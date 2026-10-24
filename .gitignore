@@ -1,0 +1,29 @@
+# Secrets: only the placeholder file is committed (SEC-10)
+.env
+.env.*
+!.env.example
+
+# Data: the raw Bitext download and intermediate outputs are not committed (DATA-07)
+data/raw/bitext/
+data/interim/
+
+# Claude Code personal files
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+dist/
+coverage/
+
+# Operating system
+.DS_Store
