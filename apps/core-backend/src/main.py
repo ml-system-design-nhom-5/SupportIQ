@@ -19,6 +19,8 @@ from src.modules.auth.routes import router as auth_router
 from src.modules.commerce.models import ProductModel
 from src.modules.commerce.routes import router as commerce_router
 from src.modules.tickets.routes import router as tickets_router
+from src.modules.audit.routes import router as audit_router
+from src.modules.reports.routes import router as reports_router
 
 MAX_JSON_BODY_BYTES = 64 * 1024  # 64 KiB
 
@@ -201,3 +203,5 @@ async def health_ready(authorization: str | None = Header(None)):
 app.include_router(auth_router)
 app.include_router(commerce_router)
 app.include_router(tickets_router)
+app.include_router(audit_router)
+app.include_router(reports_router)

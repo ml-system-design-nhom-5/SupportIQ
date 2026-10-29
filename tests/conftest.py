@@ -42,6 +42,21 @@ async def admin_token(client: AsyncClient):
     return res.json()["data"]["access_token"]
 
 @pytest_asyncio.fixture
+async def manager_token(client: AsyncClient):
+    res = await client.post(
+        "/api/v1/sessions",
+        json={"email": "manager1@supportiq.demo", "password": "DemoPassword123!"},
+        headers={"Origin": "https://supportiq.local"},
+    )
+    return res.json()["data"]["access_token"]
+
+@pytest_asyncio.fixture
+async def db_session():
+    from src.db import AppSessionLocal
+    async with AppSessionLocal() as session:
+        yield session
+
+@pytest_asyncio.fixture
 async def agent_token(client: AsyncClient):
     res = await client.post(
         "/api/v1/sessions",
