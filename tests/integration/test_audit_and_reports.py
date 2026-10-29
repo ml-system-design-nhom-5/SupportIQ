@@ -25,6 +25,15 @@ async def test_audit_is_insert_only_and_rollback_on_failure(db_session: AsyncSes
 async def test_reports_summary_excludes_manual_from_ai_acceptance_and_tracks_unknown_cost(
     client: AsyncClient, manager_token: str, db_session: AsyncSession
 ):
+    from src.db import app_engine, Base
+    from sqlalchemy import text
+    if "sqlite" in str(app_engine.url):
+        async with app_engine.begin() as conn:
+            await conn.execute(text("DROP TABLE IF EXISTS audit_events"))
+            await conn.run_sync(Base.metadata.create_all)
+            await conn.execute(text("CREATE TRIGGER IF NOT EXISTS prevent_audit_delete BEFORE DELETE ON audit_events BEGIN SELECT RAISE(ABORT, 'audit.events is append-only'); END;"))
+            await conn.execute(text("CREATE TRIGGER IF NOT EXISTS prevent_audit_update BEFORE UPDATE ON audit_events BEGIN SELECT RAISE(ABORT, 'audit.events is append-only'); END;"))
+
     from src.modules.audit.service import record_report_run_fixture
     await record_report_run_fixture(db_session)
 

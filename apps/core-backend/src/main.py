@@ -24,6 +24,7 @@ from src.modules.reports.routes import router as reports_router
 from src.modules.orchestration.routes import router as orchestration_router
 from src.modules.orchestration.releases_routes import router as releases_router
 from src.modules.review.routes import router as review_router
+from src.websocket import router as ws_router
 
 MAX_JSON_BODY_BYTES = 64 * 1024  # 64 KiB
 
@@ -215,3 +216,4 @@ app.include_router(reports_router)
 app.include_router(orchestration_router)
 app.include_router(releases_router)
 app.include_router(review_router)
+app.include_router(ws_router)

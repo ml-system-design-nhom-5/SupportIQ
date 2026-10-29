@@ -106,3 +106,63 @@ async def other_customer_token(client: AsyncClient):
         headers={"Origin": "https://supportiq.local"},
     )
     return res.json()["data"]["access_token"]
+
+@pytest_asyncio.fixture
+async def assigned_ticket_with_draft(client: AsyncClient, agent_token: str, db_session):
+    import uuid
+    from datetime import datetime, timezone
+    from src.modules.tickets.models import TicketModel
+    from src.modules.orchestration.models import PipelineRunModel, DraftModel
+
+    agent_id = "a0000000-0000-0000-0000-000000000003"
+    cust_id = "a0000000-0000-0000-0000-000000000004"
+    now = datetime.now(timezone.utc)
+    ticket_id = str(uuid.uuid4())
+    run_id = str(uuid.uuid4())
+    draft_id = str(uuid.uuid4())
+
+    ticket = TicketModel(
+        id=ticket_id,
+        customer_id=cust_id,
+        assigned_agent_id=agent_id,
+        handling_queue="standard",
+        status="open",
+        priority="normal",
+        context_version=1,
+        version=2,
+        current_run_id=run_id,
+        current_decision_id=None,
+        created_at=now,
+        updated_at=now,
+    )
+    run = PipelineRunModel(
+        id=run_id,
+        ticket_id=ticket_id,
+        customer_id=cust_id,
+        status="awaiting_review",
+        stage="llm_egress",
+        reason_codes=[],
+        deadline_at=now,
+        cost_status="known",
+        cost_micro=1200,
+        draft_id=draft_id,
+        created_at=now,
+        updated_at=now,
+    )
+    draft = DraftModel(
+        id=draft_id,
+        run_id=run_id,
+        draft_body="Draft AI response for order status.",
+        citation_ids=["cit_01"],
+    )
+    db_session.add(ticket)
+    db_session.add(run)
+    db_session.add(draft)
+    await db_session.commit()
+
+    return {
+        "ticket_id": ticket_id,
+        "run_id": run_id,
+        "draft_id": draft_id,
+        "customer_id": cust_id,
+    }
