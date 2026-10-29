@@ -133,19 +133,20 @@ async def get_ticket_messages(
     stmt = select(MessageModel).where(MessageModel.ticket_id == str(ticket.id)).order_by(MessageModel.created_at)
     res = await db.execute(stmt)
     messages = res.scalars().all()
-    return {
-        "data": [
-            {
-                "id": m.id,
-                "ticket_id": m.ticket_id,
-                "sender_id": m.sender_id,
-                "sender_role": m.sender_role,
-                "content": decrypt_text(m.content_ciphertext),
-                "created_at": m.created_at.isoformat(),
-            }
-            for m in messages
-        ]
-    }
+    decrypted_msgs = []
+    for m in messages:
+        txt = decrypt_text(m.content_ciphertext)
+        decrypted_msgs.append({
+            "id": m.id,
+            "ticket_id": m.ticket_id,
+            "sender_id": m.sender_id,
+            "sender_role": m.sender_role,
+            "direction": "inbound" if m.sender_role == "customer" else "outbound",
+            "body": txt,
+            "content": txt,
+            "created_at": m.created_at.isoformat(),
+        })
+    return {"data": decrypted_msgs}
 
 @router.post("/{ticket_id}/messages", status_code=status.HTTP_201_CREATED)
 async def post_ticket_message(

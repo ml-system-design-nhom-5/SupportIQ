@@ -13,6 +13,7 @@ def init_models():
         import src.modules.tickets.models
         import src.modules.audit.models
         import src.modules.orchestration.models
+        import src.modules.review.models
     except ImportError:
         pass
 
