@@ -14,6 +14,7 @@ def init_models():
         import src.modules.audit.models
         import src.modules.orchestration.models
         import src.modules.review.models
+        import src.modules.retrieval.models
     except ImportError:
         pass
 
