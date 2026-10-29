@@ -22,6 +22,7 @@ from src.modules.tickets.routes import router as tickets_router
 from src.modules.audit.routes import router as audit_router
 from src.modules.reports.routes import router as reports_router
 from src.modules.orchestration.routes import router as orchestration_router
+from src.modules.orchestration.releases_routes import router as releases_router
 from src.modules.review.routes import router as review_router
 
 MAX_JSON_BODY_BYTES = 64 * 1024  # 64 KiB
@@ -212,4 +213,5 @@ app.include_router(tickets_router)
 app.include_router(audit_router)
 app.include_router(reports_router)
 app.include_router(orchestration_router)
+app.include_router(releases_router)
 app.include_router(review_router)
