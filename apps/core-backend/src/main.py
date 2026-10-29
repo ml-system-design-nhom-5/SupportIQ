@@ -1,4 +1,7 @@
+import json
+import os
 import uuid
+from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import Callable
 from fastapi import FastAPI, Request, Response, Header
@@ -13,13 +16,17 @@ from src.db import Base, app_engine, AppSessionLocal
 from src.modules.auth.models import UserModel
 from src.modules.auth.service import hash_password
 from src.modules.auth.routes import router as auth_router
+from src.modules.commerce.models import ProductModel
+from src.modules.commerce.routes import router as commerce_router
+from src.modules.tickets.routes import router as tickets_router
 
 MAX_JSON_BODY_BYTES = 64 * 1024  # 64 KiB
 
-async def seed_demo_users():
+async def seed_demo_data():
     async with AppSessionLocal() as session:
-        result = await session.execute(select(UserModel).limit(1))
-        if result.scalar_one_or_none() is None:
+        # Seed users
+        user_res = await session.execute(select(UserModel).limit(1))
+        if user_res.scalar_one_or_none() is None:
             demo_password_hash = hash_password("DemoPassword123!")
             users = [
                 UserModel(
@@ -54,16 +61,65 @@ async def seed_demo_users():
                     active=True,
                     role_version=1,
                 ),
+                UserModel(
+                    id="a0000000-0000-0000-0000-000000000005",
+                    email="customer2@supportiq.demo",
+                    password_hash=demo_password_hash,
+                    role="customer",
+                    active=True,
+                    role_version=1,
+                ),
             ]
             session.add_all(users)
             await session.commit()
 
+        # Seed products
+        prod_res = await session.execute(select(ProductModel).limit(1))
+        if prod_res.scalar_one_or_none() is None:
+            products_data = []
+            seed_file = Path("data/business/demo_seed.json")
+            if seed_file.exists():
+                try:
+                    with open(seed_file, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        products_data = data.get("products", [])
+                except Exception:
+                    pass
+
+            if not products_data:
+                products_data = [
+                    {
+                        "id": "b0000000-0000-0000-0000-000000000001",
+                        "sku": "PROD-HEADPHONE-01",
+                        "name": "Tai nghe chống ồn không dây Pro",
+                        "description": "Tai nghe bluetooth chụp tai.",
+                        "unit_price_minor": 1500000,
+                        "currency": "VND",
+                        "stock_quantity": 50,
+                        "category": "audio",
+                    }
+                ]
+
+            for p in products_data:
+                session.add(
+                    ProductModel(
+                        id=p["id"],
+                        sku=p["sku"],
+                        name=p["name"],
+                        description=p.get("description"),
+                        unit_price_minor=p["unit_price_minor"],
+                        currency=p.get("currency", "VND"),
+                        stock_quantity=p.get("stock_quantity", 0),
+                        category=p.get("category"),
+                    )
+                )
+            await session.commit()
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialize tables
     async with app_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    await seed_demo_users()
+    await seed_demo_data()
     yield
 
 class SecurityAndTracingMiddleware(BaseHTTPMiddleware):
@@ -71,7 +127,6 @@ class SecurityAndTracingMiddleware(BaseHTTPMiddleware):
         req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
         request.state.request_id = req_id
 
-        # Check content length for payload_too_large (64 KiB)
         content_length = request.headers.get("content-length")
         if content_length and int(content_length) > MAX_JSON_BODY_BYTES:
             return format_problem_response(
@@ -144,3 +199,5 @@ async def health_ready(authorization: str | None = Header(None)):
 
 # Mount routers
 app.include_router(auth_router)
+app.include_router(commerce_router)
+app.include_router(tickets_router)
