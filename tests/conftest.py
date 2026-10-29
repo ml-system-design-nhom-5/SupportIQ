@@ -52,7 +52,13 @@ async def manager_token(client: AsyncClient):
 
 @pytest_asyncio.fixture
 async def db_session():
-    from src.db import AppSessionLocal
+    from src.db import Base, app_engine, AppSessionLocal
+    async with app_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+        if "sqlite" in str(app_engine.url):
+            from sqlalchemy import text
+            await conn.execute(text("CREATE TRIGGER IF NOT EXISTS prevent_audit_delete BEFORE DELETE ON audit_events BEGIN SELECT RAISE(ABORT, 'audit.events is append-only'); END;"))
+            await conn.execute(text("CREATE TRIGGER IF NOT EXISTS prevent_audit_update BEFORE UPDATE ON audit_events BEGIN SELECT RAISE(ABORT, 'audit.events is append-only'); END;"))
     async with AppSessionLocal() as session:
         yield session
 

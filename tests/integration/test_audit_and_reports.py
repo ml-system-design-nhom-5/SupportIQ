@@ -16,9 +16,9 @@ def seeded_report_fixtures():
 
 @pytest.mark.asyncio
 async def test_audit_is_insert_only_and_rollback_on_failure(db_session: AsyncSession):
-    # Verify trigger rejects UPDATE and DELETE on audit.events
+    # Verify PostgreSQL trigger / permission rejects UPDATE and DELETE on audit.events
     with pytest.raises(Exception):
-        await db_session.execute(text("DELETE FROM audit_events" if "sqlite" in str(db_session.bind.url) else "DELETE FROM audit.events"))
+        await db_session.execute(text("DELETE FROM audit.events"))
     await db_session.rollback()
 
 @pytest.mark.asyncio

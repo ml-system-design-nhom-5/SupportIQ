@@ -21,6 +21,7 @@ from src.modules.commerce.routes import router as commerce_router
 from src.modules.tickets.routes import router as tickets_router
 from src.modules.audit.routes import router as audit_router
 from src.modules.reports.routes import router as reports_router
+from src.modules.orchestration.routes import router as orchestration_router
 
 MAX_JSON_BODY_BYTES = 64 * 1024  # 64 KiB
 
@@ -121,6 +122,10 @@ async def seed_demo_data():
 async def lifespan(app: FastAPI):
     async with app_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        if "sqlite" in str(app_engine.url):
+            from sqlalchemy import text
+            await conn.execute(text("CREATE TRIGGER IF NOT EXISTS prevent_audit_delete BEFORE DELETE ON audit_events BEGIN SELECT RAISE(ABORT, 'audit.events is append-only'); END;"))
+            await conn.execute(text("CREATE TRIGGER IF NOT EXISTS prevent_audit_update BEFORE UPDATE ON audit_events BEGIN SELECT RAISE(ABORT, 'audit.events is append-only'); END;"))
     await seed_demo_data()
     yield
 
@@ -205,3 +210,4 @@ app.include_router(commerce_router)
 app.include_router(tickets_router)
 app.include_router(audit_router)
 app.include_router(reports_router)
+app.include_router(orchestration_router)
