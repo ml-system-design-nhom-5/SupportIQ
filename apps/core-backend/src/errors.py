@@ -31,6 +31,7 @@ def format_problem_response(
 ) -> JSONResponse:
     content: dict[str, Any] = {
         "type": f"urn:supportiq:problem:{code}",
+        "code": code,
         "title": title,
         "status": status,
     }

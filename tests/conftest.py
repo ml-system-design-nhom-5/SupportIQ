@@ -26,6 +26,7 @@ def anyio_backend():
 
 @pytest_asyncio.fixture
 async def client():
-    from src.main import app
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        yield ac
+    from src.main import app, lifespan
+    async with lifespan(app):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            yield ac
