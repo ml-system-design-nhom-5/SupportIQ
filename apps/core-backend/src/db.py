@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncGenerator
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
@@ -32,6 +33,20 @@ AuditReaderSessionLocal = async_sessionmaker(audit_reader_engine, expire_on_comm
 vault_engine = create_async_engine(settings.vault_db_url, echo=False)
 VaultSessionLocal = async_sessionmaker(vault_engine, expire_on_commit=False, class_=AsyncSession)
 
+_sqlite_lock: asyncio.Lock | None = None
+
+def get_sqlite_lock() -> asyncio.Lock:
+    global _sqlite_lock
+    if _sqlite_lock is None:
+        _sqlite_lock = asyncio.Lock()
+    return _sqlite_lock
+
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
-    async with AppSessionLocal() as session:
-        yield session
+    if "sqlite" in settings.app_db_url:
+        lock = get_sqlite_lock()
+        async with lock:
+            async with AppSessionLocal() as session:
+                yield session
+    else:
+        async with AppSessionLocal() as session:
+            yield session

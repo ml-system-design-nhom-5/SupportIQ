@@ -73,12 +73,14 @@ async def create_run(
 
     job = JobModel(
         id=str(uuid4()),
+        run=pipeline_run,
         run_id=str(run_id),
         stage="pipeline",
         status="queued",
         created_at=now,
         updated_at=now,
     )
+    pipeline_run.jobs.append(job)
     session.add(job)
     await session.commit()
 

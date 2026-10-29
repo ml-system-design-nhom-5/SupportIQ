@@ -1,5 +1,6 @@
 import os
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import pytest
 import pytest_asyncio
@@ -24,6 +25,34 @@ os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 @pytest.fixture
 def anyio_backend():
     return "asyncio"
+
+class MockRedisClient:
+    def __init__(self):
+        self._store: dict[str, tuple[str, datetime | None]] = {}
+
+    async def get(self, key: str) -> str | None:
+        item = self._store.get(key)
+        if not item:
+            return None
+        val, exp = item
+        if exp is not None and datetime.now(timezone.utc) > exp:
+            del self._store[key]
+            return None
+        return val
+
+    async def set(self, key: str, value: str, ex: int | None = None):
+        exp = datetime.now(timezone.utc) + timedelta(seconds=ex) if ex else None
+        self._store[key] = (value, exp)
+
+    async def setex(self, key: str, time: int, value: str):
+        await self.set(key, value, ex=time)
+
+    async def delete(self, key: str):
+        self._store.pop(key, None)
+
+@pytest.fixture
+def redis_client():
+    return MockRedisClient()
 
 @pytest_asyncio.fixture
 async def client():

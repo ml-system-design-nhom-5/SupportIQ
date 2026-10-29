@@ -40,10 +40,10 @@ class PipelineRunModel(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
-    jobs = relationship("JobModel", back_populates="run", cascade="all, delete-orphan")
-    attempts = relationship("LlmAttemptModel", back_populates="run", cascade="all, delete-orphan")
-    draft = relationship("DraftModel", back_populates="run", uselist=False, cascade="all, delete-orphan")
-    evidence = relationship("EvidenceSnapshotModel", back_populates="run", cascade="all, delete-orphan")
+    jobs = relationship("JobModel", back_populates="run", cascade="all, delete-orphan", lazy="selectin")
+    attempts = relationship("LlmAttemptModel", back_populates="run", cascade="all, delete-orphan", lazy="selectin")
+    draft = relationship("DraftModel", back_populates="run", uselist=False, cascade="all, delete-orphan", lazy="selectin")
+    evidence = relationship("EvidenceSnapshotModel", back_populates="run", cascade="all, delete-orphan", lazy="selectin")
 
 class JobModel(Base):
     __tablename__ = "jobs"

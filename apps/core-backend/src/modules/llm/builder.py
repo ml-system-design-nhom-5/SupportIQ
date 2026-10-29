@@ -9,9 +9,12 @@ def build_egress_payload(
     evidence: list[Evidence],
     prompt_version: str = "v1.0.0",
 ) -> dict[str, Any]:
-    prompt_path = Path(__file__).resolve().parent.parent.parent.parent / "config" / "prompts" / f"draft_prompt.{prompt_version}.json"
+    base_dir = Path(__file__).resolve().parent.parent.parent.parent / "config" / "prompts"
+    prompt_path = base_dir / f"draft_prompt.{prompt_version}.json"
     if not prompt_path.exists():
-        prompt_path = Path("apps/core-backend/config/prompts") / f"draft_prompt.{prompt_version}.json"
+        prompt_path = base_dir / "draft_prompt.v1.json"
+    if not prompt_path.exists():
+        prompt_path = Path("apps/core-backend/config/prompts/draft_prompt.v1.json")
 
     with open(prompt_path, "r", encoding="utf-8") as f:
         template_data = json.load(f)
