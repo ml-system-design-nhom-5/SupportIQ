@@ -6,8 +6,11 @@ import datetime
 import hashlib
 import json
 import re
+import unicodedata
 from pathlib import Path
 from typing import Any
+
+import pandas as pd
 
 # Standard Bitext taxonomy
 STANDARD_CATEGORIES = frozenset([
@@ -122,7 +125,7 @@ def get_next_id(base_dir: Path | str, date_str: str | None = None) -> str:
         prefix = date_str
 
     base_path = Path(base_dir)
-    pattern = re.compile(rf"^{re.escape(prefix)}-(\d{{2}})$")
+    pattern = re.compile(rf"^{re.escape(prefix)}-(\d{{2,}})$")
 
     highest_seq = -1
     if base_path.exists() and base_path.is_dir():
@@ -178,3 +181,23 @@ def create_manifest(
         "output_artifacts": output_artifacts,
         "metadata": metadata or {},
     }
+
+
+def normalize_instruction_text(text: Any, lowercase: bool = False) -> str:
+    """Normalize text using NFKC, collapse multiple whitespaces, and strip edges.
+
+    Args:
+        text: Input string or object.
+        lowercase: Whether to convert the result to lowercase.
+
+    Returns:
+        Cleaned, normalized string.
+    """
+    if pd.isna(text):
+        return ""
+    norm = unicodedata.normalize("NFKC", str(text))
+    norm = re.sub(r"\s+", " ", norm).strip()
+    if lowercase:
+        norm = norm.lower()
+    return norm
+

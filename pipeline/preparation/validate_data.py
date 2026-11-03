@@ -16,16 +16,14 @@ from pipeline.preparation.utils import (
     STANDARD_INTENTS,
     compute_sha256,
     get_next_id,
+    normalize_instruction_text,
     save_json,
 )
 
 
 def normalize_text_for_dedup(text: Any) -> str:
-    """Normalize text by stripping, lowercasing, and collapsing whitespace."""
-    if pd.isna(text):
-        return ""
-    text_str = str(text).strip().lower()
-    return re.sub(r"\s+", " ", text_str)
+    """Normalize text by stripping, lowercasing, and collapsing whitespace with NFKC."""
+    return normalize_instruction_text(text, lowercase=True)
 
 
 def validate_dataset(
@@ -67,8 +65,12 @@ def validate_dataset(
     issue_reasons: list[list[str]] = [[] for _ in range(total_records)]
 
     # 2. Completeness check
-    missing_instruction_mask = df["instruction"].isna() | (df["instruction"].astype(str).str.strip() == "")
-    missing_intent_mask = df["intent"].isna() | (df["intent"].astype(str).str.strip() == "")
+    cleaned_instructions = df["instruction"].fillna("").astype(str).str.strip()
+    cleaned_intents = df["intent"].fillna("").astype(str).str.strip()
+    cleaned_cats = df["category"].fillna("").astype(str).str.strip()
+
+    missing_instruction_mask = df["instruction"].isna() | (cleaned_instructions == "")
+    missing_intent_mask = df["intent"].isna() | (cleaned_intents == "")
 
     for idx, is_missing in enumerate(missing_instruction_mask):
         if is_missing:
@@ -79,14 +81,14 @@ def validate_dataset(
             issue_reasons[idx].append("missing_intent")
 
     # 3. Validity check (Taxonomy)
-    valid_intents_mask = df["intent"].isin(STANDARD_INTENTS)
+    valid_intents_mask = cleaned_intents.isin(STANDARD_INTENTS)
     invalid_intents_mask = ~valid_intents_mask & ~missing_intent_mask
 
     for idx, is_invalid in enumerate(invalid_intents_mask):
         if is_invalid:
             issue_reasons[idx].append("invalid_intent")
 
-    valid_cats_mask = df["category"].isin(STANDARD_CATEGORIES)
+    valid_cats_mask = cleaned_cats.isin(STANDARD_CATEGORIES)
     invalid_cats_mask = ~valid_cats_mask & df["category"].notna()
 
     for idx, is_invalid in enumerate(invalid_cats_mask):
@@ -97,6 +99,7 @@ def validate_dataset(
     df_eval = df.copy()
     df_eval["_orig_idx"] = range(total_records)
     df_eval["_norm_text"] = df_eval["instruction"].apply(normalize_text_for_dedup)
+    df_eval["_stripped_intent"] = df_eval["intent"].fillna("").astype(str).str.strip()
 
     # Group by non-empty normalized instruction
     valid_text_mask = df_eval["_norm_text"] != ""
@@ -111,7 +114,7 @@ def validate_dataset(
         if len(group) > 1:
             duplicate_groups_count += 1
             group_id = f"group_{hashlib.md5(norm_text.encode('utf-8')).hexdigest()[:8]}"
-            intents_in_group = group["intent"].dropna().unique()
+            intents_in_group = group["_stripped_intent"].replace("", pd.NA).dropna().unique()
             is_conflicting = len(intents_in_group) > 1
 
             if is_conflicting:

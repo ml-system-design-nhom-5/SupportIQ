@@ -16,15 +16,16 @@ from sklearn.model_selection import StratifiedGroupKFold
 from pipeline.preparation.utils import (
     compute_sha256,
     get_next_id,
+    normalize_instruction_text,
     save_json,
 )
 
 
 def _get_group_key(text: Any) -> str:
-    """Derive group key from normalized instruction text."""
-    if pd.isna(text):
+    """Derive group key from normalized instruction text with NFKC."""
+    norm = normalize_instruction_text(text, lowercase=True)
+    if not norm:
         return ""
-    norm = re.sub(r"\s+", " ", str(text).strip().lower())
     return hashlib.md5(norm.encode("utf-8")).hexdigest()
 
 
@@ -56,6 +57,9 @@ def split_dataset(
     Returns:
         Split summary report dictionary.
     """
+    if test_size <= 0.0 or test_size >= 1.0:
+        raise ValueError(f"test_size must be between 0.0 and 1.0, got {test_size}")
+
     clean_path = Path(cleaned_csv)
     if not clean_path.exists():
         raise FileNotFoundError(f"Cleaned dataset not found at {clean_path}")

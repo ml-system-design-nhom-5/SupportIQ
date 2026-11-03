@@ -53,7 +53,8 @@ class IntentFeaturePipeline:
         """Transform text queries into TF-IDF sparse matrix."""
         if not self.is_fitted:
             raise RuntimeError("IntentFeaturePipeline must be fitted before transforming.")
-        return self.vectorizer.transform(texts)
+        safe_texts = [str(t) if pd.notna(t) else "" for t in texts]
+        return self.vectorizer.transform(safe_texts)
 
     def fit_transform(self, texts: Iterable[str]) -> csr_matrix:
         """Fit to training texts and return transformed sparse matrix."""

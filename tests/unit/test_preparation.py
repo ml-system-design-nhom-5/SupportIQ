@@ -317,3 +317,55 @@ def test_run_full_preparation_synthetic_end_to_end(tmp_path: Path):
 
     # Check models artifact
     assert (base_dir / "artifacts" / "models" / run_id / "tfidf.joblib").exists()
+
+def test_quarantined_schema_consistency_when_empty(tmp_path: Path):
+    from pipeline.preparation.clean_data import clean_dataset
+
+    raw_csv = tmp_path / "all_clean.csv"
+    df = pd.DataFrame({
+        "instruction": ["Track my order please"],
+        "intent": ["track_order"],
+        "category": ["ORDER"]
+    })
+    df.to_csv(raw_csv, index=False)
+
+    processed_dir = tmp_path / "proc"
+    report_dir = tmp_path / "rep"
+    clean_dataset(raw_csv, processed_dir, report_dir, dataset_version="03-11-2026-00")
+
+    quarantined_csv = processed_dir / "03-11-2026-00" / "quarantined.csv"
+    assert quarantined_csv.exists()
+    df_q = pd.read_csv(quarantined_csv)
+    # Must NOT contain internal helper columns instruction_cleaned or _orig_idx
+    assert "instruction_cleaned" not in df_q.columns
+    assert "_orig_idx" not in df_q.columns
+    assert list(df_q.columns) == ["instruction", "intent", "category", "quarantine_reason"]
+
+def test_intent_whitespace_stripping_and_no_false_conflict(tmp_path: Path):
+    from pipeline.preparation.clean_data import clean_dataset
+
+    raw_csv = tmp_path / "intent_spaces.csv"
+    df = pd.DataFrame({
+        "instruction": ["Track my order", "Track my order"],
+        "intent": ["track_order", "track_order "],  # Trailing space in raw intent
+        "category": ["ORDER", "ORDER"]
+    })
+    df.to_csv(raw_csv, index=False)
+
+    processed_dir = tmp_path / "proc"
+    report_dir = tmp_path / "rep"
+    res = clean_dataset(raw_csv, processed_dir, report_dir, dataset_version="03-11-2026-00")
+
+    # Should NOT be flagged as conflicting intents because stripped intent is identical!
+    assert res["quarantined_samples"] == 0
+    assert res["final_clean_samples"] == 1
+    cleaned_df = pd.read_csv(processed_dir / "03-11-2026-00" / "cleaned.csv")
+    assert cleaned_df.iloc[0]["intent"] == "track_order"
+
+def test_shared_nfkc_normalization_consistency():
+    from pipeline.preparation.utils import normalize_instruction_text
+
+    # Compatibility character (halfwidth vs fullwidth or ligatures)
+    fullwidth_text = "Ｔｒａｃｋ   ｏｒｄｅｒ {{Order}} "
+    normalized = normalize_instruction_text(fullwidth_text)
+    assert normalized == "Track order {{Order}}"

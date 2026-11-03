@@ -58,7 +58,7 @@ def inspect_dataset(
     null_counts = {col: int(df[col].isna().sum()) for col in columns}
 
     # 2. Text length analysis (instruction)
-    if "instruction" in df.columns:
+    if "instruction" in df.columns and total_samples > 0:
         char_lengths = df["instruction"].fillna("").astype(str).str.len()
         word_counts = df["instruction"].fillna("").astype(str).str.split().str.len()
 

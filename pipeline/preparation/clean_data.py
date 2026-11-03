@@ -15,19 +15,14 @@ from pipeline.preparation.utils import (
     STANDARD_INTENTS,
     compute_sha256,
     get_next_id,
+    normalize_instruction_text,
     save_json,
 )
 
 
 def clean_text_instruction(text: Any) -> str:
     """Normalize text with NFKC, collapse multiple whitespaces, and strip edges."""
-    if pd.isna(text):
-        return ""
-    # Unicode normalization
-    norm = unicodedata.normalize("NFKC", str(text))
-    # Whitespace cleanup while preserving {{...}} placeholders
-    norm = re.sub(r"\s+", " ", norm).strip()
-    return norm
+    return normalize_instruction_text(text, lowercase=False)
 
 
 def clean_dataset(
@@ -69,6 +64,12 @@ def clean_dataset(
     df = pd.read_csv(input_path)
     total_raw_samples = len(df)
     raw_sha256 = compute_sha256(input_path)
+
+    # Sanitize string columns
+    if "intent" in df.columns:
+        df["intent"] = df["intent"].fillna("").astype(str).str.strip()
+    if "category" in df.columns:
+        df["category"] = df["category"].fillna("").astype(str).str.strip()
 
     # Clean text column
     df["instruction_cleaned"] = df["instruction"].apply(clean_text_instruction)
@@ -137,15 +138,18 @@ def clean_dataset(
     cleaned_csv_path = version_dir / "cleaned.csv"
     final_clean_df.to_csv(cleaned_csv_path, index=False)
 
-    # Save quarantined.csv
+    # Save quarantined.csv with consistent schema
+    original_cols = [c for c in df.columns if c not in ("instruction_cleaned", "_orig_idx")]
     df_quarantined = pd.DataFrame(quarantined_records)
     if df_quarantined.empty:
-        df_quarantined = pd.DataFrame(columns=list(df.columns) + ["quarantine_reason"])
+        df_quarantined = pd.DataFrame(columns=original_cols + ["quarantine_reason"])
     else:
-        # Clean helper columns
+        # Retain only original columns plus quarantine_reason
         for helper_col in ["instruction_cleaned", "_orig_idx"]:
             if helper_col in df_quarantined.columns:
                 df_quarantined = df_quarantined.drop(columns=[helper_col])
+        ordered_cols = [c for c in original_cols if c in df_quarantined.columns] + ["quarantine_reason"]
+        df_quarantined = df_quarantined[ordered_cols]
 
     quarantined_csv_path = version_dir / "quarantined.csv"
     df_quarantined.to_csv(quarantined_csv_path, index=False)
