@@ -145,3 +145,96 @@ def classification_report_data(
         "confusion_matrix": cm_df,
         "core_metrics": core_metrics,
     }
+
+
+def evaluate_robustness(
+    bundle: IntentModelBundle,
+    cases: list[dict[str, Any]],
+    class_order: Sequence[str],
+) -> dict[str, Any]:
+    """Evaluate intent model robustness across defined slices and paired perturbations."""
+    if not cases:
+        return {"cases_evaluated": 0, "slices": {}, "case_details": []}
+
+    case_map: dict[str, dict[str, Any]] = {}
+    for c in cases:
+        cid = c.get("case_id")
+        if not cid:
+            raise EvaluationError("Robustness case missing case_id")
+        if not c.get("slice"):
+            raise EvaluationError(f"Robustness case {cid} missing slice")
+        if "instruction" not in c or not str(c["instruction"]).strip():
+            raise EvaluationError(f"Robustness case {cid} missing instruction")
+        if c.get("requires_paired") and not c.get("source_id"):
+            raise EvaluationError(f"Robustness case {cid} requires_paired is True but source_id is missing")
+        case_map[cid] = c
+
+    # Check that any referenced source_id exists
+    for cid, c in case_map.items():
+        src = c.get("source_id")
+        if src and src not in case_map:
+            raise EvaluationError(f"Robustness case {cid} references non-existent source_id {src}")
+
+    instructions = [case_map[cid]["instruction"] for cid in case_map]
+    try:
+        preds = bundle.predict(instructions)
+    except Exception as exc:
+        raise EvaluationError(f"Robustness prediction failed: {exc}") from exc
+
+    results: list[dict[str, Any]] = []
+    case_results: dict[str, dict[str, Any]] = {}
+
+    for (cid, c), pred in zip(case_map.items(), preds):
+        gold = c.get("gold_intent")
+        correct = (str(pred) == str(gold)) if gold is not None else None
+        res_entry = {
+            "case_id": cid,
+            "slice": c["slice"],
+            "instruction": c["instruction"],
+            "gold_intent": gold,
+            "y_pred": str(pred),
+            "correct": correct,
+            "source_id": c.get("source_id"),
+            "expected_action": c.get("expected_action"),
+        }
+        results.append(res_entry)
+        case_results[cid] = res_entry
+
+    # Slices summary
+    slice_names = sorted(set(r["slice"] for r in results))
+    slices_summary: dict[str, Any] = {}
+
+    for sname in slice_names:
+        s_rows = [r for r in results if r["slice"] == sname]
+        eval_rows = [r for r in s_rows if r["gold_intent"] is not None]
+
+        acc = float(np.mean([r["correct"] for r in eval_rows])) if eval_rows else None
+        action_det = "unsupported" if not eval_rows and any(r.get("expected_action") for r in s_rows) else None
+
+        # Paired statistics
+        paired_rows = [r for r in s_rows if r["source_id"]]
+        if paired_rows:
+            valid_pairs = [r for r in paired_rows if case_results[r["source_id"]]["correct"] is True]
+            paired_denom = len(valid_pairs)
+            paired_num = sum(1 for r in valid_pairs if r["correct"] is True)
+            paired_acc = float(paired_num / paired_denom) if paired_denom > 0 else None
+        else:
+            paired_denom = 0
+            paired_acc = None
+
+        slices_summary[sname] = {
+            "slice": sname,
+            "total_cases": len(s_rows),
+            "evaluated_cases": len(eval_rows),
+            "accuracy": acc,
+            "paired_denominator": paired_denom,
+            "paired_conditional_accuracy": paired_acc,
+            "action_detection": action_det,
+        }
+
+    return {
+        "cases_evaluated": len(results),
+        "slices": slices_summary,
+        "case_details": results,
+    }
+

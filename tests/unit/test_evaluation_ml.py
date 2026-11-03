@@ -444,3 +444,142 @@ def test_svm_score_capability_is_margin_not_probability(tmp_path):
 
     assert get_score_capability(bundle_svm) == "margin"
     assert get_score_capability(bundle_lr) == "probability"
+
+
+def test_robustness_separates_known_noncore_and_ood(tmp_path):
+    from pipeline.evaluation.evaluate_intent import evaluate_robustness
+
+    fx = make_eval_fixture(tmp_path)
+    bundle = IntentModelBundle.load(fx.train_dir / "models" / "linear_svm")
+
+    cases = [
+        # Known in-scope case
+        {
+            "case_id": "c1",
+            "slice": "casing",
+            "instruction": "TRACK MY ORDER PLEASE",
+            "gold_intent": "track_order",
+            "expected_action": None,
+        },
+        # OOD case with null gold
+        {
+            "case_id": "c2",
+            "slice": "out_of_scope",
+            "instruction": "What is the weather in Hanoi?",
+            "gold_intent": None,
+            "expected_action": "escalate",
+        },
+    ]
+
+    res = evaluate_robustness(bundle, cases, fx.config["expected_intents"])
+    assert "casing" in res["slices"]
+    assert "out_of_scope" in res["slices"]
+    assert res["slices"]["out_of_scope"]["accuracy"] is None
+    assert res["slices"]["out_of_scope"]["action_detection"] == "unsupported"
+
+
+def test_paired_robustness_denominator(tmp_path):
+    from pipeline.evaluation.evaluate_intent import evaluate_robustness
+
+    fx = make_eval_fixture(tmp_path)
+    bundle = IntentModelBundle.load(fx.train_dir / "models" / "linear_svm")
+
+    cases = [
+        # Base case correctly predicted
+        {
+            "case_id": "base_1",
+            "slice": "base",
+            "instruction": "question for track_order in fold 0 sample 0",
+            "gold_intent": "track_order",
+        },
+        # Paired variant correctly predicted
+        {
+            "case_id": "pert_1",
+            "slice": "typo",
+            "instruction": "QUESTION FOR TRACK_ORDER IN FOLD 0 SAMPLE 0",
+            "gold_intent": "track_order",
+            "source_id": "base_1",
+        },
+        # Base case incorrectly predicted (cancel_order mapped to wrong gold)
+        {
+            "case_id": "base_2",
+            "slice": "base",
+            "instruction": "cancel my order",
+            "gold_intent": "wrong_expected_label",
+        },
+        # Paired variant of base_2
+        {
+            "case_id": "pert_2",
+            "slice": "typo",
+            "instruction": "cancle my order",
+            "gold_intent": "wrong_expected_label",
+            "source_id": "base_2",
+        },
+    ]
+
+    res = evaluate_robustness(bundle, cases, fx.config["expected_intents"])
+    typo_slice = res["slices"]["typo"]
+    # Denominator for conditional correctness only includes base_1 (base_2 failed)
+    assert typo_slice["paired_denominator"] == 1
+
+
+def test_timing_excludes_warmup_and_counts_requests(tmp_path):
+    from pipeline.evaluation.benchmark import benchmark_classifier
+
+    fx = make_eval_fixture(tmp_path)
+    bundle = IntentModelBundle.load(fx.train_dir / "models" / "linear_svm")
+
+    # Mock clock: returns increasing timestamps
+    # warmup=2, requests=4 -> total 6 calls
+    times = [0.0, 0.05, 0.10, 0.12, 0.15, 0.19, 0.24, 0.30, 0.37, 0.45, 0.54, 0.64]
+    clock_idx = 0
+
+    def fake_clock():
+        nonlocal clock_idx
+        val = times[clock_idx]
+        clock_idx += 1
+        return val
+
+    config = {
+        "timing": {
+            "warmup_requests": 2,
+            "benchmark_requests": 4,
+            "latency_batch_size": 1,
+            "throughput_batch_size": 4,
+        }
+    }
+
+    res = benchmark_classifier(bundle, ["track my order", "refund status"], config, clock=fake_clock)
+    assert res["latency"]["requests_measured"] == 4
+    assert res["latency"]["p50"] > 0
+    assert len(res["latency"]["durations_seconds"]) == 4
+
+
+def test_empty_latency_input_rejected(tmp_path):
+    from pipeline.evaluation.benchmark import benchmark_classifier
+
+    fx = make_eval_fixture(tmp_path)
+    bundle = IntentModelBundle.load(fx.train_dir / "models" / "linear_svm")
+
+    with pytest.raises(EvaluationError):
+        benchmark_classifier(bundle, [], fx.config)
+
+
+def test_robustness_missing_source_id_rejected(tmp_path):
+    from pipeline.evaluation.evaluate_intent import evaluate_robustness
+
+    fx = make_eval_fixture(tmp_path)
+    bundle = IntentModelBundle.load(fx.train_dir / "models" / "linear_svm")
+
+    cases = [
+        {
+            "case_id": "p1",
+            "slice": "paired_typo",
+            "instruction": "trak my ordr",
+            "gold_intent": "track_order",
+            "requires_paired": True,
+            # missing source_id!
+        }
+    ]
+    with pytest.raises(EvaluationError):
+        evaluate_robustness(bundle, cases, fx.config["expected_intents"])
