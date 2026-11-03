@@ -583,3 +583,138 @@ def test_robustness_missing_source_id_rejected(tmp_path):
     ]
     with pytest.raises(EvaluationError):
         evaluate_robustness(bundle, cases, fx.config["expected_intents"])
+
+
+def test_ml_runner_keeps_cv_winner_when_test_ranking_changes(tmp_path, monkeypatch):
+    from pipeline.evaluation.run_evaluation import run_ml_evaluation
+
+    fx = make_eval_fixture(tmp_path)
+    cfg_file = tmp_path / "eval_config.json"
+    save_json(fx.config, cfg_file)
+
+    # In fx, winner is linear_svm__v1. We run evaluation and check that baseline_comparison.csv
+    # records is_cv_winner=True for linear_svm and False for multinomial_nb.
+    out_root = tmp_path / "artifacts" / "evaluation"
+    res = run_ml_evaluation(
+        training_manifest=fx.train_manifest,
+        suite=None,
+        config_path=cfg_file,
+        run_id="03-11-2026-eval-01",
+        repo_root=fx.root,
+        output_root=out_root,
+    )
+    run_dir = Path(res["run_dir"])
+    comp = pd.read_csv(run_dir / "baseline_comparison.csv")
+
+    svm_row = comp[comp["model_id"] == "linear_svm"].iloc[0]
+    nb_row = comp[comp["model_id"] == "multinomial_nb"].iloc[0]
+    assert svm_row["is_cv_winner"] == True
+    assert nb_row["is_cv_winner"] == False
+
+
+def test_ml_only_does_not_pass_system_requirements(tmp_path):
+    from pipeline.evaluation.run_evaluation import run_ml_evaluation
+
+    fx = make_eval_fixture(tmp_path)
+    cfg_file = tmp_path / "eval_config.json"
+    save_json(fx.config, cfg_file)
+
+    out_root = tmp_path / "artifacts" / "evaluation"
+    res = run_ml_evaluation(
+        training_manifest=fx.train_manifest,
+        suite=None,
+        config_path=cfg_file,
+        run_id="03-11-2026-eval-02",
+        repo_root=fx.root,
+        output_root=out_root,
+    )
+    run_dir = Path(res["run_dir"])
+    req = pd.read_csv(run_dir / "requirements_matrix.csv")
+
+    # System requirements must be "not_evaluated"
+    system_items = req[req["requirement"].str.contains("Retrieval|Grounding|Oversight|Reliability", case=False)]
+    assert (system_items["status"] == "not_evaluated").all()
+
+
+def test_failed_run_has_no_completed_manifest(tmp_path, monkeypatch):
+    from pipeline.evaluation.run_evaluation import run_ml_evaluation
+
+    fx = make_eval_fixture(tmp_path)
+    cfg_file = tmp_path / "eval_config.json"
+    save_json(fx.config, cfg_file)
+
+    def boom(*args, **kwargs):
+        raise EvaluationError("Forced failure during prediction")
+
+    monkeypatch.setattr("pipeline.evaluation.run_evaluation.predict_rows", boom)
+
+    out_root = tmp_path / "artifacts" / "evaluation"
+    with pytest.raises(EvaluationError, match="Forced failure"):
+        run_ml_evaluation(
+            training_manifest=fx.train_manifest,
+            suite=None,
+            config_path=cfg_file,
+            run_id="03-11-2026-eval-fail",
+            repo_root=fx.root,
+            output_root=out_root,
+        )
+
+    run_dir = out_root / "03-11-2026-eval-fail"
+    assert (run_dir / "run_state.json").exists()
+    state = json.loads((run_dir / "run_state.json").read_text(encoding="utf-8"))
+    assert state["status"] == "failed"
+    assert not (run_dir / "manifest.json").exists()
+
+
+def test_existing_run_is_not_modified(tmp_path):
+    from pipeline.evaluation.run_evaluation import run_ml_evaluation
+
+    fx = make_eval_fixture(tmp_path)
+    cfg_file = tmp_path / "eval_config.json"
+    save_json(fx.config, cfg_file)
+
+    out_root = tmp_path / "artifacts" / "evaluation"
+    existing_dir = out_root / "03-11-2026-eval-exist"
+    existing_dir.mkdir(parents=True)
+    sentinel = existing_dir / "sentinel.txt"
+    sentinel.write_text("protected", encoding="utf-8")
+
+    with pytest.raises(EvaluationError):
+        run_ml_evaluation(
+            training_manifest=fx.train_manifest,
+            suite=None,
+            config_path=cfg_file,
+            run_id="03-11-2026-eval-exist",
+            repo_root=fx.root,
+            output_root=out_root,
+        )
+    assert sentinel.read_text(encoding="utf-8") == "protected"
+
+
+def test_input_changed_midrun_fails(tmp_path, monkeypatch):
+    from pipeline.evaluation.run_evaluation import run_ml_evaluation
+    import pipeline.evaluation.run_evaluation as run_eval
+
+    fx = make_eval_fixture(tmp_path)
+    cfg_file = tmp_path / "eval_config.json"
+    save_json(fx.config, cfg_file)
+
+    orig_predict = run_eval.predict_rows
+
+    def tamper_then_predict(*args, **kwargs):
+        # Mutate cleaned.csv while evaluation is in-flight
+        fx.cleaned_csv.write_text("corrupted mid-run", encoding="utf-8")
+        return orig_predict(*args, **kwargs)
+
+    monkeypatch.setattr("pipeline.evaluation.run_evaluation.predict_rows", tamper_then_predict)
+
+    out_root = tmp_path / "artifacts" / "evaluation"
+    with pytest.raises(EvaluationError, match="changed during run"):
+        run_ml_evaluation(
+            training_manifest=fx.train_manifest,
+            suite=None,
+            config_path=cfg_file,
+            run_id="03-11-2026-eval-midrun",
+            repo_root=fx.root,
+            output_root=out_root,
+        )
