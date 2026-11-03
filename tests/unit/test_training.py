@@ -22,6 +22,12 @@ from pipeline.training.models import (
     load_training_config,
     validate_training_config,
 )
+from pipeline.training.artifacts import (
+    IntentModelBundle,
+    load_bundle,
+    save_bundle,
+    write_json_atomic,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_PATH = REPO_ROOT / "pipeline" / "configs" / "training.json"
@@ -74,3 +80,54 @@ def test_build_estimator_applies_params_and_returns_fresh_instance():
 def test_config_hash_is_canonical_and_value_sensitive():
     assert compute_config_hash({"b": 1, "a": 2}) == compute_config_hash({"a": 2, "b": 1})
     assert compute_config_hash({"a": 2}) != compute_config_hash({"a": 3})
+
+
+TEXTS = ["track my order", "cancel my order", "refund status", "where is my parcel"]
+LABELS = ["track_order", "cancel_order", "refund_status", "track_order"]
+
+
+def _fit_tiny_bundle(model_id="logistic_regression"):
+    transformer = IntentFeaturePipeline(min_df=1, max_features=50).fit(TEXTS)
+    if model_id == "linear_svm":
+        classifier = LinearSVC(C=1.0, dual="auto", max_iter=5000, random_state=42)
+    else:
+        classifier = LogisticRegression(C=1.0, solver="lbfgs", max_iter=500)
+    classifier.fit(transformer.transform(TEXTS), LABELS)
+    return IntentModelBundle(
+        transformer=transformer,
+        classifier=classifier,
+        model_id=model_id,
+        candidate_id=f"{model_id}__C=1.0",
+        classes_=list(classifier.classes_),
+        metadata={"sklearn_version": sklearn.__version__},
+    )
+
+
+def test_bundle_roundtrip_and_text_normalization(tmp_path):
+    bundle = _fit_tiny_bundle()
+    reference = bundle.predict(["track my order"]).tolist()
+    assert bundle.predict(["ＴＲＡＣＫ   ＭＹ   ＯＲＤＥＲ"]).tolist() == reference
+    saved = save_bundle(bundle, tmp_path / "models" / "logistic_regression")
+    loaded = load_bundle(saved.parent)
+    assert loaded.predict(TEXTS).tolist() == bundle.predict(TEXTS).tolist()
+
+
+def test_bundle_scores_follow_classes_order():
+    bundle = _fit_tiny_bundle("linear_svm")
+    scores = bundle.decision_function(TEXTS)
+    predicted = bundle.predict(TEXTS).tolist()
+    assert predicted == [bundle.classes_[i] for i in scores.argmax(axis=1)]
+
+
+def test_svm_bundle_does_not_fake_probabilities():
+    bundle = _fit_tiny_bundle("linear_svm")
+    with pytest.raises(AttributeError):
+        bundle.predict_proba(TEXTS)
+
+
+def test_atomic_json_write_replaces_without_leftovers(tmp_path):
+    target = tmp_path / "run" / "run_state.json"
+    write_json_atomic({"status": "running"}, target)
+    write_json_atomic({"status": "completed"}, target)
+    assert load_json(target) == {"status": "completed"}
+    assert [p.name for p in target.parent.iterdir()] == ["run_state.json"]
