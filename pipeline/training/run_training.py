@@ -413,6 +413,8 @@ def run_training(
 
         def _on_fold(df: pd.DataFrame) -> None:
             write_csv_atomic(df, run_dir / "fold_metrics.csv", index=False)
+            completed_folds = df["fold"].nunique()
+            print(f"  -> Fold {completed_folds}/{config['n_folds']} done ({len(df)} fits recorded)")
 
         cv_res = run_cross_validation(
             verified.development,
