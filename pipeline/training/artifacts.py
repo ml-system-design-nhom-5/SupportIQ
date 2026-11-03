@@ -6,7 +6,7 @@ import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Collection, Sequence
 
 import joblib
 import numpy as np
@@ -111,3 +111,52 @@ def write_csv_atomic(frame: pd.DataFrame, path: str | Path, *, index: bool = Fal
         if temporary.exists():
             temporary.unlink()
     return target
+
+
+def build_model_card(
+    *,
+    run_id: str,
+    model_id: str,
+    candidate_id: str,
+    params: dict[str, Any],
+    resolved_params: dict[str, Any],
+    cv_metrics: dict[str, Any],
+    preparation_run_id: str,
+    dataset_version: str,
+    split_version: str,
+    class_order: Sequence[str],
+    core_intents: Collection[str],
+    target_met: bool,
+) -> dict[str, Any]:
+    """Emit a model card capturing provenance, parameters, scope, and evaluation requirements."""
+    classes = [str(label) for label in class_order]
+    return {
+        "model_id": model_id,
+        "candidate_id": candidate_id,
+        "params": params,
+        "resolved_params": resolved_params,
+        "training_run_id": run_id,
+        "preparation_run_id": preparation_run_id,
+        "dataset_version": dataset_version,
+        "split_version": split_version,
+        "language": "en",
+        "languages": ["en"],
+        "n_labels": len(classes),
+        "classes": classes,
+        "cv_metrics": cv_metrics,
+        "meets_cv_target": bool(target_met),
+        "core_intents": [str(label) for label in core_intents],
+        "data_limitations": (
+            "Trained on the synthetic Bitext Retail & E-Commerce dataset in English; "
+            "real user traffic may exhibit different distributions, typos, and phrasing."
+        ),
+        "calibration": "not_calibrated",
+        "abstention_threshold": None,
+        "status": "candidate",
+        "evaluation_required_before_release": True,
+        "known_limits": [
+            "LinearSVC does not supply probability estimates; decision_function represents uncalibrated signed distances.",
+            "LogisticRegression and MultinomialNB probability outputs are not calibrated probabilities.",
+            "Out-of-scope detection and confidence thresholds are not tuned during training and require evaluation protocols.",
+        ],
+    }

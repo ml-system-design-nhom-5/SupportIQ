@@ -11,13 +11,14 @@ from typing import Any, Callable, Collection, Sequence
 
 import numpy as np
 import pandas as pd
+import sklearn
 from scipy.sparse import csr_matrix
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
 
 from pipeline.preparation.features import IntentFeaturePipeline
 from pipeline.training import TrainingError
-from pipeline.training.artifacts import write_csv_atomic, write_json_atomic
+from pipeline.training.artifacts import IntentModelBundle, write_csv_atomic, write_json_atomic
 from pipeline.training.models import CandidateSpec, build_estimator
 
 FOLD_METRIC_COLUMNS = [
@@ -468,4 +469,48 @@ def build_oof_reports(
         results[model_id] = core_metrics
 
     return results
+
+
+def refit_final_models(
+    development: pd.DataFrame,
+    config: dict[str, Any],
+    candidates: Sequence[CandidateSpec],
+    best_per_model: dict[str, str],
+    *,
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, IntentModelBundle]:
+    """Fit a single TF-IDF transformer on development and refit the chosen candidates."""
+    tfidf_params = dict(config["tfidf"])
+    tfidf_params["ngram_range"] = tuple(tfidf_params["ngram_range"])
+    transformer = IntentFeaturePipeline(**tfidf_params)
+    dev_matrix = transformer.fit_transform(development["instruction"])
+    if not transformer.get_feature_names():
+        raise TrainingError("empty vocabulary in development data")
+
+    spec_by_id = {spec.candidate_id: spec for spec in candidates}
+    bundles: dict[str, IntentModelBundle] = {}
+
+    for model_id, candidate_id in best_per_model.items():
+        spec = spec_by_id.get(candidate_id)
+        if spec is None:
+            raise TrainingError(f"candidate {candidate_id!r} not found for model {model_id!r}")
+        estimator = build_estimator(spec, config)
+        estimator.fit(dev_matrix, development["intent"])
+
+        resolved = getattr(estimator, "get_params", lambda **_: {})(deep=False)
+        bundle_meta = {
+            **(metadata or {}),
+            "sklearn_version": sklearn.__version__,
+            "resolved_params": resolved,
+        }
+        bundles[model_id] = IntentModelBundle(
+            transformer=transformer,
+            classifier=estimator,
+            model_id=model_id,
+            candidate_id=candidate_id,
+            classes_=list(estimator.classes_),
+            metadata=bundle_meta,
+        )
+    return bundles
+
 

@@ -24,6 +24,7 @@ from pipeline.training.models import (
 )
 from pipeline.training.artifacts import (
     IntentModelBundle,
+    build_model_card,
     load_bundle,
     save_bundle,
     write_json_atomic,
@@ -32,6 +33,7 @@ from pipeline.training.run_training import verify_inputs
 from pipeline.training.cross_validate import (
     build_fold_features,
     build_oof_reports,
+    refit_final_models,
     run_cross_validation,
     select_candidates,
     summarize_fold_metrics,
@@ -529,3 +531,66 @@ def test_oof_reports_include_false_positives_from_other_classes(tmp_path):
     matrix = pd.read_csv(tmp_path / "m" / "confusion_matrix.csv", index_col=0)
     assert matrix.shape == (3, 3)
     assert matrix.loc["beta", "alpha"] == 1
+
+
+def test_refit_fits_one_transformer_on_all_development_rows(tmp_path, monkeypatch):
+    fx = make_prep_fixture(tmp_path)
+    config = make_cv_config()
+    verified = verify_inputs(fx.manifest_path, expected_intents=("alpha", "beta", "gamma"), n_folds=2)
+    calls = []
+    real_fit_transform = IntentFeaturePipeline.fit_transform
+
+    def spy(self, texts):
+        calls.append(list(texts))
+        return real_fit_transform(self, texts)
+
+    monkeypatch.setattr(IntentFeaturePipeline, "fit_transform", spy)
+    candidates = expand_candidates(config)
+    best = {
+        m: next(c.candidate_id for c in candidates if c.model_id == m)
+        for m in ("multinomial_nb", "logistic_regression", "linear_svm")
+    }
+    bundles = refit_final_models(verified.development, config, candidates, best)
+    assert list(calls[0]) == list(verified.development["instruction"])
+    assert len(bundles) == 3
+
+
+def test_refit_bundle_predicts_like_classifier_and_reloads(tmp_path):
+    fx = make_prep_fixture(tmp_path)
+    config = make_cv_config()
+    verified = verify_inputs(fx.manifest_path, expected_intents=("alpha", "beta", "gamma"), n_folds=2)
+    candidates = expand_candidates(config)
+    best = {
+        m: next(c.candidate_id for c in candidates if c.model_id == m)
+        for m in ("multinomial_nb", "logistic_regression", "linear_svm")
+    }
+    bundles = refit_final_models(verified.development, config, candidates, best)
+    for model_id, bundle in bundles.items():
+        expected = bundle.classifier.predict(bundle.transformer.transform(TEXTS)).tolist()
+        assert bundle.predict(TEXTS).tolist() == expected
+        loaded = load_bundle(save_bundle(bundle, tmp_path / "models" / model_id).parent)
+        assert loaded.predict(TEXTS).tolist() == expected
+
+
+def test_model_card_records_scope_limits_and_release_gate():
+    card = build_model_card(
+        run_id="03-11-2026-training-00",
+        model_id="linear_svm",
+        candidate_id="linear_svm__C=1.0",
+        params={"C": 1.0},
+        resolved_params={"C": 1.0, "max_iter": 5000},
+        cv_metrics={"macro_f1_mean": 0.8, "macro_f1_std": 0.01},
+        preparation_run_id="03-11-2026-02",
+        dataset_version="03-11-2026-02",
+        split_version="03-11-2026-02",
+        class_order=("alpha", "beta", "gamma"),
+        core_intents=("alpha",),
+        target_met=False,
+    )
+    assert card["status"] == "candidate"
+    assert card["calibration"] == "not_calibrated"
+    assert card["languages"] == ["en"]
+    assert card["n_labels"] == 3
+    assert card["evaluation_required_before_release"] is True
+    assert "synthetic" in card["data_limitations"].lower()
+    assert card["meets_cv_target"] is False
