@@ -459,6 +459,11 @@ def run_training(
             model_dir = run_dir / "models" / model_id
             save_bundle(bundle, model_dir)
             best_info = selection.payload["best_per_model"][model_id]
+            model_macro_mean = best_info.get("macro_f1_mean")
+            model_target_met = bool(
+                model_macro_mean is not None
+                and round(float(model_macro_mean), 6) >= float(config["cv_target_macro_f1"])
+            )
             card = build_model_card(
                 run_id=run_id,
                 model_id=model_id,
@@ -471,7 +476,7 @@ def run_training(
                 split_version=verified.manifest["metadata"]["split_version"],
                 class_order=verified.class_order,
                 core_intents=CORE_PRODUCT_INTENTS,
-                target_met=selection.payload["meets_cv_target"],
+                target_met=model_target_met,
             )
             write_json_atomic(card, model_dir / "model_card.json")
             loaded_b = load_bundle(model_dir)

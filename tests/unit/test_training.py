@@ -804,3 +804,56 @@ def test_environment_and_tampered_artifact_rejected(tmp_path):
 def test_training_artifacts_are_gitignored():
     ignored = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
     assert "/artifacts/training/" in [line.strip() for line in ignored]
+
+
+def test_refit_convergence_warning_raises_training_error(tmp_path, monkeypatch):
+    fx = make_prep_fixture(tmp_path)
+    config = make_cv_config()
+    verified = verify_inputs(fx.manifest_path, expected_intents=("alpha", "beta", "gamma"), n_folds=2)
+    candidates = expand_candidates(config)
+    best = {
+        m: next(c.candidate_id for c in candidates if c.model_id == m)
+        for m in ("multinomial_nb", "logistic_regression", "linear_svm")
+    }
+
+    orig_fit = LogisticRegression.fit
+
+    def warn_fit(self, X, y):
+        warnings.warn("Refit failed to converge", ConvergenceWarning)
+        return orig_fit(self, X, y)
+
+    monkeypatch.setattr(LogisticRegression, "fit", warn_fit)
+    with pytest.raises(TrainingError, match="ConvergenceWarning"):
+        refit_final_models(verified.development, config, candidates, best)
+
+
+def test_model_card_meets_target_is_specific_to_each_model(tmp_path, monkeypatch):
+    fx = make_prep_fixture(tmp_path)
+    config = make_cv_config()
+    config["cv_target_macro_f1"] = 0.85
+    config_path = tmp_path / "config.json"
+    save_json(config, config_path)
+
+    real_select = select_candidates
+
+    def mock_select(summary, candidates, target):
+        res = real_select(summary, candidates, target=target)
+        # Force multinomial_nb to have low macro_f1_mean (0.50) while winner meets target
+        res.payload["best_per_model"]["multinomial_nb"]["macro_f1_mean"] = 0.50
+        return res
+
+    monkeypatch.setattr("pipeline.training.run_training.select_candidates", mock_select)
+
+    result = run_training(
+        fx.manifest_path,
+        config_path,
+        "03-11-2026-00",
+        tmp_path / "artifacts" / "training",
+        expected_intents=("alpha", "beta", "gamma"),
+    )
+    run_dir = Path(result["run_dir"])
+    card_nb = load_json(run_dir / "models" / "multinomial_nb" / "model_card.json")
+    card_svm = load_json(run_dir / "models" / "linear_svm" / "model_card.json")
+
+    assert card_nb["meets_cv_target"] is False
+    assert card_svm["meets_cv_target"] is True

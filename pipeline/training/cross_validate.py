@@ -495,7 +495,19 @@ def refit_final_models(
         if spec is None:
             raise TrainingError(f"candidate {candidate_id!r} not found for model {model_id!r}")
         estimator = build_estimator(spec, config)
-        estimator.fit(dev_matrix, development["intent"])
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            estimator.fit(dev_matrix, development["intent"])
+
+        convergence = [
+            warning for warning in caught if issubclass(warning.category, ConvergenceWarning)
+        ]
+        if convergence:
+            message = (
+                f"ConvergenceWarning during refit of {model_id} ({spec.candidate_id}): "
+                + "; ".join(str(item.message) for item in convergence)
+            )
+            raise TrainingError(message)
 
         resolved = getattr(estimator, "get_params", lambda **_: {})(deep=False)
         bundle_meta = {
