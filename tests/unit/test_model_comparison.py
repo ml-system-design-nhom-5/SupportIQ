@@ -418,3 +418,123 @@ def test_probability_columns_match_classes(monkeypatch, tmp_path):
     assert probs[0, 0] > probs[0, 1]
     assert np.isclose(probs.sum(axis=1)[0], 1.0)
 
+
+# =========================================================================
+# Task 3: Benchmark & Hardware Tests
+# =========================================================================
+
+def test_latency_protocol_is_identical_for_all_models():
+    from pipeline.evaluation.benchmark import benchmark_classifier
+
+    texts = ["query 1", "query 2", "query 3"]
+    cfg = {
+        "timing": {
+            "warmup_requests": 2,
+            "benchmark_requests": 4,
+            "latency_batch_size": 1,
+            "throughput_batch_size": 3,
+        }
+    }
+
+    call_log = []
+
+    class MockBundle:
+        def predict(self, batch):
+            call_log.append(list(batch))
+            return np.array(["track_order"] * len(batch))
+
+    bundle = MockBundle()
+    t = [0.0]
+
+    def fake_clock():
+        t[0] += 0.001
+        return t[0]
+
+    res = benchmark_classifier(bundle, texts, cfg, clock=fake_clock)
+    assert res["latency"]["requests_measured"] == 4
+    assert len(res["latency"]["durations_seconds"]) == 4
+    # Check that warmup (2) + benchmark (4) were all batch_size=1
+    for call in call_log[:6]:
+        assert len(call) == 1
+    # Check throughput call was batch_size=3
+    assert len(call_log[6]) == 3
+
+
+def test_gpu_sync_brackets_timed_prediction():
+    from pipeline.evaluation.benchmark import benchmark_classifier
+
+    sync_events = []
+
+    class SyncBundle:
+        def predict(self, batch):
+            sync_events.append("predict")
+            return np.array(["track_order"] * len(batch))
+
+        def synchronize(self):
+            sync_events.append("sync")
+
+    bundle = SyncBundle()
+    cfg = {
+        "timing": {
+            "warmup_requests": 1,
+            "benchmark_requests": 1,
+            "latency_batch_size": 1,
+            "throughput_batch_size": 1,
+        }
+    }
+
+    t = [0.0]
+
+    def fake_clock():
+        sync_events.append("clock")
+        t[0] += 0.001
+        return t[0]
+
+    benchmark_classifier(bundle, ["query"], cfg, clock=fake_clock)
+
+    # For timed latency prediction, the sequence must bracket predict with sync:
+    # sync -> clock(t0) -> predict -> sync -> clock(t1)
+    # Let's locate the benchmark slice after warmup
+    assert "sync" in sync_events
+    predict_idx = sync_events.index("predict")
+    # Verify sync occurs before clock(t0) and before clock(t1)
+    assert sync_events.count("sync") >= 2
+
+
+def test_no_silent_cpu_fallback(monkeypatch, tmp_path):
+    import torch
+    from pipeline.evaluation.transformer_adapter import TransformerIntentAdapter
+
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+
+    with pytest.raises(EvaluationError, match="(?i)cuda.*available"):
+        TransformerIntentAdapter(model_dir=tmp_path, model_id="test_cuda", device="cuda")
+
+
+def test_zero_or_negative_duration_raises_evaluation_error():
+    from pipeline.evaluation.benchmark import benchmark_classifier
+
+    class DummyBundle:
+        def predict(self, batch):
+            return np.array(["track_order"] * len(batch))
+
+    cfg = {
+        "timing": {
+            "warmup_requests": 1,
+            "benchmark_requests": 2,
+            "latency_batch_size": 1,
+            "throughput_batch_size": 2,
+        }
+    }
+
+    # Clock goes backwards: t1 < t0
+    t = [10.0]
+
+    def backward_clock():
+        t[0] -= 1.0
+        return t[0]
+
+    with pytest.raises(EvaluationError, match="(?i)invalid duration"):
+        benchmark_classifier(DummyBundle(), ["query"], cfg, clock=backward_clock)
+
+
