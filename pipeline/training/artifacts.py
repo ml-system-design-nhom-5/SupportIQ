@@ -99,13 +99,13 @@ def write_json_atomic(data: Any, path: str | Path) -> Path:
     return target
 
 
-def write_csv_atomic(frame: pd.DataFrame, path: str | Path) -> Path:
+def write_csv_atomic(frame: pd.DataFrame, path: str | Path, *, index: bool = False) -> Path:
     """Write a DataFrame through a same-directory temporary file, then replace."""
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = target.with_name(f".{target.name}.tmp")
     try:
-        frame.to_csv(temporary, index=False)
+        frame.to_csv(temporary, index=index)
         os.replace(temporary, target)
     finally:
         if temporary.exists():

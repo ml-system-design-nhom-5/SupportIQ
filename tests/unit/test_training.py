@@ -31,7 +31,10 @@ from pipeline.training.artifacts import (
 from pipeline.training.run_training import verify_inputs
 from pipeline.training.cross_validate import (
     build_fold_features,
+    build_oof_reports,
     run_cross_validation,
+    select_candidates,
+    summarize_fold_metrics,
 )
 from pipeline.training import TrainingError
 
@@ -438,3 +441,91 @@ def test_nan_metric_fails_the_run(tmp_path, monkeypatch):
         run_cross_validation(
             verified.development, config, expand_candidates(config), class_order=verified.class_order
         )
+
+
+def test_summary_uses_population_std_and_keeps_all_candidates():
+    candidates = [
+        CandidateSpec("m__C=0.1", "m", 0, {"C": 0.1}),
+        CandidateSpec("m__C=1.0", "m", 1, {"C": 1.0}),
+    ]
+    fold_metrics = pd.DataFrame(
+        [
+            {
+                "model_id": "m",
+                "candidate_id": "m__C=0.1",
+                "params": "{}",
+                "fold": 0,
+                "macro_f1": 0.5,
+                "accuracy": 0.5,
+                "weighted_f1": 0.5,
+                "status": "ok",
+            },
+            {
+                "model_id": "m",
+                "candidate_id": "m__C=0.1",
+                "params": "{}",
+                "fold": 1,
+                "macro_f1": 0.7,
+                "accuracy": 0.5,
+                "weighted_f1": 0.5,
+                "status": "ok",
+            },
+        ]
+    )
+    summary = summarize_fold_metrics(fold_metrics, candidates, n_folds=2)
+    row = summary.loc[summary["candidate_id"] == "m__C=0.1"].iloc[0]
+    assert row["macro_f1_mean"] == pytest.approx(0.6)
+    assert row["macro_f1_std"] == pytest.approx(0.1)
+    assert len(summary) == 2
+    assert not summary.loc[summary["candidate_id"] == "m__C=1.0", "eligible"].iloc[0]
+
+
+def test_selection_tie_breaks_lower_std_then_config_order():
+    candidates = [CandidateSpec("a", "m", 0, {}), CandidateSpec("b", "m", 1, {})]
+    summary = pd.DataFrame(
+        [
+            {
+                "candidate_id": "a",
+                "model_id": "m",
+                "macro_f1_mean": 0.8,
+                "macro_f1_std": 0.02,
+                "eligible": True,
+            },
+            {
+                "candidate_id": "b",
+                "model_id": "m",
+                "macro_f1_mean": 0.8,
+                "macro_f1_std": 0.01,
+                "eligible": True,
+            },
+        ]
+    )
+    assert select_candidates(summary, candidates, target=0.85).winner == "b"
+    summary.loc[summary["candidate_id"] == "b", "macro_f1_std"] = 0.02
+    assert select_candidates(summary, candidates, target=0.85).winner == "a"
+
+
+def test_oof_reports_include_false_positives_from_other_classes(tmp_path):
+    oof = pd.DataFrame(
+        [
+            {
+                "sample_id": "1",
+                "fold": 0,
+                "y_true": "beta",
+                "y_pred": "alpha",
+                "model_id": "m",
+                "candidate_id": "m__C=1.0",
+            },
+        ]
+    )
+    core = build_oof_reports(
+        oof,
+        labels=("alpha", "beta", "gamma"),
+        core_intents=("alpha",),
+        report_dir=tmp_path,
+    )
+    assert core["m"]["per_intent"]["alpha"]["precision"] == 0.0
+    assert core["m"]["macro_f1"] == 0.0
+    matrix = pd.read_csv(tmp_path / "m" / "confusion_matrix.csv", index_col=0)
+    assert matrix.shape == (3, 3)
+    assert matrix.loc["beta", "alpha"] == 1

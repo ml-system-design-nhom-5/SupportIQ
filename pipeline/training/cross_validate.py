@@ -6,16 +6,18 @@ import json
 import time
 import warnings
 from dataclasses import dataclass
-from typing import Any, Callable, Sequence
+from pathlib import Path
+from typing import Any, Callable, Collection, Sequence
 
 import numpy as np
 import pandas as pd
 from scipy.sparse import csr_matrix
 from sklearn.exceptions import ConvergenceWarning
-from sklearn.metrics import accuracy_score, f1_score
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
 
 from pipeline.preparation.features import IntentFeaturePipeline
 from pipeline.training import TrainingError
+from pipeline.training.artifacts import write_csv_atomic, write_json_atomic
 from pipeline.training.models import CandidateSpec, build_estimator
 
 FOLD_METRIC_COLUMNS = [
@@ -229,3 +231,241 @@ def run_cross_validation(
         fold_metrics=pd.DataFrame(metric_rows, columns=FOLD_METRIC_COLUMNS),
         oof_predictions=pd.DataFrame(oof_rows, columns=OOF_COLUMNS),
     )
+
+
+SUMMARY_COLUMNS = [
+    "model_id",
+    "candidate_id",
+    "params",
+    "n_folds",
+    "macro_f1_mean",
+    "macro_f1_std",
+    "accuracy_mean",
+    "accuracy_std",
+    "weighted_f1_mean",
+    "weighted_f1_std",
+    "eligible",
+]
+
+
+@dataclass(frozen=True)
+class SelectionResult:
+    """Best candidate per model and the CV winner across models."""
+
+    best_per_model: dict[str, str]
+    winner: str
+    payload: dict[str, Any]
+
+
+def _mean_std(series: pd.Series) -> tuple[float, float]:
+    values = pd.to_numeric(series, errors="coerce").astype(float)
+    if values.empty:
+        return float("nan"), float("nan")
+    return float(values.mean()), float(values.std(ddof=0))
+
+
+def summarize_fold_metrics(
+    fold_metrics: pd.DataFrame,
+    candidates: Sequence[CandidateSpec],
+    *,
+    n_folds: int,
+) -> pd.DataFrame:
+    """Aggregate fold metrics to mean/std for every configured candidate."""
+    rows: list[dict[str, Any]] = []
+    for spec in candidates:
+        subset = fold_metrics[fold_metrics["candidate_id"] == spec.candidate_id]
+        macro_mean, macro_std = _mean_std(subset["macro_f1"])
+        accuracy_mean, accuracy_std = _mean_std(subset["accuracy"])
+        weighted_mean, weighted_std = _mean_std(subset["weighted_f1"])
+        eligible = bool(
+            len(subset) == n_folds
+            and subset["fold"].nunique() == n_folds
+            and (subset["status"] == "ok").all()
+        )
+        rows.append(
+            {
+                "model_id": spec.model_id,
+                "candidate_id": spec.candidate_id,
+                "params": json.dumps(spec.params, sort_keys=True, separators=(",", ":")),
+                "n_folds": int(len(subset)),
+                "macro_f1_mean": macro_mean,
+                "macro_f1_std": macro_std,
+                "accuracy_mean": accuracy_mean,
+                "accuracy_std": accuracy_std,
+                "weighted_f1_mean": weighted_mean,
+                "weighted_f1_std": weighted_std,
+                "eligible": eligible,
+            }
+        )
+    return pd.DataFrame(rows, columns=SUMMARY_COLUMNS).assign(
+        _order=[spec.order for spec in candidates]
+    ).sort_values("_order", kind="stable").drop(columns="_order").reset_index(drop=True)
+
+
+def _optional_float(row: dict[str, Any], key: str) -> float | None:
+    value = row.get(key)
+    if value is None or pd.isna(value):
+        return None
+    return float(value)
+
+
+def select_candidates(
+    summary: pd.DataFrame,
+    candidates: Sequence[CandidateSpec],
+    *,
+    target: float,
+) -> SelectionResult:
+    """Choose one candidate per model and a deterministic overall winner."""
+    if summary.empty:
+        raise TrainingError("no candidates available for selection")
+    eligible = summary[summary["eligible"].astype(bool)]
+    if eligible.empty:
+        raise TrainingError("no eligible candidates for selection")
+
+    spec_by_id = {spec.candidate_id: spec for spec in candidates}
+    model_order: list[str] = []
+    for spec in candidates:
+        if spec.model_id not in model_order:
+            model_order.append(spec.model_id)
+
+    records = eligible.to_dict("records")
+
+    def rank(row: dict[str, Any]) -> tuple[float, float, int]:
+        candidate_id = str(row["candidate_id"])
+        spec = spec_by_id.get(candidate_id)
+        order = spec.order if spec is not None else 10**9
+        mean = row.get("macro_f1_mean")
+        std = row.get("macro_f1_std")
+        mean_value = float(mean) if mean is not None and not pd.isna(mean) else float("-inf")
+        std_value = float(std) if std is not None and not pd.isna(std) else float("inf")
+        return (-round(mean_value, 6), round(std_value, 6), order)
+
+    best_rows: dict[str, dict[str, Any]] = {}
+    for model_id in model_order:
+        model_rows = [row for row in records if row["model_id"] == model_id]
+        if not model_rows:
+            raise TrainingError(f"no eligible candidate for model {model_id}")
+        best_rows[model_id] = min(model_rows, key=rank)
+
+    winner_row = min(best_rows.values(), key=rank)
+    best_per_model: dict[str, dict[str, Any]] = {}
+    for model_id, row in best_rows.items():
+        candidate_id = str(row["candidate_id"])
+        spec = spec_by_id.get(candidate_id)
+        best_per_model[model_id] = {
+            "candidate_id": candidate_id,
+            "model_id": model_id,
+            "params": spec.params if spec is not None else {},
+            "macro_f1_mean": _optional_float(row, "macro_f1_mean"),
+            "macro_f1_std": _optional_float(row, "macro_f1_std"),
+            "accuracy_mean": _optional_float(row, "accuracy_mean"),
+            "weighted_f1_mean": _optional_float(row, "weighted_f1_mean"),
+        }
+
+    winner_mean = _optional_float(winner_row, "macro_f1_mean")
+    payload = {
+        "selection_metric": "macro_f1_mean",
+        "tie_break": ["macro_f1_mean_desc", "macro_f1_std_asc", "config_order"],
+        "cv_target_macro_f1": float(target),
+        "meets_cv_target": bool(
+            winner_mean is not None and round(winner_mean, 6) >= target
+        ),
+        "best_per_model": best_per_model,
+        "winner": best_per_model[str(winner_row["model_id"])],
+    }
+    return SelectionResult(
+        best_per_model={model_id: row["candidate_id"] for model_id, row in best_per_model.items()},
+        winner=str(winner_row["candidate_id"]),
+        payload=payload,
+    )
+
+
+def build_oof_reports(
+    oof: pd.DataFrame,
+    *,
+    labels: Sequence[str],
+    core_intents: Collection[str],
+    report_dir: str | Path,
+) -> dict[str, dict[str, Any]]:
+    """Write per-model OOF reports from the fixed label universe."""
+    label_list = [str(label) for label in labels]
+    core_list = [str(label) for label in core_intents]
+    base_dir = Path(report_dir)
+    results: dict[str, dict[str, Any]] = {}
+
+    for model_id in oof["model_id"].drop_duplicates():
+        model_id = str(model_id)
+        frame = oof[oof["model_id"].astype(str) == model_id]
+        model_dir = base_dir / model_id
+        model_dir.mkdir(parents=True, exist_ok=True)
+
+        report = classification_report(
+            frame["y_true"],
+            frame["y_pred"],
+            labels=label_list,
+            output_dict=True,
+            zero_division=0,
+        )
+        per_class_rows = []
+        for label in label_list:
+            metrics = report.get(label, {})
+            per_class_rows.append(
+                {
+                    "label": label,
+                    "precision": float(metrics.get("precision", 0.0)),
+                    "recall": float(metrics.get("recall", 0.0)),
+                    "f1": float(metrics.get("f1-score", 0.0)),
+                    "support": int(metrics.get("support", 0)),
+                }
+            )
+        per_class = pd.DataFrame(per_class_rows).set_index("label")
+        write_csv_atomic(per_class, model_dir / "per_class_metrics.csv", index=True)
+
+        matrix = pd.DataFrame(
+            confusion_matrix(frame["y_true"], frame["y_pred"], labels=label_list),
+            index=label_list,
+            columns=label_list,
+        )
+        write_csv_atomic(matrix, model_dir / "confusion_matrix.csv", index=True)
+
+        wrong = frame[frame["y_true"] != frame["y_pred"]]
+        if wrong.empty:
+            top_confusions = pd.DataFrame(columns=["y_true", "y_pred", "count"])
+        else:
+            top_confusions = (
+                wrong.groupby(["y_true", "y_pred"])
+                .size()
+                .reset_index(name="count")
+                .sort_values(["count", "y_true", "y_pred"], ascending=[False, True, True])
+                .head(20)
+            )
+        write_csv_atomic(top_confusions, model_dir / "top_confusions.csv", index=False)
+
+        per_intent: dict[str, dict[str, Any]] = {}
+        for label in core_list:
+            metrics = report.get(label, {})
+            per_intent[label] = {
+                "precision": float(metrics.get("precision", 0.0)),
+                "recall": float(metrics.get("recall", 0.0)),
+                "f1": float(metrics.get("f1-score", 0.0)),
+                "support": int(metrics.get("support", 0)),
+            }
+        core_metrics = {
+            "core_intents": core_list,
+            "n_core_intents": len(core_list),
+            "per_intent": per_intent,
+            "macro_precision": float(np.mean([item["precision"] for item in per_intent.values()]))
+            if per_intent
+            else float("nan"),
+            "macro_recall": float(np.mean([item["recall"] for item in per_intent.values()]))
+            if per_intent
+            else float("nan"),
+            "macro_f1": float(np.mean([item["f1"] for item in per_intent.values()]))
+            if per_intent
+            else float("nan"),
+        }
+        write_json_atomic(core_metrics, model_dir / "core_intent_metrics.json")
+        results[model_id] = core_metrics
+
+    return results
+
