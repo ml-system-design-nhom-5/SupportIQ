@@ -1,8 +1,8 @@
 # UI rules
 
-> **Status:** Active · **Owner:** frontend · **Last reviewed:** 2026-10-24
+> **Status:** Active · **Owner:** frontend · **Last reviewed:** 2026-11-01
 
-A strict design system and interaction rules, so every screen looks and behaves the same, staff can work quickly and safely, and developers can build and review UI with confidence. The console exists to help staff check the AI, not to make them trust it blindly. Design-system structure: [ADR-0008](../decisions/0008-ui-design-system.md). Shop scope: [ADR-0002](../decisions/0002-shop-demo-scope.md).
+A strict design system and interaction rules, so every screen looks and behaves the same, staff can work quickly and safely, and developers can build and review UI with confidence. The console exists to help staff check the AI, not to make them trust it blindly. Design-system structure: [ADR-0008](../decisions/0008-ui-design-system.md). Shop scope: [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md). Roles: [ADR-0012](../decisions/0012-roles-v1.md).
 
 ## Principles
 
@@ -18,7 +18,7 @@ A strict design system and interaction rules, so every screen looks and behaves 
 flowchart TB
     T["Design tokens<br/>color, typography, spacing, radius, elevation, motion"] -->|"used by"| P["Primitives<br/>shadcn/ui on Radix: Button, Input, Dialog, Tooltip"]
     P -->|"used by"| D["Domain components<br/>CitationMarker, ConfidenceBadge, IntentPicker,<br/>DraftEditor, StaffNotePanel, StatusBanner, ReasonCodeChips"]
-    D -->|"used by"| S["Feature screens<br/>/console, /shop"]
+    D -->|"used by"| S["Feature screens<br/>/console, /shop, /admin"]
 ```
 
 **UI-01.** The design system lives in `frontend/src/design-system/` with `tokens/`, `primitives/`, and `components/` ([TS-05](typescript.md#project-layout)).
@@ -47,10 +47,11 @@ flowchart TB
 | `danger` | Blocked, failed, irreversible actions |
 | `info` | Neutral system information |
 | `ai` | Marks AI-generated content |
+| `success-subtle`, `warning-subtle`, `danger-subtle`, `info-subtle`, `ai-subtle` | Tinted backgrounds behind the matching role |
 
 **UI-07.** Spacing uses a 4 px grid with these steps only: 0, 4, 8, 12, 16, 24, 32, 48, 64 px.
 
-**UI-08.** Typography uses one sans-serif family for UI text and one monospace family for IDs and versions, both chosen at scaffold. Sizes: 12, 14, 16, 18, 20, 24, 30 px. Weights: 400, 500, 600. Console body text is 14 px; shop body text is 16 px.
+**UI-08.** Typography uses Inter for UI text and JetBrains Mono for IDs and versions. Sizes: 12, 14, 16, 18, 20, 24, 30 px. Weights: 400, 500, 600. Console body text is 14 px; shop body text is 16 px.
 
 **UI-09.** Radius has three steps (small, medium, large). Elevation has three levels. Motion uses two durations (100 ms and 200 ms) with one easing curve and respects `prefers-reduced-motion`.
 
@@ -70,19 +71,25 @@ flowchart TB
 
 **UI-15.** The console uses one fixed workspace layout, defined in the console design doc. Panels and actions never move between tickets.
 
-**UI-16.** The main actions are always visible, in the same place: Edit, Reject draft, Escalate, and Send reply. When authority is required, staff see Submit for approval instead of Send reply. Actions that `backend` does not list in `allowed_actions` are disabled, with the reason shown. There is no automatic send.
+**UI-16.** The main actions are always visible, in the same place: Edit, Reject draft, Escalate, and Send reply. When authority is required, staff see Submit for approval instead of Send reply; otherwise it sits in a secondary menu, and in the manual-handling state it is a visible button. Actions that `backend` does not list in `allowed_actions` are disabled, with the reason shown. There is no automatic send.
 
 **UI-17.** Irreversible actions (Send reply, Submit for approval, Reject draft, Escalate) never have single-key shortcuts. Their shortcuts use a modifier (`Ctrl` or `Cmd` with `Enter`), and Send reply shows a confirmation step.
 
-**UI-18.** When a suggestion has warnings (low confidence, signal disagreement, stale or conflicting sources, sensitive ticket), Send reply stays disabled until staff acknowledge each warning.
+**UI-18.** When a suggestion has warnings (signal disagreement, stale or conflicting sources, sensitive ticket), Send reply stays disabled until staff acknowledge each warning. Low confidence is not a warning: it produces no draft at all (UI-42).
 
-**UI-19.** Tickets where authority is required (FR-06) show a persistent banner: the AI output is supporting information, and the decision belongs to a supervisor. Supervisors see the staff proposal next to the AI draft and send it as proposed or edited.
+**UI-19.** Tickets where authority is required (FR-06) show a persistent banner: the AI output is supporting information, and the decision belongs to a manager. Managers see the staff proposal next to the AI draft and send it as proposed or edited.
 
 **UI-20.** Each draft segment shows inline citation markers. Hovering or focusing a marker shows the document title, version, effective dates, and snippet; activating it opens the full document version.
 
 **UI-21.** Staff notes appear in a separate panel labeled "For staff only", never inside the draft editor.
 
-**UI-22.** Intent correction takes one interaction from the AI panel. After a correction, the draft area shows that a new draft is being generated and marks the previous draft as outdated.
+**UI-22.** Confirming the predicted intent or choosing another takes one interaction from the AI panel. After a confirmation or a correction, the draft area shows that a new draft is being generated and marks the previous draft as outdated. A correction is allowed while the AI is running; the console then warns that a manager may still have to send the reply.
+
+**UI-41.** Editing and sending a draft, or rejecting it and sending a reply, takes at most three deliberate actions (NFR-11). Typing text is not an action. Steps that guardrails require are not counted: acknowledging warnings (UI-18) and confirming Send reply (UI-17). The console design doc states the action count of each flow, and an end-to-end test checks it.
+
+**UI-42.** When a draft abstained for low confidence (ESC-01), the AI panel shows the top three candidate intents with their confidence, each with a "Use this intent" action, and says that no draft is created until staff choose. The draft area shows no draft and no filler text.
+
+**UI-43.** AI text is shown exactly as `backend` returns it. Any text that matches the placeholder syntax ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#placeholder-syntax)), which means a mask or a pseudonym that `backend` could not restore, is highlighted with the label "Personal data hidden: replace before sending". Customer text that only looks like a placeholder (a restored `LITERAL`) is highlighted with the label "Customer text in a reserved format: rephrase before sending". Send reply and Submit for approval stay disabled while the reply editor contains text in the placeholder syntax. The UI never tries to restore or remove placeholders itself.
 
 ## States
 
@@ -92,7 +99,7 @@ flowchart TB
 
 **UI-25.** Error states say what happened and what to do next, in plain language. They never show stack traces, raw codes, or internal names, but offer a copyable trace ID under "Details".
 
-**UI-26.** The manual-handling state shows the manual-process instructions and keeps every non-AI tool working.
+**UI-26.** The manual-handling state shows the manual-process instructions, a reminder to route refund decisions and disputes to a manager, Submit for approval, and Try AI again when a retry is allowed. It keeps every non-AI tool working.
 
 ## Content
 
@@ -112,13 +119,13 @@ flowchart TB
 
 ## Layout and performance
 
-**UI-33.** The console targets desktop widths of 1280 px and above. The shop supports widths from 360 px.
+**UI-33.** The console and the admin area target desktop widths of 1280 px and above. The shop supports widths from 360 px.
 
 **UI-34.** Every interaction gives visible feedback within 100 ms.
 
 ## Developer views
 
-**UI-35.** When the developer-details setting is enabled (off by default in demo mode), the ticket workspace shows a collapsible "Developer details" panel: trace ID with a link to the trace in Grafana ([ADR-0007](../decisions/0007-observability-stack.md)), model, KB, and prompt versions, latency per step, and raw statuses and reason codes.
+**UI-35.** When the developer-details setting is enabled (off by default in demo mode), the ticket workspace shows a collapsible "Developer details" panel: trace ID with a link to the trace in Grafana ([ADR-0007](../decisions/0007-observability-stack.md)), the release ID with the model, KB, and prompt versions, latency per step, and raw statuses and reason codes.
 
 **UI-36.** Storybook is the catalog of every design-system component and the place to review UI changes in isolation. A UI PR links the affected stories.
 
@@ -126,7 +133,15 @@ flowchart TB
 
 ## Shop
 
-**UI-38.** The shop uses the same design system and adds no components outside it. Its scope is fixed by ADR-0002.
+**UI-38.** The shop uses the same design system and adds no components outside it. Its scope is fixed by [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md): a read-only catalog, "My orders", the support form, and sent replies. Every product shows the same neutral product image from the design system.
+
+## Reports
+
+**UI-44.** Managers see reports at `/console/reports` (FR-10). The page shows the figures that `backend` returns for a chosen period, each with its unit, and with its target from the [requirements](../product/requirements.md#5-quality-requirements) where one exists. The UI computes no figure, rate, or percentile itself (UI-14). Staff never see the page or a link to it.
+
+## Admin
+
+**UI-45.** The admin area `/admin` has exactly two screens: accounts (list `staff`, `manager`, and `admin` accounts; change a role between `staff` and `manager`; deactivate; reactivate) and versions in use. Every change asks for confirmation and names the account and the change. The area uses the design system and never shows customer accounts, tickets, messages, orders, or reports ([ADR-0012](../decisions/0012-roles-v1.md)).
 
 ## Boundaries
 
@@ -140,5 +155,6 @@ flowchart TB
 - [ ] Every state is implemented and has a story.
 - [ ] AI content is marked; citations work; staff notes are separate.
 - [ ] Irreversible actions need a deliberate action; warnings must be acknowledged.
+- [ ] Placeholders are highlighted and block sending; flows stay within the NFR-11 action budget.
 - [ ] Keyboard and screen reader work; axe passes.
 - [ ] Text uses glossary terms and contains no jargon.

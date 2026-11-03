@@ -1,6 +1,6 @@
 # Testing rules
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-10-23
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-01
 
 Tests are executable specifications. They catch hidden bugs early, protect the guardrails, and keep technical debt from accumulating unseen. A behavior without a test does not exist.
 
@@ -135,8 +135,27 @@ describe("DraftEditor", () => {
 - Mandatory escalation cases from the shared scenario set are routed correctly.
 - `backend` switches to manual handling when `ai-service` fails, times out, or returns an unknown status.
 - Actions that require authority (FR-06) are rejected for roles without it.
+- A `requires_authority` result of a superseded suggestion still sets the ticket's authority flag, and no send succeeds before that result is known.
 - Confidential data never appears in logs (a test captures log output and checks for it).
+- Seeded personal values of the ticket never appear in any request that `backend` sends to `ai-service`, nor in any LLM payload captured by a fake LLM adapter (FR-09, NFR-06).
+- When pseudonymization fails, `backend` makes no call to `ai-service` ([SEC-36](security-and-privacy.md#pseudonymization)).
+- No reply or reply proposal body that contains a placeholder is accepted ([SEC-38](security-and-privacy.md#pseudonymization)).
+- An admin cannot call any `/v1/shop/` or `/v1/console/` operation, and no other role can call a `/v1/admin/` operation ([SEC-41](security-and-privacy.md#authentication-and-authorization)).
+- `UPDATE` and `DELETE` on the audit log are rejected by the database ([SEC-39](security-and-privacy.md#audit-log)).
+- From the `backend` container, no internet host is reachable, directly or through the egress proxy. From the `ai-service` container, only allow-listed hosts are reachable, and only through the proxy ([SEC-40](security-and-privacy.md#transport-and-runtime)).
+- No admin operation returns or changes a customer account ([SEC-41](security-and-privacy.md#authentication-and-authorization)).
 
 ## End-to-end scenarios
 
-**TEST-27.** The end-to-end suite covers at least: a draft approved and sent; a draft edited and sent; an abstained ticket handled manually; an escalation; an intent correction that produces a new draft; and `ai-service` unavailable.
+**TEST-27.** The end-to-end suite covers at least:
+
+- a draft approved and sent;
+- a draft edited and sent;
+- an abstained ticket handled manually;
+- a low-confidence ticket where staff confirm the intent and a draft follows;
+- an escalation handled by a manager;
+- a ticket where authority is required: a staff proposal sent by a manager;
+- an intent correction that produces a new draft;
+- `ai-service` unavailable, then a retry that produces a draft after it recovers;
+- a draft whose pseudonyms appear restored in the console, and a placeholder that blocks sending until it is replaced;
+- an admin role change that takes effect on the account's next request.

@@ -1,6 +1,6 @@
 # Documentation handbook
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-10-23
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-10-28
 
 This handbook tells you where each document lives and how to write it. It applies to every contributor, human or AI agent. A change is not done until its documentation is correct.
 
@@ -133,6 +133,7 @@ Write an ADR when a decision is hard to reverse, affects more than one component
 
 - Use the [design doc template](templates/design-doc.md). Save it as `docs/design/<kebab-case-feature>.md`.
 - Status lifecycle: Draft → In review → Approved → Implemented, or Abandoned.
+- To change an Approved design before it is implemented, write a revision: set the status back to In review, describe the revision and its date in the summary, keep the earlier decisions it replaces under "Alternatives considered", and get approval again from the same reviewers. A design that is already Implemented is not revised; write a new design doc instead.
 - After implementation, update the living docs (`docs/architecture/`, component READMEs). The design doc stays as the record of what was planned and why.
 
 ## Review checklist for documentation

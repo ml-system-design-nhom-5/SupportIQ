@@ -1,6 +1,6 @@
 # Error and reliability rules
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-10-23
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-01
 
 Every failure is designed: it has a type, a defined behavior, a contract mapping, a log event, and a test. The system never turns a failure into a firm answer without evidence.
 
@@ -33,18 +33,21 @@ Every error belongs to exactly one category:
 
 ## Required behavior per failure
 
-**ERR-08.** These behaviors are mandatory. The exact statuses and reason codes are defined in `contracts/`.
+**ERR-08.** These behaviors are mandatory. They implement the escalation rules ESC-01 to ESC-05 of the [requirements](../product/requirements.md#41-escalation-and-fallback-rules). The exact statuses and reason codes are defined in `contracts/`.
 
 | Failure | Required behavior |
 |---|---|
-| Classifier is uncertain, or intent and retrieved documents disagree | No firm draft. Show alternatives and a warning; abstain or recommend review, with a reason code |
+| Classifier is uncertain (top-1 below τ or gap below δ) | No draft until staff confirm or correct the intent (ESC-01). Show the top three candidates |
+| Intent and retrieved documents disagree | No firm draft. Show alternatives and a warning; abstain or recommend review, with a reason code |
 | No valid document | Abstain with a reason code; staff handle the ticket manually |
 | Only expired or conflicting documents | Do not draft from them. Flag them, then abstain or recommend escalation |
-| Sensitive request: refund, transaction dispute, policy exception | Supporting information only. The decision belongs to authorized staff (FR-06) |
+| Sensitive request: refund, transaction dispute, policy exception, legal claim, suspected fraud | Retrieval still runs. Supporting information only. Authority is required, and a manager decides (FR-06, ESC-03) |
+| Customer asks for a human (`human_agent`) | No draft. Recommend escalation; staff decide (ESC-03) |
 | LLM timeout, error, or rate limit | No draft. The analysis is still returned, and the reason is recorded |
-| LLM output does not match the expected structure | Treated as an LLM failure. Partial output is never used |
+| LLM output does not match the expected structure, or contains a placeholder that was not in the prompt | Treated as an LLM failure. Partial output is never used |
+| Pseudonymization fails | Fail closed: nothing is sent to `ai-service`; manual handling with `pseudonymization_failed` ([SEC-36](security-and-privacy.md#pseudonymization)) |
 | Draft fails the grounding check | Unsupported claims never reach staff as facts |
-| `ai-service` unreachable, times out, or returns `5xx` | `backend` switches the ticket to manual handling and records the reason |
+| `ai-service` unreachable, times out, or returns `5xx` | `backend` switches the ticket to manual handling and records the reason. The suggestion runs again when staff open the ticket or ask for a retry |
 | Unknown status or reason code from another component | Treated as manual handling ([CON-22](contracts.md#evolution)) |
 | Invalid input at a boundary | Rejected with a typed `4xx` error; never "fixed" silently |
 
@@ -52,7 +55,7 @@ Every error belongs to exactly one category:
 
 **ERR-09.** Every call to another component or external service (LLM, vector store, database, HTTP) has an explicit timeout from settings. A call without a timeout is a defect.
 
-**ERR-10.** The end-to-end target is p95 ≤ 12 s ([requirements](../product/requirements.md#5-quality-requirements)). Each step has a budget in settings, and the sum of step timeouts plus retries MUST fit within the end-to-end budget. The budgets are documented in the `ai-service` and `backend` design docs.
+**ERR-10.** The end-to-end target is p95 ≤ 12 s ([NFR-08](../product/requirements.md#5-quality-requirements)). Each step has a budget in settings, and the sum of step timeouts plus retries MUST fit within the end-to-end budget. The LLM step, retries included, has a budget of at most 10 s (NFR-07). The budgets are documented in the `ai-service` and `backend` design docs.
 
 **ERR-11.** When the remaining budget is too small for a step, the step is skipped and the result degrades with a reason code; it does not run late.
 
@@ -69,6 +72,8 @@ Every error belongs to exactly one category:
 **ERR-15.** Every write operation that a client may retry accepts an `Idempotency-Key`. A repeated key with the same body returns the original result without repeating the side effect. A repeated key with a different body returns `409`.
 
 **ERR-16.** Recording a staff decision and sending a reply are idempotent. A retry never records a decision twice or sends a reply twice.
+
+**ERR-22.** A suggestion job can run more than once, because an expired lease is claimed again ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md#suggestion-job-queue)). A job stores its results only when its attempt number still matches the job and the suggestion is still current. A repeated or late run therefore never overwrites newer results and never records an outcome twice. The one exception is the authority flag of a superseded suggestion, which is always kept, because it can only be set to true ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md#suggestion-job-queue)).
 
 ## Startup and health
 

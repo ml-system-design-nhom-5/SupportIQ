@@ -1,6 +1,6 @@
 # Data and ML rules
 
-> **Status:** Active · **Owner:** ai-service · **Last reviewed:** 2026-10-23
+> **Status:** Active · **Owner:** ai-service · **Last reviewed:** 2026-11-01
 
 Rules for datasets, the knowledge base (KB), splits, training, prompts, and evaluation. They follow the [requirements](../product/requirements.md) and the course lectures on architecture (Lecture 3) and data quality engineering (Lecture 4). Every reported number must be reproducible from the repository.
 
@@ -38,7 +38,7 @@ data/
 
 **DATA-10.** Automated validation runs at every data boundary: ingestion, transformation, training input, serving input, and feedback export. Cleaning a dataset once is not enough.
 
-**DATA-11.** Loading Bitext checks: the expected columns, exactly the 46 expected intent labels (from a versioned label file), no empty instructions, a row count that matches the manifest, and a report of exact and near-duplicate instructions.
+**DATA-11.** Loading Bitext checks: the expected columns, exactly the 46 expected intent labels (from a versioned label file), no empty instructions, a row count that matches the manifest, and a report of exact and near-duplicate instructions. The report also counts instructions that contain identifier-like values (emails, phone numbers, order numbers) or text in the placeholder syntax ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#placeholder-syntax)).
 
 **DATA-12.** KB ingestion checks against the KB data contract: required fields, unique (document ID, version) pairs, valid dates with `effective_from` before `effective_to`, a policy key on every document, matching checksums, and a report of overlapping effective periods with different content for the same policy key.
 
@@ -50,7 +50,7 @@ data/
 
 ## Knowledge base
 
-**DATA-16.** The KB data contract defines, for each document version: document ID, version, title, body, policy key (the topic used to detect conflicts), `effective_from`, `effective_to` (absent means open-ended), source, owner, and checksum. It also states freshness rules and who acts when a rule is violated.
+**DATA-16.** The KB data contract defines, for each document version: document ID, version, title, body, policy key (the topic used to detect conflicts), `effective_from`, `effective_to` (absent means open-ended), source, owner, checksum, and `last_reviewed_at` when the source provides it. It also states freshness rules and who acts when a rule is violated.
 
 **DATA-17.** A KB version is immutable. A change produces a new `kb_version`. Earlier versions stay available so old suggestions can be reproduced.
 
@@ -60,7 +60,7 @@ data/
 
 ## Splits and evaluation protocol
 
-**DATA-20.** The evaluation protocol, including how 10-fold cross-validation relates to the fixed train, validation, and test split, is defined in a design doc that matches the shared procedure, before the first experiment.
+**DATA-20.** The evaluation protocol is defined in a design doc before the first experiment, and matches the procedure shared with Group 2 (CST-02). It follows the split in the [requirements](../product/requirements.md#31-intent-classification): a hold-out test set fixed with a seed before any experiment, and 10-fold cross-validation on the train and validation part (NFR-01). It also defines the tolerances of the offline evaluation gate (DATA-57).
 
 **DATA-21.** Each Bitext row has a stable ID: a hash of its normalized instruction text and its intent label. Rows with the same normalized instruction always fall in the same split, so duplicates cannot leak across splits.
 
@@ -96,11 +96,24 @@ data/
 
 **DATA-34.** The classifier outputs calibrated probabilities over all 46 intents. Calibration is fitted on validation data and reported with the expected calibration error and a reliability diagram.
 
-**DATA-35.** An artifact bundles preprocessing, model, label mapping, calibration, thresholds, its version, the training data manifest hash, and a metrics summary. `ai-service` refuses to load an artifact that lacks any of these ([ERR-17](errors-and-reliability.md#startup-and-health)).
+**DATA-35.** An artifact bundles preprocessing, model, label mapping, calibration, its version, the training data manifest hash, and a metrics summary. `ai-service` refuses to load an artifact that lacks any of these ([ERR-17](errors-and-reliability.md#startup-and-health)). Routing thresholds are not part of the artifact; they live in the routing configuration (DATA-58).
 
 **DATA-36.** Artifact versions are unique and immutable. Where artifacts are stored is decided in an ADR before the first artifact is shared.
 
 **DATA-37.** `ai-service` loads artifacts and never trains.
+
+**DATA-56.** `ai-service` serves exactly one release manifest at a time, loaded at startup. A release manifest has a unique, immutable `release_id` and names, with the checksum of each: the model artifact version, the KB version, the document-to-intent mapping version, the prompt versions, the routing configuration version, and the retrieval index version. It also links the offline evaluation run that passed the gate (DATA-57). `ai-service` refuses to start with a manifest that is incomplete, whose checksums do not match, or whose routing configuration was tuned for a different model artifact version than the one the manifest names (DATA-58, [ERR-17](errors-and-reliability.md#startup-and-health)). Every suggestion reports its `release_id` ([ARCH-39](architecture.md#versioned-assets)).
+
+**DATA-57.** The offline evaluation gate decides whether a candidate release manifest may be published. The gate runs exactly that manifest on the frozen hold-out test set and the scenario sets. It passes only when:
+
+1. every guardrail test ([TEST-26](testing.md#guardrail-tests)) and every mandatory escalation case passes;
+2. no quality target of the [requirements](../product/requirements.md#5-quality-requirements) is worse than in the current release by more than the tolerance in the evaluation protocol (DATA-20).
+
+If the gate fails, the current release stays in service. Missed targets are reported as they are (DATA-48). The gate never tunes anything on test data (DATA-25).
+
+**DATA-58.** The routing configuration is a versioned file that holds τ (the minimum top-1 probability), δ (the minimum gap between the top two probabilities), the rerank weight λ, the list of sensitive intents, and the sensitive-term list (ESC-01, ESC-03). τ, δ, and λ are tuned on validation data for one model artifact version, and the file records that version. Each entry of the sensitive-term list states its category (legal claim, suspected fraud) and is reviewed by the policy owner and the RAG engineer. Any change produces a new version ([ARCH-40](architecture.md#versioned-assets)) and a new evaluation.
+
+**DATA-59.** The classifier, the retrieval index, and the evaluation sets see the same kind of text that `ai-service` receives in service: pseudonymized text. Preprocessing maps every placeholder to its type alone (for example `[ORDER_ID_1]` to `[ORDER_ID]`) in training, evaluation, and serving, inside the same pipeline object (DATA-26). The scenario sets include messages with placeholders and messages that name third persons, and robustness results report them as separate slices.
 
 ## Prompts and LLM output
 
@@ -122,7 +135,7 @@ data/
 
 **DATA-45.** Retrieval: Recall@3 on questions with a supporting valid document, the ablation with and without reranking ([ADR-0005](../decisions/0005-intent-independent-retrieval.md)), and results on expired and conflicting document cases.
 
-**DATA-46.** Drafting: groundedness on the manually graded set, using a written grading rubric, and abstention correctness on insufficient-evidence cases. Two graders SHOULD grade a shared subset to check agreement.
+**DATA-46.** Drafting: groundedness on the manually graded set, using a written grading rubric, and abstention correctness on insufficient-evidence cases. Every sample is graded independently by at least two graders (NFR-04). Agreement is reported, and each disagreement is resolved by discussion and recorded with the sample.
 
 **DATA-47.** Latency and cost: p50 and p95 end to end and per step, error rate, and cost per request, under the shared test conditions recorded with the run.
 
@@ -132,7 +145,7 @@ data/
 
 **DATA-49.** Staff feedback is not ground truth. An approval does not prove that a draft was correct.
 
-**DATA-50.** Staff decisions MUST NOT flow directly into training data, prompts, or rules. Improvements go through review and versioned changes ([ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md)).
+**DATA-50.** Staff decisions MUST NOT flow directly into training data, prompts, or rules. Improvements go through review and versioned changes ([ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md)). A manager and the ML engineer review exported feedback in a curation step. An accepted improvement becomes a new version of an asset, and then a candidate release that must pass the offline evaluation gate (DATA-57).
 
 **DATA-51.** Feedback data never mixes with evaluation sets.
 

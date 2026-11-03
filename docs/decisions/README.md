@@ -1,6 +1,6 @@
 # Architecture decision records
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-10-24
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-01
 
 An architecture decision record (ADR) captures one significant decision: its context, the options, what we chose, and what it costs. This page lists every ADR and explains the process. Writing rules are in the [documentation handbook](../README.md#adrs).
 
@@ -17,6 +17,15 @@ An architecture decision record (ADR) captures one significant decision: its con
 | [0007](0007-observability-stack.md) | Observability stack | Accepted | 2026-10-24 |
 | [0008](0008-ui-design-system.md) | UI design system | Accepted | 2026-10-24 |
 | [0009](0009-demo-accounts-and-cookie-sessions.md) | Demo accounts with server-side cookie sessions for v1 | Accepted | 2026-10-24 |
+| [0010](0010-pseudonymization-and-egress-control.md) | Pseudonymization of personal data and egress control | Proposed | 2026-10-28 |
+| [0011](0011-deployment-and-runtime-topology.md) | Deployment and runtime topology | Proposed | 2026-10-28 |
+| [0012](0012-roles-v1.md) | Roles v1: customer, staff, manager, and admin | Proposed | 2026-10-28 |
+| [0013](0013-shop-demo-with-read-only-catalog.md) | Shop demo with a read-only catalog | Proposed | 2026-10-28 |
+
+Notes on the index:
+
+- [ADR-0012](0012-roles-v1.md) renames the role `supervisor` used in ADR-0009 to `manager`, once accepted. ADR-0009's authentication mechanism is unchanged.
+- [ADR-0013](0013-shop-demo-with-read-only-catalog.md) supersedes ADR-0002 once accepted. At that point, ADR-0002 and its row change to "Superseded by ADR-0013".
 
 ## Lifecycle
 
@@ -36,3 +45,4 @@ stateDiagram-v2
 3. Every member whose component is affected reviews it. When all of them approve, set the status to **Accepted**, set the date, and merge.
 4. Add the ADR to the index above in the same PR.
 5. To change an accepted decision, write a new ADR and set the old one to **Superseded by ADR-NNNN**. Apart from this status change, typos, and broken links, accepted ADRs are not edited.
+6. When a new ADR replaces one named part of an accepted ADR and the rest still holds, the old ADR stays Accepted. The new ADR names the replaced part, and a note under the index records it.
