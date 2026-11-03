@@ -217,3 +217,204 @@ def test_missing_provenance_is_explicit_not_verified(tmp_path):
         reg = specs[model_id]["provenance"]
         assert reg["status"] == "unverified"
         assert reg["eligible_for_independent_ranking"] is False
+
+
+# =========================================================================
+# Task 2: Adapter Tests
+# =========================================================================
+
+class MockHFConfig:
+    def __init__(self, id2label: dict[int | str, str], label2id: dict[str, int] | None = None):
+        self.id2label = {int(k): v for k, v in id2label.items()}
+        self.label2id = label2id or {v: int(k) for k, v in id2label.items()}
+        self.architectures = ["DistilBertForSequenceClassification"]
+
+
+class MockHFModel:
+    def __init__(self, config: MockHFConfig, fake_logits: np.ndarray | None = None):
+        self.config = config
+        self.training = False
+        self._fake_logits = fake_logits
+        self.call_count = 0
+
+    def eval(self):
+        self.training = False
+        return self
+
+    def to(self, device):
+        return self
+
+    def __call__(self, input_ids=None, attention_mask=None):
+        import torch
+        self.call_count += 1
+        assert not torch.is_grad_enabled(), "Prediction must run under inference/no_grad mode"
+        batch_size = input_ids.shape[0] if input_ids is not None else 1
+        num_classes = len(self.config.id2label)
+        if self._fake_logits is not None:
+            logits = torch.tensor(self._fake_logits, dtype=torch.float32)
+        else:
+            logits = torch.zeros((batch_size, num_classes), dtype=torch.float32)
+        return type("Output", (), {"logits": logits})()
+
+
+class MockTokenizer:
+    def __init__(self):
+        self.call_count = 0
+
+    def __call__(self, texts, **kwargs):
+        import torch
+        self.call_count += 1
+        batch_size = len(texts)
+        max_len = kwargs.get("max_length", 64)
+        return {
+            "input_ids": torch.ones((batch_size, min(max_len, 10)), dtype=torch.long),
+            "attention_mask": torch.ones((batch_size, min(max_len, 10)), dtype=torch.long),
+        }
+
+
+def test_adapter_maps_reordered_hf_labels(monkeypatch, tmp_path):
+    from pipeline.evaluation.transformer_adapter import TransformerIntentAdapter
+
+    # id2label is deliberately inverted relative to alphabetical:
+    # 0 -> "track_order", 1 -> "cancel_order"
+    hf_config = MockHFConfig(id2label={0: "track_order", 1: "cancel_order"})
+    # fake logits: for sample 0, index 1 has higher score -> should predict "cancel_order"
+    fake_logits = np.array([[0.1, 2.5]])
+    mock_model = MockHFModel(hf_config, fake_logits=fake_logits)
+    mock_tok = MockTokenizer()
+
+    monkeypatch.setattr(
+        "transformers.AutoTokenizer.from_pretrained",
+        lambda *args, **kwargs: mock_tok,
+    )
+    monkeypatch.setattr(
+        "transformers.AutoModelForSequenceClassification.from_pretrained",
+        lambda *args, **kwargs: (mock_model, {"missing_keys": []}),
+    )
+
+    adapter = TransformerIntentAdapter(
+        model_dir=tmp_path,
+        model_id="test_adapter",
+        max_length=64,
+        device="cpu",
+    )
+
+    preds = adapter.predict(["I want to cancel"])
+    assert len(preds) == 1
+    assert preds[0] == "cancel_order"
+
+
+@pytest.mark.parametrize("bad_id2label, match_err", [
+    ({0: "LABEL_0", 1: "LABEL_1"}, "LABEL_"),
+    ({0: "track_order", 2: "cancel_order"}, "contiguous|missing index"),
+    ({0: "track_order", 1: "track_order"}, "duplicate"),
+])
+def test_adapter_rejects_invalid_hf_taxonomies(monkeypatch, tmp_path, bad_id2label, match_err):
+    from pipeline.evaluation.transformer_adapter import TransformerIntentAdapter
+
+    hf_config = MockHFConfig(id2label=bad_id2label)
+    mock_model = MockHFModel(hf_config)
+    mock_tok = MockTokenizer()
+
+    monkeypatch.setattr("transformers.AutoTokenizer.from_pretrained", lambda *args, **kwargs: mock_tok)
+    monkeypatch.setattr(
+        "transformers.AutoModelForSequenceClassification.from_pretrained",
+        lambda *args, **kwargs: (mock_model, {"missing_keys": []}),
+    )
+
+    with pytest.raises(EvaluationError, match=f"(?i){match_err}"):
+        TransformerIntentAdapter(model_dir=tmp_path, model_id="test_adapter")
+
+
+def test_inference_never_initializes_random_head(monkeypatch, tmp_path):
+    from pipeline.evaluation.transformer_adapter import TransformerIntentAdapter
+
+    hf_config = MockHFConfig(id2label={0: "a", 1: "b"})
+    mock_model = MockHFModel(hf_config)
+    mock_tok = MockTokenizer()
+
+    monkeypatch.setattr("transformers.AutoTokenizer.from_pretrained", lambda *args, **kwargs: mock_tok)
+    # Simulate missing classifier weights in checkpoint
+    monkeypatch.setattr(
+        "transformers.AutoModelForSequenceClassification.from_pretrained",
+        lambda *args, **kwargs: (mock_model, {"missing_keys": ["classifier.weight", "classifier.bias"]}),
+    )
+
+    with pytest.raises(EvaluationError, match="(?i)missing.*classifier.*weights"):
+        TransformerIntentAdapter(model_dir=tmp_path, model_id="test_adapter")
+
+
+def test_adapter_uses_eval_inference_and_local_files(monkeypatch, tmp_path):
+    from pipeline.evaluation.transformer_adapter import TransformerIntentAdapter
+
+    hf_config = MockHFConfig(id2label={0: "a", 1: "b"})
+    mock_model = MockHFModel(hf_config)
+    mock_tok = MockTokenizer()
+
+    captured_kwargs = {}
+
+    def capture_loader(*args, **kwargs):
+        captured_kwargs.update(kwargs)
+        return (mock_model, {"missing_keys": []})
+
+    monkeypatch.setattr("transformers.AutoTokenizer.from_pretrained", lambda *args, **kwargs: mock_tok)
+    monkeypatch.setattr("transformers.AutoModelForSequenceClassification.from_pretrained", capture_loader)
+
+    adapter = TransformerIntentAdapter(model_dir=tmp_path, model_id="test_adapter", device="cpu")
+    assert captured_kwargs.get("local_files_only") is True
+    assert captured_kwargs.get("trust_remote_code") is False
+
+    preds = adapter.predict(["hello"])
+    assert mock_model.training is False
+    assert len(preds) == 1
+
+
+def test_empty_input_returns_empty_without_model_call(monkeypatch, tmp_path):
+    from pipeline.evaluation.transformer_adapter import TransformerIntentAdapter
+
+    hf_config = MockHFConfig(id2label={0: "a", 1: "b"})
+    mock_model = MockHFModel(hf_config)
+    mock_tok = MockTokenizer()
+
+    monkeypatch.setattr("transformers.AutoTokenizer.from_pretrained", lambda *args, **kwargs: mock_tok)
+    monkeypatch.setattr(
+        "transformers.AutoModelForSequenceClassification.from_pretrained",
+        lambda *args, **kwargs: (mock_model, {"missing_keys": []}),
+    )
+
+    adapter = TransformerIntentAdapter(model_dir=tmp_path, model_id="test_adapter")
+    res = adapter.predict([])
+    assert len(res) == 0
+    assert mock_model.call_count == 0
+
+    probs = adapter.predict_proba([])
+    assert probs.shape == (0, 2)
+    assert mock_model.call_count == 0
+
+
+def test_probability_columns_match_classes(monkeypatch, tmp_path):
+    from pipeline.evaluation.transformer_adapter import TransformerIntentAdapter
+
+    # id2label: 0 -> "beta", 1 -> "alpha"
+    # classes_ should be sorted: ["alpha", "beta"]
+    hf_config = MockHFConfig(id2label={0: "beta", 1: "alpha"})
+    fake_logits = np.array([[1.0, 3.0]])  # higher for index 1 ("alpha")
+    mock_model = MockHFModel(hf_config, fake_logits=fake_logits)
+    mock_tok = MockTokenizer()
+
+    monkeypatch.setattr("transformers.AutoTokenizer.from_pretrained", lambda *args, **kwargs: mock_tok)
+    monkeypatch.setattr(
+        "transformers.AutoModelForSequenceClassification.from_pretrained",
+        lambda *args, **kwargs: (mock_model, {"missing_keys": []}),
+    )
+
+    adapter = TransformerIntentAdapter(model_dir=tmp_path, model_id="test_adapter")
+    assert adapter.classes_ == ["alpha", "beta"]
+
+    probs = adapter.predict_proba(["test text"])
+    assert probs.shape == (1, 2)
+    # Column 0 corresponds to adapter.classes_[0] == "alpha" (which had logit 3.0)
+    # Column 1 corresponds to adapter.classes_[1] == "beta" (which had logit 1.0)
+    assert probs[0, 0] > probs[0, 1]
+    assert np.isclose(probs.sum(axis=1)[0], 1.0)
+
