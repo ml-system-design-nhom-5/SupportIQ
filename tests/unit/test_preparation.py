@@ -237,3 +237,28 @@ def test_split_dataset_stratified_no_leakage(tmp_path: Path):
                 texts_f1 = set(train_df[train_df["fold"] == f1]["instruction"])
                 texts_f2 = set(train_df[train_df["fold"] == f2]["instruction"])
                 assert len(texts_f1.intersection(texts_f2)) == 0
+
+def test_intent_feature_pipeline_preserves_placeholders_and_persists(tmp_path: Path):
+    from pipeline.preparation.features import IntentFeaturePipeline
+
+    texts = [
+        "Track my package with {{Tracking Number}} please",
+        "View {{Order History}} and cancel order",
+        "Check refund status"
+    ]
+    pipeline = IntentFeaturePipeline(max_features=50, ngram_range=(1, 2), min_df=1)
+    matrix = pipeline.fit_transform(texts)
+    assert matrix.shape[0] == 3
+
+    # Ensure placeholder was kept as a feature token
+    vocab = pipeline.get_feature_names()
+    assert any("{{tracking number}}" in term.lower() for term in vocab)
+
+    # Test persistence with joblib
+    model_path = tmp_path / "tfidf.joblib"
+    pipeline.save(model_path)
+    assert model_path.exists()
+
+    loaded_pipeline = IntentFeaturePipeline.load(model_path)
+    test_matrix = loaded_pipeline.transform(["Where is {{Tracking Number}}?"])
+    assert test_matrix.shape[1] == matrix.shape[1]
