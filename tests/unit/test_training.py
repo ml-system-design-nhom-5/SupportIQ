@@ -29,6 +29,11 @@ from pipeline.training.artifacts import (
     write_json_atomic,
 )
 from pipeline.training.run_training import verify_inputs
+from pipeline.training.cross_validate import (
+    build_fold_features,
+    run_cross_validation,
+)
+from pipeline.training import TrainingError
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_PATH = REPO_ROOT / "pipeline" / "configs" / "training.json"
@@ -323,3 +328,113 @@ def test_verify_inputs_rejects_conflicting_group_labels(tmp_path):
     rewrite_fixture(fx)
     with pytest.raises(ValueError, match="conflicting"):
         verify_inputs(fx.manifest_path, expected_intents=("alpha", "beta", "gamma"), n_folds=2)
+
+
+def make_cv_config(n_folds=2):
+    return validate_training_config(
+        {
+            "schema_version": 1,
+            "seed": 42,
+            "n_folds": n_folds,
+            "cv_target_macro_f1": 0.85,
+            "tfidf": {
+                "ngram_range": [1, 1],
+                "max_features": 100,
+                "min_df": 1,
+                "sublinear_tf": True,
+                "lowercase": True,
+            },
+            "models": [
+                {
+                    "model_id": "multinomial_nb",
+                    "estimator": "MultinomialNB",
+                    "grid": {"alpha": [0.1, 1.0]},
+                    "fixed_params": {"fit_prior": True},
+                },
+                {
+                    "model_id": "logistic_regression",
+                    "estimator": "LogisticRegression",
+                    "grid": {"C": [0.1, 1.0]},
+                    "fixed_params": {
+                        "solver": "lbfgs",
+                        "max_iter": 2000,
+                        "tol": 0.0001,
+                        "class_weight": None,
+                    },
+                },
+                {
+                    "model_id": "linear_svm",
+                    "estimator": "LinearSVC",
+                    "grid": {"C": [0.1, 1.0]},
+                    "fixed_params": {
+                        "dual": "auto",
+                        "max_iter": 5000,
+                        "tol": 0.0001,
+                        "class_weight": None,
+                        "random_state": 42,
+                    },
+                },
+            ],
+            "tie_break": ["macro_f1_mean_desc", "macro_f1_std_asc", "config_order"],
+        }
+    )
+
+
+def test_fold_transformer_excludes_validation_only_token():
+    transformer, _, _, _ = build_fold_features(
+        ["alpha common token", "beta common token"],
+        ["gamma zzonlyval token"],
+        {
+            "ngram_range": (1, 1),
+            "max_features": 100,
+            "min_df": 1,
+            "sublinear_tf": True,
+            "lowercase": True,
+        },
+    )
+    assert "zzonlyval" not in transformer.get_feature_names()
+
+
+def test_cross_validation_runs_every_candidate_and_fold(tmp_path):
+    fx = make_prep_fixture(tmp_path)
+    config = make_cv_config()
+    verified = verify_inputs(fx.manifest_path, expected_intents=("alpha", "beta", "gamma"), n_folds=2)
+    result = run_cross_validation(
+        verified.development, config, expand_candidates(config), class_order=verified.class_order
+    )
+    assert len(result.fold_metrics) == 6 * 2
+    assert result.fold_metrics.groupby("candidate_id")["fold"].nunique().eq(2).all()
+    assert (result.fold_metrics["status"] == "ok").all()
+    assert (result.fold_metrics["transform_seconds"] >= 0).all()
+    assert (result.fold_metrics["fit_seconds"] >= 0).all()
+    assert (result.fold_metrics["predict_seconds"] >= 0).all()
+
+
+def test_convergence_warning_fails_the_run(tmp_path, monkeypatch):
+    def fake_fit(self, X, y):
+        warnings.warn("did not converge", ConvergenceWarning)
+        self.classes_ = np.array(sorted(set(y)))
+        return self
+
+    monkeypatch.setattr(LogisticRegression, "fit", fake_fit)
+    fx = make_prep_fixture(tmp_path)
+    config = make_cv_config()
+    verified = verify_inputs(fx.manifest_path, expected_intents=("alpha", "beta", "gamma"), n_folds=2)
+    with pytest.raises(TrainingError, match="ConvergenceWarning"):
+        run_cross_validation(
+            verified.development, config, expand_candidates(config), class_order=verified.class_order
+        )
+
+
+def test_nan_metric_fails_the_run(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "pipeline.training.cross_validate.f1_score",
+        lambda *args, **kwargs: float("nan"),
+    )
+    fx = make_prep_fixture(tmp_path)
+    config = make_cv_config()
+    verified = verify_inputs(fx.manifest_path, expected_intents=("alpha", "beta", "gamma"), n_folds=2)
+    with pytest.raises(TrainingError, match="NaN"):
+        run_cross_validation(
+            verified.development, config, expand_candidates(config), class_order=verified.class_order
+        )
