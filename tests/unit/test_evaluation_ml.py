@@ -366,3 +366,81 @@ def test_config_validation_and_loading(tmp_path):
     bad_file.write_text(json.dumps({"schema_version": 1, "unknown_key": 99}), encoding="utf-8")
     with pytest.raises(EvaluationError):
         load_config(bad_file)
+
+
+def test_core_precision_keeps_false_positives_from_other_labels():
+    from pipeline.evaluation.evaluate_intent import classification_report_data
+
+    # gold [A, B], pred [A, A], core [A] -> A has 1 TP, 1 FP -> precision=0.5, recall=1.0, f1=2/3
+    preds = pd.DataFrame({
+        "sample_id": ["s1", "s2"],
+        "y_true": ["A", "B"],
+        "y_pred": ["A", "A"],
+    })
+    classes = ["A", "B"]
+    core = ["A"]
+    res = classification_report_data(preds, class_order=classes, core_intents=core)
+
+    core_a = res["core_metrics"]["per_intent"]["A"]
+    assert core_a["precision"] == pytest.approx(0.5)
+    assert core_a["recall"] == pytest.approx(1.0)
+    assert core_a["f1"] == pytest.approx(2.0 / 3.0)
+
+    # confusion matrix: rows are true, cols are pred
+    cm = res["confusion_matrix"]
+    assert cm.loc["A", "A"] == 1
+    assert cm.loc["A", "B"] == 0
+    assert cm.loc["B", "A"] == 1
+    assert cm.loc["B", "B"] == 0
+
+
+def test_predict_uses_bundle_without_fit(tmp_path, monkeypatch):
+    from pipeline.evaluation.evaluate_intent import predict_rows
+
+    fx = make_eval_fixture(tmp_path)
+    bundle = IntentModelBundle.load(fx.train_dir / "models" / "linear_svm")
+
+    def forbidden_fit(*args, **kwargs):
+        raise AssertionError("fit/fit_transform must not be called during evaluation")
+
+    monkeypatch.setattr(IntentFeaturePipeline, "fit", forbidden_fit)
+    monkeypatch.setattr(IntentFeaturePipeline, "fit_transform", forbidden_fit)
+
+    test_df = fx.cleaned_csv
+    test_rows = pd.read_csv(test_df).head(5)
+    res = predict_rows(bundle, test_rows, batch_size=2)
+
+    assert len(res) == len(test_rows)
+    assert list(res["sample_id"]) == list(test_rows["sample_id"])
+    assert "y_pred" in res.columns
+    assert "y_true" in res.columns
+
+
+@pytest.mark.parametrize("bad_scenario", ["short_output", "unknown_label", "nan_prediction"])
+def test_predict_rows_validates_predictions(tmp_path, monkeypatch, bad_scenario):
+    from pipeline.evaluation.evaluate_intent import predict_rows
+
+    fx = make_eval_fixture(tmp_path)
+    bundle = IntentModelBundle.load(fx.train_dir / "models" / "linear_svm")
+    test_rows = pd.read_csv(fx.cleaned_csv).head(4)
+
+    if bad_scenario == "short_output":
+        monkeypatch.setattr(bundle, "predict", lambda texts: np.array(["track_order"]))
+    elif bad_scenario == "unknown_label":
+        monkeypatch.setattr(bundle, "predict", lambda texts: np.array(["non_existent_label"] * len(texts)))
+    elif bad_scenario == "nan_prediction":
+        monkeypatch.setattr(bundle, "predict", lambda texts: np.array([None] * len(texts)))
+
+    with pytest.raises(EvaluationError):
+        predict_rows(bundle, test_rows, batch_size=2)
+
+
+def test_svm_score_capability_is_margin_not_probability(tmp_path):
+    from pipeline.evaluation.evaluate_intent import get_score_capability
+
+    fx = make_eval_fixture(tmp_path)
+    bundle_svm = IntentModelBundle.load(fx.train_dir / "models" / "linear_svm")
+    bundle_lr = IntentModelBundle.load(fx.train_dir / "models" / "logistic_regression")
+
+    assert get_score_capability(bundle_svm) == "margin"
+    assert get_score_capability(bundle_lr) == "probability"
