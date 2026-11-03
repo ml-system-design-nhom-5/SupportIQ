@@ -121,3 +121,56 @@ def test_validate_dataset_detects_errors_and_duplicates(tmp_path: Path):
     assert (artifacts_dir / "validation_report.json").exists()
     assert (artifacts_dir / "review_candidates.csv").exists()
     assert (artifacts_dir / "duplicate_groups.csv").exists()
+
+def test_clean_dataset_quarantines_and_cleans(tmp_path: Path):
+    from pipeline.preparation.clean_data import clean_dataset
+
+    csv_path = tmp_path / "raw.csv"
+    df = pd.DataFrame({
+        "instruction": [
+            "  Please track {{Tracking Number}}!  ",
+            "Please track {{Tracking Number}}!", # exact duplicate
+            "Cancel order {{Order History}}",
+            "cancel order {{order history}}",   # conflict if different intent
+            "  ",                               # empty
+            "Valid inquiry with unknown intent"
+        ],
+        "intent": [
+            "track_order",
+            "track_order",
+            "cancel_order",
+            "refund_status",                    # conflict!
+            "track_order",
+            "unknown_intent"
+        ],
+        "category": ["ORDER", "ORDER", "ORDER", "RETURNS", "ORDER", "MISC"]
+    })
+    df.to_csv(csv_path, index=False)
+
+    processed_dir = tmp_path / "processed"
+    report_dir = tmp_path / "artifacts"
+    res = clean_dataset(csv_path, processed_dir, report_dir, dataset_version="03-11-2026-00", run_id="03-11-2026-00")
+
+    cleaned_csv = processed_dir / "03-11-2026-00" / "cleaned.csv"
+    quarantined_csv = processed_dir / "03-11-2026-00" / "quarantined.csv"
+    report_json = report_dir / "cleaning_report.json"
+
+    assert cleaned_csv.exists()
+    assert quarantined_csv.exists()
+    assert report_json.exists()
+
+    df_cleaned = pd.read_csv(cleaned_csv)
+    df_quarantined = pd.read_csv(quarantined_csv)
+
+    # Cleaned should have 1 row: "Please track {{Tracking Number}}!" (deduplicated)
+    assert len(df_cleaned) == 1
+    assert "sample_id" in df_cleaned.columns
+    assert df_cleaned.iloc[0]["instruction"] == "Please track {{Tracking Number}}!"
+
+    # Quarantined should contain the conflicting pair, empty row, and unknown intent
+    assert len(df_quarantined) == 4
+    assert set(df_quarantined["quarantine_reason"]).issuperset({
+        "conflicting_labels_across_duplicates",
+        "missing_required_fields",
+        "invalid_intent_label"
+    })
