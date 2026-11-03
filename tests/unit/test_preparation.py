@@ -74,3 +74,50 @@ def test_inspect_dataset_creates_expected_artifacts(tmp_path: Path):
     assert (artifacts_dir / "figures" / "class_distribution.png").exists()
     assert (artifacts_dir / "figures" / "length_distribution.png").exists()
     assert (artifacts_dir / "figures" / "category_intent_matrix.png").exists()
+
+def test_validate_dataset_detects_errors_and_duplicates(tmp_path: Path):
+    from pipeline.preparation.validate_data import validate_dataset
+
+    csv_path = tmp_path / "dirty.csv"
+    df = pd.DataFrame({
+        "instruction": [
+            "Valid question?",
+            "",  # empty string
+            "Where is order?",
+            "Where is order?",  # exact duplicate same intent
+            "Cancel my order",
+            "cancel my order ", # normalized duplicate conflicting intent!
+            "Unknown intent query"
+        ],
+        "intent": [
+            "track_order",
+            "track_order",
+            "track_order",
+            "track_order",
+            "cancel_order",
+            "track_order",      # conflict!
+            "non_existent_intent"
+        ],
+        "category": [
+            "ORDER",
+            "ORDER",
+            "ORDER",
+            "ORDER",
+            "ORDER",
+            "ORDER",
+            "UNKNOWN_CAT"
+        ]
+    })
+    df.to_csv(csv_path, index=False)
+
+    artifacts_dir = tmp_path / "artifacts"
+    report = validate_dataset(csv_path, artifacts_dir, run_id="03-11-2026-00")
+
+    assert report["summary"]["total_records"] == 7
+    assert report["summary"]["missing_instruction"] == 1
+    assert report["summary"]["invalid_intents"] == 1
+    assert report["summary"]["conflicting_duplicates"] >= 1
+
+    assert (artifacts_dir / "validation_report.json").exists()
+    assert (artifacts_dir / "review_candidates.csv").exists()
+    assert (artifacts_dir / "duplicate_groups.csv").exists()
