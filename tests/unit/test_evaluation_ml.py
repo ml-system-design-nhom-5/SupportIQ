@@ -718,3 +718,70 @@ def test_input_changed_midrun_fails(tmp_path, monkeypatch):
             repo_root=fx.root,
             output_root=out_root,
         )
+
+
+def test_cli_ml_end_to_end_writes_reloadable_report(tmp_path):
+    from pipeline.evaluation.run_evaluation import main
+
+    fx = make_eval_fixture(tmp_path)
+    cfg_file = tmp_path / "eval_config.json"
+    save_json(fx.config, cfg_file)
+    out_root = tmp_path / "artifacts" / "evaluation"
+
+    argv = [
+        "--mode", "ml",
+        "--training-manifest", str(fx.train_manifest),
+        "--config", str(cfg_file),
+        "--run-id", "03-11-2026-eval-cli",
+        "--output-root", str(out_root),
+    ]
+    rc = main(argv)
+    assert rc == 0
+
+    run_dir = out_root / "03-11-2026-eval-cli"
+    man = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert man["status"] == "completed"
+
+    for rel, digest in man["outputs"].items():
+        assert compute_sha256(run_dir / rel) == digest
+
+
+def test_cli_reports_failure_exit_code(tmp_path):
+    from pipeline.evaluation.run_evaluation import main
+
+    fx = make_eval_fixture(tmp_path)
+    cfg_file = tmp_path / "eval_config.json"
+    save_json(fx.config, cfg_file)
+    out_root = tmp_path / "artifacts" / "evaluation"
+
+    # Provide a non-existent training manifest
+    argv = [
+        "--mode", "ml",
+        "--training-manifest", str(tmp_path / "non_existent.json"),
+        "--config", str(cfg_file),
+        "--run-id", "03-11-2026-eval-err",
+        "--output-root", str(out_root),
+    ]
+    rc = main(argv)
+    assert rc == 1
+
+
+def test_run_from_directory_with_spaces(tmp_path):
+    from pipeline.evaluation.run_evaluation import main
+
+    spaced_dir = tmp_path / "Dir With Spaces"
+    spaced_dir.mkdir(parents=True)
+    fx = make_eval_fixture(spaced_dir)
+    cfg_file = spaced_dir / "eval_config.json"
+    save_json(fx.config, cfg_file)
+    out_root = spaced_dir / "artifacts" / "evaluation"
+
+    argv = [
+        "--mode", "ml",
+        "--training-manifest", str(fx.train_manifest),
+        "--config", str(cfg_file),
+        "--run-id", "03-11-2026-eval-sp",
+        "--output-root", str(out_root),
+    ]
+    rc = main(argv)
+    assert rc == 0

@@ -31,8 +31,16 @@ pipeline/
 │   ├── run_training.py         # Điều phối training, xác minh hợp đồng, manifest
 │   └── README.md               # Chi tiết hợp đồng và hướng dẫn chạy
 ├── configs/                    # File cấu hình thí nghiệm
-│   └── training.json           # Grid 3 baseline, 10 fold, TF-IDF params, target 0.85
-├── evaluation/                 # Đánh giá hold-out test và robustness suite (sắp tới)
+│   ├── training.json           # Grid 3 baseline, 10 fold, TF-IDF params, target 0.85
+│   └── evaluation.json         # Cấu hình timing latency/throughput, metrics
+├── evaluation/                 # GIAI ĐOẠN ĐÃ HOÀN THIỆN (ML): Đánh giá hold-out test, latency, báo cáo
+│   ├── __init__.py
+│   ├── contracts.py            # Hợp đồng đầu vào, kiểm tra lineage và hash
+│   ├── evaluate_intent.py      # Đánh giá phân loại 46 intent, 12 core intent, robustness
+│   ├── benchmark.py            # Đo thời gian suy luận (latency, throughput) trên CPU
+│   ├── reporting.py            # Xuất báo cáo Markdown, ma trận yêu cầu, atomic writes
+│   ├── run_evaluation.py       # Điều phối đánh giá, runner CLI
+│   └── README.md               # Chi tiết hợp đồng và hướng dẫn chạy
 ├── deployment/                 # Đóng gói và phát hành gói model (sắp tới)
 └── monitoring/                 # Theo dõi suy luận, drift và phân tích chất lượng (sắp tới)
 ```
@@ -133,8 +141,18 @@ python -m pipeline.training.run_training \
   --run-id 03-11-2026-00
 ```
 
-### 4.5. Kiểm thử Tự động (Unit Tests)
+### 4.5. Đánh giá Mô hình trên Tập Kiểm tra (Evaluation Orchestrator)
+Đánh giá độc lập 3 baseline đã khóa trên tập hold-out test (6.690 mẫu), đo đạc p50/p95 latency và throughput:
 ```bash
-pytest tests/unit/test_preparation.py tests/unit/test_training.py -v
+python -m pipeline.evaluation.run_evaluation \
+  --mode ml \
+  --training-manifest artifacts/training/03-11-2026-00/manifest.json \
+  --config pipeline/configs/evaluation.json \
+  --run-id 03-11-2026-00
 ```
-*(Toàn bộ các unit tests kiểm tra data contract, no leakage, fold layout, tie-break, inference bundle, atomic manifest, và không rò rỉ test đều vượt qua 100%)*
+
+### 4.6. Kiểm thử Tự động (Unit Tests)
+```bash
+pytest tests/unit/test_preparation.py tests/unit/test_training.py tests/unit/test_evaluation_ml.py -v
+```
+*(Toàn bộ các unit tests kiểm tra data contract, no leakage, fold layout, inference bundle, evaluation lineage, atomic manifest, và hold-out test isolation đều vượt qua 100%)*

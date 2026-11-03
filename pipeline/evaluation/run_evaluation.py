@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import argparse
 import datetime
+import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 import pandas as pd
 
@@ -219,3 +221,52 @@ def run_ml_evaluation(
         if isinstance(exc, EvaluationError):
             raise
         raise EvaluationError(f"Evaluation failed: {exc}") from exc
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """CLI entrypoint for running ML or System evaluation."""
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="backslashreplace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="backslashreplace")
+
+    parser = argparse.ArgumentParser(description="Run Evaluation for SupportIQ ML models and system.")
+    parser.add_argument("--mode", required=True, choices=["ml", "system"], help="Evaluation mode (ml or system)")
+    parser.add_argument("--training-manifest", default=None, help="Path to completed training manifest.json")
+    parser.add_argument("--suite", default=None, help="Path to robustness/system suite manifest")
+    parser.add_argument("--config", required=True, help="Path to evaluation config JSON")
+    parser.add_argument("--run-id", default=None, help="Optional run ID in DD-MM-YYYY-stt format")
+    parser.add_argument("--output-root", default="artifacts/evaluation", help="Root dir for evaluation runs")
+
+    args = parser.parse_args(argv)
+
+    if args.mode == "system":
+        print("System evaluation mode is not yet implemented in this release.", file=sys.stderr)
+        return 1
+
+    if not args.training_manifest:
+        print("Error: --training-manifest is required when --mode=ml.", file=sys.stderr)
+        return 1
+
+    try:
+        res = run_ml_evaluation(
+            training_manifest=args.training_manifest,
+            suite=args.suite,
+            config_path=args.config,
+            run_id=args.run_id,
+            repo_root=REPO_ROOT,
+            output_root=args.output_root,
+        )
+        print(f"=== Evaluation completed successfully! ===")
+        print(f"Run dir: {res['run_dir']}")
+        winner = res["results"]["winner"]
+        print(f"CV Winner (Locked): {winner.get('candidate_id')} (CV Macro-F1: {winner.get('cv_macro_f1'):.4f})")
+        print(f"Test Macro-F1: {winner.get('test_macro_f1'):.4f}")
+        return 0
+    except Exception as exc:
+        print(f"Evaluation failed: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
