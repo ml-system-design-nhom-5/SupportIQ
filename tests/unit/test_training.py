@@ -29,7 +29,12 @@ from pipeline.training.artifacts import (
     save_bundle,
     write_json_atomic,
 )
-from pipeline.training.run_training import verify_inputs
+from pipeline.training.run_training import (
+    load_completed_manifest,
+    run_training,
+    validate_run_id,
+    verify_inputs,
+)
 from pipeline.training.cross_validate import (
     build_fold_features,
     build_oof_reports,
@@ -594,3 +599,175 @@ def test_model_card_records_scope_limits_and_release_gate():
     assert card["evaluation_required_before_release"] is True
     assert "synthetic" in card["data_limitations"].lower()
     assert card["meets_cv_target"] is False
+
+
+def _tiny_run(tmp_path, run_id="03-11-2026-training-00"):
+    fx = make_prep_fixture(tmp_path)
+    config = make_cv_config()
+    config_path = tmp_path / "config.json"
+    save_json(config, config_path)
+    result = run_training(
+        fx.manifest_path,
+        config_path,
+        run_id,
+        tmp_path / "artifacts" / "training",
+        expected_intents=("alpha", "beta", "gamma"),
+    )
+    return fx, Path(result["run_dir"])
+
+
+def test_run_training_writes_complete_artifact_tree(tmp_path):
+    fx, run_dir = _tiny_run(tmp_path)
+    for name in (
+        "config.resolved.json",
+        "environment.json",
+        "fold_metrics.csv",
+        "candidate_summary.csv",
+        "selection.json",
+        "oof_predictions.csv",
+        "manifest.json",
+    ):
+        assert (run_dir / name).exists()
+    assert len(pd.read_csv(run_dir / "fold_metrics.csv")) == 6 * 2
+    assert len(pd.read_csv(run_dir / "candidate_summary.csv")) == 6
+    oof = pd.read_csv(run_dir / "oof_predictions.csv")
+    assert oof["model_id"].nunique() == 3
+    assert oof.groupby(["model_id", "sample_id"]).size().eq(1).all()
+    for model_id in ("multinomial_nb", "logistic_regression", "linear_svm"):
+        assert (run_dir / "models" / model_id / "bundle.joblib").exists()
+        assert (run_dir / "models" / model_id / "model_card.json").exists()
+        assert (run_dir / "reports" / model_id / "confusion_matrix.csv").exists()
+    manifest = load_completed_manifest(run_dir)
+    assert manifest["status"] == "completed"
+    assert manifest["schema_version"] == 1
+    for rel, digest in manifest["outputs"].items():
+        assert compute_sha256(run_dir / rel) == digest
+
+
+def test_run_training_refuses_existing_run_id_before_writing(tmp_path):
+    fx = make_prep_fixture(tmp_path)
+    config_path = tmp_path / "config.json"
+    save_json(make_cv_config(), config_path)
+    run_dir = tmp_path / "artifacts" / "training" / "03-11-2026-training-00"
+    run_dir.mkdir(parents=True)
+    (run_dir / "sentinel.txt").write_text("keep", encoding="utf-8")
+    with pytest.raises(FileExistsError):
+        run_training(
+            fx.manifest_path,
+            config_path,
+            run_dir.name,
+            run_dir.parent,
+            expected_intents=("alpha", "beta", "gamma"),
+        )
+    assert (run_dir / "sentinel.txt").read_text(encoding="utf-8") == "keep"
+    assert not (run_dir / "run_state.json").exists()
+
+
+def test_failed_run_leaves_failed_state_without_completed_manifest(tmp_path, monkeypatch):
+    fx = make_prep_fixture(tmp_path)
+    config_path = tmp_path / "config.json"
+    save_json(make_cv_config(), config_path)
+
+    def boom(*args, **kwargs):
+        raise TrainingError("boom")
+
+    monkeypatch.setattr("pipeline.training.run_training.run_cross_validation", boom)
+    with pytest.raises(TrainingError, match="boom"):
+        run_training(
+            fx.manifest_path,
+            config_path,
+            "03-11-2026-training-01",
+            tmp_path / "artifacts" / "training",
+            expected_intents=("alpha", "beta", "gamma"),
+        )
+    run_dir = tmp_path / "artifacts" / "training" / "03-11-2026-training-01"
+    assert load_json(run_dir / "run_state.json")["status"] == "failed"
+    assert not (run_dir / "manifest.json").exists()
+
+
+def test_run_fails_when_input_changes_mid_run(tmp_path, monkeypatch):
+    fx = make_prep_fixture(tmp_path)
+    config_path = tmp_path / "config.json"
+    save_json(make_cv_config(), config_path)
+    real_cv = run_cross_validation
+
+    def tamper_then_run(*args, **kwargs):
+        fx.cleaned.loc[fx.cleaned.index[0], "instruction"] = "mutated during run"
+        fx.cleaned.to_csv(fx.cleaned_path, index=False)
+        return real_cv(*args, **kwargs)
+
+    monkeypatch.setattr("pipeline.training.run_training.run_cross_validation", tamper_then_run)
+    with pytest.raises(TrainingError, match="changed during run"):
+        run_training(
+            fx.manifest_path,
+            config_path,
+            "03-11-2026-training-03",
+            tmp_path / "artifacts" / "training",
+            expected_intents=("alpha", "beta", "gamma"),
+        )
+    run_dir = tmp_path / "artifacts" / "training" / "03-11-2026-training-03"
+    assert load_json(run_dir / "run_state.json")["status"] == "failed"
+    assert not (run_dir / "manifest.json").exists()
+
+
+def test_test_changes_do_not_change_selection(tmp_path):
+    fx, run_a = _tiny_run(tmp_path, "03-11-2026-training-00")
+    selection_a = load_json(run_a / "selection.json")
+    oof_a = pd.read_csv(run_a / "oof_predictions.csv")
+    metric_cols = ["model_id", "candidate_id", "fold", "macro_f1", "accuracy", "weighted_f1"]
+    metrics_a = pd.read_csv(run_a / "fold_metrics.csv")[metric_cols]
+    fx.cleaned.loc[fx.cleaned["sample_id"].str.endswith("-test"), "instruction"] += " modified test query"
+    rewrite_fixture(fx)
+    result_b = run_training(
+        fx.manifest_path,
+        tmp_path / "config.json",
+        "03-11-2026-training-01",
+        tmp_path / "artifacts" / "training",
+        expected_intents=("alpha", "beta", "gamma"),
+    )
+    run_b = Path(result_b["run_dir"])
+    selection_b = load_json(run_b / "selection.json")
+    assert selection_a["winner"] == selection_b["winner"]
+    assert selection_a["best_per_model"] == selection_b["best_per_model"]
+    pd.testing.assert_frame_equal(oof_a, pd.read_csv(run_b / "oof_predictions.csv"))
+    pd.testing.assert_frame_equal(metrics_a, pd.read_csv(run_b / "fold_metrics.csv")[metric_cols])
+
+
+def test_training_never_transforms_test_text(tmp_path, monkeypatch):
+    fx = make_prep_fixture(tmp_path)
+    config_path = tmp_path / "config.json"
+    save_json(make_cv_config(), config_path)
+    seen = []
+    real_transform = IntentFeaturePipeline.transform
+
+    def spy(self, texts):
+        seen.extend(list(texts))
+        return real_transform(self, texts)
+
+    monkeypatch.setattr(IntentFeaturePipeline, "transform", spy)
+    run_training(
+        fx.manifest_path,
+        config_path,
+        "03-11-2026-training-02",
+        tmp_path / "artifacts" / "training",
+        expected_intents=("alpha", "beta", "gamma"),
+    )
+    test_text = set(fx.cleaned.loc[fx.cleaned["sample_id"].str.endswith("-test"), "instruction"])
+    assert test_text.isdisjoint(seen)
+
+
+@pytest.mark.parametrize("bad_run_id", ["../escape", "03-11-2026-a/b", "03-11-2026-a\\b", ""])
+def test_invalid_run_id_is_rejected(bad_run_id):
+    with pytest.raises(ValueError):
+        validate_run_id(bad_run_id)
+
+
+def test_environment_and_tampered_artifact_rejected(tmp_path):
+    _, run_dir = _tiny_run(tmp_path)
+    environment = load_json(run_dir / "environment.json")
+    assert environment["libraries"]["scikit-learn"] == sklearn.__version__
+    assert environment["cpu_count"] >= 1
+    assert "git_revision" in environment and "git_dirty" in environment
+    (run_dir / "models" / "linear_svm" / "bundle.joblib").write_bytes(b"corrupt")
+    with pytest.raises(ValueError, match="checksum"):
+        load_completed_manifest(run_dir)
