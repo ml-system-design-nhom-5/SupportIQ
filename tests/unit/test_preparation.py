@@ -174,3 +174,66 @@ def test_clean_dataset_quarantines_and_cleans(tmp_path: Path):
         "missing_required_fields",
         "invalid_intent_label"
     })
+
+def test_split_dataset_stratified_no_leakage(tmp_path: Path):
+    from pipeline.preparation.split_data import split_dataset
+
+    cleaned_csv = tmp_path / "cleaned.csv"
+    records = []
+    for i in range(25):
+        records.append({
+            "sample_id": f"s_a_{i}",
+            "instruction": f"Query type A variant {i % 5}",
+            "intent": "track_order",
+            "category": "ORDER"
+        })
+        records.append({
+            "sample_id": f"s_b_{i}",
+            "instruction": f"Query type B variant {i % 5}",
+            "intent": "cancel_order",
+            "category": "ORDER"
+        })
+    df = pd.DataFrame(records)
+    df.to_csv(cleaned_csv, index=False)
+
+    splits_dir = tmp_path / "splits"
+    report_dir = tmp_path / "artifacts"
+
+    res = split_dataset(
+        cleaned_csv=cleaned_csv,
+        splits_dir=splits_dir,
+        report_dir=report_dir,
+        split_version="03-11-2026-00",
+        run_id="03-11-2026-00",
+        test_size=0.2,
+        n_splits=3,
+        random_state=42
+    )
+
+    assignments_csv = splits_dir / "03-11-2026-00" / "split_assignments.csv"
+    report_json = report_dir / "split_report.json"
+
+    assert assignments_csv.exists()
+    assert report_json.exists()
+
+    df_assign = pd.read_csv(assignments_csv)
+    assert len(df_assign) == 50
+    assert set(df_assign["partition"]) == {"train", "test"}
+
+    # Merge with original data to verify group leakage
+    merged = df_assign.merge(df, on="sample_id")
+    train_texts = set(merged[merged["partition"] == "train"]["instruction"])
+    test_texts = set(merged[merged["partition"] == "test"]["instruction"])
+
+    # NO LEAKAGE: Intersection of texts between train and test must be empty!
+    assert len(train_texts.intersection(test_texts)) == 0
+
+    # Cross-fold leakage check for train partition
+    train_df = merged[merged["partition"] == "train"]
+    folds = train_df["fold"].unique()
+    for f1 in folds:
+        for f2 in folds:
+            if f1 != f2:
+                texts_f1 = set(train_df[train_df["fold"] == f1]["instruction"])
+                texts_f2 = set(train_df[train_df["fold"] == f2]["instruction"])
+                assert len(texts_f1.intersection(texts_f2)) == 0
