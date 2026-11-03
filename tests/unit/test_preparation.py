@@ -1,5 +1,6 @@
 # tests/unit/test_preparation.py
 from pathlib import Path
+import pandas as pd
 import pytest
 
 def test_data_science_packages_installed():
@@ -49,3 +50,27 @@ def test_constants_count():
     from pipeline.preparation.utils import STANDARD_INTENTS, STANDARD_CATEGORIES
     assert len(STANDARD_INTENTS) == 46
     assert len(STANDARD_CATEGORIES) == 13
+
+def test_inspect_dataset_creates_expected_artifacts(tmp_path: Path):
+    from pipeline.preparation.inspect_data import inspect_dataset
+
+    csv_path = tmp_path / "sample.csv"
+    df = pd.DataFrame({
+        "instruction": ["How to track order?", "Cancel my order please", "Check refund status"],
+        "intent": ["track_order", "cancel_order", "refund_status"],
+        "category": ["ORDER", "ORDER", "RETURNS"],
+        "tags": ["order", "cancel", "refund"],
+        "response": ["resp1", "resp2", "resp3"]
+    })
+    df.to_csv(csv_path, index=False)
+
+    artifacts_dir = tmp_path / "artifacts"
+    result = inspect_dataset(csv_path, artifacts_dir, run_id="03-11-2026-00")
+
+    assert result["run_id"] == "03-11-2026-00"
+    assert result["total_samples"] == 3
+    assert (artifacts_dir / "profile.json").exists()
+    assert (artifacts_dir / "class_distribution.csv").exists()
+    assert (artifacts_dir / "figures" / "class_distribution.png").exists()
+    assert (artifacts_dir / "figures" / "length_distribution.png").exists()
+    assert (artifacts_dir / "figures" / "category_intent_matrix.png").exists()
