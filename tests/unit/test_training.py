@@ -771,3 +771,8 @@ def test_environment_and_tampered_artifact_rejected(tmp_path):
     (run_dir / "models" / "linear_svm" / "bundle.joblib").write_bytes(b"corrupt")
     with pytest.raises(ValueError, match="checksum"):
         load_completed_manifest(run_dir)
+
+
+def test_training_artifacts_are_gitignored():
+    ignored = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+    assert "/artifacts/training/" in [line.strip() for line in ignored]

@@ -23,11 +23,18 @@ pipeline/
 │   ├── split_data.py           # Chia tập Test & 10-Fold CV (StratifiedGroupKFold - No Leakage)
 │   ├── features.py             # Bộ biến đổi TF-IDF (fit độc lập trên train, xuất joblib)
 │   └── run_preparation.py      # Bộ điều phối (Runner) thực thi liên hoàn end-to-end
-├── training/                   # Baseline TF-IDF + Classifier & mô hình thứ hai (sắp tới)
-├── evaluation/                 # Cross-validation, metrics per-class, confusion matrix (sắp tới)
+├── training/                   # GIAI ĐOẠN ĐÃ HOÀN THIỆN: 10-Fold CV 3 baseline, refit, bundles
+│   ├── __init__.py
+│   ├── models.py               # Config schema, validation, và factory estimator
+│   ├── cross_validate.py       # Vòng lặp CV 10 fold, tie-break, OOF, refit
+│   ├── artifacts.py            # Bundle suy luận, model card, ghi file nguyên tử
+│   ├── run_training.py         # Điều phối training, xác minh hợp đồng, manifest
+│   └── README.md               # Chi tiết hợp đồng và hướng dẫn chạy
+├── configs/                    # File cấu hình thí nghiệm
+│   └── training.json           # Grid 3 baseline, 10 fold, TF-IDF params, target 0.85
+├── evaluation/                 # Đánh giá hold-out test và robustness suite (sắp tới)
 ├── deployment/                 # Đóng gói và phát hành gói model (sắp tới)
-├── monitoring/                 # Theo dõi suy luận, drift và phân tích chất lượng (sắp tới)
-└── configs/                    # File cấu hình thí nghiệm (sắp tới)
+└── monitoring/                 # Theo dõi suy luận, drift và phân tích chất lượng (sắp tới)
 ```
 
 ---
@@ -117,8 +124,17 @@ Lệnh điều phối duy nhất tự động sinh ID ngày `DD-MM-YYYY-stt`, k�
 python -m pipeline.preparation.run_preparation --input data/datasets/bitext-retail-ecommerce-llm-chatbot-training-dataset.csv
 ```
 
-### 4.4. Kiểm thử Tự động (Unit Tests)
+### 4.4. Huấn luyện và So sánh Baseline (Training Orchestrator)
+Thực thi 10-fold CV trên 3 thuật toán baseline (90 fold fits), tự động khóa winner, refit mô hình trên toàn development và xuất bundle suy luận:
 ```bash
-pytest tests/unit/test_preparation.py -v
+python -m pipeline.training.run_training \
+  --preparation-manifest artifacts/preparation/03-11-2026-02/manifest.json \
+  --config pipeline/configs/training.json \
+  --run-id 03-11-2026-training-01
 ```
-*(Toàn bộ 13 unit tests kiểm tra ID format, validation, quarantine, group leakage, placeholder preservation, và schema consistency đều vượt qua 100%)*
+
+### 4.5. Kiểm thử Tự động (Unit Tests)
+```bash
+pytest tests/unit/test_preparation.py tests/unit/test_training.py -v
+```
+*(Toàn bộ các unit tests kiểm tra data contract, no leakage, fold layout, tie-break, inference bundle, atomic manifest, và không rò rỉ test đều vượt qua 100%)*

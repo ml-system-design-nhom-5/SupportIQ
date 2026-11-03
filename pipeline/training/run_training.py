@@ -533,6 +533,10 @@ def run_training(
 
 def main(argv: Sequence[str] | None = None) -> None:
     """CLI entrypoint for running the training pipeline."""
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="backslashreplace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="backslashreplace")
     parser = argparse.ArgumentParser(description="Run Training pipeline for SupportIQ intent models.")
     parser.add_argument("--preparation-manifest", required=True, help="Path to preparation manifest.json")
     parser.add_argument("--config", required=True, help="Path to training.json")

@@ -30,6 +30,7 @@ coverage/
 
 # Generated pipeline reports
 /artifacts/preparation/
+/artifacts/training/
 /artifacts/evaluation/
 /artifacts/monitoring/
 
