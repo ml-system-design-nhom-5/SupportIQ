@@ -262,3 +262,58 @@ def test_intent_feature_pipeline_preserves_placeholders_and_persists(tmp_path: P
     loaded_pipeline = IntentFeaturePipeline.load(model_path)
     test_matrix = loaded_pipeline.transform(["Where is {{Tracking Number}}?"])
     assert test_matrix.shape[1] == matrix.shape[1]
+
+def test_run_full_preparation_synthetic_end_to_end(tmp_path: Path):
+    from pipeline.preparation.run_preparation import run_full_preparation
+
+    raw_csv = tmp_path / "raw.csv"
+    records = []
+    # Generate 50 valid records across 2 standard intents
+    for i in range(25):
+        records.append({
+            "instruction": f"I want to track order {{Order History}} number {i}",
+            "intent": "track_order",
+            "category": "ORDER",
+            "tags": "order,track",
+            "response": "Response"
+        })
+        records.append({
+            "instruction": f"Please cancel order {{Order History}} number {i}",
+            "intent": "cancel_order",
+            "category": "ORDER",
+            "tags": "order,cancel",
+            "response": "Response"
+        })
+    pd.DataFrame(records).to_csv(raw_csv, index=False)
+
+    base_dir = tmp_path
+    result = run_full_preparation(
+        input_csv=raw_csv,
+        base_dir=base_dir,
+        run_id="03-11-2026-00",
+        dataset_version="03-11-2026-00",
+        split_version="03-11-2026-00",
+        n_splits=3,
+        test_size=0.2,
+    )
+
+    run_id = result["run_id"]
+    assert run_id == "03-11-2026-00"
+
+    # Check processed data
+    assert (base_dir / "data" / "datasets" / "processed" / run_id / "cleaned.csv").exists()
+    assert (base_dir / "data" / "datasets" / "processed" / run_id / "quarantined.csv").exists()
+
+    # Check splits
+    assert (base_dir / "data" / "datasets" / "splits" / run_id / "split_assignments.csv").exists()
+
+    # Check preparation artifacts
+    prep_dir = base_dir / "artifacts" / "preparation" / run_id
+    assert (prep_dir / "manifest.json").exists()
+    assert (prep_dir / "profile.json").exists()
+    assert (prep_dir / "validation_report.json").exists()
+    assert (prep_dir / "cleaning_report.json").exists()
+    assert (prep_dir / "split_report.json").exists()
+
+    # Check models artifact
+    assert (base_dir / "artifacts" / "models" / run_id / "tfidf.joblib").exists()

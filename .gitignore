@@ -28,6 +28,11 @@ coverage/
 /artifacts/search-index/*
 !/artifacts/search-index/.gitkeep
 
+# Generated pipeline reports
+/artifacts/preparation/
+/artifacts/evaluation/
+/artifacts/monitoring/
+
 # Local persistence and logs
 *.db
 *.db-shm
