@@ -11,6 +11,7 @@ import pandas as pd
 from pipeline.preparation.utils import (
     STANDARD_INTENTS,
     compute_sha256,
+    get_near_duplicate_key,
     load_json,
 )
 
@@ -157,7 +158,59 @@ def verify_inputs(
             f"expected {actual}, found {metadata.get(key)!r}",
         )
 
-    development = merged.loc[merged["partition"] == "train", list(cleaned.columns) + ["fold"]].copy()
+    partitions = set(merged["partition"].astype(str))
+    _check(partitions <= {"train", "test"}, "partition", f"unexpected partitions {sorted(partitions - {'train', 'test'})}")
+    _check({"train", "test"} <= partitions, "partition", "both train and test partitions are required")
+
+    test_folds = set(merged.loc[merged["partition"] == "test", "fold"].tolist())
+    _check(test_folds == {-1}, "test fold", f"test partition must have fold -1, found {sorted(test_folds)}")
+
+    development_rows = merged[merged["partition"] == "train"]
+    development_folds = sorted(set(development_rows["fold"].tolist()))
+    _check(
+        development_folds == list(range(n_folds)),
+        "fold",
+        f"development folds must be exactly 0..{n_folds - 1}, found {development_folds}",
+    )
+    fold_sizes = development_rows.groupby("fold").size()
+    _check((fold_sizes > 0).all(), "fold", "development contains an empty fold")
+
+    merged["group_key"] = merged["instruction"].apply(get_near_duplicate_key)
+    group_shape = merged.groupby("group_key").agg(
+        partitions=("partition", "nunique"),
+        folds=("fold", "nunique"),
+    )
+    spanning = group_shape[(group_shape["partitions"] > 1) | (group_shape["folds"] > 1)]
+    _check(
+        spanning.empty,
+        "group",
+        f"{len(spanning)} near-duplicate group(s) span multiple partitions or folds",
+    )
+    group_labels = merged.groupby("group_key")["intent"].nunique()
+    conflicting = group_labels[group_labels > 1]
+    _check(
+        conflicting.empty,
+        "conflicting group labels",
+        f"{len(conflicting)} near-duplicate group(s) carry different intents",
+    )
+
+    test_intents = set(merged.loc[merged["partition"] == "test", "intent"].astype(str))
+    missing_test = expected - test_intents
+    _check(not missing_test, "intent", f"missing from test: {sorted(missing_test)}")
+    for fold in range(n_folds):
+        validation_intents = set(development_rows.loc[development_rows["fold"] == fold, "intent"].astype(str))
+        missing_validation = expected - validation_intents
+        _check(
+            not missing_validation,
+            "intent",
+            f"intent {sorted(missing_validation)!r} missing from validation fold {fold}",
+        )
+    for fold in range(n_folds):
+        train_intents = set(development_rows.loc[development_rows["fold"] != fold, "intent"].astype(str))
+        missing_train = expected - train_intents
+        _check(not missing_train, "intent", f"missing from training fold {fold}: {sorted(missing_train)}")
+
+    development = merged.loc[merged["partition"] == "train", list(cleaned.columns) + ["fold", "group_key"]].copy()
     development = development.reset_index(drop=True)
     test_sample_ids = tuple(merged.loc[merged["partition"] == "test", "sample_id"].astype(str))
     class_order = tuple(sorted(expected))

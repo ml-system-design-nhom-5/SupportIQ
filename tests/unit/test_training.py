@@ -270,3 +270,56 @@ def test_verify_inputs_rejects_count_mismatch(tmp_path):
     save_json(manifest, fx.manifest_path)
     with pytest.raises(ValueError, match="train_samples"):
         verify_inputs(fx.manifest_path, expected_intents=("alpha", "beta", "gamma"), n_folds=2)
+
+
+def _fold_column(fx, fold):
+    fx.assignments.loc[fx.assignments["fold"] == fold, "fold"] = 99
+    rewrite_fixture(fx)
+
+
+def test_verify_inputs_rejects_test_fold_not_minus_one(tmp_path):
+    fx = make_prep_fixture(tmp_path)
+    fx.assignments.loc[fx.assignments["partition"] == "test", "fold"] = 0
+    rewrite_fixture(fx)
+    with pytest.raises(ValueError, match="test.*fold"):
+        verify_inputs(fx.manifest_path, expected_intents=("alpha", "beta", "gamma"), n_folds=2)
+
+
+def test_verify_inputs_rejects_missing_or_empty_fold(tmp_path):
+    fx = make_prep_fixture(tmp_path)
+    _fold_column(fx, 1)
+    with pytest.raises(ValueError, match="fold"):
+        verify_inputs(fx.manifest_path, expected_intents=("alpha", "beta", "gamma"), n_folds=2)
+
+
+def test_verify_inputs_rejects_intent_missing_from_fold_validation(tmp_path):
+    fx = make_prep_fixture(tmp_path)
+    mask = (fx.cleaned["intent"] == "gamma") & fx.cleaned["sample_id"].isin(
+        fx.assignments.loc[fx.assignments["fold"] == 1, "sample_id"]
+    )
+    fx.assignments.loc[fx.assignments["sample_id"].isin(fx.cleaned.loc[mask, "sample_id"]), "fold"] = 0
+    rewrite_fixture(fx)
+    with pytest.raises(ValueError, match="validation fold 1"):
+        verify_inputs(fx.manifest_path, expected_intents=("alpha", "beta", "gamma"), n_folds=2)
+
+
+def test_verify_inputs_rejects_near_duplicate_group_across_folds(tmp_path):
+    fx = make_prep_fixture(tmp_path)
+    fold0_id = fx.assignments.loc[fx.assignments["fold"] == 0, "sample_id"].iloc[0]
+    fold1_id = fx.assignments.loc[fx.assignments["fold"] == 1, "sample_id"].iloc[0]
+    text = fx.cleaned.loc[fx.cleaned["sample_id"] == fold0_id, "instruction"].iloc[0]
+    fx.cleaned.loc[fx.cleaned["sample_id"] == fold1_id, "instruction"] = text.upper() + "!!!"
+    rewrite_fixture(fx)
+    with pytest.raises(ValueError, match="group"):
+        verify_inputs(fx.manifest_path, expected_intents=("alpha", "beta", "gamma"), n_folds=2)
+
+
+def test_verify_inputs_rejects_conflicting_group_labels(tmp_path):
+    fx = make_prep_fixture(tmp_path)
+    first, second = fx.assignments["sample_id"].iloc[0], fx.assignments["sample_id"].iloc[1]
+    text = fx.cleaned.loc[fx.cleaned["sample_id"] == first, "instruction"].iloc[0]
+    fx.cleaned.loc[fx.cleaned["sample_id"] == second, "instruction"] = text
+    fx.cleaned.loc[fx.cleaned["sample_id"] == second, "intent"] = "beta"
+    rewrite_fixture(fx)
+    with pytest.raises(ValueError, match="conflicting"):
+        verify_inputs(fx.manifest_path, expected_intents=("alpha", "beta", "gamma"), n_folds=2)
