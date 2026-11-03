@@ -201,3 +201,26 @@ def normalize_instruction_text(text: Any, lowercase: bool = False) -> str:
         norm = norm.lower()
     return norm
 
+
+def get_near_duplicate_key(text: Any) -> str:
+    """Derive canonical near-duplicate grouping key.
+
+    Normalizes Unicode NFKC, converts to lowercase, preserves entity
+    placeholders {{...}}, removes punctuation outside placeholders,
+    and collapses whitespace.
+    """
+    if pd.isna(text):
+        return ""
+    norm = unicodedata.normalize("NFKC", str(text)).lower()
+    placeholders = re.findall(r"\{\{[^}]+\}\}", norm)
+    # Mask placeholders with safe token
+    for i, ph in enumerate(placeholders):
+        norm = norm.replace(ph, f" __ph_{i}__ ")
+    # Remove punctuation outside placeholders
+    norm = re.sub(r"[^\w\s]", " ", norm)
+    # Restore placeholders
+    for i, ph in enumerate(placeholders):
+        norm = norm.replace(f"__ph_{i}__", ph)
+    return re.sub(r"\s+", " ", norm).strip()
+
+

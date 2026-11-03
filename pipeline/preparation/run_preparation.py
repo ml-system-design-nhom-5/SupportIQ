@@ -7,17 +7,73 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
+
 from pipeline.preparation.clean_data import clean_dataset
 from pipeline.preparation.features import build_and_save_train_features
 from pipeline.preparation.inspect_data import inspect_dataset
 from pipeline.preparation.split_data import split_dataset
 from pipeline.preparation.utils import (
+    STANDARD_CATEGORIES,
+    STANDARD_INTENTS,
     compute_sha256,
     create_manifest,
+    get_near_duplicate_key,
     get_next_id,
     save_json,
 )
 from pipeline.preparation.validate_data import validate_dataset
+
+
+def verify_cleaned_integrity(cleaned_csv_path: Path | str) -> dict[str, Any]:
+    """Verify that cleaned dataset strictly conforms to DQ-01..04 standards before release."""
+    path = Path(cleaned_csv_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Cleaned dataset not found at {path}")
+
+    df = pd.read_csv(path)
+    if df.empty:
+        raise ValueError(f"Cleaned dataset failed integrity validation: file is empty at {path}")
+
+    # 1. Schema check
+    required_cols = ["sample_id", "instruction", "intent", "category"]
+    missing_cols = [c for c in required_cols if c not in df.columns]
+    if missing_cols:
+        raise ValueError(f"Cleaned dataset failed integrity validation: missing columns {missing_cols}")
+
+    # 2. Completeness (no null/whitespace in required columns)
+    violations = []
+    for col in required_cols:
+        null_count = int(df[col].isna().sum())
+        empty_count = int((df[col].astype(str).str.strip() == "").sum())
+        if null_count > 0 or empty_count > 0:
+            violations.append(f"Column '{col}' has {null_count} nulls and {empty_count} empty strings.")
+
+    # 3. Validity (intent & category)
+    invalid_intents = set(df["intent"].dropna().unique()) - STANDARD_INTENTS
+    if invalid_intents:
+        violations.append(f"Cleaned dataset contains invalid intents: {invalid_intents}")
+
+    invalid_cats = set(df["category"].dropna().unique()) - STANDARD_CATEGORIES
+    if invalid_cats:
+        violations.append(f"Cleaned dataset contains invalid categories: {invalid_cats}")
+
+    # 4. Consistency: no near-duplicate conflicting groups
+    df["_near_key"] = df["instruction"].apply(get_near_duplicate_key)
+    conflicting_near_groups = df.groupby("_near_key")["intent"].nunique()
+    bad_groups = conflicting_near_groups[conflicting_near_groups > 1]
+    if len(bad_groups) > 0:
+        violations.append(f"Cleaned dataset contains {len(bad_groups)} conflicting near-duplicate groups.")
+
+    if violations:
+        raise ValueError("Cleaned dataset failed integrity validation:\n" + "\n".join(violations))
+
+    return {
+        "status": "passed",
+        "sample_count": len(df),
+        "intents_count": int(df["intent"].nunique()),
+        "categories_count": int(df["category"].nunique()),
+    }
 
 
 def run_full_preparation(
@@ -29,6 +85,7 @@ def run_full_preparation(
     test_size: float = 0.15,
     n_splits: int = 10,
     seed: int = 42,
+    overwrite: bool = False,
 ) -> dict[str, Any]:
     """Execute end-to-end preparation pipeline: inspect -> validate -> clean -> split -> features.
 
@@ -90,8 +147,12 @@ def run_full_preparation(
         report_dir=prep_dir,
         dataset_version=dataset_version,
         run_id=run_id,
+        overwrite=overwrite,
     )
     cleaned_csv_path = Path(clean_res["artifacts"]["cleaned_csv"])
+
+    # Post-cleaning integrity check: Ensure zero violations escape into production split/features
+    integrity_res = verify_cleaned_integrity(cleaned_csv_path)
 
     # 4. Split data (Hold-out Test & 10-Fold CV with group leakage prevention)
     print(f"[4/5] Running split_data for split version {split_version}...")
@@ -104,6 +165,7 @@ def run_full_preparation(
         test_size=test_size,
         n_splits=n_splits,
         random_state=seed,
+        overwrite=overwrite,
     )
     splits_csv_path = Path(split_res["artifacts"]["split_assignments"])
 
@@ -175,6 +237,7 @@ def main() -> None:
     parser.add_argument("--test-size", type=float, default=0.15, help="Test set fraction (default: 0.15)")
     parser.add_argument("--n-splits", type=int, default=10, help="Number of CV folds (default: 10)")
     parser.add_argument("--seed", type=int, default=42, help="Random seed (default: 42)")
+    parser.add_argument("--overwrite", action="store_true", help="Overwrite existing dataset/split versions")
     args = parser.parse_args()
 
     result = run_full_preparation(
@@ -185,6 +248,7 @@ def main() -> None:
         test_size=args.test_size,
         n_splits=args.n_splits,
         seed=args.seed,
+        overwrite=args.overwrite,
     )
     print(f"All artifacts successfully created for run {result['run_id']}.")
 

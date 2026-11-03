@@ -11,7 +11,7 @@ import pandas as pd
 from scipy.sparse import csr_matrix
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from pipeline.preparation.utils import get_next_id
+from pipeline.preparation.utils import get_next_id, normalize_instruction_text
 
 
 class IntentFeaturePipeline:
@@ -43,9 +43,18 @@ class IntentFeaturePipeline:
         )
         self.is_fitted = False
 
+    def _preprocess_texts(self, texts: Iterable[str]) -> list[str]:
+        """Apply shared NFKC and whitespace normalization to text queries."""
+        return [
+            normalize_instruction_text(t, lowercase=self.lowercase)
+            if pd.notna(t) else ""
+            for t in texts
+        ]
+
     def fit(self, texts: Iterable[str]) -> IntentFeaturePipeline:
         """Fit TF-IDF vocabulary and IDF weights on training texts."""
-        self.vectorizer.fit(texts)
+        clean_texts = self._preprocess_texts(texts)
+        self.vectorizer.fit(clean_texts)
         self.is_fitted = True
         return self
 
@@ -53,12 +62,13 @@ class IntentFeaturePipeline:
         """Transform text queries into TF-IDF sparse matrix."""
         if not self.is_fitted:
             raise RuntimeError("IntentFeaturePipeline must be fitted before transforming.")
-        safe_texts = [str(t) if pd.notna(t) else "" for t in texts]
-        return self.vectorizer.transform(safe_texts)
+        clean_texts = self._preprocess_texts(texts)
+        return self.vectorizer.transform(clean_texts)
 
     def fit_transform(self, texts: Iterable[str]) -> csr_matrix:
         """Fit to training texts and return transformed sparse matrix."""
-        matrix = self.vectorizer.fit_transform(texts)
+        clean_texts = self._preprocess_texts(texts)
+        matrix = self.vectorizer.fit_transform(clean_texts)
         self.is_fitted = True
         return matrix
 

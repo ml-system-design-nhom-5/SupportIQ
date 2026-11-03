@@ -15,6 +15,7 @@ from pipeline.preparation.utils import (
     STANDARD_CATEGORIES,
     STANDARD_INTENTS,
     compute_sha256,
+    get_near_duplicate_key,
     get_next_id,
     normalize_instruction_text,
     save_json,
@@ -22,8 +23,8 @@ from pipeline.preparation.utils import (
 
 
 def normalize_text_for_dedup(text: Any) -> str:
-    """Normalize text by stripping, lowercasing, and collapsing whitespace with NFKC."""
-    return normalize_instruction_text(text, lowercase=True)
+    """Normalize text using near-duplicate key (NFKC, lowercase, punctuation-cleaned)."""
+    return get_near_duplicate_key(text)
 
 
 def validate_dataset(

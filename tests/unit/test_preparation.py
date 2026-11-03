@@ -1,4 +1,4 @@
-# tests/unit/test_preparation.py
+# In tests/unit/test_preparation.py
 from pathlib import Path
 import pandas as pd
 import pytest
@@ -369,3 +369,194 @@ def test_shared_nfkc_normalization_consistency():
     fullwidth_text = "Ｔｒａｃｋ   ｏｒｄｅｒ {{Order}} "
     normalized = normalize_instruction_text(fullwidth_text)
     assert normalized == "Track order {{Order}}"
+
+# === NEW TESTS ADDRESSING FEEDBACK ===
+
+def test_transformer_applies_nfkc_normalization_consistently():
+    from pipeline.preparation.features import IntentFeaturePipeline
+
+    # Train vocabulary on normalized text
+    pipeline = IntentFeaturePipeline(max_features=50, ngram_range=(1, 1), min_df=1)
+    pipeline.fit(["Track order"])
+
+    # Raw fullwidth query must produce non-zero features matching "Track order"
+    vec_ascii = pipeline.transform(["Track order"])
+    vec_fullwidth = pipeline.transform(["Ｔｒａｃｋ ｏｒｄｅｒ"])
+
+    assert vec_ascii.nnz > 0
+    assert vec_fullwidth.nnz == vec_ascii.nnz
+    assert (vec_ascii.toarray() == vec_fullwidth.toarray()).all()
+
+def test_near_duplicate_key_normalizes_punctuation():
+    from pipeline.preparation.utils import get_near_duplicate_key
+
+    # Sentences differing only in punctuation or spacing around punctuation must yield identical key
+    k1 = get_near_duplicate_key("can I buy through your app?")
+    k2 = get_near_duplicate_key("can I buy through your app ?")
+    k3 = get_near_duplicate_key("Can I buy through your app!")
+    k4 = get_near_duplicate_key("CAN I BUY THROUGH YOUR APP")
+
+    assert k1 == k2 == k3 == k4
+    assert k1 != ""
+
+    # Placeholders must be preserved within the near duplicate key
+    kp1 = get_near_duplicate_key("Where is {{Tracking Number}}?")
+    kp2 = get_near_duplicate_key("Where is {{Tracking Number}}")
+    assert kp1 == kp2
+    assert "{{tracking number}}" in kp1
+
+def test_clean_data_quarantines_near_duplicate_conflicting_intents(tmp_path: Path):
+    from pipeline.preparation.clean_data import clean_dataset
+
+    raw_csv = tmp_path / "near_dup_conflict.csv"
+    df = pd.DataFrame({
+        "instruction": [
+            "how do i return a product in store",   # no question mark
+            "how do I return a product in store?",  # has question mark, uppercase I
+            "where is my package",                  # distinct query
+        ],
+        "intent": [
+            "return_policy",
+            "return_product_in_store",              # conflicting intent on near-duplicate!
+            "delivery_issue",
+        ],
+        "category": ["RETURNS", "RETURNS", "DELIVERY"]
+    })
+    df.to_csv(raw_csv, index=False)
+
+    processed_dir = tmp_path / "proc"
+    report_dir = tmp_path / "rep"
+    res = clean_dataset(raw_csv, processed_dir, report_dir, dataset_version="03-11-2026-00")
+
+    assert res["quarantined_samples"] == 2
+    assert res["final_clean_samples"] == 1
+    cleaned_df = pd.read_csv(processed_dir / "03-11-2026-00" / "cleaned.csv")
+    assert cleaned_df.iloc[0]["intent"] == "delivery_issue"
+
+def test_split_dataset_exact_target_ratio_and_near_duplicate_leakage(tmp_path: Path):
+    from pipeline.preparation.split_data import split_dataset
+
+    cleaned_csv = tmp_path / "cleaned.csv"
+    # Create 100 samples across 2 intents, with near-duplicates (varying punctuation)
+    records = []
+    for i in range(50):
+        punct = "?" if i % 2 == 0 else " !"
+        records.append({
+            "sample_id": f"sample_a_{i:04d}",
+            "instruction": f"Order track question variant {i % 10}{punct}",
+            "intent": "track_order",
+            "category": "ORDER"
+        })
+        records.append({
+            "sample_id": f"sample_b_{i:04d}",
+            "instruction": f"Refund inquiry variant {i % 10}{punct}",
+            "intent": "refund_status",
+            "category": "RETURNS"
+        })
+    pd.DataFrame(records).to_csv(cleaned_csv, index=False)
+
+    splits_dir = tmp_path / "splits"
+    report_dir = tmp_path / "rep"
+
+    # Test with test_size=0.3
+    res = split_dataset(
+        cleaned_csv=cleaned_csv,
+        splits_dir=splits_dir,
+        report_dir=report_dir,
+        split_version="03-11-2026-00",
+        run_id="03-11-2026-00",
+        test_size=0.3,
+        n_splits=5,
+        random_state=42
+    )
+
+    df_assign = pd.read_csv(splits_dir / "03-11-2026-00" / "split_assignments.csv")
+    actual_test_ratio = res["summary"]["actual_test_ratio"]
+    assert abs(actual_test_ratio - 0.3) < 0.05  # Close to requested ratio
+
+    # Check zero near-duplicate leakage
+    from pipeline.preparation.utils import get_near_duplicate_key
+    df_raw = pd.read_csv(cleaned_csv)
+    merged = df_assign.merge(df_raw, on="sample_id")
+    merged["near_key"] = merged["instruction"].apply(get_near_duplicate_key)
+
+    train_keys = set(merged[merged["partition"] == "train"]["near_key"])
+    test_keys = set(merged[merged["partition"] == "test"]["near_key"])
+    assert len(train_keys.intersection(test_keys)) == 0
+
+def test_clean_data_quarantines_invalid_category(tmp_path: Path):
+    from pipeline.preparation.clean_data import clean_dataset
+
+    raw_csv = tmp_path / "invalid_cat.csv"
+    df = pd.DataFrame({
+        "instruction": ["Valid instruction here"],
+        "intent": ["track_order"],
+        "category": ["NON_EXISTENT_CAT"]  # Invalid category!
+    })
+    df.to_csv(raw_csv, index=False)
+
+    processed_dir = tmp_path / "proc"
+    report_dir = tmp_path / "rep"
+    res = clean_dataset(raw_csv, processed_dir, report_dir, dataset_version="03-11-2026-00")
+
+    assert res["quarantined_samples"] == 1
+    assert res["final_clean_samples"] == 0
+    quarantined_df = pd.read_csv(processed_dir / "03-11-2026-00" / "quarantined.csv")
+    assert quarantined_df.iloc[0]["quarantine_reason"] == "invalid_category_label"
+
+def test_run_preparation_aborts_if_cleaned_data_has_violations(tmp_path: Path, monkeypatch):
+    from pipeline.preparation.run_preparation import run_full_preparation
+    import pipeline.preparation.run_preparation as runner_mod
+
+    raw_csv = tmp_path / "raw.csv"
+    pd.DataFrame({
+        "instruction": ["Valid track query"],
+        "intent": ["track_order"],
+        "category": ["ORDER"]
+    }).to_csv(raw_csv, index=False)
+
+    # Monkeypatch clean_dataset to return a corrupted cleaned.csv with an invalid category
+    original_clean = runner_mod.clean_dataset
+    def mock_clean(*args, **kwargs):
+        res = original_clean(*args, **kwargs)
+        corrupted_df = pd.DataFrame({
+            "sample_id": ["sample_000000"],
+            "instruction": ["Some text"],
+            "intent": ["track_order"],
+            "category": ["CORRUPTED_CATEGORY"]
+        })
+        corrupted_df.to_csv(res["artifacts"]["cleaned_csv"], index=False)
+        return res
+
+    monkeypatch.setattr(runner_mod, "clean_dataset", mock_clean)
+
+    with pytest.raises(ValueError, match="integrity validation"):
+        run_full_preparation(input_csv=raw_csv, base_dir=tmp_path, run_id="03-11-2026-00")
+
+def test_refuse_overwriting_existing_versions(tmp_path: Path):
+    from pipeline.preparation.clean_data import clean_dataset
+    from pipeline.preparation.split_data import split_dataset
+
+    csv_path = tmp_path / "sample.csv"
+    pd.DataFrame({
+        "instruction": ["Track order"],
+        "intent": ["track_order"],
+        "category": ["ORDER"]
+    }).to_csv(csv_path, index=False)
+
+    proc_dir = tmp_path / "proc"
+    rep_dir = tmp_path / "rep"
+    splits_dir = tmp_path / "splits"
+
+    # First clean succeeds
+    clean_dataset(csv_path, proc_dir, rep_dir, dataset_version="03-11-2026-00")
+    # Second clean with same version must raise FileExistsError without overwrite=True
+    with pytest.raises(FileExistsError):
+        clean_dataset(csv_path, proc_dir, rep_dir, dataset_version="03-11-2026-00", overwrite=False)
+
+    # First split succeeds
+    cleaned_csv = proc_dir / "03-11-2026-00" / "cleaned.csv"
+    split_dataset(cleaned_csv, splits_dir, rep_dir, split_version="03-11-2026-00", n_splits=2, test_size=0.5)
+    # Second split with same version must raise FileExistsError without overwrite=True
+    with pytest.raises(FileExistsError):
+        split_dataset(cleaned_csv, splits_dir, rep_dir, split_version="03-11-2026-00", overwrite=False)

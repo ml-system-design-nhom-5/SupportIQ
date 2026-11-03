@@ -12,8 +12,10 @@ from typing import Any
 import pandas as pd
 
 from pipeline.preparation.utils import (
+    STANDARD_CATEGORIES,
     STANDARD_INTENTS,
     compute_sha256,
+    get_near_duplicate_key,
     get_next_id,
     normalize_instruction_text,
     save_json,
@@ -31,6 +33,7 @@ def clean_dataset(
     report_dir: Path | str,
     dataset_version: str | None = None,
     run_id: str | None = None,
+    overwrite: bool = False,
 ) -> dict[str, Any]:
     """Clean dataset text, quarantine flawed samples, and deduplicate identical pairs.
 
@@ -40,6 +43,7 @@ def clean_dataset(
         report_dir: Directory where cleaning report will be saved.
         dataset_version: Optional version string in DD-MM-YYYY-stt format.
         run_id: Optional run ID string.
+        overwrite: Whether to overwrite existing dataset version directory.
 
     Returns:
         Cleaning summary dictionary.
@@ -59,6 +63,12 @@ def clean_dataset(
         run_id = dataset_version
 
     version_dir = proc_base / dataset_version
+    cleaned_csv_path = version_dir / "cleaned.csv"
+    if cleaned_csv_path.exists() and not overwrite:
+        raise FileExistsError(
+            f"Dataset version '{dataset_version}' already exists at {version_dir}. "
+            "To prevent provenance corruption, specify a new version or use overwrite=True."
+        )
     version_dir.mkdir(parents=True, exist_ok=True)
 
     df = pd.read_csv(input_path)
@@ -82,7 +92,8 @@ def clean_dataset(
     for idx, row in df.iterrows():
         inst = row["instruction_cleaned"]
         intent = row.get("intent")
-        if not inst or pd.isna(intent) or str(intent).strip() == "":
+        cat = row.get("category")
+        if not inst or pd.isna(intent) or str(intent).strip() == "" or pd.isna(cat) or str(cat).strip() == "":
             quarantined_indices.add(idx)
             row_dict = row.to_dict()
             row_dict["quarantine_reason"] = "missing_required_fields"
@@ -99,13 +110,25 @@ def clean_dataset(
             row_dict["quarantine_reason"] = "invalid_intent_label"
             quarantined_records.append(row_dict)
 
-    # 3. Quarantine: conflicting duplicate groups
-    # Group remaining valid candidates by lowercased cleaned instruction
-    remaining_candidates = df[~df["_orig_idx"].isin(quarantined_indices)].copy()
-    remaining_candidates["_norm_group"] = remaining_candidates["instruction_cleaned"].str.lower()
+    # 3. Quarantine: invalid category label
+    for idx, row in df.iterrows():
+        if idx in quarantined_indices:
+            continue
+        cat = str(row.get("category")).strip()
+        if cat not in STANDARD_CATEGORIES:
+            quarantined_indices.add(idx)
+            row_dict = row.to_dict()
+            row_dict["quarantine_reason"] = "invalid_category_label"
+            quarantined_records.append(row_dict)
 
-    grouped = remaining_candidates.groupby("_norm_group")
-    for norm_group, group in grouped:
+    # 4. Quarantine: conflicting duplicate/near-duplicate groups
+    remaining_candidates = df[~df["_orig_idx"].isin(quarantined_indices)].copy()
+    remaining_candidates["_near_key"] = remaining_candidates["instruction_cleaned"].apply(get_near_duplicate_key)
+
+    grouped = remaining_candidates.groupby("_near_key")
+    for near_key, group in grouped:
+        if not near_key:
+            continue
         unique_intents = group["intent"].unique()
         if len(unique_intents) > 1:
             for idx in group["_orig_idx"]:
@@ -114,7 +137,7 @@ def clean_dataset(
                 row_dict["quarantine_reason"] = "conflicting_labels_across_duplicates"
                 quarantined_records.append(row_dict)
 
-    # 4. Clean subset & deduplication
+    # 5. Clean subset & deduplication
     valid_df = df[~df["_orig_idx"].isin(quarantined_indices)].copy()
     initial_clean_count = len(valid_df)
 
@@ -135,7 +158,6 @@ def clean_dataset(
             clean_columns.append(extra_col)
 
     final_clean_df = deduped_df[clean_columns]
-    cleaned_csv_path = version_dir / "cleaned.csv"
     final_clean_df.to_csv(cleaned_csv_path, index=False)
 
     # Save quarantined.csv with consistent schema
@@ -190,6 +212,7 @@ def main() -> None:
     parser.add_argument("--report-dir", required=True, help="Directory to save cleaning_report.json")
     parser.add_argument("--dataset-version", default=None, help="Version string in DD-MM-YYYY-stt format")
     parser.add_argument("--run-id", default=None, help="Run ID in DD-MM-YYYY-stt format")
+    parser.add_argument("--overwrite", action="store_true", help="Overwrite existing dataset version")
     args = parser.parse_args()
 
     result = clean_dataset(
@@ -198,6 +221,7 @@ def main() -> None:
         report_dir=args.report_dir,
         dataset_version=args.dataset_version,
         run_id=args.run_id,
+        overwrite=args.overwrite,
     )
     print(f"Cleaning complete for version: {result['dataset_version']}.")
     print(f"Clean samples: {result['final_clean_samples']}, Quarantined: {result['quarantined_samples']}")

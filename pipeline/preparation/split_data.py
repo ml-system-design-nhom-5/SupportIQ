@@ -15,6 +15,7 @@ from sklearn.model_selection import StratifiedGroupKFold
 
 from pipeline.preparation.utils import (
     compute_sha256,
+    get_near_duplicate_key,
     get_next_id,
     normalize_instruction_text,
     save_json,
@@ -22,8 +23,8 @@ from pipeline.preparation.utils import (
 
 
 def _get_group_key(text: Any) -> str:
-    """Derive group key from normalized instruction text with NFKC."""
-    norm = normalize_instruction_text(text, lowercase=True)
+    """Derive group key from near-duplicate normalized instruction text."""
+    norm = get_near_duplicate_key(text)
     if not norm:
         return ""
     return hashlib.md5(norm.encode("utf-8")).hexdigest()
@@ -38,6 +39,7 @@ def split_dataset(
     test_size: float = 0.15,
     n_splits: int = 10,
     random_state: int = 42,
+    overwrite: bool = False,
 ) -> dict[str, Any]:
     """Split cleaned dataset into hold-out test set and stratified group CV folds.
 
@@ -53,6 +55,7 @@ def split_dataset(
         test_size: Proportion of dataset for hold-out test set (e.g. 0.15).
         n_splits: Number of cross-validation folds for development set (default 10).
         random_state: Seed for reproducibility.
+        overwrite: Whether to overwrite existing split directory.
 
     Returns:
         Split summary report dictionary.
@@ -75,6 +78,12 @@ def split_dataset(
         run_id = split_version
 
     version_dir = spl_base / split_version
+    assignments_csv_path = version_dir / "split_assignments.csv"
+    if assignments_csv_path.exists() and not overwrite:
+        raise FileExistsError(
+            f"Split version '{split_version}' already exists at {version_dir}. "
+            "To prevent provenance corruption, specify a new version or use overwrite=True."
+        )
     version_dir.mkdir(parents=True, exist_ok=True)
 
     df = pd.read_csv(clean_path)
@@ -84,34 +93,56 @@ def split_dataset(
     if "sample_id" not in df.columns:
         raise ValueError("Missing 'sample_id' column in cleaned dataset")
 
-    # Generate group IDs based on normalized instruction text
+    # Generate group IDs based on near-duplicate normalized instruction text
     df["_group_id"] = df["instruction"].apply(_get_group_key)
-    y = df["intent"].values
-    groups = df["_group_id"].values
+    df["_orig_idx"] = np.arange(total_samples)
 
-    # Step 1: Split into Hold-out Test and Development Train
-    n_test_folds = max(2, int(round(1.0 / test_size)))
-    sgkf_test = StratifiedGroupKFold(n_splits=n_test_folds, shuffle=True, random_state=random_state)
+    # Step 1: Split into Hold-out Test and Development Train by Intent Groups
+    group_info = df.groupby("_group_id").agg(
+        intent=("intent", "first"),
+        indices=("_orig_idx", list),
+        size=("_orig_idx", "count"),
+    ).reset_index()
 
-    dev_indices: np.ndarray = np.array([])
-    test_indices: np.ndarray = np.array([])
+    rng = np.random.RandomState(random_state)
+    test_indices_list: list[int] = []
+    dev_indices_list: list[int] = []
 
-    for train_idx, val_idx in sgkf_test.split(df, y, groups):
-        test_indices = val_idx
-        dev_indices = train_idx
-        break  # Use the first fold split as test
+    for intent, grps in group_info.groupby("intent"):
+        grps_shuffled = grps.sample(frac=1.0, random_state=rng)
+        total_intent_samples = grps["size"].sum()
+        target_test_samples = int(round(total_intent_samples * test_size))
 
-    df_dev = df.iloc[dev_indices].copy()
-    df_test = df.iloc[test_indices].copy()
+        curr_test_samples = 0
+        if len(grps_shuffled) > 1 and target_test_samples > 0:
+            for _, row in grps_shuffled.iterrows():
+                grp_indices = row["indices"]
+                grp_size = row["size"]
+                remaining_for_dev = total_intent_samples - (curr_test_samples + grp_size)
+                if (curr_test_samples + grp_size <= target_test_samples) and (remaining_for_dev > 0 or curr_test_samples == 0):
+                    test_indices_list.extend(grp_indices)
+                    curr_test_samples += grp_size
+                else:
+                    dev_indices_list.extend(grp_indices)
+        else:
+            for _, row in grps_shuffled.iterrows():
+                dev_indices_list.extend(row["indices"])
+
+    df_dev = df.iloc[dev_indices_list].copy()
+    df_test = df.iloc[test_indices_list].copy()
 
     # Step 2: Split Development Train into n_splits Folds
-    sgkf_folds = StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
-    y_dev = df_dev["intent"].values
-    groups_dev = df_dev["_group_id"].values
-
+    unique_dev_groups = len(df_dev["_group_id"].unique())
     dev_fold_assignments = np.zeros(len(df_dev), dtype=int)
-    for fold_num, (_, val_idx) in enumerate(sgkf_folds.split(df_dev, y_dev, groups_dev)):
-        dev_fold_assignments[val_idx] = fold_num
+
+    if len(df_dev) > 1 and unique_dev_groups > 1 and n_splits > 1:
+        effective_n_splits = max(2, min(n_splits, unique_dev_groups, len(df_dev)))
+        sgkf_folds = StratifiedGroupKFold(n_splits=effective_n_splits, shuffle=True, random_state=random_state)
+        y_dev = df_dev["intent"].values
+        groups_dev = df_dev["_group_id"].values
+
+        for fold_num, (_, val_idx) in enumerate(sgkf_folds.split(df_dev, y_dev, groups_dev)):
+            dev_fold_assignments[val_idx] = fold_num
 
     df_dev["fold"] = dev_fold_assignments
     df_dev["partition"] = "train"
@@ -130,7 +161,7 @@ def split_dataset(
 
     train_test_leak = train_groups.intersection(test_groups)
     if train_test_leak:
-        raise ValueError(f"Data leakage detected! {len(train_test_leak)} groups overlap between train and test.")
+        raise ValueError(f"Data leakage detected! {len(train_test_leak)} near-duplicate groups overlap between train and test.")
 
     # Cross-fold leakage check
     train_df = merged[merged["partition"] == "train"]
@@ -149,7 +180,6 @@ def split_dataset(
         raise ValueError(f"Cross-fold leakage detected between folds: {fold_leakages}")
 
     # Step 4: Save split_assignments.csv
-    assignments_csv_path = version_dir / "split_assignments.csv"
     assignments.to_csv(assignments_csv_path, index=False)
 
     # Step 5: Generate split_report.json
@@ -160,6 +190,8 @@ def split_dataset(
     for f in folds:
         fold_samples = df_dev[df_dev["fold"] == f]
         class_dist_per_fold[f"fold_{f}"] = fold_samples["intent"].value_counts().to_dict()
+
+    actual_test_ratio = round(len(df_test) / total_samples, 4) if total_samples > 0 else 0.0
 
     report = {
         "run_id": run_id,
@@ -176,6 +208,7 @@ def split_dataset(
             "total_samples": total_samples,
             "train_samples": len(df_dev),
             "test_samples": len(df_test),
+            "actual_test_ratio": actual_test_ratio,
             "unique_groups": int(df["_group_id"].nunique()),
             "leakage_detected": False,
         },
@@ -207,6 +240,7 @@ def main() -> None:
     parser.add_argument("--test-size", type=float, default=0.15, help="Test set fraction (default: 0.15)")
     parser.add_argument("--n-splits", type=int, default=10, help="Number of folds (default: 10)")
     parser.add_argument("--seed", type=int, default=42, help="Random seed (default: 42)")
+    parser.add_argument("--overwrite", action="store_true", help="Overwrite existing split version")
     args = parser.parse_args()
 
     result = split_dataset(
@@ -218,6 +252,7 @@ def main() -> None:
         test_size=args.test_size,
         n_splits=args.n_splits,
         random_state=args.seed,
+        overwrite=args.overwrite,
     )
     print(f"Splitting complete for split_version: {result['split_version']}.")
     print(f"Train samples: {result['summary']['train_samples']}, Test samples: {result['summary']['test_samples']}")
