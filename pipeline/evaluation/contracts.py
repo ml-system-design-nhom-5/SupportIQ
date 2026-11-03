@@ -221,6 +221,18 @@ def verify_ml_inputs(
     if not isinstance(selection, dict):
         raise EvaluationError("Training manifest missing selection")
 
+    sel_file = train_dir / "selection.json"
+    if not sel_file.exists():
+        raise EvaluationError(f"selection.json not found in training run dir: {sel_file}")
+    if "selection.json" not in t_outputs:
+        raise EvaluationError("Missing required checksum for selection.json in manifest outputs")
+    if compute_sha256(sel_file) != t_outputs["selection.json"]:
+        raise EvaluationError("Hash mismatch for selection.json")
+
+    disk_selection = load_json(sel_file)
+    if disk_selection != selection:
+        raise EvaluationError("Manifest selection does not match selection.json on disk")
+
     target = float(selection.get("cv_target_macro_f1", 0.85))
     best_per_model = selection.get("best_per_model", {})
     if not best_per_model:
@@ -242,12 +254,17 @@ def verify_ml_inputs(
         if not bpath.exists() or not cpath.exists():
             raise EvaluationError(f"Model artifacts missing for {mid}")
 
-        # Verify against outputs dict
+        # Mandatory verification against outputs dict
         b_rel = f"models/{mid}/bundle.joblib"
         c_rel = f"models/{mid}/model_card.json"
-        if b_rel in t_outputs and compute_sha256(bpath) != t_outputs[b_rel]:
+        if b_rel not in t_outputs:
+            raise EvaluationError(f"Missing required checksum for bundle in manifest outputs: {b_rel}")
+        if compute_sha256(bpath) != t_outputs[b_rel]:
             raise EvaluationError(f"Hash mismatch for {b_rel}")
-        if c_rel in t_outputs and compute_sha256(cpath) != t_outputs[c_rel]:
+
+        if c_rel not in t_outputs:
+            raise EvaluationError(f"Missing required checksum for model card in manifest outputs: {c_rel}")
+        if compute_sha256(cpath) != t_outputs[c_rel]:
             raise EvaluationError(f"Hash mismatch for {c_rel}")
 
         card = load_json(cpath)
@@ -305,14 +322,23 @@ def verify_ml_inputs(
         raise EvaluationError("Near-duplicate groups have conflicting intent labels")
 
     expected_classes = config.get("expected_intents")
-    if not expected_classes:
-        expected_classes = sorted(cleaned_df["intent"].unique())
+    if expected_classes is None:
+        expected_classes = sorted(STANDARD_INTENTS)
     else:
         expected_classes = sorted(expected_classes)
 
+    cleaned_classes = set(cleaned_df["intent"].unique())
+    invalid_classes = cleaned_classes - set(expected_classes)
+    if invalid_classes:
+        raise EvaluationError(f"Cleaned dataset contains labels outside expected taxonomy: {sorted(invalid_classes)}")
+    missing_classes = set(expected_classes) - cleaned_classes
+    if missing_classes:
+        raise EvaluationError(f"Cleaned dataset missing expected taxonomy labels: {sorted(missing_classes)}")
+
     test_classes = set(test_rows["intent"].unique())
-    if not test_classes.issubset(set(expected_classes)):
-        raise EvaluationError(f"Test contains unknown classes: {test_classes - set(expected_classes)}")
+    missing_test_classes = set(expected_classes) - test_classes
+    if missing_test_classes:
+        raise EvaluationError(f"Test partition missing expected labels: {sorted(missing_test_classes)}")
 
     input_hashes = hash_inputs(source_paths)
 

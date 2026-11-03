@@ -181,6 +181,18 @@ def evaluate_robustness(
     except Exception as exc:
         raise EvaluationError(f"Robustness prediction failed: {exc}") from exc
 
+    if len(preds) != len(instructions):
+        raise EvaluationError(
+            f"Robustness prediction count mismatch: expected {len(instructions)}, got {len(preds)}"
+        )
+
+    classes_set = set(class_order) if class_order else set(bundle.classes_)
+    for p in preds:
+        if p is None or pd.isna(p) or str(p).strip() == "":
+            raise EvaluationError("Received NaN, null, or empty string prediction in robustness")
+        if str(p) not in classes_set:
+            raise EvaluationError(f"Predicted label {p!r} not in class taxonomy")
+
     results: list[dict[str, Any]] = []
     case_results: dict[str, dict[str, Any]] = {}
 

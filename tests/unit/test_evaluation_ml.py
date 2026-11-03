@@ -785,3 +785,100 @@ def test_run_from_directory_with_spaces(tmp_path):
     ]
     rc = main(argv)
     assert rc == 0
+
+
+def test_verify_inputs_rejects_missing_bundle_checksum_in_manifest_outputs(tmp_path):
+    fx = make_eval_fixture(tmp_path)
+    m = json.loads(fx.train_manifest.read_text(encoding="utf-8"))
+    # Delete bundle output checksum
+    del m["outputs"]["models/linear_svm/bundle.joblib"]
+    fx.train_manifest.write_text(json.dumps(m), encoding="utf-8")
+
+    with pytest.raises(EvaluationError, match="Missing required checksum.*bundle"):
+        verify_ml_inputs(fx.train_manifest, fx.root, fx.config)
+
+
+def test_verify_inputs_rejects_selection_winner_tampered_from_disk_selection(tmp_path):
+    fx = make_eval_fixture(tmp_path)
+    m = json.loads(fx.train_manifest.read_text(encoding="utf-8"))
+    # Tamper winner in training manifest selection while selection.json on disk remains unchanged
+    m["selection"]["winner"] = m["selection"]["best_per_model"]["multinomial_nb"]
+    fx.train_manifest.write_text(json.dumps(m), encoding="utf-8")
+
+    with pytest.raises(EvaluationError, match="selection"):
+        verify_ml_inputs(fx.train_manifest, fx.root, fx.config)
+
+
+def test_run_evaluation_detects_suite_and_config_tampering_midrun(tmp_path, monkeypatch):
+    from pipeline.evaluation.run_evaluation import run_ml_evaluation
+    import pipeline.evaluation.run_evaluation as run_eval
+
+    fx = make_eval_fixture(tmp_path)
+    cfg_file = tmp_path / "eval_config.json"
+    save_json(fx.config, cfg_file)
+
+    suite_file = tmp_path / "suite.json"
+    save_json({
+        "robustness_cases": [
+            {
+                "case_id": "c1",
+                "slice": "casing",
+                "instruction": "track my order",
+                "gold_intent": "track_order",
+            }
+        ]
+    }, suite_file)
+
+    orig_predict = run_eval.predict_rows
+
+    def tamper_config_and_suite(*args, **kwargs):
+        # Tamper config and suite during prediction
+        cfg_file.write_text(json.dumps({"tampered": True}), encoding="utf-8")
+        suite_file.write_text(json.dumps({"tampered": True}), encoding="utf-8")
+        return orig_predict(*args, **kwargs)
+
+    monkeypatch.setattr("pipeline.evaluation.run_evaluation.predict_rows", tamper_config_and_suite)
+
+    out_root = tmp_path / "artifacts" / "evaluation"
+    with pytest.raises(EvaluationError, match="changed during run"):
+        run_ml_evaluation(
+            training_manifest=fx.train_manifest,
+            suite=suite_file,
+            config_path=cfg_file,
+            run_id="03-11-2026-eval-midrun-cfg",
+            repo_root=fx.root,
+            output_root=out_root,
+        )
+
+
+def test_evaluate_robustness_validates_prediction_length_and_labels(tmp_path, monkeypatch):
+    from pipeline.evaluation.evaluate_intent import evaluate_robustness
+
+    fx = make_eval_fixture(tmp_path)
+    bundle = IntentModelBundle.load(fx.train_dir / "models" / "linear_svm")
+
+    cases = [
+        {"case_id": "c1", "slice": "s1", "instruction": "test 1"},
+        {"case_id": "c2", "slice": "s1", "instruction": "test 2"},
+    ]
+
+    # Classifier returns short predictions (1 instead of 2)
+    monkeypatch.setattr(bundle, "predict", lambda texts: np.array(["track_order"]))
+    with pytest.raises(EvaluationError, match="mismatch"):
+        evaluate_robustness(bundle, cases, fx.config["expected_intents"])
+
+    # Classifier returns unknown label
+    monkeypatch.setattr(bundle, "predict", lambda texts: np.array(["unknown_label", "unknown_label"]))
+    with pytest.raises(EvaluationError, match="taxonomy"):
+        evaluate_robustness(bundle, cases, fx.config["expected_intents"])
+
+
+def test_verify_inputs_defaults_to_standard_intents_and_checks_coverage(tmp_path):
+    fx = make_eval_fixture(tmp_path)
+    config_prod = dict(fx.config)
+    # Remove expected_intents so it defaults to STANDARD_INTENTS
+    del config_prod["expected_intents"]
+
+    # fx only has 3 intents, but STANDARD_INTENTS requires 46 -> must fail with missing classes
+    with pytest.raises(EvaluationError, match="missing expected taxonomy labels"):
+        verify_ml_inputs(fx.train_manifest, fx.root, config_prod)

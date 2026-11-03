@@ -176,8 +176,13 @@ def run_ml_evaluation(
 
         written_artifacts = write_reports(run_dir, results, metadata)
 
-        # Check for mid-run input tampering
-        for name, path in verified.source_paths.items():
+        all_input_paths = dict(verified.source_paths)
+        all_input_paths["config"] = resolved_cfg_path
+        if suite_data:
+            all_input_paths.update(suite_data["source_paths"])
+
+        # Check for mid-run input tampering across all data, config, and suite files
+        for name, path in all_input_paths.items():
             current_hash = compute_sha256(path)
             if current_hash != initial_inputs[name]:
                 raise EvaluationError(f"Input {name} changed during run")
