@@ -17,14 +17,14 @@ Lệnh chạy điều phối huấn luyện từ gốc repository:
 python -m pipeline.training.run_training `
   --preparation-manifest artifacts/preparation/03-11-2026-02/manifest.json `
   --config pipeline/configs/training.json `
-  --run-id 03-11-2026-training-01 `
+  --run-id 03-11-2026-00 `
   --output-root artifacts/training
 ```
 
 ### Ý nghĩa các tham số:
 - `--preparation-manifest`: Đường dẫn tới file `manifest.json` của giai đoạn Preparation đã hoàn tất (chứa đường dẫn `cleaned.csv`, `split_assignments.csv`, `split_report.json` và mã băm SHA-256 đối chiếu).
 - `--config`: Đường dẫn tới file cấu hình JSON của thí nghiệm (mặc định `pipeline/configs/training.json`).
-- `--run-id`: Định danh run ID dạng `DD-MM-YYYY-<suffix>` (ví dụ `03-11-2026-training-01`). **Run ID là bất biến, không hỗ trợ ghi đè (`--overwrite`)** nhằm bảo vệ phả hệ nguồn gốc.
+- `--run-id`: Định danh run ID dạng `<ngày>-<tháng>-<năm>-<stt>` (ví dụ `03-11-2026-00`). Nếu không chỉ định, hệ thống tự động sinh ID kế tiếp bằng `get_next_id`. **Run ID là bất biến, không hỗ trợ ghi đè (`--overwrite`)** nhằm bảo vệ phả hệ nguồn gốc.
 - `--output-root`: Thư mục gốc chứa các thư mục run (mặc định `artifacts/training`).
 
 ---
@@ -34,7 +34,7 @@ python -m pipeline.training.run_training `
 Mỗi run hoàn tất lưu toàn bộ kết quả dưới `artifacts/training/<run-id>/`:
 
 ```text
-artifacts/training/<training-run-id>/
+artifacts/training/<run-id>/
 ├── config.resolved.json         # Cấu hình đã chuẩn hóa kèm danh sách candidate mở rộng
 ├── environment.json             # Thông tin OS, phần cứng, Git commit, phiên bản thư viện
 ├── fold_metrics.csv             # Metrics chi tiết từng fold (Macro-F1, Acc, Weighted-F1, thời gian)

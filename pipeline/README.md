@@ -130,7 +130,7 @@ Thực thi 10-fold CV trên 3 thuật toán baseline (90 fold fits), tự độn
 python -m pipeline.training.run_training \
   --preparation-manifest artifacts/preparation/03-11-2026-02/manifest.json \
   --config pipeline/configs/training.json \
-  --run-id 03-11-2026-training-01
+  --run-id 03-11-2026-00
 ```
 
 ### 4.5. Kiểm thử Tự động (Unit Tests)

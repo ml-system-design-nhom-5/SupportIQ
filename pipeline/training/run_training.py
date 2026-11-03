@@ -21,6 +21,7 @@ from pipeline.preparation.utils import (
     STANDARD_INTENTS,
     compute_sha256,
     get_near_duplicate_key,
+    get_next_id,
     load_json,
 )
 from pipeline.training import TrainingError
@@ -261,13 +262,13 @@ def verify_inputs(
 
 
 def validate_run_id(run_id: str) -> str:
-    """Validate that run ID matches DD-MM-YYYY-<suffix> without directory traversal."""
+    """Validate that run ID strictly matches DD-MM-YYYY-stt format."""
     if not isinstance(run_id, str):
         raise ValueError("run_id: must be a string")
-    pattern = re.compile(r"^\d{2}-\d{2}-\d{4}-[A-Za-z0-9_-]+$")
+    pattern = re.compile(r"^\d{2}-\d{2}-\d{4}-\d{2,}$")
     if not pattern.match(run_id) or "/" in run_id or "\\" in run_id or ".." in run_id:
         raise ValueError(
-            f"run_id: {run_id!r} is invalid; expected format DD-MM-YYYY-<suffix>"
+            f"run_id: {run_id!r} is invalid; expected format DD-MM-YYYY-stt (e.g. '03-11-2026-00')"
         )
     return run_id
 
@@ -347,16 +348,20 @@ def load_completed_manifest(run_dir: Path | str) -> dict[str, Any]:
 def run_training(
     preparation_manifest: str | Path,
     config_path: str | Path,
-    run_id: str,
-    output_root: str | Path,
+    run_id: str | None = None,
+    output_root: str | Path = "artifacts/training",
     *,
     expected_intents: Collection[str] = STANDARD_INTENTS,
     repo_root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
     """Execute end-to-end training, CV selection, refitting, and artifact emission."""
-    run_id = validate_run_id(run_id)
     root = Path(repo_root)
     out_base = _resolve(output_root, root)
+    if run_id is None:
+        run_id = get_next_id(out_base)
+    else:
+        run_id = validate_run_id(run_id)
+
     run_dir = out_base / run_id
     if run_dir.exists():
         raise FileExistsError(f"Run directory already exists at {run_dir}")
@@ -540,7 +545,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Run Training pipeline for SupportIQ intent models.")
     parser.add_argument("--preparation-manifest", required=True, help="Path to preparation manifest.json")
     parser.add_argument("--config", required=True, help="Path to training.json")
-    parser.add_argument("--run-id", required=True, help="Run ID in DD-MM-YYYY-<suffix> format")
+    parser.add_argument("--run-id", default=None, help="Run ID in DD-MM-YYYY-stt format. If None, auto-generated.")
     parser.add_argument("--output-root", default="artifacts/training", help="Root dir for training runs")
     args = parser.parse_args(argv)
 

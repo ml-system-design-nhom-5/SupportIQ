@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import warnings
 from dataclasses import dataclass
 from pathlib import Path
@@ -579,7 +580,7 @@ def test_refit_bundle_predicts_like_classifier_and_reloads(tmp_path):
 
 def test_model_card_records_scope_limits_and_release_gate():
     card = build_model_card(
-        run_id="03-11-2026-training-00",
+        run_id="03-11-2026-00",
         model_id="linear_svm",
         candidate_id="linear_svm__C=1.0",
         params={"C": 1.0},
@@ -601,7 +602,7 @@ def test_model_card_records_scope_limits_and_release_gate():
     assert card["meets_cv_target"] is False
 
 
-def _tiny_run(tmp_path, run_id="03-11-2026-training-00"):
+def _tiny_run(tmp_path, run_id="03-11-2026-00"):
     fx = make_prep_fixture(tmp_path)
     config = make_cv_config()
     config_path = tmp_path / "config.json"
@@ -648,7 +649,7 @@ def test_run_training_refuses_existing_run_id_before_writing(tmp_path):
     fx = make_prep_fixture(tmp_path)
     config_path = tmp_path / "config.json"
     save_json(make_cv_config(), config_path)
-    run_dir = tmp_path / "artifacts" / "training" / "03-11-2026-training-00"
+    run_dir = tmp_path / "artifacts" / "training" / "03-11-2026-00"
     run_dir.mkdir(parents=True)
     (run_dir / "sentinel.txt").write_text("keep", encoding="utf-8")
     with pytest.raises(FileExistsError):
@@ -676,11 +677,11 @@ def test_failed_run_leaves_failed_state_without_completed_manifest(tmp_path, mon
         run_training(
             fx.manifest_path,
             config_path,
-            "03-11-2026-training-01",
+            "03-11-2026-01",
             tmp_path / "artifacts" / "training",
             expected_intents=("alpha", "beta", "gamma"),
         )
-    run_dir = tmp_path / "artifacts" / "training" / "03-11-2026-training-01"
+    run_dir = tmp_path / "artifacts" / "training" / "03-11-2026-01"
     assert load_json(run_dir / "run_state.json")["status"] == "failed"
     assert not (run_dir / "manifest.json").exists()
 
@@ -701,17 +702,17 @@ def test_run_fails_when_input_changes_mid_run(tmp_path, monkeypatch):
         run_training(
             fx.manifest_path,
             config_path,
-            "03-11-2026-training-03",
+            "03-11-2026-03",
             tmp_path / "artifacts" / "training",
             expected_intents=("alpha", "beta", "gamma"),
         )
-    run_dir = tmp_path / "artifacts" / "training" / "03-11-2026-training-03"
+    run_dir = tmp_path / "artifacts" / "training" / "03-11-2026-03"
     assert load_json(run_dir / "run_state.json")["status"] == "failed"
     assert not (run_dir / "manifest.json").exists()
 
 
 def test_test_changes_do_not_change_selection(tmp_path):
-    fx, run_a = _tiny_run(tmp_path, "03-11-2026-training-00")
+    fx, run_a = _tiny_run(tmp_path, "03-11-2026-00")
     selection_a = load_json(run_a / "selection.json")
     oof_a = pd.read_csv(run_a / "oof_predictions.csv")
     metric_cols = ["model_id", "candidate_id", "fold", "macro_f1", "accuracy", "weighted_f1"]
@@ -721,7 +722,7 @@ def test_test_changes_do_not_change_selection(tmp_path):
     result_b = run_training(
         fx.manifest_path,
         tmp_path / "config.json",
-        "03-11-2026-training-01",
+        "03-11-2026-01",
         tmp_path / "artifacts" / "training",
         expected_intents=("alpha", "beta", "gamma"),
     )
@@ -748,7 +749,7 @@ def test_training_never_transforms_test_text(tmp_path, monkeypatch):
     run_training(
         fx.manifest_path,
         config_path,
-        "03-11-2026-training-02",
+        "03-11-2026-02",
         tmp_path / "artifacts" / "training",
         expected_intents=("alpha", "beta", "gamma"),
     )
@@ -756,10 +757,37 @@ def test_training_never_transforms_test_text(tmp_path, monkeypatch):
     assert test_text.isdisjoint(seen)
 
 
-@pytest.mark.parametrize("bad_run_id", ["../escape", "03-11-2026-a/b", "03-11-2026-a\\b", ""])
+@pytest.mark.parametrize(
+    "bad_run_id",
+    [
+        "../escape",
+        "03-11-2026-a/b",
+        "03-11-2026-a\\b",
+        "03-11-2026-training-01",
+        "03-11-2026-abc",
+        "03-11-2026-1",
+        "",
+    ],
+)
 def test_invalid_run_id_is_rejected(bad_run_id):
     with pytest.raises(ValueError):
         validate_run_id(bad_run_id)
+
+
+def test_auto_increment_run_id_when_none(tmp_path):
+    fx = make_prep_fixture(tmp_path)
+    config_path = tmp_path / "config.json"
+    save_json(make_cv_config(), config_path)
+    result = run_training(
+        fx.manifest_path,
+        config_path,
+        run_id=None,
+        output_root=tmp_path / "artifacts" / "training",
+        expected_intents=("alpha", "beta", "gamma"),
+    )
+    run_dir = Path(result["run_dir"])
+    assert re.match(r"^\d{2}-\d{2}-\d{4}-\d{2}$", run_dir.name)
+
 
 
 def test_environment_and_tampered_artifact_rejected(tmp_path):
