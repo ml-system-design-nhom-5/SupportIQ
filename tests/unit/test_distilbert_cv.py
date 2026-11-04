@@ -118,3 +118,47 @@ def test_intent_dataset_tensor_output() -> None:
     assert "input_ids" in item and item["input_ids"].shape == (2,)
     assert "attention_mask" in item and item["attention_mask"].shape == (2,)
     assert "labels" in item and item["labels"].item() == 0
+
+
+def test_training_report_structure(tmp_path: Path) -> None:
+    """Verify that training_report contains all mandatory keys and types for comparison."""
+    from pipeline.preparation.utils import save_json
+
+    report = {
+        "model_architecture": "DistilBertForSequenceClassification",
+        "base_model": "distilbert-base-uncased",
+        "num_labels": 46,
+        "classes": sorted(STANDARD_INTENTS),
+        "epochs": 2,
+        "batch_size": 32,
+        "learning_rate": 3e-5,
+        "train_samples": 37911,
+        "cv_protocol": "10-fold cross-validation",
+        "cv_n_folds": 10,
+        "cv_macro_f1_mean": 0.985,
+        "cv_macro_f1_std": 0.002,
+        "cv_accuracy_mean": 0.986,
+        "cv_accuracy_std": 0.002,
+        "cv_weighted_f1_mean": 0.985,
+        "cv_weighted_f1_std": 0.002,
+        "cv_duration_seconds": 600.0,
+        "refit_duration_seconds": 120.0,
+        "total_training_seconds": 720.0,
+        "fold_metrics": [],
+        "membership_evidence": {
+            "evidence_file": "train_sample_ids.json",
+            "sample_count": 37911,
+            "sha256": "dummy",
+        },
+        "created_at": "2026-11-04T12:00:00Z",
+    }
+    report_file = tmp_path / "training_report.json"
+    save_json(report, report_file)
+
+    with open(report_file, "r", encoding="utf-8") as f:
+        loaded = json.load(f)
+
+    assert loaded["train_samples"] == 37911
+    assert loaded["cv_protocol"] == "10-fold cross-validation"
+    assert loaded["cv_macro_f1_mean"] == 0.985
+    assert len(loaded["classes"]) == 46
