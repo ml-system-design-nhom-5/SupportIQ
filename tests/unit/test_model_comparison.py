@@ -538,3 +538,208 @@ def test_zero_or_negative_duration_raises_evaluation_error():
         benchmark_classifier(DummyBundle(), ["query"], cfg, clock=backward_clock)
 
 
+# =========================================================================
+# Task 4: Comparison Runner Tests
+# =========================================================================
+
+def _setup_mock_transformers_for_runner(monkeypatch, setup):
+    """Helper to mock transformers so real weights are not loaded during runner tests."""
+    intents = setup["config"]["expected_intents"]
+    id2label = {i: c for i, c in enumerate(intents)}
+    hf_config = MockHFConfig(id2label=id2label)
+    mock_model = MockHFModel(hf_config)
+    mock_tok = MockTokenizer()
+
+    monkeypatch.setattr("transformers.AutoTokenizer.from_pretrained", lambda *args, **kwargs: mock_tok)
+    monkeypatch.setattr(
+        "transformers.AutoModelForSequenceClassification.from_pretrained",
+        lambda *args, **kwargs: (mock_model, {"missing_keys": []}),
+    )
+
+
+def test_comparison_has_five_rows_and_keeps_cv_winner(monkeypatch, tmp_path):
+    from pipeline.evaluation.run_comparison import run_comparison
+
+    setup = make_comparison_fixture(tmp_path)
+    _setup_mock_transformers_for_runner(monkeypatch, setup)
+
+    cfg_file = tmp_path / "comparison_config.json"
+    save_json(setup["config"], cfg_file)
+    out_root = tmp_path / "artifacts" / "evaluation"
+
+    report_data = run_comparison(
+        config_path=cfg_file,
+        run_id="03-11-2026-cmp-test",
+        repo_root=tmp_path,
+        output_root=out_root,
+    )
+
+    run_dir = out_root / "03-11-2026-cmp-test"
+    cmp_csv = run_dir / "comparison.csv"
+    assert cmp_csv.exists()
+
+    df = pd.read_csv(cmp_csv)
+    assert len(df) == 5
+    assert set(df["model_id"]) == {
+        "multinomial_nb",
+        "logistic_regression",
+        "linear_svm",
+        "supportiq_distilbert",
+        "supportpilot_distilbert",
+    }
+
+    # Verify CV winner is strictly linear_svm and only linear_svm
+    winner_row = df[df["is_cv_winner"] == True]
+    assert len(winner_row) == 1
+    assert winner_row.iloc[0]["model_id"] == "linear_svm"
+
+
+def test_external_score_is_descriptive_when_overlap_unknown(monkeypatch, tmp_path):
+    from pipeline.evaluation.run_comparison import run_comparison
+
+    setup = make_comparison_fixture(tmp_path)
+    _setup_mock_transformers_for_runner(monkeypatch, setup)
+
+    cfg_file = tmp_path / "comparison_config.json"
+    save_json(setup["config"], cfg_file)
+    out_root = tmp_path / "artifacts" / "evaluation"
+
+    run_comparison(
+        config_path=cfg_file,
+        run_id="03-11-2026-cmp-desc",
+        repo_root=tmp_path,
+        output_root=out_root,
+    )
+
+    df = pd.read_csv(out_root / "03-11-2026-cmp-desc" / "comparison.csv")
+    tf_rows = df[df["model_type"] == "transformer"]
+    assert len(tf_rows) == 2
+    for _, row in tf_rows.iterrows():
+        assert row["independence_status"] == "unverified"
+        assert row["eligible_for_independent_ranking"] == False
+
+
+def test_local_missing_cv_is_na_not_zero(monkeypatch, tmp_path):
+    from pipeline.evaluation.run_comparison import run_comparison
+
+    setup = make_comparison_fixture(tmp_path)
+    _setup_mock_transformers_for_runner(monkeypatch, setup)
+
+    cfg_file = tmp_path / "comparison_config.json"
+    save_json(setup["config"], cfg_file)
+    out_root = tmp_path / "artifacts" / "evaluation"
+
+    run_comparison(
+        config_path=cfg_file,
+        run_id="03-11-2026-cmp-cv",
+        repo_root=tmp_path,
+        output_root=out_root,
+    )
+
+    df = pd.read_csv(out_root / "03-11-2026-cmp-cv" / "comparison.csv")
+    tf_rows = df[df["model_type"] == "transformer"]
+    for _, row in tf_rows.iterrows():
+        # cv_macro_f1 must be NaN, null, or empty string — never 0.0 or val score!
+        assert pd.isna(row["cv_macro_f1"]) or str(row["cv_macro_f1"]).strip() == ""
+
+
+def test_new_run_does_not_modify_historical_artifacts(monkeypatch, tmp_path):
+    from pipeline.evaluation.run_comparison import run_comparison
+
+    setup = make_comparison_fixture(tmp_path)
+    _setup_mock_transformers_for_runner(monkeypatch, setup)
+
+    cfg_file = tmp_path / "comparison_config.json"
+    save_json(setup["config"], cfg_file)
+    out_root = tmp_path / "artifacts" / "evaluation"
+
+    # Snapshot historical hashes
+    eval_dir = setup["eval_manifest"].parent
+    hist_hashes_before = {
+        p.relative_to(eval_dir).as_posix(): compute_sha256(p)
+        for p in eval_dir.rglob("*")
+        if p.is_file()
+    }
+
+    run_comparison(
+        config_path=cfg_file,
+        run_id="03-11-2026-cmp-hist",
+        repo_root=tmp_path,
+        output_root=out_root,
+    )
+
+    # Verify no historical file changed
+    for rel_path, old_hash in hist_hashes_before.items():
+        curr_p = eval_dir / rel_path
+        assert curr_p.exists()
+        assert compute_sha256(curr_p) == old_hash
+
+
+def test_comparison_fails_if_model_fails_to_load_or_predict(monkeypatch, tmp_path):
+    from pipeline.evaluation.run_comparison import run_comparison
+
+    setup = make_comparison_fixture(tmp_path)
+    _setup_mock_transformers_for_runner(monkeypatch, setup)
+
+    # Corrupt model adapter prediction by causing predict_rows to raise an error
+    def failing_predict(*args, **kwargs):
+        raise RuntimeError("Inference engine crashed")
+
+    monkeypatch.setattr("pipeline.evaluation.run_comparison.predict_rows", failing_predict)
+
+    cfg_file = tmp_path / "comparison_config.json"
+    save_json(setup["config"], cfg_file)
+    out_root = tmp_path / "artifacts" / "evaluation"
+
+    with pytest.raises(EvaluationError, match="Inference engine crashed"):
+        run_comparison(
+            config_path=cfg_file,
+            run_id="03-11-2026-cmp-fail",
+            repo_root=tmp_path,
+            output_root=out_root,
+        )
+
+    # State file must be failed, manifest must not be created
+    run_dir = out_root / "03-11-2026-cmp-fail"
+    state_file = run_dir / "run_state.json"
+    assert state_file.exists()
+    state_data = json.loads(state_file.read_text())
+    assert state_data["status"] == "failed"
+    assert not (run_dir / "manifest.json").exists()
+
+
+def test_comparison_fails_if_input_file_changes_during_run(monkeypatch, tmp_path):
+    from pipeline.evaluation.run_comparison import run_comparison
+
+    setup = make_comparison_fixture(tmp_path)
+    _setup_mock_transformers_for_runner(monkeypatch, setup)
+
+    cfg_file = tmp_path / "comparison_config.json"
+    save_json(setup["config"], cfg_file)
+    out_root = tmp_path / "artifacts" / "evaluation"
+
+    from pipeline.evaluation.evaluate_intent import predict_rows as real_predict_rows
+
+    def tampering_predict(adapter, test_df, batch_size=256):
+        # Tamper with the config file mid-run!
+        cfg_file.write_text("{\"tampered\": true}")
+        return real_predict_rows(adapter, test_df, batch_size=batch_size)
+
+    monkeypatch.setattr("pipeline.evaluation.run_comparison.predict_rows", tampering_predict)
+
+    with pytest.raises(EvaluationError, match="changed during comparison run"):
+        run_comparison(
+            config_path=cfg_file,
+            run_id="03-11-2026-cmp-tamper",
+            repo_root=tmp_path,
+            output_root=out_root,
+        )
+
+    run_dir = out_root / "03-11-2026-cmp-tamper"
+    state_data = json.loads((run_dir / "run_state.json").read_text())
+    assert state_data["status"] == "failed"
+    assert not (run_dir / "manifest.json").exists()
+
+
+
+

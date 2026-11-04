@@ -296,6 +296,7 @@ def verify_comparison_inputs(
         "test": test_df,
         "class_order": verified_ml.class_order,
         "baseline_model_dirs": verified_ml.model_dirs,
+        "baseline_selection": verified_ml.selection,
         "transformer_specs": transformer_specs,
         "historical_results": historical_results,
         "source_paths": source_paths,
