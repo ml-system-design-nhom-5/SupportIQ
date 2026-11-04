@@ -503,12 +503,12 @@ def main() -> None:
     )
     parser.add_argument(
         "--cleaned-csv",
-        default="artifacts/preparation/03-11-2026-02/cleaned.csv",
+        default="data/datasets/processed/03-11-2026-02/cleaned.csv",
         help="Path to cleaned dataset CSV",
     )
     parser.add_argument(
         "--splits-csv",
-        default="artifacts/preparation/03-11-2026-02/split_assignments.csv",
+        default="data/datasets/splits/03-11-2026-02/split_assignments.csv",
         help="Path to split assignments CSV",
     )
     parser.add_argument(
