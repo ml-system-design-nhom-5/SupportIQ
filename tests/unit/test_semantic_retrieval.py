@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import numpy as np
 import pytest
 from apps.core_backend.retrieval.importer import (
     PolicyDocument,
@@ -8,6 +9,7 @@ from apps.core_backend.retrieval.importer import (
     eligible_versions,
     detect_rule_conflicts,
 )
+from apps.core_backend.retrieval.encoder import PolicyEncoder, chunk_policy
 
 def test_metadata_importer_valid_approved_passes(tmp_path):
     policies_data = [
@@ -100,3 +102,35 @@ def test_conflict_detection_overlapping_conditions():
     ]
     # Same seller, same key, different values -> CONFLICT!
     assert detect_rule_conflicts(conflicting_rules) is True
+
+
+def test_chunking_short_policy_creates_single_chunk():
+    policy = PolicyVersion(
+        doc_id="POL-001",
+        version="1.0",
+        category="shipping",
+        title="Delivery Hours",
+        content="We deliver from 8am to 5pm Monday to Friday.",
+        content_hash="hash1",
+        is_active=True,
+        metadata=PolicyMetadata()
+    )
+    chunks = chunk_policy(policy, max_tokens=480, overlap=40)
+    assert len(chunks) == 1
+    assert chunks[0]["doc_id"] == "POL-001"
+    assert "Delivery Hours" in chunks[0]["text"]
+
+
+def test_encoder_normalizes_embeddings_to_unit_length():
+    encoder = PolicyEncoder(mock_mode=True)
+    embeddings = encoder.encode_queries(["How long does shipping take?"])
+    assert embeddings.shape == (1, 384)
+    # L2 norm must be approximately 1.0
+    norm = np.linalg.norm(embeddings[0])
+    assert abs(norm - 1.0) < 1e-5
+
+
+def test_encoder_adds_query_prefix():
+    encoder = PolicyEncoder(mock_mode=True)
+    prepared = encoder.prepare_query("How to return a product?")
+    assert prepared.startswith("Represent this sentence for searching relevant passages: ")
