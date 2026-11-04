@@ -1,7 +1,7 @@
 import hashlib
 import json
 from datetime import datetime, timezone
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 from pydantic import BaseModel, Field
 
 class PolicyDocument(BaseModel):
@@ -34,16 +34,27 @@ class PolicyVersion(BaseModel):
     is_active: bool
     metadata: PolicyMetadata
 
-def conditions_overlap(c1: Optional[Dict[str, Any]], c2: Optional[Dict[str, Any]]) -> bool:
-    """P2: Check if two condition dictionaries overlap.
-    Two conditions overlap if there is no key present in both dictionaries with different values.
-    For example: {'seller': 'X'} and {'seller': 'X', 'market': 'US'} overlap!
-    However, {'seller': 'X'} and {'seller': 'Y'} do not overlap.
+def normalize_condition(cond: Any) -> Dict[str, Any]:
+    """P2: Normalize condition representation.
+    If condition is 'all', None, empty, or string, convert to dictionary.
     """
-    if not c1 or not c2:
+    if not cond or cond == "all":
+        return {}
+    if isinstance(cond, dict):
+        return cond
+    return {"scope": str(cond)}
+
+def conditions_overlap(c1: Any, c2: Any) -> bool:
+    """P2: Check if two conditions overlap.
+    Handles universal/string condition 'all' gracefully.
+    Two conditions overlap if there is no key present in both dictionaries with different values.
+    """
+    d1 = normalize_condition(c1)
+    d2 = normalize_condition(c2)
+    if not d1 or not d2:
         return True
-    for k in set(c1.keys()) & set(c2.keys()):
-        if c1[k] != c2[k]:
+    for k in set(d1.keys()) & set(d2.keys()):
+        if d1[k] != d2[k]:
             return False
     return True
 
@@ -88,7 +99,6 @@ def import_policies(
         try:
             meta = PolicyMetadata(**raw_meta)
         except Exception as e:
-            # P1: Quarantine if required approval fields (approved_by, approved_at, valid_from, etc.) are missing
             quarantined.append({"doc_id": doc_id, "reason": f"invalid_approval_metadata: {e}"})
             continue
 
@@ -131,7 +141,7 @@ def eligible_versions(
         if not v.is_active or v.metadata.status != "approved":
             continue
 
-        # P1: Enforce strict ACL without silently adding customer role
+        # Enforce strict ACL without silently adding customer role
         if role not in v.metadata.allowed_roles:
             continue
 
