@@ -14,12 +14,13 @@ class PolicyDocument(BaseModel):
     tags: List[str] = Field(default_factory=list)
 
 class PolicyMetadata(BaseModel):
-    status: str = "approved"  # "approved", "draft", "revoked"
-    approved_by: Optional[str] = None
-    approved_at: Optional[str] = None
-    valid_from: Optional[str] = None
-    valid_to: Optional[str] = None  # None means unlimited
-    allowed_roles: List[str] = Field(default_factory=lambda: ["customer", "agent", "staff", "admin"])
+    # P1: Required approval metadata; no silent unapproved defaults
+    status: str  # Must be explicitly provided: "approved", "draft", "revoked"
+    approved_by: str
+    approved_at: str
+    valid_from: str
+    valid_to: Optional[str] = None  # None indicates indefinite validity
+    allowed_roles: List[str]
     policy_key: Optional[str] = None
     rule_assertions: List[Dict[str, Any]] = Field(default_factory=list)
 
@@ -32,6 +33,19 @@ class PolicyVersion(BaseModel):
     content_hash: str
     is_active: bool
     metadata: PolicyMetadata
+
+def conditions_overlap(c1: Optional[Dict[str, Any]], c2: Optional[Dict[str, Any]]) -> bool:
+    """P2: Check if two condition dictionaries overlap.
+    Two conditions overlap if there is no key present in both dictionaries with different values.
+    For example: {'seller': 'X'} and {'seller': 'X', 'market': 'US'} overlap!
+    However, {'seller': 'X'} and {'seller': 'Y'} do not overlap.
+    """
+    if not c1 or not c2:
+        return True
+    for k in set(c1.keys()) & set(c2.keys()):
+        if c1[k] != c2[k]:
+            return False
+    return True
 
 def detect_rule_conflicts(rules: List[Dict[str, Any]]) -> bool:
     """Detect if two rules have the exact same key and overlapping conditions but contradictory values."""
@@ -48,8 +62,8 @@ def detect_rule_conflicts(rules: List[Dict[str, Any]]) -> bool:
                 r1, r2 = items[i], items[j]
                 cond1 = r1.get("condition")
                 cond2 = r2.get("condition")
-                # If conditions are identical or both universal, but values differ -> conflict
-                if cond1 == cond2 and r1.get("value") != r2.get("value"):
+                # If conditions overlap and values contradict -> conflict!
+                if conditions_overlap(cond1, cond2) and r1.get("value") != r2.get("value"):
                     return True
     return False
 
@@ -71,7 +85,13 @@ def import_policies(
             quarantined.append({"doc_id": doc_id, "reason": "missing_metadata"})
             continue
 
-        meta = PolicyMetadata(**raw_meta)
+        try:
+            meta = PolicyMetadata(**raw_meta)
+        except Exception as e:
+            # P1: Quarantine if required approval fields (approved_by, approved_at, valid_from, etc.) are missing
+            quarantined.append({"doc_id": doc_id, "reason": f"invalid_approval_metadata: {e}"})
+            continue
+
         content = p.get("content", "")
         c_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
 
@@ -103,7 +123,7 @@ def eligible_versions(
     role: str = "customer",
     as_of: Optional[datetime] = None
 ) -> List[PolicyVersion]:
-    """Filter versions by role ACL and temporal validity."""
+    """Filter versions strictly by role ACL and temporal validity."""
     now = as_of or datetime.now(timezone.utc)
     results: List[PolicyVersion] = []
 
@@ -111,6 +131,7 @@ def eligible_versions(
         if not v.is_active or v.metadata.status != "approved":
             continue
 
+        # P1: Enforce strict ACL without silently adding customer role
         if role not in v.metadata.allowed_roles:
             continue
 

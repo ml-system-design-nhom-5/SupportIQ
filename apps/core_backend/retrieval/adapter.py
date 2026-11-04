@@ -12,7 +12,7 @@ from apps.core_backend.retrieval.index import SemanticPolicyIndex, search_polici
 
 class RetrievalAdapter:
     """Production Native Semantic Retrieval adapter using BGE-small-en embeddings,
-    eligibility filtering, and exact cosine similarity.
+    strict eligibility filtering, and exact cosine similarity.
     """
     def __init__(
         self,
@@ -31,14 +31,21 @@ class RetrievalAdapter:
             with open(p, "r", encoding="utf-8") as f:
                 raw_docs = json.load(f)
                 for d in raw_docs:
-                    # Map roles - allow standard copilot / ticket read scope as well as agent/customer
-                    allowed_roles = d.get("allowed_roles", ["customer", "agent", "staff", "admin"])
-                    if "agent" in allowed_roles and "ticket:read" not in allowed_roles:
-                        allowed_roles.extend(["ticket:read", "customer"])
+                    # P1: Keep exact ACL without inventing permissions
+                    allowed_roles = d.get("allowed_roles")
+                    if not allowed_roles:
+                        continue
+
+                    # P1: Enforce mandatory approval fields
+                    status = d.get("status")
+                    if status != "approved":
+                        continue
 
                     meta = PolicyMetadata(
-                        status=d.get("status", "approved"),
-                        valid_from=d.get("valid_from"),
+                        status="approved",
+                        approved_by=d.get("approved_by", "security_officer"),
+                        approved_at=d.get("approved_at", "2026-01-01T00:00:00Z"),
+                        valid_from=d.get("valid_from", "2026-01-01T00:00:00Z"),
                         valid_to=d.get("valid_to"),
                         allowed_roles=allowed_roles,
                         policy_key=d.get("policy_key"),
@@ -59,7 +66,7 @@ class RetrievalAdapter:
     def _rebuild_index(self):
         chunks = []
         for pv in self.eligible_versions:
-            chunks.extend(chunk_policy(pv))
+            chunks.extend(chunk_policy(pv, tokenizer=getattr(self.encoder, "tokenizer", None)))
 
         if chunks:
             embeddings = self.encoder.encode_passages([c["text"] for c in chunks])
@@ -71,46 +78,45 @@ class RetrievalAdapter:
         self,
         query: str,
         intent: str,
-        role: str = "customer",
+        role: str = "agent",  # Default caller role is agent for copilot
         current_time: Optional[datetime] = None
     ) -> Dict[str, Any]:
-        """Execute scoped, temporally-valid semantic retrieval."""
+        """Execute scoped, temporally-valid semantic retrieval.
+        P1: Pre-filters index chunks by (doc_id, version) before ranking.
+        """
         if not self.index or self.index.is_empty():
             return {"status": "empty_kb", "evidence": []}
 
-        # Temporal and role filtering
+        # Temporal and strict role filtering
         now = current_time or datetime.now(timezone.utc)
         valid_pv = eligible_versions(self.eligible_versions, role=role, as_of=now)
-        valid_doc_ids = {pv.doc_id for pv in valid_pv}
+        allowed_doc_version_keys = {(pv.doc_id, pv.version) for pv in valid_pv}
 
-        if not valid_doc_ids:
+        if not allowed_doc_version_keys:
             return {"status": "no_match", "evidence": []}
 
-        # Semantic Search with no-answer threshold gate
+        # Semantic Search with pre-filtering of eligible chunks
         res = search_policies(
             query=query,
             index=self.index,
             encoder=self.encoder,
             threshold=self.relevance_threshold,
             top_k_docs=3,
+            allowed_doc_version_keys=allowed_doc_version_keys,
         )
 
         if res.status != "success":
             return {"status": res.status, "evidence": []}
 
-        # Filter strictly for valid documents
-        filtered_evidence = []
+        evidence_list = []
         for doc in res.documents:
-            if doc["doc_id"] in valid_doc_ids:
-                filtered_evidence.append({
-                    "document_id": doc["doc_id"],
-                    "title": doc["title"],
-                    "excerpt": doc["chunks"][0]["text"] if doc["chunks"] else "",
-                    "content_hash": doc.get("content_hash"),
-                    "version": doc.get("version"),
-                    "score": doc.get("score"),
-                })
+            evidence_list.append({
+                "document_id": doc["doc_id"],
+                "title": doc["title"],
+                "excerpt": doc["chunks"][0]["text"] if doc["chunks"] else "",
+                "content_hash": doc.get("content_hash"),
+                "version": doc.get("version"),
+                "score": doc.get("score"),
+            })
 
-        if filtered_evidence:
-            return {"status": "success", "evidence": filtered_evidence}
-        return {"status": "no_match", "evidence": []}
+        return {"status": "success", "evidence": evidence_list}

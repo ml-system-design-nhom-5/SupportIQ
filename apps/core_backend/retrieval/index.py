@@ -28,12 +28,26 @@ def search_policies(
     top_k_docs: int = 3,
     max_chunks_per_doc: int = 2,
     token_budget: int = 1500,
+    allowed_doc_version_keys: Optional[set] = None,  # P1: Filter eligible (doc_id, version) keys BEFORE ranking
 ) -> RetrievalResult:
     """Exact cosine similarity search over eligible policy chunks.
-    Groups results to return up to top_k_docs distinct documents.
+    Filters eligible chunks BEFORE ranking, groups results to return up to top_k_docs distinct documents,
+    and strictly respects token_budget.
     """
     if index.is_empty():
         return RetrievalResult(status="no_evidence", reason_codes=["empty_index"])
+
+    # P1: Determine eligible indices prior to ranking
+    eligible_indices = []
+    for i, c in enumerate(index.chunks):
+        if allowed_doc_version_keys is not None:
+            doc_ver_key = (c["doc_id"], c.get("version", "1.0"))
+            if doc_ver_key not in allowed_doc_version_keys:
+                continue
+        eligible_indices.append(i)
+
+    if not eligible_indices:
+        return RetrievalResult(status="no_evidence", reason_codes=["no_eligible_chunks"])
 
     try:
         # Encode query with prefix (shape: (1, 384))
@@ -42,7 +56,8 @@ def search_policies(
         return RetrievalResult(status="error", reason_codes=["encoder_failed", str(e)])
 
     # Dot product of normalized vectors equals exact cosine similarity
-    scores = np.dot(index.embeddings, q_emb)
+    sub_embeddings = index.embeddings[eligible_indices]
+    scores = np.dot(sub_embeddings, q_emb)
 
     if len(scores) == 0:
         return RetrievalResult(status="no_evidence", reason_codes=["no_chunks"])
@@ -55,18 +70,27 @@ def search_policies(
             reason_codes=["below_relevance_threshold"]
         )
 
-    # Sort chunk indices descending by similarity
-    sorted_chunk_indices = np.argsort(scores)[::-1]
+    # Sort eligible chunk indices descending by similarity
+    sorted_sub_indices = np.argsort(scores)[::-1]
 
-    # Group chunks by doc_id to return distinct documents
+    # P2: Group chunks by doc_id while respecting token_budget
     docs_map: Dict[str, Dict[str, Any]] = {}
-    for idx in sorted_chunk_indices:
-        score = float(scores[idx])
+    total_tokens_used = 0
+
+    for sub_idx in sorted_sub_indices:
+        score = float(scores[sub_idx])
         if score < threshold:
             continue
 
-        chunk = index.chunks[idx]
+        orig_idx = eligible_indices[sub_idx]
+        chunk = index.chunks[orig_idx]
         doc_id = chunk["doc_id"]
+        chunk_token_count = chunk.get("token_count", len(chunk["text"].split()))
+
+        # Check if adding this chunk exceeds token_budget
+        if total_tokens_used + chunk_token_count > token_budget:
+            # Token budget reached, skip further chunks
+            continue
 
         if doc_id not in docs_map:
             if len(docs_map) >= top_k_docs:
@@ -80,11 +104,16 @@ def search_policies(
                 "content_hash": chunk.get("content_hash"),
                 "chunks": [chunk],
             }
+            total_tokens_used += chunk_token_count
         else:
             if len(docs_map[doc_id]["chunks"]) < max_chunks_per_doc:
                 docs_map[doc_id]["chunks"].append(chunk)
+                total_tokens_used += chunk_token_count
 
     selected_docs = list(docs_map.values())
+    if not selected_docs:
+        return RetrievalResult(status="no_evidence", reason_codes=["token_budget_exceeded"])
+
     return RetrievalResult(
         status="success",
         documents=selected_docs,
