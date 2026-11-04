@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import hashlib
+import json
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -10,11 +12,13 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 from unittest.mock import MagicMock
 
+import numpy as np
+
 from apps.core_backend.commerce.adapter import CommerceAdapter
 from apps.core_backend.intent.client import IntentClient
 from apps.core_backend.intent.routing import load_policy_v2, decide_route
 from apps.core_backend.intent.schemas import RoutingContext, IntentPrediction
-from apps.core_backend.llm.gemini import GeminiDraftClient
+from apps.core_backend.llm.gemini import GeminiDraftClient, LLMError
 from apps.core_backend.orchestration.pipeline_runner import PipelineRunner
 from apps.core_backend.orchestration.store import PersistentStore
 from apps.core_backend.retrieval.adapter import RetrievalAdapter
@@ -25,11 +29,85 @@ from pipeline.evaluation.system_contracts import (
     SystemCase,
     VerifiedSystemInputs,
 )
+from pipeline.evaluation.system_performance import BudgetLedger
 from pipeline.evaluation.system_server import ManagedDemoServer
 
 
 def _compute_str_sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+class MockPolicyEncoder:
+    """Offline mock policy encoder ensuring zero network/disk weight loading in mock profile."""
+    def __init__(self, dimension: int = 384):
+        self.dimension = dimension
+        self.tokenizer = None
+
+    def encode_passages(self, texts: List[str]) -> np.ndarray:
+        if not texts:
+            return np.empty((0, self.dimension), dtype=np.float32)
+        vecs = []
+        for t in texts:
+            h = int(hashlib.sha256(t.encode("utf-8")).hexdigest(), 16)
+            rng = np.random.RandomState(h % (2**32))
+            v = rng.randn(self.dimension).astype(np.float32)
+            norm = np.linalg.norm(v)
+            vecs.append(v / (norm if norm > 0 else 1.0))
+        return np.array(vecs, dtype=np.float32)
+
+    def encode_query(self, query: str) -> np.ndarray:
+        h = int(hashlib.sha256(query.encode("utf-8")).hexdigest(), 16)
+        rng = np.random.RandomState(h % (2**32))
+        v = rng.randn(self.dimension).astype(np.float32)
+        norm = np.linalg.norm(v)
+        return (v / (norm if norm > 0 else 1.0)).astype(np.float32)
+
+
+class MockLLMClient:
+    """Zero-network mock LLM client completely isolated from environment keys and httpx."""
+    def __init__(self, configured: bool = True):
+        self.configured = configured
+
+    def generate(self, question: str, intent: str, evidence: list[dict], business_context: dict | None = None) -> dict[str, Any]:
+        if not self.configured:
+            raise LLMError("llm_not_configured")
+        citations = []
+        body_parts = []
+        for i, ev in enumerate(evidence[:3], start=1):
+            doc_id = ev.get("document_id") or ev.get("doc_id", "DOC")
+            citations.append(f"[S{i}]")
+            excerpt = ev.get("excerpt") or ev.get("title") or "policy information"
+            body_parts.append(f"{excerpt.strip()} [S{i}]")
+        body = " ".join(body_parts) if body_parts else "Support information."
+        return {
+            "body": body,
+            "citations": citations,
+            "usage": {"input_tokens": 120, "output_tokens": 60},
+        }
+
+
+class BudgetedLLMClient:
+    """Wraps any LLM client to atomically reserve and record budget via BudgetLedger."""
+    def __init__(self, client: Any, ledger: BudgetLedger, input_bound: int = 4000, output_bound: int = 1000):
+        self._client = client
+        self._ledger = ledger
+        self.input_bound = input_bound
+        self.output_bound = output_bound
+
+    @property
+    def configured(self) -> bool:
+        return bool(getattr(self._client, "configured", False))
+
+    def generate(self, question: str, intent: str, evidence: list[dict], business_context: dict | None = None) -> dict[str, Any]:
+        attempt_id = self._ledger.reserve(self.input_bound, self.output_bound)
+        try:
+            res = self._client.generate(question, intent, evidence, business_context=business_context)
+            usage = res.get("usage") if isinstance(res, dict) else None
+            self._ledger.record(attempt_id, usage)
+            return res
+        except Exception:
+            self._ledger.record(attempt_id, None)
+            raise
 
 
 class MockIntentClient:
@@ -100,17 +178,23 @@ def build_system_dependencies(
 
     orchestration_db = r_dir / "orchestration.sqlite3"
     demo_db = r_dir / "demo.sqlite3"
+    budget_db = r_dir / "budget.sqlite3"
     clock_fn = lambda: inputs.as_of
     deadline_sec = inputs.config.deadline_seconds or 30.0
+
+    # Build Budget Ledger for call and cost governance
+    ledger = BudgetLedger(db_path=budget_db, config=inputs.config)
 
     if clean_profile == "mock":
         p_store = PersistentStore(db_path=str(orchestration_db))
         kb_path = inputs.source_paths.get("kb", Path("data/knowledge/approved_kb.v1.json"))
-        
-        # Build offline retrieval adapter
-        retrieval = RetrievalAdapter(kb_path=str(kb_path), encoder=None)
+
+        # Build offline retrieval adapter with MockPolicyEncoder (zero PyTorch / model loading)
+        mock_encoder = MockPolicyEncoder()
+        retrieval = RetrievalAdapter(kb_path=str(kb_path), encoder=mock_encoder)
         mock_intent_client = MockIntentClient()
-        mock_llm_client = GeminiDraftClient(api_key=None)  # unconfigured mock
+        raw_mock_llm = MockLLMClient(configured=True)
+        budgeted_llm = BudgetedLLMClient(raw_mock_llm, ledger=ledger)
         policy = load_policy_v2()
 
         runner = PipelineRunner(
@@ -118,7 +202,7 @@ def build_system_dependencies(
             policy=policy,
             retrieval_adapter=retrieval,
             store=p_store,
-            llm_client=mock_llm_client,
+            llm_client=budgeted_llm,
             clock=clock_fn,
         )
 
@@ -133,6 +217,7 @@ def build_system_dependencies(
             runtime_dir=r_dir,
             clock=clock_fn,
             deadline_seconds=deadline_sec,
+            ledger=ledger,
         )
 
     # Live profile preflight verification
@@ -140,8 +225,53 @@ def build_system_dependencies(
     if not release_manifest.exists():
         raise EvaluationError("Live preflight failed: release manifest 'ml/releases/manifest.json' not found")
 
-    # In live profile, verify dependencies readiness before starting
-    raise EvaluationError("Live preflight failed: external ML inference service not ready or unpinned")
+    try:
+        with open(release_manifest, "r", encoding="utf-8") as f:
+            rel_data = json.load(f)
+    except Exception as exc:
+        raise EvaluationError(f"Live preflight failed: invalid release manifest JSON: {exc}") from exc
+
+    if not isinstance(rel_data, dict):
+        raise EvaluationError("Live preflight failed: release manifest must be a JSON object")
+
+    kb_path = inputs.source_paths.get("kb", Path("data/knowledge/approved_kb.v1.json"))
+    if not Path(kb_path).exists():
+        raise EvaluationError(f"Live preflight failed: approved KB snapshot '{kb_path}' not found")
+
+    # In live profile, build real dependencies
+    p_store = PersistentStore(db_path=str(orchestration_db))
+    try:
+        retrieval = RetrievalAdapter(kb_path=str(kb_path))
+    except Exception as exc:
+        raise EvaluationError(f"Live preflight failed: could not load retrieval adapter: {exc}") from exc
+
+    intent_client = IntentClient()
+    raw_llm = GeminiDraftClient()
+    budgeted_llm = BudgetedLLMClient(raw_llm, ledger=ledger)
+    policy = load_policy_v2()
+
+    runner = PipelineRunner(
+        intent_client=intent_client,
+        policy=policy,
+        retrieval_adapter=retrieval,
+        store=p_store,
+        llm_client=budgeted_llm,
+        clock=clock_fn,
+    )
+
+    app = create_app(db_path=str(demo_db), runner=runner)
+
+    return SystemDependencies(
+        runner=runner,
+        retrieval=retrieval,
+        store=p_store,
+        demo_app=app,
+        profile="live",
+        runtime_dir=r_dir,
+        clock=clock_fn,
+        deadline_seconds=deadline_sec,
+        ledger=ledger,
+    )
 
 
 def execute_system_case(
@@ -242,10 +372,55 @@ def execute_system_case(
         as_of=deps.clock(),
     )
 
+    # Inject controlled faults into runner dependencies if specified
+    old_classify = None
+    runner_intent_client = getattr(deps.runner, "intent_client", None)
+    if case.fault in ("ml_error", "ml_unavailable") and runner_intent_client is not None:
+        old_classify = getattr(runner_intent_client, "classify_intent", None)
+        runner_intent_client.classify_intent = lambda *a, **kw: IntentPrediction(
+            intent="unknown",
+            confidence=0.0,
+            margin=0.0,
+            model_version="fault-injected",
+            score_kind="error",
+            error="ml_service_unavailable",
+        )
+
+    old_llm_generate = None
+    runner_llm = getattr(deps.runner, "llm_client", None)
+    if case.fault in (
+        "llm_error",
+        "llm_unavailable",
+        "llm_rate_limited",
+        "llm_invalid_citations",
+        "llm_blocked",
+    ) and runner_llm is not None:
+        old_llm_generate = getattr(runner_llm, "generate", None)
+        def _failing_llm(*a, **kw):
+            raise LLMError(case.fault)
+        runner_llm.generate = _failing_llm
+
     t_run_start = time.perf_counter()
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(deps.runner.run, text=case.text, context=ctx, run_id=attempt_id)
     try:
-        run_res = deps.runner.run(text=case.text, context=ctx, run_id=attempt_id)
+        run_res = future.result(timeout=deadline)
+        executor.shutdown(wait=True)
+    except concurrent.futures.TimeoutError:
+        executor.shutdown(wait=False, cancel_futures=True)
+        total_elapsed = round((time.perf_counter() - t_start) * 1000.0, 2)
+        return CaseResult(
+            case_id=case.id,
+            repetition=1,
+            profile=deps.profile,
+            scope=scope,
+            execution_status="timeout",
+            error_code="deadline_exceeded",
+            stage_elapsed_ms={"deadline_timeout_ms": total_elapsed},
+            total_elapsed_ms=total_elapsed,
+        )
     except Exception as exc:
+        executor.shutdown(wait=False, cancel_futures=True)
         total_elapsed = round((time.perf_counter() - t_start) * 1000.0, 2)
         return CaseResult(
             case_id=case.id,
@@ -257,11 +432,16 @@ def execute_system_case(
             stage_elapsed_ms={},
             total_elapsed_ms=total_elapsed,
         )
+    finally:
+        if old_classify and runner_intent_client:
+            runner_intent_client.classify_intent = old_classify
+        if old_llm_generate and runner_llm:
+            runner_llm.generate = old_llm_generate
 
     t_run_elapsed = time.perf_counter() - t_run_start
     total_elapsed_ms = round(t_run_elapsed * 1000.0, 2)
 
-    # Deadline termination check
+    # Post-execution sanity check on total elapsed
     if t_run_elapsed > deadline:
         return CaseResult(
             case_id=case.id,
@@ -288,6 +468,23 @@ def execute_system_case(
         })
 
     routing_act = run_res.get("routing_action") or run_res.get("initial_routing_action") or run_res.get("action")
+
+    # Safety check on must_not_draft invariant
+    if case.expected.must_not_draft and draft_body and str(draft_body).strip():
+        return CaseResult(
+            case_id=case.id,
+            repetition=1,
+            profile=deps.profile,
+            scope=scope,
+            execution_status="error",
+            error_code="must_not_draft_violation",
+            routing_action=routing_act,
+            final_action=run_res.get("action"),
+            draft_body=draft_body,
+            draft_hash=draft_hash,
+            sources=normalized_sources,
+            total_elapsed_ms=total_elapsed_ms,
+        )
 
     return CaseResult(
         case_id=case.id,

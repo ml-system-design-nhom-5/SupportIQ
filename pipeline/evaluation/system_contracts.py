@@ -143,7 +143,12 @@ class SystemConfig(BaseModel):
     llm_timeout_seconds: float = 15.0
     demo_timeout_seconds: float = 20.0
     max_estimated_cost_usd: Optional[float] = 1.0
-    pricing: Optional[Dict[str, Any]] = None
+    pricing: Optional[Dict[str, Any]] = Field(default_factory=lambda: {
+        "model": "gemini-3.1-flash-lite",
+        "currency": "USD",
+        "input_cost_per_million": 0.075,
+        "output_cost_per_million": 0.30,
+    })
     mandatory_gates: List[str] = Field(default_factory=list)
     thresholds: Dict[str, float] = Field(default_factory=dict)
 
@@ -340,13 +345,22 @@ def load_system_inputs(
                 intent_counts[case.true_intent] = intent_counts.get(case.true_intent, 0) + 1
 
     # 6. Compute coverage statistics
-    missing_core_intents = set(CORE_PRODUCT_INTENTS) - set(intent_counts.keys())
+    # KB coverage gap reflects actual approved KB evidence coverage, not just query presence
+    kb_covered_intents = {
+        c.true_intent
+        for c in cases
+        if c.expected.answerable and c.expected.gold_sources and c.true_intent in CORE_PRODUCT_INTENTS
+    }
+    missing_core_kb_intents = set(CORE_PRODUCT_INTENTS) - kb_covered_intents
+    missing_core_query_intents = set(CORE_PRODUCT_INTENTS) - set(intent_counts.keys())
     coverage = {
         "total_cases": len(cases),
         "slice_counts": slice_counts,
         "intent_counts": intent_counts,
-        "missing_core_intents": sorted(missing_core_intents),
-        "kb_coverage_gap": len(missing_core_intents) > 0,
+        "missing_core_intents": sorted(missing_core_query_intents),
+        "kb_covered_intents": sorted(kb_covered_intents),
+        "missing_core_kb_intents": sorted(missing_core_kb_intents),
+        "kb_coverage_gap": len(missing_core_kb_intents) > 0,
     }
 
     return VerifiedSystemInputs(

@@ -170,8 +170,41 @@ def run_system_evaluation(
         )
 
         # 11. Aggregate metrics and evaluate quality gates
-        metrics = aggregate_system_metrics(inputs.cases, e2e_results)
+        kb_path = inputs.source_paths.get("kb")
+        kb_snapshot = None
+        if kb_path and Path(kb_path).exists():
+            with open(kb_path, "r", encoding="utf-8") as f:
+                raw_kb = json.load(f)
+            kb_snapshot = {}
+            for d in raw_kb:
+                d_id = d.get("doc_id") or d.get("document_id")
+                ver = str(d.get("version", "1.0"))
+                kb_snapshot[(d_id, ver)] = d
+                if "." not in ver:
+                    kb_snapshot[(d_id, f"{ver}.0")] = d
+
+        metrics = aggregate_system_metrics(inputs.cases, e2e_results, kb_snapshot=kb_snapshot, as_of=inputs.as_of)
         metrics["latency"] = latency_data
+
+        # Aggregate oversight scenarios
+        ov_total = len(oversight_results)
+        ov_passed = sum(1 for r in oversight_results if r.execution_status == "ok")
+        ov_failed = ov_total - ov_passed
+        metrics["oversight"] = {
+            "total_scenarios": ov_total,
+            "passed_scenarios": ov_passed,
+            "failed_scenarios": ov_failed,
+            "status": "pass" if (ov_failed == 0 and ov_total > 0) else "fail",
+        }
+
+        # Aggregate component probes
+        comp_total = len(component_results)
+        comp_ok = sum(1 for r in component_results if r.execution_status == "ok")
+        metrics["component_probes"] = {
+            "total_probes": comp_total,
+            "successful_probes": comp_ok,
+        }
+
         evidence_kind = "simulated" if profile == "mock" else "live"
         gates = evaluate_system_gates(metrics, inputs.config, evidence_kind=evidence_kind)
 
@@ -224,6 +257,17 @@ def run_system_evaluation(
 
         return run_dir
 
+    except Exception as exc:
+        if state_file.exists():
+            fail_data = {
+                "status": "failed",
+                "mode": "system",
+                "profile": profile,
+                "error": str(exc),
+                "failed_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            }
+            write_json_atomic(fail_data, state_file)
+        raise
     finally:
         if deps is not None:
             deps.close()

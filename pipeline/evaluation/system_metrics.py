@@ -49,6 +49,8 @@ def _normalize_doc_key(doc_id: Any, version: Any) -> Tuple[str, str]:
 def aggregate_system_metrics(
     cases: List[SystemCase],
     results: List[CaseResult],
+    kb_snapshot: Optional[Dict[Tuple[str, str], Dict[str, Any]]] = None,
+    as_of: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Pure aggregator computing system evaluation metrics across routing, retrieval, drafting,
     and robustness slices.
@@ -206,15 +208,46 @@ def aggregate_system_metrics(
             # Deduplicate top 3 sources by (doc_id, version)
             for s in r.sources[:3]:
                 doc_id = s.get("doc_id") or s.get("document_id")
-                ver = s.get("version", "1.0")
-                if doc_id:
-                    retrieved_keys.add(_normalize_doc_key(doc_id, ver))
-                
+                ver = str(s.get("version", "1.0"))
+                norm_key = _normalize_doc_key(doc_id, ver) if doc_id else None
+                if norm_key:
+                    retrieved_keys.add(norm_key)
+
                 # Check safety flags if reported in source
                 if s.get("status") not in (None, "approved"):
                     safety_violations += 1
                 if s.get("is_expired") is True or s.get("is_revoked") is True:
                     safety_violations += 1
+
+                # Independent verification against pinned KB snapshot
+                if kb_snapshot is not None:
+                    if not norm_key or norm_key not in kb_snapshot:
+                        safety_violations += 1
+                    else:
+                        doc = kb_snapshot[norm_key]
+                        if doc.get("status") != "approved":
+                            safety_violations += 1
+                        caller_role = getattr(c.context, "role", "agent") if hasattr(c.context, "role") else "agent"
+                        allowed = doc.get("allowed_roles", [])
+                        if allowed and caller_role not in allowed:
+                            safety_violations += 1
+                        check_dt = as_of or datetime.now(timezone.utc)
+                        vf = doc.get("valid_from")
+                        vt = doc.get("valid_to")
+                        if vf:
+                            try:
+                                dt_vf = datetime.fromisoformat(str(vf).replace("Z", "+00:00"))
+                                if check_dt < dt_vf:
+                                    safety_violations += 1
+                            except Exception:
+                                safety_violations += 1
+                        if vt:
+                            try:
+                                dt_vt = datetime.fromisoformat(str(vt).replace("Z", "+00:00"))
+                                if check_dt >= dt_vt:
+                                    safety_violations += 1
+                            except Exception:
+                                safety_violations += 1
 
         if c.expected.answerable:
             answerable_count += 1
@@ -233,8 +266,13 @@ def aggregate_system_metrics(
             if len(retrieved_keys) > 0:
                 false_evidence_count += 1
 
+    recall_at_3_raw = (
+        (total_recall / answerable_count)
+        if answerable_count > 0
+        else 0.0
+    )
     recall_at_3 = (
-        round(total_recall / answerable_count, 4)
+        round(recall_at_3_raw, 4)
         if answerable_count > 0
         else "N/A"
     )
@@ -265,6 +303,7 @@ def aggregate_system_metrics(
         "answerable_count": answerable_count,
         "unanswerable_count": unanswerable_count,
         "recall_at_3": recall_at_3,
+        "recall_at_3_raw": recall_at_3_raw,
         "hit_at_3": hit_at_3,
         "hit_at_3_ci": hit_at_3_ci,
         "false_evidence_count": false_evidence_count,
@@ -369,13 +408,16 @@ def evaluate_system_gates(
     # 3. Retrieval recall
     target_recall = config.thresholds.get("recall_at_3", 0.80)
     actual_recall = ret_metric.get("recall_at_3")
+    raw_recall = ret_metric.get("recall_at_3_raw", actual_recall)
     ans_count = ret_metric.get("answerable_count", 0)
     if ans_count == 0 or actual_recall == "N/A":
-        gates["retrieval_recall"] = {"status": "insufficient_evidence", "reason": "No answerable cases"}
-    elif isinstance(actual_recall, (int, float)) and actual_recall >= target_recall:
-        gates["retrieval_recall"] = {"status": "pass", "details": f"{actual_recall} >= {target_recall}"}
+        recall_gate = {"status": "insufficient_evidence", "reason": "No answerable cases"}
+    elif isinstance(raw_recall, (int, float)) and raw_recall >= target_recall:
+        recall_gate = {"status": "pass", "details": f"{actual_recall} >= {target_recall}"}
     else:
-        gates["retrieval_recall"] = {"status": "fail", "details": f"{actual_recall} < {target_recall}"}
+        recall_gate = {"status": "fail", "details": f"{actual_recall} < {target_recall}"}
+    gates["retrieval_recall"] = recall_gate
+    gates["retrieval_recall_at_3"] = recall_gate
 
     # 4. Grounded claims (Human assessment)
     target_grounded = config.thresholds.get("grounded_claims", 0.90)
@@ -387,7 +429,8 @@ def evaluate_system_gates(
         }
     else:
         grounded_ratio = human_metric.get("supported_claims_ratio")
-        if isinstance(grounded_ratio, (int, float)) and grounded_ratio >= target_grounded:
+        raw_grounded = human_metric.get("supported_claims_ratio_raw", grounded_ratio)
+        if isinstance(raw_grounded, (int, float)) and raw_grounded >= target_grounded:
             gates["grounded_claims"] = {"status": "pass", "details": f"{grounded_ratio} >= {target_grounded}"}
         else:
             gates["grounded_claims"] = {"status": "fail", "details": f"{grounded_ratio} < {target_grounded}"}
@@ -406,11 +449,35 @@ def evaluate_system_gates(
     target_p95 = config.thresholds.get("warm_p95_seconds", 12.0)
     lat_metric = metrics.get("latency")
     if lat_metric is None or "warm_p95_seconds" not in lat_metric:
-        gates["live_latency"] = {"status": "not_evaluated", "reason": "Warm latency measurements not present"}
+        latency_gate = {"status": "not_evaluated", "reason": "Warm latency measurements not present"}
     elif lat_metric.get("warm_p95_seconds", float("inf")) <= target_p95:
-        gates["live_latency"] = {"status": "pass", "details": f"{lat_metric['warm_p95_seconds']}s <= {target_p95}s"}
+        latency_gate = {"status": "pass", "details": f"{lat_metric['warm_p95_seconds']}s <= {target_p95}s"}
     else:
-        gates["live_latency"] = {"status": "fail", "details": f"{lat_metric.get('warm_p95_seconds')}s > {target_p95}s"}
+        latency_gate = {"status": "fail", "details": f"{lat_metric.get('warm_p95_seconds')}s > {target_p95}s"}
+    gates["live_latency"] = latency_gate
+    gates["live_warm_p95_seconds"] = latency_gate
+
+    # 7. Oversight compliance
+    oversight_metric = metrics.get("oversight")
+    if oversight_metric is None:
+        gates["oversight_compliance"] = {
+            "status": "not_evaluated",
+            "reason": "Oversight scenarios not present in metrics",
+        }
+    else:
+        ov_status = oversight_metric.get("status")
+        failed_scenarios = oversight_metric.get("failed_scenarios", 0)
+        total_scenarios = oversight_metric.get("total_scenarios", 0)
+        if ov_status == "pass" or (failed_scenarios == 0 and total_scenarios > 0):
+            gates["oversight_compliance"] = {
+                "status": "pass",
+                "details": f"{total_scenarios - failed_scenarios}/{total_scenarios} scenarios passed",
+            }
+        else:
+            gates["oversight_compliance"] = {
+                "status": "fail",
+                "details": f"{failed_scenarios} oversight scenarios failed",
+            }
 
     # Profile & Evidence verification
     if evidence_kind == "simulated":

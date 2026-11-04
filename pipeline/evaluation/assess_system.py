@@ -17,12 +17,16 @@ from pipeline.preparation.utils import compute_sha256
 def evaluate_claim_annotations(
     annotations: List[Dict[str, Any]],
     expected_draft_hashes: Dict[str, str],
+    expected_draft_case_ids: Optional[Set[str]] = None,
 ) -> Dict[str, Any]:
     """Evaluate human factual claim annotations against run draft hashes.
     Strictly enforces:
     - Reviewer identity and timestamp presence.
     - Draft SHA-256 integrity check against actual run outputs.
+    - Rejects annotations referencing undeclared or non-existent cases.
+    - Full coverage across all expected draft cases.
     - 'unknown' verdicts count as unsupported claims.
+    - Unrounded threshold comparison (0.89999 fails 0.90).
     - Zero claims without reviewer rationale yields insufficient_evidence.
     """
     total_claims = 0
@@ -43,9 +47,12 @@ def evaluate_claim_annotations(
         if not cid:
             raise EvaluationError(f"Missing case_id in annotation at record {idx}")
 
-        expected_hash = expected_draft_hashes.get(cid)
+        if cid not in expected_draft_hashes:
+            raise EvaluationError(f"Annotation references undeclared or non-existent case '{cid}'")
+
+        expected_hash = expected_draft_hashes[cid]
         actual_hash = ann.get("draft_sha256")
-        if expected_hash and actual_hash != expected_hash:
+        if actual_hash != expected_hash:
             raise EvaluationError(
                 f"Draft hash mismatch for case '{cid}': expected {expected_hash}, got {actual_hash}"
             )
@@ -69,14 +76,24 @@ def evaluate_claim_annotations(
             else:
                 unsupported_claims += 1
 
+    # Verify coverage across mandatory draft cases
+    if expected_draft_case_ids:
+        missing_mandatory = set(expected_draft_case_ids) - annotated_cases
+        if missing_mandatory:
+            has_insufficient_evidence = True
+            insufficient_reason = f"Missing required annotations for draft cases: {sorted(missing_mandatory)}"
+
     if total_claims == 0 or has_insufficient_evidence:
         status = "insufficient_evidence"
+        supported_ratio_raw = 0.0
         supported_ratio = 0.0
         gate_passed = False
     else:
         # Unknown counts as unsupported, so denominator is total_claims
-        supported_ratio = round(supported_claims / total_claims, 4)
-        gate_passed = supported_ratio >= 0.90
+        # Strict unrounded comparison against target threshold
+        supported_ratio_raw = supported_claims / total_claims
+        gate_passed = supported_ratio_raw >= 0.90
+        supported_ratio = round(supported_ratio_raw, 4)
         status = "pass" if gate_passed else "fail"
 
     return {
@@ -87,6 +104,7 @@ def evaluate_claim_annotations(
         "unsupported_claims": unsupported_claims,
         "unknown_claims": unknown_claims,
         "supported_claims_ratio": supported_ratio,
+        "supported_claims_ratio_raw": supported_ratio_raw,
         "grounded_claims_gate_passed": gate_passed,
         "insufficient_reason": insufficient_reason if has_insufficient_evidence else None,
     }
@@ -194,7 +212,13 @@ def assess_run(
 
     # 1. Verify checksums of run artifacts declared in manifest
     manifest_dir = run_p
-    files_dict = run_manifest.get("files", {})
+    files_dict = run_manifest.get("files")
+    if not isinstance(files_dict, dict) or not files_dict:
+        raise EvaluationError("Run manifest must contain a non-empty 'files' dictionary of artifacts")
+
+    if "results.jsonl" not in files_dict:
+        raise EvaluationError("Run manifest missing mandatory artifact declaration 'results.jsonl'")
+
     for f_key, f_meta in files_dict.items():
         target = manifest_dir / f_meta.get("path", f_key)
         if not target.exists():
@@ -218,6 +242,7 @@ def assess_run(
     # 3. Read results.jsonl to extract expected draft hashes
     results_file = run_p / "results.jsonl"
     draft_hashes: Dict[str, str] = {}
+    expected_draft_cases: Set[str] = set()
     with open(results_file, "r", encoding="utf-8") as f:
         for line in f:
             line_str = line.strip()
@@ -228,6 +253,7 @@ def assess_run(
             d_hash = r.get("draft_hash")
             if cid and d_hash:
                 draft_hashes[cid] = d_hash
+                expected_draft_cases.add(cid)
 
     # 4. Load annotations and evaluate
     ann_path = Path(annotations_path)
@@ -242,7 +268,11 @@ def assess_run(
                 continue
             annotations.append(json.loads(line_str))
 
-    claim_metrics = evaluate_claim_annotations(annotations, draft_hashes)
+    claim_metrics = evaluate_claim_annotations(
+        annotations,
+        draft_hashes,
+        expected_draft_case_ids=expected_draft_cases,
+    )
 
     # 5. Evaluate product sessions if provided
     product_metrics = None

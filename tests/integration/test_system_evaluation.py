@@ -152,6 +152,7 @@ def test_cli_mode_system_dispatches_cleanly(minimal_system_suite, tmp_path):
         "--config", str(minimal_system_suite["config_path"]),
         "--run-id", "sys-cli-run-001",
         "--output-root", str(out_root),
+        "--repo-root", str(minimal_system_suite["root"]),
     ])
     # Code 2: executed successfully but simulated evidence / insufficient evidence for acceptance
     assert exit_code == 2
