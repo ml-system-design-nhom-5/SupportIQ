@@ -107,11 +107,13 @@ class DemoService:
         # Extract and format sources
         sources = []
         for src in run_result.get("sources", []):
-            snippet = ""
-            if src.get("chunks"):
-                snippet = src["chunks"][0].get("text", "")[:300]
+            doc_id = src.get("document_id") or src.get("doc_id")
+            snippet = src.get("excerpt") or ""
+            if not snippet and src.get("chunks"):
+                snippet = src["chunks"][0].get("text", "")
+            snippet = snippet[:300]
             sources.append({
-                "doc_id": src.get("doc_id"),
+                "doc_id": doc_id,
                 "title": src.get("title"),
                 "version": src.get("version"),
                 "category": src.get("category"),
