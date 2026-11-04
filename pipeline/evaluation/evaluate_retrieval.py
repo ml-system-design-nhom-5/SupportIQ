@@ -19,12 +19,21 @@ def score_retrieval(
             "false_answer_rate": "N/A",
         }
 
-    res_by_id = {r["id"]: r for r in retrieved_results}
+    valid_case_ids = {c["id"] for c in cases}
+    res_by_id = {}
+    for r in retrieved_results:
+        rid = r.get("id")
+        if rid not in valid_case_ids:
+            raise ValueError(f"Extra prediction ID '{rid}' not in test cases")
+        if rid in res_by_id:
+            raise ValueError(f"Duplicate prediction ID '{rid}' found in retrieved_results")
+        res_by_id[rid] = r
 
     # P2: Raise error if any case has missing prediction
     for c in cases:
         if c["id"] not in res_by_id:
             raise ValueError(f"Missing prediction result for test case '{c['id']}'")
+
 
     answerable_count = 0
     unanswerable_count = 0

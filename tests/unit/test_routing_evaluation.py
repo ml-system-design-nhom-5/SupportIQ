@@ -69,3 +69,23 @@ def test_coverage_and_selective_accuracy():
     assert metrics["selective_accuracy"] == 1.0
     # 1 out of 2 cases accepted for drafting -> coverage is 0.5
     assert metrics["coverage"] == 0.5
+
+
+def test_duplicate_decision_raises_error():
+    cases = [{"id": "c1", "true_intent": "track_order"}]
+    decisions = [
+        {"id": "c1", "action": "retrieve_draft", "predicted_intent": "track_order"},
+        {"id": "c1", "action": "retrieve_draft", "predicted_intent": "track_order"},
+    ]
+    with pytest.raises(ValueError, match="Duplicate decision"):
+        evaluate_routes(cases, decisions)
+
+
+def test_extra_decision_raises_error():
+    cases = [{"id": "c1", "true_intent": "track_order"}]
+    decisions = [
+        {"id": "c1", "action": "retrieve_draft", "predicted_intent": "track_order"},
+        {"id": "c_extra", "action": "retrieve_draft", "predicted_intent": "track_order"},
+    ]
+    with pytest.raises(ValueError, match="Extra decision"):
+        evaluate_routes(cases, decisions)

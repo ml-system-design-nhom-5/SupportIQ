@@ -43,3 +43,23 @@ def test_score_retrieval_raises_on_missing_case():
     ]
     with pytest.raises(ValueError, match="Missing prediction result"):
         score_retrieval(cases, retrieved)
+
+
+def test_score_retrieval_raises_on_duplicate_case():
+    cases = [{"id": "q1", "is_answerable": True, "gold_doc_ids": ["DOC-1:1.0"]}]
+    retrieved = [
+        {"id": "q1", "documents": []},
+        {"id": "q1", "documents": []},
+    ]
+    with pytest.raises(ValueError, match="Duplicate prediction"):
+        score_retrieval(cases, retrieved)
+
+
+def test_score_retrieval_raises_on_extra_case():
+    cases = [{"id": "q1", "is_answerable": True, "gold_doc_ids": ["DOC-1:1.0"]}]
+    retrieved = [
+        {"id": "q1", "documents": []},
+        {"id": "q_extra", "documents": []},
+    ]
+    with pytest.raises(ValueError, match="Extra prediction"):
+        score_retrieval(cases, retrieved)

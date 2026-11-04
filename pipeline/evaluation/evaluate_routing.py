@@ -22,8 +22,15 @@ def evaluate_routes(
         }
 
     valid_case_ids = {c["id"] for c in cases}
-    # Only match decisions that belong to the test suite cases
-    dec_by_id = {d["id"]: d for d in decisions if d.get("id") in valid_case_ids}
+    dec_by_id = {}
+    for d in decisions:
+        did = d.get("id")
+        if did not in valid_case_ids:
+            raise ValueError(f"Extra decision ID '{did}' not in test cases")
+        if did in dec_by_id:
+            raise ValueError(f"Duplicate decision ID '{did}' found in decisions")
+        dec_by_id[did] = d
+
 
     must_escalate_total = 0
     must_escalate_correct = 0
