@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import importlib.metadata
+import json
 import sys
 from pathlib import Path
 from typing import Any, Sequence
@@ -112,12 +113,28 @@ def _generate_comparison_markdown_report(
             _df_to_markdown(cuda_df),
         ])
 
+    has_tf_cv = any(
+        r.get("cv_protocol") == "10-fold cross-validation"
+        for r in comp_df[comp_df["model_type"] == "transformer"].to_dict("records")
+    )
+    if has_tf_cv:
+        budget_note = (
+            "- **Training Budget Parity:** Both baseline models and local Transformer (`supportiq_distilbert`) "
+            "were evaluated using 10-fold CV on the full 37,911 development samples, establishing fair and directly comparable benchmarks."
+        )
+    else:
+        budget_note = (
+            "- **Training Budget Disparity:** Baseline models were trained on 37,911 samples with 10-fold CV. "
+            "The local Transformer was fine-tuned on a 9,200 sample subset with 1,840 validation split (no 10-fold CV). "
+            "Raw score differences must not be conflated with algorithmic superiority."
+        )
+
     lines.extend([
         "",
         "## 5. Invariants and Governance Rules",
         "",
         "- **Winner Immutability:** The cross-validation winner (`linear_svm`) is permanently locked from 10-fold CV. Test set rankings do NOT override the CV selection.",
-        "- **Training Budget Disparity:** Baseline models were trained on 37,911 samples with 10-fold CV. The local Transformer was fine-tuned on a 9,200 sample subset with 1,840 validation split (no 10-fold CV). Raw score differences must not be conflated with algorithmic superiority.",
+        budget_note,
         "- **Hardware Latency Parity:** All 5 models in the primary comparison matrix were benchmarked on the identical sequential CPU inference protocol (batch=1, locked thread count, tokenizer included, weights pre-loaded).",
         "",
     ])
@@ -361,7 +378,19 @@ def run_comparison(
                     "speedup_vs_cpu": speedup,
                 })
 
-            training_samples = 9200 if mid == "supportiq_distilbert" else "unknown"
+            training_samples: int | str = "unknown"
+            cv_protocol = "none"
+            cv_macro_f1 = np.nan
+            report_file = Path(spec["model_dir"]) / "training_report.json"
+            if report_file.exists():
+                try:
+                    rep = json.loads(report_file.read_text(encoding="utf-8"))
+                    training_samples = rep.get("train_samples", "unknown")
+                    cv_protocol = rep.get("cv_protocol", "none")
+                    if cv_protocol == "10-fold cross-validation" and "cv_macro_f1_mean" in rep:
+                        cv_macro_f1 = float(rep["cv_macro_f1_mean"])
+                except Exception:
+                    pass
 
             comp_rows.append({
                 "model_id": mid,
@@ -371,7 +400,7 @@ def run_comparison(
                 "independence_status": prov["status"],
                 "eligible_for_independent_ranking": prov["eligible_for_independent_ranking"],
                 "is_cv_winner": False,
-                "cv_macro_f1": np.nan,
+                "cv_macro_f1": cv_macro_f1,
                 "test_macro_f1": eval_data["metrics"]["macro_f1"],
                 "test_accuracy": eval_data["metrics"]["accuracy"],
                 "test_weighted_f1": eval_data["metrics"]["weighted_f1"],
@@ -380,7 +409,7 @@ def run_comparison(
                 "latency_p95_ms": bench_data["latency"]["p95"] * 1000.0,
                 "throughput_items_sec": bench_data["throughput"]["items_per_second"],
                 "training_samples": training_samples,
-                "cv_protocol": "none",
+                "cv_protocol": cv_protocol,
             })
 
             model_registry[mid] = {
@@ -396,7 +425,7 @@ def run_comparison(
                 "preprocessing": f"HF DistilBertTokenizer (truncation max_length={config.get('max_length', 64)})",
                 "device": "cpu",
                 "training_samples": training_samples,
-                "cv_protocol": "none",
+                "cv_protocol": cv_protocol,
                 "artifact_hashes": spec["artifact_hashes"],
             }
 
