@@ -36,6 +36,7 @@ from pipeline.evaluation.evaluate_intent import (
     predict_rows,
 )
 from pipeline.evaluation.reporting import write_reports
+from pipeline.evaluation.run_system_evaluation import run_system_evaluation
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -237,17 +238,46 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(description="Run Evaluation for SupportIQ ML models and system.")
     parser.add_argument("--mode", required=True, choices=["ml", "system"], help="Evaluation mode (ml or system)")
+    parser.add_argument("--profile", default="mock", choices=["mock", "live"], help="System execution profile (mock or live)")
     parser.add_argument("--training-manifest", default=None, help="Path to completed training manifest.json")
     parser.add_argument("--suite", default=None, help="Path to robustness/system suite manifest")
     parser.add_argument("--config", required=True, help="Path to evaluation config JSON")
     parser.add_argument("--run-id", default=None, help="Optional run ID in DD-MM-YYYY-stt format")
     parser.add_argument("--output-root", default="artifacts/evaluation", help="Root dir for evaluation runs")
+    parser.add_argument("--repo-root", default=str(REPO_ROOT), help="Root directory of the repository")
 
     args = parser.parse_args(argv)
 
     if args.mode == "system":
-        print("System evaluation mode is not yet implemented in this release.", file=sys.stderr)
-        return 1
+        if not args.suite:
+            print("Error: --suite is required when --mode=system.", file=sys.stderr)
+            return 1
+        try:
+            import json
+            run_dir = run_system_evaluation(
+                suite_path=args.suite,
+                config_path=args.config,
+                profile=args.profile,
+                run_id=args.run_id,
+                output_root=args.output_root,
+                repo_root=args.repo_root,
+            )
+            print(f"=== System evaluation completed! ===")
+            print(f"Run dir: {run_dir}")
+
+            man_path = run_dir / "manifest.json"
+            with open(man_path, "r", encoding="utf-8") as f:
+                manifest = json.load(f)
+
+            if manifest.get("all_mandatory_passed"):
+                print("Status: All mandatory gates PASSED.")
+                return 0
+            else:
+                print("Status: Incomplete or simulated evidence (acceptance gates not certified).")
+                return 2
+        except Exception as exc:
+            print(f"System evaluation failed: {exc}", file=sys.stderr)
+            return 1
 
     if not args.training_manifest:
         print("Error: --training-manifest is required when --mode=ml.", file=sys.stderr)
