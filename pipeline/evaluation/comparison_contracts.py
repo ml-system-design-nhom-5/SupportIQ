@@ -143,14 +143,26 @@ def verify_comparison_inputs(
 
     source_paths["historical_evaluation_manifest"] = hist_path
 
-    # Verify historical inputs match verified baseline inputs
+    REQUIRED_LINEAGE_INPUTS = (
+        "training_manifest",
+        "preparation_manifest",
+        "cleaned_csv",
+        "split_assignments",
+        "split_report",
+    )
     hist_inputs = hist_man.get("inputs", {})
-    for k in ("training_manifest", "preparation_manifest", "cleaned_csv", "split_assignments", "split_report"):
-        if k in hist_inputs and k in source_paths:
-            expected_h = hist_inputs[k]
-            actual_h = compute_sha256(source_paths[k])
-            if expected_h != actual_h:
-                raise EvaluationError(f"Historical manifest hash mismatch for {k}")
+    if not isinstance(hist_inputs, dict):
+        raise EvaluationError("Historical evaluation manifest missing valid inputs dict")
+
+    for k in REQUIRED_LINEAGE_INPUTS:
+        if k not in hist_inputs:
+            raise EvaluationError(f"Historical manifest missing required lineage input: {k}")
+        if k not in source_paths:
+            raise EvaluationError(f"Missing verified baseline source path for lineage input: {k}")
+        expected_h = hist_inputs[k]
+        actual_h = compute_sha256(source_paths[k])
+        if expected_h != actual_h:
+            raise EvaluationError(f"Historical manifest hash mismatch for lineage input {k}")
 
     hist_outputs = hist_man.get("outputs", {})
     hist_dir = hist_path.parent
@@ -192,13 +204,23 @@ def verify_comparison_inputs(
             if test_id_to_true.get(sid) != y_t:
                 raise EvaluationError(f"Ground truth y_true mismatch in {preds_rel} for sample {sid}")
 
-        metrics_data = {}
-        if metrics_rel in hist_outputs:
-            metrics_file = hist_dir / metrics_rel
-            if metrics_file.exists() and compute_sha256(metrics_file) == hist_outputs[metrics_rel]:
-                metrics_data = load_json(metrics_file)
-                source_paths[f"hist_{mid}_metrics"] = metrics_file
+        if metrics_rel not in hist_outputs:
+            raise EvaluationError(f"Missing required historical output: {metrics_rel}")
+        metrics_file = hist_dir / metrics_rel
+        if not metrics_file.exists():
+            raise EvaluationError(f"Historical metrics file not found: {metrics_file}")
+        if compute_sha256(metrics_file) != hist_outputs[metrics_rel]:
+            raise EvaluationError(f"Hash mismatch for historical metrics {metrics_rel}")
 
+        try:
+            metrics_data = load_json(metrics_file)
+        except Exception as exc:
+            raise EvaluationError(f"Failed to parse historical metrics {metrics_file}: {exc}") from exc
+
+        if not isinstance(metrics_data, dict) or "macro_f1" not in metrics_data:
+            raise EvaluationError(f"Historical metrics {metrics_rel} missing required 'macro_f1' metric")
+
+        source_paths[f"hist_{mid}_metrics"] = metrics_file
         historical_results["models"][mid] = {
             "predictions_df": preds_df,
             "metrics": metrics_data,
@@ -214,7 +236,7 @@ def verify_comparison_inputs(
         if not model_dir_str:
             raise EvaluationError(f"Model {mid} missing model_dir")
 
-        mdir = _resolve_path(model_dir_str, root)
+        mdir = _resolve_path(model_dir_str, root).resolve()
         # Prevent path escape outside repo
         try:
             mdir.relative_to(root)
@@ -228,21 +250,21 @@ def verify_comparison_inputs(
         tok_cfg_path = mdir / "tokenizer_config.json"
         tok_vocab_path = mdir / "tokenizer.json"
         weights_safetensors = mdir / "model.safetensors"
-        weights_bin = mdir / "pytorch_model.bin"
 
         for req in (config_path, tok_cfg_path, tok_vocab_path):
             if not req.exists():
                 raise EvaluationError(f"Missing required transformer artifact at {req}")
 
-        if not weights_safetensors.exists() and not weights_bin.exists():
-            raise EvaluationError(f"No weights file found in {mdir} (.safetensors or .bin)")
-
-        weights_path = weights_safetensors if weights_safetensors.exists() else weights_bin
+        if not weights_safetensors.exists():
+            raise EvaluationError(
+                f"Missing required safetensors weights file at {weights_safetensors}. "
+                "Pickle checkpoints (.bin) are strictly prohibited."
+            )
 
         source_paths[f"{mid}_config"] = config_path
         source_paths[f"{mid}_tokenizer_config"] = tok_cfg_path
         source_paths[f"{mid}_tokenizer"] = tok_vocab_path
-        source_paths[f"{mid}_weights"] = weights_path
+        source_paths[f"{mid}_weights"] = weights_safetensors
 
         report_path = mdir / "training_report.json"
         has_report = report_path.exists()
@@ -255,19 +277,65 @@ def verify_comparison_inputs(
         base_model = prov.get("base_model")
         membership_evidence = prov.get("membership_evidence")
 
-        # Explicit provenance rule: unless verified membership evidence is provided, status is unverified
-        if membership_evidence and isinstance(membership_evidence, dict) and membership_evidence.get("verified") is True:
-            prov_status = "verified"
-            eligible_for_independent_ranking = True
-        else:
-            prov_status = "unverified"
-            eligible_for_independent_ranking = False
+        # Rigorous membership verification
+        prov_status = "unverified"
+        eligible_for_independent_ranking = False
+        verified_evidence_data = None
+
+        if membership_evidence and isinstance(membership_evidence, dict):
+            evidence_path_str = membership_evidence.get("evidence_path")
+            if evidence_path_str:
+                ev_path = _resolve_path(evidence_path_str, root).resolve()
+                try:
+                    ev_path.relative_to(root)
+                except ValueError:
+                    raise EvaluationError(f"Membership evidence path {ev_path} escapes repo root")
+
+                if not ev_path.exists():
+                    raise EvaluationError(f"Membership evidence file not found at {ev_path}")
+
+                expected_checksum = membership_evidence.get("checksum")
+                actual_checksum = compute_sha256(ev_path)
+                if expected_checksum and expected_checksum != actual_checksum:
+                    raise EvaluationError(f"Membership evidence checksum mismatch for {ev_path}")
+
+                source_paths[f"{mid}_membership_evidence"] = ev_path
+
+                try:
+                    ev_content = load_json(ev_path)
+                    if isinstance(ev_content, list):
+                        training_sids = set(str(sid) for sid in ev_content)
+                    elif isinstance(ev_content, dict) and "sample_ids" in ev_content:
+                        training_sids = set(str(sid) for sid in ev_content["sample_ids"])
+                    else:
+                        raise EvaluationError("Membership evidence format invalid; expected list of IDs or dict with 'sample_ids'")
+                except Exception as exc:
+                    if isinstance(exc, EvaluationError):
+                        raise
+                    raise EvaluationError(f"Failed to load membership evidence from {ev_path}: {exc}") from exc
+
+                overlapping = training_sids.intersection(set(test_sample_ids))
+                if overlapping:
+                    raise EvaluationError(
+                        f"Model {mid} membership evidence reveals {len(overlapping)} overlapping samples with hold-out test set! "
+                        "Data leakage detected; cannot certify as independent."
+                    )
+
+                prov_status = "verified"
+                eligible_for_independent_ranking = True
+                verified_evidence_data = {
+                    "evidence_path": str(ev_path),
+                    "checksum": actual_checksum,
+                    "verified": True,
+                    "training_samples_verified": len(training_sids),
+                    "test_overlap_samples": 0,
+                }
 
         artifact_hashes = {
             "config": compute_sha256(config_path),
             "tokenizer_config": compute_sha256(tok_cfg_path),
             "tokenizer": compute_sha256(tok_vocab_path),
-            "weights": compute_sha256(weights_path),
+            "weights": compute_sha256(weights_safetensors),
         }
         if has_report:
             artifact_hashes["training_report"] = compute_sha256(report_path)
@@ -281,7 +349,7 @@ def verify_comparison_inputs(
                 "base_model": base_model,
                 "status": prov_status,
                 "eligible_for_independent_ranking": eligible_for_independent_ranking,
-                "membership_evidence": membership_evidence,
+                "membership_evidence": verified_evidence_data or membership_evidence,
                 "notes": (
                     "Verified independent test isolation"
                     if prov_status == "verified"

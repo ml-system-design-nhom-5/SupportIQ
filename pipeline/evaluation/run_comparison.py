@@ -46,6 +46,7 @@ def _generate_comparison_markdown_report(
     comp_df: pd.DataFrame,
     model_registry: dict[str, Any],
     metadata: dict[str, Any],
+    cuda_df: pd.DataFrame | None = None,
 ) -> str:
     """Generate comprehensive comparison markdown report distinguishing independent hold-out vs descriptive."""
     winner_cid = metadata.get("winner_candidate_id", "linear_svm__v1")
@@ -60,8 +61,7 @@ def _generate_comparison_markdown_report(
         f"- **Run ID:** `{metadata.get('run_id')}`",
         f"- **Mode:** `{metadata.get('mode', 'comparison')}`",
         f"- **Evaluation Date (UTC):** `{metadata.get('timestamp')}`",
-        f"- **Inference Device:** `{metadata.get('device', 'cpu')}`",
-        f"- **CPU Threads:** `{metadata.get('num_threads', 1)}`",
+        f"- **CPU Threads (Locked):** `{metadata.get('num_threads', 1)}`",
         f"- **CV Winner (Locked):** `{winner_cid}` (Model: `{winner_mid}`)",
         "",
         "## 1. Independent Hold-out Benchmark (Hold-out có bằng chứng độc lập)",
@@ -97,18 +97,28 @@ def _generate_comparison_markdown_report(
 
     lines.extend([
         "",
-        "## 3. Complete 5-Model Comparison Matrix",
+        "## 3. Complete 5-Model Comparison Matrix (CPU)",
         "",
     ])
     lines.append(_df_to_markdown(comp_df))
 
+    if cuda_df is not None and not cuda_df.empty:
+        lines.extend([
+            "",
+            "## 4. CUDA Acceleration Profile (GPU Supplementary Benchmark)",
+            "",
+            "Transformer latency measured on NVIDIA CUDA GPU with hardware synchronization:",
+            "",
+            _df_to_markdown(cuda_df),
+        ])
+
     lines.extend([
         "",
-        "## 4. Invariants and Governance Rules",
+        "## 5. Invariants and Governance Rules",
         "",
         "- **Winner Immutability:** The cross-validation winner (`linear_svm`) is permanently locked from 10-fold CV. Test set rankings do NOT override the CV selection.",
         "- **Training Budget Disparity:** Baseline models were trained on 37,911 samples with 10-fold CV. The local Transformer was fine-tuned on a 9,200 sample subset with 1,840 validation split (no 10-fold CV). Raw score differences must not be conflated with algorithmic superiority.",
-        "- **Hardware Latency Parity:** All 5 models were benchmarked on the identical sequential CPU inference protocol (batch=1, locked thread count, tokenizer included, weights pre-loaded).",
+        "- **Hardware Latency Parity:** All 5 models in the primary comparison matrix were benchmarked on the identical sequential CPU inference protocol (batch=1, locked thread count, tokenizer included, weights pre-loaded).",
         "",
     ])
 
@@ -198,13 +208,13 @@ def run_comparison(
                         f"Recomputed macro_f1 differs from historical by {diff:.10f} for {mid}"
                     )
 
-            # Load baseline bundle strictly to remeasure latency under current hardware settings
+            # Load baseline bundle strictly to remeasure latency under current hardware settings (strictly CPU)
             bundle = IntentModelBundle.load(mdir)
             with scoped_num_threads(num_threads):
                 bench_data = benchmark_classifier(
                     bundle,
                     test_df["instruction"].tolist(),
-                    config,
+                    dict(config, device="cpu"),
                 )
 
             best_entry = baseline_selection.get("best_per_model", {}).get(mid, {})
@@ -256,7 +266,7 @@ def run_comparison(
                 "provenance_status": "verified",
                 "eligible_for_independent_ranking": True,
                 "preprocessing": "TF-IDF (unigram + bigram, max_features=10000, sublinear_tf=True)",
-                "device": device,
+                "device": "cpu",
                 "training_samples": 37911,
                 "cv_protocol": "10-fold cross-validation",
                 "artifact_hashes": {
@@ -265,14 +275,30 @@ def run_comparison(
             }
 
         # 2. Transformer models: predict on holdout, compute metrics, measure latency
+        cuda_rows: list[dict[str, Any]] = []
+        is_cuda_requested = (device == "cuda")
+        if is_cuda_requested:
+            import torch
+
+            if not torch.cuda.is_available():
+                raise EvaluationError("CUDA device requested but torch.cuda.is_available() is False")
+
         for mid in sorted(TRANSFORMER_MODELS):
             spec = transformer_specs[mid]
             adapter = TransformerIntentAdapter(
                 model_dir=spec["model_dir"],
                 model_id=mid,
                 max_length=config.get("max_length", 64),
-                device=device,
+                device="cpu",
             )
+
+            # Taxonomy verification: adapter classes must match verified class_order
+            if set(adapter.classes_) != set(class_order):
+                missing = sorted(set(class_order) - set(adapter.classes_))
+                extra = sorted(set(adapter.classes_) - set(class_order))
+                raise EvaluationError(
+                    f"Model {mid} taxonomy mismatch against verified class_order: missing {missing}, extra {extra}"
+                )
 
             preds_df = predict_rows(adapter, test_df, batch_size=batch_size)
             eval_data = classification_report_data(
@@ -285,7 +311,7 @@ def run_comparison(
                 bench_data = benchmark_classifier(
                     adapter,
                     test_df["instruction"].tolist(),
-                    config,
+                    dict(config, device="cpu"),
                 )
 
             prov = spec["provenance"]
@@ -304,6 +330,36 @@ def run_comparison(
                 "confusion_matrix": eval_data["confusion_matrix"],
                 "latency": bench_data,
             }
+
+            if is_cuda_requested:
+                import torch
+
+                adapter_cuda = TransformerIntentAdapter(
+                    model_dir=spec["model_dir"],
+                    model_id=mid,
+                    max_length=config.get("max_length", 64),
+                    device="cuda",
+                )
+                bench_cuda = benchmark_classifier(
+                    adapter_cuda,
+                    test_df["instruction"].tolist(),
+                    config,
+                )
+                models_results[mid]["latency_cuda"] = bench_cuda
+                cpu_p50 = bench_data["latency"]["p50"]
+                cuda_p50 = bench_cuda["latency"]["p50"]
+                speedup = (cpu_p50 / cuda_p50) if cuda_p50 > 0 else 0.0
+
+                cuda_rows.append({
+                    "model_id": mid,
+                    "device": "cuda",
+                    "gpu_name": torch.cuda.get_device_name(0),
+                    "latency_p50_ms": bench_cuda["latency"]["p50"] * 1000.0,
+                    "latency_p95_ms": bench_cuda["latency"]["p95"] * 1000.0,
+                    "throughput_items_sec": bench_cuda["throughput"]["items_per_second"],
+                    "cpu_latency_p50_ms": cpu_p50 * 1000.0,
+                    "speedup_vs_cpu": speedup,
+                })
 
             training_samples = 9200 if mid == "supportiq_distilbert" else "unknown"
 
@@ -338,7 +394,7 @@ def run_comparison(
                 "membership_evidence": prov.get("membership_evidence"),
                 "notes": prov.get("notes"),
                 "preprocessing": f"HF DistilBertTokenizer (truncation max_length={config.get('max_length', 64)})",
-                "device": device,
+                "device": "cpu",
                 "training_samples": training_samples,
                 "cv_protocol": "none",
                 "artifact_hashes": spec["artifact_hashes"],
@@ -359,6 +415,8 @@ def run_comparison(
             write_csv_atomic(mdata["per_class"], mdir / "per_class.csv", index=True)
             write_csv_atomic(mdata["confusion_matrix"], mdir / "confusion_matrix.csv", index=True)
             write_json_atomic(mdata["latency"], mdir / "latency.json")
+            if "latency_cuda" in mdata:
+                write_json_atomic(mdata["latency_cuda"], mdir / "latency_cuda.json")
 
             rdir = robustness_base / mid
             rdir.mkdir(parents=True, exist_ok=True)
@@ -366,6 +424,11 @@ def run_comparison(
                 "status": "not_evaluated",
                 "reason": "No independent robustness suite provided in comparison config",
             }, rdir / "status.json")
+
+        cuda_df = None
+        if cuda_rows:
+            cuda_df = pd.DataFrame(cuda_rows)
+            write_csv_atomic(cuda_df, run_dir / "cuda_profile.csv", index=False)
 
         metadata = {
             "run_id": run_id,
@@ -376,7 +439,7 @@ def run_comparison(
             "winner_candidate_id": winner_cid,
             "winner_model_id": winner_mid,
         }
-        report_md = _generate_comparison_markdown_report(cmp_df, model_registry, metadata)
+        report_md = _generate_comparison_markdown_report(cmp_df, model_registry, metadata, cuda_df=cuda_df)
         md_path = run_dir / "report.md"
         md_tmp = run_dir / ".report.md.tmp"
         md_tmp.write_text(report_md, encoding="utf-8")

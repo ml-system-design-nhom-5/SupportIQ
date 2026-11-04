@@ -828,3 +828,199 @@ def test_cli_help_does_not_load_models():
         main(["--help"])
     assert excinfo.value.code == 0
 
+
+# =========================================================================
+# Review Items (P2) Regression Tests
+# =========================================================================
+
+def test_scoped_num_threads_locks_openblas_pool():
+    import os
+    from pipeline.evaluation.benchmark import scoped_num_threads
+
+    with scoped_num_threads(1):
+        assert os.environ.get("OPENBLAS_NUM_THREADS") == "1"
+        assert os.environ.get("OMP_NUM_THREADS") == "1"
+        # If openblas is loaded, verify its runtime thread count is locked to 1
+        import numpy, glob, ctypes
+        p = os.path.join(os.path.dirname(numpy.__file__), "..", "numpy.libs")
+        if os.path.exists(p):
+            for dll_f in glob.glob(os.path.join(p, "*openblas*.dll")):
+                dll = ctypes.CDLL(dll_f)
+                if hasattr(dll, "openblas_get_num_threads"):
+                    assert dll.openblas_get_num_threads() == 1
+
+
+def test_runner_rejects_transformer_with_mismatched_taxonomy(monkeypatch, tmp_path):
+    from pipeline.evaluation.run_comparison import run_comparison
+
+    setup = make_comparison_fixture(tmp_path)
+    # Mock transformer with wrong taxonomy
+    hf_config = MockHFConfig(id2label={0: "wrong_intent_alpha", 1: "wrong_intent_beta"})
+    mock_model = MockHFModel(hf_config)
+    mock_tok = MockTokenizer()
+    monkeypatch.setattr("transformers.AutoTokenizer.from_pretrained", lambda *args, **kwargs: mock_tok)
+    monkeypatch.setattr(
+        "transformers.AutoModelForSequenceClassification.from_pretrained",
+        lambda *args, **kwargs: (mock_model, {"missing_keys": []}),
+    )
+
+    cfg_file = tmp_path / "comparison_config.json"
+    save_json(setup["config"], cfg_file)
+    out_root = tmp_path / "artifacts" / "evaluation"
+
+    with pytest.raises(EvaluationError, match="taxonomy mismatch"):
+        run_comparison(
+            config_path=cfg_file,
+            run_id="03-11-2026-cmp-tax-fail",
+            repo_root=tmp_path,
+            output_root=out_root,
+        )
+
+
+def test_unverified_if_membership_evidence_is_empty_or_boolean_flag_only(tmp_path):
+    from pipeline.evaluation.comparison_contracts import verify_comparison_inputs
+
+    setup = make_comparison_fixture(tmp_path)
+    cfg = setup["config"]
+
+    # Boolean flag only without evidence file must remain unverified!
+    cfg["models"]["supportiq_distilbert"]["provenance"]["membership_evidence"] = {"verified": True}
+    verified = verify_comparison_inputs(cfg, repo_root=tmp_path)
+    prov = verified["transformer_specs"]["supportiq_distilbert"]["provenance"]
+    assert prov["status"] == "unverified"
+    assert prov["eligible_for_independent_ranking"] is False
+
+
+def test_membership_evidence_verified_only_with_valid_clean_sample_file(tmp_path):
+    from pipeline.evaluation.comparison_contracts import verify_comparison_inputs
+
+    setup = make_comparison_fixture(tmp_path)
+    cfg = setup["config"]
+
+    # Provide a clean evidence file with sample IDs not in test
+    evidence_file = tmp_path / "train_ids.json"
+    save_json(["train_sid_1", "train_sid_2", "train_sid_3"], evidence_file)
+
+    cfg["models"]["supportiq_distilbert"]["provenance"]["membership_evidence"] = {
+        "evidence_path": str(evidence_file),
+        "checksum": compute_sha256(evidence_file),
+    }
+
+    verified = verify_comparison_inputs(cfg, repo_root=tmp_path)
+    prov = verified["transformer_specs"]["supportiq_distilbert"]["provenance"]
+    assert prov["status"] == "verified"
+    assert prov["eligible_for_independent_ranking"] is True
+
+    # If evidence file has an overlap with test set, it must fail or be unverified
+    test_sid = str(verified["test"]["sample_id"].iloc[0])
+    leaked_evidence = tmp_path / "leaked_ids.json"
+    save_json(["train_sid_1", test_sid], leaked_evidence)
+    cfg["models"]["supportiq_distilbert"]["provenance"]["membership_evidence"] = {
+        "evidence_path": str(leaked_evidence),
+        "checksum": compute_sha256(leaked_evidence),
+    }
+    with pytest.raises(EvaluationError, match="overlapping samples"):
+        verify_comparison_inputs(cfg, repo_root=tmp_path)
+
+
+def test_historical_manifest_rejects_missing_lineage_inputs(tmp_path):
+    from pipeline.evaluation.comparison_contracts import verify_comparison_inputs
+
+    setup = make_comparison_fixture(tmp_path)
+    eval_man = setup["eval_manifest"]
+    man_data = json.loads(eval_man.read_text())
+
+    # Delete required training_manifest from inputs
+    del man_data["inputs"]["training_manifest"]
+    save_json(man_data, eval_man)
+
+    with pytest.raises(EvaluationError, match="missing required lineage input"):
+        verify_comparison_inputs(setup["config"], repo_root=tmp_path)
+
+
+def test_historical_manifest_rejects_missing_or_corrupted_metrics(tmp_path):
+    from pipeline.evaluation.comparison_contracts import verify_comparison_inputs
+
+    setup = make_comparison_fixture(tmp_path)
+    metrics_file = setup["eval_manifest"].parent / "intent" / "linear_svm" / "metrics.json"
+
+    # Corrupt the metrics file
+    metrics_file.write_text("{\"corrupted\": true}")
+    with pytest.raises(EvaluationError, match="Hash mismatch for historical metrics"):
+        verify_comparison_inputs(setup["config"], repo_root=tmp_path)
+
+
+def test_safetensors_strictly_required(tmp_path):
+    from pipeline.evaluation.comparison_contracts import verify_comparison_inputs
+
+    setup = make_comparison_fixture(tmp_path)
+    siq_dir = Path(setup["config"]["models"]["supportiq_distilbert"]["model_dir"])
+    safetensors_f = siq_dir / "model.safetensors"
+    bin_f = siq_dir / "pytorch_model.bin"
+
+    # Remove safetensors and leave only .bin
+    safetensors_f.unlink()
+    bin_f.write_bytes(b"mock_bin_weights")
+
+    with pytest.raises(EvaluationError, match="Missing required safetensors"):
+        verify_comparison_inputs(setup["config"], repo_root=tmp_path)
+
+
+def test_cuda_profile_is_isolated_from_cpu_table(monkeypatch, tmp_path):
+    import torch
+    from pipeline.evaluation.run_comparison import run_comparison
+
+    setup = make_comparison_fixture(tmp_path)
+    _setup_mock_transformers_for_runner(monkeypatch, setup)
+
+    # Mock CUDA availability
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "get_device_name", lambda idx=0: "Mock NVIDIA GPU")
+    monkeypatch.setattr(torch.cuda, "synchronize", lambda: None)
+    monkeypatch.setattr(torch.Tensor, "to", lambda self, *args, **kwargs: self)
+    monkeypatch.setattr(MockHFModel, "to", lambda self, *args, **kwargs: self)
+
+    cfg = setup["config"]
+    cfg["device"] = "cuda"
+    cfg_file = tmp_path / "comparison_config.json"
+    save_json(cfg, cfg_file)
+    out_root = tmp_path / "artifacts" / "evaluation"
+
+    run_comparison(
+        config_path=cfg_file,
+        run_id="03-11-2026-cmp-cuda",
+        repo_root=tmp_path,
+        output_root=out_root,
+    )
+
+    run_dir = out_root / "03-11-2026-cmp-cuda"
+    # Baselines in registry must still be recorded as cpu
+    reg = json.loads((run_dir / "model_registry.json").read_text())
+    assert reg["linear_svm"]["device"] == "cpu"
+    assert reg["logistic_regression"]["device"] == "cpu"
+    assert reg["multinomial_nb"]["device"] == "cpu"
+
+    # Dedicated cuda_profile.csv must exist and contain the 2 transformers
+    cuda_csv = run_dir / "cuda_profile.csv"
+    assert cuda_csv.exists()
+    cuda_df = pd.read_csv(cuda_csv)
+    assert len(cuda_df) == 2
+    assert set(cuda_df["model_id"]) == {"supportiq_distilbert", "supportpilot_distilbert"}
+    assert (cuda_df["device"] == "cuda").all()
+
+    # Latency cuda json must exist
+    assert (run_dir / "intent" / "supportiq_distilbert" / "latency_cuda.json").exists()
+
+
+
+def test_model_dir_escaping_via_relative_parent_rejected(tmp_path):
+    from pipeline.evaluation.comparison_contracts import verify_comparison_inputs
+
+    setup = make_comparison_fixture(tmp_path)
+    cfg = setup["config"]
+
+    # Model directory that traverses outside tmp_path
+    cfg["models"]["supportiq_distilbert"]["model_dir"] = "../outside_dir"
+    with pytest.raises(EvaluationError, match="escapes repo root"):
+        verify_comparison_inputs(cfg, repo_root=tmp_path)
+

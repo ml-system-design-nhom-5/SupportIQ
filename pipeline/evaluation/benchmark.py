@@ -12,6 +12,35 @@ import numpy as np
 from pipeline.evaluation import EvaluationError
 
 
+def _set_direct_openblas_threads(n_threads: int) -> list[tuple[Any, int]]:
+    """Directly locate and lock OpenBLAS runtime threads via ctypes."""
+    restorations: list[tuple[Any, int]] = []
+    import ctypes
+    import glob
+    import sys
+
+    candidate_dirs: set[str] = set()
+    for mod_name in ("numpy", "scipy"):
+        if mod_name in sys.modules:
+            mod = sys.modules[mod_name]
+            base = os.path.dirname(getattr(mod, "__file__", ""))
+            candidate_dirs.add(os.path.join(base, "..", f"{mod_name}.libs"))
+            candidate_dirs.add(os.path.join(base, ".."))
+
+    for c_dir in candidate_dirs:
+        if os.path.exists(c_dir):
+            for dll_p in glob.glob(os.path.join(c_dir, "*openblas*.dll")):
+                try:
+                    dll = ctypes.CDLL(os.path.abspath(dll_p))
+                    if hasattr(dll, "openblas_get_num_threads") and hasattr(dll, "openblas_set_num_threads"):
+                        prev = dll.openblas_get_num_threads()
+                        dll.openblas_set_num_threads(n_threads)
+                        restorations.append((dll, prev))
+                except Exception:
+                    pass
+    return restorations
+
+
 @contextlib.contextmanager
 def scoped_num_threads(num_threads: int | None) -> Generator[None, None, None]:
     """Scoped context manager to temporarily lock CPU thread count across PyTorch and BLAS."""
@@ -28,6 +57,23 @@ def scoped_num_threads(num_threads: int | None) -> Generator[None, None, None]:
     except Exception:
         pass
 
+    tp_context = None
+    try:
+        import threadpoolctl
+
+        tp_context = threadpoolctl.threadpool_limits(limits=num_threads)
+        tp_context.__enter__()
+    except Exception:
+        tp_context = None
+
+    blas_restorations = _set_direct_openblas_threads(num_threads)
+
+    env_vars = ["OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS"]
+    prev_env: dict[str, str | None] = {}
+    for var in env_vars:
+        prev_env[var] = os.environ.get(var)
+        os.environ[var] = str(num_threads)
+
     try:
         yield
     finally:
@@ -38,6 +84,25 @@ def scoped_num_threads(num_threads: int | None) -> Generator[None, None, None]:
                 torch.set_num_threads(prev_torch_threads)
             except Exception:
                 pass
+
+        if tp_context is not None:
+            try:
+                tp_context.__exit__(None, None, None)
+            except Exception:
+                pass
+
+        for dll, prev_t in blas_restorations:
+            try:
+                dll.openblas_set_num_threads(prev_t)
+            except Exception:
+                pass
+
+        for var, prev_val in prev_env.items():
+            if prev_val is None:
+                os.environ.pop(var, None)
+            else:
+                os.environ[var] = prev_val
+
 
 
 def benchmark_classifier(

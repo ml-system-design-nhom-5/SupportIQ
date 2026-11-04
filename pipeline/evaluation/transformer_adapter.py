@@ -49,6 +49,7 @@ class TransformerIntentAdapter:
                 self.model_dir,
                 local_files_only=True,
                 trust_remote_code=False,
+                use_safetensors=True,
                 output_loading_info=True,
             )
             if isinstance(load_result, tuple):
