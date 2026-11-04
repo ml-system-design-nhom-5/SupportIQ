@@ -741,5 +741,90 @@ def test_comparison_fails_if_input_file_changes_during_run(monkeypatch, tmp_path
     assert not (run_dir / "manifest.json").exists()
 
 
+# =========================================================================
+# Task 5: CLI and Config Smoke Tests
+# =========================================================================
 
+def test_config_device_and_unknown_keys_rejected(tmp_path):
+    from pipeline.evaluation.comparison_contracts import load_comparison_config
+
+    setup = make_comparison_fixture(tmp_path)
+    base_cfg = setup["config"]
+
+    # Unknown key
+    bad_cfg1 = dict(base_cfg)
+    bad_cfg1["unexpected_key"] = "bad"
+    p1 = tmp_path / "cfg1.json"
+    save_json(bad_cfg1, p1)
+    with pytest.raises(EvaluationError, match="unknown keys"):
+        load_comparison_config(p1, repo_root=tmp_path)
+
+    # Unsupported device
+    bad_cfg2 = dict(base_cfg)
+    bad_cfg2["device"] = "tpu"
+    p2 = tmp_path / "cfg2.json"
+    save_json(bad_cfg2, p2)
+    with pytest.raises(EvaluationError, match="Unsupported device"):
+        load_comparison_config(p2, repo_root=tmp_path)
+
+    # max_length <= 0
+    bad_cfg3 = dict(base_cfg)
+    bad_cfg3["max_length"] = 0
+    p3 = tmp_path / "cfg3.json"
+    save_json(bad_cfg3, p3)
+    with pytest.raises(EvaluationError, match="max_length must be a positive integer"):
+        load_comparison_config(p3, repo_root=tmp_path)
+
+    # num_threads <= 0
+    bad_cfg4 = dict(base_cfg)
+    bad_cfg4["num_threads"] = -1
+    p4 = tmp_path / "cfg4.json"
+    save_json(bad_cfg4, p4)
+    with pytest.raises(EvaluationError, match="num_threads must be a positive integer"):
+        load_comparison_config(p4, repo_root=tmp_path)
+
+
+def test_cli_comparison_offline_smoke(monkeypatch, tmp_path, capsys):
+    from pipeline.evaluation.run_comparison import main
+
+    setup = make_comparison_fixture(tmp_path)
+    _setup_mock_transformers_for_runner(monkeypatch, setup)
+
+    cfg_file = tmp_path / "comparison_config.json"
+    save_json(setup["config"], cfg_file)
+    out_root = tmp_path / "artifacts" / "evaluation"
+
+    ret = main([
+        "--config", str(cfg_file),
+        "--run-id", "03-11-2026-cmp-cli",
+        "--repo-root", str(tmp_path),
+        "--output-root", str(out_root),
+    ])
+    assert ret == 0
+
+    run_dir = out_root / "03-11-2026-cmp-cli"
+    cmp_csv = run_dir / "comparison.csv"
+    assert cmp_csv.exists()
+    df = pd.read_csv(cmp_csv)
+    assert len(df) == 5
+
+    manifest_file = run_dir / "manifest.json"
+    assert manifest_file.exists()
+    man = json.loads(manifest_file.read_text())
+    assert man["status"] == "completed"
+    assert "outputs" in man
+
+    # Verify all output hashes match actual files on disk
+    for rel_path, expected_hash in man["outputs"].items():
+        actual_path = run_dir / rel_path
+        assert actual_path.exists()
+        assert compute_sha256(actual_path) == expected_hash
+
+
+def test_cli_help_does_not_load_models():
+    from pipeline.evaluation.run_comparison import main
+
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--help"])
+    assert excinfo.value.code == 0
 

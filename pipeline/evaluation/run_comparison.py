@@ -446,6 +446,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run 5-Model Comparison Benchmark for SupportIQ.")
     parser.add_argument("--config", required=True, help="Path to comparison config JSON")
     parser.add_argument("--run-id", default=None, help="Optional run ID in DD-MM-YYYY-stt format")
+    parser.add_argument("--repo-root", default=str(REPO_ROOT), help="Optional repository root path")
     parser.add_argument("--output-root", default="artifacts/evaluation", help="Root dir for evaluation runs")
 
     args = parser.parse_args(argv)
@@ -454,7 +455,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         res = run_comparison(
             config_path=args.config,
             run_id=args.run_id,
-            repo_root=REPO_ROOT,
+            repo_root=args.repo_root,
             output_root=args.output_root,
         )
         print("=== Comparison completed successfully! ===")
