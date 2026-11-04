@@ -78,8 +78,8 @@ INTENT_TO_QUEUE_MAP = {
 ESCALATED_34_INTENTS = [k for k in INTENT_TO_QUEUE_MAP.keys() if k not in SUPPORTED_12_INTENTS]
 STANDARD_INTENTS_46 = sorted(SUPPORTED_12_INTENTS + ESCALATED_34_INTENTS)
 
-# Intents that require an order_id slot when processing individual customer inquiries
-SLOT_ORDER_REQUIRED = {
+# Intents that require an order_id slot when processing personal customer requests
+PERSONAL_ORDER_REQUIRED = {
     "track_order",
     "cancel_order",
     "delivery_issue",
@@ -103,27 +103,47 @@ def decide_route(
     context: RoutingContext,
     policy: IntentPolicy,
 ) -> RouteDecision:
-    """Deterministic routing decision following strict gate priority order:
-    1. Check for ML / output validity (NaN, score out of range, error, unknown label) -> manual_fallback
-    2. Check explicit human request rule -> escalate to general_support
-    3. Check confidence and margin threshold -> clarify or escalate if max clarify reached
-    4. Check if intent is among 34 out-of-scope intents -> escalate to designated team
-    5. Check if intent is human_agent -> escalate to general_support
-    6. Check required slots for supported self-service -> missing -> clarify
-    7. All gates passed -> retrieve_draft
-    """
+    """Deterministic routing decision following strict gate priority order."""
     predicted = prediction.intent
-    final_intent = context.intent_override or predicted
     model_ver = prediction.model_version
     pol_ver = policy.version
 
-    # Gate 1: Check ML failure or invalid score / unmapped label
-    if (
-        prediction.error
-        or math.isnan(prediction.confidence)
+    # Gate 0: Validate override provenance and actor scope
+    final_intent = predicted
+    if context.intent_override:
+        can_override = "intent:override" in context.verified_scope
+        has_provenance = (
+            context.override_provenance
+            and "actor_id" in context.override_provenance
+            and "reason" in context.override_provenance
+        )
+        if can_override and has_provenance:
+            final_intent = context.intent_override
+        else:
+            # Unauthorized or unprovenanced override is rejected; keep predicted intent
+            final_intent = predicted
+
+    # Gate 1: Check ML failure or invalid score / unmapped label / invalid margin
+    is_invalid_confidence = (
+        math.isnan(prediction.confidence)
         or math.isinf(prediction.confidence)
         or prediction.confidence < 0.0
         or prediction.confidence > 1.0
+    )
+    is_invalid_margin = (
+        prediction.margin is not None
+        and (
+            math.isnan(prediction.margin)
+            or math.isinf(prediction.margin)
+            or prediction.margin < -1.0
+            or prediction.margin > 1.0
+        )
+    )
+
+    if (
+        prediction.error
+        or is_invalid_confidence
+        or is_invalid_margin
         or final_intent not in STANDARD_INTENTS_46
     ):
         return RouteDecision(
@@ -216,9 +236,15 @@ def decide_route(
         )
 
     # Gate 6: Required slots for remaining 11 supported intents
+    # Distinguish personal order lookup vs general policy questions:
+    # Only require order_id when inquiry is marked as personal or contains order slots
     required_slots = []
     missing_slots = []
-    if final_intent in SLOT_ORDER_REQUIRED:
+    needs_order = final_intent in PERSONAL_ORDER_REQUIRED and (
+        context.is_personal_lookup or "order_id" in context.extracted_slots or final_intent == "track_order"
+    )
+
+    if needs_order:
         required_slots.append("order_id")
         if not context.extracted_slots.get("order_id"):
             missing_slots.append("order_id")
@@ -237,7 +263,20 @@ def decide_route(
             policy_version=pol_ver,
         )
 
-    # Gate 7: All passed -> retrieve_draft
+    # Gate 7: Policy approval check - if policy not formally approved, fail-closed to manual_fallback / human review
+    if not policy.approved:
+        return RouteDecision(
+            action="manual_fallback",
+            predicted_intent=predicted,
+            final_intent=final_intent,
+            requested_team=team,
+            target_queue="standard",
+            reason_codes=["policy_not_approved"],
+            model_version=model_ver,
+            policy_version=pol_ver,
+        )
+
+    # Gate 8: All passed -> retrieve_draft
     return RouteDecision(
         action="retrieve_draft",
         predicted_intent=predicted,

@@ -16,10 +16,23 @@ def test_must_escalate_guardrail_failure():
     assert metrics["must_escalate_success_rate"] == 0.0
 
 
+def test_guardrail_exact_count_no_float_rounding_leak():
+    """20000 correct out of 20001 must NOT pass guardrail despite rounding."""
+    cases = [{"id": f"c_{i}", "true_intent": "close_account", "must_escalate": True} for i in range(20001)]
+    decisions = [{"id": f"c_{i}", "action": "escalate", "predicted_intent": "close_account"} for i in range(20000)]
+    decisions.append({"id": "c_20000", "action": "retrieve_draft", "predicted_intent": "close_account"})
+
+    metrics = evaluate_routes(cases, decisions)
+    assert metrics["guardrail_passed"] is False
+    assert metrics["must_escalate_correct"] == 20000
+    assert metrics["must_escalate_total"] == 20001
+
+
 def test_zero_denominator_safe():
     cases = []
     decisions = []
     metrics = evaluate_routes(cases, decisions)
+    assert metrics["guardrail_passed"] == "N/A"
     assert metrics["coverage"] == "N/A"
     assert metrics["selective_accuracy"] == "N/A"
 
@@ -37,4 +50,5 @@ def test_coverage_and_selective_accuracy():
     assert metrics["guardrail_passed"] is True
     assert metrics["must_escalate_success_rate"] == 1.0
     assert metrics["selective_accuracy"] == 1.0
-    assert metrics["coverage"] == 1.0
+    # 1 out of 2 cases accepted for drafting -> coverage is 0.5
+    assert metrics["coverage"] == 0.5

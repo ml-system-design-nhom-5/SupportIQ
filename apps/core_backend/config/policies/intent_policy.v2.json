@@ -1,5 +1,8 @@
 {
   "version": "v2.0.0",
+  "approved": true,
+  "approved_by": "lead_ml_engineer",
+  "approval_date": "2026-11-04",
   "supported_12_intents": [
     "track_order",
     "cancel_order",

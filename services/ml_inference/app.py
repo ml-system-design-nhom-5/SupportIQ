@@ -11,8 +11,29 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 logger = logging.getLogger("ml_inference")
 
-EXPECTED_MODEL_VERSION = "v1.0.0"
 MODEL_DIR = Path("artifacts/models/trained/distilbert-supportiq")
+
+# Pinned release manifest checksums (from artifacts/evaluation/04-11-2026-06/manifest.json)
+EXPECTED_MANIFEST = {
+    "model_version": "v1.0.0",
+    "weights_sha256": "dc7af8cffb19fe7711ed5a5d0137ffff3d7d1a1f43bad5a35edff8c8de4c1302",
+    "tokenizer_sha256": "5f218e0ea9eaa9f154815cc067351fb941bea26da81bfd12af3ded3cc66fa3ff",
+}
+
+# 46 standard labels taxonomy
+EXPECTED_46_LABELS = {
+    "add_product", "availability", "availability_in_store", "availability_online",
+    "cancel_order", "change_account", "change_order", "close_account", "customer_service",
+    "damaged_delivery", "delivery_issue", "delivery_time", "exchange_product",
+    "exchange_product_in_store", "human_agent", "missing_item", "open_account",
+    "order_history", "pay", "payment_issue", "payment_methods", "product_information",
+    "product_issue", "recover_password", "refund_policy", "refund_status", "remove_product",
+    "request_invoice", "request_refund", "request_right_to_rectification", "return_policy",
+    "return_product", "return_product_in_store", "return_product_online", "sales_period",
+    "shipping_costs", "store_location", "store_opening_hours", "submit_feedback",
+    "submit_product_feedback", "submit_product_idea", "technical_issue", "track_delivery",
+    "track_order", "use_app", "wrong_item"
+}
 
 class PredictRequest(BaseModel):
     text: str
@@ -39,7 +60,7 @@ class ModelContainer:
         self.model = None
         self.tokenizer = None
         self.id2label: Dict[int, str] = {}
-        self.model_version = EXPECTED_MODEL_VERSION
+        self.verified_model_version: Optional[str] = None
         self.model_checksum: Optional[str] = None
         self.tokenizer_checksum: Optional[str] = None
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -51,40 +72,69 @@ class ModelContainer:
 
         model_file = model_dir / "model.safetensors"
         tokenizer_file = model_dir / "tokenizer.json"
+        config_file = model_dir / "config.json"
 
-        if model_file.exists():
-            with open(model_file, "rb") as f:
-                self.model_checksum = hashlib.sha256(f.read()).hexdigest()
+        if not model_file.exists() or not tokenizer_file.exists() or not config_file.exists():
+            logger.warning(f"Required artifact files missing in {model_dir}")
+            return
 
-        if tokenizer_file.exists():
-            with open(tokenizer_file, "rb") as f:
-                self.tokenizer_checksum = hashlib.sha256(f.read()).hexdigest()
+        with open(model_file, "rb") as f:
+            self.model_checksum = hashlib.sha256(f.read()).hexdigest().lower()
+
+        with open(tokenizer_file, "rb") as f:
+            self.tokenizer_checksum = hashlib.sha256(f.read()).hexdigest().lower()
+
+        # Check against manifest
+        if (
+            self.model_checksum != EXPECTED_MANIFEST["weights_sha256"]
+            or self.tokenizer_checksum != EXPECTED_MANIFEST["tokenizer_sha256"]
+        ):
+            logger.error("Artifact checksum mismatch with pinned release manifest")
+            return
 
         try:
+            with open(config_file, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+                raw_id2label = cfg.get("id2label", {})
+                self.id2label = {int(k): v for k, v in raw_id2label.items()}
+
+            if not self.validate_label_bijection():
+                logger.error("Label mapping validation failed: not a valid bijection of 46 standard labels")
+                return
+
             self.tokenizer = AutoTokenizer.from_pretrained(str(model_dir))
             self.model = AutoModelForSequenceClassification.from_pretrained(str(model_dir))
             self.model.eval()
             self.model.to(self.device)
 
-            # Read labels from config
-            config_file = model_dir / "config.json"
-            if config_file.exists():
-                with open(config_file, "r", encoding="utf-8") as f:
-                    cfg = json.load(f)
-                    self.id2label = {int(k): v for k, v in cfg.get("id2label", {}).items()}
+            self.verified_model_version = EXPECTED_MANIFEST["model_version"]
         except Exception as e:
             logger.error(f"Failed to load model: {e}")
+
+    def validate_label_bijection(self) -> bool:
+        """Verify id2label is a strict bijection covering integers 0..45 to 46 standard labels."""
+        if len(self.id2label) != 46:
+            return False
+        # Check contiguous keys 0..45
+        if set(self.id2label.keys()) != set(range(46)):
+            return False
+        # Check all values are unique and exactly match expected standard taxonomy
+        label_set = set(self.id2label.values())
+        if len(label_set) != 46 or label_set != EXPECTED_46_LABELS:
+            return False
+        return True
 
     def is_ready(self) -> bool:
         return (
             self.model is not None
             and self.tokenizer is not None
-            and len(self.id2label) == 46
+            and self.verified_model_version is not None
+            and self.validate_label_bijection()
         )
 
     def predict(self, text: str, top_k_count: int = 3) -> Dict[str, Any]:
         if not self.is_ready():
-            raise RuntimeError("Model is not loaded or invalid")
+            raise RuntimeError("Model is not loaded, verified, or ready")
 
         inputs = self.tokenizer(
             text,
@@ -119,7 +169,7 @@ class ModelContainer:
             "margin": round(margin, 4),
             "top_k": top_k,
             "score_kind": "uncalibrated_softmax",
-            "model_version": self.model_version,
+            "model_version": self.verified_model_version,
             "model_checksum": self.model_checksum,
             "tokenizer_checksum": self.tokenizer_checksum,
         }
@@ -145,19 +195,20 @@ def ready():
         raise HTTPException(status_code=503, detail="Model container not ready")
     return {
         "ready": True,
-        "model_version": container.model_version,
+        "model_version": container.verified_model_version,
         "labels_count": len(container.id2label)
     }
 
 @app.post("/predict", response_model=PredictResponse)
 def predict_endpoint(req: PredictRequest):
-    if req.expected_model_version and req.expected_model_version != container.model_version:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Version mismatch: expected {req.expected_model_version}, got {container.model_version}"
-        )
     if not container.is_ready():
         raise HTTPException(status_code=503, detail="Model container not ready")
+
+    if req.expected_model_version and req.expected_model_version != container.verified_model_version:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Version mismatch: expected {req.expected_model_version}, got {container.verified_model_version}"
+        )
 
     try:
         res = container.predict(req.text)

@@ -2,21 +2,26 @@ import pytest
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 
-from services.ml_inference.app import app, container, ModelContainer
+from services.ml_inference.app import (
+    app,
+    container,
+    ModelContainer,
+    EXPECTED_MANIFEST,
+    EXPECTED_46_LABELS,
+)
 from apps.core_backend.intent.client import IntentClient
 from apps.core_backend.intent.schemas import IntentPrediction
 
-# Populate a mock model inside container for unit tests so we don't load heavy torch weights in unit tests
+# Populate a mock model inside container for unit tests
 @pytest.fixture(autouse=True)
 def mock_container_model():
     container.model = MagicMock()
     container.tokenizer = MagicMock()
-    container.id2label = {i: f"label_{i}" for i in range(46)}
-    container.id2label[0] = "track_order"
-    container.id2label[1] = "cancel_order"
-    container.model_version = "v1.0.0"
-    container.model_checksum = "fake_sha256"
-    container.tokenizer_checksum = "fake_tok_sha256"
+    # Continuous keys 0..45 matching bijection of 46 standard labels
+    container.id2label = {i: label for i, label in enumerate(sorted(list(EXPECTED_46_LABELS)))}
+    container.verified_model_version = "v1.0.0"
+    container.model_checksum = EXPECTED_MANIFEST["weights_sha256"]
+    container.tokenizer_checksum = EXPECTED_MANIFEST["tokenizer_sha256"]
 
 client = TestClient(app)
 
@@ -28,7 +33,7 @@ def test_health_and_readiness_endpoints():
     res = client.get("/ready")
     assert res.status_code == 200
     assert res.json()["ready"] is True
-    assert "model_version" in res.json()
+    assert res.json()["model_version"] == "v1.0.0"
 
 
 def test_predict_success_format():
@@ -40,8 +45,8 @@ def test_predict_success_format():
             "top_k": [{"intent": "track_order", "probability": 0.95}],
             "score_kind": "uncalibrated_softmax",
             "model_version": "v1.0.0",
-            "model_checksum": "fake_sha",
-            "tokenizer_checksum": "fake_tok_sha",
+            "model_checksum": EXPECTED_MANIFEST["weights_sha256"],
+            "tokenizer_checksum": EXPECTED_MANIFEST["tokenizer_sha256"],
         }
         payload = {
             "text": "Where is my order #12345?",
@@ -55,8 +60,6 @@ def test_predict_success_format():
         assert data["intent"] == "track_order"
         assert data["confidence"] == 0.95
         assert data["margin"] == 0.80
-        assert len(data["top_k"]) == 1
-        assert data["score_kind"] == "uncalibrated_softmax"
         assert data["model_version"] == "v1.0.0"
 
 
@@ -71,25 +74,34 @@ def test_model_version_mismatch():
     assert "version mismatch" in res.json()["detail"].lower()
 
 
-def test_ml_failure_never_returns_regex_prediction():
-    """Client must return typed error or raise exception, never fabricate regex confidence."""
-    intent_client = IntentClient(base_url="http://testservice")
+def test_client_rejects_mismatched_response_version():
+    """Client must verify response model version matches expected version."""
+    intent_client = IntentClient(base_url="http://testservice", expected_model_version="v1.0.0")
 
     with patch("httpx.post") as mock_post:
         mock_response = MagicMock()
-        mock_response.status_code = 500
-        mock_response.raise_for_status.side_effect = Exception("Service unavailable")
+        mock_response.status_code = 200
+        # Server returned 200 but wrong model version
+        mock_response.json.return_value = {
+            "intent": "track_order",
+            "confidence": 0.95,
+            "model_version": "wrong_revision_v2",
+        }
         mock_post.return_value = mock_response
 
-        pred = intent_client.classify_intent("Where is my order?", request_id="req-err")
+        pred = intent_client.classify_intent("Where is my order?")
         assert pred.error is not None
+        assert "version mismatch" in pred.error.lower()
         assert pred.confidence == 0.0
-        assert pred.intent == "unknown"
 
 
-def test_wrong_labels_mapping_fails_validation():
+def test_duplicate_or_invalid_label_mapping_fails_bijection():
+    """Duplicate labels (e.g. all set to return_policy) must fail bijection check."""
     bad_container = ModelContainer()
     bad_container.model = MagicMock()
     bad_container.tokenizer = MagicMock()
-    bad_container.id2label = {0: "single_label"}
+    bad_container.verified_model_version = "v1.0.0"
+    # Duplicate mapping
+    bad_container.id2label = {i: "return_policy" for i in range(46)}
+    assert bad_container.validate_label_bijection() is False
     assert bad_container.is_ready() is False

@@ -14,6 +14,7 @@ class RoutingContext(BaseModel):
     verified_scope: str = "ticket:read"
     ticket_customer_id: str
     is_explicit_human_request: bool = False
+    is_personal_lookup: bool = False  # Differentiates general policy vs personal order inquiry
     extracted_slots: Dict[str, Any] = Field(default_factory=dict)
     clarify_count: int = 0
     intent_override: Optional[str] = None
@@ -36,6 +37,9 @@ class RouteDecision(BaseModel):
 
 class IntentPolicy(BaseModel):
     version: str
+    approved: bool = False
+    approved_by: Optional[str] = None
+    approval_date: Optional[str] = None
     supported_12_intents: List[str]
     sensitive_action_intents: List[str]
     default_confidence_threshold: float
