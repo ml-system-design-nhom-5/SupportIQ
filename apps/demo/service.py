@@ -113,6 +113,8 @@ class DemoService:
                 snippet = src["chunks"][0].get("text", "")
             snippet = snippet[:300]
             sources.append({
+                "source_id": next((c["source_id"] for c in (run_result.get("llm") or {}).get("citations", [])
+                                   if c["document_id"] == str(doc_id) and c["version"] == str(src.get("version"))), None),
                 "doc_id": doc_id,
                 "title": src.get("title"),
                 "version": src.get("version"),
@@ -143,7 +145,9 @@ class DemoService:
             "evidence_count": run_result.get("evidence_count", 0),
             "sources": sources,
             "draft_body": draft_body,
-            "draft_kind": "template",  # P1: Explicitly label template draft kind
+            "draft_kind": run_result.get("draft_kind"),
+            "llm": run_result.get("llm"),
+            "llm_called": run_result.get("llm_called", False),
             "draft_hash": draft_hash,
             "is_duplicate_run": run_result.get("is_duplicate_run", False),
         }

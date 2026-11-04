@@ -31,11 +31,12 @@ class DummyRetrievalAdapter:
         return {"status": "no_evidence", "evidence": []}
 
 @pytest.fixture
-def test_setup(tmp_path):
+def test_setup(tmp_path, fake_llm):
     demo_db = str(tmp_path / "demo_test.sqlite3")
     orch_db = str(tmp_path / "orch_test.sqlite3")
     p_store = PersistentStore(db_path=orch_db)
     runner = PipelineRunner(
+        llm_client=fake_llm,
         intent_client=DummyIntentClient(),
         retrieval_adapter=DummyRetrievalAdapter(),
         store=p_store
@@ -60,7 +61,7 @@ def test_demo_health(client):
     assert res.status_code == 200
     data = res.json()
     assert data["status"] == "ok"
-    assert data["draft_kind"] == "template"
+    assert data["draft_kind"] == "llm"
 
 def test_get_profiles(client):
     res = client.get("/api/demo/profiles")
@@ -138,7 +139,7 @@ def test_same_id_changed_payload_conflicts(client):
     res2 = client.post("/api/demo/runs", json=payload2)
     assert res2.status_code == 409
 
-def test_sources_are_real_and_template_is_labeled(client):
+def test_sources_are_real_and_provider_is_labeled(client):
     payload = {
         "submission_id": "55555555-5555-5555-5555-555555555555",
         "profile_id": "demo-customer",
@@ -149,7 +150,7 @@ def test_sources_are_real_and_template_is_labeled(client):
     assert res.status_code == 200
     data = res.json()
     assert data["action"] == "retrieve_draft"
-    assert data["draft_kind"] == "template"
+    assert data["draft_kind"] == "llm"
     assert "Standard Return Policy" in data["draft_body"]
     assert len(data["sources"]) == 1
     src = data["sources"][0]

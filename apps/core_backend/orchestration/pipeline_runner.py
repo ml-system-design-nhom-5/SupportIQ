@@ -8,6 +8,7 @@ from apps.core_backend.intent.client import IntentClient
 from apps.core_backend.commerce.adapter import CommerceAdapter
 from apps.core_backend.retrieval.adapter import RetrievalAdapter
 from apps.core_backend.orchestration.store import PersistentStore
+from apps.core_backend.llm.gemini import GeminiDraftClient, LLMError
 
 logger = logging.getLogger("pipeline_runner")
 
@@ -19,12 +20,14 @@ class PipelineRunner:
         commerce_adapter: Optional[CommerceAdapter] = None,
         retrieval_adapter: Optional[RetrievalAdapter] = None,
         store: Optional[PersistentStore] = None,
+        llm_client: Optional[Any] = None,
     ):
         self.intent_client = intent_client or IntentClient()
         self.policy = policy or load_policy_v2()
         self.commerce = commerce_adapter or CommerceAdapter()
         self.retrieval = retrieval_adapter or RetrievalAdapter()
         self.store = store or PersistentStore()
+        self.llm_client = llm_client if llm_client is not None else GeminiDraftClient()
 
     def run(
         self,
@@ -51,6 +54,7 @@ class PipelineRunner:
 
         # 4. Commerce authorization and lookup if slot order_id is present
         order_id = context.extracted_slots.get("order_id")
+        order_facts = None
         if order_id and decision.action in ["retrieve_draft", "clarify"]:
             commerce_result = self.commerce.lookup_order(
                 order_id=order_id,
@@ -61,18 +65,31 @@ class PipelineRunner:
                 decision.action = "escalate"
                 decision.reason_codes.append(f"commerce_{commerce_result['error']}")
                 decision.requested_team = "order_support"
+            else:
+                order_facts = commerce_result.get("order")
 
         # 5. Handling retrieval & drafting ONLY when action is retrieve_draft
         evidence_retrieved = False
         draft_response = None
         evidence_list = []
+        llm_called = False
+        llm_result = None
+        draft_kind = None
 
         if decision.action == "retrieve_draft":
             ret_res = self.retrieval.retrieve(text, decision.final_intent)
             if ret_res["status"] == "success" and ret_res["evidence"]:
                 evidence_retrieved = True
                 evidence_list = ret_res["evidence"]
-                draft_response = f"Thank you for contacting us regarding {decision.final_intent}. Based on policy: {evidence_list[0]['title']}."
+                try:
+                    llm_called = bool(getattr(self.llm_client, "configured", False))
+                    llm_result = self.llm_client.generate(text, decision.final_intent, evidence_list,
+                                                         business_context=order_facts)
+                    draft_response = llm_result["body"]
+                    draft_kind = "llm"
+                except LLMError as exc:
+                    decision.action = "escalate" if exc.code == "llm_insufficient_evidence" else "manual_fallback"
+                    decision.reason_codes.append(exc.code)
             else:
                 # Evidence missing, stale, or conflicting -> Escalate according to spec Gate 7
                 decision.action = "escalate"
@@ -110,8 +127,10 @@ class PipelineRunner:
             "margin": getattr(prediction, "margin", None),
             "score_kind": getattr(prediction, "score_kind", None),
             "draft_body": draft_response,
+            "draft_kind": draft_kind,
+            "llm": {k: v for k, v in llm_result.items() if k != "body"} if llm_result else None,
             "is_duplicate_run": False,
-            "llm_called": evidence_retrieved,
+            "llm_called": llm_called,
         }
 
         # 8. Atomically save run and enqueue escalation

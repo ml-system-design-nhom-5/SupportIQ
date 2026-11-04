@@ -15,7 +15,7 @@ class DummyIntentClient:
         return self.pred
 
 @pytest.fixture
-def integration_app(tmp_path):
+def integration_app(tmp_path, fake_llm):
     demo_db = str(tmp_path / "demo_integ.sqlite3")
     orch_db = str(tmp_path / "orch_integ.sqlite3")
     orch_store = PersistentStore(db_path=orch_db)
@@ -24,6 +24,7 @@ def integration_app(tmp_path):
     retrieval_adapter = RetrievalAdapter()
     
     runner = PipelineRunner(
+        llm_client=fake_llm,
         intent_client=DummyIntentClient(intent="return_policy"),
         retrieval_adapter=retrieval_adapter,
         store=orch_store
@@ -53,7 +54,7 @@ def test_end_to_end_demo_policy_flow(integration_app):
     data = res.json()
 
     assert data["action"] == "retrieve_draft"
-    assert data["draft_kind"] == "template"
+    assert data["draft_kind"] == "llm"
     assert "Standard Return Policy" in data["draft_body"]
     assert data["evidence_retrieved"] is True
     assert len(data["sources"]) >= 1

@@ -76,6 +76,17 @@
   };
 
   const REASON_VI_MAP = {
+    'llm_not_configured': 'Chưa cấu hình API key Gemini trên máy chủ.',
+    'llm_auth_error': 'Google AI Studio từ chối xác thực. Kiểm tra API key trên máy chủ.',
+    'llm_request_rejected': 'Google AI Studio từ chối yêu cầu. Kiểm tra cấu hình trên máy chủ.',
+    'llm_rate_limited': 'Đã chạm giới hạn lượt gọi Gemini hoặc quota. Vui lòng thử lại sau.',
+    'llm_model_unavailable': 'Tài khoản chưa truy cập được model Gemini đã chọn.',
+    'llm_unavailable': 'Dịch vụ Gemini hiện không khả dụng. Chuyển xử lý thủ công.',
+    'llm_timeout': 'Gemini phản hồi quá thời gian chờ. Chuyển xử lý thủ công.',
+    'llm_insufficient_evidence': 'Gemini không tìm thấy đủ căn cứ để soạn câu trả lời.',
+    'llm_invalid_citations': 'Bản nháp không trích dẫn đúng nguồn đã truy xuất nên bị chặn.',
+    'llm_invalid_response': 'Phản hồi Gemini không đúng định dạng nên không được sử dụng.',
+    'llm_blocked_or_incomplete': 'Gemini chặn hoặc chưa hoàn tất phản hồi. Chuyển xử lý thủ công.',
     'high_confidence_supported': 'Đầy đủ căn cứ chính sách hợp lệ và độ tin cậy đạt yêu cầu.',
     'missing_order_id': 'Thiếu mã đơn hàng để tra cứu thông tin cá nhân của khách.',
     'commerce_order_not_found': 'Không tìm thấy mã đơn hàng trong hệ thống lưu trữ.',
@@ -455,7 +466,7 @@
         metaSpan.className = 'source-meta';
         const vText = src.version ? `v${src.version}` : 'Chưa có';
         const scoreText = src.score ? ` (Khớp: ${src.score})` : '';
-        metaSpan.textContent = `${src.doc_id} · ${vText}${scoreText}`;
+        metaSpan.textContent = `${src.source_id ? `[${src.source_id}] ` : ''}${src.doc_id} · ${vText}${scoreText}`;
 
         header.appendChild(titleSpan);
         header.appendChild(metaSpan);
@@ -474,7 +485,9 @@
     if (data.draft_body) {
       cardDraft.style.display = 'block';
       draftEditor.value = data.draft_body;
-      badgeDraftKind.textContent = data.draft_kind === 'template' ? 'Mẫu minh họa (Template)' : 'Sinh bởi LLM';
+      badgeDraftKind.textContent = data.draft_kind === 'llm'
+        ? `Sinh bởi ${data.llm?.model || 'LLM'}`
+        : 'Mẫu minh họa (Template)';
       draftHashDisplay.textContent = `Hash: ${data.draft_hash ? data.draft_hash.substring(0, 12) + '...' : '--'}`;
       btnApprove.disabled = false;
       btnSaveEdit.disabled = false;

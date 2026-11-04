@@ -22,6 +22,8 @@ def create_app(
 
     demo_store = DemoStore(db_path=db_path)
     if runner is None:
+        from dotenv import load_dotenv
+        load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
         p_store = PersistentStore(db_path=db_path)
         runner = PipelineRunner(intent_client=intent_client, store=p_store)
 
@@ -61,7 +63,10 @@ def create_app(
         return {
             "status": "ok",
             "model_version": getattr(runner.policy, "version", "unknown"),
-            "draft_kind": "template",
+            "draft_kind": "llm" if getattr(getattr(runner, "llm_client", None), "configured", False) else None,
+            "llm_provider": "google_ai_studio",
+            "llm_model": getattr(getattr(runner, "llm_client", None), "model", None),
+            "llm_configured": getattr(getattr(runner, "llm_client", None), "configured", False),
             "local_mode": True,
         }
 

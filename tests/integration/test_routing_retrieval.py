@@ -19,19 +19,19 @@ def test_store(tmp_path):
     db_file = tmp_path / "test_store.sqlite3"
     return PersistentStore(db_path=str(db_file))
 
-def test_missing_slot_clarifies(test_store):
+def test_missing_slot_clarifies(test_store, fake_llm):
     pred = IntentPrediction(intent="track_order", confidence=0.92, margin=0.5, model_version="v2.0.0")
-    runner = PipelineRunner(intent_client=DummyIntentClient(pred), store=test_store)
+    runner = PipelineRunner(intent_client=DummyIntentClient(pred), store=test_store, llm_client=fake_llm)
     ctx = RoutingContext(ticket_customer_id="demo-customer", is_personal_lookup=True, extracted_slots={})
     res = runner.run("Where is my package?", ctx)
     assert res["action"] == "clarify"
     assert "missing_order_id" in res["reason_codes"]
 
 
-def test_policy_query_retrieval_and_drafting(test_store):
+def test_policy_query_retrieval_and_drafting(test_store, fake_llm):
     """When policy question has valid evidence, evidence_retrieved is True and draft is populated."""
     pred = IntentPrediction(intent="return_policy", confidence=0.88, margin=0.4, model_version="v2.0.0")
-    runner = PipelineRunner(intent_client=DummyIntentClient(pred), store=test_store)
+    runner = PipelineRunner(intent_client=DummyIntentClient(pred), store=test_store, llm_client=fake_llm)
     ctx = RoutingContext(ticket_customer_id="demo-customer", is_personal_lookup=False)
     res = runner.run("What is your standard return policy?", ctx)
     assert res["action"] == "retrieve_draft"
@@ -41,10 +41,10 @@ def test_policy_query_retrieval_and_drafting(test_store):
     assert "Standard Return Policy" in res["draft_body"]
 
 
-def test_irrelevant_intent_does_not_grab_wrong_evidence(test_store):
+def test_irrelevant_intent_does_not_grab_wrong_evidence(test_store, fake_llm):
     """Intent like shipping_costs or track_order must NOT match return policy and must escalate when KB lacks shipping evidence."""
     pred = IntentPrediction(intent="shipping_costs", confidence=0.90, margin=0.5, model_version="v2.0.0")
-    runner = PipelineRunner(intent_client=DummyIntentClient(pred), store=test_store)
+    runner = PipelineRunner(intent_client=DummyIntentClient(pred), store=test_store, llm_client=fake_llm)
     ctx = RoutingContext(ticket_customer_id="demo-customer", is_personal_lookup=False)
     # The default approved KB only has return, refund, cancel policies.
     res = runner.run("How much is shipping to Hanoi?", ctx)
@@ -62,9 +62,9 @@ def test_expired_document_is_rejected():
     assert res["evidence"] == []
 
 
-def test_34_routes_and_human_agent_escalate_without_llm(test_store):
+def test_34_routes_and_human_agent_escalate_without_llm(test_store, fake_llm):
     pred = IntentPrediction(intent="technical_issue", confidence=0.95, margin=0.7, model_version="v2.0.0")
-    runner = PipelineRunner(intent_client=DummyIntentClient(pred), store=test_store)
+    runner = PipelineRunner(intent_client=DummyIntentClient(pred), store=test_store, llm_client=fake_llm)
     ctx = RoutingContext(ticket_customer_id="demo-customer")
     res = runner.run("The app crashed", ctx)
     assert res["action"] == "escalate"
@@ -73,10 +73,10 @@ def test_34_routes_and_human_agent_escalate_without_llm(test_store):
     assert res["evidence_retrieved"] is False
 
 
-def test_unauthorized_order_access_rejected_via_commerce_adapter(test_store):
+def test_unauthorized_order_access_rejected_via_commerce_adapter(test_store, fake_llm):
     """Real order ORD-1002 belongs to cust-1002. Caller demo-customer must be rejected."""
     pred = IntentPrediction(intent="track_order", confidence=0.95, margin=0.5, model_version="v2.0.0")
-    runner = PipelineRunner(intent_client=DummyIntentClient(pred), store=test_store)
+    runner = PipelineRunner(intent_client=DummyIntentClient(pred), store=test_store, llm_client=fake_llm)
     ctx = RoutingContext(
         ticket_customer_id="demo-customer",
         verified_scope="ticket:read",
@@ -88,10 +88,10 @@ def test_unauthorized_order_access_rejected_via_commerce_adapter(test_store):
     assert "commerce_unauthorized_customer" in res["reason_codes"]
 
 
-def test_authorized_real_order_passes_scope(test_store):
+def test_authorized_real_order_passes_scope(test_store, fake_llm):
     """Real order ORD-1001 belongs to demo-customer."""
     pred = IntentPrediction(intent="cancel_order", confidence=0.95, margin=0.5, model_version="v2.0.0")
-    runner = PipelineRunner(intent_client=DummyIntentClient(pred), store=test_store)
+    runner = PipelineRunner(intent_client=DummyIntentClient(pred), store=test_store, llm_client=fake_llm)
     ctx = RoutingContext(
         ticket_customer_id="demo-customer",
         verified_scope="ticket:read order:read",
@@ -104,9 +104,9 @@ def test_authorized_real_order_passes_scope(test_store):
     assert res["evidence_retrieved"] is True
 
 
-def test_escalation_idempotency_persisted_in_store(test_store):
+def test_escalation_idempotency_persisted_in_store(test_store, fake_llm):
     pred = IntentPrediction(intent="customer_service", confidence=0.95, margin=0.6, model_version="v2.0.0")
-    runner1 = PipelineRunner(intent_client=DummyIntentClient(pred), store=test_store)
+    runner1 = PipelineRunner(intent_client=DummyIntentClient(pred), store=test_store, llm_client=fake_llm)
     ctx = RoutingContext(ticket_customer_id="demo-customer")
 
     res1 = runner1.run("I need help", ctx, run_id="run-101")
@@ -114,7 +114,7 @@ def test_escalation_idempotency_persisted_in_store(test_store):
     assert res1["is_duplicate_run"] is False
 
     # Simulate new runner / process restart pointing to same store
-    runner2 = PipelineRunner(intent_client=DummyIntentClient(pred), store=test_store)
+    runner2 = PipelineRunner(intent_client=DummyIntentClient(pred), store=test_store, llm_client=fake_llm)
     res2 = runner2.run("I need help", ctx, run_id="run-101")
     assert res2["action"] == "escalate"
     assert res2["is_duplicate_run"] is True
