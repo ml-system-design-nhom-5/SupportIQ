@@ -2,7 +2,19 @@ import hashlib
 import json
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional, Union
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+def parse_iso_datetime(dt_str: Optional[str]) -> Optional[datetime]:
+    """Parse ISO datetime string ensuring valid format and UTC timezone."""
+    if dt_str is None:
+        return None
+    try:
+        dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception as exc:
+        raise ValueError(f"Invalid ISO datetime string '{dt_str}': {exc}") from exc
 
 class PolicyDocument(BaseModel):
     doc_id: str
@@ -14,7 +26,7 @@ class PolicyDocument(BaseModel):
     tags: List[str] = Field(default_factory=list)
 
 class PolicyMetadata(BaseModel):
-    # P1: Required approval metadata; no silent unapproved defaults
+    # P1: Required approval metadata; strictly validates dates
     status: str  # Must be explicitly provided: "approved", "draft", "revoked"
     approved_by: str
     approved_at: str
@@ -23,6 +35,19 @@ class PolicyMetadata(BaseModel):
     allowed_roles: List[str]
     policy_key: Optional[str] = None
     rule_assertions: List[Dict[str, Any]] = Field(default_factory=list)
+
+    @field_validator("valid_from", "approved_at")
+    @classmethod
+    def validate_required_dates(cls, v: str) -> str:
+        parse_iso_datetime(v)
+        return v
+
+    @field_validator("valid_to")
+    @classmethod
+    def validate_optional_date(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            parse_iso_datetime(v)
+        return v
 
 class PolicyVersion(BaseModel):
     doc_id: str
@@ -35,7 +60,7 @@ class PolicyVersion(BaseModel):
     metadata: PolicyMetadata
 
 def normalize_condition(cond: Any) -> Dict[str, Any]:
-    """P2: Normalize condition representation.
+    """Normalize condition representation.
     If condition is 'all', None, empty, or string, convert to dictionary.
     """
     if not cond or cond == "all":
@@ -45,7 +70,7 @@ def normalize_condition(cond: Any) -> Dict[str, Any]:
     return {"scope": str(cond)}
 
 def conditions_overlap(c1: Any, c2: Any) -> bool:
-    """P2: Check if two conditions overlap.
+    """Check if two conditions overlap.
     Handles universal/string condition 'all' gracefully.
     Two conditions overlap if there is no key present in both dictionaries with different values.
     """
@@ -73,7 +98,6 @@ def detect_rule_conflicts(rules: List[Dict[str, Any]]) -> bool:
                 r1, r2 = items[i], items[j]
                 cond1 = r1.get("condition")
                 cond2 = r2.get("condition")
-                # If conditions overlap and values contradict -> conflict!
                 if conditions_overlap(cond1, cond2) and r1.get("value") != r2.get("value"):
                     return True
     return False
@@ -99,6 +123,7 @@ def import_policies(
         try:
             meta = PolicyMetadata(**raw_meta)
         except Exception as e:
+            # P1: Invalid date format or missing required approval metadata is quarantined
             quarantined.append({"doc_id": doc_id, "reason": f"invalid_approval_metadata: {e}"})
             continue
 
@@ -133,8 +158,15 @@ def eligible_versions(
     role: str = "customer",
     as_of: Optional[datetime] = None
 ) -> List[PolicyVersion]:
-    """Filter versions strictly by role ACL and temporal validity."""
+    """Filter versions strictly by role ACL and temporal validity:
+    valid_from <= as_of < valid_to.
+    P1 FIX: If date parsing fails, version is treated as unverifiable and excluded.
+    P2 FIX: Excluded when as_of >= valid_to (strict upper bound < valid_to).
+    """
     now = as_of or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+
     results: List[PolicyVersion] = []
 
     for v in versions:
@@ -145,25 +177,28 @@ def eligible_versions(
         if role not in v.metadata.allowed_roles:
             continue
 
-        # Check temporal window
-        v_from = v.metadata.valid_from
-        v_to = v.metadata.valid_to
+        # Check temporal window: valid_from <= now < valid_to
+        v_from_str = v.metadata.valid_from
+        v_to_str = v.metadata.valid_to
 
-        if v_from:
+        # P1: Validate valid_from parsing
+        try:
+            dt_from = parse_iso_datetime(v_from_str)
+            if dt_from is not None and now < dt_from:
+                continue
+        except Exception:
+            # Unverifiable validity date -> exclude!
+            continue
+
+        # P1 & P2: Validate valid_to parsing and enforce strict upper bound: now >= valid_to is excluded!
+        if v_to_str:
             try:
-                dt_from = datetime.fromisoformat(v_from.replace("Z", "+00:00"))
-                if now < dt_from:
+                dt_to = parse_iso_datetime(v_to_str)
+                if dt_to is not None and now >= dt_to:
                     continue
             except Exception:
-                pass
-
-        if v_to:
-            try:
-                dt_to = datetime.fromisoformat(v_to.replace("Z", "+00:00"))
-                if now > dt_to:
-                    continue
-            except Exception:
-                pass
+                # Unverifiable validity date -> exclude!
+                continue
 
         results.append(v)
 
