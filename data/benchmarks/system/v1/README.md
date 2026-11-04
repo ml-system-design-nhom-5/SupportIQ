@@ -35,3 +35,11 @@ Theo quy định tại mục 5 Đặc tả hệ thống, toàn bộ 156 ca kiể
 Mọi tệp đầu vào tham chiếu trong `suite_manifest.json` đều được kiểm tra mã băm SHA-256 nghiêm ngặt trước và sau khi chạy:
 - Nếu tệp bị sửa đổi hoặc thiếu sót giữa chu trình đánh giá, hệ thống sẽ từ chối xuất báo cáo nghiệm thu và phát tín hiệu cảnh báo vi phạm provenance.
 - Tuyệt đối không sử dụng đường dẫn thoát khỏi phạm vi repository (`..` hoặc symlink ngoài).
+
+---
+
+## 4. Phạm vi dữ liệu tri thức mặc định (KB Coverage Note)
+
+- Hiện tại kho tri thức đã duyệt `data/knowledge/approved_kb.v1.json` chỉ chứa 3 chính sách cốt lõi được phê duyệt chính thức (Return Policy, Refund Policy, Cancellation Policy).
+- KB mặc định **chưa chứng minh phủ mọi intent trong số 12 intent sản phẩm**.
+- Hệ thống báo cáo rõ `kb_coverage_gap` và không tự ý bịa gold document IDs cho các intent chưa có tài liệu chứng cứ được phê duyệt hợp lệ.

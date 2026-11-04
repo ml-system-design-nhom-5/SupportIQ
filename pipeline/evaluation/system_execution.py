@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 
 from apps.core_backend.commerce.adapter import CommerceAdapter
 from apps.core_backend.intent.client import IntentClient
-from apps.core_backend.intent.routing import load_policy_v2
+from apps.core_backend.intent.routing import load_policy_v2, decide_route
 from apps.core_backend.intent.schemas import RoutingContext, IntentPrediction
 from apps.core_backend.llm.gemini import GeminiDraftClient
 from apps.core_backend.orchestration.pipeline_runner import PipelineRunner
@@ -172,34 +172,63 @@ def execute_system_case(
 
     # 1. Component Scope
     if scope == "component":
-        # Retrieval component probe uses gold intent directly
         t_probe = time.perf_counter()
         target_intent = case.true_intent or "unknown"
-        ret_res = deps.retrieval.retrieve(
-            case.text,
-            target_intent,
-            role="agent",
-            current_time=deps.clock(),
+        pred = IntentPrediction(
+            intent=target_intent,
+            confidence=0.95,
+            margin=0.30,
+            model_version="v1.0-probe",
+            score_kind="probe_softmax",
+            error=None,
         )
-        probe_elapsed = round((time.perf_counter() - t_probe) * 1000.0, 2)
-        raw_sources = ret_res.get("evidence", [])
-        normalized_sources = []
-        for s in raw_sources:
-            normalized_sources.append({
-                "doc_id": s.get("document_id") or s.get("doc_id"),
-                "version": str(s.get("version", "1.0")),
-                "status": s.get("status", "approved"),
-            })
+        ctx = RoutingContext(
+            ticket_customer_id=case.context.ticket_customer_id,
+            verified_scope=case.context.verified_scope,
+            is_personal_lookup=case.context.is_personal_lookup,
+            extracted_slots=case.context.extracted_slots,
+            role="agent",
+            as_of=deps.clock(),
+        )
+        decision = decide_route(pred, ctx, deps.runner.policy)
 
+        # Retrieval component probe uses gold intent directly
+        normalized_sources = []
+        ret_status = "ok"
+        if decision.action == "retrieve_draft" or case.expected.retrieval_applicable or case.expected.answerable:
+            ret_res = deps.retrieval.retrieve(
+                case.text,
+                target_intent,
+                role="agent",
+                current_time=deps.clock(),
+            )
+            raw_sources = ret_res.get("evidence", [])
+            for s in raw_sources:
+                normalized_sources.append({
+                    "doc_id": s.get("document_id") or s.get("doc_id"),
+                    "version": str(s.get("version", "1.0")),
+                    "status": s.get("status", "approved"),
+                })
+            if ret_res.get("status") != "success":
+                ret_status = ret_res.get("status", "error")
+
+        probe_elapsed = round((time.perf_counter() - t_probe) * 1000.0, 2)
         return CaseResult(
             case_id=case.id,
             repetition=1,
             profile=deps.profile,
             scope="component",
-            execution_status="ok" if ret_res.get("status") == "success" else "error",
-            error_code=None if ret_res.get("status") == "success" else ret_res.get("status"),
+            execution_status="ok",
+            error_code=None if ret_status == "ok" else ret_status,
+            routing_action=decision.action,
+            final_action=decision.action,
+            requested_team=decision.requested_team,
+            target_queue=decision.target_queue,
+            reason_codes=decision.reason_codes,
+            predicted_intent=decision.predicted_intent,
+            final_intent=decision.final_intent,
             sources=normalized_sources,
-            stage_elapsed_ms={"retrieval_ms": probe_elapsed},
+            stage_elapsed_ms={"component_probe_ms": probe_elapsed},
             total_elapsed_ms=probe_elapsed,
         )
 
@@ -286,3 +315,22 @@ def execute_system_case(
         stage_elapsed_ms=run_res.get("stage_elapsed_ms", {}),
         total_elapsed_ms=total_elapsed_ms,
     )
+
+
+def run_component_probes(
+    inputs: VerifiedSystemInputs,
+    deps: SystemDependencies,
+) -> List[CaseResult]:
+    """Execute component probes for all benchmark cases with isolated scope='component'.
+    Evaluates routing and semantic retrieval directly without modifying end-to-end metrics.
+    """
+    probe_results: List[CaseResult] = []
+    for case in inputs.cases:
+        res = execute_system_case(
+            case=case,
+            deps=deps,
+            attempt_id=f"probe-{case.id}",
+            scope="component",
+        )
+        probe_results.append(res)
+    return probe_results
