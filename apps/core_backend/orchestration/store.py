@@ -97,3 +97,23 @@ class PersistentStore:
             except Exception:
                 conn.rollback()
                 raise
+
+    def enqueue_escalation(
+        self,
+        run_id: str,
+        decision_id: str,
+        target_team: str,
+        target_queue: str,
+        reason_codes: list
+    ) -> bool:
+        with self._connection() as conn:
+            try:
+                conn.execute("""
+                    INSERT OR IGNORE INTO escalation_queue (run_id, decision_id, target_team, target_queue, reason_codes)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (run_id, decision_id, target_team, target_queue, json.dumps(reason_codes)))
+                conn.commit()
+                return True
+            except Exception:
+                conn.rollback()
+                return False
