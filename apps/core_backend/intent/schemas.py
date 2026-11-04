@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal, Optional, Dict, Any, List
 from pydantic import BaseModel, Field
 
@@ -19,6 +20,8 @@ class RoutingContext(BaseModel):
     clarify_count: int = 0
     intent_override: Optional[str] = None
     override_provenance: Optional[Dict[str, Any]] = None
+    role: str = "agent"
+    as_of: Optional[datetime] = None
 
 class RouteDecision(BaseModel):
     decision_id: Optional[str] = None

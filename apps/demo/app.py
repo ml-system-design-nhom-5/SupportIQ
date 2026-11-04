@@ -1,7 +1,7 @@
 import os
 import uuid
 from pathlib import Path
-from typing import Optional, Any
+from typing import Optional, Any, Dict
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -16,7 +16,8 @@ STATIC_DIR = Path(__file__).parent / "static"
 def create_app(
     db_path: Optional[str] = None,
     runner: Optional[PipelineRunner] = None,
-    intent_client: Optional[Any] = None
+    intent_client: Optional[Any] = None,
+    health_metadata: Optional[Dict[str, Any]] = None,
 ) -> FastAPI:
     app = FastAPI(title="SupportIQ Local Copilot Demo", docs_url=None, redoc_url=None)
 
@@ -60,7 +61,7 @@ def create_app(
 
     @app.get("/api/demo/health")
     def health():
-        return {
+        data = {
             "status": "ok",
             "model_version": getattr(runner.policy, "version", "unknown"),
             "draft_kind": "llm" if getattr(getattr(runner, "llm_client", None), "configured", False) else None,
@@ -69,6 +70,9 @@ def create_app(
             "llm_configured": getattr(getattr(runner, "llm_client", None), "configured", False),
             "local_mode": True,
         }
+        if health_metadata:
+            data.update(health_metadata)
+        return data
 
     @app.get("/api/demo/profiles")
     def get_profiles():
