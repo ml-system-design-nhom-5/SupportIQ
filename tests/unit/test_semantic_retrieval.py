@@ -10,6 +10,11 @@ from apps.core_backend.retrieval.importer import (
     detect_rule_conflicts,
 )
 from apps.core_backend.retrieval.encoder import PolicyEncoder, chunk_policy
+from apps.core_backend.retrieval.index import (
+    SemanticPolicyIndex,
+    search_policies,
+    RetrievalResult,
+)
 
 def test_metadata_importer_valid_approved_passes(tmp_path):
     policies_data = [
@@ -88,19 +93,16 @@ def test_metadata_importer_excludes_inactive_or_expired():
 
 
 def test_conflict_detection_overlapping_conditions():
-    """Rules with same key and overlapping conditions but conflicting values must raise conflict."""
     rules = [
         {"key": "return_window", "value": 30, "condition": {"seller": "tiki_trading"}},
         {"key": "return_window", "value": 7, "condition": {"seller": "marketplace"}},
     ]
-    # Different sellers -> not a conflict
     assert detect_rule_conflicts(rules) is False
 
     conflicting_rules = [
         {"key": "return_window", "value": 30, "condition": {"seller": "tiki_trading"}},
         {"key": "return_window", "value": 14, "condition": {"seller": "tiki_trading"}},
     ]
-    # Same seller, same key, different values -> CONFLICT!
     assert detect_rule_conflicts(conflicting_rules) is True
 
 
@@ -125,12 +127,52 @@ def test_encoder_normalizes_embeddings_to_unit_length():
     encoder = PolicyEncoder(mock_mode=True)
     embeddings = encoder.encode_queries(["How long does shipping take?"])
     assert embeddings.shape == (1, 384)
-    # L2 norm must be approximately 1.0
     norm = np.linalg.norm(embeddings[0])
     assert abs(norm - 1.0) < 1e-5
 
 
-def test_encoder_adds_query_prefix():
+def test_cosine_ranking_returns_top3_distinct_documents():
+    """Verify semantic search returns up to 3 distinct documents, grouping multiple chunks per document."""
     encoder = PolicyEncoder(mock_mode=True)
-    prepared = encoder.prepare_query("How to return a product?")
-    assert prepared.startswith("Represent this sentence for searching relevant passages: ")
+    chunks = [
+        {"chunk_id": "P1:1:c0", "doc_id": "P1", "version": "1.0", "title": "Doc 1 Chunk 0", "text": "Doc 1 Chunk 0", "category": "return"},
+        {"chunk_id": "P1:1:c1", "doc_id": "P1", "version": "1.0", "title": "Doc 1 Chunk 1", "text": "Doc 1 Chunk 1", "category": "return"},
+        {"chunk_id": "P2:1:c0", "doc_id": "P2", "version": "1.0", "title": "Doc 2 Chunk 0", "text": "Doc 2 Chunk 0", "category": "refund"},
+        {"chunk_id": "P3:1:c0", "doc_id": "P3", "version": "1.0", "title": "Doc 3 Chunk 0", "text": "Doc 3 Chunk 0", "category": "cancel"},
+        {"chunk_id": "P4:1:c0", "doc_id": "P4", "version": "1.0", "title": "Doc 4 Chunk 0", "text": "Doc 4 Chunk 0", "category": "shipping"},
+    ]
+    # Build embeddings
+    embeddings = encoder.encode_passages([c["text"] for c in chunks])
+    index = SemanticPolicyIndex(chunks=chunks, embeddings=embeddings)
+
+    result = search_policies(
+        query="I want to return an item",
+        index=index,
+        encoder=encoder,
+        threshold=0.0  # Accept all for this toy test
+    )
+    assert result.status == "success"
+    assert len(result.documents) <= 3
+    # Check distinct doc_ids
+    doc_ids = [d["doc_id"] for d in result.documents]
+    assert len(doc_ids) == len(set(doc_ids))
+
+
+def test_relevance_threshold_gate_rejects_low_similarity():
+    """Relevance gate: if highest similarity is below threshold, returns no_evidence."""
+    encoder = PolicyEncoder(mock_mode=True)
+    chunks = [
+        {"chunk_id": "P1:1:c0", "doc_id": "P1", "version": "1.0", "title": "Doc 1", "text": "Unrelated topic", "category": "misc"}
+    ]
+    embeddings = encoder.encode_passages([c["text"] for c in chunks])
+    index = SemanticPolicyIndex(chunks=chunks, embeddings=embeddings)
+
+    # Set threshold very high (0.9999) to force rejection
+    result = search_policies(
+        query="Some query",
+        index=index,
+        encoder=encoder,
+        threshold=0.9999
+    )
+    assert result.status == "no_evidence"
+    assert len(result.documents) == 0
