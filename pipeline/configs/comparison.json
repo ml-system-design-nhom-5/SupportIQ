@@ -33,6 +33,7 @@
         "base_model": "distilbert/distilbert-base-uncased",
         "membership_evidence": {
           "evidence_path": "artifacts/models/trained/distilbert-supportiq/train_sample_ids.json",
+          "checksum": "AEA5D14F09C8BBAB63FBAFE2FAB37C5060705C25798598F3D232F7DC21CE9220",
           "evidence_sha256": "AEA5D14F09C8BBAB63FBAFE2FAB37C5060705C25798598F3D232F7DC21CE9220"
         }
       }

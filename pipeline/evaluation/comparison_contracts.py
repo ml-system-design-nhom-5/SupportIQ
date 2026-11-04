@@ -294,7 +294,11 @@ def verify_comparison_inputs(
                 if not ev_path.exists():
                     raise EvaluationError(f"Membership evidence file not found at {ev_path}")
 
-                expected_checksum = membership_evidence.get("checksum")
+                expected_checksum = (
+                    membership_evidence.get("checksum")
+                    or membership_evidence.get("evidence_sha256")
+                    or membership_evidence.get("sha256")
+                )
                 actual_checksum = compute_sha256(ev_path)
                 if expected_checksum and expected_checksum != actual_checksum:
                     raise EvaluationError(f"Membership evidence checksum mismatch for {ev_path}")

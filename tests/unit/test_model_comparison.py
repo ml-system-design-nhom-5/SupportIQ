@@ -923,6 +923,33 @@ def test_membership_evidence_verified_only_with_valid_clean_sample_file(tmp_path
         verify_comparison_inputs(cfg, repo_root=tmp_path)
 
 
+def test_membership_evidence_checks_evidence_sha256_key_and_fails_on_mismatch(tmp_path):
+    from pipeline.evaluation.comparison_contracts import verify_comparison_inputs
+
+    setup = make_comparison_fixture(tmp_path)
+    cfg = setup["config"]
+
+    evidence_file = tmp_path / "train_ids.json"
+    save_json(["train_sid_1", "train_sid_2"], evidence_file)
+
+    # 1. Providing evidence_sha256 that does not match must raise EvaluationError
+    cfg["models"]["supportiq_distilbert"]["provenance"]["membership_evidence"] = {
+        "evidence_path": str(evidence_file),
+        "evidence_sha256": "BAD_INCORRECT_HASH",
+    }
+    with pytest.raises(EvaluationError, match="Membership evidence checksum mismatch"):
+        verify_comparison_inputs(cfg, repo_root=tmp_path)
+
+    # 2. Providing correct evidence_sha256 passes and marks verified
+    cfg["models"]["supportiq_distilbert"]["provenance"]["membership_evidence"] = {
+        "evidence_path": str(evidence_file),
+        "evidence_sha256": compute_sha256(evidence_file),
+    }
+    verified = verify_comparison_inputs(cfg, repo_root=tmp_path)
+    assert verified["transformer_specs"]["supportiq_distilbert"]["provenance"]["status"] == "verified"
+
+
+
 def test_historical_manifest_rejects_missing_lineage_inputs(tmp_path):
     from pipeline.evaluation.comparison_contracts import verify_comparison_inputs
 
