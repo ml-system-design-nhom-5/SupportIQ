@@ -334,3 +334,160 @@ def run_component_probes(
         )
         probe_results.append(res)
     return probe_results
+
+
+def run_oversight_scenarios(
+    deps: SystemDependencies,
+    runtime_dir: Path | str,
+) -> List[CaseResult]:
+    """Execute human oversight, session ownership, and idempotency scenarios against demo app.
+    Collects actual database persistence facts and returns structured CaseResult records.
+    """
+    import sqlite3
+    from fastapi.testclient import TestClient
+
+    r_dir = Path(runtime_dir).resolve()
+    results: List[CaseResult] = []
+
+    client_a = TestClient(deps.demo_app, cookies={"demo_session_id": "eval-session-A"})
+    client_b = TestClient(deps.demo_app, cookies={"demo_session_id": "eval-session-B"})
+
+    # 1. Submit a base run as Session A
+    sub_id = "eval-over-sub-001"
+    resp_sub = client_a.post("/api/demo/runs", json={
+        "submission_id": sub_id,
+        "profile_id": "demo-customer",
+        "text": "What is the return policy?",
+        "is_personal_lookup": False,
+    })
+    run_data = resp_sub.json()
+    run_id = run_data["run_id"]
+    current_hash = run_data.get("draft_hash") or "initial-hash"
+
+    # Scenario 1: Session B cross-session feedback rejection
+    t0 = time.perf_counter()
+    resp_cross = client_b.post(f"/api/demo/runs/{run_id}/feedback", json={
+        "action": "approve",
+        "draft_hash": current_hash,
+    })
+    elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+    cross_rejected = resp_cross.status_code in (403, 409)
+
+    results.append(CaseResult(
+        case_id="oversight-session-ownership",
+        repetition=1,
+        profile=deps.profile,
+        scope="oversight",
+        execution_status="ok" if cross_rejected else "error",
+        error_code=None if cross_rejected else f"status_{resp_cross.status_code}",
+        stage_elapsed_ms={"check_ms": elapsed_ms},
+        total_elapsed_ms=elapsed_ms,
+        audit_evidence={
+            "run_id": run_id,
+            "session_owner": "eval-session-A",
+            "attacker_session": "eval-session-B",
+            "http_status": resp_cross.status_code,
+            "ownership_protected": cross_rejected,
+        },
+    ))
+
+    # Scenario 2: Stale draft hash approval rejection (409)
+    t0 = time.perf_counter()
+    resp_stale = client_a.post(f"/api/demo/runs/{run_id}/feedback", json={
+        "action": "approve",
+        "draft_hash": "stale-tampered-hash-000",
+    })
+    elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+    stale_rejected = (resp_stale.status_code == 409)
+
+    results.append(CaseResult(
+        case_id="oversight-stale-hash",
+        repetition=1,
+        profile=deps.profile,
+        scope="oversight",
+        execution_status="ok" if stale_rejected else "error",
+        error_code=None if stale_rejected else f"status_{resp_stale.status_code}",
+        stage_elapsed_ms={"check_ms": elapsed_ms},
+        total_elapsed_ms=elapsed_ms,
+        audit_evidence={
+            "run_id": run_id,
+            "expected_hash": current_hash,
+            "submitted_hash": "stale-tampered-hash-000",
+            "http_status": resp_stale.status_code,
+            "stale_protection_passed": stale_rejected,
+        },
+    ))
+
+    # Scenario 3: Feedback audit verification & transaction safety
+    t0 = time.perf_counter()
+    resp_approve = client_a.post(f"/api/demo/runs/{run_id}/feedback", json={
+        "action": "approve",
+        "draft_hash": current_hash,
+    })
+    elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+
+    demo_db = r_dir / "demo.sqlite3"
+    feedback_count = 0
+    tx_blocked = True
+    if demo_db.exists():
+        with sqlite3.connect(demo_db) as conn:
+            conn.row_factory = sqlite3.Row
+            fb_row = conn.execute("SELECT COUNT(*) as cnt FROM demo_feedback WHERE run_id = ?", (run_id,)).fetchone()
+            feedback_count = fb_row["cnt"] if fb_row else 0
+            sub_row = conn.execute("SELECT result_json FROM demo_submissions WHERE run_id = ?", (run_id,)).fetchone()
+            if sub_row:
+                import json
+                sub_data = json.loads(sub_row["result_json"])
+                tx_blocked = (sub_data.get("can_execute_transaction") is False)
+
+    results.append(CaseResult(
+        case_id="oversight-feedback-audit",
+        repetition=1,
+        profile=deps.profile,
+        scope="oversight",
+        execution_status="ok" if (feedback_count >= 1 and tx_blocked) else "error",
+        error_code=None if (feedback_count >= 1 and tx_blocked) else "audit_check_failed",
+        stage_elapsed_ms={"check_ms": elapsed_ms},
+        total_elapsed_ms=elapsed_ms,
+        audit_evidence={
+            "run_id": run_id,
+            "feedback_recorded": feedback_count >= 1,
+            "can_execute_transaction": not tx_blocked,
+            "audit_verified": (feedback_count >= 1 and tx_blocked),
+        },
+    ))
+
+    # Scenario 4: Concurrent idempotency on orchestration store
+    t0 = time.perf_counter()
+    idem_run_id = "eval-idem-test-999"
+    saved1 = deps.store.save_run_and_escalate_atomic(
+        run_id=idem_run_id,
+        result={"run_id": idem_run_id, "action": "escalate"},
+        escalate_info={"decision_id": "dec-1", "target_team": "support", "target_queue": "standard", "reason_codes": []},
+    )
+    saved2 = deps.store.save_run_and_escalate_atomic(
+        run_id=idem_run_id,
+        result={"run_id": idem_run_id, "action": "escalate"},
+        escalate_info={"decision_id": "dec-1", "target_team": "support", "target_queue": "standard", "reason_codes": []},
+    )
+    elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+    idempotent_ok = (saved1 is True and saved2 is False)
+
+    results.append(CaseResult(
+        case_id="oversight-idempotent-persistence",
+        repetition=1,
+        profile=deps.profile,
+        scope="oversight",
+        execution_status="ok" if idempotent_ok else "error",
+        error_code=None if idempotent_ok else "idempotency_failed",
+        stage_elapsed_ms={"check_ms": elapsed_ms},
+        total_elapsed_ms=elapsed_ms,
+        audit_evidence={
+            "run_id": idem_run_id,
+            "first_save": saved1,
+            "second_save": saved2,
+            "idempotency_preserved": idempotent_ok,
+        },
+    ))
+
+    return results

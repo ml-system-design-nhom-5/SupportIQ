@@ -79,6 +79,8 @@ class DemoService:
         # Idempotency check on submission_id
         existing = self.store.get_submission(req.submission_id)
         if existing:
+            if existing.get("session_id") and existing.get("session_id") != session_id:
+                raise KeyError(f"Submission ID '{req.submission_id}' belongs to another session")
             if existing["fingerprint"] != fingerprint:
                 # Same submission_id with different payload -> 409 Conflict
                 raise KeyError(f"Submission ID '{req.submission_id}' reused with different payload")
@@ -163,10 +165,12 @@ class DemoService:
 
     def record_feedback(self, run_id: str, req: DemoFeedbackRequest, session_id: str) -> Dict[str, Any]:
         with self.store._connection() as conn:
-            cur = conn.execute("SELECT result_json FROM demo_submissions WHERE run_id = ?", (run_id,))
+            cur = conn.execute("SELECT session_id, result_json FROM demo_submissions WHERE run_id = ?", (run_id,))
             row = cur.fetchone()
             if not row:
                 raise ValueError(f"Run '{run_id}' not found")
+            if row["session_id"] and row["session_id"] != session_id:
+                raise KeyError("Unauthorized: feedback session does not match submission owner")
             res_data = json.loads(row["result_json"])
 
         draft_body = res_data.get("draft_body")
@@ -178,7 +182,7 @@ class DemoService:
                 # Spec: Nếu không có draft, approve/edit trả 409
                 raise KeyError("No draft exists on this run to approve or edit")
             if req.draft_hash != current_hash:
-                raise ValueError("Draft revision mismatch: draft has been modified or incorrect revision hash provided")
+                raise KeyError("Draft revision mismatch: draft has been modified or incorrect revision hash provided")
         elif req.action in ("reject", "escalate"):
             # Reject and escalate do not strictly require draft, but if hash provided it should match if draft exists
             if current_hash and req.draft_hash and req.draft_hash != current_hash:
