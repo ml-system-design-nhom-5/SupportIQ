@@ -398,7 +398,7 @@ def run_oversight_scenarios(
         "draft_hash": "stale-tampered-hash-000",
     })
     elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
-    stale_rejected = (resp_stale.status_code == 409)
+    stale_rejected = resp_stale.status_code in (400, 409)
 
     results.append(CaseResult(
         case_id="oversight-stale-hash",

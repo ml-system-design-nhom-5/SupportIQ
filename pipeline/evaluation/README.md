@@ -91,3 +91,46 @@ python -m pipeline.evaluation.run_comparison `
    - Cả 5 mô hình đều được benchmark trên cùng một giao thức đo tuần tự CPU: batch=1, warm-up 20 request, 1.000 requests đo lường, thread count được khóa qua cấu hình (`num_threads`).
    - Thời gian đo bao gồm tokenizer/preprocessor và forward pass của mô hình, không tính thời gian load weights.
    - Độ trễ của Transformer trên CPU (~15–30 ms) tự nhiên cao hơn so với mô hình tuyến tính TF-IDF (~0.5 ms) do độ phức tạp tính toán self-attention nhiều lớp.
+
+---
+
+## 5. Đánh giá Toàn hệ thống (System Evaluation)
+
+Phân hệ đo lường và thẩm định chất lượng toàn chuỗi: **ML Classifier -> Intake Gate Routing -> Semantic Retrieval -> Google AI Studio -> Human Oversight**.
+
+### 5.1. Hai Profile Chạy (`mock` vs `live`)
+
+1. **`mock` (Mặc định):**
+   - Chạy offline hoàn toàn, không yêu cầu mạng, không đọc API key.
+   - Thẩm định orchestration, xử lý lỗi có kiểm soát (fault scenarios), session ownership, và tính bất biến của artifacts.
+   - Báo cáo mang nhãn `evidence_kind: simulated`. Kết quả exit code là `2` vì dữ liệu giả lập không thể chứng nhận đạt tiêu chuẩn nghiệm thu live.
+2. **`live` (Acceptance chính thức):**
+   - Đi qua classifier `supportiq_distilbert` trên ML inference service được ghim (pinned endpoint), BGE encoder thật với weights local, và Google AI Studio Gemini API.
+   - Bắt buộc kiểm tra preflight: kiểm tra release mô hình, tính sẵn sàng của encoder, snapshot tri thức, và ngân sách token (`BudgetLedger`).
+   - Yêu cầu cấu hình explicit API key qua biến môi trường server-side, không fallback vector giả hoặc template soạn sẵn.
+
+### 5.2. Lệnh Chạy CLI
+
+```powershell
+# Chạy đánh giá toàn hệ thống (Mock Profile offline)
+python -m pipeline.evaluation.run_evaluation `
+  --mode system `
+  --profile mock `
+  --suite data/benchmarks/system/v1/suite_manifest.json `
+  --config pipeline/configs/system_evaluation.json `
+  --run-id system-mock-001 `
+  --output-root artifacts/evaluation
+
+# Nhập kết quả chấm thủ công (Human Assessment)
+python -m pipeline.evaluation.assess_system `
+  --run-dir artifacts/evaluation/system-mock-001 `
+  --annotations tests/fixtures/system_evaluation/example_annotations.jsonl `
+  --assessment-id review-001 `
+  --product-sessions tests/fixtures/system_evaluation/example_product_sessions.csv
+```
+
+### 5.3. Ý nghĩa Mã thoát (Exit Codes)
+
+- **`0`**: Tất cả các cổng chất lượng bắt buộc (`mandatory_gates`) đều đạt chuẩn với bằng chứng live hợp lệ.
+- **`2`**: Quá trình đánh giá hoàn tất hợp lệ nhưng chưa đạt chuẩn nghiệm thu (hoặc chạy trên profile `mock` chỉ có bằng chứng giả lập, hoặc thiếu bằng chứng con người).
+- **`1`**: Lỗi cấu hình, vi phạm phả hệ provenance (checksum mismatch), vi phạm đường dẫn thoát repository, hoặc sự cố preflight hạ tầng.

@@ -313,3 +313,35 @@ def assess_run(
     manifest_out.write_text(json.dumps(assessment_manifest, indent=2), encoding="utf-8")
 
     return assessment_dir
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    """CLI entrypoint for assessing an evaluation run with human annotations."""
+    import argparse
+    import sys
+
+    parser = argparse.ArgumentParser(description="Assess a completed evaluation run with verified annotations.")
+    parser.add_argument("--run-dir", required=True, help="Path to completed run directory")
+    parser.add_argument("--annotations", required=True, help="Path to annotations JSONL file")
+    parser.add_argument("--assessment-id", required=True, help="Unique assessment identifier")
+    parser.add_argument("--product-sessions", default=None, help="Optional path to product sessions CSV")
+    args = parser.parse_args(argv)
+
+    try:
+        out_dir = assess_run(
+            run_dir=args.run_dir,
+            annotations_path=args.annotations,
+            assessment_id=args.assessment_id,
+            product_sessions_path=args.product_sessions,
+        )
+        print(f"=== Assessment completed successfully ===")
+        print(f"Assessment directory: {out_dir}")
+        return 0
+    except Exception as exc:
+        print(f"Assessment failed: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(main())

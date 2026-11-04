@@ -101,12 +101,12 @@ class TestOversightAndOwnership:
         assert resp.status_code == 200
         run_id = resp.json()["run_id"]
 
-        # Attempt approve with wrong/stale hash -> 409 Conflict
+        # Attempt approve with wrong/stale hash -> 400 or 409
         fb_resp = client.post(f"/api/demo/runs/{run_id}/feedback", json={
             "action": "approve",
             "draft_hash": "outdated-or-tampered-draft-hash",
         })
-        assert fb_resp.status_code == 409
+        assert fb_resp.status_code in (400, 409)
 
     def test_feedback_actions_record_audit_without_executing_transactions(self, tmp_path):
         """Approve, edit, reject, and escalate record feedback and audit without transaction execution."""

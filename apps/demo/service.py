@@ -182,7 +182,7 @@ class DemoService:
                 # Spec: Nếu không có draft, approve/edit trả 409
                 raise KeyError("No draft exists on this run to approve or edit")
             if req.draft_hash != current_hash:
-                raise KeyError("Draft revision mismatch: draft has been modified or incorrect revision hash provided")
+                raise ValueError("Draft revision mismatch: draft has been modified or incorrect revision hash provided")
         elif req.action in ("reject", "escalate"):
             # Reject and escalate do not strictly require draft, but if hash provided it should match if draft exists
             if current_hash and req.draft_hash and req.draft_hash != current_hash:

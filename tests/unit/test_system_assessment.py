@@ -249,6 +249,29 @@ class TestAssessRunWorkflow:
                 assessment_id="review-002",
             )
 
+    def test_assess_system_cli_main(self, mock_run_dir, tmp_path):
+        """CLI main entrypoint for assess_system executes and returns exit code 0."""
+        from pipeline.evaluation.assess_system import main as assess_main
+
+        ann_file = tmp_path / "annotations.jsonl"
+        ann = {
+            "case_id": "c1",
+            "draft_sha256": "sha256-draft-c1-hash",
+            "reviewer": "eval_lead",
+            "reviewed_at": "2026-11-05T00:00:00Z",
+            "attestation": {"all_factual_claims_identified": True},
+            "claims": [{"claim_id": "c1_1", "verdict": "supported"}],
+        }
+        ann_file.write_text(json.dumps(ann) + "\n", encoding="utf-8")
+
+        exit_code = assess_main([
+            "--run-dir", str(mock_run_dir),
+            "--annotations", str(ann_file),
+            "--assessment-id", "cli-review-001",
+        ])
+        assert exit_code == 0
+
+
 
 class TestProductSessions:
     def test_negative_or_nonfinite_duration_raises_error(self, tmp_path):
