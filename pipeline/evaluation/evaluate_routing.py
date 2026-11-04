@@ -34,21 +34,23 @@ def evaluate_routes(
     for c in cases:
         cid = c["id"]
         dec = dec_by_id.get(cid)
-        if not dec:
-            continue
-        action = dec.get("action")
-        predicted_intent = dec.get("predicted_intent")
-        true_intent = c.get("true_intent")
+        is_must_escalate = c.get("must_escalate")
 
-        if c.get("must_escalate"):
+        # P2: Count case towards must_escalate_total even if decision is missing!
+        if is_must_escalate:
             must_escalate_total += 1
-            if action == "escalate":
+            if dec and dec.get("action") == "escalate":
                 must_escalate_correct += 1
 
-        if action == "retrieve_draft":
-            draft_total += 1
-            if predicted_intent == true_intent:
-                draft_correct += 1
+        if dec:
+            action = dec.get("action")
+            predicted_intent = dec.get("predicted_intent")
+            true_intent = c.get("true_intent")
+
+            if action == "retrieve_draft":
+                draft_total += 1
+                if predicted_intent == true_intent:
+                    draft_correct += 1
 
     if must_escalate_total == 0:
         esc_rate = "N/A"
@@ -64,7 +66,7 @@ def evaluate_routes(
         else "N/A"
     )
 
-    # P2: Coverage is the proportion of total cases accepted for automated drafting
+    # Coverage is the proportion of total cases accepted for automated drafting
     coverage = round(draft_total / total, 4)
 
     return {

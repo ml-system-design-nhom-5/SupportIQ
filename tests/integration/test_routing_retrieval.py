@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timezone
 import pytest
 from apps.core_backend.orchestration.pipeline_runner import PipelineRunner
 from apps.core_backend.orchestration.store import PersistentStore
@@ -40,6 +41,27 @@ def test_policy_query_retrieval_and_drafting(test_store):
     assert "Standard Return Policy" in res["draft_body"]
 
 
+def test_irrelevant_intent_does_not_grab_wrong_evidence(test_store):
+    """Intent like shipping_costs or track_order must NOT match return policy and must escalate when KB lacks shipping evidence."""
+    pred = IntentPrediction(intent="shipping_costs", confidence=0.90, margin=0.5, model_version="v2.0.0")
+    runner = PipelineRunner(intent_client=DummyIntentClient(pred), store=test_store)
+    ctx = RoutingContext(ticket_customer_id="demo-customer", is_personal_lookup=False)
+    # The default approved KB only has return, refund, cancel policies.
+    res = runner.run("How much is shipping to Hanoi?", ctx)
+    assert res["action"] == "escalate"
+    assert "insufficient_evidence" in res["reason_codes"]
+    assert res["evidence_retrieved"] is False
+
+
+def test_expired_document_is_rejected():
+    adapter = RetrievalAdapter()
+    # Check in future year 2028 when all 2026 policies have expired
+    future_time = datetime(2028, 1, 1, tzinfo=timezone.utc)
+    res = adapter.retrieve("What is your return policy?", "return_policy", current_time=future_time)
+    assert res["status"] == "no_match"
+    assert res["evidence"] == []
+
+
 def test_34_routes_and_human_agent_escalate_without_llm(test_store):
     pred = IntentPrediction(intent="technical_issue", confidence=0.95, margin=0.7, model_version="v2.0.0")
     runner = PipelineRunner(intent_client=DummyIntentClient(pred), store=test_store)
@@ -68,7 +90,7 @@ def test_unauthorized_order_access_rejected_via_commerce_adapter(test_store):
 
 def test_authorized_real_order_passes_scope(test_store):
     """Real order ORD-1001 belongs to demo-customer."""
-    pred = IntentPrediction(intent="track_order", confidence=0.95, margin=0.5, model_version="v2.0.0")
+    pred = IntentPrediction(intent="cancel_order", confidence=0.95, margin=0.5, model_version="v2.0.0")
     runner = PipelineRunner(intent_client=DummyIntentClient(pred), store=test_store)
     ctx = RoutingContext(
         ticket_customer_id="demo-customer",
@@ -76,11 +98,13 @@ def test_authorized_real_order_passes_scope(test_store):
         is_personal_lookup=True,
         extracted_slots={"order_id": "ORD-1001"}
     )
-    res = runner.run("Track order ORD-1001", ctx)
+    res = runner.run("Can I cancel order ORD-1001?", ctx)
+    # cancel_order has cancellation policy in KB so evidence matches
     assert res["action"] == "retrieve_draft"
+    assert res["evidence_retrieved"] is True
 
 
-def test_escalation_idempotency_persisted_in_store(test_store, tmp_path):
+def test_escalation_idempotency_persisted_in_store(test_store):
     pred = IntentPrediction(intent="customer_service", confidence=0.95, margin=0.6, model_version="v2.0.0")
     runner1 = PipelineRunner(intent_client=DummyIntentClient(pred), store=test_store)
     ctx = RoutingContext(ticket_customer_id="demo-customer")

@@ -16,6 +16,23 @@ def test_must_escalate_guardrail_failure():
     assert metrics["must_escalate_success_rate"] == 0.0
 
 
+def test_missing_decision_counts_in_must_escalate_denominator():
+    """Case with missing decision must count towards must_escalate_total and fail guardrail."""
+    cases = [
+        {"id": "c1", "true_intent": "close_account", "must_escalate": True},
+        {"id": "c2", "true_intent": "open_account", "must_escalate": True},
+    ]
+    # Only c1 has decision, c2 missing
+    decisions = [
+        {"id": "c1", "action": "escalate", "predicted_intent": "close_account"},
+    ]
+    metrics = evaluate_routes(cases, decisions)
+    assert metrics["guardrail_passed"] is False
+    assert metrics["must_escalate_total"] == 2
+    assert metrics["must_escalate_correct"] == 1
+    assert metrics["must_escalate_success_rate"] == 0.5
+
+
 def test_guardrail_exact_count_no_float_rounding_leak():
     """20000 correct out of 20001 must NOT pass guardrail despite rounding."""
     cases = [{"id": f"c_{i}", "true_intent": "close_account", "must_escalate": True} for i in range(20001)]

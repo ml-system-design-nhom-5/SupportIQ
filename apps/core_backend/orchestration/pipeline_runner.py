@@ -35,7 +35,7 @@ class PipelineRunner:
         """Execute intake routing, scope checks, retrieval, draft generation, and persistent escalation."""
         actual_run_id = run_id or str(uuid.uuid4())
 
-        # 1. Persistent Idempotency check
+        # 1. Fast check if run is already stored
         existing_run = self.store.get_run(actual_run_id)
         if existing_run:
             dup = existing_run.copy()
@@ -72,24 +72,23 @@ class PipelineRunner:
             if ret_res["status"] == "success" and ret_res["evidence"]:
                 evidence_retrieved = True
                 evidence_list = ret_res["evidence"]
-                # In production, LLM generates draft from verified evidence
                 draft_response = f"Thank you for contacting us regarding {decision.final_intent}. Based on policy: {evidence_list[0]['title']}."
             else:
                 # Evidence missing, stale, or conflicting -> Escalate according to spec Gate 7
                 decision.action = "escalate"
                 decision.reason_codes.append("insufficient_evidence")
 
-        # 6. Persistent escalation queueing if action is escalate
+        # 6. Prepare escalation info if action is escalate
+        escalate_info = None
         if decision.action == "escalate":
-            self.store.enqueue_escalation(
-                run_id=actual_run_id,
-                decision_id=decision.decision_id,
-                team=decision.requested_team,
-                queue=decision.target_queue,
-                reason_codes=decision.reason_codes,
-            )
+            escalate_info = {
+                "decision_id": decision.decision_id,
+                "target_team": decision.requested_team,
+                "target_queue": decision.target_queue,
+                "reason_codes": decision.reason_codes,
+            }
 
-        # 7. Construct and persist result
+        # 7. Construct result
         result = {
             "run_id": actual_run_id,
             "decision_id": decision.decision_id,
@@ -110,5 +109,18 @@ class PipelineRunner:
             "llm_called": evidence_retrieved,
         }
 
-        self.store.save_run(actual_run_id, result)
+        # 8. Atomically save run and enqueue escalation
+        saved = self.store.save_run_and_escalate_atomic(
+            run_id=actual_run_id,
+            result=result,
+            escalate_info=escalate_info
+        )
+        if not saved:
+            # Another concurrent runner saved this run first; fetch and return existing
+            concurrent_run = self.store.get_run(actual_run_id)
+            if concurrent_run:
+                dup = concurrent_run.copy()
+                dup["is_duplicate_run"] = True
+                return dup
+
         return result
