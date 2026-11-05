@@ -87,8 +87,11 @@ class TestSystemDependenciesFactory:
         runtime_dir = tmp_path / "runtime_live"
         runtime_dir.mkdir()
 
-        with pytest.raises(EvaluationError, match="preflight|release|readiness"):
-            build_system_dependencies(mock_verified_inputs, profile="live", runtime_dir=runtime_dir)
+        # Keep the missing-release scenario independent of local deployed artifacts.
+        original_exists = Path.exists
+        with patch.object(Path, "exists", lambda p: False if p == Path("ml/releases/manifest.json") else original_exists(p)):
+            with pytest.raises(EvaluationError, match="preflight|release|readiness"):
+                build_system_dependencies(mock_verified_inputs, profile="live", runtime_dir=runtime_dir)
 
 
 class TestExecuteSystemCase:

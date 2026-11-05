@@ -439,12 +439,13 @@ def evaluate_system_gates(
     # 5. ML Macro-F1
     target_f1 = config.thresholds.get("ml_macro_f1", 0.85)
     ml_metric = metrics.get("ml")
-    if ml_metric is None or "macro_f1" not in ml_metric:
+    macro_f1_val = ml_metric.get("macro_f1") if ml_metric else None
+    if ml_metric is None or macro_f1_val is None:
         gates["ml_macro_f1"] = {"status": "not_evaluated", "reason": "ML holdout benchmark not imported"}
-    elif ml_metric.get("macro_f1", 0.0) >= target_f1:
-        gates["ml_macro_f1"] = {"status": "pass", "details": f"{ml_metric['macro_f1']} >= {target_f1}"}
+    elif macro_f1_val >= target_f1:
+        gates["ml_macro_f1"] = {"status": "pass", "details": f"{macro_f1_val} >= {target_f1}"}
     else:
-        gates["ml_macro_f1"] = {"status": "fail", "details": f"{ml_metric.get('macro_f1')} < {target_f1}"}
+        gates["ml_macro_f1"] = {"status": "fail", "details": f"{macro_f1_val} < {target_f1}"}
 
     # 6. Live latency
     target_p95 = config.thresholds.get("warm_p95_seconds", 12.0)
@@ -484,6 +485,9 @@ def evaluate_system_gates(
     if evidence_kind == "simulated":
         all_mandatory_passed = False
         summary_reason = "Simulated mock runs cannot satisfy live acceptance criteria."
+    elif evidence_kind != "live":
+        all_mandatory_passed = False
+        summary_reason = "Experimental live runs cannot certify acceptance with an unapproved suite."
     else:
         all_mandatory_passed = True
         failed_gates = []

@@ -134,3 +134,58 @@ python -m pipeline.evaluation.assess_system `
 - **`0`**: Tất cả các cổng chất lượng bắt buộc (`mandatory_gates`) đều đạt chuẩn với bằng chứng live hợp lệ.
 - **`2`**: Quá trình đánh giá hoàn tất hợp lệ nhưng chưa đạt chuẩn nghiệm thu (hoặc chạy trên profile `mock` chỉ có bằng chứng giả lập, hoặc thiếu bằng chứng con người).
 - **`1`**: Lỗi cấu hình, vi phạm phả hệ provenance (checksum mismatch), vi phạm đường dẫn thoát repository, hoặc sự cố preflight hạ tầng.
+
+### 5.4. Live thử nghiệm khi suite chưa được duyệt
+
+Dùng `pipeline/configs/system_evaluation.experimental.json` với
+`allow_draft_suite: true` để chạy dữ liệu draft mà không thay trạng thái phê duyệt.
+Kết quả mang nhãn `live_experimental`, luôn chưa được chứng nhận nghiệm thu.
+Cấu hình mặc định vẫn từ chối live acceptance với suite draft.
+
+`ml/releases/manifest.json` ghi checksum của sáu artifact local của
+`supportiq_distilbert`; weights/tokenizer được đối chiếu với release mà ML service
+đang pin. Cần chạy ML service ở `127.0.0.1:8001`, kiểm tra `/ready`, và có encoder
+được cache trước. API key chỉ nằm trong biến môi trường hoặc `.env` phía server.
+
+Chạy từ gốc repo bằng PowerShell (đổi run ID cho mỗi lần chạy):
+
+```powershell
+@'
+from dotenv import load_dotenv
+from pipeline.evaluation.run_system_evaluation import main
+load_dotenv('.env', override=False)
+raise SystemExit(main([
+    '--profile', 'live',
+    '--suite', 'data/benchmarks/system/v1/suite_manifest.json',
+    '--config', 'pipeline/configs/system_evaluation.experimental.json',
+    '--run-id', 'system-live-experimental-001'
+]))
+'@ | .venv\Scripts\python.exe -X utf8 -
+```
+
+Các lần chạy live mới đo latency qua `POST /api/demo/runs` của demo server riêng,
+với cùng snapshot/config/as-of và ledger của run. Timer `api_total` bao gồm HTTP,
+middleware, xử lý backend, persistence và serialization; không gồm tải model,
+browser rendering hoặc thời gian người duyệt. Lưu từng mẫu trong
+`latency_results.jsonl`; timeout/lỗi vẫn có record trong tập đo.
+
+Để bổ sung HTTP latency cho run cũ mà không chạy lại 156 case hoặc ghi đè báo cáo:
+
+```powershell
+.venv\Scripts\python.exe -m pipeline.evaluation.complete_system_report `
+  --parent-run artifacts/evaluation/05-11-2026-system-live-experimental-00 `
+  --output-dir artifacts/evaluation/05-11-2026-system-http-assessment-01
+```
+
+Lệnh này dùng suite và experimental config hiện tại, kiểm tra checksum của run
+gốc trước/sau đo, trừ số call/chi phí dự phòng đã dùng khỏi ngân sách 200 call/
+1 USD của thử nghiệm. Thư mục đầu ra phải mới. Các input đã thay đổi cần được
+đánh giá như một thử nghiệm khác, không coi là cùng lần chạy cũ.
+
+Grounding vẫn cần annotation của người chấm; chế độ thử nghiệm không tự tạo
+bằng chứng phê duyệt hoặc bỏ qua kiểm tra checksum. Phiếu sơ bộ AI được ghi
+`reviewer_type: ai` và không được import như điểm chấm thủ công. Người duyệt đọc
+`grounding/review.md`, điền danh tính/thời điểm, kiểm tra từng claim/evidence và
+cập nhật `grounding/human_review.jsonl` trước khi dùng `assess_system`.
+Những case kỳ vọng có draft nhưng chưa tạo được vẫn là thiếu bằng chứng, kể cả
+khi mọi draft đã có đều được duyệt.

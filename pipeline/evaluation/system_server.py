@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import socket
 import subprocess
 import sys
@@ -43,15 +44,18 @@ class ManagedDemoServer:
         self.runtime_dir: Optional[Path] = None
         self.ledger_path: Optional[Path] = None
         self._inputs: Optional[VerifiedSystemInputs] = None
+        self._profile = "mock"
 
     def start(
         self,
         inputs: VerifiedSystemInputs,
         runtime_dir: Path | str,
         ledger_path: Path | str,
+        profile: str = "mock",
     ) -> str:
         """Start the managed loopback demo server subprocess and perform handshake."""
         self._inputs = inputs
+        self._profile = profile
         self.runtime_dir = Path(runtime_dir).resolve()
         self.ledger_path = Path(ledger_path).resolve()
 
@@ -59,6 +63,16 @@ class ManagedDemoServer:
             self.port = find_free_port()
 
         db_path = str(self.runtime_dir / "demo.sqlite3")
+        # Pass pinned inputs, never credentials; the worker shares this run's ledger.
+        inputs_path = self.runtime_dir / "server_inputs.json"
+        inputs_path.write_text(json.dumps({
+            "cases": [c.model_dump() for c in inputs.cases],
+            "config": inputs.config.model_dump(),
+            "source_paths": {k: str(v) for k, v in inputs.source_paths.items()},
+            "input_hashes": inputs.input_hashes, "as_of": inputs.as_of.isoformat(),
+            "coverage": inputs.coverage, "manifest": inputs.manifest,
+            "profile": profile,
+        }), encoding="utf-8")
         cmd = [
             sys.executable,
             "-m",
@@ -71,6 +85,7 @@ class ManagedDemoServer:
             self.run_nonce,
             "--fingerprint",
             self.input_fingerprint,
+            "--inputs", str(inputs_path),
         ]
 
         self.process = subprocess.Popen(
@@ -80,8 +95,8 @@ class ManagedDemoServer:
         )
         self.base_url = f"http://127.0.0.1:{self.port}"
 
-        # Poll health endpoint until ready (up to 10 seconds)
-        deadline = time.time() + 10.0
+        # Local encoder initialization is outside measured request latency.
+        deadline = time.time() + 60.0
         health_data = None
         last_error = None
 
@@ -145,13 +160,17 @@ class ManagedDemoServer:
         time.sleep(0.2)
         # Allocate new free port on restart to avoid TIME_WAIT collisions
         self.port = find_free_port()
-        return self.start(self._inputs, self.runtime_dir, self.ledger_path)
+        return self.start(self._inputs, self.runtime_dir, self.ledger_path, profile=self._profile)
 
     def close(self) -> None:
         """Terminate server process and ensure clean cleanup."""
         if self.process is not None:
             try:
-                self.process.terminate()
+                if os.name == "nt":
+                    subprocess.run(["taskkill", "/PID", str(self.process.pid), "/T", "/F"],
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+                else:
+                    self.process.terminate()
                 self.process.wait(timeout=2.0)
             except Exception:
                 try:
@@ -170,6 +189,7 @@ def main() -> None:
     parser.add_argument("--db-path", type=str, required=True, help="Path to demo SQLite database")
     parser.add_argument("--nonce", type=str, default="", help="Expected run nonce")
     parser.add_argument("--fingerprint", type=str, default="", help="Expected input fingerprint")
+    parser.add_argument("--inputs", required=True, help="Pinned non-secret runtime inputs")
     args = parser.parse_args()
 
     import uvicorn
@@ -179,9 +199,27 @@ def main() -> None:
         "nonce": args.nonce,
         "fingerprint": args.fingerprint,
     }
-    app = create_app(db_path=args.db_path, health_metadata=health_meta)
+    from datetime import datetime
+    from pipeline.evaluation.system_contracts import SystemCase, SystemConfig, verify_input_snapshot
+    from pipeline.evaluation.system_execution import build_system_dependencies
+    from dotenv import load_dotenv
+    data = json.loads(Path(args.inputs).read_text(encoding='utf-8'))
+    if data['profile'] == 'live':
+        load_dotenv(Path(__file__).resolve().parents[2] / '.env', override=False)
+    inputs = VerifiedSystemInputs(
+        cases=[SystemCase.model_validate(c) for c in data['cases']],
+        config=SystemConfig.model_validate(data['config']),
+        source_paths={k: Path(v) for k, v in data['source_paths'].items()},
+        input_hashes=data['input_hashes'], as_of=datetime.fromisoformat(data['as_of']),
+        coverage=data['coverage'], manifest=data['manifest'])
+    verify_input_snapshot(inputs)
+    deps = build_system_dependencies(inputs, data['profile'], Path(args.db_path).parent, start_server=False)
+    app = create_app(db_path=args.db_path, runner=deps.runner, health_metadata=health_meta)
 
-    uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
+    try:
+        uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
+    finally:
+        deps.close()
 
 
 if __name__ == "__main__":

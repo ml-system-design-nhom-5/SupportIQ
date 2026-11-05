@@ -45,8 +45,10 @@ class IntentClient:
             "expected_model_version": self.expected_model_version,
         }
         try:
-            client = self._get_client()
-            resp = client.post(f"{self.base_url}/predict", json=payload, timeout=self.timeout)
+            if self._http is not None:
+                resp = self._http.post(f"{self.base_url}/predict", json=payload, timeout=self.timeout)
+            else:
+                resp = httpx.post(f"{self.base_url}/predict", json=payload, timeout=self.timeout)
             resp.raise_for_status()
             data = resp.json()
 
