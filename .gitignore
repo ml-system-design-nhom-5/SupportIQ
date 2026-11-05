@@ -11,6 +11,7 @@ venv/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.pytest-cleanup.lock
 .pytest-*/
 .review-system-probe-*/
 .mypy_cache/
@@ -43,6 +44,7 @@ coverage/
 *.sqlite
 *.sqlite3
 *.log
+*.zip
 /logs/
 /tmp/
 /infra/compose/volumes/

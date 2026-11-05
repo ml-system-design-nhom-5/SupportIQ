@@ -208,6 +208,8 @@ def aggregate_system_metrics(
         if r is not None and r.sources:
             # Deduplicate top 3 sources by (doc_id, version)
             for s in r.sources[:3]:
+                if s.get('source_type') == 'order_facts':
+                    continue  # Business evidence is not a policy retrieval prediction.
                 doc_id = s.get("doc_id") or s.get("document_id")
                 ver = str(s.get("version", "1.0"))
                 norm_key = _normalize_doc_key(doc_id, ver) if doc_id else None

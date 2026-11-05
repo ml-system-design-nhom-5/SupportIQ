@@ -1,6 +1,7 @@
 """Integration tests for ManagedDemoServer loopback process lifecycle and handshake."""
 
 import pytest
+import httpx
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -39,6 +40,24 @@ def sample_inputs(tmp_path):
 
 
 class TestManagedDemoServer:
+    def test_quality_case_runs_inside_the_managed_worker(self, sample_inputs, tmp_path):
+        server = ManagedDemoServer()
+        runtime = tmp_path/'quality-worker'
+        runtime.mkdir()
+        try:
+            url = server.start(sample_inputs, runtime, runtime/'budget.sqlite3', profile='mock')
+            payload = {'case':sample_inputs.cases[0].model_dump(),'attempt_id':'inside-worker'}
+            with httpx.Client(trust_env=False) as client:
+                denied = client.post(url+'/api/evaluation/case',json=payload)
+                assert denied.status_code==403
+                response=client.post(url+'/api/evaluation/case',json=payload,
+                    headers={'X-Evaluation-Nonce':server.run_nonce},timeout=5)
+                assert response.status_code==200
+                assert response.json()['case_id']=='c1'
+                assert response.json()['execution_status']=='ok'
+        finally:
+            server.close()
+
     def test_server_lifecycle_and_handshake(self, sample_inputs, tmp_path):
         """ManagedDemoServer starts on loopback port, handshakes nonce, and closes cleanly."""
         runtime_dir = tmp_path / "runtime_server"

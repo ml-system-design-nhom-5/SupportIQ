@@ -43,7 +43,7 @@ Hệ thống hoạt động theo kiến trúc 2 dịch vụ độc lập:
 ### Bước 1: Khởi động dịch vụ suy luận mô hình ML (Cổng 8001)
 Mở cửa sổ dòng lệnh thứ nhất:
 ```powershell
-.venv\Scripts\python.exe -m uvicorn services.ml_inference.app:app --host 127.0.0.1 --port 8001
+.venv\Scripts\python.exe -m uvicorn apps.ml_inference.app:app --host 127.0.0.1 --port 8001
 ```
 *Kiểm tra sẵn sàng:* `/health` chỉ kiểm tra process; dùng `http://127.0.0.1:8001/ready` để kiểm tra model đã load và version.
 

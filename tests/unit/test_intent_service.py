@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 
-from services.ml_inference.app import (
+from apps.ml_inference.app import (
     app,
     container,
     ModelContainer,
@@ -78,7 +78,7 @@ def test_client_rejects_mismatched_response_version():
     """Client must verify response model version matches expected version."""
     intent_client = IntentClient(base_url="http://testservice", expected_model_version="v1.0.0")
 
-    with patch("httpx.post") as mock_post:
+    with patch("httpx.Client.post") as mock_post:
         mock_response = MagicMock()
         mock_response.status_code = 200
         # Server returned 200 but wrong model version

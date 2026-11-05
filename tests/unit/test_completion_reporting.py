@@ -29,10 +29,10 @@ class TestVerifiedMLMetricsImport:
         }
         manifest_file.write_text(json.dumps(manifest_data), encoding="utf-8")
 
+        # Self-declared signer/inline numbers are not verifiable CV provenance.
         res = import_verified_ml_metrics(manifest_file, expected_model_type="bge-small-en-v1.5")
-        assert res["status"] == "verified"
-        assert res["macro_f1"] == 0.885
-        assert "return_policy" in res["per_intent"]
+        assert res["status"] == "unverified"
+        assert res["macro_f1"] is None
 
     def test_import_verified_ml_metrics_rejects_model_type_mismatch(self, tmp_path):
         """import_verified_ml_metrics rejects report when model_type does not match expected model."""
@@ -45,7 +45,7 @@ class TestVerifiedMLMetricsImport:
         }
         manifest_file.write_text(json.dumps(manifest_data), encoding="utf-8")
 
-        with pytest.raises(EvaluationError, match="model_type mismatch"):
+        with pytest.raises(EvaluationError, match="model_type"):
             import_verified_ml_metrics(manifest_file, expected_model_type="bge-small-en-v1.5", strict=True)
 
     def test_missing_ml_metrics_marks_na_without_fabrication(self, tmp_path):

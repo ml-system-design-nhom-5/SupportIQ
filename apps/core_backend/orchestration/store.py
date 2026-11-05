@@ -55,6 +55,13 @@ class PersistentStore:
                 return json.loads(row["payload_json"])
         return None
 
+    def save_input_snapshot(self, run_id: str, snapshot: dict) -> None:
+        """Persist sanitized evidence before egress, including failed LLM attempts."""
+        with self._connection() as conn:
+            conn.execute('CREATE TABLE IF NOT EXISTS llm_inputs (run_id TEXT PRIMARY KEY, snapshot_json TEXT NOT NULL)')
+            conn.execute('INSERT OR IGNORE INTO llm_inputs VALUES (?, ?)',
+                         (run_id, json.dumps(snapshot, ensure_ascii=False)))
+
     def save_run_and_escalate_atomic(
         self,
         run_id: str,

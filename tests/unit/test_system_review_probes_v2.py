@@ -7,7 +7,9 @@
 6. [P2] Controlled fault injection for encoder and commerce components.
 """
 
+
 from __future__ import annotations
+from tests.annotation_fixtures import reviewed_annotations
 
 import json
 import time
@@ -145,7 +147,7 @@ class TestReviewFinding1WorkerTimeoutTermination:
             runtime_dir=tmp_path,
             clock=lambda: datetime(2026, 6, 1, tzinfo=timezone.utc),
             deadline_seconds=0.02,
-            managed_server=mock_server,
+            managed_server=None,
         )
 
         case = base_verified_inputs.cases[0]
@@ -155,8 +157,9 @@ class TestReviewFinding1WorkerTimeoutTermination:
         assert res.error_code == "deadline_exceeded"
 
         # Worker process must be terminated and restarted cleanly without async exception injection
-        assert mock_server.close.called, "Managed worker process was not terminated on timeout!"
-        assert mock_server.restart.called, "Managed worker process was not restarted after timeout!"
+        assert deps.isolated_caller is not None
+        assert not deps.isolated_caller.is_running(), "The process actually executing run() must be terminated"
+        deps.close()
 
 
 class TestReviewFinding2LivePreflightVerification:
@@ -309,14 +312,14 @@ class TestReviewFinding3GroundingMandatoryBenchmarkCases:
         # Annotation only for c1 (100% supported)
         ann_file = tmp_path / "annotations.jsonl"
         ann_file.write_text(
-            json.dumps({
+            json.dumps(reviewed_annotations([{
                 "case_id": "c1",
                 "draft_sha256": "hash-c1",
                 "reviewer": "qa_lead",
                 "reviewed_at": "2026-11-05T00:00:00Z",
                 "attestation": {"all_factual_claims_identified": True},
                 "claims": [{"claim_id": "c1_1", "verdict": "supported"}],
-            }) + "\n",
+            }])[0]) + "\n",
             encoding="utf-8",
         )
 
@@ -406,7 +409,7 @@ class TestReviewFinding5ClaimAnnotationDeduplication:
         ]
 
         res = evaluate_claim_annotations(
-            annotations,
+            reviewed_annotations(annotations),
             expected_draft_hashes=expected_hashes,
             expected_draft_case_ids={"c1"},
         )

@@ -1,6 +1,6 @@
 import os
 import uuid
-from contextlib import asynccontextmanager
+from contextlib import ExitStack, asynccontextmanager
 from pathlib import Path
 from typing import Optional, Any, Dict
 from fastapi import FastAPI, HTTPException, Request, Response
@@ -21,21 +21,26 @@ def create_app(
     health_metadata: Optional[Dict[str, Any]] = None,
 ) -> FastAPI:
     demo_store = DemoStore(db_path=db_path)
+    owned_clients = []
     if runner is None:
         from dotenv import load_dotenv
         load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
         p_store = PersistentStore(db_path=db_path)
         runner = PipelineRunner(intent_client=intent_client, store=p_store)
+        if intent_client is None:
+            owned_clients.append(runner.intent_client)
+        owned_clients.append(runner.llm_client)
 
     service = DemoService(runner=runner, store=demo_store)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        yield
-        for client in (runner.intent_client, runner.llm_client):
-            close = getattr(client, "close", None)
-            if callable(close):
-                close()
+        with ExitStack() as cleanup:
+            for client in owned_clients:
+                close = getattr(client, "close", None)
+                if callable(close):
+                    cleanup.callback(close)
+            yield
 
     app = FastAPI(title="SupportIQ Local Copilot Demo", docs_url=None, redoc_url=None, lifespan=lifespan)
 

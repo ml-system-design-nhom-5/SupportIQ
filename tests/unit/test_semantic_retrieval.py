@@ -197,12 +197,12 @@ def test_adapter_fails_closed_and_quarantines_unapproved_documents(tmp_path):
     assert res["status"] == "empty_kb"
 
 
-def test_orchestration_boundary_handles_encoder_failure_gracefully(tmp_path):
+def test_orchestration_boundary_handles_encoder_failure_gracefully(tmp_path, offline_retrieval):
     from apps.core_backend.orchestration.pipeline_runner import PipelineRunner
     from apps.core_backend.orchestration.store import PersistentStore
     from apps.core_backend.intent.schemas import RoutingContext, IntentPrediction
 
-    adapter = RetrievalAdapter()
+    adapter = offline_retrieval
     adapter.encoder = None
     adapter.encoder_error = "Mocked checkpoint load failure"
 

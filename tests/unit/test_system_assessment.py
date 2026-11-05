@@ -1,5 +1,7 @@
 """Unit tests for Human Assessment, claim annotation verification, and product session analysis."""
 
+from tests.annotation_fixtures import reviewed_annotations
+
 import json
 import pytest
 from pathlib import Path
@@ -110,7 +112,7 @@ class TestClaimAnnotations:
                 ),
             }
         ]
-        res_89 = evaluate_claim_annotations(ann_89, {"c1": "sha256-draft-c1-hash"})
+        res_89 = evaluate_claim_annotations(reviewed_annotations(ann_89), {"c1": "sha256-draft-c1-hash"})
         assert res_89["total_claims"] == 100
         assert res_89["supported_claims"] == 89
         assert res_89["supported_claims_ratio"] == 0.89
@@ -130,7 +132,7 @@ class TestClaimAnnotations:
                 ),
             }
         ]
-        res_90 = evaluate_claim_annotations(ann_90, {"c1": "sha256-draft-c1-hash"})
+        res_90 = evaluate_claim_annotations(reviewed_annotations(ann_90), {"c1": "sha256-draft-c1-hash"})
         assert res_90["supported_claims"] == 90
         assert res_90["supported_claims_ratio"] == 0.90
         assert res_90["grounded_claims_gate_passed"] is True
@@ -150,7 +152,7 @@ class TestClaimAnnotations:
                 ],
             }
         ]
-        res = evaluate_claim_annotations(ann, {"c1": "sha256-draft-c1-hash"})
+        res = evaluate_claim_annotations(reviewed_annotations(ann), {"c1": "sha256-draft-c1-hash"})
         assert res["total_claims"] == 2
         assert res["supported_claims"] == 1
         assert res["unknown_claims"] == 1
@@ -168,7 +170,7 @@ class TestClaimAnnotations:
             }
         ]
         with pytest.raises(EvaluationError, match="Draft hash mismatch"):
-            evaluate_claim_annotations(ann, {"c1": "sha256-draft-c1-hash"})
+            evaluate_claim_annotations(reviewed_annotations(ann), {"c1": "sha256-draft-c1-hash"})
 
     def test_zero_claims_without_rationale_rejected(self):
         """Draft marked with 0 claims without reviewer rationale fails with insufficient_evidence."""
@@ -182,7 +184,7 @@ class TestClaimAnnotations:
                 "attestation": {"all_factual_claims_identified": True, "rationale": None},
             }
         ]
-        res = evaluate_claim_annotations(ann, {"c1": "sha256-draft-c1-hash"})
+        res = evaluate_claim_annotations(reviewed_annotations(ann), {"c1": "sha256-draft-c1-hash"})
         assert res["status"] == "insufficient_evidence"
         assert res["grounded_claims_gate_passed"] is False
 
@@ -198,7 +200,7 @@ class TestClaimAnnotations:
             }
         ]
         with pytest.raises(EvaluationError, match="Missing reviewer"):
-            evaluate_claim_annotations(ann, {"c1": "sha256-draft-c1-hash"})
+            evaluate_claim_annotations(reviewed_annotations(ann), {"c1": "sha256-draft-c1-hash"})
 
 
 class TestAssessRunWorkflow:
@@ -213,7 +215,7 @@ class TestAssessRunWorkflow:
             "attestation": {"all_factual_claims_identified": True},
             "claims": [{"claim_id": "c1_1", "verdict": "supported"}],
         }
-        ann_file.write_text(json.dumps(ann) + "\n", encoding="utf-8")
+        ann_file.write_text(json.dumps(reviewed_annotations([ann])[0]) + "\n", encoding="utf-8")
 
         assessment_dir = assess_run(
             run_dir=mock_run_dir,
@@ -262,7 +264,7 @@ class TestAssessRunWorkflow:
             "attestation": {"all_factual_claims_identified": True},
             "claims": [{"claim_id": "c1_1", "verdict": "supported"}],
         }
-        ann_file.write_text(json.dumps(ann) + "\n", encoding="utf-8")
+        ann_file.write_text(json.dumps(reviewed_annotations([ann])[0]) + "\n", encoding="utf-8")
 
         exit_code = assess_main([
             "--run-dir", str(mock_run_dir),

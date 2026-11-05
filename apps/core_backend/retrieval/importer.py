@@ -38,6 +38,13 @@ class PolicyMetadata(BaseModel):
     supported_intents: List[str] = Field(default_factory=list)
     answer_capabilities: List[str] = Field(default_factory=list)
 
+    @field_validator('approved_by')
+    @classmethod
+    def reviewer_not_blank(cls, value):
+        if not value.strip():
+            raise ValueError('approved_by cannot be blank')
+        return value
+
     @field_validator("allowed_roles")
     @classmethod
     def validate_allowed_roles(cls, v: List[str]) -> List[str]:

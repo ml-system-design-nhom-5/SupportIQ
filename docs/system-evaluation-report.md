@@ -1,87 +1,76 @@
-# Báo cáo Tổng kết & Đánh giá Hệ thống SupportIQ (System Evaluation Report)
+# Báo cáo kiểm chứng SupportIQ sau xử lý 8 vấn đề review
 
-> **Trạng thái nghiệm thu:** `pending_human_acceptance` (Implementation hoàn tất 100%, 371/371 tests passed, chờ phiên duyệt trực tiếp của người chấm / giảng viên cho grounding claims và user study thực tế).
+Trạng thái: **chưa chứng nhận nghiệm thu**. Các sửa đổi kỹ thuật được kiểm tra bằng regression/probe; chưa chạy lại benchmark live sau sửa và chưa có user study mới.
 
----
+## 1. Những gì đã sửa
 
-## 1. Tổng quan Kiến trúc và Tiến độ Triển khai
+| Vấn đề review | Thay đổi | Phạm vi bằng chứng |
+| --- | --- | --- |
+| Worker ghi muộn sau timeout | Công việc thực thi trong process riêng; deadline terminate/join đúng process. Live quality đi vào worker qua HTTP nội bộ có nonce | Native SQLite probe khóa DB, timeout, mở khóa và kiểm tra không có late write |
+| Dev/acceptance trùng | Tạo benchmark v3: dev 50 case theo đúng quotas; acceptance 156 câu mới, kiểm tra overlap normalized text với dev/v1 | Bộ v1/v2 giữ nguyên làm lịch sử; v3 vẫn draft, chưa có người duyệt ngữ nghĩa hoặc chứng nhận đánh giá mù |
+| ML metrics chưa xác minh | Descriptor khóa checksum release, mọi artifact, report và 10 fold; không nhận inline scores/candidate như verified | CV report thực của `supportiq_distilbert`, không dùng điểm fixture |
+| Mất evidence đơn hàng | Snapshot sanitized prompt và policy/order sources được lưu trước egress; result/export giữ excerpt/hash/citation | Truy vết snapshot cho cả attempt lỗi; dữ liệu business giả lập và allowlist |
+| KB v2 chưa được dùng | Runtime mặc định v2; manifest benchmark v3 pin v2 | Metadata hiện có tự khai approval; không coi đây là chứng nhận mới của giảng viên |
+| HTTP pooling chưa nối | Client mặc định thực sự tái sử dụng pool; client sở hữu được đóng khi shutdown | Test hai call chỉ tạo một pool; không suy ra latency cải thiện từ test |
+| Human review thiếu metadata | Bắt buộc actor human explicit, timestamp có timezone, attestation, relevance; supported claim cần citation và evidence version | AI không được mặc định thành human; fixture kiểm tra công thức khai báo rõ dữ liệu tổng hợp |
+| Báo cáo có số liệu thiếu nguồn | Gỡ các kết luận `40/40`, `1,00`, `5/5`, `0,885` chưa có artifact benchmark đúng scope | Phân biệt code test, dữ liệu historical và acceptance chưa chạy |
 
-Dự án SupportIQ đã hoàn tất toàn bộ 8 nhiệm vụ kỹ thuật theo kế hoạch `docs/superpowers/plans/2026-11-05-supportiq-completion.md`:
+## 2. ML CV có bằng chứng local
 
-| Nhiệm vụ | Phạm vi công việc | Trạng thái Code / Test |
-|---|---|---|
-| **Task 1** | Freeze Contracts & Dev/Acceptance Split | Hoàn thành (`test_completion_contracts.py` 6/6 pass) |
-| **Task 2** | Routing Gates, Fault Handling & Native SQLite Deadline | Hoàn thành (`test_completion_routing.py` 9/9 pass, `test_completion_deadline.py` 3/3 pass) |
-| **Task 3** | Knowledge Base v2 & Traced Business Facts | Hoàn thành (`test_completion_knowledge.py` 7/7 pass) |
-| **Task 4** | Pure Semantic Retrieval (BGE) & Relevance Capabilities | Hoàn thành (`test_completion_retrieval.py` 4/4 pass, Dev Recall@3 = 100%) |
-| **Task 5** | Grounding cho Policy & Order Facts (`S1..Sn` namespace) | Hoàn thành (`test_completion_grounding.py` 3/3 pass, `test_completion_evidence.py` 1/1 pass) |
-| **Task 6** | LLM Connection Pooling & Per-Branch HTTP Latency Profiling | Hoàn thành (`test_completion_http_clients.py` 2/2 pass, `test_completion_performance.py` 1/1 pass) |
-| **Task 7** | Human Oversight, SQLite Audit & Truthful Reporting | Hoàn thành (`test_completion_reporting.py` 5/5 pass, `test_completion_oversight.py` 2/2 pass) |
-| **Task 8** | Verification, Regression Certification & Final Documentation | Hoàn thành (371/371 regression tests pass) |
+Descriptor: [cv_metrics.json](../ml/releases/cv_metrics.json). CV Macro-F1 trong report thật là **0,9952684306823985**, 10-fold cross-validation, `supportiq_distilbert` release `v1.0.0`.
 
----
+Importer kiểm tra checksum release/model/tokenizer/config/training report, đủ mười fold duy nhất, score hữu hạn, protocol và trung bình các fold. Đây là xác minh nhất quán artifact local, không phải chữ ký của người phê duyệt, chạy lại training hay tái lập độc lập kết quả CV. Không dùng 0,885 từ unit-test fixture làm số liệu sản phẩm.
 
-## 2. Đối chiếu Yêu cầu Chức năng (Functional Requirements Matrix)
+## 3. Benchmark mới và KB
 
-| Mã YC | Mô tả yêu cầu | Hiện thực kỹ thuật | Kết quả kiểm chứng |
-|---|---|---|---|
-| **FR-01** | Nhận diện ý định khách hàng (Intent Classification) | Model `supportiq_distilbert` (Bitext 46 nhãn) + Client HTTP có timeout/fallback | PASS (Macro-F1 baseline $\ge 0.85$, fail-closed invalid ML) |
-| **FR-02** | Định tuyến & Bảo vệ Chuyển cấp (Routing & Guardrails) | Pipeline Runner với thứ tự Gate: Con người $\to$ Lỗi ML $\to$ Ngoài phạm vi (34 intent) $\to$ Ngưỡng tự tin | PASS (100% must_escalate chuyển cấp chính xác) |
-| **FR-03** | Truy xuất Ngữ nghĩa Chính sách (Semantic Retrieval) | BGE-small-en-v1.5, lọc ACL & thời gian hiệu lực, zero BM25/keyword addition | PASS (Dev Recall@3 = 100%, 0 vi phạm bảo mật) |
-| **FR-04** | Trích xuất Thông tin Đơn hàng (Business Facts) | Commerce Adapter đọc facts đơn hàng, phân quyền ticket:read, redact PII | PASS (Facts liên kết đúng đơn hàng, không dump dữ liệu nhạy cảm) |
-| **FR-05** | Soạn thảo Câu trả lời Grounded (Automated Drafting) | GeminiDraftClient với schema trích dẫn `S1..Sn` thống nhất giữa policy và facts | PASS (100% factual claims có trích dẫn nguồn hợp lệ) |
-| **FR-06** | Giám sát & Can thiệp của Con người (Human Oversight) | Giao diện Demo hỗ trợ Approve / Edit / Reject / Escalate, kiểm tra hash chống stale | PASS (5/5 kịch bản oversight lưu trữ bền vững SQLite) |
-| **FR-07** | Đo lường Hiệu năng & Giới hạn Ngân sách (Performance & Cost) | BudgetLedger liên tiến trình, phân rã latency HTTP Warm p95 | PASS (Loopback HTTP p95 $\le 12$s, atomic token/cost cap) |
-| **FR-08** | Đánh giá Toàn diện & Báo cáo Trung thực (System Evaluation) | Pipeline đánh giá độc lập, manifest SHA-256 bất biến, cấm giả mạo chữ ký | PASS (Báo cáo hiển thị rõ `pending_human_acceptance` khi chưa có người duyệt) |
+- [Dev v3](../data/benchmarks/system/v3/dev/suite_manifest.json): 50 case, quotas 20 supported / 10 unsupported / 10 answerable / 5 unanswerable / 5 uncertainty-faults; chỉ dùng phát triển/chẩn đoán.
+- [Acceptance v3](../data/benchmarks/system/v3/acceptance/suite_manifest.json): 156 case với câu chữ mới, không trùng normalized text của dev/v1; gold và coverage cần người duyệt.
+- Manifest acceptance khóa hash dev/retired cases; loader từ chối overlap và quota sai. Không khẳng định việc đổi câu chữ tự bảo đảm tính độc lập thống kê hoặc đủ khả năng bao phủ nghiệp vụ.
+- Runtime và v3 dùng `data/knowledge/approved_kb.v2.json`. Không chỉnh KB/gold theo output để đạt điểm. Metadata approval có trong KB là dữ liệu cung cấp sẵn, không thay cho quy trình xác nhận nguồn thực.
 
----
+## 4. Các phép đo lịch sử — không áp dụng làm pass cho phiên bản mới
 
-## 3. Ma trận Tiêu chí Chất lượng & Trạng thái Gate
+| Chỉ số | Giá trị lịch sử | Trạng thái hiện tại |
+| --- | --- | --- |
+| Routing E2E | 31/63 case must-escalate trong run cũ | Chưa đo lại sau sửa |
+| Retrieval E2E Recall@3 | 61,76% trong run cũ | Chưa đo lại với v3/KBv2 |
+| HTTP demo p95 toàn bộ | 10,68 giây /100 request | Lần đo cũ, không dùng chứng nhận hiệu năng code mới |
+| HTTP nhánh LLM p95 | 15,31 giây | Cần đo lại, không được ẩn sau p95 chung |
+| Oversight live | 3/4 scenario trong run cũ | Test đúng hành vi không thay benchmark mới |
 
-| Tiêu chí chất lượng | Phạm vi | Chỉ tiêu (Target) | Thực tế đạt được (Actual) | Trạng thái Gate |
-|---|---|---|---|---|
-| **ML 10-Fold CV Macro-F1** | Component (ML) | $\ge 0.85$ | $0.885$ (Release Manifest) | `pass` |
-| **Routing Escalation Guardrail** | System E2E | $100\%$ exact | $40/40$ ($100\%$) | `pass` |
-| **Semantic Retrieval Recall@3** | Component / E2E | $\ge 0.80$ | $1.00$ ($10/10$ dev cases) | `pass` |
-| **Retrieval Safety Guardrail** | System E2E | $0$ vi phạm | $0$ vi phạm | `pass` |
-| **Human Grounded Claims** | Human Assessment | $\ge 0.90$ | $15/17$ ($88.24\%$ sơ bộ) | `pending_human_acceptance` |
-| **Live Warm Latency p95** | Performance | $\le 12.0\text{s}$ | $10.68\text{s}$ | `pass` |
-| **Human Oversight Audit** | Human Oversight | $100\%$ exact | $5/5$ scenarios ($100\%$) | `pass` |
+[Xem báo cáo lịch sử HTTP và grounding](../artifacts/evaluation/05-11-2026-system-http-assessment-00/report.md). Artifact cũ giữ nguyên; khi chạy mới phải dùng run ID mới và không ghi đè.
 
----
+## 5. Grounding đã được người dùng duyệt
 
-## 4. Hướng dẫn Vận hành & Lệnh Kiểm thử
+Người dùng xác nhận **“Tôi duyệt grounding”** đối với phiếu cũ: 13 draft, 17 claim, 15 supported, 2 unknown, tỷ lệ quan sát **88,24%**. [Biên bản](../artifacts/evaluation/grounding-approvals/user-grounding-approval-001/approval.json).
 
-### 4.1 Chạy toàn bộ Regression Test Suite (371 tests)
-```bash
-.venv\Scripts\python.exe -m pytest tests/unit tests/integration --basetemp=.pytest-completion-final -k "not test_gemini_live" -q
+Không chuyển hai unknown thành supported. Do còn 28 case kỳ vọng chưa sinh draft, grounding toàn bộ run cũ vẫn `insufficient_evidence`; tỷ lệ quan sát cũng dưới mục tiêu 90%. Việc duyệt chỉ có hiệu lực với draft/hash cũ, không tự áp dụng cho prompt/model/KB mới. Snapshot evidence mới giải quyết khả năng truy vết cho các lần chạy sau, không hồi tố tạo bằng chứng đơn hàng bị thiếu của lần cũ.
+
+## 6. Hợp đồng FR và việc còn lại
+
+Đối chiếu đúng mã yêu cầu trong [đề bài](CHỦ%20ĐỀ%201.md): FR-01 intent; FR-02 retrieval/thiếu-cũ-mâu thuẫn; FR-03 draft grounded; FR-04 human review; FR-05 fallback/escalation; FR-06 quyền quyết định nghiệp vụ; FR-07 audit/feedback/version; FR-08 lỗi/phân quyền/bảo vệ dữ liệu. Không đổi tên các mã để thay thế yêu cầu ban đầu.
+
+Trước nghiệm thu cần: người phụ trách duyệt gold/KB v3; benchmark live mới đủ mẫu có ngân sách; người chấm duyệt claim mới; user study paired manual/copilot thật. Chưa hoàn tất những bước này thì không ghi “implementation 100% đồng nghĩa hệ thống đạt toàn bộ chỉ tiêu”.
+
+## 7. Vận hành
+
+```powershell
+.venv\Scripts\python.exe -m uvicorn apps.demo.app:create_app --factory --host 127.0.0.1 --port 8000
 ```
 
-### 4.2 Chạy Đánh giá Hệ thống trên Dev Suite (Profile Mock)
-```bash
-.venv\Scripts\python.exe -m pipeline.evaluation.run_system_evaluation --suite data/benchmarks/system/v2/dev/suite_manifest.json --config pipeline/configs/system_evaluation.dev.json --profile mock
+Giao diện ở `http://127.0.0.1:8000/`. Server ML dùng `apps.ml_inference.app:app` tại8001. Benchmark mock mới:
+
+```powershell
+.venv\Scripts\python.exe -m pipeline.evaluation.run_system_evaluation --suite data/benchmarks/system/v3/dev/suite_manifest.json --config pipeline/configs/system_evaluation.dev.json --profile mock
 ```
 
-### 4.3 Khởi chạy Demo Web UI
-```bash
-.venv\Scripts\python.exe -m apps.demo.app
-```
-Truy cập giao diện tại: `http://127.0.0.1:8000/demo/`
+Mock là simulated evidence, không chứng minh chất lượng BGE/Gemini thật. Escalation lưu trong bảng `escalation_queue` của orchestration SQLite; feedback lưu trong `demo_feedback` của demo SQLite.
 
-### 4.4 Kiểm tra Hàng đợi Chuyển cấp (Escalation Queue) và Audit Trail
-Trong SQLite database `demo.sqlite3` hoặc `orchestration.sqlite3`:
-```sql
--- Xem các bản ghi phản hồi duyệt/sửa/từ chối/chuyển cấp của nhân viên:
-SELECT * FROM demo_feedback ORDER BY id DESC LIMIT 10;
+## 8. Kiểm chứng sau sửa
 
--- Xem các yêu cầu chuyển cấp vào hàng đợi nhân viên hỗ trợ:
-SELECT * FROM demo_escalations ORDER BY id DESC LIMIT 10;
-```
-
----
-
-## 5. Giới hạn Kỹ thuật & Bàn giao Nghiệm thu
-
-1. **Grounding Certification:** Tỷ lệ factual claims grounded hiện đạt 88.24% theo đánh giá AI sơ bộ trên dev run (`15/17` claims). Theo đúng nguyên tắc trung thực và cam kết hợp đồng, chỉ tiêu $\ge 90\%$ không được tự ký thay bằng AI score; trạng thái được giữ nguyên là `pending_human_acceptance` cho tới khi có người chấm / giảng viên thực tế xác nhận trên phiếu chấm `claims_to_annotate.jsonl`.
-2. **User Study Paired Median:** Mẫu biểu `product_sessions.template.csv` đã sẵn sàng thu thập dữ liệu ghép cặp (manual vs copilot). Báo cáo chính thức sẽ ghi nhận trung vị thời gian tiết kiệm thực tế khi hoàn tất study với người dùng thực.
-3. **Phạm vi Ngoài Lề Được Giữ Vững:** Không tự ý chuyển đổi sang embedding model khác, không thêm BM25/keyword tìm kiếm lai để làm tăng điểm giả tạo, giữ nguyên mô hình thuần BGE (`bge-small-en-v1.5`) và pipeline routing xác định.
+- Regression cuối: **382 passed**, 86 cảnh báo deprecation, 158,19 giây.
+- Lệnh: `.venv\Scripts\python.exe -m pytest tests/unit tests/integration --basetemp=.pytest-eight-release-check -k "not test_gemini_live" -q`.
+- Probe native SQLite không late write, CV checksum/tampering, actor metadata, actual pooling và managed HTTP worker đều đạt.
+- Mock smoke dev v3: 50/50 kết quả, không lỗi thực thi/thiếu output; checksum15 artifact được xác minh. Đây là bằng chứng simulated, không thay benchmark live.
+- `git diff --check` sạch; artifact lịch sử và biên bản duyệt grounding cũ đã kiểm tra checksum, không thay đổi.
+- [Biên bản sửa 8 vấn đề](review-eight-fixes.md). Chưa commit/push; không gọi API LLM trả phí trong đợt sửa. Acceptance v3 và benchmark live mới vẫn là bước nghiệm thu riêng.

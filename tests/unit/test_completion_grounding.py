@@ -1,5 +1,7 @@
 """Unit tests for grounded sources, fact isolation, and claim relevance (Task 5)."""
 
+from tests.annotation_fixtures import reviewed_annotations
+
 import hashlib
 import json
 import pytest
@@ -103,7 +105,7 @@ class TestRelevanceScoringAndGroundingVerification:
             }
         ]
         expected_hashes = {"case-01": draft_hash}
-        res = evaluate_claim_annotations(annotations, expected_hashes)
+        res = evaluate_claim_annotations(reviewed_annotations(annotations), expected_hashes)
 
         assert res["status"] == "pass"
         assert res["supported_claims_ratio"] == 1.0

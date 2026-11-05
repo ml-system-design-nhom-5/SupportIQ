@@ -347,6 +347,19 @@ def load_system_inputs(
 
     # 5b. Validate expected outcomes across all cases
     outcome_validation = validate_expected_outcomes(cases, kb_docs_map, as_of=as_of, strict=True)
+    if manifest.get('enforce_split_contract'):
+        if manifest.get('total_cases') != len(cases) or manifest.get('slice_quotas') != slice_counts:
+            raise EvaluationError('Benchmark count/slice quota mismatch')
+        if manifest.get('split') == 'acceptance':
+            from pipeline.preparation.utils import get_near_duplicate_key
+            current = {get_near_duplicate_key(c.text) for c in cases}
+            for key in ('dev_cases', 'retired_cases'):
+                if key not in source_paths:
+                    raise EvaluationError(f'Acceptance must pin {key}')
+                other = {get_near_duplicate_key(json.loads(line)['text'])
+                         for line in source_paths[key].read_text(encoding='utf-8').splitlines() if line.strip()}
+                if current & other:
+                    raise EvaluationError(f'Acceptance text overlap with {key}')
 
     # 6. Compute coverage statistics
     # KB coverage gap reflects actual approved KB evidence coverage, not just query presence

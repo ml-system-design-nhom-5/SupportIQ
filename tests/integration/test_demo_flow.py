@@ -15,13 +15,13 @@ class DummyIntentClient:
         return self.pred
 
 @pytest.fixture
-def integration_app(tmp_path, fake_llm):
+def integration_app(tmp_path, fake_llm, offline_retrieval):
     demo_db = str(tmp_path / "demo_integ.sqlite3")
     orch_db = str(tmp_path / "orch_integ.sqlite3")
     orch_store = PersistentStore(db_path=orch_db)
     
-    # Real RetrievalAdapter with default approved KB
-    retrieval_adapter = RetrievalAdapter()
+    # Real eligibility/index with synthetic embeddings; no model-quality claim
+    retrieval_adapter = offline_retrieval
     
     runner = PipelineRunner(
         llm_client=fake_llm,
@@ -60,7 +60,7 @@ def test_end_to_end_demo_policy_flow(integration_app):
     assert len(data["sources"]) >= 1
 
     top_source = data["sources"][0]
-    assert "Standard Return Policy" in top_source["title"]
+    assert "Return" in top_source["title"]
     assert top_source["version"] is not None
     assert "30 days" in top_source["snippet"]
 

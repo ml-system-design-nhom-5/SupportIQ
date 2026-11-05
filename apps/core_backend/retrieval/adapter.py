@@ -25,7 +25,7 @@ class RetrievalAdapter:
         encoder: Optional[PolicyEncoder] = None,
         relevance_threshold: float = 0.55
     ):
-        p = Path(kb_path or "data/knowledge/approved_kb.v1.json")
+        p = Path(kb_path or "data/knowledge/approved_kb.v2.json")
         self.encoder = encoder
         self.encoder_error: Optional[str] = None
         if self.encoder is None:

@@ -192,8 +192,9 @@ def run_system_evaluation(
         metrics["latency"] = latency_data
 
         # Import verified ML metrics from release manifest if available
-        ml_manifest_p = inputs.source_paths.get("ml_release") or Path("ml/releases/manifest.json")
-        metrics["ml"] = import_verified_ml_metrics(ml_manifest_p, strict=False)
+        ml_manifest_p = inputs.source_paths.get("ml_metrics") or Path("ml/releases/cv_metrics.json")
+        metrics["ml"] = import_verified_ml_metrics(ml_manifest_p, strict=False,
+            expected_release_path=inputs.source_paths.get("ml_release") or Path("ml/releases/manifest.json"))
 
         # Aggregate oversight scenarios
         ov_total = len(oversight_results)

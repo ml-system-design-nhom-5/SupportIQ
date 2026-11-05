@@ -1,5 +1,32 @@
 # Subsystem Đánh giá (Evaluation) — SupportIQ
 
+## Cập nhật sau review 8 vấn đề
+
+- Dùng `data/benchmarks/system/v3/dev/suite_manifest.json` cho chẩn đoán. Bộ
+  acceptance v3 có câu mới, pin dev/v1 để phát hiện normalized-text overlap và
+  pin KB v2. Cả hai vẫn `draft`; người phụ trách cần duyệt gold/ngữ nghĩa trước
+  khi chạy acceptance chính thức. Bộ v1/v2 chỉ giữ làm lịch sử.
+- Runtime mặc định dùng `approved_kb.v2.json`. Test cần KB thiếu shipping phải
+  chỉ rõ KB v1/fixture, không suy từ mặc định triển khai.
+- Quality E2E live gửi vào endpoint nội bộ có nonce của managed process. Với
+  dependencies giả lập, evaluator dùng `IsolatedCaller` và terminate/join process
+  thực thi khi quá hạn; không tiêm ngoại lệ vào thread. Chuẩn bị worker ngoài
+  phần execution deadline; không coi tổng thời gian mock setup là HTTP latency.
+- `ml/releases/cv_metrics.json` khóa checksum release và báo cáo CV; importer
+  kiểm tra artifact, đúng model/release, 10 fold và tính lại mean. Đây là kiểm tra
+  nhất quán local, không phải chữ ký approval hay chạy lại training.
+- Snapshot sanitized prompt + policy/order facts được ghi ở `llm_inputs` trước
+  egress và trong kết quả run. Người chấm xem đúng snapshot/hash, không truy vấn
+  một đơn hàng đã thay đổi để thay bằng chứng của lần chạy trước.
+- Human annotation bắt buộc `reviewer_type: human`, reviewer, `reviewed_at` có
+  timezone, `attestation.all_factual_claims_reviewed: true` (boolean) và relevance.
+  Claim supported cần claim_text/source_id (hoặc citation)/doc_id/version/
+  evidence_span. Phiếu cũ không tự được bổ sung chữ ký hoặc metadata giả.
+
+```powershell
+.venv\Scripts\python.exe -m pipeline.evaluation.run_system_evaluation --suite data/benchmarks/system/v3/dev/suite_manifest.json --config pipeline/configs/system_evaluation.dev.json --profile mock
+```
+
 Thành phần `pipeline/evaluation/` thực thi đánh giá độc lập các mô hình phân loại intent đã được huấn luyện và khóa lựa chọn từ giai đoạn Training:
 1. **Hold-out Test Evaluation:** Đánh giá trên tập kiểm tra độc lập (6.690 mẫu chưa từng nhìn thấy trong lúc fit đặc trưng hoặc huấn luyện).
 2. **Robustness Evaluation:** Đánh giá độ bền vững trước các nhiễu thực tế (casing, typos, negation, out-of-scope).

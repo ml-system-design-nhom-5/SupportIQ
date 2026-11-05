@@ -1,5 +1,7 @@
 """Reproduction and regression probes for the 10 system evaluation review findings."""
 
+from tests.annotation_fixtures import reviewed_annotations
+
 import json
 import time
 from datetime import datetime, timezone
@@ -177,7 +179,7 @@ class TestSystemReviewProbes:
             }
         ]
         with pytest.raises(EvaluationError, match="undeclared|unknown|non-existent"):
-            evaluate_claim_annotations(bad_annotations, expected_hashes)
+            evaluate_claim_annotations(reviewed_annotations(bad_annotations), expected_hashes)
 
         # Case B: Incomplete annotation of mandatory draft cases yields insufficient_evidence
         partial_annotations = [
@@ -191,7 +193,7 @@ class TestSystemReviewProbes:
         ]
         # case-02 is missing from annotations
         res = evaluate_claim_annotations(
-            partial_annotations,
+            reviewed_annotations(partial_annotations),
             expected_hashes,
             expected_draft_case_ids={"case-01", "case-02"},
         )
@@ -257,6 +259,9 @@ class TestSystemReviewProbes:
         runtime_dir.mkdir()
         deps = build_system_dependencies(sample_verified_inputs, profile="mock", runtime_dir=runtime_dir)
         deps.deadline_seconds = 0.05
+        from pipeline.evaluation.isolated_call import IsolatedCaller
+        deps.isolated_caller = IsolatedCaller()
+        deps.isolated_caller.call(lambda: None, {}, 2)
 
         def _hanging_run(*args, **kwargs):
             time.sleep(0.4)

@@ -10,7 +10,7 @@ from apps.core_backend.intent.client import IntentClient
 from apps.core_backend.commerce.adapter import CommerceAdapter
 from apps.core_backend.retrieval.adapter import RetrievalAdapter
 from apps.core_backend.orchestration.store import PersistentStore
-from apps.core_backend.llm.gemini import GeminiDraftClient, LLMError
+from apps.core_backend.llm.gemini import GeminiDraftClient, LLMError, prepare_llm_input
 
 logger = logging.getLogger("pipeline_runner")
 
@@ -93,6 +93,7 @@ class PipelineRunner:
         llm_called = False
         llm_result = None
         draft_kind = None
+        llm_input_snapshot = None
 
         if decision.action == "retrieve_draft":
             t_ret = time.perf_counter()
@@ -101,6 +102,8 @@ class PipelineRunner:
             if ret_res["status"] == "success" and ret_res["evidence"]:
                 evidence_retrieved = True
                 evidence_list = ret_res["evidence"]
+                llm_input_snapshot = prepare_llm_input(text, decision.final_intent, evidence_list, order_facts)
+                self.store.save_input_snapshot(actual_run_id, llm_input_snapshot)
                 try:
                     llm_called = bool(getattr(self.llm_client, "configured", False))
                     t_llm = time.perf_counter()
@@ -108,6 +111,8 @@ class PipelineRunner:
                                                          business_context=order_facts)
                     stage_elapsed_ms["llm_ms"] = round((time.perf_counter() - t_llm) * 1000.0, 2)
                     draft_response = llm_result["body"]
+                    if llm_result.get("input_snapshot"):
+                        evidence_list = llm_result["input_snapshot"]["sources"]
                     draft_kind = "llm"
                 except LLMError as exc:
                     decision.action = "escalate" if exc.code == "llm_insufficient_evidence" else "manual_fallback"
@@ -157,6 +162,7 @@ class PipelineRunner:
             "draft_body": draft_response,
             "draft_kind": draft_kind,
             "llm": {k: v for k, v in llm_result.items() if k != "body"} if llm_result else None,
+            "llm_input_snapshot": llm_input_snapshot,
             "is_duplicate_run": False,
             "llm_called": llm_called,
             "stage_elapsed_ms": stage_elapsed_ms,

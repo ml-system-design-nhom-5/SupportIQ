@@ -11,6 +11,7 @@ import sys
 import time
 import urllib.request
 import uuid
+from fastapi import Request
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -215,6 +216,18 @@ def main() -> None:
     verify_input_snapshot(inputs)
     deps = build_system_dependencies(inputs, data['profile'], Path(args.db_path).parent, start_server=False)
     app = create_app(db_path=args.db_path, runner=deps.runner, health_metadata=health_meta)
+
+    from fastapi import Request, HTTPException
+    from pipeline.evaluation.system_execution import execute_system_case
+
+    @app.post('/api/evaluation/case')
+    def evaluation_case(payload: dict, request: Request):
+        if request.headers.get('X-Evaluation-Nonce') != args.nonce:
+            raise HTTPException(status_code=403)
+        case = SystemCase.model_validate(payload['case'])
+        if case.id not in {c.id for c in inputs.cases}:
+            raise HTTPException(status_code=400, detail='Unknown benchmark case')
+        return execute_system_case(case, deps, payload['attempt_id'], in_worker=True).model_dump()
 
     try:
         uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")

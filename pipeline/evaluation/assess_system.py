@@ -8,7 +8,7 @@ import math
 import statistics
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from pipeline.evaluation import EvaluationError
 from pipeline.preparation.utils import compute_sha256
@@ -41,8 +41,18 @@ def evaluate_claim_annotations(
     insufficient_reason = ""
 
     for idx, ann in enumerate(annotations, start=1):
-        if ann.get("reviewer_type", "human") != "human":
+        if ann.get("reviewer_type") != "human":
             raise EvaluationError("AI preliminary annotations require human review before acceptance")
+        try:
+            reviewed_at = datetime.fromisoformat(ann['reviewed_at'].replace('Z', '+00:00'))
+            if reviewed_at.tzinfo is None:
+                raise ValueError('Missing timezone')
+        except (KeyError, TypeError, ValueError, AttributeError) as exc:
+            raise EvaluationError('Human annotation requires an explicit UTC-offset reviewed_at') from exc
+        if (ann.get('attestation') or {}).get('all_factual_claims_reviewed') is not True:
+            raise EvaluationError('Human review must attest all factual claims were reviewed')
+        if ann.get('relevance') not in ('fully_answers', 'partial', 'off_topic', 'not_assessed'):
+            raise EvaluationError('Human review requires an explicit relevance assessment')
         reviewer = ann.get("reviewer")
         if not reviewer or not str(reviewer).strip():
             raise EvaluationError(f"Missing reviewer in annotation at record {idx}")
@@ -74,6 +84,12 @@ def evaluate_claim_annotations(
                 insufficient_reason = f"Case '{cid}' has zero claims without reviewer rationale"
 
         for c in claims:
+            verdict = str(c.get('verdict', '')).strip().lower()
+            if verdict == 'supported' and not (
+                c.get('source_id', c.get('citation')) and c.get('evidence_span')
+                and c.get('doc_id') and c.get('version') and c.get('claim_text')
+            ):
+                raise EvaluationError('Supported human claim requires claim text and versioned evidence/citation')
             cid_claim = str(c.get("claim_id") or c.get("claim_text") or json.dumps(c, sort_keys=True)).strip()
             claim_key = (cid, cid_claim)
             if claim_key in seen_claims:
@@ -128,9 +144,10 @@ def import_verified_ml_metrics(
     path: Path | str,
     expected_model_type: Optional[str] = None,
     strict: bool = False,
+    expected_release_path: Optional[Path | str] = None,
 ) -> Dict[str, Any]:
-    """Import and verify signed ML evaluation metrics from release manifest or evaluation report.
-    Validates model_type, release approval, and extracts Macro-F1 and per-intent metrics without inline fabrication.
+    """Verify local CV artifacts against the runtime release and recompute fold mean.
+    Checksum binding proves artifact consistency, not a human signature or independent retraining.
     """
     p = Path(path)
     if not p.exists():
@@ -151,7 +168,47 @@ def import_verified_ml_metrics(
             raise EvaluationError("ML metrics data must be a JSON object")
         return {"status": "unverified", "macro_f1": None, "per_intent": {}}
 
-    model_type = data.get("model_type")
+    # Metrics are accepted only through a descriptor pinning both release and CV report.
+    try:
+        if data.get('schema_version') != 'verified-cv-v1':
+            raise EvaluationError('ML metrics require a verified CV descriptor, not inline metrics')
+        release_path = Path(expected_release_path or 'ml/releases/manifest.json').resolve()
+        release = json.loads(release_path.read_text(encoding='utf-8'))
+        if compute_sha256(release_path).lower() != data['release_sha256'].lower():
+            raise EvaluationError('ML release checksum mismatch')
+        for item in release['artifacts'].values():
+            artifact = (release_path.parent / item['path']).resolve()
+            if compute_sha256(artifact).lower() != item['sha256'].lower():
+                raise EvaluationError('ML release artifact checksum mismatch')
+        report_path = (p.parent / data['cv_report']['path']).resolve()
+        if compute_sha256(report_path).lower() != data['cv_report']['sha256'].lower():
+            raise EvaluationError('CV report checksum mismatch')
+        report = json.loads(report_path.read_text(encoding='utf-8'))
+        if data['model_id'] != release['model_id'] or data['model_type'] != release['model_type']:
+            raise EvaluationError('ML model_type or model_id mismatch')
+        if data['package_version'] != release['package_version']:
+            raise EvaluationError('ML release version mismatch')
+        # Bind report bytes to a hashed artifact within this model release as well.
+        if not any((release_path.parent / a['path']).resolve() == report_path
+                   and a['sha256'].lower() == data['cv_report']['sha256'].lower()
+                   for a in release['artifacts'].values()):
+            raise EvaluationError('CV report is not an artifact of the pinned model release')
+        if report.get('cv_protocol') != '10-fold cross-validation' or report.get('cv_n_folds') != 10:
+            raise EvaluationError('ML metrics require 10-fold cross-validation')
+        folds = report['fold_metrics']
+        scores = [f['macro_f1'] for f in folds]
+        if len(folds) != 10 or {f['fold'] for f in folds} != set(range(10)):
+            raise EvaluationError('CV report requires ten unique folds')
+        if not all(type(s) in (int, float) and math.isfinite(s) and 0 <= s <= 1 for s in scores):
+            raise EvaluationError('Invalid CV scores')
+        mean = statistics.mean(scores)
+        if not math.isclose(mean, report['cv_macro_f1_mean'], abs_tol=1e-12):
+            raise EvaluationError('CV mean mismatch')
+        model_type = data['model_type']
+    except (EvaluationError, KeyError, OSError, ValueError, TypeError) as exc:
+        if strict:
+            raise EvaluationError(f'Unverified ML model_type/release/CV evidence: {exc}') from exc
+        return {'status': 'unverified', 'macro_f1': None, 'per_intent': {}}
     if expected_model_type and model_type != expected_model_type:
         if strict:
             raise EvaluationError(
@@ -159,16 +216,15 @@ def import_verified_ml_metrics(
             )
         return {"status": "mismatch", "macro_f1": None, "per_intent": {}}
 
-    metrics = data.get("metrics") or {}
-    macro_f1 = metrics.get("macro_f1")
-    per_intent = metrics.get("intents") or {}
-
     return {
-        "status": "verified" if data.get("status") in ("approved", "candidate") else "unverified",
+        "status": "verified",
         "model_type": model_type,
         "package_version": data.get("package_version"),
-        "macro_f1": macro_f1,
-        "per_intent": per_intent,
+        "macro_f1": mean,
+        "cv_protocol": report['cv_protocol'],
+        "cv_report_sha256": data['cv_report']['sha256'],
+        "release_sha256": data['release_sha256'],
+        "per_intent": {},
     }
 
 

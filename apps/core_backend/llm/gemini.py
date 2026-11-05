@@ -142,17 +142,31 @@ def build_grounded_sources(
     return sources
 
 
+def prepare_llm_input(question: str, intent: str, evidence: list[dict], business_context=None) -> dict:
+    import hashlib
+    sources = build_grounded_sources(evidence, business_context)
+    allowed = {'order_status', 'payment_status', 'refund_status', 'delivery_date',
+               'estimated_delivery', 'expected_refund_time', 'can_cancel', 'eligible_for_return'}
+    facts = {k: redact_contacts(v) if isinstance(v, str) else v
+             for k, v in (business_context or {}).items() if k in allowed}
+    prompt = json.dumps({'question': redact_contacts(question), 'intent': intent,
+                         'sources': sources, 'order_facts': facts}, ensure_ascii=False)
+    return {'prompt': prompt, 'sources': sources, 'sha256': hashlib.sha256(prompt.encode()).hexdigest()}
+
+
 class GeminiDraftClient:
     def __init__(self, api_key: str | None = None, model: str | None = None,
                  http_client: httpx.Client | None = None):
         self._api_key = (api_key if api_key is not None else os.getenv("GEMINI_API_KEY", "")).strip()
         self.model = model or os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
         self._http = http_client
+        self._owns_http = http_client is None
 
     def close(self) -> None:
-        if self._http is not None:
+        if self._owns_http and self._http is not None:
             try:
                 self._http.close()
+                self._http = None
             except Exception:
                 pass
 
@@ -175,17 +189,12 @@ class GeminiDraftClient:
         except ValueError:
             raise LLMError("llm_invalid_configuration") from None
         timeout = httpx.Timeout(timeout_seconds, connect=min(3.0, timeout_seconds))
-        sources = build_grounded_sources(evidence, business_context)
+        snapshot = prepare_llm_input(question, intent, evidence, business_context)
+        sources = snapshot['sources']
         if not sources:
             raise LLMError("llm_invalid_evidence")
 
-        # Keep personal/contact/payment identifiers out of provider context.
-        allowed_fields = {"order_status", "payment_status", "refund_status", "delivery_date",
-                          "estimated_delivery", "expected_refund_time", "can_cancel", "eligible_for_return"}
-        facts = {k: redact_contacts(v) if isinstance(v, str) else v
-                 for k, v in (business_context or {}).items() if k in allowed_fields}
-        prompt = json.dumps({"question": redact_contacts(question), "intent": intent,
-                             "sources": sources, "order_facts": facts}, ensure_ascii=False)
+        prompt = snapshot['prompt']
         payload = {
             "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
@@ -199,12 +208,10 @@ class GeminiDraftClient:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
         started = time.perf_counter()
         try:
-            if self._http is not None:
-                response = self._http.post(url, headers={"x-goog-api-key": self._api_key}, json=payload,
-                                           timeout=timeout)
-            else:
-                with httpx.Client(timeout=timeout, follow_redirects=False) as client:
-                    response = client.post(url, headers={"x-goog-api-key": self._api_key}, json=payload)
+            if self._http is None:
+                self._http = httpx.Client(timeout=timeout, follow_redirects=False)
+            response = self._http.post(url, headers={"x-goog-api-key": self._api_key}, json=payload,
+                                       timeout=timeout)
         except httpx.TimeoutException:
             raise LLMError("llm_timeout") from None
         except httpx.HTTPError:
@@ -233,6 +240,7 @@ class GeminiDraftClient:
         except (KeyError, IndexError, AttributeError, TypeError, ValueError, ValidationError):
             raise LLMError("llm_invalid_response") from None
         return {"body": draft.answer.strip(), "provider": "google_ai_studio", "model": self.model,
+                "input_snapshot": snapshot,
                 "model_version": data.get("modelVersion", self.model), "prompt_version": "grounded-v2",
                 "citations": [{"source_id": s["source_id"], "source_type": s["source_type"],
                                "document_id": s["document_id"], "version": s["version"]}

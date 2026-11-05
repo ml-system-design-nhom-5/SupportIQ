@@ -27,7 +27,7 @@ class IntentClient:
         return self._http
 
     def close(self) -> None:
-        if self._owns_http and self._http is not None:
+        if getattr(self, '_owns_http', False) and self._http is not None:
             try:
                 self._http.close()
             except Exception:
@@ -45,10 +45,7 @@ class IntentClient:
             "expected_model_version": self.expected_model_version,
         }
         try:
-            if self._http is not None:
-                resp = self._http.post(f"{self.base_url}/predict", json=payload, timeout=self.timeout)
-            else:
-                resp = httpx.post(f"{self.base_url}/predict", json=payload, timeout=self.timeout)
+            resp = self._get_client().post(f"{self.base_url}/predict", json=payload, timeout=self.timeout)
             resp.raise_for_status()
             data = resp.json()
 
