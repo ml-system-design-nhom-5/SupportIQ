@@ -114,9 +114,18 @@ class DemoService:
             if not snippet and src.get("chunks"):
                 snippet = src["chunks"][0].get("text", "")
             snippet = snippet[:300]
+            source_id = None
+            llm_citations = (run_result.get("llm") or {}).get("citations", [])
+            for c in llm_citations:
+                if isinstance(c, dict):
+                    if str(c.get("document_id")) == str(doc_id) and str(c.get("version")) == str(src.get("version")):
+                        source_id = c.get("source_id")
+                        break
+                elif isinstance(c, str):
+                    source_id = c
+                    break
             sources.append({
-                "source_id": next((c["source_id"] for c in (run_result.get("llm") or {}).get("citations", [])
-                                   if c["document_id"] == str(doc_id) and c["version"] == str(src.get("version"))), None),
+                "source_id": source_id,
                 "doc_id": doc_id,
                 "title": src.get("title"),
                 "version": src.get("version"),

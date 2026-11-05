@@ -26,6 +26,7 @@ from pipeline.evaluation.system_execution import (
     run_component_probes,
     run_oversight_scenarios,
 )
+from pipeline.evaluation.assess_system import import_verified_ml_metrics
 from pipeline.evaluation.system_metrics import (
     aggregate_system_metrics,
     evaluate_system_gates,
@@ -120,6 +121,9 @@ def run_system_evaluation(
 
         # 8. Latency measurement
         lat_results = measure_system_latency(inputs, deps)
+        with open(run_dir / "latency_results.jsonl", "w", encoding="utf-8") as f:
+            for result in lat_results:
+                f.write(result.model_dump_json() + "\n")
         warm_times = [r.total_elapsed_ms / 1000.0 for r in lat_results]
         if warm_times:
             p50 = round(statistics.median(warm_times), 4)
@@ -132,6 +136,7 @@ def run_system_evaluation(
             p95 = "N/A"
 
         latency_data = {
+            "measurement_scope": "api_total" if profile == "live" else "pipeline_total",
             "p50_seconds": p50,
             "warm_p95_seconds": p95,
             "requests_count": len(lat_results),
@@ -186,6 +191,10 @@ def run_system_evaluation(
         metrics = aggregate_system_metrics(inputs.cases, e2e_results, kb_snapshot=kb_snapshot, as_of=inputs.as_of)
         metrics["latency"] = latency_data
 
+        # Import verified ML metrics from release manifest if available
+        ml_manifest_p = inputs.source_paths.get("ml_release") or Path("ml/releases/manifest.json")
+        metrics["ml"] = import_verified_ml_metrics(ml_manifest_p, strict=False)
+
         # Aggregate oversight scenarios
         ov_total = len(oversight_results)
         ov_passed = sum(1 for r in oversight_results if r.execution_status == "ok")
@@ -206,6 +215,8 @@ def run_system_evaluation(
         }
 
         evidence_kind = "simulated" if profile == "mock" else "live"
+        if profile == "live" and inputs.manifest.get("status") != "approved":
+            evidence_kind = "live_experimental"
         gates = evaluate_system_gates(metrics, inputs.config, evidence_kind=evidence_kind)
 
         write_json_atomic(metrics, run_dir / "metrics.json")
@@ -228,6 +239,7 @@ def run_system_evaluation(
             "slices.csv",
             "requirements_matrix.csv",
             "latency.json",
+            "latency_results.jsonl",
             "cost.json",
             "claims_to_annotate.jsonl",
             "product_sessions.template.csv",

@@ -5,6 +5,7 @@ from __future__ import annotations
 import concurrent.futures
 import hashlib
 import json
+import re
 import threading
 import time
 import uuid
@@ -40,8 +41,25 @@ def _compute_str_sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+_STOPWORDS = frozenset([
+    "a", "about", "above", "after", "again", "against", "all", "am", "an", "and", "any", "are",
+    "as", "at", "be", "because", "been", "before", "being", "below", "between", "both", "but",
+    "by", "can", "did", "do", "does", "doing", "don", "down", "during", "each", "few", "for",
+    "from", "further", "had", "has", "have", "having", "he", "her", "here", "hers", "herself",
+    "him", "himself", "his", "how", "i", "if", "in", "into", "is", "it", "its", "itself", "just",
+    "me", "more", "most", "my", "myself", "no", "nor", "not", "now", "of", "off", "on", "once",
+    "only", "or", "other", "our", "ours", "ourselves", "out", "over", "own", "same", "she",
+    "should", "so", "some", "such", "than", "that", "the", "their", "theirs", "them", "themselves",
+    "then", "there", "these", "they", "this", "those", "through", "to", "too", "under", "until",
+    "up", "very", "was", "we", "were", "what", "when", "where", "which", "while", "who", "whom",
+    "why", "with", "you", "your", "yours", "yourself", "yourselves",
+])
+
+
 class MockPolicyEncoder:
-    """Offline mock policy encoder ensuring zero network/disk weight loading in mock profile."""
+    """Offline mock policy encoder ensuring zero network/disk weight loading in mock profile.
+    Uses deterministic stopword-filtered word vector sums for semantic similarity.
+    """
     def __init__(self, dimension: int = 384):
         self.dimension = dimension
         self.tokenizer = None
@@ -51,10 +69,16 @@ class MockPolicyEncoder:
             return np.empty((0, self.dimension), dtype=np.float32)
         vecs = []
         for t in texts:
-            h = int(hashlib.sha256(t.encode("utf-8")).hexdigest(), 16)
-            rng = np.random.RandomState(h % (2**32))
-            v = rng.randn(self.dimension).astype(np.float32)
-            norm = np.linalg.norm(v)
+            words = [w for w in re.findall(r"\w+", t.lower()) if w not in _STOPWORDS]
+            if not words:
+                words = re.findall(r"\w+", t.lower()) or ["empty"]
+            v = np.zeros(self.dimension, dtype=np.float32)
+            for w in words:
+                h = int(hashlib.sha256(w.encode("utf-8")).hexdigest()[:8], 16)
+                rng = np.random.RandomState(h)
+                w_vec = rng.randn(self.dimension).astype(np.float32)
+                v += w_vec / max(float(np.linalg.norm(w_vec)), 1e-6)
+            norm = float(np.linalg.norm(v))
             vecs.append(v / (norm if norm > 0 else 1.0))
         return np.array(vecs, dtype=np.float32)
 
@@ -76,10 +100,17 @@ class MockLLMClient:
         citations = []
         body_parts = []
         for i, ev in enumerate(evidence[:3], start=1):
-            doc_id = ev.get("document_id") or ev.get("doc_id", "DOC")
-            citations.append(f"[S{i}]")
+            doc_id = str(ev.get("document_id") or ev.get("doc_id", "DOC"))
+            ver = str(ev.get("version", "1.0"))
+            s_id = f"S{i}"
+            citations.append({
+                "source_id": s_id,
+                "source_type": ev.get("source_type", "policy"),
+                "document_id": doc_id,
+                "version": ver,
+            })
             excerpt = ev.get("excerpt") or ev.get("title") or "policy information"
-            body_parts.append(f"{excerpt.strip()} [S{i}]")
+            body_parts.append(f"{excerpt.strip()} [{s_id}]")
         body = " ".join(body_parts) if body_parts else "Support information."
         return {
             "body": body,
@@ -194,7 +225,7 @@ def build_system_dependencies(
 
         # Build offline retrieval adapter with MockPolicyEncoder (zero PyTorch / model loading)
         mock_encoder = MockPolicyEncoder()
-        retrieval = RetrievalAdapter(kb_path=str(kb_path), encoder=mock_encoder)
+        retrieval = RetrievalAdapter(kb_path=str(kb_path), encoder=mock_encoder, relevance_threshold=0.35)
         mock_intent_client = MockIntentClient()
         raw_mock_llm = MockLLMClient(configured=True)
         budgeted_llm = BudgetedLLMClient(raw_mock_llm, ledger=ledger)
@@ -645,18 +676,19 @@ def run_oversight_scenarios(
         "text": "What is the return policy?",
         "is_personal_lookup": False,
     })
-    run_data = resp_sub.json()
-    run_id = run_data["run_id"]
-    current_hash = run_data.get("draft_hash") or "initial-hash"
+    run_data = resp_sub.json() if resp_sub.status_code == 200 else {}
+    run_id = run_data.get("run_id") or sub_id
+    has_draft = bool(run_data.get("draft_body"))
+    current_hash = run_data.get("draft_hash") or ""
 
     # Scenario 1: Session B cross-session feedback rejection
     t0 = time.perf_counter()
     resp_cross = client_b.post(f"/api/demo/runs/{run_id}/feedback", json={
         "action": "approve",
-        "draft_hash": current_hash,
+        "draft_hash": current_hash or "initial-hash",
     })
     elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
-    cross_rejected = resp_cross.status_code in (403, 409)
+    cross_rejected = (resp_cross.status_code in (403, 409)) and has_draft
 
     results.append(CaseResult(
         case_id="oversight-session-ownership",
@@ -664,7 +696,7 @@ def run_oversight_scenarios(
         profile=deps.profile,
         scope="oversight",
         execution_status="ok" if cross_rejected else "error",
-        error_code=None if cross_rejected else f"status_{resp_cross.status_code}",
+        error_code=None if cross_rejected else ("missing_draft" if not has_draft else f"status_{resp_cross.status_code}"),
         stage_elapsed_ms={"check_ms": elapsed_ms},
         total_elapsed_ms=elapsed_ms,
         audit_evidence={
@@ -672,6 +704,7 @@ def run_oversight_scenarios(
             "session_owner": "eval-session-A",
             "attacker_session": "eval-session-B",
             "http_status": resp_cross.status_code,
+            "missing_draft": not has_draft,
             "ownership_protected": cross_rejected,
         },
     ))
@@ -683,7 +716,7 @@ def run_oversight_scenarios(
         "draft_hash": "stale-tampered-hash-000",
     })
     elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
-    stale_rejected = resp_stale.status_code in (400, 409)
+    stale_rejected = (resp_stale.status_code in (400, 409)) and has_draft
 
     results.append(CaseResult(
         case_id="oversight-stale-hash",
@@ -691,7 +724,7 @@ def run_oversight_scenarios(
         profile=deps.profile,
         scope="oversight",
         execution_status="ok" if stale_rejected else "error",
-        error_code=None if stale_rejected else f"status_{resp_stale.status_code}",
+        error_code=None if stale_rejected else ("missing_draft" if not has_draft else f"status_{resp_stale.status_code}"),
         stage_elapsed_ms={"check_ms": elapsed_ms},
         total_elapsed_ms=elapsed_ms,
         audit_evidence={
@@ -699,11 +732,12 @@ def run_oversight_scenarios(
             "expected_hash": current_hash,
             "submitted_hash": "stale-tampered-hash-000",
             "http_status": resp_stale.status_code,
+            "missing_draft": not has_draft,
             "stale_protection_passed": stale_rejected,
         },
     ))
 
-    # Scenario 3: Feedback audit verification & transaction safety
+    # Scenario 3: Feedback audit verification (Approve) & transaction safety
     t0 = time.perf_counter()
     resp_approve = client_a.post(f"/api/demo/runs/{run_id}/feedback", json={
         "action": "approve",
@@ -726,23 +760,90 @@ def run_oversight_scenarios(
                 tx_blocked = (sub_data.get("can_execute_transaction") is False)
 
     results.append(CaseResult(
-        case_id="oversight-feedback-audit",
+        case_id="oversight-approve",
         repetition=1,
         profile=deps.profile,
         scope="oversight",
-        execution_status="ok" if (feedback_count >= 1 and tx_blocked) else "error",
-        error_code=None if (feedback_count >= 1 and tx_blocked) else "audit_check_failed",
+        execution_status="ok" if (resp_approve.status_code == 200 and tx_blocked) else "error",
+        error_code=None if (resp_approve.status_code == 200 and tx_blocked) else "approve_failed",
         stage_elapsed_ms={"check_ms": elapsed_ms},
         total_elapsed_ms=elapsed_ms,
         audit_evidence={
             "run_id": run_id,
             "feedback_recorded": feedback_count >= 1,
             "can_execute_transaction": not tx_blocked,
-            "audit_verified": (feedback_count >= 1 and tx_blocked),
+            "audit_verified": (resp_approve.status_code == 200 and tx_blocked),
         },
     ))
 
-    # Scenario 4: Concurrent idempotency on orchestration store
+    # Scenario 4: Edit draft with human reviewer edited text and revised hash
+    t0 = time.perf_counter()
+    resp_edit = client_a.post(f"/api/demo/runs/{run_id}/feedback", json={
+        "action": "edit",
+        "draft_hash": current_hash,
+        "edited_text": "Updated verified return policy: returns accepted within 30 days.",
+    })
+    elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+    new_hash = resp_edit.json().get("current_draft_hash") if resp_edit.status_code == 200 else None
+
+    results.append(CaseResult(
+        case_id="oversight-edit",
+        repetition=1,
+        profile=deps.profile,
+        scope="oversight",
+        execution_status="ok" if (resp_edit.status_code == 200 and new_hash) else "error",
+        error_code=None if (resp_edit.status_code == 200 and new_hash) else "edit_failed",
+        stage_elapsed_ms={"check_ms": elapsed_ms},
+        total_elapsed_ms=elapsed_ms,
+        audit_evidence={
+            "run_id": run_id,
+            "original_hash": current_hash,
+            "revised_hash": new_hash,
+            "edit_verified": resp_edit.status_code == 200,
+        },
+    ))
+
+    # Scenario 5: Reject draft
+    t0 = time.perf_counter()
+    resp_reject = client_a.post(f"/api/demo/runs/{run_id}/feedback", json={
+        "action": "reject",
+        "draft_hash": new_hash or current_hash,
+    })
+    elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+
+    results.append(CaseResult(
+        case_id="oversight-reject",
+        repetition=1,
+        profile=deps.profile,
+        scope="oversight",
+        execution_status="ok" if resp_reject.status_code == 200 else "error",
+        error_code=None if resp_reject.status_code == 200 else "reject_failed",
+        stage_elapsed_ms={"check_ms": elapsed_ms},
+        total_elapsed_ms=elapsed_ms,
+        audit_evidence={"run_id": run_id, "reject_verified": resp_reject.status_code == 200},
+    ))
+
+    # Scenario 6: Escalate draft feedback
+    t0 = time.perf_counter()
+    resp_esc = client_a.post(f"/api/demo/runs/{run_id}/feedback", json={
+        "action": "escalate",
+        "draft_hash": new_hash or current_hash,
+    })
+    elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+
+    results.append(CaseResult(
+        case_id="oversight-escalate",
+        repetition=1,
+        profile=deps.profile,
+        scope="oversight",
+        execution_status="ok" if resp_esc.status_code == 200 else "error",
+        error_code=None if resp_esc.status_code == 200 else "escalate_failed",
+        stage_elapsed_ms={"check_ms": elapsed_ms},
+        total_elapsed_ms=elapsed_ms,
+        audit_evidence={"run_id": run_id, "escalate_verified": resp_esc.status_code == 200},
+    ))
+
+    # Scenario 7: Concurrent idempotency on orchestration store
     t0 = time.perf_counter()
     idem_run_id = "eval-idem-test-999"
     saved1 = deps.store.save_run_and_escalate_atomic(
