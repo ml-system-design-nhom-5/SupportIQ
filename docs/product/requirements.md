@@ -1,6 +1,6 @@
 # Requirements
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-01
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-04
 
 The scope, functional and quality requirements, assumptions, and constraints of SupportIQ. Read it before designing any feature. Reviewers check designs, contracts, and evaluation results against it.
 
@@ -116,7 +116,7 @@ Priorities use MoSCoW (Must, Should, Could, Won't). The **Brief** column names t
 |---|---|---|---|
 | FR-01 | **Intent classification.** Receive a request written in natural language and predict its intent (46 labels) with the self-trained non-generative ML model. Show the intent with its calibrated confidence and the top three candidates. Staff can correct the intent, and the correction is recorded as feedback. | Must | FR-01 |
 | FR-02 | **Knowledge retrieval and validity checks.** From the intent and the request content, retrieve policies and FAQ (top-k) and simulated business data (order, shipment, and refund status). Check the validity period and version of every document. Detect and flag information that is missing, expired, or conflicting. | Must | FR-02 |
-| FR-03 | **Grounded drafts.** Use the LLM to draft a reply from the retrieved information. Every claim cites a specific document and version. Without enough evidence, the draft states what is missing or proposes a clarifying question, and makes no firm conclusion. | Must | FR-03 |
+| FR-03 | **Grounded drafts.** Use the LLM to draft a reply from the retrieved information. Every policy claim cites a specific document and version, and every fact about the customer's order cites the order data it comes from. Without enough evidence, the draft states what is missing or proposes a clarifying question, and makes no firm conclusion. | Must | FR-03 |
 | FR-04 | **Review interface.** Staff see the request, intent, confidence, citations, warnings, and draft, and can approve, edit, reject, or escalate. Only replies that staff approved are sent. There is no automatic send path. | Must | FR-04 |
 | FR-05 | **Abstention, fallback, and escalation.** Trigger fallback or escalation when confidence is below the threshold, the intent is outside the 12 in-scope intents, the request is sensitive, no valid document is found, or the ML, retrieval, or LLM component fails or exceeds its time budget. Each case carries a reason code shown to staff. The rules are in [§4.1](#41-escalation-and-fallback-rules). | Must | FR-05 |
 | FR-06 | **Limits on business decisions.** For refunds, transaction disputes, and policy exceptions, the system provides supporting information only: the applicable policy, the status, and the conditions. The decision belongs to a manager. A draft never commits the business to anything. | Must | FR-06 |
@@ -238,3 +238,4 @@ Each row is a point where this file deliberately differs from the specification 
 | 19 | NFR-10: token counts per request in the logs | Token counts per suggestion in `backend` records | Telemetry is disposable and never the source of evaluation data ([LOG-33](../rules/logging-and-observability.md#alerts-and-retention)) |
 | 20 | FR-06 says "refunds"; ESC-03 says "refund exception" | A customer who asks for a refund requires authority; a message that only asks for information does not | The two texts differ, and the system can detect a request but not an exception |
 | 21 | ESC-05 does not say what happens after a failure ends | The suggestion runs again when staff open the ticket or ask for a retry | A ticket should not stay without AI help, or without an authority flag, after `ai-service` recovers |
+| 22 | FR-03 and NFR-04: every claim cites a specific document and version | Policy claims cite a KB document version. Facts about the customer's order cite a field of the order context, and such a fact counts as supported for NFR-04 when its citation is valid. Order data is never evidence for a policy or for routing | An order fact is not in the KB, so the original wording would keep a draft from stating it ([ADR-0014](../decisions/0014-citations-to-order-context.md)) |

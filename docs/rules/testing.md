@@ -1,6 +1,6 @@
 # Testing rules
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-01
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-05
 
 Tests are executable specifications. They catch hidden bugs early, protect the guardrails, and keep technical debt from accumulating unseen. A behavior without a test does not exist.
 
@@ -82,7 +82,7 @@ describe("DraftEditor", () => {
 
 **TEST-13.** Pure domain logic with invariants has property-based tests (Hypothesis, fast-check). Required invariants include:
 
-- routing never returns a draft when no valid citation supports it;
+- routing never returns a draft unless a valid KB document version supports it, apart from a draft that states the missing information (ESC-04);
 - reranking never returns an expired document in the top-k;
 - a recorded decision always references the suggestion version staff saw.
 
@@ -131,11 +131,11 @@ describe("DraftEditor", () => {
 - A customer never sees a draft before staff send a reply.
 - No endpoint performs a refund, an order change, or any other transaction.
 - The AI abstains when no valid source supports the claims a draft would make.
-- Every draft segment that states a fact or a policy carries a citation to a valid KB document version.
+- Every draft segment that states a fact or a policy carries a citation of the right kind: a policy cites a valid KB document version, and a fact about the order cites a field of the order context sent with the request ([ADR-0014](../decisions/0014-citations-to-order-context.md)).
 - Mandatory escalation cases from the shared scenario set are routed correctly.
 - `backend` switches to manual handling when `ai-service` fails, times out, or returns an unknown status.
 - Actions that require authority (FR-06) are rejected for roles without it.
-- A `requires_authority` result of a superseded suggestion still sets the ticket's authority flag, and no send succeeds before that result is known.
+- No reply is accepted while a part of the current suggestion is `pending`, and no intent override is accepted before an intent is known, so a `requires_authority` result is always known before a send.
 - Confidential data never appears in logs (a test captures log output and checks for it).
 - Seeded personal values of the ticket never appear in any request that `backend` sends to `ai-service`, nor in any LLM payload captured by a fake LLM adapter (FR-09, NFR-06).
 - When pseudonymization fails, `backend` makes no call to `ai-service` ([SEC-36](security-and-privacy.md#pseudonymization)).

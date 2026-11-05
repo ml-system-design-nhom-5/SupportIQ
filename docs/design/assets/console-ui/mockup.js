@@ -83,9 +83,9 @@ const POLICY_SOURCES = [
 ];
 
 const DRAFT_PARAGRAPHS = [
-  [{ text: "Hi Linh, thank you for your patience." }],
+  [{ text: "Thank you for your patience." }],
   [
-    { text: "Your refund request for order ORD-20931 was received on 14 October and is currently under review." },
+    { text: "Your refund request for order ORD-20931 was received on 14 October and is currently under review.", cites: ["order"] },
     { text: "Refund requests are reviewed as described in our refund policy.", cites: [1] },
     { text: "If you have the tracking number for your return, please reply with it so we can confirm that the return has arrived.", cites: [2] },
   ],
@@ -155,7 +155,7 @@ const MANAGER_REVIEW = {
   draft: {
     generated: "38 min ago",
     paragraphs: [
-      [{ text: "Hi An, I'm sorry the blender arrived with a cracked jug." }],
+      [{ text: "I'm sorry the blender arrived with a cracked jug." }],
       [
         { text: "Refund requests for items that arrive damaged are handled under our refund policy.", cites: [1, 2] },
         { text: "A manager will review your request and reply to you on this ticket." },
@@ -359,14 +359,13 @@ function intentStrip(s) {
       <div class="panel-body"><div class="candidates">${rows}</div></div>
     </section>`;
   }
-  const alternatives = s.candidates
+  const isChosen = s.intent.source === "Chosen by staff";
+  const alternatives = isChosen ? "" : s.candidates
     .map((c) => `<button class="btn btn-sm">${c.name}<span class="muted">${c.percent}%</span></button>`)
     .join("");
-  const change = s.intent.source === "Chosen by staff"
-    ? ""
-    : `<span class="row wrap"><span class="muted small">Not right? Use:</span>${alternatives}<button class="btn btn-sm btn-ghost">Other intent ${icon("chevronRight", "icon-sm")}</button></span>`;
+  const change = `<span class="row wrap"><span class="muted small">Not right? Use:</span>${alternatives}<button class="btn btn-sm btn-ghost">Other intent ${icon("chevronRight", "icon-sm")}</button></span>`;
   const conf = s.intent.band ? confidence(s.intent.band, s.intent.percent) : "";
-  const tone = s.intent.source === "Chosen by staff" ? "badge-neutral" : "badge-ai";
+  const tone = isChosen ? "badge-neutral" : "badge-ai";
   return `<section class="panel panel-ai">
     <div class="panel-body intent-strip">
       <span class="row strong">${icon("sparkles")}Intent</span>
@@ -376,9 +375,15 @@ function intentStrip(s) {
   </section>`;
 }
 
+function citationMarker(cite) {
+  return cite === "order"
+    ? `<span class="cite cite-plain cite-order" aria-label="From order records, not AI">${icon("package", "icon-sm")}</span>`
+    : `<span class="cite">${cite}</span>`;
+}
+
 function draftText(draft) {
   return draft.paragraphs
-    .map((p) => `<p>${p.map((seg) => seg.text + (seg.cites || []).map((n) => `<span class="cite">${n}</span>`).join("")).join(" ")}</p>`)
+    .map((p) => `<p>${p.map((seg) => seg.text + (seg.cites || []).map(citationMarker).join("")).join(" ")}</p>`)
     .join("");
 }
 
@@ -640,7 +645,7 @@ const AUTHORITY_DRAFT = {
   draft: {
     generated: "8 min ago",
     paragraphs: [
-      [{ text: "Hi Bao, I'm sorry the shoes did not last." }],
+      [{ text: "I'm sorry the shoes did not last." }],
       [
         { text: "Items delivered within the return period can be returned under our returns policy.", cites: [1] },
         { text: "A manager will review your refund request and reply to you on this ticket." },
@@ -666,7 +671,7 @@ const NO_ORDER_FACTS = {
 const SEND_DIALOG = `<div class="scrim"><div class="dialog" role="dialog" aria-label="Send reply">
   <h2>Send this reply to Linh Tran?</h2>
   <p class="muted">The customer sees it in the shop right away. A sent reply cannot be changed.</p>
-  <div class="dialog-preview draft-text">Hi Linh, thank you for your patience. Your refund request for order ORD-20931 was received on 14 October and is currently under review.…</div>
+  <div class="dialog-preview draft-text">Thank you for your patience. Your refund request for order ORD-20931 was received on 14 October and is currently under review.…</div>
   <div class="dialog-actions"><button class="btn">Keep editing</button><button class="btn btn-primary">${icon("send", "icon-sm")}Send reply</button></div>
 </div></div>`;
 
@@ -687,6 +692,15 @@ const CITATION_POPOVER = `<div class="popover popover-citation" role="tooltip">
     <div class="row">${badge(VALIDITY.valid)}<span class="muted small">Since 1 Sep 2026</span></div>
     <div class="small">"A refund request is reviewed after the returned item is inspected."</div>
     <div class="row small muted">${icon("chevronRight", "icon-sm")}Activate the marker to read the full version</div>
+  </div>
+</div>`;
+
+const ORDER_CITATION_POPOVER = `<div class="popover popover-citation popover-citation-order" role="tooltip">
+  <div class="panel-head">${icon("package")}Order ORD-20931<span class="trail"><span class="muted small">From order records, not AI</span></span></div>
+  <div class="panel-body stack-8">
+    <div class="row small"><span class="muted">Refund requested</span><span>14 Oct 2026</span></div>
+    <div class="row small"><span class="muted">Refund status</span><span>Under review</span></div>
+    <div class="row small muted">${icon("chevronRight", "icon-sm")}Activate the marker to open the order details</div>
   </div>
 </div>`;
 
@@ -836,9 +850,8 @@ const SCREENS = {
   "state-intent-changed": () => workspace({
     intent: { name: "Request refund", source: "Chosen by staff" },
     reply: "outdated", warnings: [],
-    banner: { tone: "warning", icon: "alert", html: "<b>The AI is still running.</b> If it flags this ticket, a manager must send the reply." },
     actions: { ...ACTIONS_OFF, reason: "The AI is still working on this ticket." },
-  }, "State · intent changed while the AI was running"),
+  }, "State · intent changed"),
   "state-ai-unavailable": () => workspace({
     ...NO_ORDER_FACTS, intentView: "none", reply: "manual", sidebar: "unavailable", replyBadge: DRAFT_STATUS.unavailable,
     manualText: "Manual-process instructions appear here. The team provides the text.",
@@ -886,7 +899,7 @@ const SCREENS = {
   }, "State · closed"),
   "state-editing": () => workspace({
     reply: "editing",
-    editorHtml: "Hi Linh, thank you for your patience.<br><br>Your refund request for order ORD-20931 was received on 14 October and is currently under review. Refund requests are reviewed as described in our refund policy. Please reply with the tracking number of your return.",
+    editorHtml: "Thank you for your patience.<br><br>Your refund request for order ORD-20931 was received on 14 October and is currently under review. Refund requests are reviewed as described in our refund policy. Please reply with the tracking number of your return.",
     editorHint: "Edited text is not checked against the sources.",
     actions: { ...SENDABLE, edit: { label: "Discard edits", enabled: true } },
   }, "State · editing a draft"),
@@ -896,7 +909,7 @@ const SCREENS = {
   }, "State · draft rejected"),
   "state-placeholder": () => workspace({
     reply: "editing", warnings: [],
-    editorHtml: 'Hi Linh, we have sent the return label to <mark class="placeholder" title="Personal data hidden: replace before sending">[EMAIL]</mark>. Please reply with the tracking number of your return.',
+    editorHtml: 'We have sent the return label to <mark class="placeholder" title="Personal data hidden: replace before sending">[EMAIL]</mark>. Please reply with the tracking number of your return.',
     editorHint: "Personal data hidden: replace before sending.",
     actions: { ...BASE.actions, edit: { label: "Discard edits", enabled: true }, reason: "Replace the highlighted text to send the reply." },
   }, "State · placeholder in the editor"),
@@ -906,6 +919,7 @@ const SCREENS = {
   "dialog-confirm-send": () => workspace({ warnings: [], actions: SENDABLE }, "Dialog · confirm Send reply", { overlay: SEND_DIALOG }),
   "dialog-escalate": () => workspace({ warnings: [], actions: SENDABLE }, "Dialog · Escalate ticket", { overlay: ESCALATE_DIALOG }),
   "citation-popover": () => workspace({ warnings: [], actions: SENDABLE }, "Citation marker · hover or focus", { overlay: CITATION_POPOVER }),
+  "citation-order": () => workspace({ warnings: [], actions: SENDABLE }, "Order citation marker · hover or focus", { overlay: ORDER_CITATION_POPOVER }),
   "kb-document": () => workspace({ warnings: [], actions: SENDABLE }, "KB document version · side sheet", { overlay: KB_SHEET }),
 };
 

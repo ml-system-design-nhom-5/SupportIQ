@@ -1,6 +1,6 @@
 # Logging and observability rules
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-01
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-04
 
 Telemetry that is easy to read, collected in one place, and viewed on one screen. It must trace any ticket across components, help reconstruct any suggestion (FR-07), and measure latency, cost, and product value, without carrying confidential data. The stack is defined in [ADR-0007](../decisions/0007-observability-stack.md).
 
@@ -103,7 +103,7 @@ Bad:  message="draft failed for ticket 123, msg='where is my order...'"
 | Component | Events |
 |---|---|
 | Both | `startup.completed`, `settings.loaded`, `settings.invalid`, `shutdown.started` |
-| `backend` | `ticket.created`, `suggestion_job.claimed`, `suggestion_job.lease_expired`, `pseudonymization.failed`, `pseudonym.restore_failed`, `ai_service.called`, `ai_service.call_failed`, `suggestion.draft_cancelled`, `ticket.manual_handling_started`, `intent.overridden`, `decision.recorded`, `reply.sent`, `account.role_changed`, `account.status_changed`, `permission.denied` |
+| `backend` | `ticket.created`, `suggestion_job.claimed`, `suggestion_job.lease_expired`, `pseudonymization.failed`, `pseudonym.restore_failed`, `ai_service.called`, `ai_service.call_failed`, `suggestion.part_cancelled`, `ticket.manual_handling_started`, `intent.overridden`, `decision.recorded`, `reply.sent`, `account.role_changed`, `account.status_changed`, `permission.denied` |
 | `ai-service` | `release.loaded`, `model.loaded`, `kb.loaded`, `analysis.completed`, `draft.generated`, `draft.abstained`, `escalation.recommended`, `personal_data.masked`, `llm.call_failed`, `grounding.check_failed` |
 
 The full event list of each flow is in its design doc, for example the [contracts v1 design](../design/contracts-v1.md#observability).

@@ -68,7 +68,7 @@ sequenceDiagram
 
 ## Project status
 
-Design phase. Decisions are recorded in [docs/decisions/](docs/decisions/README.md). Revision 2 of the contracts v1 design ([docs/design/contracts-v1.md](docs/design/contracts-v1.md)) aligns the design with the team's specification and is in review, together with ADR-0010 to ADR-0013. Writing the contracts follows their approval. There is no runnable code yet; setup instructions are added here when the first component is scaffolded.
+Design phase. Decisions are recorded in [docs/decisions/](docs/decisions/README.md). Revision 2 of the contracts v1 design ([docs/design/contracts-v1.md](docs/design/contracts-v1.md)) aligns the design with the team's specification and is in review, together with ADR-0010 to ADR-0014. Writing the contracts follows their approval. There is no runnable code yet; setup instructions are added here when the first component is scaffolded.
 
 ## Target repository layout
 
@@ -78,7 +78,7 @@ supportiq-ecom/
 ├── AGENTS.md        # Instructions for AI coding agents
 ├── docs/            # Requirements, decisions, rules, glossary
 ├── contracts/       # API and data contracts (created during contract design)
-├── frontend/        # /shop and /console (created at scaffold)
+├── frontend/        # /shop, /console, and /admin (created at scaffold)
 ├── backend/         # Created at scaffold
 ├── ai-service/      # Created at scaffold
 ├── ml/              # Training and offline evaluation (created at scaffold)
@@ -102,7 +102,7 @@ Start with [docs/README.md](docs/README.md): where every document lives and how 
 ## Non-negotiable rules
 
 1. Staff approve every reply. The system never sends replies or performs transactions on its own.
-2. Every draft cites verifiable sources (document ID and version). Without enough evidence, the AI abstains.
+2. Every draft cites verifiable sources: a document ID and version for policy, and an order field for facts about the order. Without enough evidence, the AI abstains.
 3. Simulated data only. Personal data is pseudonymized before it leaves `backend`. No secrets in the repository.
 4. Design before code. Contracts before implementation.
 

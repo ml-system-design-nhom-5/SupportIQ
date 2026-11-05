@@ -3,8 +3,8 @@
 - **Status:** In review
 - **Owner:** contracts gatekeeper
 - **Reviewers:** ML engineer, RAG engineer, backend engineer, frontend engineer
-- **Last reviewed:** 2026-11-01
-- **Related:** [Requirements](../product/requirements.md) (FR-01 to FR-11, ESC-01 to ESC-05), [ADR-0001](../decisions/0001-system-architecture.md), [ADR-0004](../decisions/0004-api-conventions.md), [ADR-0005](../decisions/0005-intent-independent-retrieval.md), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md), [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md), [contract rules](../rules/contracts.md)
+- **Last reviewed:** 2026-11-05
+- **Related:** [Requirements](../product/requirements.md) (FR-01 to FR-11, ESC-01 to ESC-05), [ADR-0001](../decisions/0001-system-architecture.md), [ADR-0004](../decisions/0004-api-conventions.md), [ADR-0005](../decisions/0005-intent-independent-retrieval.md), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md), [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md), [ADR-0014](../decisions/0014-citations-to-order-context.md), [contract rules](../rules/contracts.md)
 
 ## Summary
 
@@ -18,7 +18,7 @@ The team agreed the product behavior:
 - Personal data is pseudonymized before any text leaves `backend`.
 - Sign-in follows ADR-0009, and roles follow ADR-0012.
 
-**Revision 2 (2026-10-28, updated 2026-11-01).** Revision 1 was approved on 2026-10-24. Revision 2 aligns the design with the team's specification:
+**Revision 2 (2026-10-28, updated 2026-11-05).** Revision 1 was approved on 2026-10-24. Revision 2 aligns the design with the team's specification:
 
 - four roles, including `manager` and `admin` ([ADR-0012](../decisions/0012-roles-v1.md));
 - pseudonymization ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md));
@@ -27,7 +27,9 @@ The team agreed the product behavior:
 - reports for managers (FR-10) and the audit log (NFR-09);
 - the release ID;
 - the escalation rules ESC-01 to ESC-05;
-- the update of 2026-11-01: a retry of failed suggestions, draft cancellation on an intent change, an authority flag that survives supersession, read-only staff access to tickets that are not open, and the customer's other orders in the workspace.
+- the update of 2026-11-01: a retry of failed suggestions, draft cancellation on an intent change, read-only staff access to tickets that are not open, and the customer's other orders in the workspace;
+- the update of 2026-11-04: citations to the order context ([ADR-0014](../decisions/0014-citations-to-order-context.md)), and intent changes accepted only after an intent is known;
+- the update of 2026-11-05: one pending rule for every role, responses from the ingress, shared `Citation` and `OrderContext` schemas, the shop's `order_id` filter on `listShopTickets`, the ticket status `replied`, the newest-first order of shop lists, the `account_id` of `getCurrentSession`, and names that follow CON-18 (`start_at`, `end_at`, `handling_time_ms`, `mask_count_by_type`).
 
 Revision 2 needs a new approval.
 
@@ -68,6 +70,7 @@ Revision 2 needs a new approval.
 - Sign-in: [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md). Roles: [ADR-0012](../decisions/0012-roles-v1.md).
 - Pseudonymization and egress control: [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md).
 - Replicas, the suggestion job queue, and deployment: [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md).
+- Citations to order data: [ADR-0014](../decisions/0014-citations-to-order-context.md).
 
 ## Design
 
@@ -94,7 +97,7 @@ The roles are `customer`, `staff`, `manager`, and `admin` ([ADR-0012](../decisio
 | Confirm or correct the intent of an open ticket | No | Yes | Yes | No |
 | Send a reply on an open ticket where authority is not required and no suggestion part is pending | No | Yes | Yes | No |
 | Submit a reply proposal on an open ticket | No | Yes | No | No |
-| Send a reply on a ticket that requires authority, awaits approval, or is escalated | No | No | Yes | No |
+| Send a reply on a ticket that requires authority, awaits approval, or is escalated, when no suggestion part is pending | No | No | Yes | No |
 | Escalate an open ticket | No | Yes | No | No |
 | View reports | No | No | Yes | No |
 | List `staff`, `manager`, and `admin` accounts; change a role between `staff` and `manager`; deactivate or reactivate one of those accounts | No | No | No | Yes |
@@ -107,14 +110,15 @@ The roles are `customer`, `staff`, `manager`, and `admin` ([ADR-0012](../decisio
 
 ### Authority rule (FR-06)
 
-- A ticket has `is_authority_required`, a ticket-level property that `backend` sets to `true` when any suggestion of that ticket carries the reason code `requires_authority`, in its routing or in its draft outcome. A superseded suggestion counts: its analysis still finishes, and its flag still applies ([Suggestion lifecycle](#suggestion-lifecycle)).
+- A ticket has `is_authority_required`, a ticket-level property that `backend` sets to `true` when any suggestion of that ticket carries the reason code `requires_authority`, in its routing or in its draft outcome. `backend` sets it in the transaction that stores that result.
 - `requires_authority` covers refund decisions, transaction disputes, policy exceptions, legal claims, and suspected fraud (ESC-03). The reason code `human_agent_requested` does not set the property.
 - `ai-service` sets `requires_authority` from these signals, and each signal can only add it:
   - a sensitive intent, at least `request_refund`, with a significant probability in the intent distribution ([ADR-0005](../decisions/0005-intent-independent-retrieval.md), statement 5);
   - a term of the sensitive-term list, for legal claims and suspected fraud;
   - the LLM, if the `ai-service` pipeline design adopts this signal after measuring it.
-- The property is never cleared in v1. Correcting the intent or re-running the suggestion cannot remove it.
-- While any part of the current suggestion is `pending`, or the analysis of a superseded suggestion is still running, staff cannot send a reply (`409 suggestion-pending`). This closes the gap where the flag is not yet known. Staff can still correct the intent during this time, and the console warns that the flag may still be set.
+- The property is never cleared in v1. Correcting the intent or re-running the suggestion cannot remove it. A sensitive intent chosen by staff sets it in the same way, because the override replaces the intent distribution. A choice that staff replace before its draft outcome arrives sets nothing, because staff withdrew it.
+- While any part of the current suggestion is `pending`, staff cannot send a reply (`409 suggestion-pending`). This closes the gap where the flag is not yet known.
+- Staff can correct the intent only when an intent is known: the analysis of the current suggestion is `ready`, or the current suggestion already carries an `intent_override`. Every signal of the model's analysis is therefore stored before any correction. A correction is allowed while a draft is generating: it cancels the draft call and starts a new draft ([Suggestion lifecycle](#suggestion-lifecycle)).
 - Staff can always route a ticket to a manager themselves, with a reply proposal or an escalation.
 - Tickets that the AI never flags (manual mode, AI unavailable, or a missed classification) rely on staff judgment ([ASM-04](../product/requirements.md#6-assumptions-and-constraints)). The guarantee is: every ticket the AI flags is sent by a manager. The manual-handling panel reminds staff to route refund decisions and disputes to a manager and offers Submit for approval, and a retry ([Suggestion lifecycle](#suggestion-lifecycle)) limits this case to the time the AI is down.
 
@@ -142,7 +146,7 @@ stateDiagram-v2
 - An AI failure never changes the ticket state. The ticket stays `open` and is handled manually.
 - A forbidden transition, for example sending a reply on a `closed` ticket, returns `409 invalid-ticket-state`. A repeated request with the same `Idempotency-Key` returns the original result instead.
 
-**Handling mode.** Each ticket has `handling_mode`: `assisted` or `manual`. In `manual` mode, `backend` requests no suggestion and the console shows no AI panel. Shop tickets use the default mode from settings. Tickets imported for the product-value study take their mode from the import file, as the study protocol decides.
+**Handling mode.** Each ticket has `handling_mode`: `assisted` or `manual`. In `manual` mode, `backend` requests no suggestion and the console shows no AI output. Shop tickets use the default mode from settings. Tickets imported for the product-value study take their mode from the import file, as the study protocol decides.
 
 **Handling time.** The clock starts at the first staff view (`recordTicketView`) and stops when the reply is sent. It is reported per mode (`supportiq.ticket.handling.duration`).
 
@@ -155,7 +159,7 @@ A suggestion is everything the AI produced for a ticket in one run, as recorded 
 | `ticket_created` | A ticket is created in `assisted` mode |
 | `intent_override` | Staff or a manager confirms the predicted intent or chooses another |
 | `kb_version_changed` | On the first staff view, the current suggestion used a KB version different from the one `ai-service` has loaded |
-| `retry` | The current suggestion has a part `unavailable` with `ai_service_unavailable`, or a draft `llm_unavailable`, and staff open the ticket or ask for a retry |
+| `retry` | The ticket is `open`, the current suggestion has a part `unavailable` with `ai_service_unavailable`, or a draft `llm_unavailable`, and staff open the ticket or ask for a retry |
 
 Every suggestion of a ticket uses `as_of` = the ticket's `created_at`, the time the customer asked. The `ai-service` pipeline design confirms this choice.
 
@@ -163,21 +167,21 @@ A suggestion has two parts, each with its own status, because the two calls retu
 
 | Part | Statuses |
 |---|---|
-| Analysis | `pending`, `ready`, `unavailable` |
+| Analysis | `pending`, `ready`, `unavailable`, `cancelled` |
 | Draft | `pending`, `draft_ready`, `abstained`, `escalation_recommended`, `llm_unavailable`, `unavailable`, `cancelled` |
 
 - `backend` sets both parts `unavailable` with the reason code `pseudonymization_failed` when pseudonymization fails or its output exceeds `PseudonymizedText`. `ai-service` is not called ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md)).
 - `backend` sets a part `unavailable` with the reason code `ai_service_unavailable` when `ai-service` is unreachable, times out, returns `5xx`, returns any `4xx`, or returns a response that does not match the contract. A `4xx` means `backend` sent a request `ai-service` rejected, which is a defect: it is logged at `error` level.
 - The draft response embeds its own analysis. If the analysis call failed but the draft call succeeded, `backend` fills the analysis from the draft response.
 - A new suggestion supersedes the previous one. The workspace shows only the current suggestion; every suggestion stays stored for provenance.
-- If the superseded suggestion is still running, `backend` cancels its draft call and sets its draft part to `cancelled`. `cancelled` is set only by `backend` and is never shown. Cancelling is best effort: a call that cannot be stopped finishes, and its result is discarded. The LLM usage of a cancelled call is not recorded, so cost figures can be slightly low.
+- If the superseded suggestion is still running, `backend` cancels its calls to `ai-service` and sets every part that is still `pending` to `cancelled`. `cancelled` is set only by `backend` and is never shown. Cancelling is best effort: a call that cannot be stopped finishes, and its result is discarded. The LLM usage of a cancelled call is not recorded, so cost figures can be slightly low.
 - A failure with `pseudonymization_failed` is not retried, because pseudonymization is deterministic and fails the same way.
 - **Low confidence (ESC-01).** When the draft outcome is `abstained` with `low_confidence`, there is no draft. Staff confirm the predicted intent or choose another. Both create a suggestion with `intent_override`, and its source is recorded as `staff`.
 
 **Suggestion jobs.** Each suggestion has exactly one job in the suggestion job queue ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md#suggestion-job-queue)):
 
 - A worker claims a job under a lease. An expired lease is claimed again, up to the maximum number of attempts.
-- Results are stored only by the current attempt, and only while the suggestion is current. The one exception: when a suggestion is superseded, its analysis call still finishes, and a `requires_authority` in it sets the ticket's flag.
+- Results are stored only by the current attempt, and only while the suggestion is current.
 - When the attempts run out, every part that is still `pending` becomes `unavailable` with `ai_service_unavailable`.
 - There is no re-queue at startup: lease expiry recovers jobs from a crashed replica.
 
@@ -275,8 +279,10 @@ sequenceDiagram
     BE-->>FE: Ticket summaries
     Manager->>FE: Review the proposal or the escalation, edit if needed, send
     FE->>BE: POST /v1/console/tickets/{ticket_id}/replies
-    alt Caller is a manager and the ticket is not closed
+    alt Caller is a manager, the ticket is not closed, and no suggestion part is pending
         BE-->>FE: 201 reply, ticket closed
+    else A suggestion part is pending
+        BE-->>FE: 409 suggestion-pending
     else Caller is staff
         BE-->>FE: 403 forbidden
     else Ticket already closed
@@ -296,15 +302,11 @@ sequenceDiagram
     participant AI as ai-service
     Staff->>FE: Confirm the predicted intent, or choose another
     FE->>BE: POST /v1/console/tickets/{ticket_id}/suggestions with intent_override
-    alt Ticket open
+    alt Ticket open and intent known
         BE-->>FE: 202 new suggestion (pending), the previous one superseded
         opt The previous suggestion is still running
-            BE->>AI: Cancel its draft call; its analysis call finishes
-            alt Analysis carries requires_authority
-                BE->>BE: Set the authority flag and discard the rest
-            else No flag
-                BE->>BE: Discard the result
-            end
+            BE->>AI: Cancel its calls
+            BE->>BE: Set its pending parts cancelled, discard any late result
         end
         BE->>BE: A worker claims the job and loads the ticket's pseudonymized text
         alt Pseudonymization failed
@@ -320,6 +322,10 @@ sequenceDiagram
         loop While the suggestion is pending
             FE->>BE: GET /v1/console/tickets/{ticket_id}
         end
+    else No intent known, a part is pending
+        BE-->>FE: 409 suggestion-pending
+    else No intent known, nothing pending
+        BE-->>FE: 422 invalid-request
     else Ticket not open
         BE-->>FE: 409 invalid-ticket-state
     end
@@ -351,7 +357,7 @@ sequenceDiagram
             BE->>BE: Parts unavailable (ai_service_unavailable), manual handling continues
         end
     else Nothing to retry, or pseudonymization_failed
-        BE-->>FE: 422 invalid-request for an explicit retry; no new suggestion on a view
+        BE-->>FE: 422 invalid-request for an explicit retry, no new suggestion on a view
     end
 ```
 
@@ -365,6 +371,7 @@ Both contracts are new at version `1.0.0`. No consumer exists yet, so there is n
 
 - **Headers:** `traceparent` on every request ([ADR-0004](../decisions/0004-api-conventions.md), decision 6). `Idempotency-Key` on every write except `createSession`.
 - **Status codes:** as in [CON-11](../rules/contracts.md#api-conventions), including `202` for `createSuggestion` and `204` for operations without a response body.
+- **Responses from the ingress:** `ingress` can answer `413` (body over its size limit), `429` (rate limit), `502`, or `504` (`backend` unreachable) before `backend` sees the request ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)). These bodies are not Problem Details. `frontend` treats them as technical failures: a plain-language message, editor text kept, and automatic retries only as [TS-29](../rules/typescript.md#api-access) and [ERR-12](../rules/errors-and-reliability.md#retries) allow, so never for `sendReply` and never after `413`.
 - **Errors:** Problem Details with a `trace_id` extension member. Problem types:
 
 | Type (`urn:supportiq:problem:` + name) | Status | Meaning |
@@ -387,7 +394,8 @@ Both contracts are new at version `1.0.0`. No consumer exists yet, so there is n
   - `ConfidenceBand`: `high`, `medium`, `low`.
   - `AiReasonCode`.
   - `DocumentValidity`: `valid`, `expired`, `conflicting`.
-  - `Citation`, `RankedDocument`, `DraftSegment`, `Warning`.
+  - `Citation` (both variants, never with a `value`), `RankedDocument`, `DraftSegment`, `Warning`.
+  - `OrderContext` and `OrderContextField`, the closed enum of its field names.
   - `AssetVersions`: `release_id` and the version of each asset.
   - `Placeholder`: the placeholder syntax of [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#placeholder-syntax). Both contracts use it to describe AI text and the rule that a reply body contains no placeholder.
   - `Money`: `amount_minor`, `currency`.
@@ -457,7 +465,7 @@ Staff use the `StaffReasonCode` values from [ADR-0006](../decisions/0006-staff-f
 - The request carries no ticket ID, no customer identity, and no staff identity, and its personal data is pseudonymized ([SEC-04](../rules/security-and-privacy.md#data-sent-to-llm-providers)). A value that every detector misses can remain ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#detection)). Requests are correlated by trace context.
 - All AI text in responses (draft segment `text`, `staff_note`) MAY contain only placeholders that appear in the prompt: the pseudonyms of the request's `message` and the masks that `ai-service` applied. `ai-service` enforces this before responding.
 
-`OrderContext`, the allow-list. Every field is optional; absence means not applicable or unknown. It contains no identifiers and no address.
+`OrderContext`, the allow-list and a shared schema. Every field is optional; absence means not applicable or unknown. It contains no identifiers and no address.
 
 | Field | Type |
 |---|---|
@@ -492,7 +500,16 @@ Staff use the `StaffReasonCode` values from [ADR-0006](../decisions/0006-staff-f
 
 `paragraph_index` is required: an integer that starts at 0 and never decreases from one segment to the next. Segments with the same index form one paragraph.
 
-Every variant also carries `reason_codes`, the embedded `analysis`, an optional `staff_note`, `versions`, `step_latency_ms`, `masks_applied` (the number of masks applied by type; Internal), and `llm_usage` (input tokens, output tokens, cost in micro-USD) when the LLM was called.
+`Citation`, a shared schema, is a union discriminated by `source_type` ([ADR-0014](../decisions/0014-citations-to-order-context.md)):
+
+| `source_type` | Fields | Supports |
+|---|---|---|
+| `kb_document` | `citation_id`, `document_id`, `version`, `snippet` | A policy, an eligibility, or a conclusion |
+| `order_context` | `citation_id`, `field` (`OrderContextField`, a closed enum of the `OrderContext` field names) | A fact held in that field. It is never evidence for a policy or for routing |
+
+An `order_context` citation carries the field name and never its value, so no personal value leaves `ai-service`.
+
+Every variant also carries `reason_codes`, the embedded `analysis`, an optional `staff_note`, `versions`, `step_latency_ms`, `mask_count_by_type` (the number of masks applied, by type; Internal), and `llm_usage` (input tokens, output tokens, cost in micro-USD) when the LLM was called.
 
 #### `backend` contract (`backend.openapi.yaml`)
 
@@ -505,14 +522,14 @@ Three audience namespaces keep the guardrails structural:
 | Operation ID | Method and path | Roles | Result |
 |---|---|---|---|
 | `createSession` | `POST /v1/sessions` | Anyone | `201` session view and cookie ([ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md)) |
-| `getCurrentSession` | `GET /v1/sessions/current` | Signed in | User ID, display name, role |
+| `getCurrentSession` | `GET /v1/sessions/current` | Signed in | `account_id` (the same identifier that `listAdminAccounts` returns), display name, role |
 | `deleteCurrentSession` | `DELETE /v1/sessions/current` | Signed in | `204` |
 | `listShopProducts` | `GET /v1/shop/products` | customer | Catalog products, paginated |
 | `getShopProduct` | `GET /v1/shop/products/{product_id}` | customer | One catalog product |
 | `listShopOrders` | `GET /v1/shop/orders` | customer | Own orders, paginated |
 | `getShopOrder` | `GET /v1/shop/orders/{order_id}` | customer | Own order with lines, shipment, and refund |
 | `createShopTicket` | `POST /v1/shop/tickets` | customer | `201` shop ticket view |
-| `listShopTickets` | `GET /v1/shop/tickets` | customer | Own tickets, paginated |
+| `listShopTickets` | `GET /v1/shop/tickets` | customer | Own tickets, paginated, optionally for one order |
 | `getShopTicket` | `GET /v1/shop/tickets/{ticket_id}` | customer | Shop ticket view |
 | `listConsoleTickets` | `GET /v1/console/tickets` | staff (`open` only), manager | Ticket summaries filtered by `status`, paginated |
 | `getConsoleTicket` | `GET /v1/console/tickets/{ticket_id}` | staff, manager | Ticket workspace |
@@ -531,13 +548,15 @@ Three audience namespaces keep the guardrails structural:
 
 `createShopTicket` takes `order_id` (required, one of the caller's orders, as [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md) attaches the support form to an order) and `message` (`MessageText`). Tickets imported for evaluation may have no order; they are created by a `backend` import command, not through the shop.
 
-`createSuggestion` takes an optional `intent_override`. With it, the request corrects or confirms the intent, also while a suggestion is running. Without it, the request is a retry, valid only when `retry_suggestion` is allowed; otherwise it returns `422 invalid-request`.
+`listShopTickets` takes an optional `order_id` query parameter. It must name one of the caller's orders; otherwise it returns `404 not-found`. The shop's order page uses it ([shop UI design](shop-ui.md)). `listShopOrders` and `listShopTickets` return items newest first, by `placed_at` and `created_at`.
+
+`createSuggestion` takes an optional `intent_override`. With it, the request corrects or confirms the intent, also while a draft is generating. When no intent is known ([Authority rule](#authority-rule-fr-06)), it returns `409 suggestion-pending` while a part is `pending`, and `422 invalid-request` otherwise. Without it, the request is a retry, valid only when `retry_suggestion` is allowed; otherwise it returns `422 invalid-request`.
 
 Shop view models:
 
 - `ShopProductView`: product ID, name, description, category, price.
 - `ShopOrderView`: order ID, status, `placed_at`, totals, lines (product ID, product name, quantity), shipment, and refund. It has no shipping address field, because the shop has no screen that needs it.
-- `ShopTicketView`: ticket ID, order ID, the customer's message, `created_at`, `customer_status` (`received` or `answered`), and `reply` (body and `sent_at`) only after a reply is sent. It has no state, suggestion, proposal, or escalation fields.
+- `ShopTicketView`: ticket ID, order ID, the customer's message, `created_at`, `customer_status` (`received` or `replied`), and `reply` (body and `sent_at`) only after a reply is sent. It has no state, suggestion, proposal, or escalation fields.
 
 `TicketSummary`, the items of `listConsoleTickets`:
 
@@ -564,9 +583,9 @@ The excerpt length and the sort parameter are set in contract PR 2.
 | `proposal` | The reply proposal, when one was submitted |
 | `escalation` | Staff reason codes, note, who escalated, and when, when escalated |
 | `reply` | The sent reply, who sent it, and when, when closed |
-| `allowed_actions` | Subset of `send_reply`, `submit_reply_proposal`, `escalate`, `correct_intent`, `retry_suggestion`, computed by `backend` for the caller. Empty when staff read a ticket that is not `open` |
+| `allowed_actions` | Subset of `send_reply`, `submit_reply_proposal`, `escalate`, `correct_intent`, `retry_suggestion`, computed by `backend` for the caller. `correct_intent` appears only when an intent is known. Empty when staff read a ticket that is not `open` |
 
-`SuggestionView`: suggestion ID, trigger, `created_at`, `analysis_status` with the analysis when ready, `draft_status` with the draft when `draft_ready` (a union discriminated by `draft_status`), draft `reason_codes`, `warnings`, `staff_note`, `versions` (including `release_id`), `step_latency_ms`, and `trace_id`. Pseudonyms in draft segments and the staff note are restored to their original values. Masks and pseudonyms missing from the map stay as written.
+`SuggestionView`: suggestion ID, trigger, `intent_override` when staff chose an intent, `created_at`, `analysis_status` with the analysis when ready, `draft_status` with the draft when `draft_ready` (a union discriminated by `draft_status`), draft `reason_codes`, `warnings`, `staff_note`, `versions` (including `release_id`), `step_latency_ms`, and `trace_id`. Pseudonyms in draft segments and the staff note are restored to their original values. Masks and pseudonyms missing from the map stay as written. Citations use the view model `CitationView`, which references the shared variants: a `kb_document` citation as it is, and an `order_context` citation extended with `value`, typed as that field is in `OrderContext`. `backend` takes it from the stored request of that suggestion, so staff see what the draft was written from.
 
 The draft in `SuggestionView` also carries `text`: the canonical plain-text body, built by `backend` from the restored segments with one rule:
 
@@ -603,11 +622,11 @@ An escalation records `escalate`. For a reply proposal, the record keeps both th
 
 #### Reports (FR-10)
 
-`getConsoleReport` takes the query parameters `from` and `to` (timestamps, required, `from` earlier than `to`; otherwise `422 invalid-request`). `backend` computes the report on request from its own records: the audit log, suggestions, and decisions. It never uses telemetry ([LOG-33](../rules/logging-and-observability.md#alerts-and-retention)). The report contains only aggregates, so it is Internal data.
+`getConsoleReport` takes the query parameters `start_at` and `end_at` (timestamps, required, `start_at` earlier than `end_at`; otherwise `422 invalid-request`). `backend` computes the report on request from its own records: the audit log, suggestions, and decisions. It never uses telemetry ([LOG-33](../rules/logging-and-observability.md#alerts-and-retention)). The report contains only aggregates, so it is Internal data.
 
 | Field | Meaning |
 |---|---|
-| `period` | `from` and `to` |
+| `period` | `start_at` and `end_at` |
 | `ticket_counts` | Tickets created and tickets closed in the period, by handling mode |
 | `draft_decisions` | Counts and shares of `approve`, `edit`, and `reject` among replies sent in the period from a `draft_ready` draft |
 | `escalations` | Escalations in the period, by staff reason code |
@@ -616,7 +635,7 @@ An escalation records `escalate`. For a reply proposal, the record keeps both th
 | `suggestion_latency_ms` | p50 and p95 per part, from suggestion creation until the part left `pending` |
 | `ai_error_rate` | Share of suggestions with a part `unavailable` or a draft `llm_unavailable` |
 | `llm_cost_micro_usd` | Total, and average per suggestion that called the LLM |
-| `handling_time_s` | p50 by handling mode (NFR-11) |
+| `handling_time_ms` | p50 by handling mode (NFR-11) |
 
 Infrastructure cost (NFR-10) is reported from AWS billing, not from this report.
 
@@ -696,12 +715,15 @@ Values missing from the source files are never invented. A document without a re
 | A detector misses an unknown name or address in a message | The value reaches `ai-service`; the second layer masks only patterns. Every miss counts against NFR-06 and is reported | NFR-06 suite with messages that name third persons |
 | A customer asks about another customer's order | Nothing about that order is available: the ticket holds the caller's order, `other_orders` holds only the same customer's orders, and `ai-service` receives only the ticket's order context | NFR-06 attack scenario; permission test |
 | The LLM output contains a placeholder that was not in the prompt | No draft; `llm_invalid_output` | `ai-service` provider test with a fake LLM |
+| A draft cites an order field that is absent from the request's `order_context`, states a value that differs from that field, or supports a policy only with an order citation | No draft; `grounding_failed` | `ai-service` provider test with a fake LLM; guardrail test (TEST-26) |
 | Stored AI text contains a pseudonym missing from the map | Shown as written and highlighted; logged at `error` as a defect | Use-case test |
 | A reply or proposal body contains a placeholder | `422 invalid-request` | Handler test |
 | Staff send a reply on a ticket where authority is required | `403 authority-required` | Guardrail test (TEST-26) |
 | Staff correct the intent on a flagged ticket, then try to send | The flag stays set: `409 suggestion-pending` while pending, `403 authority-required` after | Guardrail test (TEST-26) |
-| Staff correct the intent while the first suggestion is running, and its analysis carries `requires_authority` | The draft call is cancelled, the flag is still set, and sending stays blocked until that analysis finishes | Guardrail test (TEST-26) |
-| A draft call is still running when its suggestion is superseded | Draft part `cancelled`; a late result is discarded | Use-case test |
+| Staff correct the intent when no intent is known and a part is `pending` | `409 suggestion-pending`; no new suggestion | Guardrail test (TEST-26) |
+| Staff correct the intent when no intent is known and nothing is `pending` | `422 invalid-request`; staff use a retry when one is allowed, otherwise manual handling | Handler test |
+| Staff correct the intent while a draft is generating | The draft call is cancelled, a new suggestion starts, and the flag stays set | Use-case test |
+| A call is still running when its suggestion is superseded | Pending parts `cancelled`; a late result is discarded | Use-case test |
 | A retry while `ai-service` is still failing | The new suggestion ends `unavailable`; manual handling continues | Use-case test |
 | A retry with nothing to retry, or after `pseudonymization_failed` | `422 invalid-request` | Handler test |
 | Staff send while a suggestion part is pending | `409 suggestion-pending` | Handler test |
@@ -713,12 +735,13 @@ Values missing from the source files are never invented. A document without a re
 | Staff read a ticket that is not `open` | `200` with empty `allowed_actions` | Permission table test |
 | An admin calls a `/v1/shop/` or `/v1/console/` operation, or another role calls a `/v1/admin/` operation | `403 forbidden` | Permission table test |
 | Staff or a customer request a report | `403 forbidden` | Permission table test |
-| A report request with `from` not earlier than `to` | `422 invalid-request` | Handler test |
+| A report request with `start_at` not earlier than `end_at` | `422 invalid-request` | Handler test |
 | An admin changes their own role or status, changes an `admin` role, or removes the last active manager | `422 invalid-request` | Use-case tests |
 | An admin reads or changes a customer account | `404 not-found`; customer accounts never appear in admin lists | Permission test |
 | An account whose role or status changed uses its old session | `401 unauthenticated` | Integration test |
 | Customer requests another customer's order or ticket | `404 not-found` | Permission test |
 | Customer creates a ticket on an order that is not theirs | `404 not-found` | Permission test |
+| Customer lists tickets for an order that is not theirs | `404 not-found` | Permission test |
 | Customer sees AI output before a reply is sent | Impossible: shop schemas have no AI fields | Schema test over every `/v1/shop/` response; guardrail test |
 | Any operation changes commerce data or performs a transaction | Impossible: no such operation exists | Contract test that lists operations and fails on any write to products, orders, shipments, or refunds |
 | A worker crashes or hangs while holding a job | The job is claimed again after its lease expires; results are recorded once | Integration test with two workers and a killed worker |
@@ -738,22 +761,25 @@ Values missing from the source files are never invented. A document without a re
 - **Staff may send authority-required replies after acknowledging a warning:** rejected by the team in favor of manager approval.
 - **Reports as Grafana dashboards:** rejected. Telemetry is disposable and is not the record of truth ([LOG-33](../rules/logging-and-observability.md#alerts-and-retention)). Grafana sits outside the access control of `backend` (FR-08). The observability stack may also be reduced to fit the memory budget ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)). Grafana stays the developer view.
 - **In-process job runner with a re-queue at startup** (revision 1): replaced by the PostgreSQL job queue, because two replicas could process one job twice ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)).
-- **Blocking intent corrections while a suggestion is running:** rejected. Staff stay in control, and the flag of the superseded suggestion is kept instead.
+- **Blocking intent corrections until the draft is ready:** rejected. Staff would wait up to the draft timeout for a draft they already know is wrong. Only the analysis, which has no LLM step, finishes first.
+- **Finishing the analysis of a superseded suggestion to keep its flag:** rejected. It needs an exception to the job rules, and it is not needed: an intent correction is accepted only after the analysis, so the flag is already stored.
+- **Citations only to KB document versions:** rejected. An order fact is not in the KB, so a draft could not state it and still pass the grounding check ([ADR-0014](../decisions/0014-citations-to-order-context.md)).
 - **A checkbox before a manual reply, or blocking staff replies on tickets without an AI result:** rejected. ESC-05 and NFR-07 require that manual replies keep working, a checkbox proves nothing about the reply, and a block would send every ticket to a manager during an outage.
 - **A ticket attached to several orders:** rejected. It would change [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md) and the order context. Showing the customer's other orders read-only gives staff the context they need.
 - **Masking only inside `ai-service`** (revision 1): replaced by pseudonymization in `backend` ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md)).
+- **No admin role or admin screens** (revision 1): replaced by the minimal admin area of [ADR-0012](../decisions/0012-roles-v1.md).
 
 ## Testing and evaluation
 
 - **Contract:** provider tests (Schemathesis) and consumer tests (Prism mocks) for both contracts, with an example for every outcome of every operation ([CON-27, CON-28](../rules/contracts.md#contract-tests)).
 - **Unit:**
   - the ticket state machine, with property-based tests that a `closed` ticket never changes and that replies come only from allowed states;
-  - the authority rule, with property-based tests that no sequence of suggestions, overrides, or re-runs clears the flag, and that a flag in a superseded suggestion is never lost;
+  - the authority rule, with property-based tests that no sequence of suggestions, overrides, or re-runs clears the flag, and that an intent override is refused until an intent is known;
   - the permission matrix, as a table-driven test over every operation and all four roles;
   - basis validation, the placeholder check on bodies, and decision derivation on restored drafts;
   - building the canonical draft `text` from segments, with property-based tests that sending `text` unchanged always records `approve`;
   - merging suggestion parts in every arrival order;
-  - pseudonymization: each detector with at least five positive and five negative examples, and property-based tests that it is deterministic and that restoring gives back the original message;
+  - pseudonymization: each detector with at least five positive and five negative examples, and property-based tests that it is deterministic and that restoring gives back the original message, apart from spellings that normalization treats as equal;
   - admin rules: self-change, allowed role changes, and the last active manager;
   - report aggregation on a fixed set of records with known answers.
 - **Integration:** the suggestion job queue with two workers, lease expiry, stale results, draft cancellation, and retries; the insert-only audit log against PostgreSQL; session deletion on role and status changes.
@@ -763,7 +789,7 @@ Values missing from the source files are never invented. A document without a re
 
 ## Observability
 
-- **Events:** `ticket.created`, `suggestion.requested`, `suggestion_job.claimed`, `suggestion_job.lease_expired`, `pseudonymization.failed`, `pseudonym.restore_failed`, `ai_service.called`, `ai_service.call_failed`, `suggestion.completed`, `suggestion.superseded`, `suggestion.draft_cancelled`, `ticket.viewed`, `ticket.manual_handling_started`, `intent.overridden`, `reply_proposal.submitted`, `decision.recorded`, `reply.sent`, `ticket.escalated`, `account.role_changed`, `account.status_changed`, `permission.denied`.
+- **Events:** `ticket.created`, `suggestion.requested`, `suggestion_job.claimed`, `suggestion_job.lease_expired`, `pseudonymization.failed`, `pseudonym.restore_failed`, `ai_service.called`, `ai_service.call_failed`, `suggestion.completed`, `suggestion.superseded`, `suggestion.part_cancelled`, `ticket.viewed`, `ticket.manual_handling_started`, `intent.overridden`, `reply_proposal.submitted`, `decision.recorded`, `reply.sent`, `ticket.escalated`, `account.role_changed`, `account.status_changed`, `permission.denied`.
 - **Spans:** `create_ticket`, `run_suggestion_job`, `pseudonymize_message`, `call_ai_service` (with the endpoint as an attribute), `save_decision`, `send_reply`, `build_report`.
 - **Metrics:** `supportiq.ticket.handling.duration` by mode, `supportiq.staff.decisions`, `supportiq.ai_service.unavailable`, `supportiq.suggestion.duration` (ms, by part), `supportiq.pseudonymization.outcomes` (by outcome), and `supportiq.suggestion_job.lease_expirations`.
 - The trace ID is stored with each suggestion and audit log entry, and shown in the developer details panel ([UI-35](../rules/ui.md#developer-views)).
@@ -778,7 +804,7 @@ Values missing from the source files are never invented. A document without a re
 | `ai-service` → LLM provider | The pseudonymized message after masking, KB snippets, and the order fields a prompt needs, through the egress proxy ([SEC-04 to SEC-06](../rules/security-and-privacy.md#data-sent-to-llm-providers), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md)) |
 | `backend` → `/shop` | Catalog products (Public); the caller's own orders and tickets, and sent replies only (Confidential) |
 | `backend` → `/console` | Customer display name, message, order details, the customer's other orders without addresses, and suggestions with pseudonyms restored (Confidential), to staff and managers only. Reports (Internal), to managers only |
-| `backend` → `/admin` | Display names, roles, and statuses of `staff`, `manager`, and `admin` accounts; versions in use. No customer data |
+| `backend` → `/admin` | Display names (Confidential, staff identity), roles, and statuses (Internal) of `staff`, `manager`, and `admin` accounts; versions in use (Internal). No customer data |
 | Pseudonym map | Never leaves `backend` ([SEC-37](../rules/security-and-privacy.md#pseudonymization)) |
 
 Every schema property states its data class ([SEC-03](../rules/security-and-privacy.md#data-classification)). Sessions follow [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md).
@@ -787,14 +813,14 @@ Every schema property states its data class ([SEC-03](../rules/security-and-priv
 
 1. Done on 2026-10-24: revision 1 was approved and ADR-0009 accepted.
 2. Done on 2026-10-24: UI-16, UI-17, and UI-19 were updated for the reply proposal flow.
-3. Revision 2, dated 2026-10-28 and updated 2026-11-01, is in review together with ADR-0010 to ADR-0013.
+3. Revision 2, dated 2026-10-28 and updated 2026-11-05, is in review together with ADR-0010 to ADR-0014.
 4. Contract PR 1: `contracts/README.md` (tooling commands), `CHANGELOG.md`, shared schemas, `ai-service.openapi.yaml` 1.0.0, examples, mock setup.
 5. Contract PR 2: `backend.openapi.yaml` 1.0.0 and examples.
 6. Contract PR 3: `kb-contract.md` structure, completed when the KB files arrive.
 7. Implementation starts in parallel against mocks. These follow-up design docs come first:
-   - the `ai-service` pipeline: routing per the escalation rules, the list of sensitive intents, whether the LLM is a third authority signal ([SEC-26](../rules/security-and-privacy.md#prompt-injection) applies), step budgets, retrieval limits (N, k, and snippet length), the maximum output tokens, an LLM spending limit, the grounding check, placeholder instructions and the output check, and the `as_of` confirmation;
-   - the `backend` ticket workflow: job queue schema and settings, pseudonymization detectors and the named-entity library, the audit log schema, and report queries;
-   - the admin layout (the console layout is in the [console UI design](console-ui.md));
+   - the `ai-service` pipeline: routing per the escalation rules, the list of sensitive intents, whether the LLM is a third authority signal ([SEC-26](../rules/security-and-privacy.md#prompt-injection) applies) and, if so, how that signal stays known when a correction cancels the draft that would carry it, step budgets, retrieval limits (N, k, and snippet length), the maximum output tokens, an LLM spending limit, the grounding check including order citations, placeholder instructions and the output check, and the `as_of` confirmation;
+   - the `backend` ticket workflow: job queue schema and settings, pseudonymization detectors and the named-entity library, how a storage error while writing the pseudonym map is retried (it is not a `pseudonymization_failed`), the audit log schema, report queries, and a decision-record export that keeps original values out ([SEC-37](../rules/security-and-privacy.md#pseudonymization));
+   - the screens of `/console`, `/shop`, and `/admin`: the [console UI](console-ui.md), [shop UI](shop-ui.md), and [admin UI](admin-ui.md) designs;
    - the evaluation protocol ([DATA-20](../rules/data-and-ml.md#splits-and-evaluation-protocol)).
 
 Nothing is deployed yet, so no migration or rollback is needed.

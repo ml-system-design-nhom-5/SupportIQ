@@ -1,6 +1,6 @@
 # UI rules
 
-> **Status:** Active · **Owner:** frontend · **Last reviewed:** 2026-11-01
+> **Status:** Active · **Owner:** frontend · **Last reviewed:** 2026-11-05
 
 A strict design system and interaction rules, so every screen looks and behaves the same, staff can work quickly and safely, and developers can build and review UI with confidence. The console exists to help staff check the AI, not to make them trust it blindly. Design-system structure: [ADR-0008](../decisions/0008-ui-design-system.md). Shop scope: [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md). Roles: [ADR-0012](../decisions/0012-roles-v1.md).
 
@@ -79,15 +79,15 @@ flowchart TB
 
 **UI-19.** Tickets where authority is required (FR-06) show a persistent banner: the AI output is supporting information, and the decision belongs to a manager. Managers see the staff proposal next to the AI draft and send it as proposed or edited.
 
-**UI-20.** Each draft segment shows inline citation markers. Hovering or focusing a marker shows the document title, version, effective dates, and snippet; activating it opens the full document version.
+**UI-20.** Each draft segment shows inline citation markers. Hovering or focusing a KB marker shows the document title, version, effective dates, and snippet; activating it opens the full document version. Hovering or focusing an order marker shows each cited order field with its value; activating it opens the order details.
 
 **UI-21.** Staff notes appear in a separate panel labeled "For staff only", never inside the draft editor.
 
-**UI-22.** Confirming the predicted intent or choosing another takes one interaction from the AI panel. After a confirmation or a correction, the draft area shows that a new draft is being generated and marks the previous draft as outdated. A correction is allowed while the AI is running; the console then warns that a manager may still have to send the reply.
+**UI-22.** Confirming the predicted intent or choosing another takes one interaction from where the intent is shown. After a confirmation or a correction, the draft area shows that a new draft is being generated and marks the previous draft as outdated. A correction is available as soon as the intent is shown, also while a draft is generating.
 
 **UI-41.** Editing and sending a draft, or rejecting it and sending a reply, takes at most three deliberate actions (NFR-11). Typing text is not an action. Steps that guardrails require are not counted: acknowledging warnings (UI-18) and confirming Send reply (UI-17). The console design doc states the action count of each flow, and an end-to-end test checks it.
 
-**UI-42.** When a draft abstained for low confidence (ESC-01), the AI panel shows the top three candidate intents with their confidence, each with a "Use this intent" action, and says that no draft is created until staff choose. The draft area shows no draft and no filler text.
+**UI-42.** When a draft abstained for low confidence (ESC-01), the console shows the top three candidate intents with their confidence, each with a "Use this intent" action, and says that no draft is created until staff choose. The draft area shows no draft and no filler text.
 
 **UI-43.** AI text is shown exactly as `backend` returns it. Any text that matches the placeholder syntax ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#placeholder-syntax)), which means a mask or a pseudonym that `backend` could not restore, is highlighted with the label "Personal data hidden: replace before sending". Customer text that only looks like a placeholder (a restored `LITERAL`) is highlighted with the label "Customer text in a reserved format: rephrase before sending". Send reply and Submit for approval stay disabled while the reply editor contains text in the placeholder syntax. The UI never tries to restore or remove placeholders itself.
 

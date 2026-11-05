@@ -1,6 +1,6 @@
 # Security and privacy rules
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-01
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-04
 
 Strict rules for protecting data and keys, especially when calling LLM providers (FR-08, FR-09). All data in this project is simulated, but it is handled exactly as real data would be, so the habits and the controls are right from the start.
 
@@ -89,7 +89,7 @@ The mechanism, the placeholder syntax, and the detectors are defined in [ADR-001
 
 ## Input and output handling
 
-**SEC-21.** All input is validated at each component boundary against the contract: types, lengths, and formats. Message text has one maximum length, defined in the shared contract schema (`MessageText`), so every component enforces the same limit. Invalid input is rejected, never repaired.
+**SEC-21.** All input is validated at each component boundary against the contract: types, lengths, and formats. Message text has one maximum length, defined in the shared contract schema (`MessageText`), and pseudonymized text has its own (`PseudonymizedText`), so every component enforces the same limits. Invalid input is rejected, never repaired.
 
 **SEC-22.** The UI renders customer text, drafts, staff notes, and KB snippets as plain text. Rendering raw HTML or unescaped Markdown is forbidden.
 

@@ -1,6 +1,6 @@
 # Glossary
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-01
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-05
 
 The canonical meaning of every domain term. Code, contracts, docs, and UI use these terms exactly. Add a term here in the same PR that introduces it.
 
@@ -13,13 +13,15 @@ The canonical meaning of every domain term. Code, contracts, docs, and UI use th
 | Analysis | The LLM-free part of the AI pipeline: intent distribution, retrieved documents, and routing recommendation. Served by `/v1/analyses` ([ADR-0005](decisions/0005-intent-independent-retrieval.md)). | — |
 | `as_of` | The point in time used to decide which KB document versions are in effect. | — |
 | Audit log | The insert-only record in `backend` of every pseudonymization outcome, suggestion outcome, staff decision, reply, proposal, escalation, and admin change, with who, what, and when. The source for reports and for reconstructing a suggestion (NFR-09). | audit store, logs (telemetry is separate) |
+| Authority flag | The field `is_authority_required`, which holds the ticket property Authority required. | — |
 | Authority required | A ticket property that becomes true once any suggestion for the ticket carries the reason code `requires_authority` (refund decisions, transaction disputes, policy exceptions, legal claims, suspected fraud; FR-06, ESC-03). It is never cleared, and only a manager can send the reply. Defined in the [contracts v1 design](design/contracts-v1.md#authority-rule-fr-06). | — |
-| Citation | A link from a draft segment to one KB document version, with the supporting snippet. | reference, source link |
+| Citation | A link from a draft segment to its source: one KB document version with the supporting snippet, or one field of the order context, called an order citation ([ADR-0014](decisions/0014-citations-to-order-context.md)). | reference, source link |
 | Component | One of `frontend`, `backend`, or `ai-service` ([ADR-0001](decisions/0001-system-architecture.md)). | — |
 | Contract | The versioned API or data agreement between components, stored in `contracts/`. | — |
 | Customer | A simulated shopper who uses `/shop`. | user (ambiguous) |
 | Design token | A named visual value (color role, spacing step, type size) that every UI element must use instead of a literal ([ADR-0008](decisions/0008-ui-design-system.md)). | — |
 | Draft | An AI-proposed reply for the customer, made of segments with citations. Never sent automatically. | answer, response |
+| Egress proxy | The forward proxy that is the only route from `ai-service` to the internet. It allows only the LLM provider hosts on its allow-list and tunnels TLS, so it never sees request bodies or API keys ([ADR-0010](decisions/0010-pseudonymization-and-egress-control.md#egress-control)). | — |
 | Escalation | Moving a ticket to a manager. The AI can only recommend it; staff decide it. | — |
 | Grounding | The property that every factual or policy claim in a draft is supported by a cited source. | — |
 | Handling mode | Whether a ticket is handled `assisted` (with AI suggestions) or `manual` (without them), used for the product-value study. Defined in the [contracts v1 design](design/contracts-v1.md#ticket-lifecycle). | — |
@@ -68,6 +70,7 @@ The canonical meaning of every domain term. Code, contracts, docs, and UI use th
 | AWS | Amazon Web Services |
 | CI | Continuous integration |
 | FR | Functional requirement, as numbered in the [requirements](product/requirements.md#4-functional-requirements) |
+| JWT | JSON Web Token |
 | LLM | Large language model |
 | ML | Machine learning |
 | MoSCoW | The priority scale Must, Should, Could, Won't |
@@ -77,4 +80,8 @@ The canonical meaning of every domain term. Code, contracts, docs, and UI use th
 | PII | Personally identifiable information: data that identifies a person, such as a name, email, phone number, address, or order ID |
 | PR | Pull request |
 | RAG | Retrieval-augmented generation |
+| RBAC | Role-based access control |
+| SQL | Structured Query Language |
+| TLS | Transport Layer Security |
+| WAF | Web application firewall |
 | WCAG | Web Content Accessibility Guidelines |

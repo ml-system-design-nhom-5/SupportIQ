@@ -118,12 +118,12 @@ A **placeholder** is text that stands in for a personal-data value. There are tw
    ```
 
 3. `N` MUST count from 1 per type within one ticket, in order of first appearance in the message, up to 999.
-4. Each distinct original value MUST get exactly one pseudonym within a ticket, and the same value MUST always get the same pseudonym. Values are compared after normalization: lowercase without diacritics for `NAME` and `ADDRESS`; lowercase for `EMAIL`; digits only for `PHONE` and `CARD`; exact for `ORDER_ID`, `TRACKING_ID`, `TRANSACTION_ID`, and `LITERAL`.
+4. Each distinct original value MUST get exactly one pseudonym within a ticket, and the same value MUST always get the same pseudonym. The map stores the spelling that appears first, so every later spelling of that value is restored in the stored spelling. Values are compared after normalization: lowercase without diacritics for `NAME` and `ADDRESS`; lowercase for `EMAIL`; digits only for `PHONE` and `CARD`; exact for `ORDER_ID`, `TRACKING_ID`, `TRANSACTION_ID`, and `LITERAL`.
 5. Pseudonymization MUST be deterministic: the same message, the same known values, and the same detector version always produce the same text and the same map.
 
 ### Detection
 
-`backend` detects values in this order. A character that is already part of a detected value is never detected again.
+`backend` runs the steps below on the whole message and collects every detection. It then resolves overlaps (step 5), so each character ends up in at most one placeholder.
 
 1. **Literal placeholders.** Any text that matches the placeholder expression in the raw message becomes a `LITERAL` pseudonym. This keeps customer-written text from colliding with real pseudonyms and blocks attempts to inject placeholders. A restored `LITERAL` is the customer's own text and still matches the expression, so it can never be sent as written ([Restoring and sending](#restoring-and-sending)).
 2. **Known values of the ticket.** Whole-word matches of the values `backend` holds for the ticket, ignoring case and diacritics, so "Bui Thi An" matches "Bùi Thị An":
@@ -172,7 +172,7 @@ The limit of 4 000 characters is twice the `MessageText` limit. Only a message m
 1. Prompts MUST instruct the LLM to copy placeholders exactly as they appear and never to create new ones.
 2. `ai-service` MUST check every LLM output: each placeholder in the output MUST appear in the prompt that produced it. Otherwise the output is rejected with the outcome `llm_invalid_output`.
 3. `ai-service` MUST NOT restore, guess, or rewrite placeholders.
-4. Every draft outcome reports `masks_applied`: the number of masks that the second layer applied, by type. `backend` records it in the audit log, because a mask means that pseudonymization missed a value (NFR-06).
+4. Every draft outcome reports `mask_count_by_type`: the number of masks that the second layer applied, by type. `backend` records it in the audit log, because a mask means that pseudonymization missed a value (NFR-06).
 
 ### Restoring and sending
 
@@ -259,7 +259,7 @@ The limit of 4 000 characters is twice the `MessageText` limit. Only a message m
 ## Validation
 
 - Guardrail tests ([TEST-26](../rules/testing.md#guardrail-tests)): seeded personal values of the ticket never appear in requests to `ai-service`, in LLM payloads captured by a fake LLM adapter, or in log output.
-- Property-based tests: pseudonymization is deterministic, and restoring a pseudonymized text gives back the original message exactly.
+- Property-based tests: pseudonymization is deterministic, and restoring a pseudonymized text gives back the original message, apart from later spellings of a value that normalization treats as equal.
 - The NFR-06 suite includes messages that name third persons and unknown addresses, and it reports misses and over-detection separately.
 - A reply body that contains a placeholder is rejected with `422`.
 - A pseudonymizer that raises an error results in no call to `ai-service` and the reason `pseudonymization_failed`.

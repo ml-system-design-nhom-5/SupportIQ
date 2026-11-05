@@ -3,8 +3,8 @@
 - **Status:** Draft
 - **Owner:** frontend engineer
 - **Reviewers:** backend engineer, ML engineer, RAG engineer, contracts gatekeeper
-- **Last reviewed:** 2026-11-01
-- **Related:** [Requirements](../product/requirements.md) (FR-01, FR-04 to FR-07, FR-10, NFR-11, ESC-01 to ESC-05), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md) (Proposed), [ADR-0012](../decisions/0012-roles-v1.md) (Proposed), [contracts v1 design](contracts-v1.md) (revision 2, in review), [UI rules](../rules/ui.md)
+- **Last reviewed:** 2026-11-05
+- **Related:** [Requirements](../product/requirements.md) (FR-01, FR-04 to FR-07, FR-10, NFR-11, ESC-01 to ESC-05), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md) (Proposed), [ADR-0012](../decisions/0012-roles-v1.md) (Proposed), [ADR-0014](../decisions/0014-citations-to-order-context.md) (Proposed), [contracts v1 design](contracts-v1.md) (revision 2, in review), [UI rules](../rules/ui.md)
 
 ## Summary
 
@@ -12,7 +12,7 @@ This design fixes the screens, the one workspace layout ([UI-15](../rules/ui.md#
 
 The team chose the inbox layout on 2026-11-01. It has an inbox on the left, the message, intent, and reply in the middle, and the other AI output on the right. Every screen, state, and dialog below is drawn in that layout.
 
-This draft follows contracts v1 revision 2, ADR-0010, and ADR-0012, which are still in review. If they change, this document changes with them.
+This draft follows contracts v1 revision 2, ADR-0010, ADR-0012, and ADR-0014, which are still in review. If they change, this document changes with them.
 
 ## Goals and non-goals
 
@@ -26,8 +26,8 @@ This draft follows contracts v1 revision 2, ADR-0010, and ADR-0012, which are st
 
 ### Non-goals
 
-- `/shop`. It gets its own design doc after this one and reuses these tokens.
-- `/admin` ([UI-45](../rules/ui.md#admin)). Where it is designed is an open question.
+- `/shop`, designed in the [shop UI design](shop-ui.md), which reuses these tokens.
+- `/admin` ([UI-45](../rules/ui.md#admin)), designed in the [admin UI design](admin-ui.md), which reuses this app shell.
 - A dark theme ([UI-10](../rules/ui.md#tokens)). Tokens are named by role, not by color, so a dark theme later adds a second set of values and a second contrast check, without changing components.
 - Push updates. `frontend` polls ([contracts v1](contracts-v1.md#non-goals)).
 
@@ -85,7 +85,7 @@ The ticket header spans the middle and right columns and holds the order chip.
 | Authority banner | "Authority required": the AI output is supporting information; a manager decides and sends the reply | `is_authority_required` | UI-19 |
 | Customer message | The message as written, with its time | `message` | [SEC-22](../rules/security-and-privacy.md#input-and-output-handling) (plain text) |
 | Order chip | The order ID and the order, shipment, and refund status. A popover holds the rest. "No order attached" when absent | `order`, `other_orders` | UI-31 (popover from the Radix primitives) |
-| Intent strip | Predicted intent with band and percentage; the next two candidates; Other intent | `suggestion` → analysis `intent`, `alternatives` | FR-01, UI-14, UI-22, UI-42 |
+| Intent strip | Predicted intent with band and percentage; the next two candidates; Other intent. After a correction: the chosen intent, marked Chosen by staff, and Other intent | `suggestion` → analysis `intent`, `alternatives`, `intent_override` | FR-01, UI-14, UI-22, UI-42 |
 | Reply area | Warnings with acknowledgement, the AI draft with citation markers, the editor, and the action bar. For a manager: the staff proposal next to the AI draft, or the escalation reasons | `suggestion` draft and `warnings`, `proposal`, `escalation`, `reply`, `allowed_actions` | UI-16 to UI-20, UI-41, UI-43 |
 | AI recommendation | The recommendation and its reason codes | `suggestion` → analysis `routing` | UI-13 |
 | For staff only | The staff note, marked as AI text | `suggestion.staff_note` | UI-13, UI-21 |
@@ -101,15 +101,15 @@ Placement rules:
 5. Confidence is shown with neutral bars for `high` and `medium`, and with the `warning` role for `low` only. A green "high" would read as "correct" and add to the over-trust risk of [ASM-04](../product/requirements.md#6-assumptions-and-constraints).
 6. The staff note is written by the AI, so it carries the `ai` marker ([UI-13](../rules/ui.md#visual-semantics)).
 7. **Intent first.** The intent sits directly under the customer message, before the draft. A wrong intent changes which documents reach the LLM ([requirements §7](../product/requirements.md#7-risks-and-required-controls)), so staff check it first and correct it before they read the draft. The inbox also shows the intent and confidence of each ticket.
-8. **Order status stays visible.** Facts that a draft takes from the order (for example "your refund is under review") carry no citation, because citations point only to KB document versions. Staff check them against the order. The statuses therefore stay visible without a click; only the details open on demand.
-9. **Order data is not AI output.** It never carries the `ai` marker and never sits in the AI sidebar. The popover says "From order records, not AI".
+8. **Order status stays visible.** Facts that a draft takes from the order (for example "your refund is under review") carry an order citation ([ADR-0014](../decisions/0014-citations-to-order-context.md)), so staff can see which sentences to check against the order. The statuses stay visible without a click; only the details open on demand.
+9. **Order data is not AI output.** It never carries the `ai` marker and never sits in the AI sidebar. The popover says "From order records, not AI". An order citation marker inside a draft uses neutral colors and says the same.
 
 ### Inbox
 
 - A dropdown selects the status. Staff have only Open; `backend` returns `403` to staff for other statuses ([contracts v1](contracts-v1.md#roles-and-permissions)). Managers also have Awaiting approval, Escalated, and Closed.
 - Tickets are sorted oldest first, so no ticket waits behind newer ones.
 - Each item shows the ticket ID, time received, customer, message excerpt, predicted intent with confidence, AI status, and the authority flag.
-- When `handling_started_at` is set, the item says who is likely working on it, for example "Opened 4 min ago". v1 has no ticket assignment, so two staff can still work on one ticket, and the later send gets `409 invalid-ticket-state`.
+- When `handling_started_at` is set, the item says who is likely working on it, for example "Opened 4 min ago". v1 has no ticket assignment, so two staff can still work on one ticket. The later send gets `409 invalid-ticket-state` after a reply, or `403 forbidden` after an escalation or a proposal.
 - One click opens a ticket. The inbox polls while it is open.
 
 When no ticket is selected, the middle shows [no-ticket-selected.png](assets/console-ui/no-ticket-selected.png). An empty inbox shows [inbox-empty.png](assets/console-ui/inbox-empty.png).
@@ -137,7 +137,7 @@ flowchart TD
     Q["Inbox: open a ticket"] -->|"recordTicketView, then getConsoleTicket"| W{"Suggestion parts"}
     W -->|"a part is pending"| P["Partial state: analysis shown, draft skeleton, poll"]
     P -->|"poll result"| W
-    P -->|"Use this intent while running"| IC["Warning shown; old draft outdated; draft call cancelled"]
+    P -->|"Use this intent while the draft generates"| IC["Old draft outdated; draft call cancelled; new draft pending"]
     IC -->|"poll result"| W
     W -->|"a part unavailable: retry starts on the view"| P
     W -->|"retry failed, or manual mode"| M["Manual handling: instructions, reminder, empty editor"]
@@ -155,9 +155,11 @@ flowchart TD
     M -->|"write a reply, Send reply, confirm"| S
     M -->|"write a reply, Submit for approval"| R
     M -->|"Escalate ticket, reasons"| E
+    P -->|"Use this intent on an old screen: 409 suggestion-pending"| RL
     S -->|"201"| C["Closed: the sent reply is shown read-only"]
     S -->|"409 suggestion-pending or suggestion-superseded"| RL["Message; workspace reloads; editor text is kept"]
     S -->|"409 invalid-ticket-state"| HS["Message: the ticket was already handled; workspace reloads"]
+    S -->|"403 forbidden"| FB["Message: a colleague escalated or submitted the ticket; workspace reloads; editor text is kept"]
     S -->|"422 invalid-request"| F["Inline message; editor text is kept"]
     S -->|"403 authority-required"| A["Banner shown; Submit for approval replaces Send reply"]
     S -->|"5xx or network error"| X["Error with copyable trace ID; no automatic retry"]
@@ -168,7 +170,7 @@ flowchart TD
 1. Staff open a ticket from the inbox. `frontend` records the view, which starts the handling clock, and loads the workspace. If the suggestion failed and can be retried, `backend` starts a retry.
 2. While a suggestion part is `pending`, the analysis appears as soon as it is ready and the reply area shows a skeleton ([UI-24](../rules/ui.md#states)). `frontend` polls.
 3. The reply area depends on the draft status: a draft to review, a choice of intent (ESC-01), reason codes with an empty editor, or manual handling.
-4. Staff can correct the intent at any time while the ticket is open. If the AI is still running, the console warns that a manager may still have to send the reply, the old draft is cancelled, and a new draft starts.
+4. Staff can correct the intent as soon as it is shown, while the ticket is open. The predicted intent appears only when the analysis is ready, so the authority flag is already known. If a draft is still generating, it is cancelled and a new draft starts. After a correction, the chosen intent stays on the strip and staff can change it again. If a correction fails on an old screen, the workspace reloads.
 5. Staff send, submit for approval, or escalate. Only actions in `allowed_actions` are enabled.
 6. Every typed problem from `backend` becomes a plain-language message. Text in the editor is never lost.
 
@@ -181,7 +183,8 @@ flowchart TD
 | Escalate ticket | `escalate` is allowed | `createEscalation` | Dialog with reason codes (at least one) and a note, required with `other` |
 | Send reply | `send_reply` is allowed, no suggestion is running, every warning is acknowledged, the editor is not empty and holds no placeholder | `sendReply` after a confirmation step | UI-17, UI-18, UI-43 |
 | Submit for approval | `submit_reply_proposal` is allowed. It replaces Send reply when `is_authority_required` is true, sits in the More menu otherwise, and is a visible button in manual handling | `createReplyProposal` | UI-16 |
-| Use this intent | `correct_intent` is allowed, also while the AI is running | `createSuggestion` with `intent_override` | UI-22, UI-42 |
+| Use this intent | `correct_intent` is allowed, also while a draft is generating | `createSuggestion` with `intent_override` | UI-22, UI-42 |
+| Edit proposal | The caller is a manager, the ticket is `awaiting_approval`, and `send_reply` is allowed | None | Turns the proposal into the editor. Send reply then uses `basis: reply_proposal` with the edited body |
 | Try AI again | `retry_suggestion` is allowed | `createSuggestion` without `intent_override` | Shown only in manual handling after an AI failure ([UI-26](../rules/ui.md#states)) |
 
 ![More menu with Submit for approval](assets/console-ui/action-menu.png)
@@ -215,12 +218,14 @@ Choosing a second reason code is optional and adds one action. Choosing an inten
 
 ### Draft editing and citations
 
-- **View:** the draft shows each segment with its citation markers, and starts a new paragraph where `paragraph_index` changes. Hovering or focusing a marker shows the document title, version, effective dates, and snippet; activating it opens the document version (UI-20).
-- **Edit:** one plain-text editor starts from the draft's canonical `text` that `backend` builds, because the reply `body` is plain text and `backend` compares the sent body with that same `text` to record approve or edit. `frontend` never rebuilds the text from segments. Citation markers are hidden while editing. The citations stay listed under Sources, and a line under the editor says that edited text is not checked against the sources.
+- **View:** the draft shows each segment with its citation markers, and starts a new paragraph where `paragraph_index` changes. Hovering or focusing a KB marker shows the document title, version, effective dates, and snippet; activating it opens the document version (UI-20). A segment that states order facts has one order marker in neutral colors, without a number. Hovering or focusing it lists each cited field with its value and says "From order records, not AI"; activating it opens the order chip popover.
+- **Edit:** one plain-text editor starts from the draft's canonical `text` that `backend` builds, because the reply `body` is plain text and `backend` compares the sent body with that same `text` to record approve or edit. `frontend` never rebuilds the text from segments. Citation markers are hidden while editing. KB citations stay listed under Sources, the order chip stays visible, and a line under the editor says that edited text is not checked against the sources.
 - **Reject:** the AI draft stays visible, read-only and marked as rejected, above an empty editor.
 - **Placeholders:** a mask or an unrestored pseudonym in the draft or the editor is highlighted with the label "Personal data hidden: replace before sending". Customer text that only looks like a placeholder (a restored `LITERAL`) is highlighted with the label "Customer text in a reserved format: rephrase before sending". Send reply and Submit for approval stay disabled while the editor contains text in the placeholder syntax (UI-43).
 
 ![Citation marker on hover or focus](assets/console-ui/citation-popover.png)
+
+![Order citation marker on hover or focus](assets/console-ui/citation-order.png)
 
 ![KB document version in a side sheet](assets/console-ui/kb-document.png)
 
@@ -238,7 +243,7 @@ Each state of [UI-23](../rules/ui.md#states) has a mockup.
 | Choose an intent | `abstained` with `low_confidence` (ESC-01) | No draft and no filler text; "No draft is created until you choose an intent" | Shown; the middle holds the top three candidates, each with "Use this intent" (UI-42) | [state-choose-intent.png](assets/console-ui/state-choose-intent.png) |
 | Abstained | `abstained` for another reason (ESC-02, ESC-04) | Reason codes and an empty editor | Shown | [state-abstained.png](assets/console-ui/state-abstained.png) |
 | Escalation recommended | `escalation_recommended` (ESC-03) | Reason codes, an empty editor, and Escalate ticket | Shown | [state-escalation-recommended.png](assets/console-ui/state-escalation-recommended.png) |
-| Intent changed | After Use this intent | Previous draft marked as outdated; new draft pending (UI-22). If the AI was still running, a banner says "If it flags this ticket, a manager must send the reply" | Shown | [state-intent-changed.png](assets/console-ui/state-intent-changed.png) |
+| Intent changed | After Use this intent | Previous draft marked as outdated; new draft pending (UI-22). The Authority banner stays if the flag is set | Shown | [state-intent-changed.png](assets/console-ui/state-intent-changed.png) |
 | AI unavailable | A part `unavailable` or `llm_unavailable` (ESC-05), after the retry on view | Manual handling: instructions, the reminder, an empty editor, Try AI again, and Submit for approval (UI-26) | "AI unavailable" with the reason | [state-ai-unavailable.png](assets/console-ui/state-ai-unavailable.png) |
 | Manual mode | `handling_mode` is `manual` | Manual handling, without Try AI again | Replaced by the manual-handling panel; the layout does not move (UI-15) | [state-manual-mode.png](assets/console-ui/state-manual-mode.png) |
 | Authority required | `is_authority_required` | Submit for approval instead of Send reply | Shown, with the reason code | [state-authority-required.png](assets/console-ui/state-authority-required.png) |
@@ -248,7 +253,7 @@ Each state of [UI-23](../rules/ui.md#states) has a mockup.
 | Closed | `closed` | The sent reply, who sent it, and when; actions disabled with the reason | Shown, read-only | [state-closed.png](assets/console-ui/state-closed.png) |
 | Placeholder present | A placeholder in the editor | Highlight; send disabled (UI-43) | Shown | [state-placeholder.png](assets/console-ui/state-placeholder.png) |
 | Error | Any other problem | Message and copyable trace ID ([UI-25](../rules/ui.md#states)) | — | [state-error.png](assets/console-ui/state-error.png) |
-| Permission denied | `403`, `404` | Message and copyable trace ID | — | [state-permission-denied.png](assets/console-ui/state-permission-denied.png) |
+| Permission denied | `403` or `404` when a screen opens | Message and copyable trace ID | — | [state-permission-denied.png](assets/console-ui/state-permission-denied.png) |
 
 The reminder in manual handling reads: "Refund decision or dispute? Do not decide it here. Use Submit for approval, so a manager sends the reply." When the AI is down, nothing flags a ticket, so this reminder and staff judgment are the only control ([contracts v1](contracts-v1.md#authority-rule-fr-06)).
 
@@ -311,12 +316,12 @@ The page shows the fields of `getConsoleReport` for a chosen period ([contracts 
 | Document `expired` | `warning` | Clock | Expired |
 | Document `conflicting` | `danger` | Triangle | Conflicting |
 
-Draft `cancelled` has no presentation, because a superseded suggestion is never shown.
+The status `cancelled` has no presentation, because a superseded suggestion is never shown.
 
 ### Data and contracts
 
 - Every region maps to `TicketWorkspace`, and the inbox uses `TicketSummary`, both in the [`backend` contract section of contracts v1](contracts-v1.md#backend-contract-backendopenapiyaml) revision 2.
-- The items this design needs are in that revision: `other_orders`, `handling_started_at` in `TicketSummary`, `retry_suggestion` in `allowed_actions`, and `createSuggestion` without `intent_override`.
+- The items this design needs are in that revision: `other_orders`, `handling_started_at` in `TicketSummary`, `retry_suggestion` in `allowed_actions`, `createSuggestion` without `intent_override`, `intent_override` in `SuggestionView`, and `CitationView`.
 - The editor and the approve or edit decision both use the draft's canonical `text` from the same section, so a draft sent unchanged is always recorded as `approve`.
 - Drafts that cite a document version past its review deadline carry the warning `source_review_overdue` ([reason codes](contracts-v1.md#reason-codes)). Staff acknowledge it like any other warning.
 - Writes send an `Idempotency-Key` created once per staff action. Sending a reply is never retried automatically ([TS-29](../rules/typescript.md#api-access)).
@@ -329,16 +334,17 @@ Draft `cancelled` has no presentation, because a superseded suggestion is never 
 | Staff send with an unacknowledged warning | Send reply disabled; `422` from `backend` as the backstop | Component test; end-to-end test |
 | The editor contains a placeholder | Highlighted; Send reply and Submit for approval disabled; `422` as the backstop | Component test |
 | Staff send on a ticket where authority is required | Submit for approval replaces Send reply; a `403 authority-required` shows the banner | Component test; end-to-end test |
-| A suggestion is running, including a superseded one | Send reply disabled; a `409 suggestion-pending` shows "The AI is still working on this ticket" | Component test |
-| Staff change the intent while the AI is running | Allowed; the banner warns that a manager may still have to send the reply; the flag of the earlier run is kept by `backend` | Component test; guardrail test |
+| A suggestion is running | Send reply disabled; a `409 suggestion-pending` shows "The AI is still working on this ticket" | Component test |
+| Staff change the intent while a draft is generating | Allowed; the old draft is cancelled, a new draft starts, and the flag stays set | Component test; guardrail test |
 | The AI is down when staff open a ticket | Manual handling with the reminder, Try AI again, and Submit for approval; manual replies keep working (ESC-05) | Component test; end-to-end test |
+| An intent correction arrives when no intent is known (an old screen) | `409 suggestion-pending` or `422 invalid-request`: message and reload | Component test |
 | The draft was superseded | `409 suggestion-superseded`: the workspace reloads, the editor text is kept, and the new draft is shown | Component test |
-| Another person already handled the ticket | `409 invalid-ticket-state`: message and reload | Component test |
+| Another person already handled the ticket | `409 invalid-ticket-state` after a reply, or `403 forbidden` after an escalation or a proposal: message and reload, editor text kept | Component test |
 | Staff open a ticket that is not open | Read-only workspace; every action disabled with the reason | Component test |
 | Session expired | `401`: go to sign-in | Component test |
-| Network error or `5xx` | Error with a copyable trace ID; no automatic retry of a send | Component test |
+| Network error, `5xx`, or `413` or `429` from the ingress | Error with a copyable trace ID when there is one; no automatic retry of a send; editor text kept | Component test |
 | AI text is mistaken for staff text | Every AI region carries the `ai` marker and label | Story with axe; component test |
-| Order data is mistaken for AI output | It sits in the header popover, without the `ai` marker, and says "From order records, not AI" | Story |
+| Order data is mistaken for AI output | It sits in the header popover, and inside a draft only behind a neutral order marker. Neither carries the `ai` marker, and both say "From order records, not AI" | Story; component test |
 | Staff assume the AI read another order | The preview of another order says that the AI did not use it | Story |
 | Staff over-trust the AI | Neutral confidence colors, visible sources with validity, warnings next to Send reply | Usability study (NFR-11) |
 | Customer text contains HTML or Markdown | Rendered as plain text | Component test (SEC-22) |
@@ -352,12 +358,12 @@ Draft `cancelled` has no presentation, because a superseded suggestion is never 
 - **Warnings inside the AI sidebar:** rejected, because they would sit far from the button they block.
 - **Green confidence for `high`:** rejected, because color would suggest that the prediction is correct.
 - **A separate Approve button:** rejected, because `backend` derives approve or edit from the sent body (ADR-0006).
-- **Locking the intent while the AI runs, or a confirmation checkbox on manual replies:** rejected ([contracts v1](contracts-v1.md#alternatives-considered)).
+- **Locking the intent until the draft is ready, or a confirmation checkbox on manual replies:** rejected ([contracts v1](contracts-v1.md#alternatives-considered)).
 
 ## Testing and evaluation
 
 - **Storybook:** a story for every region in every state, with axe checks ([UI-04](../rules/ui.md#design-system-structure), [UI-32](../rules/ui.md#accessibility)).
-- **Component tests:** button enablement from `allowed_actions`, warnings, and placeholders; `basis` selection; the mapping of every problem type to a message; the order chip with one and with several orders.
+- **Component tests:** button enablement from `allowed_actions`, warnings, and placeholders; `basis` selection; the mapping of every problem type to a message; the order chip with one and with several orders; the order citation marker and its popover.
 - **End-to-end tests (Playwright):** the action count of each flow in [Action counts](#action-counts-ui-41), the TEST-27 scenarios, and a reply proposal sent by a manager.
 - **Product value:** handling time with and without the AI (NFR-11) is measured by `backend`, as the evaluation protocol defines.
 - No model metric changes.
@@ -381,7 +387,7 @@ Draft `cancelled` has no presentation, because a superseded suggestion is never 
 
 1. Done on 2026-11-01: the team chose the layout, and this document holds every screen, state, and dialog.
 2. The affected owners review this document. The team sets the status to Approved.
-3. Contract PR 2 implements `TicketSummary`, `other_orders`, and the draft `text` in `backend.openapi.yaml`.
+3. Contract PR 2 implements `TicketSummary`, `other_orders`, `CitationView`, `intent_override` in `SuggestionView`, and the draft `text` in `backend.openapi.yaml`.
 4. Implementation: token files and primitives, then domain components with stories, then screens against Prism mocks.
 
 ### Mockup sources
@@ -400,5 +406,4 @@ The page loads Inter and JetBrains Mono from Google Fonts.
 - Keyboard movement through the inbox (arrow keys, or J and K). [UI-17](../rules/ui.md#console-interaction) forbids single-key shortcuts only for irreversible actions, so this is allowed.
 - The excerpt length and sort parameter of `TicketSummary` (open for contract PR 2), and the polling interval of the inbox and the workspace.
 - The text of the manual-process instructions ([UI-26](../rules/ui.md#states)). The team provides it. The mockups show a stand-in line.
-- Whether `/admin` is designed in this document, as the [contracts v1 rollout](contracts-v1.md#rollout) groups "the admin layout", or in its own.
-- This draft depends on ADR-0010, ADR-0012, and contracts v1 revision 2, which are in review.
+- This draft depends on ADR-0010, ADR-0012, ADR-0014, and contracts v1 revision 2, which are in review.

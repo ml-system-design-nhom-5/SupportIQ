@@ -1,6 +1,6 @@
 # Architecture decision records
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-01
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-04
 
 An architecture decision record (ADR) captures one significant decision: its context, the options, what we chose, and what it costs. This page lists every ADR and explains the process. Writing rules are in the [documentation handbook](../README.md#adrs).
 
@@ -21,6 +21,7 @@ An architecture decision record (ADR) captures one significant decision: its con
 | [0011](0011-deployment-and-runtime-topology.md) | Deployment and runtime topology | Proposed | 2026-10-28 |
 | [0012](0012-roles-v1.md) | Roles v1: customer, staff, manager, and admin | Proposed | 2026-10-28 |
 | [0013](0013-shop-demo-with-read-only-catalog.md) | Shop demo with a read-only catalog | Proposed | 2026-10-28 |
+| [0014](0014-citations-to-order-context.md) | Citations to the order context | Proposed | 2026-11-04 |
 
 Notes on the index:
 

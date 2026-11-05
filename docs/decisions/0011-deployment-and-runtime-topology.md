@@ -141,7 +141,8 @@ stateDiagram-v2
     running --> done: results stored while the lease is valid and the suggestion is current
     running --> running: lease expired and attempts remain, another worker claims it (attempt + 1)
     running --> done: lease expired, no attempts left, pending parts unavailable (ai_service_unavailable)
-    running --> done: suggestion superseded, analysis finished, only the authority flag kept
+    queued --> done: suggestion superseded, pending parts cancelled
+    running --> done: suggestion superseded, pending parts cancelled
     done --> [*]
 ```
 
@@ -149,7 +150,7 @@ stateDiagram-v2
 2. Each `backend` replica runs a fixed number of workers. A worker claims one job in a single statement that selects the oldest claimable job with `FOR UPDATE SKIP LOCKED`. A job is claimable when it is `queued`, or `running` with an expired lease. Claiming sets the state to `running`, sets the lease expiry, and increments the attempt number. Two workers can never hold the same job. When the claimed job has an expired lease and no attempts left, the worker finalizes it as in item 6 instead of calling `ai-service`, so no separate scheduler is needed ([ARCH-41](../rules/architecture.md#state-time-and-side-effects)).
 3. The lease MUST be longer than `ai_service_draft_timeout_ms`. `backend` checks this at startup ([ERR-17](../rules/errors-and-reliability.md#startup-and-health)).
 4. A worker stores results only if its attempt number still matches the job and the suggestion is still current. Otherwise it discards them. A late or duplicate result can therefore never overwrite a newer one.
-5. When a suggestion is superseded, the worker cancels its `POST /v1/drafts` call and the draft part becomes `cancelled`. Cancelling is best effort: a call that cannot be stopped finishes, and its result is discarded. The analysis call still completes, and a job that was still `queued` runs only that call. If the analysis carries `requires_authority`, the worker sets the ticket's authority flag even though the rest of the result is discarded. This is the only exception to item 4, and it is safe under any attempt because it can only set the flag to true.
+5. When a suggestion is superseded, the worker cancels its calls to `ai-service`, and every part that is still `pending` becomes `cancelled`. A job that is still `queued` ends without calling `ai-service`. Cancelling is best effort: a call that cannot be stopped finishes, and item 4 discards its result. No authority flag is lost, because `backend` accepts an intent override only after an intent is known and sets the flag in the transaction that stores the analysis ([authority rule](../design/contracts-v1.md#authority-rule-fr-06)).
 6. When a job's lease expires and its attempts are used up, both suggestion parts that are still `pending` become `unavailable` with `ai_service_unavailable`, and the ticket is handled manually.
 7. The settings `suggestion_workers_per_replica`, `suggestion_job_lease_ms`, `suggestion_job_max_attempts`, and `suggestion_queue_poll_ms` control the queue. Their initial values are set in the `backend` ticket workflow design doc.
 8. End-to-end latency starts at ticket creation (NFR-08). The queue wait (at most `suggestion_queue_poll_ms` when a worker is free), claiming, pseudonymization, and `ai_service_draft_timeout_ms` together MUST fit within the 12 s p95 target ([ERR-10](../rules/errors-and-reliability.md#timeouts-and-latency-budget)). If they do not fit, the draft timeout is lowered.

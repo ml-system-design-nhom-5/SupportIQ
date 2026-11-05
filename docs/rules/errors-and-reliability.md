@@ -1,6 +1,6 @@
 # Error and reliability rules
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-01
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-04
 
 Every failure is designed: it has a type, a defined behavior, a contract mapping, a log event, and a test. The system never turns a failure into a firm answer without evidence.
 
@@ -38,8 +38,8 @@ Every error belongs to exactly one category:
 | Failure | Required behavior |
 |---|---|
 | Classifier is uncertain (top-1 below τ or gap below δ) | No draft until staff confirm or correct the intent (ESC-01). Show the top three candidates |
-| Intent and retrieved documents disagree | No firm draft. Show alternatives and a warning; abstain or recommend review, with a reason code |
-| No valid document | Abstain with a reason code; staff handle the ticket manually |
+| Intent and retrieved documents disagree | Lower the confidence and show a warning with a reason code. If the confidence falls below τ, ESC-01 applies ([ADR-0005](../decisions/0005-intent-independent-retrieval.md), statement 4) |
+| No valid document | Abstain, or draft a reply that states the missing information, with a reason code and a warning (ESC-04). An order citation does not count as a valid document ([ADR-0014](../decisions/0014-citations-to-order-context.md)) |
 | Only expired or conflicting documents | Do not draft from them. Flag them, then abstain or recommend escalation |
 | Sensitive request: refund, transaction dispute, policy exception, legal claim, suspected fraud | Retrieval still runs. Supporting information only. Authority is required, and a manager decides (FR-06, ESC-03) |
 | Customer asks for a human (`human_agent`) | No draft. Recommend escalation; staff decide (ESC-03) |
@@ -73,7 +73,7 @@ Every error belongs to exactly one category:
 
 **ERR-16.** Recording a staff decision and sending a reply are idempotent. A retry never records a decision twice or sends a reply twice.
 
-**ERR-22.** A suggestion job can run more than once, because an expired lease is claimed again ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md#suggestion-job-queue)). A job stores its results only when its attempt number still matches the job and the suggestion is still current. A repeated or late run therefore never overwrites newer results and never records an outcome twice. The one exception is the authority flag of a superseded suggestion, which is always kept, because it can only be set to true ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md#suggestion-job-queue)).
+**ERR-22.** A suggestion job can run more than once, because an expired lease is claimed again ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md#suggestion-job-queue)). A job stores its results only when its attempt number still matches the job and the suggestion is still current. A repeated or late run therefore never overwrites newer results and never records an outcome twice.
 
 ## Startup and health
 
