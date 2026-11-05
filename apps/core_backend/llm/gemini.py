@@ -149,6 +149,13 @@ class GeminiDraftClient:
         self.model = model or os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
         self._http = http_client
 
+    def close(self) -> None:
+        if self._http is not None:
+            try:
+                self._http.close()
+            except Exception:
+                pass
+
     @property
     def configured(self) -> bool:
         return bool(self._api_key)

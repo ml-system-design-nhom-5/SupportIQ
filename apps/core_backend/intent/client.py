@@ -6,10 +6,33 @@ from apps.core_backend.intent.schemas import IntentPrediction
 logger = logging.getLogger("intent_client")
 
 class IntentClient:
-    def __init__(self, base_url: str = "http://localhost:8001", timeout: float = 3.0, expected_model_version: str = "v1.0.0"):
+    def __init__(
+        self,
+        base_url: str = "http://localhost:8001",
+        timeout: float = 3.0,
+        expected_model_version: str = "v1.0.0",
+        http_client: Optional[httpx.Client] = None,
+    ):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.expected_model_version = expected_model_version
+        self._http = http_client
+        self._owns_http = False
+
+    def _get_client(self) -> httpx.Client:
+        if self._http is None:
+            connect_timeout = min(1.0, self.timeout)
+            self._http = httpx.Client(timeout=httpx.Timeout(self.timeout, connect=connect_timeout))
+            self._owns_http = True
+        return self._http
+
+    def close(self) -> None:
+        if self._owns_http and self._http is not None:
+            try:
+                self._http.close()
+            except Exception:
+                pass
+            self._http = None
 
     def classify_intent(self, text: str, request_id: Optional[str] = None) -> IntentPrediction:
         """Call ML inference service. In case of timeout, connection error, non-200 status,
@@ -22,7 +45,8 @@ class IntentClient:
             "expected_model_version": self.expected_model_version,
         }
         try:
-            resp = httpx.post(f"{self.base_url}/predict", json=payload, timeout=self.timeout)
+            client = self._get_client()
+            resp = client.post(f"{self.base_url}/predict", json=payload, timeout=self.timeout)
             resp.raise_for_status()
             data = resp.json()
 

@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import httpx
 import sqlite3
+import statistics
 import time
 import uuid
 from datetime import datetime, timezone
@@ -215,6 +218,45 @@ class BudgetLedger:
         }
 
 
+def execute_demo_http_case(case, deps, attempt_id: str, client: httpx.Client) -> CaseResult:
+    """Measure the complete loopback request, including response serialization."""
+    from apps.demo.service import DEMO_PROFILES
+    profile_id = case.context.ticket_customer_id
+    if profile_id not in DEMO_PROFILES:
+        raise EvaluationError(f"No server-side demo profile for {profile_id!r}")
+    payload = {"submission_id": attempt_id, "profile_id": profile_id, "text": case.text,
+               "is_personal_lookup": case.context.is_personal_lookup,
+               "order_id": case.context.extracted_slots.get("order_id")}
+    started = time.perf_counter()
+    status, error, body = "ok", None, {}
+    restarted = False
+    try:
+        response = client.post(deps.managed_server.base_url + '/api/demo/runs', json=payload,
+                               timeout=deps.deadline_seconds)
+        response.raise_for_status()
+        body = response.json()
+        if body.get('run_id') != attempt_id or body.get('action') not in {
+                'retrieve_draft', 'clarify', 'escalate', 'manual_fallback'}:
+            raise ValueError('Invalid demo response')
+    except httpx.TimeoutException:
+        status, error = 'timeout', 'demo_http_timeout'
+    except (httpx.HTTPError, ValueError, TypeError):
+        status, error = 'error', 'demo_http_error'
+    elapsed = (time.perf_counter() - started) * 1000
+    if status == 'timeout':
+        deps.managed_server.restart()
+        restarted = True
+    draft = body.get('draft_body')
+    return CaseResult(case_id=case.id, profile=deps.profile, scope='e2e', execution_status=status,
+        error_code=error, routing_action=body.get('action'), final_action=body.get('action'),
+        predicted_intent=body.get('predicted_intent'), final_intent=body.get('final_intent'),
+        reason_codes=body.get('reason_codes', []), sources=body.get('sources', []),
+        draft_body=draft, draft_hash=hashlib.sha256(draft.encode()).hexdigest() if draft else None,
+        llm_called=bool(body.get('llm_called', False)),
+        llm_metadata=body.get('llm'), stage_elapsed_ms={'api_total': elapsed}, total_elapsed_ms=elapsed,
+        audit_evidence={'attempt_id': attempt_id, 'server_restarted': restarted})
+
+
 def measure_system_latency(
     inputs: VerifiedSystemInputs,
     deps: SystemDependencies,
@@ -227,6 +269,18 @@ def measure_system_latency(
     cases = inputs.cases
     if not cases:
         return []
+
+    if deps.profile == 'live':
+        if deps.managed_server is None:
+            raise EvaluationError('Live HTTP benchmark requires a managed demo server')
+        results = []
+        with httpx.Client(trust_env=False, follow_redirects=False) as client:
+            for i in range(inputs.config.warmup_requests):
+                execute_demo_http_case(cases[i % len(cases)], deps, f'http-warmup-{uuid.uuid4().hex}', client)
+            for i in range(inputs.config.latency_requests):
+                results.append(execute_demo_http_case(cases[i % len(cases)], deps,
+                    f'http-lat-{uuid.uuid4().hex}', client))
+        return results
 
     # 1. Warm-up Phase
     warmup_count = inputs.config.warmup_requests
@@ -246,3 +300,52 @@ def measure_system_latency(
         latency_results.append(res)
 
     return latency_results
+
+
+def summarize_http_results(results: List[CaseResult]) -> Dict[str, Any]:
+    """Calculate latency statistics broken down across total, LLM-attempt, and no-LLM branches."""
+    total_requests = len(results)
+    ok_requests = sum(1 for r in results if r.execution_status == "ok")
+    timeout_requests = sum(1 for r in results if r.execution_status == "timeout")
+    error_requests = sum(1 for r in results if r.execution_status == "error")
+    draft_count = sum(1 for r in results if r.final_action == "retrieve_draft")
+
+    def _calc_p95(times: List[float]) -> Optional[float]:
+        if not times:
+            return None
+        s = sorted(times)
+        idx = int(round(0.95 * (len(s) - 1)))
+        return round(s[idx], 4)
+
+    def _calc_p50(times: List[float]) -> Optional[float]:
+        if not times:
+            return None
+        return round(statistics.median(times), 4)
+
+    all_times = [r.total_elapsed_ms / 1000.0 for r in results if r.execution_status == "ok"]
+    llm_times = [
+        r.total_elapsed_ms / 1000.0 for r in results
+        if r.execution_status == "ok" and (r.final_action == "retrieve_draft" or "llm_ms" in r.stage_elapsed_ms)
+    ]
+    no_llm_times = [
+        r.total_elapsed_ms / 1000.0 for r in results
+        if r.execution_status == "ok" and r.final_action != "retrieve_draft" and "llm_ms" not in r.stage_elapsed_ms
+    ]
+
+    return {
+        "total_requests": total_requests,
+        "ok_requests": ok_requests,
+        "timeout_requests": timeout_requests,
+        "error_requests": error_requests,
+        "draft_count": draft_count,
+        "draft_coverage": round(draft_count / total_requests, 4) if total_requests else 0.0,
+        "llm_branch_count": len(llm_times),
+        "no_llm_branch_count": len(no_llm_times),
+        "p50_total_seconds": _calc_p50(all_times),
+        "p95_total_seconds": _calc_p95(all_times),
+        "llm_branch_p50_seconds": _calc_p50(llm_times),
+        "llm_branch_p95_seconds": _calc_p95(llm_times),
+        "no_llm_branch_p50_seconds": _calc_p50(no_llm_times),
+        "no_llm_branch_p95_seconds": _calc_p95(no_llm_times),
+    }
+
