@@ -66,6 +66,82 @@ def redact_contacts(text: str) -> str:
     return text
 
 
+def build_grounded_sources(
+    policy_evidence: list[dict],
+    authorized_facts: dict | None,
+    provenance: dict | None = None
+) -> list[dict]:
+    """Construct unified, sanitized grounded sources S1..Sn covering both policy and order facts.
+    Strictly excludes sensitive customer identifiers (phone, email, secret tokens).
+    Assigns sequential source_id, document_id, version, excerpt, and SHA-256 digest.
+    """
+    import hashlib
+    sources: list[dict] = []
+    idx = 1
+
+    # 1. Format policy sources S1..Sk
+    for item in (policy_evidence or [])[:3]:
+        doc_id = str(item.get("document_id") or item.get("doc_id", "DOC"))
+        ver = str(item.get("version", "1.0"))
+        title = item.get("title", "")
+        excerpt = item.get("excerpt") or "\n".join(c.get("text", "") for c in item.get("chunks", []))
+        sanitized_excerpt = redact_contacts(excerpt.strip())
+        sha256 = hashlib.sha256(sanitized_excerpt.encode("utf-8")).hexdigest()
+        sources.append({
+            "source_id": f"S{idx}",
+            "id": f"S{idx}",
+            "source_type": "policy",
+            "document_id": doc_id,
+            "version": ver,
+            "title": redact_contacts(title),
+            "excerpt": sanitized_excerpt,
+            "text": sanitized_excerpt,
+            "sha256": sha256,
+        })
+        idx += 1
+
+    # 2. Format authorized order facts source if present
+    if authorized_facts:
+        allowed_fields = {
+            "order_id",
+            "order_status",
+            "payment_status",
+            "refund_status",
+            "delivery_date",
+            "estimated_delivery",
+            "expected_refund_time",
+            "can_cancel",
+            "eligible_for_return",
+            "carrier",
+            "tracking_code",
+        }
+        order_lines = []
+        order_id = str(authorized_facts.get("order_id", "ORDER-FACTS"))
+        for k in sorted(allowed_fields):
+            if k in authorized_facts and k != "order_id":
+                val = authorized_facts[k]
+                sanitized_val = redact_contacts(str(val))
+                order_lines.append(f"{k}: {sanitized_val}")
+
+        if order_lines:
+            facts_text = f"Verified Order {order_id} Details:\n" + "\n".join(order_lines)
+            sha256 = hashlib.sha256(facts_text.encode("utf-8")).hexdigest()
+            sources.append({
+                "source_id": f"S{idx}",
+                "id": f"S{idx}",
+                "source_type": "order_facts",
+                "document_id": order_id,
+                "version": "facts",
+                "title": f"Verified Order {order_id} Details",
+                "excerpt": facts_text,
+                "text": facts_text,
+                "sha256": sha256,
+            })
+            idx += 1
+
+    return sources
+
+
 class GeminiDraftClient:
     def __init__(self, api_key: str | None = None, model: str | None = None,
                  http_client: httpx.Client | None = None):
@@ -92,14 +168,10 @@ class GeminiDraftClient:
         except ValueError:
             raise LLMError("llm_invalid_configuration") from None
         timeout = httpx.Timeout(timeout_seconds, connect=min(3.0, timeout_seconds))
-        sources = []
-        for i, item in enumerate(evidence[:3], 1):
-            doc_id = item.get("document_id") or item.get("doc_id")
-            excerpt = item.get("excerpt") or "\n".join(c.get("text", "") for c in item.get("chunks", []))
-            if not doc_id or not item.get("version") or not excerpt.strip():
-                raise LLMError("llm_invalid_evidence")
-            sources.append({"id": f"S{i}", "document_id": str(doc_id), "version": str(item["version"]),
-                            "title": redact_contacts(item.get("title", "")), "text": redact_contacts(excerpt)})
+        sources = build_grounded_sources(evidence, business_context)
+        if not sources:
+            raise LLMError("llm_invalid_evidence")
+
         # Keep personal/contact/payment identifiers out of provider context.
         allowed_fields = {"order_status", "payment_status", "refund_status", "delivery_date",
                           "estimated_delivery", "expected_refund_time", "can_cancel", "eligible_for_return"}
@@ -154,7 +226,8 @@ class GeminiDraftClient:
         except (KeyError, IndexError, AttributeError, TypeError, ValueError, ValidationError):
             raise LLMError("llm_invalid_response") from None
         return {"body": draft.answer.strip(), "provider": "google_ai_studio", "model": self.model,
-                "model_version": data.get("modelVersion", self.model), "prompt_version": "grounded-v1",
-                "citations": [{"source_id": s["id"], "document_id": s["document_id"], "version": s["version"]}
-                              for s in sources if s["id"] in inline],
+                "model_version": data.get("modelVersion", self.model), "prompt_version": "grounded-v2",
+                "citations": [{"source_id": s["source_id"], "source_type": s["source_type"],
+                               "document_id": s["document_id"], "version": s["version"]}
+                              for s in sources if s["source_id"] in inline],
                 "usage": usage, "latency_seconds": round(time.perf_counter() - started, 4)}

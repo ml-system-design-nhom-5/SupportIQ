@@ -35,11 +35,14 @@ def evaluate_claim_annotations(
     unknown_claims = 0
     annotated_cases = set()
     seen_claims: Set[Tuple[str, str]] = set()
+    relevance_counts = {"fully_answers": 0, "partial": 0, "off_topic": 0}
 
     has_insufficient_evidence = False
     insufficient_reason = ""
 
     for idx, ann in enumerate(annotations, start=1):
+        if ann.get("reviewer_type", "human") != "human":
+            raise EvaluationError("AI preliminary annotations require human review before acceptance")
         reviewer = ann.get("reviewer")
         if not reviewer or not str(reviewer).strip():
             raise EvaluationError(f"Missing reviewer in annotation at record {idx}")
@@ -59,6 +62,9 @@ def evaluate_claim_annotations(
             )
 
         annotated_cases.add(cid)
+        rel = ann.get("relevance")
+        if rel in relevance_counts:
+            relevance_counts[rel] += 1
         claims = ann.get("claims", [])
         if len(claims) == 0:
             attestation = ann.get("attestation") or {}
@@ -113,6 +119,7 @@ def evaluate_claim_annotations(
         "supported_claims_ratio": supported_ratio,
         "supported_claims_ratio_raw": supported_ratio_raw,
         "grounded_claims_gate_passed": gate_passed,
+        "relevance_counts": relevance_counts,
         "insufficient_reason": insufficient_reason if has_insufficient_evidence else None,
     }
 
