@@ -1,0 +1,12 @@
+{
+  "model": "gemini-3.1-flash-lite",
+  "max_calls": 12,
+  "attempted": 12,
+  "warmup": 1,
+  "measured": 11,
+  "successes": 11,
+  "errors": [],
+  "max_concurrency": 4,
+  "p95_seconds": 2.2381,
+  "scope": "provider_generate_including_citation_validation; excludes ML/retrieval/HTTP demo; bounded load, not capacity certification"
+}

@@ -1,0 +1,39 @@
+{
+  "total_cases": 50,
+  "slice_counts": {
+    "supported": 50
+  },
+  "intent_counts": {
+    "track_order": 5,
+    "cancel_order": 5,
+    "delivery_time": 5,
+    "delivery_issue": 5,
+    "shipping_costs": 5,
+    "return_policy": 5,
+    "return_product": 5,
+    "refund_policy": 5,
+    "request_refund": 5,
+    "refund_status": 5
+  },
+  "missing_core_intents": [
+    "human_agent",
+    "payment_issue"
+  ],
+  "kb_covered_intents": [
+    "refund_policy",
+    "return_policy"
+  ],
+  "missing_core_kb_intents": [
+    "cancel_order",
+    "delivery_issue",
+    "delivery_time",
+    "human_agent",
+    "payment_issue",
+    "refund_status",
+    "request_refund",
+    "return_product",
+    "shipping_costs",
+    "track_order"
+  ],
+  "kb_coverage_gap": true
+}

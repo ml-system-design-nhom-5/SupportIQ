@@ -1,0 +1,60 @@
+{
+  "run_id": "03-11-2026-00",
+  "input_file": "F:\\Năm 3\\SD\\project\\SupportIQ\\data\\datasets\\bitext-retail-ecommerce-llm-chatbot-training-dataset.csv",
+  "sha256": "13A988266FED4E2B2C1FF947A89EF220CE09B5B13AC83C4A1496C0D7B81E8127",
+  "total_samples": 44884,
+  "columns": [
+    "instruction",
+    "intent",
+    "category",
+    "tags",
+    "response"
+  ],
+  "null_counts": {
+    "instruction": 0,
+    "intent": 0,
+    "category": 0,
+    "tags": 0,
+    "response": 0
+  },
+  "unique_intents": 46,
+  "unique_categories": 13,
+  "category_distribution": {
+    "RETURNS": 6925,
+    "PRODUCT": 6679,
+    "DELIVERY": 6595,
+    "ACCOUNT": 4950,
+    "ORDER": 3945,
+    "PAYMENT": 2981,
+    "FEEDBACK": 2980,
+    "APP_WEBSITE": 1993,
+    "CONTACT": 1986,
+    "CART": 1950,
+    "STORE": 1916,
+    "SALES": 995,
+    "USER": 989
+  },
+  "char_stats": {
+    "min": 3,
+    "max": 131,
+    "mean": 58.37,
+    "median": 58.0,
+    "p90": 78.0,
+    "p95": 84.0,
+    "p99": 95.0
+  },
+  "word_stats": {
+    "min": 1,
+    "max": 24,
+    "mean": 11.8,
+    "median": 12.0,
+    "p90": 16.0,
+    "p95": 17.0,
+    "p99": 18.0
+  },
+  "figures_generated": [
+    "figures/class_distribution.png",
+    "figures/length_distribution.png",
+    "figures/category_intent_matrix.png"
+  ]
+}

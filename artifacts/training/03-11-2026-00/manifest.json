@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "run_id": "03-11-2026-00",
+  "status": "completed",
+  "created_at": "2026-11-03T11:41:40.281505+00:00",
+  "completed_at": "2026-11-03T11:43:27.415912+00:00",
+  "preparation": {
+    "run_id": "03-11-2026-02",
+    "dataset_version": "03-11-2026-02",
+    "split_version": "03-11-2026-02",
+    "manifest_path": "F:\\Năm 3\\SD\\project\\SupportIQ\\artifacts\\preparation\\03-11-2026-02\\manifest.json",
+    "manifest_sha256": "924F455583CAECF22100EDD5667EAD711F3F940FAB5B7258738F6631133398A2"
+  },
+  "seed": 42,
+  "config_hash": "AE29975B98B43856547F470D0716E1822B4D1D9DB5052B988B621C5C26C9F565",
+  "inputs": {
+    "preparation_manifest": "924F455583CAECF22100EDD5667EAD711F3F940FAB5B7258738F6631133398A2",
+    "cleaned_csv": "8BC10CFA056371BDECB3394BFD4C75EEE7E10022ACE5071833ECD140B2D75846",
+    "split_assignments": "1D366E898F6BA68BE46C5CA0F9059E9862FAD1D7BAFE350D9CDD310DD3E0A04C",
+    "split_report": "BDAEF5C2699384A2A76AA5BC4C98C32D7423FF1AF425AA90E630512437448C56",
+    "config": "BAFDB3A1878CC66025BFC72CE1B5552A83B770F8362DBE8248348E3A940AD650"
+  },
+  "outputs": {
+    "candidate_summary.csv": "E0000147B2159DC23ADAA0518543B4727CC93F40653CA2C0F1454F751150C10F",
+    "config.resolved.json": "E35E0525F665278D5C0C1290A121C45DB81B2DFEFDA055909E416A063CC3FEB5",
+    "environment.json": "003C052C349CDB9B06E1F340F19C1122B75DAA0F52BFDB038F40CCFD50C907D9",
+    "fold_metrics.csv": "24B1F7677D32FE650165A9209CB792E2E5CC5A85CA4A1C11E44E56AF2F141714",
+    "models/linear_svm/bundle.joblib": "BB20C4CEAA8C44D4D58C208BF24FD8DDFB72E41209C4E3114BC973B8FBE924F0",
+    "models/linear_svm/model_card.json": "4406F67A295BC51D0D91D6E6189CB98E98289800BA36DE85AA73646CCDCD0997",
+    "models/logistic_regression/bundle.joblib": "23152C26BD402F772DFB4CDE64EFD8D838194C0E5FE69818EFCEA169512CE207",
+    "models/logistic_regression/model_card.json": "2EE66F84D81F484874686B00B1719489BDD398D84C4A82E3BDF832DA23568B4C",
+    "models/multinomial_nb/bundle.joblib": "62280C15A7CFE182E6A53A512159E3ABAFA3744144C4774E3BB99D52357CB3E5",
+    "models/multinomial_nb/model_card.json": "42AF7527D0DC4A53B2E08CE2A61A5A1219BB8F89D3F59C28A4940381FC543CC2",
+    "oof_predictions.csv": "3FB6D94EE49EBD953A0A2C7D04392D750648CDD6C701C358F973986E1915920C",
+    "reports/linear_svm/confusion_matrix.csv": "3824F36A7B16887F8F79972C4C5586E4193761BF0A3437588501375AD138224D",
+    "reports/linear_svm/core_intent_metrics.json": "57350E7222BA9F8572ADAE1DC9A5AB6F301ADD77DC6C436139973039D77DBE59",
+    "reports/linear_svm/per_class_metrics.csv": "DDA4C24F0C9E3F7AA36DB928808C83EDD4E5233FB46FD178B79013642A50E487",
+    "reports/linear_svm/top_confusions.csv": "F7426DE148E7E4C79A9252EC5E716DAD3D2DBEBD67B40C2DD084F362C9C7B5B7",
+    "reports/logistic_regression/confusion_matrix.csv": "A947EBEA2E2314F30A95A03D80AA7ADA9D42F87B7CAF941FA5C342D8537CDF49",
+    "reports/logistic_regression/core_intent_metrics.json": "3394E9DE4BC819072AD358002F9F3AB2DE46D94F25759F725215AB0BCDAF3D0A",
+    "reports/logistic_regression/per_class_metrics.csv": "38759F86EE09F0983385EC77743A721CC9F953ACAD874EC9F617C1545399C32F",
+    "reports/logistic_regression/top_confusions.csv": "52C0BED42E380536D67905F8E5487A59100E0448E8B1E1A4F0A4709295406859",
+    "reports/multinomial_nb/confusion_matrix.csv": "6C32279656073DB530526F7F88C8795968725DE78F74149146EA9E8CB8276DF6",
+    "reports/multinomial_nb/core_intent_metrics.json": "D79A4BC3BCEB306C92DF967312C8DF73D98E1969CB9FF5DDE52E44040D73CC75",
+    "reports/multinomial_nb/per_class_metrics.csv": "927E2024E0F5A1EA424F3808FA04F97EBA9CA8EC6E7A02E1379F0F4D800FF93C",
+    "reports/multinomial_nb/top_confusions.csv": "B5194AB3E6E358FD7B48C19E2FF92206BF63DB80B20486A4F3D13F9BA0A5D4DB",
+    "run_state.json": "095BB677F76317BD9D29FFABAE4CA541B074EA24904FFBDE9F341F255E1260DD",
+    "selection.json": "54757ABB7D6885144DB2C8E62911C4546012986F06E571076A18FD16C18ABD29"
+  },
+  "environment": {
+    "python_version": "3.12.14 (main, Sep  1 2026, 14:17:39) [MSC v.1944 64 bit (AMD64)]",
+    "platform": "Windows-11-10.0.26300-SP0",
+    "machine": "AMD64",
+    "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+    "cpu_count": 20,
+    "libraries": {
+      "pandas": "3.1.0",
+      "numpy": "2.5.4",
+      "scikit-learn": "1.9.1",
+      "scipy": "1.18.1",
+      "joblib": "1.6.0"
+    },
+    "git_revision": "5533a6f2a170e778c0a249d31f3cfeed8a5fcc07",
+    "git_dirty": true,
+    "captured_at": "2026-11-03T11:41:40.956310+00:00"
+  },
+  "selection": {
+    "selection_metric": "macro_f1_mean",
+    "tie_break": [
+      "macro_f1_mean_desc",
+      "macro_f1_std_asc",
+      "config_order"
+    ],
+    "cv_target_macro_f1": 0.85,
+    "meets_cv_target": true,
+    "best_per_model": {
+      "multinomial_nb": {
+        "candidate_id": "multinomial_nb__alpha=0.1",
+        "model_id": "multinomial_nb",
+        "params": {
+          "alpha": 0.1
+        },
+        "macro_f1_mean": 0.9836311537816853,
+        "macro_f1_std": 0.0013946516146763116,
+        "accuracy_mean": 0.9835139813148397,
+        "weighted_f1_mean": 0.9834660155810855
+      },
+      "logistic_regression": {
+        "candidate_id": "logistic_regression__C=10.0",
+        "model_id": "logistic_regression",
+        "params": {
+          "C": 10.0
+        },
+        "macro_f1_mean": 0.9888739963081082,
+        "macro_f1_std": 0.0014818139066694496,
+        "accuracy_mean": 0.9887630820052378,
+        "weighted_f1_mean": 0.9887535533372572
+      },
+      "linear_svm": {
+        "candidate_id": "linear_svm__C=1.0",
+        "model_id": "linear_svm",
+        "params": {
+          "C": 1.0
+        },
+        "macro_f1_mean": 0.9902564545663207,
+        "macro_f1_std": 0.0006795708049642265,
+        "accuracy_mean": 0.9901611508825588,
+        "weighted_f1_mean": 0.9901547759886782
+      }
+    },
+    "winner": {
+      "candidate_id": "linear_svm__C=1.0",
+      "model_id": "linear_svm",
+      "params": {
+        "C": 1.0
+      },
+      "macro_f1_mean": 0.9902564545663207,
+      "macro_f1_std": 0.0006795708049642265,
+      "accuracy_mean": 0.9901611508825588,
+      "weighted_f1_mean": 0.9901547759886782
+    }
+  }
+}

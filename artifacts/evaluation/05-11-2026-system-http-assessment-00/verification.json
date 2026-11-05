@@ -1,0 +1,11 @@
+{
+  "regression_tests_passed": 328,
+  "warnings": 2,
+  "parent_checksums_verified": true,
+  "http_checksums_verified": true,
+  "http_metrics_recomputed": true,
+  "human_grounding_status": "pending_human_review",
+  "ai_annotation_claims": 17,
+  "ai_supported_claims": 15,
+  "no_parent_artifacts_modified": true
+}

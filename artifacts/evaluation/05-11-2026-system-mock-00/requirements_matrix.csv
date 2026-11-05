@@ -1,0 +1,7 @@
+requirement,scope,target,actual,status
+ML 10-Fold CV Macro-F1,Component (ML),>= 0.85,N/A,not_evaluated
+Routing Escalation Guardrail,System E2E,100% exact,20/63,fail
+Semantic Retrieval Recall@3,Component / E2E,>= 0.80,0.0,fail
+Retrieval Safety,System E2E,0 violations,0 violations,pass
+Human Grounded Claims,Human Assessment,>= 0.90,N/A,insufficient_evidence
+Live Warm Latency p95,Performance,<= 12.0s,0.0226,pass

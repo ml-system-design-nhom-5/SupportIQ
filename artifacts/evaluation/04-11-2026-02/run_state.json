@@ -1,0 +1,7 @@
+{
+  "status": "failed",
+  "error": {
+    "type": "NameError",
+    "message": "name 'df' is not defined"
+  }
+}

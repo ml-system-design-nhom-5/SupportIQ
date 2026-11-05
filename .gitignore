@@ -68,3 +68,13 @@ worktrees/
 apps/frontend/test-results/
 apps/frontend/playwright-report/
 
+
+# Version pipeline reports and preserve model directory structure
+!/artifacts/**/
+!/artifacts/**/*
+/artifacts/models/**/*
+!/artifacts/models/**/
+/artifacts/**/*.joblib
+/artifacts/**/*.safetensors
+/artifacts/**/*.zip
+!/artifacts/**/.gitkeep
