@@ -1,10 +1,28 @@
-"""Offline provider fixtures: tests never need credentials or a paid API call."""
+"""Offline provider fixtures and test profile configuration.
+Ensures tests never call external network services unless explicitly opted-in via --run-live.
+"""
 import json
-
 import httpx
 import pytest
 
 from apps.core_backend.llm.gemini import GeminiDraftClient
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--run-live",
+        action="store_true",
+        default=False,
+        help="Run live tests requiring valid external credentials and network egress",
+    )
+
+
+def pytest_collection_modifyitems(config, items):
+    if not config.getoption("--run-live"):
+        skip_live = pytest.mark.skip(reason="requires --run-live option and valid credentials")
+        for item in items:
+            if "live" in item.keywords:
+                item.add_marker(skip_live)
 
 
 @pytest.fixture

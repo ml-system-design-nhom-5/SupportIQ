@@ -4,6 +4,7 @@ import pytest
 import torch
 
 
+@pytest.mark.cuda
 def test_torch_cuda_functional() -> None:
     """Verify that PyTorch detects CUDA and can execute tensor operations on GPU."""
     assert torch.cuda.is_available(), "CUDA must be available in .venv for GPU acceleration"
