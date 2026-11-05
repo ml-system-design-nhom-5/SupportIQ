@@ -1,0 +1,6 @@
+slice,quota,actual
+supported,60,60
+unsupported,34,34
+answerable,24,24
+unanswerable,18,18
+uncertainty_and_faults,20,20

@@ -1,0 +1,15 @@
+intent,document_ids,capabilities,workflow,requires_order_lookup,status
+return_policy,POL-RET-001;POL-RET-003;b1000000-0000-0000-0000-000000000001,return_window;return_conditions;restricted_categories,retrieve_draft,False,covered
+return_product,POL-RET-001;POL-RET-002;b1000000-0000-0000-0000-000000000001,return_initiation;return_instructions;pickup_service,retrieve_draft,True,covered
+refund_policy,POL-REFUND-001;POL-REFUND-002;b1000000-0000-0000-0000-000000000002,refund_reconciliation;refund_timeline;payment_method_timelines,retrieve_draft,False,covered
+request_refund,POL-REFUND-001;POL-REFUND-002;b1000000-0000-0000-0000-000000000002,refund_eligibility;refund_timeline,retrieve_draft,True,covered
+refund_status,POL-REFUND-002;POL-REFUND-007;b1000000-0000-0000-0000-000000000002,refund_tracking;refund_history,retrieve_draft,True,covered
+cancel_order,POL-ORD-002;b1000000-0000-0000-0000-000000000003,cancellation_window;cancel_unfulfilled;cancellation_process,retrieve_draft,True,covered
+track_order,POL-ORD-001,order_tracking_guide;status_lookup,retrieve_draft,True,covered
+shipping_costs,POL-SHIP-002,shipping_fees;free_shipping_rules,retrieve_draft,False,covered
+delivery_time,POL-SHIP-001,delivery_timelines;express_shipping,retrieve_draft,False,covered
+delivery_issue,POL-SHIP-004,delayed_package_handling;discrepant_status,retrieve_draft,True,covered
+change_shipping_address,POL-ORD-003,modify_address_window;address_update_process,retrieve_draft,True,covered
+edit_order,POL-ORD-003,modify_address_window,retrieve_draft,True,covered
+payment_issue,POL-PAY-001;POL-PAY-004,failed_transaction;payment_reversal;duplicate_charge_resolution,retrieve_draft,True,covered
+human_agent,N/A,escalation_to_general_support,escalate,False,covered
