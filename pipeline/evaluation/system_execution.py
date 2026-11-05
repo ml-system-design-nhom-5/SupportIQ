@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import concurrent.futures
+import ctypes
 import hashlib
 import json
+import threading
 import time
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -31,6 +34,7 @@ from pipeline.evaluation.system_contracts import (
 )
 from pipeline.evaluation.system_performance import BudgetLedger
 from pipeline.evaluation.system_server import ManagedDemoServer
+from pipeline.preparation.utils import compute_sha256
 
 
 def _compute_str_sha256(text: str) -> str:
@@ -55,12 +59,11 @@ class MockPolicyEncoder:
             vecs.append(v / (norm if norm > 0 else 1.0))
         return np.array(vecs, dtype=np.float32)
 
+    def encode_queries(self, queries: List[str]) -> np.ndarray:
+        return self.encode_passages(queries)
+
     def encode_query(self, query: str) -> np.ndarray:
-        h = int(hashlib.sha256(query.encode("utf-8")).hexdigest(), 16)
-        rng = np.random.RandomState(h % (2**32))
-        v = rng.randn(self.dimension).astype(np.float32)
-        norm = np.linalg.norm(v)
-        return (v / (norm if norm > 0 else 1.0)).astype(np.float32)
+        return self.encode_passages([query])[0]
 
 
 class MockLLMClient:
@@ -234,6 +237,33 @@ def build_system_dependencies(
     if not isinstance(rel_data, dict):
         raise EvaluationError("Live preflight failed: release manifest must be a JSON object")
 
+    # Strict release schema validation
+    for required_key in ("package_version", "model_type", "artifacts"):
+        if required_key not in rel_data:
+            raise EvaluationError(
+                f"Live preflight failed: release manifest missing required fields ({required_key})"
+            )
+
+    artifacts = rel_data.get("artifacts")
+    if not isinstance(artifacts, dict) or not artifacts:
+        raise EvaluationError(
+            "Live preflight failed: release manifest must contain a non-empty 'artifacts' dictionary"
+        )
+
+    rel_dir = release_manifest.parent
+    for art_key, art_meta in artifacts.items():
+        if not isinstance(art_meta, dict) or "path" not in art_meta or "sha256" not in art_meta:
+            raise EvaluationError(f"Live preflight failed: artifact '{art_key}' missing path or sha256 checksum")
+        target_art = rel_dir / art_meta["path"]
+        if not target_art.exists():
+            raise EvaluationError(f"Live preflight failed: declared artifact '{art_key}' missing at {target_art}")
+        actual_sha = compute_sha256(target_art)
+        expected_sha = art_meta["sha256"]
+        if actual_sha != expected_sha:
+            raise EvaluationError(
+                f"Live preflight failed: artifact '{art_key}' checksum mismatch: expected {expected_sha}, got {actual_sha}"
+            )
+
     kb_path = inputs.source_paths.get("kb", Path("data/knowledge/approved_kb.v1.json"))
     if not Path(kb_path).exists():
         raise EvaluationError(f"Live preflight failed: approved KB snapshot '{kb_path}' not found")
@@ -261,6 +291,17 @@ def build_system_dependencies(
 
     app = create_app(db_path=str(demo_db), runner=runner)
 
+    # Instantiate and start managed demo server for live loopback testing
+    managed_server = ManagedDemoServer(
+        run_nonce=f"live-eval-{uuid.uuid4().hex[:8]}",
+        input_fingerprint=inputs.input_hashes.get("suite_manifest", "live-fingerprint"),
+    )
+    try:
+        managed_server.start(inputs, runtime_dir=r_dir, ledger_path=budget_db)
+    except Exception as exc:
+        managed_server.close()
+        raise EvaluationError(f"Live preflight failed to start managed demo server: {exc}") from exc
+
     return SystemDependencies(
         runner=runner,
         retrieval=retrieval,
@@ -271,6 +312,7 @@ def build_system_dependencies(
         clock=clock_fn,
         deadline_seconds=deadline_sec,
         ledger=ledger,
+        managed_server=managed_server,
     )
 
 
@@ -400,43 +442,88 @@ def execute_system_case(
             raise LLMError(case.fault)
         runner_llm.generate = _failing_llm
 
+    old_retrieve = None
+    runner_retrieval = getattr(deps.runner, "retrieval", None)
+    if case.fault in ("encoder_unavailable", "encoder_failure") and runner_retrieval is not None:
+        old_retrieve = getattr(runner_retrieval, "retrieve", None)
+        runner_retrieval.retrieve = lambda *a, **kw: {
+            "status": case.fault,
+            "evidence": [],
+            "error": case.fault,
+        }
+
+    old_lookup_order = None
+    runner_commerce = getattr(deps.runner, "commerce", None)
+    if case.fault in ("commerce_unauthorized", "commerce_not_found") and runner_commerce is not None:
+        old_lookup_order = getattr(runner_commerce, "lookup_order", None)
+        error_kind = "unauthorized_scope" if case.fault == "commerce_unauthorized" else "order_not_found"
+        runner_commerce.lookup_order = lambda *a, **kw: {
+            "authorized": False,
+            "error": error_kind,
+            "order": None,
+        }
+        if not ctx.extracted_slots.get("order_id"):
+            ctx.extracted_slots["order_id"] = "FAULT-ORD-999"
+
     t_run_start = time.perf_counter()
-    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-    future = executor.submit(deps.runner.run, text=case.text, context=ctx, run_id=attempt_id)
+    worker_res: Dict[str, Any] = {}
+    worker_exc: Dict[str, Any] = {}
+
+    def _worker():
+        try:
+            worker_res["data"] = deps.runner.run(text=case.text, context=ctx, run_id=attempt_id)
+        except BaseException as exc:
+            worker_exc["error"] = exc
+
+    worker_thread = threading.Thread(target=_worker, daemon=True)
     try:
-        run_res = future.result(timeout=deadline)
-        executor.shutdown(wait=True)
-    except concurrent.futures.TimeoutError:
-        executor.shutdown(wait=False, cancel_futures=True)
-        total_elapsed = round((time.perf_counter() - t_start) * 1000.0, 2)
-        return CaseResult(
-            case_id=case.id,
-            repetition=1,
-            profile=deps.profile,
-            scope=scope,
-            execution_status="timeout",
-            error_code="deadline_exceeded",
-            stage_elapsed_ms={"deadline_timeout_ms": total_elapsed},
-            total_elapsed_ms=total_elapsed,
-        )
-    except Exception as exc:
-        executor.shutdown(wait=False, cancel_futures=True)
-        total_elapsed = round((time.perf_counter() - t_start) * 1000.0, 2)
-        return CaseResult(
-            case_id=case.id,
-            repetition=1,
-            profile=deps.profile,
-            scope=scope,
-            execution_status="error",
-            error_code=type(exc).__name__,
-            stage_elapsed_ms={},
-            total_elapsed_ms=total_elapsed,
-        )
+        worker_thread.start()
+        worker_thread.join(timeout=deadline)
+
+        if worker_thread.is_alive():
+            # Stop the worker thread immediately using asynchronous exception injection
+            if worker_thread.ident is not None:
+                ctypes.pythonapi.PyThreadState_SetAsyncExc(
+                    ctypes.c_ulong(worker_thread.ident),
+                    ctypes.py_object(SystemExit),
+                )
+            worker_thread.join(timeout=0.05)
+            total_elapsed = round((time.perf_counter() - t_start) * 1000.0, 2)
+            return CaseResult(
+                case_id=case.id,
+                repetition=1,
+                profile=deps.profile,
+                scope=scope,
+                execution_status="timeout",
+                error_code="deadline_exceeded",
+                stage_elapsed_ms={"deadline_timeout_ms": total_elapsed},
+                total_elapsed_ms=total_elapsed,
+            )
+
+        if "error" in worker_exc:
+            exc = worker_exc["error"]
+            total_elapsed = round((time.perf_counter() - t_start) * 1000.0, 2)
+            return CaseResult(
+                case_id=case.id,
+                repetition=1,
+                profile=deps.profile,
+                scope=scope,
+                execution_status="error",
+                error_code=type(exc).__name__,
+                stage_elapsed_ms={},
+                total_elapsed_ms=total_elapsed,
+            )
+
+        run_res = worker_res.get("data", {})
     finally:
         if old_classify and runner_intent_client:
             runner_intent_client.classify_intent = old_classify
         if old_llm_generate and runner_llm:
             runner_llm.generate = old_llm_generate
+        if old_retrieve and runner_retrieval:
+            runner_retrieval.retrieve = old_retrieve
+        if old_lookup_order and runner_commerce:
+            runner_commerce.lookup_order = old_lookup_order
 
     t_run_elapsed = time.perf_counter() - t_run_start
     total_elapsed_ms = round(t_run_elapsed * 1000.0, 2)

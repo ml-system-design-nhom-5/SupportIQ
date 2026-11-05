@@ -250,6 +250,7 @@ def run_system_evaluation(
             "completed_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "evidence_kind": evidence_kind,
             "all_mandatory_passed": gates.get("all_mandatory_passed", False),
+            "expected_draft_cases": [c.id for c in inputs.cases if c.expected.draft_expected],
             "files": manifest_files,
         }
         write_json_atomic(manifest_data, run_dir / "manifest.json")
@@ -275,6 +276,11 @@ def run_system_evaluation(
 
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI orchestrator for SupportIQ System Evaluation."""
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
     parser = argparse.ArgumentParser(description="SupportIQ System Benchmark & Evaluation CLI")
     parser.add_argument("--suite", required=True, help="Path to system suite manifest JSON")
     parser.add_argument("--config", required=True, help="Path to system evaluation config JSON")

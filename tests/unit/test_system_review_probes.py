@@ -118,6 +118,7 @@ class TestSystemReviewProbes:
             "package_version": "1.0.0",
             "model_type": "hybrid",
             "status": "ready",
+            "artifacts": {"model": {"path": "model.onnx", "sha256": "dummy_sha"}},
         }
         from io import StringIO
         orig_open = open
@@ -126,12 +127,18 @@ class TestSystemReviewProbes:
                 return StringIO(json.dumps(manifest_mock))
             return orig_open(file, *args, **kwargs)
 
+        mock_server = MagicMock()
+        mock_server.start.return_value = "http://127.0.0.1:8999"
+
         with patch.object(Path, "exists", return_value=True), \
              patch("builtins.open", side_effect=_mocked_open), \
+             patch("pipeline.evaluation.system_execution.compute_sha256", return_value="dummy_sha"), \
+             patch("pipeline.evaluation.system_execution.ManagedDemoServer", return_value=mock_server), \
              patch("apps.core_backend.retrieval.adapter.RetrievalAdapter.__init__", return_value=None), \
              patch("apps.core_backend.intent.client.IntentClient.__init__", return_value=None):
             deps = build_system_dependencies(sample_verified_inputs, profile="live", runtime_dir=runtime_dir)
             assert deps.profile == "live"
+            assert deps.managed_server is not None
             deps.close()
 
     def test_probe_2_mock_profile_blocks_real_encoder_and_gemini_client(self, sample_verified_inputs, monkeypatch, tmp_path):

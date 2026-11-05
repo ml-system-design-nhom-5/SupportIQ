@@ -34,6 +34,7 @@ def evaluate_claim_annotations(
     unsupported_claims = 0
     unknown_claims = 0
     annotated_cases = set()
+    seen_claims: Set[Tuple[str, str]] = set()
 
     has_insufficient_evidence = False
     insufficient_reason = ""
@@ -67,6 +68,12 @@ def evaluate_claim_annotations(
                 insufficient_reason = f"Case '{cid}' has zero claims without reviewer rationale"
 
         for c in claims:
+            cid_claim = str(c.get("claim_id") or c.get("claim_text") or json.dumps(c, sort_keys=True)).strip()
+            claim_key = (cid, cid_claim)
+            if claim_key in seen_claims:
+                continue
+            seen_claims.add(claim_key)
+
             verdict = str(c.get("verdict", "")).strip().lower()
             total_claims += 1
             if verdict == "supported":
@@ -254,6 +261,10 @@ def assess_run(
             if cid and d_hash:
                 draft_hashes[cid] = d_hash
                 expected_draft_cases.add(cid)
+
+    # Enforce mandatory benchmark draft cases declared in run manifest
+    if "expected_draft_cases" in run_manifest and isinstance(run_manifest["expected_draft_cases"], list):
+        expected_draft_cases = set(run_manifest["expected_draft_cases"])
 
     # 4. Load annotations and evaluate
     ann_path = Path(annotations_path)
