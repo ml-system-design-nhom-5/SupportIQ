@@ -6,7 +6,6 @@
 
 const ICONS = {
   chevronRight: '<path d="m9 18 6-6-6-6"/>',
-  chevronLeft: '<path d="m15 18-6-6 6-6"/>',
   chevronDown: '<path d="m6 9 6 6 6-6"/>',
   checkCircle: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
   xCircle: '<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>',
@@ -176,8 +175,9 @@ function orderHead() {
       <span class="trail"><button class="btn">${icon("message", "icon-sm")}Contact support</button></span></div>`;
 }
 
-function pager(text, hasNext) {
-  return `<div class="pager"><button class="btn btn-sm" disabled>${icon("chevronLeft", "icon-sm")}Previous</button><span class="muted small">${text}</span><button class="btn btn-sm" ${hasNext ? "" : "disabled"}>Next${icon("chevronRight", "icon-sm")}</button></div>`;
+// Lists use cursor pagination (CON-14), so there is no page count: Show more loads the next page.
+function showMore(label) {
+  return `<div class="pager"><button class="btn">${icon("chevronDown", "icon-sm")}${label}</button></div>`;
 }
 
 function ordersList() {
@@ -188,7 +188,7 @@ function ordersList() {
       <div class="row wrap"><span class="pair"><span class="muted small">Order</span>${badge(ORDER_STATUS[o.order])}</span><span class="pair"><span class="muted small">Shipment</span>${badge(SHIPMENT_STATUS[o.shipment[0]])}</span>${o.refund[0] === "none" ? "" : badge(REFUND_STATUS[o.refund[0]])}</div>
     </div><span class="price">${o.total}</span>${icon("chevronRight", "go")}</div>`)
     .join("");
-  return `<div class="page-head"><h1>My orders</h1></div><section class="card">${rows}</section>${pager("Page 1 of 1", false)}`;
+  return `<div class="page-head"><h1>My orders</h1></div><section class="card">${rows}</section>`;
 }
 
 function supportList() {
@@ -207,7 +207,7 @@ function productsGrid() {
   const cards = PRODUCTS
     .map(([name, category, price]) => `<div class="product-card"><div class="product-image">${icon("package")}</div><div class="product-body"><div class="name">${name}</div><div class="muted small">${category}</div><div class="strong">${price}</div></div></div>`)
     .join("");
-  return `<div class="page-head"><h1>Products</h1><span class="meta">A read-only catalog for the demo</span></div><div class="product-grid">${cards}</div>${pager("Page 1 of 3", true)}`;
+  return `<div class="page-head"><h1>Products</h1><span class="meta">A read-only catalog for the demo</span></div><div class="product-grid">${cards}</div>${showMore("Show more products")}`;
 }
 
 function productDetail() {

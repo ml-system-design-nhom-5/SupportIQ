@@ -54,9 +54,9 @@ Only `frontend` changes. It reads and writes through the `backend` contract only
 | Screen | Route (proposed) | Content | Mockup |
 |---|---|---|---|
 | Sign in | `/sign-in` | Shared with the console | [sign-in.png](assets/console-ui/sign-in.png) |
-| Products | `/shop` | Paginated catalog cards: neutral image, name, category, price | [products.png](assets/shop-ui/products.png) |
+| Products | `/shop` | Catalog cards: neutral image, name, category, price. Show more products loads the next page ([CON-14](../rules/contracts.md#api-conventions)) | [products.png](assets/shop-ui/products.png) |
 | Product | `/shop/products/{product_id}` | Name, category, price, description, neutral image | [product.png](assets/shop-ui/product.png) |
-| My orders | `/shop/orders` | Paginated list, newest first: order ID, `placed_at`, product names, order and shipment status, refund status when there is a refund, total | [orders.png](assets/shop-ui/orders.png) |
+| My orders | `/shop/orders` | List, newest first, with Show more when there is a next page: order ID, `placed_at`, product names, order and shipment status, refund status when there is a refund, total | [orders.png](assets/shop-ui/orders.png) |
 | Order | `/shop/orders/{order_id}` | Order, shipment, and refund status with dates; lines that link to their products; total; Support for this order (below) | [order.png](assets/shop-ui/order.png) |
 | Support | `/shop/support` | Every ticket of the customer, newest first: excerpt, ticket ID, order ID, time, status. Each row opens the order page at that ticket | [support.png](assets/shop-ui/support.png) |
 
@@ -151,6 +151,7 @@ sequenceDiagram
 | No orders | `listShopOrders` returns no item | "You have no orders yet." | — |
 | No tickets | The customer has no ticket about this order, or none at all | Order page: only the message box. Support: "You have not written to support yet." | — |
 | Sending | After Send message | The button shows progress; the text stays | — |
+| Loading more | After Show more | The button shows progress; the items already shown stay. On an error, a message under the list and the button again. The button is hidden when there is no next page | — |
 | Received | `customer_status` is `received` | Badge Received and the "No reply yet" line | [order-sent.png](assets/shop-ui/order-sent.png) |
 | Replied | `customer_status` is `replied` | Badge Replied and the reply | [order.png](assets/shop-ui/order.png) |
 | Not found | `404` | "This order was not found.", with Back to My orders | [order-not-found.png](assets/shop-ui/order-not-found.png) |

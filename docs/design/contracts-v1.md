@@ -29,7 +29,7 @@ The team agreed the product behavior:
 - the escalation rules ESC-01 to ESC-05;
 - the update of 2026-11-01: a retry of failed suggestions, draft cancellation on an intent change, read-only staff access to tickets that are not open, and the customer's other orders in the workspace;
 - the update of 2026-11-04: citations to the order context ([ADR-0014](../decisions/0014-citations-to-order-context.md)), and intent changes accepted only after an intent is known;
-- the update of 2026-11-05: one pending rule for every role, responses from the ingress, shared `Citation` and `OrderContext` schemas, the shop's `order_id` filter on `listShopTickets`, the ticket status `replied`, the newest-first order of shop lists, the `account_id` of `getCurrentSession`, and names that follow CON-18 (`start_at`, `end_at`, `handling_time_ms`, `mask_count_by_type`).
+- the update of 2026-11-05: one pending rule for every role, responses from the ingress, shared `Citation` and `OrderContext` schemas, the shop's `order_id` filter on `listShopTickets`, the ticket status `replied`, the newest-first order of shop lists, the `account_id` of `getCurrentSession`, the data classes of commerce IDs, no `Idempotency-Key` on sign-out, and names that follow CON-18 (`start_at`, `end_at`, `handling_time_ms`, `mask_count_by_type`).
 
 Revision 2 needs a new approval.
 
@@ -369,7 +369,7 @@ Both contracts are new at version `1.0.0`. No consumer exists yet, so there is n
 
 #### Common elements
 
-- **Headers:** `traceparent` on every request ([ADR-0004](../decisions/0004-api-conventions.md), decision 6). `Idempotency-Key` on every write except `createSession`.
+- **Headers:** `traceparent` on every request ([ADR-0004](../decisions/0004-api-conventions.md), decision 6). `Idempotency-Key` on every write except `createSession` and `deleteCurrentSession`.
 - **Status codes:** as in [CON-11](../rules/contracts.md#api-conventions), including `202` for `createSuggestion` and `204` for operations without a response body.
 - **Responses from the ingress:** `ingress` can answer `413` (body over its size limit), `429` (rate limit), `502`, or `504` (`backend` unreachable) before `backend` sees the request ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)). These bodies are not Problem Details. `frontend` treats them as technical failures: a plain-language message, editor text kept, and automatic retries only as [TS-29](../rules/typescript.md#api-access) and [ERR-12](../rules/errors-and-reliability.md#retries) allow, so never for `sendReply` and never after `413`.
 - **Errors:** Problem Details with a `trace_id` extension member. Problem types:
@@ -656,11 +656,11 @@ Infrastructure cost (NFR-10) is reported from AWS billing, not from this report.
 
 | Entity | Fields | Data class |
 |---|---|---|
-| Customer | `customer_id`, `display_name`, `email` (synthetic), `phone` (synthetic) | Confidential |
+| Customer | `customer_id`, `display_name`, `email` (synthetic), `phone` (synthetic) | Confidential, except `customer_id` (Internal) |
 | Product | `product_id`, `name`, `description`, `category`, `price` | Public |
-| Order | `order_id`, `customer_id`, `order_status`, `placed_at`, `order_total`, `shipping_cost`, `shipping_address` (synthetic), `transaction_id`, lines (`product_id`, `quantity`) | Confidential |
-| Shipment | `shipment_id`, `order_id`, `shipment_status`, `tracking_code`, `estimated_delivery_at`, `delivered_at` | Confidential |
-| Refund | `refund_id`, `order_id`, `refund_status`, `refund_amount`, `refund_requested_at`, `updated_at` | Confidential |
+| Order | `order_id`, `customer_id`, `order_status`, `placed_at`, `order_total`, `shipping_cost`, `shipping_address` (synthetic), `transaction_id`, lines (`product_id`, `quantity`) | Confidential, except `customer_id` (Internal) |
+| Shipment | `shipment_id`, `order_id`, `shipment_status`, `tracking_code`, `estimated_delivery_at`, `delivered_at` | Confidential, except `shipment_id` (Internal) |
+| Refund | `refund_id`, `order_id`, `refund_status`, `refund_amount`, `refund_requested_at`, `updated_at` | Confidential, except `refund_id` (Internal) |
 
 - The data is produced by a deterministic, versioned seed script ([DATA-04](../rules/data-and-ml.md#sources-and-acceptable-use)) and read through the `CommerceGateway` port. No operation writes it.
 - Order IDs, tracking codes, and transaction IDs each follow one documented format, so that pseudonymization can detect them in free text ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#detection)).
@@ -819,7 +819,8 @@ Every schema property states its data class ([SEC-03](../rules/security-and-priv
 6. Contract PR 3: `kb-contract.md` structure, completed when the KB files arrive.
 7. Implementation starts in parallel against mocks. These follow-up design docs come first:
    - the `ai-service` pipeline: routing per the escalation rules, the list of sensitive intents, whether the LLM is a third authority signal ([SEC-26](../rules/security-and-privacy.md#prompt-injection) applies) and, if so, how that signal stays known when a correction cancels the draft that would carry it, step budgets, retrieval limits (N, k, and snippet length), the maximum output tokens, an LLM spending limit, the grounding check including order citations, placeholder instructions and the output check, and the `as_of` confirmation;
-   - the `backend` ticket workflow: job queue schema and settings, pseudonymization detectors and the named-entity library, how a storage error while writing the pseudonym map is retried (it is not a `pseudonymization_failed`), the audit log schema, report queries, and a decision-record export that keeps original values out ([SEC-37](../rules/security-and-privacy.md#pseudonymization));
+   - the `backend` foundation: tables, database roles, sessions, idempotency, the audit log schema, and the seed and reset commands, in the [backend foundation design](backend-foundation.md);
+   - the `backend` ticket workflow: job queue schema and settings, pseudonymization detectors and the named-entity library, how a storage error while writing the pseudonym map is retried (it is not a `pseudonymization_failed`), report queries, and a decision-record export that keeps original values out ([SEC-37](../rules/security-and-privacy.md#pseudonymization));
    - the screens of `/console`, `/shop`, and `/admin`: the [console UI](console-ui.md), [shop UI](shop-ui.md), and [admin UI](admin-ui.md) designs;
    - the evaluation protocol ([DATA-20](../rules/data-and-ml.md#splits-and-evaluation-protocol)).
 
