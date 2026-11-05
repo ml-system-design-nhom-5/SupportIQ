@@ -1,6 +1,6 @@
 # Architecture rules
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-10-23
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-01
 
 Rules for where code lives, how parts depend on each other, and how the system grows without rewrites. The component map and its reasons are in [ADR-0001](../decisions/0001-system-architecture.md).
 
@@ -20,7 +20,7 @@ Rules for where code lives, how parts depend on each other, and how the system g
 
 **ARCH-03.** Components MUST NOT share a database, a file system location, or an in-memory store. Each component owns its data.
 
-**ARCH-04.** `ai-service` MUST NOT read `backend` data. `backend` sends the minimal order context each request needs ([security-and-privacy.md](security-and-privacy.md#data-sent-to-llm-providers)).
+**ARCH-04.** `ai-service` MUST NOT read `backend` data. `backend` sends only pseudonymized text and the minimal order context each request needs ([security-and-privacy.md](security-and-privacy.md#data-sent-to-llm-providers), [SEC-36](security-and-privacy.md#pseudonymization)).
 
 **ARCH-05.** Only `backend` MAY send a reply to a customer, and only as the result of a staff action.
 
@@ -33,6 +33,8 @@ Rules for where code lives, how parts depend on each other, and how the system g
 **ARCH-09.** `ai-service` keeps no per-ticket state between requests. Every request carries what it needs.
 
 **ARCH-10.** Each component has its own README, configuration, Dockerfile, test suite, and dependency lockfile.
+
+**ARCH-42.** Deployment configuration (the Compose file, Nginx, the egress proxy, and observability provisioning) lives in `deploy/` ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)). Components never read files from `deploy/` at runtime; they receive values through their settings.
 
 ## Layers
 
@@ -118,11 +120,13 @@ The layout is illustrative. Each component fixes its exact layout in its README 
 
 ## State, time, and side effects
 
-**ARCH-30.** Persistent state lives only in a component's own data store. In-memory caches are never a source of truth; every cache is explicit, bounded, has a documented expiry, and can be disabled by configuration.
+**ARCH-30.** Persistent state lives only in a component's own data store. In-memory caches are never a source of truth; every cache is explicit, bounded, has a documented expiry, and can be disabled by configuration. Adding a cache needs an ADR ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md#caching-and-updates)).
 
 **ARCH-31.** Time, randomness, and identifier generation are dependencies (`Clock`, random generator, ID factory) injected into the code that needs them.
 
 **ARCH-32.** I/O happens only in adapters and the composition root.
+
+**ARCH-41.** `backend` replicas share no in-process state. Sessions, sign-in failure counters, idempotency records, suggestion jobs, audit log entries, and pseudonym maps live in PostgreSQL. Background work runs only through the suggestion job queue; no other in-process scheduler or queue exists ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md#suggestion-job-queue)).
 
 ## Configuration
 
@@ -132,15 +136,15 @@ The layout is illustrative. Each component fixes its exact layout in its README 
 
 **ARCH-35.** `.env` files are git-ignored. `.env.example` lists every setting with a safe placeholder and a one-line comment.
 
-**ARCH-36.** Every tunable value (confidence thresholds, top-k, timeouts, rerank weight, retry counts) is a setting whose name includes its unit (`llm_timeout_ms`) and whose comment links its origin: an ADR, a requirement, or an evaluation run.
+**ARCH-36.** Every tunable value is either a setting or an entry of a versioned asset, never a literal in code. Operational values (top-k, timeouts, retry counts, queue settings) are settings whose name includes their unit (`llm_timeout_ms`) and whose comment links their origin: an ADR, a requirement, or an evaluation run. Values tuned on data for one model (τ, δ, the rerank weight λ, the list of sensitive intents, and the sensitive-term list) live in the routing configuration ([DATA-58](data-and-ml.md#models-and-artifacts)).
 
 **ARCH-37.** Defaults are safe: when a setting controls a guardrail, its default is the most conservative value.
 
 ## Versioned assets
 
-**ARCH-38.** Model artifacts, KB versions, prompt templates, the routing table, and the document-to-intent mapping are versioned assets. Each has an explicit version string.
+**ARCH-38.** Model artifacts, KB versions, prompt templates, the routing configuration, the document-to-intent mapping, the retrieval index, and the release manifest that names them together are versioned assets. Each has an explicit version string ([DATA-56](data-and-ml.md#models-and-artifacts)).
 
-**ARCH-39.** Every suggestion reports the versions of all assets that produced it (`model_version`, `kb_version`, `prompt_version`, and others defined in the contract).
+**ARCH-39.** Every suggestion reports the `release_id` and the versions of all assets that produced it (`model_version`, `kb_version`, `prompt_version`, and others defined in the contract).
 
 **ARCH-40.** A versioned asset is immutable once published. A change produces a new version.
 
@@ -182,5 +186,6 @@ Follow these recipes when extending the system. If a change does not fit a recip
 ### Change routing, thresholds, or prompts
 
 1. Treat it as a change to a versioned asset: create a new version.
-2. Re-run the evaluation and compare against the previous version and the baseline.
-3. Report the numbers in the PR ([data-and-ml.md](data-and-ml.md#evaluation-and-reporting)).
+2. Create a candidate release manifest that names the new version ([DATA-56](data-and-ml.md#models-and-artifacts)).
+3. Run the offline evaluation gate on the candidate and compare it against the current release and the baseline ([DATA-57](data-and-ml.md#models-and-artifacts)).
+4. Report the numbers in the PR ([data-and-ml.md](data-and-ml.md#evaluation-and-reporting)). Publish the release only if the gate passes.

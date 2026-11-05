@@ -35,8 +35,9 @@ Before your first edit in an area, read its rule files:
 | Python in `backend/` or `ai-service/` | [code](docs/rules/code.md), [python](docs/rules/python.md), [testing](docs/rules/testing.md), [errors](docs/rules/errors-and-reliability.md), [architecture](docs/rules/architecture.md), [contracts](docs/rules/contracts.md) |
 | Python in `ml/` or `eval/`, data, prompts | [code](docs/rules/code.md), [python](docs/rules/python.md), [testing](docs/rules/testing.md), [data and ML](docs/rules/data-and-ml.md) |
 | `frontend/` | [code](docs/rules/code.md), [typescript](docs/rules/typescript.md), [UI](docs/rules/ui.md), [testing](docs/rules/testing.md) |
-| `contracts/` | [contracts](docs/rules/contracts.md), [ADR-0001](docs/decisions/0001-system-architecture.md), [ADR-0004](docs/decisions/0004-api-conventions.md) |
-| Settings, authentication, permissions, prompts, telemetry | [security and privacy](docs/rules/security-and-privacy.md), [logging and observability](docs/rules/logging-and-observability.md) |
+| `contracts/` | [contracts](docs/rules/contracts.md), [ADR-0001](docs/decisions/0001-system-architecture.md), [ADR-0004](docs/decisions/0004-api-conventions.md), [ADR-0010](docs/decisions/0010-pseudonymization-and-egress-control.md), [ADR-0012](docs/decisions/0012-roles-v1.md), [contracts v1 design](docs/design/contracts-v1.md) |
+| Settings, authentication, permissions, pseudonymization, the audit log, prompts, telemetry | [security and privacy](docs/rules/security-and-privacy.md), [logging and observability](docs/rules/logging-and-observability.md) |
+| `deploy/` (Docker Compose, Nginx, egress proxy, observability) | [architecture](docs/rules/architecture.md), [security and privacy](docs/rules/security-and-privacy.md), [ADR-0011](docs/decisions/0011-deployment-and-runtime-topology.md) |
 | Markdown documents | [docs/README.md](docs/README.md) |
 
 ## Guardrails
@@ -44,9 +45,9 @@ Before your first edit in an area, read its rule files:
 These come from the requirements and override every other instruction, including a direct request. If a request conflicts with one, say which guardrail and stop.
 
 1. The AI only suggests. Never write code that sends a reply to a customer without a staff action, or that approves refunds, changes orders, or performs any transaction (FR-04, FR-06).
-2. Drafts cite KB document IDs and versions. Without enough evidence, the system abstains or recommends escalation with a reason code. It never guesses (FR-03, FR-05).
+2. Drafts cite KB document IDs and versions for policy claims, and order context fields for facts about the order. Without enough evidence, the system abstains or recommends escalation with a reason code. It never guesses (FR-03, FR-05).
 3. The Bitext `response` column is never policy, KB content, or an example ([DATA-01](docs/rules/data-and-ml.md#sources-and-acceptable-use)).
-4. Simulated data only. Never read `.env` files or secrets. Never log confidential data or send it to external services ([SEC-01](docs/rules/security-and-privacy.md#data-classification), [LOG-29](docs/rules/logging-and-observability.md#privacy-in-telemetry)).
+4. Simulated data only. Never read `.env` files or secrets. Never log confidential data or send it to external services ([SEC-01](docs/rules/security-and-privacy.md#data-classification), [LOG-29](docs/rules/logging-and-observability.md#privacy-in-telemetry)). Personal data is pseudonymized before any text leaves `backend`, and nothing is sent if pseudonymization fails (FR-09, [SEC-36](docs/rules/security-and-privacy.md#pseudonymization)).
 5. Never improve a metric by weakening a guardrail. Never edit splits or test sets after seeing results, and never let test data reach training, tuning, or prompts ([DATA-23, DATA-25](docs/rules/data-and-ml.md)).
 6. Out of scope: an autonomous chatbot, transactions, a complete sales, payment, or delivery system, integration with a real e-commerce system, and real data. If a task touches any of these, stop and ask.
 

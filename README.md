@@ -8,31 +8,34 @@ SupportIQ is an AI copilot that helps e-commerce customer support staff handle t
 
 - Classifies each customer message into one of 46 intents with a self-trained ML model and shows a calibrated confidence.
 - Retrieves versioned policy documents from a knowledge base (KB) and drafts a reply with citations.
-- Lets staff edit, approve, reject, or escalate. Nothing reaches a customer without a staff action.
-- Records staff decisions and source versions for evaluation and monitoring.
+- Lets staff edit, approve, reject, or escalate. Managers decide refunds, disputes, and policy exceptions. Nothing reaches a customer without a staff action.
+- Replaces personal data with pseudonyms before any text leaves `backend`.
+- Records staff decisions, source versions, and an insert-only audit log for evaluation, reports, and monitoring.
 
 Full scope and requirements: [docs/product/requirements.md](docs/product/requirements.md).
 
 ## Architecture
 
-Three components talk only through versioned contracts ([ADR-0001](docs/decisions/0001-system-architecture.md)).
+Three components talk only through versioned contracts ([ADR-0001](docs/decisions/0001-system-architecture.md)). They run as one Docker Compose project behind an Nginx ingress, with two replicas of `backend` and of `ai-service` ([ADR-0011](docs/decisions/0011-deployment-and-runtime-topology.md)).
 
 ```mermaid
 flowchart LR
     Customer(["Customer"]) -->|"/shop"| FE["frontend"]
-    Staff(["Staff"]) -->|"/console"| FE
+    Staff(["Staff and managers"]) -->|"/console"| FE
+    Admin(["Admin"]) -->|"/admin"| FE
     FE -->|"backend contract"| BE["backend"]
-    BE -->|"ai-service contract"| AI["ai-service"]
-    BE --> DB[("PostgreSQL")]
-    AI --> ART[("Model artifact<br/>versioned KB")]
+    BE -->|"ai-service contract:<br/>pseudonymized text only"| AI["ai-service"]
+    BE -->|"SQL"| DB[("PostgreSQL")]
+    AI -->|"loads at startup"| ART[("Release manifest:<br/>model, KB, prompts, routing")]
+    AI -->|"egress proxy,<br/>allow-listed host only"| LLM["LLM provider"]
     ML["ml/ training"] -.->|"versioned artifact"| ART
 ```
 
 | Component | Responsibility |
 |---|---|
-| `frontend` | Minimal shop demo for simulated customers; review console for staff |
-| `backend` | Ticket lifecycle, AI orchestration, permissions, the only path that sends replies, decision records, simulated commerce data |
-| `ai-service` | Intent classification, retrieval, routing recommendation, drafts with citations. Suggests only |
+| `frontend` | Shop demo with a read-only catalog for simulated customers; review console for staff and managers; admin area for accounts and versions |
+| `backend` | Ticket lifecycle, AI orchestration through a job queue, pseudonymization of personal data, permissions, the only path that sends replies, decision records and the audit log, reports, simulated commerce data |
+| `ai-service` | Intent classification, retrieval, routing recommendation, drafts with citations, on pseudonymized text. Suggests only |
 
 ## Main flow
 
@@ -46,6 +49,7 @@ sequenceDiagram
 
     Customer->>FE: Submit a support request in /shop
     FE->>BE: Create ticket
+    BE->>BE: Queue a suggestion job and pseudonymize the message
     par Analysis
         BE->>AI: Request analysis
         AI-->>BE: Intent distribution, documents, routing recommendation
@@ -57,14 +61,14 @@ sequenceDiagram
     Staff->>FE: Edit, approve, reject, or escalate
     FE->>BE: Record staff decision
     BE-->>Customer: Reply visible in /shop only after staff send it
-    Note over BE,AI: If ai-service fails or times out, backend switches the ticket to manual handling and records the reason.
+    Note over BE,AI: If pseudonymization fails, or ai-service fails or times out, backend switches the ticket to manual handling and records the reason.
 ```
 
-When `backend` requests the analysis and draft (at ticket creation or when staff open the ticket) is decided during contract design. Pipeline details: [ADR-0005](docs/decisions/0005-intent-independent-retrieval.md).
+`backend` requests the analysis and the draft when a ticket is created ([contracts v1 design](docs/design/contracts-v1.md#suggestion-lifecycle)). Pipeline details: [ADR-0005](docs/decisions/0005-intent-independent-retrieval.md).
 
 ## Project status
 
-Design phase. Decisions are recorded in [docs/decisions/](docs/decisions/README.md). The design of contracts v1 is approved ([docs/design/contracts-v1.md](docs/design/contracts-v1.md)); writing the contracts is the next step. There is no runnable code yet; setup instructions are added here when the first component is scaffolded.
+Design phase. Decisions are recorded in [docs/decisions/](docs/decisions/README.md). Revision 2 of the contracts v1 design ([docs/design/contracts-v1.md](docs/design/contracts-v1.md)) aligns the design with the team's specification and is in review, together with ADR-0010, ADR-0011, and ADR-0014. ADR-0012 and ADR-0013 were accepted on 2026-11-05. Writing the contracts follows their approval. There is no runnable code yet; setup instructions are added here when the first component is scaffolded.
 
 ## Target repository layout
 
@@ -74,11 +78,12 @@ supportiq-ecom/
 ├── AGENTS.md        # Instructions for AI coding agents
 ├── docs/            # Requirements, decisions, rules, glossary
 ├── contracts/       # API and data contracts (created during contract design)
-├── frontend/        # /shop and /console (created at scaffold)
+├── frontend/        # /shop, /console, and /admin (created at scaffold)
 ├── backend/         # Created at scaffold
 ├── ai-service/      # Created at scaffold
 ├── ml/              # Training and offline evaluation (created at scaffold)
 ├── eval/            # Shared test sets and evaluation runs (created at scaffold)
+├── deploy/          # Docker Compose, Nginx, egress proxy, observability (created at scaffold)
 └── data/            # Local datasets; large files are not committed
 ```
 
@@ -97,8 +102,8 @@ Start with [docs/README.md](docs/README.md): where every document lives and how 
 ## Non-negotiable rules
 
 1. Staff approve every reply. The system never sends replies or performs transactions on its own.
-2. Every draft cites verifiable sources (document ID and version). Without enough evidence, the AI abstains.
-3. Simulated data only. No secrets in the repository.
+2. Every draft cites verifiable sources: a document ID and version for policy, and an order field for facts about the order. Without enough evidence, the AI abstains.
+3. Simulated data only. Personal data is pseudonymized before it leaves `backend`. No secrets in the repository.
 4. Design before code. Contracts before implementation.
 
 Details: [docs/rules/](docs/rules/README.md). Team roles and ownership: [ADR-0001](docs/decisions/0001-system-architecture.md#team-allocation).

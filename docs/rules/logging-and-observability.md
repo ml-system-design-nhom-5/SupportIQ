@@ -1,6 +1,6 @@
 # Logging and observability rules
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-10-23
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-04
 
 Telemetry that is easy to read, collected in one place, and viewed on one screen. It must trace any ticket across components, help reconstruct any suggestion (FR-07), and measure latency, cost, and product value, without carrying confidential data. The stack is defined in [ADR-0007](../decisions/0007-observability-stack.md).
 
@@ -57,7 +57,7 @@ flowchart LR
 | `reason_code` | string, optional | The reason code, when relevant |
 | `duration_ms` | integer, optional | Duration of the operation |
 | `error_type` | string, optional | Domain error type name |
-| `model_version`, `kb_version`, `prompt_version` | string, optional | Versions involved |
+| `release_id`, `model_version`, `kb_version`, `prompt_version` | string, optional | Versions involved |
 
 **LOG-10.** Additional attributes are allowed only from an allow-list kept in the setup module. Attribute values are scalars (string, number, boolean). Logging whole objects, dictionaries, request bodies, or response bodies is forbidden.
 
@@ -103,14 +103,21 @@ Bad:  message="draft failed for ticket 123, msg='where is my order...'"
 | Component | Events |
 |---|---|
 | Both | `startup.completed`, `settings.loaded`, `settings.invalid`, `shutdown.started` |
-| `backend` | `ticket.created`, `ai_service.called`, `ai_service.call_failed`, `ticket.manual_handling_started`, `decision.recorded`, `reply.sent`, `permission.denied` |
-| `ai-service` | `model.loaded`, `kb.loaded`, `analysis.completed`, `draft.generated`, `draft.abstained`, `escalation.recommended`, `llm.call_failed`, `grounding.check_failed` |
+| `backend` | `ticket.created`, `suggestion_job.claimed`, `suggestion_job.lease_expired`, `pseudonymization.failed`, `pseudonym.restore_failed`, `ai_service.called`, `ai_service.call_failed`, `suggestion.part_cancelled`, `ticket.manual_handling_started`, `intent.overridden`, `decision.recorded`, `reply.sent`, `account.role_changed`, `account.status_changed`, `permission.denied` |
+| `ai-service` | `release.loaded`, `model.loaded`, `kb.loaded`, `analysis.completed`, `draft.generated`, `draft.abstained`, `escalation.recommended`, `personal_data.masked`, `llm.call_failed`, `grounding.check_failed` |
+
+The full event list of each flow is in its design doc, for example the [contracts v1 design](../design/contracts-v1.md#observability).
 
 ## Traces
 
-**LOG-20.** There is one span per pipeline step and per external call. Span names are low-cardinality `snake_case` operations: `classify_intent`, `retrieve_documents`, `filter_valid_documents`, `rerank_documents`, `route_ticket`, `generate_draft`, `check_grounding`, `call_ai_service`, `save_decision`. HTTP and database spans come from auto-instrumentation.
+**LOG-20.** There is one span per pipeline step and per external call. Span names are low-cardinality `snake_case` operations:
 
-**LOG-21.** Spans carry the asset versions, counts (`candidate_count`, `citation_count`), the outcome status, and reason codes. `generate_draft` carries token usage using the OpenTelemetry generative AI conventions (`gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`) and the estimated cost in integer micro-dollars (`supportiq.llm.cost_micro_usd`).
+- `backend`: `create_ticket`, `run_suggestion_job`, `pseudonymize_message`, `call_ai_service`, `save_decision`, `send_reply`, `build_report`;
+- `ai-service`: `classify_intent`, `retrieve_documents`, `filter_valid_documents`, `rerank_documents`, `route_ticket`, `mask_personal_data`, `generate_draft`, `check_placeholders`, `check_grounding`.
+
+HTTP and database spans come from auto-instrumentation.
+
+**LOG-21.** Spans carry the `release_id` and asset versions, counts (`candidate_count`, `citation_count`, `pseudonym_count`, `mask_count`), the outcome status, and reason codes. Counts of placeholders are allowed; their values and the original values behind them are not. `generate_draft` carries token usage using the OpenTelemetry generative AI conventions (`gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`) and the estimated cost in integer micro-dollars (`supportiq.llm.cost_micro_usd`).
 
 **LOG-22.** A failure is recorded on its span (error status and exception event) in addition to its single log line.
 
@@ -130,6 +137,9 @@ Bad:  message="draft failed for ticket 123, msg='where is my order...'"
 | `supportiq.ai_service.unavailable` | Counter | `{event}` | — |
 | `supportiq.staff.decisions` | Counter | `{decision}` | decision, reason code |
 | `supportiq.ticket.handling.duration` | Histogram | `s` | mode (`assisted`, `manual`) |
+| `supportiq.pseudonymization.outcomes` | Counter | `{message}` | outcome (`succeeded`, `failed`) |
+| `supportiq.masking.applied` | Counter | `{mask}` | type (`email`, `phone`, `card`) |
+| `supportiq.suggestion_job.lease_expirations` | Counter | `{job}` | — |
 
 **LOG-25.** Metric attributes have low cardinality. Identifiers (`ticket_id`, `trace_id`) and free text are forbidden as metric attributes.
 
@@ -142,7 +152,7 @@ Bad:  message="draft failed for ticket 123, msg='where is my order...'"
 | Dashboard | Shows |
 |---|---|
 | System overview | End-to-end p50 and p95 against the 12 s target, error rate, cost per request, readiness of each component |
-| AI pipeline | Latency per step, suggestion outcomes by status and reason code, abstention and escalation rates, LLM tokens and cost |
+| AI pipeline | Latency per step, suggestion outcomes by status and reason code, abstention and escalation rates, LLM tokens and cost, pseudonymization failures, masks applied, job lease expirations |
 | Staff outcomes | Approve, edit, reject, and escalate rates by intent; handling time assisted versus manual |
 | Ticket trace | Search by ticket ID or trace ID; the full trace with its linked log lines |
 
@@ -150,7 +160,7 @@ Bad:  message="draft failed for ticket 123, msg='where is my order...'"
 
 ## Privacy in telemetry
 
-**LOG-29.** Telemetry MUST NOT contain Confidential or Secret data ([data classification](security-and-privacy.md#data-classification)): no customer message text, draft text, reply text, staff note text, names, emails, phone numbers, addresses, payment data, credentials, or tokens.
+**LOG-29.** Telemetry MUST NOT contain Confidential or Secret data ([data classification](security-and-privacy.md#data-classification)): no customer message text (raw or pseudonymized), draft text, reply text, staff note text, names, emails, phone numbers, addresses, order IDs, the original values behind pseudonyms, payment data, credentials, or session tokens.
 
 **LOG-30.** The setup module drops attributes that are not allow-listed and masks known personal-data patterns. A test sends confidential samples through the logger and asserts they never appear in the output ([TEST-26](testing.md#guardrail-tests)).
 
@@ -160,4 +170,4 @@ Bad:  message="draft failed for ticket 123, msg='where is my order...'"
 
 **LOG-32.** Alerts are actionable: they name the slice, the threshold, the affected decision, the owner, and the first action. In the prototype, alerts are dashboard thresholds; nobody is paged.
 
-**LOG-33.** Telemetry is disposable. Evaluation data comes from `backend` decision records and evaluation runs, never from logs.
+**LOG-33.** Telemetry is disposable. Evaluation data comes from `backend` decision records and evaluation runs, never from logs. Reports for managers (FR-10) come from `backend` records through the console ([contracts v1 design](../design/contracts-v1.md#reports-fr-10)), never from telemetry. Dashboards are views for developers and operations only.

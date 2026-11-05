@@ -1,8 +1,8 @@
 # Security and privacy rules
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-10-24
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-04
 
-Strict rules for protecting data and keys, especially when calling LLM providers (FR-08). All data in this project is simulated, but it is handled exactly as real data would be, so the habits and the controls are right from the start.
+Strict rules for protecting data and keys, especially when calling LLM providers (FR-08, FR-09). All data in this project is simulated, but it is handled exactly as real data would be, so the habits and the controls are right from the start.
 
 ## Principles
 
@@ -20,7 +20,7 @@ Strict rules for protecting data and keys, especially when calling LLM providers
 |---|---|---|---|---|---|
 | Public | KB policy documents, project docs | Anywhere | Yes | Yes | Yes |
 | Internal | IDs, versions, statuses, reason codes, metrics, settings without secrets | Component stores, telemetry | Yes | No (not needed) | To staff and developers |
-| Confidential | Customer messages, drafts, replies, staff notes, order, shipment, and refund details, customer profile (name, email, phone, address), staff identity | `backend` database; `ai-service` processes it only in memory | Never | Only the allow-listed, masked subset ([below](#data-sent-to-llm-providers)) | Only to roles that need it |
+| Confidential | Customer messages (raw or pseudonymized), drafts, replies, staff notes, order, shipment, and refund details, customer profile (name, email, phone, address), staff identity, the pseudonym map | `backend` database; `ai-service` processes pseudonymized text only in memory | Never | Only the allow-listed subset, pseudonymized by `backend` and masked by `ai-service` ([below](#data-sent-to-llm-providers)) | Only to roles that need it |
 | Secret | API keys, credentials, session tokens, signing keys | Secret settings only | Never | Never | Never |
 
 **SEC-02.** Simulated data is classified as if it were real.
@@ -31,19 +31,29 @@ Strict rules for protecting data and keys, especially when calling LLM providers
 
 **SEC-04.** `ai-service` sends an LLM provider only:
 
-1. the customer's message text, after masking;
+1. the customer's message text, as pseudonymized by `backend` ([SEC-36](#pseudonymization)) and then masked ([SEC-06](#data-sent-to-llm-providers));
 2. snippets of retrieved KB documents;
 3. allow-listed order context fields.
 
 Everything else is forbidden, including names, emails, phone numbers, addresses, payment data, staff identity, internal IDs, and other tickets.
 
-**SEC-05.** The order context allow-list (for example order status, shipment status, refund status, relevant dates, amounts) is defined in the `ai-service` contract. `backend` sends only allow-listed fields, and `ai-service` puts into a prompt only the fields that prompt needs.
+**SEC-05.** The order context allow-list (for example order status, shipment status, refund status, relevant dates, amounts) is defined in the `ai-service` contract. It contains no identifiers and no address. `backend` sends only allow-listed fields, and `ai-service` puts into a prompt only the fields that prompt needs.
 
-**SEC-06.** Before every LLM call, personal-data patterns in text are replaced by typed placeholders: `[EMAIL]`, `[PHONE]`, `[CARD]`, `[ADDRESS]`. Each pattern has tests with positive and negative examples.
+**SEC-06.** Before every LLM call, `ai-service` replaces personal-data patterns that are still present outside placeholders with masks: `[EMAIL]`, `[PHONE]`, `[CARD]` ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#placeholder-syntax)). Masking is the second layer and never replaces pseudonymization. Each pattern has unit tests with at least five positive and five negative examples. Every mask applied is logged as `personal_data.masked` at `warning`, with the type only, because it means pseudonymization missed a value.
 
 **SEC-07.** The LLM provider and plan are chosen so that API data is not used for training and is retained as briefly as the provider allows. The LLM provider ADR records the terms that were checked.
 
-**SEC-08.** Only `ai-service` calls LLM providers, over TLS, with a key used for nothing else.
+**SEC-08.** Only `ai-service` calls LLM providers, over TLS, through the egress proxy ([SEC-40](#transport-and-runtime)), with a key used for nothing else.
+
+## Pseudonymization
+
+The mechanism, the placeholder syntax, and the detectors are defined in [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md).
+
+**SEC-36.** `backend` MUST pseudonymize every customer message before any text derived from it leaves `backend`. `ai-service` MUST NOT receive raw personal data. If pseudonymization fails, nothing is sent: the suggestion parts become `unavailable` with `pseudonymization_failed` (fail closed). A detector can still miss a value; a miss is not a failure, and it is measured and reported against NFR-06 ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#detection)).
+
+**SEC-37.** The pseudonym map is stored only in the `backend` database and is Confidential. Only the `pseudonymization` feature module reads or writes it, through its public API, and an import-linter contract enforces this. Its rows are inserted once and never updated. Map rows are never returned by any operation, logged, or exported. Restoration happens only when `backend` builds AI text for `/console` or compares a sent reply with its draft. The original values behind pseudonyms MUST NOT appear in logs, telemetry, error messages, or exports. Responses may still contain the Confidential data that their schema defines, such as a customer's display name in the ticket workspace.
+
+**SEC-38.** No placeholder reaches a customer. `backend` rejects every reply and reply proposal body that contains text matching the placeholder syntax, with `422 invalid-request`. Pseudonymized text is still Confidential: pseudonymization is not anonymization.
 
 ## Secrets
 
@@ -61,21 +71,25 @@ Everything else is forbidden, including names, emails, phone numbers, addresses,
 
 **SEC-14.** `backend` authenticates every request except the public operations listed in the contract (health checks).
 
-**SEC-15.** Roles are at least `customer` (shop demo persona), `staff`, and `supervisor` (authority for FR-06 actions). The permission matrix is defined in the backend contract.
+**SEC-15.** There are exactly four roles ([ADR-0012](../decisions/0012-roles-v1.md)): `customer` (shop demo persona), `staff` (Tier 1 support), `manager` (Tier 2 support, with authority for FR-06 actions and access to reports), and `admin` (accounts and versions only). The permission matrix is defined in the backend contract.
 
 **SEC-16.** Authorization is deny by default. Every operation declares its required role in the contract, and `backend` checks it in the application layer, not only in middleware.
 
-**SEC-17.** Object-level access is checked on every request: a customer reaches only their own orders and tickets, and staff reach only tickets they are allowed to handle. An ID in a URL is never proof of access.
+**SEC-17.** Object-level access is checked on every request: a customer reaches only their own orders and tickets, staff and managers reach an order only through a ticket of the same customer, and an admin reaches no ticket, message, order, report, or customer account. An ID in a URL is never proof of access.
 
-**SEC-18.** Actions that require authority (refund decisions, transaction disputes, policy exceptions) are allowed only for the authorized role (FR-06). The check is in `backend` and is covered by guardrail tests ([TEST-26](testing.md#guardrail-tests)).
+**SEC-18.** Actions that require authority (refund decisions, transaction disputes, policy exceptions, legal claims, suspected fraud) are allowed only for `manager` (FR-06). `backend` enforces this on every ticket where authority is required, and guardrail tests cover it ([TEST-26](testing.md#guardrail-tests)). A ticket without an AI result carries no flag: it relies on staff judgment, and the console reminds staff to route such requests to a manager ([contracts v1 design](../design/contracts-v1.md#authority-rule-fr-06)).
 
 **SEC-19.** Session tokens are never stored in `localStorage` or `sessionStorage`. The session mechanism is defined in [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md).
 
 **SEC-20.** `frontend` hides actions a role cannot perform as a convenience only. `backend` is the only enforcement point.
 
+**SEC-41.** The `admin` role is limited to managing internal accounts (`staff`, `manager`, `admin`) and viewing versions. An admin never sees a customer account: customer accounts are never listed, and a request about one returns `404`. An admin cannot call any `/v1/shop/` or `/v1/console/` operation, cannot give any account the `admin` role, cannot change their own role or status, and cannot demote or deactivate the last active manager. Admin account lists show display names, roles, and statuses only ([ADR-0012](../decisions/0012-roles-v1.md)).
+
+**SEC-42.** A role change or a deactivation deletes every session of the account in the same transaction, so the change applies to its next request. No permission or session is cached outside PostgreSQL ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)).
+
 ## Input and output handling
 
-**SEC-21.** All input is validated at each component boundary against the contract: types, lengths, and formats. Message text has one maximum length, defined in the shared contract schema (`MessageText`), so every component enforces the same limit. Invalid input is rejected, never repaired.
+**SEC-21.** All input is validated at each component boundary against the contract: types, lengths, and formats. Message text has one maximum length, defined in the shared contract schema (`MessageText`), and pseudonymized text has its own (`PseudonymizedText`), so every component enforces the same limits. Invalid input is rejected, never repaired.
 
 **SEC-22.** The UI renders customer text, drafts, staff notes, and KB snippets as plain text. Rendering raw HTML or unescaped Markdown is forbidden.
 
@@ -93,9 +107,17 @@ Everything else is forbidden, including names, emails, phone numbers, addresses,
 
 ## Transport and runtime
 
-**SEC-28.** Outside local development, all traffic uses TLS. In local development, components talk over the Docker Compose network, and only the `frontend`, `backend`, and observability UI ports are published to the host.
+**SEC-28.** Outside local development, all traffic that enters or leaves the host uses TLS, terminated by the `ingress` service ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)). Traffic between containers stays on the host's internal Docker networks. Only `ingress` publishes ports: the system port, and Grafana on the host loopback interface only.
 
 **SEC-29.** Containers run as non-root users. Images contain no secrets and no development credentials.
+
+**SEC-40.** Among the application services, only `ai-service` reaches the internet. It does so only through the egress proxy, and only to the LLM provider hosts on the proxy's allow-list ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#egress-control)). The other services are limited by their networks ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md#topology)):
+
+- `egress-proxy` shares a network only with `ai-service`.
+- `backend`, `backend-migrate`, PostgreSQL, and the observability stack sit only on networks without an internet route, so they can reach no internet host, directly or through the proxy.
+- `ingress` accepts inbound connections and connects only to its upstreams.
+
+The allow-list is a versioned file, and changing it needs the security review of SEC-35.
 
 ## Dependencies
 
@@ -105,9 +127,13 @@ Everything else is forbidden, including names, emails, phone numbers, addresses,
 
 ## Retention and exports
 
-**SEC-32.** `backend` keeps tickets, suggestion snapshots, and decisions for evaluation. A reset script restores the simulated data to a known state.
+**SEC-32.** `backend` keeps tickets, suggestion snapshots, decisions, audit log entries, and pseudonym maps for evaluation. A reset script restores the simulated data to a known state.
 
-**SEC-33.** Evaluation exports contain only the fields the evaluation needs, are written to git-ignored folders, and are never uploaded to any external service, except text sent to the approved LLM provider under SEC-04.
+**SEC-33.** Evaluation exports contain only the fields the evaluation needs, are written to git-ignored folders, and are never uploaded to any external service, except text sent to the approved LLM provider under SEC-04. Message and AI text in exports is in pseudonymized form, and exports never contain the pseudonym map. Tickets that have no pseudonym map (manual mode, or failed pseudonymization) are exported without message text.
+
+## Audit log
+
+**SEC-39.** The audit log is insert-only. The database role that `backend` uses has no `UPDATE` or `DELETE` privilege on it, and a trigger rejects both. Each entry is written in the same transaction as the change it records and holds identifiers, statuses, reason codes, versions, and numbers only, never message or AI text. Only the reset script, running as the database owner, removes entries. The event types are listed in the [contracts v1 design](../design/contracts-v1.md#audit-log).
 
 ## Incidents
 
@@ -115,4 +141,4 @@ Everything else is forbidden, including names, emails, phone numbers, addresses,
 
 ## Security review
 
-**SEC-35.** PRs that touch authentication, authorization, data classification, prompts, LLM calls, or telemetry redaction need two approvals ([WF-15](workflow.md#reviews)).
+**SEC-35.** PRs that touch authentication, authorization, data classification, pseudonymization, the audit log, the egress allow-list, prompts, LLM calls, or telemetry redaction need two approvals ([WF-15](workflow.md#reviews)).
