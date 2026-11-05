@@ -127,7 +127,17 @@ class RetrievalAdapter:
         # Temporal and strict role filtering
         now = current_time or datetime.now(timezone.utc)
         valid_pv = eligible_versions(self.eligible_versions, role=role, as_of=now)
-        allowed_doc_version_keys = {(pv.doc_id, pv.version) for pv in valid_pv}
+
+        # Pre-filter by applicability: if a policy document specifies supported_intents, it must match intent
+        if intent:
+            applicable_pv = [
+                pv for pv in valid_pv
+                if not pv.metadata.supported_intents or intent in pv.metadata.supported_intents
+            ]
+        else:
+            applicable_pv = valid_pv
+
+        allowed_doc_version_keys = {(pv.doc_id, pv.version) for pv in applicable_pv}
 
         if not allowed_doc_version_keys:
             return {"status": "no_match", "evidence": []}
@@ -145,15 +155,23 @@ class RetrievalAdapter:
         if res.status != "success":
             return {"status": res.status, "evidence": []}
 
+        pv_by_key = {(pv.doc_id, pv.version): pv for pv in applicable_pv}
         evidence_list = []
         for doc in res.documents:
+            pv = pv_by_key.get((doc["doc_id"], doc.get("version")))
+            chunk_ids = [c.get("chunk_id") for c in doc.get("chunks", []) if c.get("chunk_id")]
+            capabilities = pv.metadata.answer_capabilities if pv else []
             evidence_list.append({
+                "source_type": "policy",
                 "document_id": doc["doc_id"],
+                "doc_id": doc["doc_id"],
                 "title": doc["title"],
                 "excerpt": doc["chunks"][0]["text"] if doc["chunks"] else "",
+                "chunk_ids": chunk_ids,
                 "content_hash": doc.get("content_hash"),
                 "version": doc.get("version"),
                 "score": doc.get("score"),
+                "capabilities": capabilities,
             })
 
         return {"status": "success", "evidence": evidence_list}
