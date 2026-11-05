@@ -25,6 +25,20 @@ def mock_container_model():
 
 client = TestClient(app)
 
+
+def test_prediction_preserves_softmax_precision():
+    import torch
+
+    container.device = torch.device("cpu")
+    container.tokenizer.return_value = {"input_ids": torch.tensor([[1]])}
+    logits = torch.linspace(-3.17, 4.23, len(container.id2label))
+    container.model.return_value.logits = logits.unsqueeze(0)
+    probabilities = torch.softmax(logits, dim=-1).tolist()
+    result = container.predict("What is your return policy?")
+    assert result["confidence"] == probabilities[-1]
+    assert result["margin"] == probabilities[-1] - probabilities[-2]
+    assert [item.probability for item in result["top_k"]] == probabilities[-3:][::-1]
+
 def test_health_and_readiness_endpoints():
     res = client.get("/health")
     assert res.status_code == 200

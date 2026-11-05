@@ -160,14 +160,14 @@ class ModelContainer:
         margin = top1_prob - top2_prob
 
         top_k = [
-            PredictionItem(intent=self.id2label[idx], probability=round(probs[idx], 4))
+            PredictionItem(intent=self.id2label[idx], probability=probs[idx])
             for idx in sorted_indices[:top_k_count]
         ]
 
         return {
             "intent": top1_intent,
-            "confidence": round(top1_prob, 4),
-            "margin": round(margin, 4),
+            "confidence": top1_prob,
+            "margin": margin,
             "top_k": top_k,
             "score_kind": "uncalibrated_softmax",
             "model_version": self.verified_model_version,

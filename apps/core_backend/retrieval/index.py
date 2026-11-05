@@ -66,7 +66,7 @@ def search_policies(
     if max_score < threshold:
         return RetrievalResult(
             status="no_evidence",
-            top_score=round(max_score, 4),
+            top_score=max_score,
             reason_codes=["below_relevance_threshold"]
         )
 
@@ -100,7 +100,7 @@ def search_policies(
                 "version": chunk.get("version"),
                 "category": chunk.get("category"),
                 "title": chunk.get("title"),
-                "score": round(score, 4),
+                "score": score,
                 "content_hash": chunk.get("content_hash"),
                 "chunks": [chunk],
             }
@@ -117,6 +117,6 @@ def search_policies(
     return RetrievalResult(
         status="success",
         documents=selected_docs,
-        top_score=round(max_score, 4),
+        top_score=max_score,
         reason_codes=[],
     )

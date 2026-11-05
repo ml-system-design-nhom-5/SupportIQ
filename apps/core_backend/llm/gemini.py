@@ -175,7 +175,7 @@ class GeminiDraftClient:
         return bool(self._api_key)
 
     def generate(self, question: str, intent: str, evidence: list[dict],
-                 business_context: dict | None = None) -> dict[str, Any]:
+                 business_context: dict | None = None, *, timeout_seconds: float | None = None) -> dict[str, Any]:
         if not self.configured:
             raise LLMError("llm_not_configured")
         if not re.fullmatch(r"gemini-[a-z0-9._-]+", self.model):
@@ -183,7 +183,7 @@ class GeminiDraftClient:
         if not evidence:
             raise LLMError("llm_no_evidence")
         try:
-            timeout_seconds = float(os.getenv("GEMINI_TIMEOUT_SECONDS", "7"))
+            timeout_seconds = float(timeout_seconds if timeout_seconds is not None else os.getenv("GEMINI_TIMEOUT_SECONDS", "7"))
             if not math.isfinite(timeout_seconds) or not 0 < timeout_seconds <= 60:
                 raise ValueError
         except ValueError:

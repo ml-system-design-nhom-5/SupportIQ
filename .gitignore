@@ -22,6 +22,7 @@ node_modules/
 dist/
 build/
 coverage/
+*.tsbuildinfo
 
 # Local datasets and generated artifacts
 /data/datasets/*
@@ -59,4 +60,11 @@ Thumbs.db
 .superpowers/
 .worktrees/
 worktrees/
+
+# Application runtime data and local credentials
+.local/
+.taste-skill/
+.impeccable/
+apps/frontend/test-results/
+apps/frontend/playwright-report/
 

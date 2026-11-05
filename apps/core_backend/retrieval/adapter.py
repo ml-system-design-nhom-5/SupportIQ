@@ -23,7 +23,8 @@ class RetrievalAdapter:
         self,
         kb_path: Optional[str] = None,
         encoder: Optional[PolicyEncoder] = None,
-        relevance_threshold: float = 0.55
+        relevance_threshold: float = 0.55,
+        allowed_document_versions: Optional[set[tuple[str, str]]] = None,
     ):
         p = Path(kb_path or "data/knowledge/approved_kb.v2.json")
         self.encoder = encoder
@@ -47,6 +48,10 @@ class RetrievalAdapter:
             with open(p, "r", encoding="utf-8") as f:
                 raw_docs = json.load(f)
                 for d in raw_docs:
+                    key = (d.get("document_id", d.get("doc_id")), str(d.get("version")))
+                    if allowed_document_versions is not None and key not in allowed_document_versions:
+                        self.quarantined_docs.append({"document_id": key[0], "reason": "not_in_current_release"})
+                        continue
                     # P1: Strict validation - do NOT invent missing approval metadata
                     status = d.get("status")
                     approved_by = d.get("approved_by")
