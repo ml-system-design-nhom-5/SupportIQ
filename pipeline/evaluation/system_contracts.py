@@ -135,6 +135,7 @@ class SystemConfig(BaseModel):
     schema_version: str = "v1.0"
     seed: int = 42
     concurrency: int = 1
+    allow_draft_suite: bool = False
     warmup_requests: int = 5
     latency_requests: int = 100
     max_llm_calls: int = 200
@@ -228,7 +229,7 @@ def load_system_inputs(
         raise EvaluationError("Suite manifest must be a JSON object")
 
     suite_status = manifest.get("status", "draft")
-    if profile == "live" and suite_status == "draft":
+    if profile == "live" and suite_status == "draft" and not config.allow_draft_suite:
         raise EvaluationError("Suite in 'draft' status cannot be used for live acceptance evaluation")
 
     as_of_str = manifest.get("as_of")
@@ -344,6 +345,9 @@ def load_system_inputs(
             if case.true_intent:
                 intent_counts[case.true_intent] = intent_counts.get(case.true_intent, 0) + 1
 
+    # 5b. Validate expected outcomes across all cases
+    outcome_validation = validate_expected_outcomes(cases, kb_docs_map, as_of=as_of, strict=True)
+
     # 6. Compute coverage statistics
     # KB coverage gap reflects actual approved KB evidence coverage, not just query presence
     kb_covered_intents = {
@@ -383,3 +387,156 @@ def verify_input_snapshot(inputs: VerifiedSystemInputs) -> None:
         expected_hash = inputs.input_hashes.get(key)
         if current_hash != expected_hash:
             raise EvaluationError(f"Input file modified mid-run: '{key}' at {path}")
+
+
+def validate_expected_outcomes(
+    cases: List[SystemCase],
+    kb_snapshot: List[Dict[str, Any]] | Dict[Tuple[str, str], Dict[str, Any]],
+    as_of: Optional[datetime] = None,
+    strict: bool = True,
+) -> Dict[str, Any]:
+    """Validate expected benchmark case outcomes against logical constraints and KB evidence.
+    Enforces:
+    - No contradictions: must_escalate cannot expect draft; must_not_draft cannot contain retrieve_draft.
+    - Full evidence verification: answerable cases must have approved, temporally valid, ACL-permissible gold docs.
+    - Coverage by intent analytics.
+    Raises EvaluationError on contract violation if strict=True.
+    """
+    check_time = as_of or datetime.now(timezone.utc)
+
+    # Normalize kb_snapshot to map by (doc_id, version)
+    kb_map: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    if isinstance(kb_snapshot, dict):
+        for k, v in kb_snapshot.items():
+            if isinstance(k, tuple):
+                kb_map[(str(k[0]), str(k[1]))] = v
+            else:
+                d_id = v.get("doc_id") or v.get("document_id") or str(k)
+                raw_ver = str(v.get("version", "1.0"))
+                kb_map[(d_id, raw_ver)] = v
+    elif isinstance(kb_snapshot, list):
+        for doc in kb_snapshot:
+            d_id = doc.get("doc_id") or doc.get("document_id")
+            raw_ver = str(doc.get("version", "1.0"))
+            kb_map[(d_id, raw_ver)] = doc
+            if "." not in raw_ver:
+                kb_map[(d_id, f"{raw_ver}.0")] = doc
+            elif raw_ver.endswith(".0"):
+                kb_map[(d_id, raw_ver[:-2])] = doc
+
+    contradictions: List[str] = []
+    missing_evidence: List[str] = []
+    coverage_by_intent: Dict[str, Dict[str, int]] = {}
+
+    for c in cases:
+        intent = c.true_intent or "unknown"
+        if intent not in coverage_by_intent:
+            coverage_by_intent[intent] = {
+                "total": 0,
+                "answerable_count": 0,
+                "escalate_count": 0,
+                "clarify_count": 0,
+                "draft_expected_count": 0,
+            }
+        coverage_by_intent[intent]["total"] += 1
+        if c.expected.answerable:
+            coverage_by_intent[intent]["answerable_count"] += 1
+        if c.expected.must_escalate or "escalate" in c.expected.actions:
+            coverage_by_intent[intent]["escalate_count"] += 1
+        if "clarify" in c.expected.actions:
+            coverage_by_intent[intent]["clarify_count"] += 1
+        if c.expected.draft_expected:
+            coverage_by_intent[intent]["draft_expected_count"] += 1
+
+        # 1. Check logical contradictions in expectations
+        if c.expected.must_escalate and c.expected.draft_expected:
+            err = f"Case '{c.id}' has contradiction: must_escalate=True cannot expect draft"
+            contradictions.append(err)
+            if strict:
+                raise EvaluationError(err)
+
+        if c.expected.must_not_draft and ("retrieve_draft" in c.expected.actions or c.expected.draft_expected):
+            err = f"Case '{c.id}' has contradiction: must_not_draft=True cannot contain retrieve_draft action or draft_expected"
+            contradictions.append(err)
+            if strict:
+                raise EvaluationError(err)
+
+        if c.expected.must_escalate and "retrieve_draft" in c.expected.actions:
+            err = f"Case '{c.id}' has contradiction: must_escalate=True cannot contain retrieve_draft action"
+            contradictions.append(err)
+            if strict:
+                raise EvaluationError(err)
+
+        if not c.expected.answerable and c.expected.draft_expected:
+            err = f"Case '{c.id}' has contradiction: unanswerable case cannot have draft_expected=True"
+            contradictions.append(err)
+            if strict:
+                raise EvaluationError(err)
+
+        # 2. Check gold evidence presence and validity if answerable
+        if c.expected.answerable:
+            if not c.expected.gold_sources:
+                err = f"Case '{c.id}' is answerable but provides no gold_sources"
+                missing_evidence.append(err)
+                if strict:
+                    raise EvaluationError(err)
+
+            for gs in c.expected.gold_sources:
+                doc_id = gs.get("doc_id")
+                ver = str(gs.get("version", "1.0"))
+                doc_key = (doc_id, ver)
+                doc = (
+                    kb_map.get(doc_key)
+                    or kb_map.get((doc_id, f"{ver}.0"))
+                    or kb_map.get((doc_id, ver.rstrip(".0")))
+                )
+                if doc is None:
+                    err = f"Case '{c.id}' gold source {doc_key} not found in KB snapshot"
+                    missing_evidence.append(err)
+                    if strict:
+                        raise EvaluationError(err)
+                    continue
+
+                if doc.get("status") != "approved":
+                    err = f"Case '{c.id}' references unapproved gold document {doc_key} (status: '{doc.get('status')}')"
+                    missing_evidence.append(err)
+                    if strict:
+                        raise EvaluationError(err)
+
+                # Temporal validity
+                vt = doc.get("valid_to")
+                if vt:
+                    try:
+                        dt_vt = datetime.fromisoformat(str(vt).replace("Z", "+00:00"))
+                        if check_time >= dt_vt:
+                            err = f"Case '{c.id}' references expired or ineligible gold document {doc_key} (expired {dt_vt} <= as_of {check_time})"
+                            missing_evidence.append(err)
+                            if strict:
+                                raise EvaluationError(err)
+                    except ValueError:
+                        err = f"Case '{c.id}' has invalid valid_to format on {doc_key}"
+                        missing_evidence.append(err)
+                        if strict:
+                            raise EvaluationError(err)
+
+                vf = doc.get("valid_from")
+                if vf:
+                    try:
+                        dt_vf = datetime.fromisoformat(str(vf).replace("Z", "+00:00"))
+                        if check_time < dt_vf:
+                            err = f"Case '{c.id}' references not yet effective gold document {doc_key}"
+                            missing_evidence.append(err)
+                            if strict:
+                                raise EvaluationError(err)
+                    except ValueError:
+                        err = f"Case '{c.id}' has invalid valid_from format on {doc_key}"
+                        missing_evidence.append(err)
+                        if strict:
+                            raise EvaluationError(err)
+
+    return {
+        "total_cases": len(cases),
+        "contradictions": contradictions,
+        "missing_evidence": missing_evidence,
+        "coverage_by_intent": coverage_by_intent,
+    }
