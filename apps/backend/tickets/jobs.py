@@ -115,9 +115,30 @@ class SuggestionWorker:
                 return part, result, round((time.perf_counter() - started) * 1000)
             except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError):
                 return part, None, round((time.perf_counter() - started) * 1000)
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            for future in as_completed([pool.submit(fetch, part) for part in ("analysis", "draft")]):
-                self.store(identifier, token, *future.result())
+        # 1. Fetch analysis first
+        part, analysis_res, latency = fetch("analysis")
+        self.store(identifier, token, part, analysis_res, latency)
+
+        # 2. If analysis abstained or escalated, avoid redundant model inference and LLM call
+        if analysis_res is not None and analysis_res.get("routing", {}).get("recommendation") != "draft":
+            rec = analysis_res["routing"]["recommendation"]
+            codes = analysis_res["routing"]["reason_codes"]
+            synthesized_draft = {
+                "analysis": analysis_res,
+                "status": "escalation_recommended" if rec == "escalate" else "abstained",
+                "reason_codes": codes,
+                "versions": analysis_res.get("versions", {}),
+                "step_latency_ms": analysis_res.get("step_latency_ms", {}),
+                "mask_count_by_type": {}
+            }
+            if "low_confidence" in codes:
+                synthesized_draft["staff_note"] = "The model score or margin is below the routing threshold. Confirm or correct the intent before drafting."
+            self.store(identifier, token, "draft", synthesized_draft, 0)
+            return
+
+        # 3. Otherwise execute draft
+        part, draft_res, latency = fetch("draft")
+        self.store(identifier, token, part, draft_res, latency)
 
     def store(self, identifier, token, part, result, latency_ms):
         with self.database.transaction() as session:

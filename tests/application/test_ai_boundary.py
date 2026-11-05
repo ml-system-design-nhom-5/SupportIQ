@@ -68,3 +68,54 @@ def test_low_score_still_abstains_without_calling_llm():
             raise AssertionError('LLM must not be called')
     subject=engine(ForbiddenLLM());subject.model=LowModel()
     assert subject.draft(request())['status']=='abstained'
+
+
+def test_conflicting_sources_abstains_with_warning():
+    class ConflictRetriever(Retriever):
+        def retrieve(self, *args, **kwargs):
+            res = super().retrieve(*args, **kwargs)
+            res["has_conflict"] = True
+            return res
+    subject = engine()
+    subject.retriever = ConflictRetriever()
+    result = subject.draft(request())
+    assert result["status"] == "abstained"
+    assert "conflicting_sources" in result["reason_codes"]
+    assert any("conflicting" in w.lower() for w in result["analysis"]["warnings"])
+
+
+def test_clarification_draft_sets_missing_information():
+    class ClarifyingLLM(LLM):
+        def generate(self, *args, **kwargs):
+            res = super().generate(*args, **kwargs)
+            res["is_clarification"] = True
+            return res
+    result = engine(ClarifyingLLM()).draft(request())
+    assert result["status"] == "draft_ready"
+    assert "missing_information" in result["reason_codes"]
+    assert "clarification" in result["staff_note"].lower()
+
+
+def test_high_entropy_triggers_ood_low_confidence():
+    class FlatEntropyModel(Model):
+        def predict(self, text):
+            # Uniform probabilities across 4 classes -> maximum entropy
+            return {
+                "intent": "track_order",
+                "confidence": 0.25,
+                "margin": 0.0,
+                "score_kind": "uncalibrated_softmax",
+                "top_k": [
+                    {"intent": "track_order", "probability": 0.25},
+                    {"intent": "request_refund", "probability": 0.25},
+                    {"intent": "cancel_order", "probability": 0.25},
+                    {"intent": "human_agent", "probability": 0.25},
+                ],
+                "model_version": "test-model"
+            }
+    subject = engine()
+    subject.model = FlatEntropyModel()
+    analysis = subject.analyse(request())
+    assert "low_confidence" in analysis["routing"]["reason_codes"]
+    assert "out_of_scope_intent" in analysis["routing"]["reason_codes"]
+

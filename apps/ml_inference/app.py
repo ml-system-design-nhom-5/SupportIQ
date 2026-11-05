@@ -40,6 +40,8 @@ class PredictRequest(BaseModel):
     text: str
     request_id: Optional[str] = None
     expected_model_version: Optional[str] = None
+    temperature: Optional[float] = None
+    calibrated: Optional[bool] = False
 
 class PredictionItem(BaseModel):
     intent: str
@@ -133,7 +135,15 @@ class ModelContainer:
             and self.validate_label_bijection()
         )
 
-    def predict(self, text: str, top_k_count: int = 3) -> Dict[str, Any]:
+    CALIBRATION_TEMPERATURE: float = 1.25
+
+    def predict(
+        self,
+        text: str,
+        top_k_count: int = 3,
+        temperature: Optional[float] = None,
+        calibrated: bool = False,
+    ) -> Dict[str, Any]:
         if not self.is_ready():
             raise RuntimeError("Model is not loaded, verified, or ready")
 
@@ -146,10 +156,19 @@ class ModelContainer:
         )
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
+        use_calibrated = calibrated or (temperature is not None and temperature > 0)
+        temp = temperature if temperature is not None else (self.CALIBRATION_TEMPERATURE if calibrated else 1.0)
+
         with torch.inference_mode():
             outputs = self.model(**inputs)
             logits = outputs.logits[0]
-            probs = torch.softmax(logits, dim=-1).cpu().tolist()
+            if use_calibrated:
+                scaled_logits = logits / temp
+                probs = torch.softmax(scaled_logits, dim=-1).cpu().tolist()
+                score_kind = "calibrated_probability"
+            else:
+                probs = torch.softmax(logits, dim=-1).cpu().tolist()
+                score_kind = "uncalibrated_softmax"
 
         sorted_indices = sorted(range(len(probs)), key=lambda i: probs[i], reverse=True)
         top1_idx = sorted_indices[0]
@@ -169,7 +188,7 @@ class ModelContainer:
             "confidence": top1_prob,
             "margin": margin,
             "top_k": top_k,
-            "score_kind": "uncalibrated_softmax",
+            "score_kind": score_kind,
             "model_version": self.verified_model_version,
             "model_checksum": self.model_checksum,
             "tokenizer_checksum": self.tokenizer_checksum,
@@ -213,7 +232,11 @@ def predict_endpoint(req: PredictRequest):
         )
 
     try:
-        res = container.predict(req.text)
+        res = container.predict(
+            req.text,
+            temperature=req.temperature,
+            calibrated=bool(req.calibrated)
+        )
         res["request_id"] = req.request_id
         return PredictResponse(**res)
     except Exception as e:

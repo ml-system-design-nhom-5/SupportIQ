@@ -1,6 +1,7 @@
 """Translate existing verified assets into the application AI contract without ticket state."""
 
 from datetime import datetime
+import math
 import re
 import time
 
@@ -27,11 +28,27 @@ class Engine:
         if label == "human_agent":
             codes.append("human_agent_requested")
         candidates = [item.model_dump() if hasattr(item, "model_dump") else item for item in prediction.get("top_k", [])]
+        if not override and candidates:
+            probs = [item.get("probability", 0) for item in candidates]
+            if len(probs) >= 2 and sum(probs) > 0:
+                norm_probs = [p / sum(probs) for p in probs]
+                entropy = -sum(p * math.log2(p) for p in norm_probs if p > 0)
+                max_entropy = math.log2(len(probs))
+                norm_entropy = entropy / max_entropy if max_entropy > 0 else 0
+                if norm_entropy > 0.85 or (norm_entropy > 0.70 and probability < 0.60):
+                    if "low_confidence" not in codes:
+                        codes.append("low_confidence")
+                    if "out_of_scope_intent" not in codes:
+                        codes.append("out_of_scope_intent")
         sensitive = label in self.policy["sensitive_action_intents"] or not override and any(item["intent"] in self.policy["sensitive_action_intents"] and item["probability"] >= self.policy.get("default_margin_threshold", .1) for item in candidates)
         if sensitive or re.search(r"\b(fraud|lawsuit|legal action|chargeback|unauthorized transaction|policy exception)\b", request["message"], re.I):
             codes.append("requires_authority")
         retrieved = self.retriever.retrieve(request["message"], label, role="agent", current_time=datetime.fromisoformat(request["as_of"].replace("Z", "+00:00")))
         evidence = retrieved.get("evidence", [])
+        warnings = []
+        if retrieved.get("has_conflict"):
+            codes.append("conflicting_sources")
+            warnings.append("Retrieved knowledge base sources contain conflicting policy terms. Staff review required.")
         if not evidence:
             codes.append("no_valid_document")
         documents = []
@@ -41,11 +58,11 @@ class Engine:
                               "snippet": item["excerpt"], "score": item.get("score"), "rank": index, "validity": "valid",
                               "effective_from": str(original.metadata.valid_from) if original else None,
                               "effective_to": str(original.metadata.valid_to) if original and original.metadata.valid_to else None})
-        recommendation = "escalate" if "human_agent_requested" in codes else "abstain" if set(codes) & {"low_confidence", "out_of_scope_intent", "no_valid_document"} else "draft"
-        analysis = {"intent": {"label": label, "probability": probability, "confidence_band": "low" if low else "high" if probability >= .9 else "medium", "source": "staff" if override else "model", "score_kind": "staff_choice" if override else prediction.get("score_kind", "unknown")},
+        recommendation = "escalate" if "human_agent_requested" in codes else "abstain" if set(codes) & {"low_confidence", "out_of_scope_intent", "no_valid_document", "conflicting_sources"} else "draft"
+        analysis = {"intent": {"label": label, "probability": probability, "confidence_band": "low" if (low or "low_confidence" in codes) else "high" if probability >= .9 else "medium", "source": "staff" if override else "model", "score_kind": "staff_choice" if override else prediction.get("score_kind", "unknown")},
                     "alternatives": [{"label": item["intent"], "probability": item["probability"], "confidence_band": "low"} for item in candidates if item["intent"] != label][:4],
                     "is_in_scope": label in self.policy["supported_12_intents"], "documents": documents,
-                    "routing": {"recommendation": recommendation, "reason_codes": codes}, "warnings": [], "versions": self.versions,
+                    "routing": {"recommendation": recommendation, "reason_codes": codes}, "warnings": warnings, "versions": self.versions,
                     "step_latency_ms": {"analysis": round((time.perf_counter() - started) * 1000)}}
         return analysis, evidence
 
@@ -98,5 +115,12 @@ class Engine:
             return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
         result['step_latency_ms'] = {**analysis['step_latency_ms'], 'llm': round(generated.get('latency_seconds', 0) * 1000)}
         result['llm_usage'] = {'input_tokens': generated.get('usage', {}).get('promptTokenCount'), 'output_tokens': generated.get('usage', {}).get('candidatesTokenCount')}
-        return {**result, "status": "draft_ready", "draft": {"segments": segments, "citations": list(citations.values())},
-                "staff_note": "Review every claim against its cited source. AI output is supporting information; a person decides what to send."}
+        is_clarification = generated.get("is_clarification", False)
+        final_codes = list(set(codes) | ({"missing_information"} if is_clarification else set()))
+        staff_note = (
+            "Customer request lacks required details. A polite clarification draft has been prepared with relevant policy citations for review."
+            if is_clarification
+            else "Review every claim against its cited source. AI output is supporting information; a person decides what to send."
+        )
+        return {**result, "status": "draft_ready", "reason_codes": final_codes, "draft": {"segments": segments, "citations": list(citations.values())},
+                "staff_note": staff_note}

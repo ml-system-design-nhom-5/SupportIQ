@@ -19,7 +19,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from .accounts import authenticate, create_session, session_view, change_account
 from .accounts.service import COOKIE, account_view
 from .api import OrderInput, ProfileView, ProfileInput, EscalationInput, ReplyInput, RoleInput, SessionInput, SessionView, ShopTicketPage, ShopTicketView, StatusInput, SuggestionInput, TicketInput
-from .commerce import order_view, require_order, page
+from .commerce import order_view, require_order, page, page_query
 from .platform.config import Settings
 from .platform.database import Database, Problem, idempotent, utcnow
 from .platform.models import Account, Order, Product, SessionRecord, Ticket
@@ -130,7 +130,7 @@ def create_app(settings=None, database=None, start_worker=True):
 
     @app.get("/v1/shop/products", operation_id="listShopProducts")
     def products(request: Request, limit: int = 20, cursor: str | None = None):
-        return execute(request, ["customer"], lambda session, actor: page([product.payload for product in session.scalars(select(Product).order_by(Product.product_id))], limit, cursor))
+        return execute(request, ["customer"], lambda session, actor: page_query(session, select(Product).order_by(Product.product_id), lambda p: p.payload, limit, cursor))
 
     @app.get("/v1/shop/products/{product_id}", operation_id="getShopProduct")
     def product(request: Request, product_id: str):
@@ -194,7 +194,7 @@ def create_app(settings=None, database=None, start_worker=True):
             query = select(Ticket).where(Ticket.customer_id == actor.customer_id).order_by(Ticket.created_at.desc(), Ticket.ticket_id.desc())
             if order_id:
                 query = query.where(Ticket.order_id == order_id)
-            return page([shop_ticket(session, ticket) for ticket in session.scalars(query)], limit, cursor)
+            return page_query(session, query, lambda ticket: shop_ticket(session, ticket), limit, cursor)
         return execute(request, ["customer"], load)
 
     @app.get("/v1/shop/tickets/{ticket_id}", response_model=ShopTicketView, operation_id="getShopTicket")
@@ -208,7 +208,8 @@ def create_app(settings=None, database=None, start_worker=True):
                 raise Problem(403, "forbidden", "Only managers can list handled tickets.")
             if status not in ("open", "awaiting_approval", "escalated", "closed"):
                 raise Problem(422, "invalid-request", "Choose a valid ticket status.")
-            return page([summary(session, ticket) for ticket in session.scalars(select(Ticket).where(Ticket.status == status).order_by(Ticket.created_at, Ticket.ticket_id))], limit, cursor)
+            query = select(Ticket).where(Ticket.status == status).order_by(Ticket.created_at, Ticket.ticket_id)
+            return page_query(session, query, lambda ticket: summary(session, ticket), limit, cursor)
         return execute(request, ["staff", "manager"], load)
 
     @app.get("/v1/console/tickets/{ticket_id}", operation_id="getConsoleTicket")
@@ -267,7 +268,7 @@ def create_app(settings=None, database=None, start_worker=True):
 
     @app.get("/v1/admin/accounts", operation_id="listAdminAccounts")
     def accounts(request: Request, limit: int = 20, cursor: str | None = None):
-        return execute(request, ["admin"], lambda session, actor: page([account_view(account) for account in session.scalars(select(Account).where(Account.role != "customer").order_by(Account.login_name))], limit, cursor))
+        return execute(request, ["admin"], lambda session, actor: page_query(session, select(Account).where(Account.role != "customer").order_by(Account.login_name), account_view, limit, cursor))
 
     @app.post("/v1/admin/accounts/{account_id}/role-changes", status_code=201, operation_id="changeAccountRole")
     def role_change(request: Request, account_id: str, body: RoleInput):
