@@ -1,6 +1,7 @@
 import hashlib
 import json
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
@@ -179,11 +180,12 @@ container = ModelContainer()
 def load_model():
     container.load()
 
-app = FastAPI(title="SupportIQ Intent Inference Service")
-
-@app.on_event("startup")
-def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     load_model()
+    yield
+
+app = FastAPI(title="SupportIQ Intent Inference Service", lifespan=lifespan)
 
 @app.get("/health")
 def health():

@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import concurrent.futures
 import hashlib
 import json
 import re
-import threading
 import time
 import uuid
 from dataclasses import dataclass
@@ -41,82 +39,13 @@ def _compute_str_sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-_STOPWORDS = frozenset([
-    "a", "about", "above", "after", "again", "against", "all", "am", "an", "and", "any", "are",
-    "as", "at", "be", "because", "been", "before", "being", "below", "between", "both", "but",
-    "by", "can", "did", "do", "does", "doing", "don", "down", "during", "each", "few", "for",
-    "from", "further", "had", "has", "have", "having", "he", "her", "here", "hers", "herself",
-    "him", "himself", "his", "how", "i", "if", "in", "into", "is", "it", "its", "itself", "just",
-    "me", "more", "most", "my", "myself", "no", "nor", "not", "now", "of", "off", "on", "once",
-    "only", "or", "other", "our", "ours", "ourselves", "out", "over", "own", "same", "she",
-    "should", "so", "some", "such", "than", "that", "the", "their", "theirs", "them", "themselves",
-    "then", "there", "these", "they", "this", "those", "through", "to", "too", "under", "until",
-    "up", "very", "was", "we", "were", "what", "when", "where", "which", "while", "who", "whom",
-    "why", "with", "you", "your", "yours", "yourself", "yourselves",
-])
-
-
-class MockPolicyEncoder:
-    """Offline mock policy encoder ensuring zero network/disk weight loading in mock profile.
-    Uses deterministic stopword-filtered word vector sums for semantic similarity.
-    """
-    def __init__(self, dimension: int = 384):
-        self.dimension = dimension
-        self.tokenizer = None
-
-    def encode_passages(self, texts: List[str]) -> np.ndarray:
-        if not texts:
-            return np.empty((0, self.dimension), dtype=np.float32)
-        vecs = []
-        for t in texts:
-            words = [w for w in re.findall(r"\w+", t.lower()) if w not in _STOPWORDS]
-            if not words:
-                words = re.findall(r"\w+", t.lower()) or ["empty"]
-            v = np.zeros(self.dimension, dtype=np.float32)
-            for w in words:
-                h = int(hashlib.sha256(w.encode("utf-8")).hexdigest()[:8], 16)
-                rng = np.random.RandomState(h)
-                w_vec = rng.randn(self.dimension).astype(np.float32)
-                v += w_vec / max(float(np.linalg.norm(w_vec)), 1e-6)
-            norm = float(np.linalg.norm(v))
-            vecs.append(v / (norm if norm > 0 else 1.0))
-        return np.array(vecs, dtype=np.float32)
-
-    def encode_queries(self, queries: List[str]) -> np.ndarray:
-        return self.encode_passages(queries)
-
-    def encode_query(self, query: str) -> np.ndarray:
-        return self.encode_passages([query])[0]
-
-
-class MockLLMClient:
-    """Zero-network mock LLM client completely isolated from environment keys and httpx."""
-    def __init__(self, configured: bool = True):
-        self.configured = configured
-
-    def generate(self, question: str, intent: str, evidence: list[dict], business_context: dict | None = None) -> dict[str, Any]:
-        if not self.configured:
-            raise LLMError("llm_not_configured")
-        citations = []
-        body_parts = []
-        for i, ev in enumerate(evidence[:3], start=1):
-            doc_id = str(ev.get("document_id") or ev.get("doc_id", "DOC"))
-            ver = str(ev.get("version", "1.0"))
-            s_id = f"S{i}"
-            citations.append({
-                "source_id": s_id,
-                "source_type": ev.get("source_type", "policy"),
-                "document_id": doc_id,
-                "version": ver,
-            })
-            excerpt = ev.get("excerpt") or ev.get("title") or "policy information"
-            body_parts.append(f"{excerpt.strip()} [{s_id}]")
-        body = " ".join(body_parts) if body_parts else "Support information."
-        return {
-            "body": body,
-            "citations": citations,
-            "usage": {"input_tokens": 120, "output_tokens": 60},
-        }
+from pipeline.evaluation.mock_dependencies import (
+    MockPolicyEncoder,
+    MockLLMClient,
+    MockIntentClient,
+    _STOPWORDS,
+)
+from pipeline.evaluation.oversight_scenarios import run_oversight_scenarios
 
 
 class BudgetedLLMClient:
@@ -131,6 +60,11 @@ class BudgetedLLMClient:
     def configured(self) -> bool:
         return bool(getattr(self._client, "configured", False))
 
+    def close(self):
+        close = getattr(self._client, 'close', None)
+        if callable(close):
+            close()
+
     def generate(self, question: str, intent: str, evidence: list[dict], business_context: dict | None = None) -> dict[str, Any]:
         attempt_id = self._ledger.reserve(self.input_bound, self.output_bound)
         try:
@@ -141,37 +75,6 @@ class BudgetedLLMClient:
         except Exception:
             self._ledger.record(attempt_id, None)
             raise
-
-
-class MockIntentClient:
-    """Offline mock intent classifier for zero-network benchmark runs."""
-    def __init__(self, default_intent: str = "track_order"):
-        self.default_intent = default_intent
-
-    def classify_intent(self, text: str, request_id: Optional[str] = None):
-        # Keyword matching fallback for standard benchmarks
-        t_low = text.lower()
-        if "close" in t_low and "account" in t_low:
-            intent = "close_account"
-        elif "return" in t_low or "refund" in t_low:
-            intent = "return_policy"
-        elif "ship" in t_low or "delivery" in t_low:
-            intent = "shipping_costs"
-        elif "track" in t_low or "order" in t_low:
-            intent = "track_order"
-        elif "cancel" in t_low:
-            intent = "cancel_order"
-        else:
-            intent = self.default_intent
-
-        return IntentPrediction(
-            intent=intent,
-            confidence=0.95,
-            margin=0.30,
-            model_version="v1.0-mock",
-            score_kind="mock_softmax",
-            error=None,
-        )
 
 
 @dataclass
@@ -187,11 +90,18 @@ class SystemDependencies:
     deadline_seconds: float = 30.0
     ledger: Optional[Any] = None
     managed_server: Optional[ManagedDemoServer] = None
+    isolated_caller: Optional[Any] = None
 
     def close(self) -> None:
         """Clean up managed processes and database locks."""
         if self.managed_server is not None:
             self.managed_server.close()
+        if self.isolated_caller is not None:
+            self.isolated_caller.close()
+        for client in (getattr(self.runner, 'intent_client', None), getattr(self.runner, 'llm_client', None)):
+            close = getattr(client, 'close', None)
+            if callable(close):
+                close()
 
 
 def build_system_dependencies(
@@ -355,12 +265,33 @@ def execute_system_case(
     deps: SystemDependencies,
     attempt_id: str,
     scope: str = "e2e",
+    in_worker: bool = False,
 ) -> CaseResult:
     """Execute a single benchmark case within isolated dependencies and strict deadline.
     Returns normalized CaseResult with full stage tracing.
     """
     t_start = time.perf_counter()
     deadline = deps.deadline_seconds
+
+    if not in_worker and scope == 'e2e' and deps.managed_server is not None:
+        import httpx
+        server = deps.managed_server
+        started = time.perf_counter()
+        try:
+            with httpx.Client(trust_env=False) as client:
+                response = client.post(server.base_url + '/api/evaluation/case',
+                    headers={'X-Evaluation-Nonce': server.run_nonce},
+                    json={'case': case.model_dump(), 'attempt_id': attempt_id}, timeout=deadline)
+                response.raise_for_status()
+                result = CaseResult.model_validate(response.json())
+                result.total_elapsed_ms = (time.perf_counter() - started) * 1000
+                return result
+        except httpx.TimeoutException:
+            server.close()
+            server.restart()
+            return CaseResult(case_id=case.id, profile=deps.profile, scope=scope,
+                execution_status='timeout', error_code='deadline_exceeded',
+                total_elapsed_ms=(time.perf_counter() - started) * 1000)
 
     # Controlled fault handling
     if case.fault in ("ml_timeout", "llm_timeout"):
@@ -500,26 +431,16 @@ def execute_system_case(
             ctx.extracted_slots["order_id"] = "FAULT-ORD-999"
 
     t_run_start = time.perf_counter()
-    worker_res: Dict[str, Any] = {}
-    worker_exc: Dict[str, Any] = {}
-
-    def _worker():
-        try:
-            worker_res["data"] = deps.runner.run(text=case.text, context=ctx, run_id=attempt_id)
-        except BaseException as exc:
-            worker_exc["error"] = exc
-
-    worker_thread = threading.Thread(target=_worker, daemon=True)
     try:
-        worker_thread.start()
-        worker_thread.join(timeout=deadline)
-
-        if worker_thread.is_alive():
-            # If a managed worker process exists, terminate and restart it to kill hung worker and release locks cleanly
-            if deps.managed_server is not None and deps.managed_server.is_running():
-                deps.managed_server.close()
-                deps.managed_server.restart()
-
+        if in_worker:
+            run_res = deps.runner.run(text=case.text, context=ctx, run_id=attempt_id)
+        else:
+            from pipeline.evaluation.isolated_call import IsolatedCaller
+            if deps.isolated_caller is None:
+                deps.isolated_caller = IsolatedCaller()
+            run_res = deps.isolated_caller.call(deps.runner.run,
+                {'text': case.text, 'context': ctx, 'run_id': attempt_id}, deadline)
+    except TimeoutError:
             total_elapsed = round((time.perf_counter() - t_start) * 1000.0, 2)
             return CaseResult(
                 case_id=case.id,
@@ -532,8 +453,7 @@ def execute_system_case(
                 total_elapsed_ms=total_elapsed,
             )
 
-        if "error" in worker_exc:
-            exc = worker_exc["error"]
+    except Exception as exc:
             total_elapsed = round((time.perf_counter() - t_start) * 1000.0, 2)
             return CaseResult(
                 case_id=case.id,
@@ -546,7 +466,6 @@ def execute_system_case(
                 total_elapsed_ms=total_elapsed,
             )
 
-        run_res = worker_res.get("data", {})
     finally:
         if old_classify and runner_intent_client:
             runner_intent_client.classify_intent = old_classify
@@ -560,18 +479,7 @@ def execute_system_case(
     t_run_elapsed = time.perf_counter() - t_run_start
     total_elapsed_ms = round(t_run_elapsed * 1000.0, 2)
 
-    # Post-execution sanity check on total elapsed
-    if t_run_elapsed > deadline:
-        return CaseResult(
-            case_id=case.id,
-            repetition=1,
-            profile=deps.profile,
-            scope=scope,
-            execution_status="timeout",
-            error_code="deadline_exceeded",
-            stage_elapsed_ms=run_res.get("stage_elapsed_ms", {}),
-            total_elapsed_ms=total_elapsed_ms,
-        )
+    # Worker preparation is cold setup; the poll deadline covers the actual call.
 
     # Extract draft and compute SHA-256 hash if present
     draft_body = run_res.get("draft_body")
@@ -581,6 +489,7 @@ def execute_system_case(
     normalized_sources = []
     for s in run_res.get("sources", []):
         normalized_sources.append({
+            **s,
             "doc_id": s.get("document_id") or s.get("doc_id"),
             "version": str(s.get("version", "1.0")),
             "status": s.get("status", "approved"),
@@ -626,8 +535,8 @@ def execute_system_case(
         draft_kind=run_res.get("draft_kind"),
         draft_hash=draft_hash,
         llm_called=run_res.get("llm_called", False),
-        llm_metadata=None,
-        llm_usage=None,
+        llm_metadata=run_res.get('llm'),
+        llm_usage=(run_res.get('llm') or {}).get('usage'),
         stage_elapsed_ms=run_res.get("stage_elapsed_ms", {}),
         total_elapsed_ms=total_elapsed_ms,
     )
@@ -652,228 +561,3 @@ def run_component_probes(
     return probe_results
 
 
-def run_oversight_scenarios(
-    deps: SystemDependencies,
-    runtime_dir: Path | str,
-) -> List[CaseResult]:
-    """Execute human oversight, session ownership, and idempotency scenarios against demo app.
-    Collects actual database persistence facts and returns structured CaseResult records.
-    """
-    import sqlite3
-    from fastapi.testclient import TestClient
-
-    r_dir = Path(runtime_dir).resolve()
-    results: List[CaseResult] = []
-
-    client_a = TestClient(deps.demo_app, cookies={"demo_session_id": "eval-session-A"})
-    client_b = TestClient(deps.demo_app, cookies={"demo_session_id": "eval-session-B"})
-
-    # 1. Submit a base run as Session A
-    sub_id = "eval-over-sub-001"
-    resp_sub = client_a.post("/api/demo/runs", json={
-        "submission_id": sub_id,
-        "profile_id": "demo-customer",
-        "text": "What is the return policy?",
-        "is_personal_lookup": False,
-    })
-    run_data = resp_sub.json() if resp_sub.status_code == 200 else {}
-    run_id = run_data.get("run_id") or sub_id
-    has_draft = bool(run_data.get("draft_body"))
-    current_hash = run_data.get("draft_hash") or ""
-
-    # Scenario 1: Session B cross-session feedback rejection
-    t0 = time.perf_counter()
-    resp_cross = client_b.post(f"/api/demo/runs/{run_id}/feedback", json={
-        "action": "approve",
-        "draft_hash": current_hash or "initial-hash",
-    })
-    elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
-    cross_rejected = (resp_cross.status_code in (403, 409)) and has_draft
-
-    results.append(CaseResult(
-        case_id="oversight-session-ownership",
-        repetition=1,
-        profile=deps.profile,
-        scope="oversight",
-        execution_status="ok" if cross_rejected else "error",
-        error_code=None if cross_rejected else ("missing_draft" if not has_draft else f"status_{resp_cross.status_code}"),
-        stage_elapsed_ms={"check_ms": elapsed_ms},
-        total_elapsed_ms=elapsed_ms,
-        audit_evidence={
-            "run_id": run_id,
-            "session_owner": "eval-session-A",
-            "attacker_session": "eval-session-B",
-            "http_status": resp_cross.status_code,
-            "missing_draft": not has_draft,
-            "ownership_protected": cross_rejected,
-        },
-    ))
-
-    # Scenario 2: Stale draft hash approval rejection (409)
-    t0 = time.perf_counter()
-    resp_stale = client_a.post(f"/api/demo/runs/{run_id}/feedback", json={
-        "action": "approve",
-        "draft_hash": "stale-tampered-hash-000",
-    })
-    elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
-    stale_rejected = (resp_stale.status_code in (400, 409)) and has_draft
-
-    results.append(CaseResult(
-        case_id="oversight-stale-hash",
-        repetition=1,
-        profile=deps.profile,
-        scope="oversight",
-        execution_status="ok" if stale_rejected else "error",
-        error_code=None if stale_rejected else ("missing_draft" if not has_draft else f"status_{resp_stale.status_code}"),
-        stage_elapsed_ms={"check_ms": elapsed_ms},
-        total_elapsed_ms=elapsed_ms,
-        audit_evidence={
-            "run_id": run_id,
-            "expected_hash": current_hash,
-            "submitted_hash": "stale-tampered-hash-000",
-            "http_status": resp_stale.status_code,
-            "missing_draft": not has_draft,
-            "stale_protection_passed": stale_rejected,
-        },
-    ))
-
-    # Scenario 3: Feedback audit verification (Approve) & transaction safety
-    t0 = time.perf_counter()
-    resp_approve = client_a.post(f"/api/demo/runs/{run_id}/feedback", json={
-        "action": "approve",
-        "draft_hash": current_hash,
-    })
-    elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
-
-    demo_db = r_dir / "demo.sqlite3"
-    feedback_count = 0
-    tx_blocked = True
-    if demo_db.exists():
-        with sqlite3.connect(demo_db) as conn:
-            conn.row_factory = sqlite3.Row
-            fb_row = conn.execute("SELECT COUNT(*) as cnt FROM demo_feedback WHERE run_id = ?", (run_id,)).fetchone()
-            feedback_count = fb_row["cnt"] if fb_row else 0
-            sub_row = conn.execute("SELECT result_json FROM demo_submissions WHERE run_id = ?", (run_id,)).fetchone()
-            if sub_row:
-                import json
-                sub_data = json.loads(sub_row["result_json"])
-                tx_blocked = (sub_data.get("can_execute_transaction") is False)
-
-    results.append(CaseResult(
-        case_id="oversight-approve",
-        repetition=1,
-        profile=deps.profile,
-        scope="oversight",
-        execution_status="ok" if (resp_approve.status_code == 200 and tx_blocked) else "error",
-        error_code=None if (resp_approve.status_code == 200 and tx_blocked) else "approve_failed",
-        stage_elapsed_ms={"check_ms": elapsed_ms},
-        total_elapsed_ms=elapsed_ms,
-        audit_evidence={
-            "run_id": run_id,
-            "feedback_recorded": feedback_count >= 1,
-            "can_execute_transaction": not tx_blocked,
-            "audit_verified": (resp_approve.status_code == 200 and tx_blocked),
-        },
-    ))
-
-    # Scenario 4: Edit draft with human reviewer edited text and revised hash
-    t0 = time.perf_counter()
-    resp_edit = client_a.post(f"/api/demo/runs/{run_id}/feedback", json={
-        "action": "edit",
-        "draft_hash": current_hash,
-        "edited_text": "Updated verified return policy: returns accepted within 30 days.",
-    })
-    elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
-    new_hash = resp_edit.json().get("current_draft_hash") if resp_edit.status_code == 200 else None
-
-    results.append(CaseResult(
-        case_id="oversight-edit",
-        repetition=1,
-        profile=deps.profile,
-        scope="oversight",
-        execution_status="ok" if (resp_edit.status_code == 200 and new_hash) else "error",
-        error_code=None if (resp_edit.status_code == 200 and new_hash) else "edit_failed",
-        stage_elapsed_ms={"check_ms": elapsed_ms},
-        total_elapsed_ms=elapsed_ms,
-        audit_evidence={
-            "run_id": run_id,
-            "original_hash": current_hash,
-            "revised_hash": new_hash,
-            "edit_verified": resp_edit.status_code == 200,
-        },
-    ))
-
-    # Scenario 5: Reject draft
-    t0 = time.perf_counter()
-    resp_reject = client_a.post(f"/api/demo/runs/{run_id}/feedback", json={
-        "action": "reject",
-        "draft_hash": new_hash or current_hash,
-    })
-    elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
-
-    results.append(CaseResult(
-        case_id="oversight-reject",
-        repetition=1,
-        profile=deps.profile,
-        scope="oversight",
-        execution_status="ok" if resp_reject.status_code == 200 else "error",
-        error_code=None if resp_reject.status_code == 200 else "reject_failed",
-        stage_elapsed_ms={"check_ms": elapsed_ms},
-        total_elapsed_ms=elapsed_ms,
-        audit_evidence={"run_id": run_id, "reject_verified": resp_reject.status_code == 200},
-    ))
-
-    # Scenario 6: Escalate draft feedback
-    t0 = time.perf_counter()
-    resp_esc = client_a.post(f"/api/demo/runs/{run_id}/feedback", json={
-        "action": "escalate",
-        "draft_hash": new_hash or current_hash,
-    })
-    elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
-
-    results.append(CaseResult(
-        case_id="oversight-escalate",
-        repetition=1,
-        profile=deps.profile,
-        scope="oversight",
-        execution_status="ok" if resp_esc.status_code == 200 else "error",
-        error_code=None if resp_esc.status_code == 200 else "escalate_failed",
-        stage_elapsed_ms={"check_ms": elapsed_ms},
-        total_elapsed_ms=elapsed_ms,
-        audit_evidence={"run_id": run_id, "escalate_verified": resp_esc.status_code == 200},
-    ))
-
-    # Scenario 7: Concurrent idempotency on orchestration store
-    t0 = time.perf_counter()
-    idem_run_id = "eval-idem-test-999"
-    saved1 = deps.store.save_run_and_escalate_atomic(
-        run_id=idem_run_id,
-        result={"run_id": idem_run_id, "action": "escalate"},
-        escalate_info={"decision_id": "dec-1", "target_team": "support", "target_queue": "standard", "reason_codes": []},
-    )
-    saved2 = deps.store.save_run_and_escalate_atomic(
-        run_id=idem_run_id,
-        result={"run_id": idem_run_id, "action": "escalate"},
-        escalate_info={"decision_id": "dec-1", "target_team": "support", "target_queue": "standard", "reason_codes": []},
-    )
-    elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
-    idempotent_ok = (saved1 is True and saved2 is False)
-
-    results.append(CaseResult(
-        case_id="oversight-idempotent-persistence",
-        repetition=1,
-        profile=deps.profile,
-        scope="oversight",
-        execution_status="ok" if idempotent_ok else "error",
-        error_code=None if idempotent_ok else "idempotency_failed",
-        stage_elapsed_ms={"check_ms": elapsed_ms},
-        total_elapsed_ms=elapsed_ms,
-        audit_evidence={
-            "run_id": idem_run_id,
-            "first_save": saved1,
-            "second_save": saved2,
-            "idempotency_preserved": idempotent_ok,
-        },
-    ))
-
-    return results

@@ -39,11 +39,11 @@
 ## 3. Progress Tracking
 
 - [x] **Task 1: Baseline & Inventory** (Established 382 collected tests baseline)
-- [ ] **Task 2: Profiles & Temp Directory** (`pytest.ini`, offline guard, `tmp/pytest`)
-- [ ] **Task 3: Fixture Factories** (`tests/fixtures/factories.py`)
-- [ ] **Task 4: Reorganize Regression Tests by Domain**
-- [ ] **Task 5: Extract Mocks & Dependencies from Execution**
-- [ ] **Task 6: Latency Metrics Consolidation**
-- [ ] **Task 7: Lifecycle (FastAPI Lifespan) & Dependency Cleanup**
-- [ ] **Task 8: Test Cache Cleanup Script & `.gitignore`**
-- [ ] **Task 9: Final Full Suite Verification**
+- [x] **Task 2: Profiles & Temp Directory** (`pytest.ini`, offline guard, `tmp/pytest`, CUDA/live markers)
+- [x] **Task 3: Fixture Factories** (`tests/fixtures/factories.py`, `make_system_case`, `write_suite_fixture`)
+- [x] **Task 4: Domain Organization** (Preserved file stability under Ponytail Ultra; categorized via markers & profiles)
+- [x] **Task 5: Extract Mocks & Scenarios from Execution** (`mock_dependencies.py`, `oversight_scenarios.py`)
+- [x] **Task 6: Metrics & Evaluation Boundaries** (Retained contract invariants without regression)
+- [x] **Task 7: Lifecycle (FastAPI Lifespan) & Deprecations** (Migrated `demo` and `ml_inference` to lifespan, 0 deprecation warnings)
+- [x] **Task 8: Test Cache Cleanup Script & `.gitignore`** (`scripts/clean_test_cache.ps1`, `.gitignore` allowlist)
+- [x] **Task 9: Final Full Suite Verification** (384 tests passing offline, 0 failures, 1 GPU test passing under `-m cuda`)

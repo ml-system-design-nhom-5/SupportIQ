@@ -1,5 +1,6 @@
 import os
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional, Any, Dict
 from fastapi import FastAPI, HTTPException, Request, Response
@@ -19,8 +20,6 @@ def create_app(
     intent_client: Optional[Any] = None,
     health_metadata: Optional[Dict[str, Any]] = None,
 ) -> FastAPI:
-    app = FastAPI(title="SupportIQ Local Copilot Demo", docs_url=None, redoc_url=None)
-
     demo_store = DemoStore(db_path=db_path)
     if runner is None:
         from dotenv import load_dotenv
@@ -29,6 +28,16 @@ def create_app(
         runner = PipelineRunner(intent_client=intent_client, store=p_store)
 
     service = DemoService(runner=runner, store=demo_store)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        yield
+        for client in (runner.intent_client, runner.llm_client):
+            close = getattr(client, "close", None)
+            if callable(close):
+                close()
+
+    app = FastAPI(title="SupportIQ Local Copilot Demo", docs_url=None, redoc_url=None, lifespan=lifespan)
 
     # Middleware to ensure session_id cookie and block cross-origin mutations
     @app.middleware("http")

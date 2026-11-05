@@ -26,3 +26,17 @@ Hệ thống kiểm thử SupportIQ được cấu hình phân tách theo các p
 # Chạy integration test loopback
 .venv\Scripts\python.exe -m pytest -m "integration and not real_model and not cuda and not live" --basetemp=tmp/pytest/integration -q
 ```
+
+---
+
+## 3. Dọn Dẹp Cache Kiểm Thử
+
+Script `scripts/clean_test_cache.ps1` hỗ trợ liệt kê và dọn dẹp an toàn các thư mục cache tạm (`.pytest-*`, `tmp/pytest`, `__pycache__` ngoài môi trường ảo):
+
+```powershell
+# Xem trước danh sách cache hợp lệ (Dry-run, không xóa)
+powershell -ExecutionPolicy Bypass -File scripts/clean_test_cache.ps1
+
+# Thực thi xóa các thư mục cache
+powershell -ExecutionPolicy Bypass -File scripts/clean_test_cache.ps1 -Apply
+```

@@ -8,6 +8,13 @@ import pytest
 from apps.core_backend.llm.gemini import GeminiDraftClient
 
 
+def pytest_configure(config):
+    basetemp = config.getoption("basetemp", default=None)
+    if basetemp:
+        from pathlib import Path
+        Path(basetemp).parent.mkdir(parents=True, exist_ok=True)
+
+
 def pytest_addoption(parser):
     parser.addoption(
         "--run-live",
