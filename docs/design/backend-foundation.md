@@ -61,9 +61,9 @@ Every column is `NOT NULL` unless it says "optional". Times are `timestamptz` in
 
 | Table (feature) | Columns and data class | Notes |
 |---|---|---|
-| `accounts` (`accounts`) | `account_id` UUID (Internal); `login_name` unique (Confidential); `display_name` (Confidential: staff identity or customer name); `role` enum `customer`, `staff`, `manager`, `admin` (Internal); `is_active` (Internal); `customer_id` optional, set only for `customer` (Internal); `password_hash` Argon2id (Confidential); `created_at` (Internal) | A check constraint requires `customer_id` exactly when `role` is `customer` |
+| `accounts` (`accounts`) | `account_id` UUID (Internal); `login_name` unique (Internal: a role and a number such as `staff-1`, never a person's name); `display_name` (Confidential: staff identity or customer name); `role` enum `customer`, `staff`, `manager`, `admin` (Internal); `is_active` (Internal); `customer_id` optional, set only for `customer` (Internal); `password_hash` Argon2id (Confidential); `created_at` (Internal) | A check constraint requires `customer_id` exactly when `role` is `customer` |
 | `sessions` (`accounts`) | `session_id_hash` SHA-256, primary key (Confidential); `account_id` (Internal); `role` at creation (Internal); `created_at`, `last_seen_at`, `expires_at` (Internal) | The raw identifier exists only in the cookie ([ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), statement 4) |
-| `sign_in_failures` (`accounts`) | `login_name_hash` SHA-256 of the normalized login name (Confidential); `failed_at` (Internal) | Keyed by the typed name, not the account, so an unknown name is slowed down exactly like a known one |
+| `sign_in_failures` (`accounts`) | `login_name_hash` SHA-256 of the normalized login name (Internal); `failed_at` (Internal) | Keyed by the typed name, not the account, so an unknown name is slowed down exactly like a known one |
 | `idempotency_records` (`idempotency`) | `account_id`, `operation_id`, `idempotency_key` (Internal); `request_hash` SHA-256 of the canonical body (Internal); `response_status` optional (Internal); `response_body` JSON, optional (Confidential); `created_at` (Internal) | Unique on (`account_id`, `operation_id`, `idempotency_key`). No response yet means the request is in progress |
 | `customers` (`commerce`) | `customer_id` (Internal); `display_name`, `email`, `phone` (Confidential, synthetic) | Seeded only |
 | `products` (`commerce`) | `product_id`, `name`, `description`, `category`, `price` (Public) | Seeded only |
@@ -132,10 +132,11 @@ sequenceDiagram
     end
 ```
 
-1. Password verification runs even for an unknown login name, against a fixed dummy hash, so the response time does not reveal whether the name exists.
-2. Every later request loads the session by the hash of the cookie value. A missing, expired, or idle session returns `401` and is deleted. A valid one updates `last_seen_at` at most once per `session_touch_interval_ms`, so reads do not write on every request.
-3. Signing out deletes the session. `deleteCurrentSession` takes no `Idempotency-Key`: a retry after success gets `401`, which `frontend` treats as signed out.
-4. Every state-changing request, `createSession` included, is checked against `allowed_origins` before anything else. A missing or unknown `Origin` returns `403 forbidden` ([ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), statement 7).
+1. The sign-in screen has a text field for the login name, with a hint such as `staff-1`, and lists no accounts. No operation returns accounts before sign-in.
+2. Password verification runs even for an unknown login name, against a fixed dummy hash, so the response time does not reveal whether the name exists.
+3. Every later request loads the session by the hash of the cookie value. A missing, expired, or idle session returns `401` and is deleted. A valid one updates `last_seen_at` at most once per `session_touch_interval_ms`, so reads do not write on every request.
+4. Signing out deletes the session. `deleteCurrentSession` takes no `Idempotency-Key`: a retry after success gets `401`, which `frontend` treats as signed out.
+5. Every state-changing request, `createSession` included, is checked against `allowed_origins` before anything else. A missing or unknown `Origin` returns `403 forbidden` ([ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), statement 7).
 
 #### Creating a shop ticket
 
@@ -217,7 +218,7 @@ sequenceDiagram
 ### Seed and reset
 
 - **Seed** (`backend seed`, a one-off command run as `supportiq_owner`, [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)) loads a versioned data file, `backend/seed/synthetic-dev-only-v1.json`. The same file always produces the same rows, IDs, and times, apart from `password_hash`, which Argon2id salts randomly.
-- The file holds at least one account per role ([ADR-0012](../decisions/0012-roles-v1.md)); customers with orders that cover every order, shipment, and refund status; and the catalog. Login names follow the pattern `customer-1`, `staff-1`, `manager-1`, `admin-1`.
+- The file holds at least one account per role ([ADR-0012](../decisions/0012-roles-v1.md)); customers with orders that cover every order, shipment, and refund status; and the catalog. Login names follow the pattern `customer-1`, `staff-1`, `manager-1`, `admin-1`. They name a role, not a person, so they are Internal and the README lists them. Passwords are never written in the repository, the README, or slides ([SEC-09](../rules/security-and-privacy.md#secrets)); each person sets them in their own `.env`.
 - Passwords come from one secret setting per role, never from the file ([ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), statement 1). The seed hashes them with Argon2id.
 - **Reset** (`backend reset`, also run as `supportiq_owner`) truncates every `backend` table in one transaction and then runs the seed, so role changes, deactivations, tickets, and audit log entries all return to the seeded state ([SEC-32](../rules/security-and-privacy.md#retention-and-exports)). It asks for confirmation unless it gets `--yes`.
 
@@ -235,7 +236,7 @@ All settings live in one `pydantic-settings` class ([PY-43](../rules/python.md#s
 | `database_pool_timeout_ms` | 3 000 | ERR-09 |
 | `session_idle_timeout_ms` | 1 800 000 (30 minutes) | [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), statement 6 |
 | `session_absolute_lifetime_ms` | 28 800 000 (8 hours) | ADR-0009, statement 6 |
-| `session_touch_interval_ms` | 60 000 | Sign-in and sessions, step 2 |
+| `session_touch_interval_ms` | 60 000 | Sign-in and sessions, step 3 |
 | `session_cookie_secure` | `true` | ADR-0009, statement 4. `false` only in local development ([ARCH-37](../rules/architecture.md#configuration)) |
 | `allowed_origins` | None; required | ADR-0009, statement 7 |
 | `sign_in_failure_limit` | 5 | ADR-0009, statement 8 |
@@ -274,7 +275,7 @@ No scheduler exists outside the suggestion job queue ([ARCH-41](../rules/archite
 | A session expires | `401`; the session row is deleted | Use-case test with a fake `Clock` |
 | A request without an allowed `Origin` changes state | `403 forbidden` | Handler test |
 | The database is unreachable or a timeout fires | `GET /health/ready` returns `503`; requests return `503 not-ready` and roll back | Integration test |
-| Confidential data or a secret reaches a log | The logging setup drops attributes that are not allow-listed and masks known patterns ([LOG-30](../rules/logging-and-observability.md#privacy-in-telemetry)). Request logs never include headers, so the raw session identifier in the `Cookie` header is never logged | Log-capture test with message text, display names, login names, order IDs, shipping addresses, passwords, and a raw cookie value (TEST-26) |
+| Confidential data or a secret reaches a log | The logging setup drops attributes that are not allow-listed and masks known patterns ([LOG-30](../rules/logging-and-observability.md#privacy-in-telemetry)). Request logs never include headers, so the raw session identifier in the `Cookie` header is never logged | Log-capture test with message text, display names, order IDs, shipping addresses, passwords, and a raw cookie value (TEST-26) |
 | The seed produces different data on two runs | Prevented by design and checked | Test that seeds twice and compares every table except `password_hash`, and checks each seeded password against its hash |
 | Reset leaves changed accounts or tickets behind | Impossible: every table is truncated before the seed | Test that changes a role, creates a ticket, resets, and compares with a fresh seed |
 
@@ -310,13 +311,12 @@ No scheduler exists outside the suggestion job queue ([ARCH-41](../rules/archite
 
 1. The backend and frontend owners review this design. The team sets the status to Approved.
 2. Contract PR 2 writes the operations listed in Goals, with the points under Data and contracts.
-3. Scaffold `backend` (uv, ruff, pyright, pytest, import-linter, Alembic), `deploy/`, and CI. In `deploy/`, the PostgreSQL container creates `supportiq_owner` and `supportiq_app` on first start, with passwords from secret settings; then `backend-migrate`, two `backend` replicas, and `ingress` start in that order ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)).
+3. Scaffold `backend` (uv, ruff, pyright, pytest, import-linter, Alembic), `deploy/`, and CI. In `deploy/`, the PostgreSQL container creates `supportiq_owner` and `supportiq_app` on first start, with passwords from secret settings; then `backend-migrate`, two `backend` replicas, and `ingress` start in that order ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)). The README gets a "Demo accounts" section that lists the login names and roles and says that passwords come from each person's `.env`.
 4. Implement `platform`, `audit`, and `idempotency`, then `accounts`, then `commerce` with the seed, then `tickets`. `frontend` builds the shop and admin screens against Prism mocks in parallel.
 5. The `backend` ticket workflow design follows, for the console and everything that involves `ai-service`.
 
 ## Open questions
 
-- The sign-in mockup shows a dropdown of demo accounts, but no operation lists accounts before sign-in, and display names are Confidential. The proposal is a text field for the login name, with a hint such as `staff-1`.
 - The ID formats of the shared commerce data of groups 2 and 5. When that data is adopted, the seed formats above change to match it.
 - The content of the seed file: how many products, customers, and orders. The seed PR proposes it.
 - Whether the backend and frontend owners may approve contract PR 2 for the operations above before the ML and RAG engineers approve contracts v1 as a whole.

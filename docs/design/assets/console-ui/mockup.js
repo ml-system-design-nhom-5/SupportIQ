@@ -744,9 +744,9 @@ function signInScreen() {
   return `<div class="app"><div class="page"><div class="center">
     <section class="panel sign-in">
       <div class="brand">SupportIQ <span>Console</span></div>
-      <label class="field"><span class="small strong">Demo account</span><span class="input select">staff-1 ${icon("chevronDown", "icon-sm")}</span></label>
+      <label class="field"><span class="small strong">Login name</span><span class="input">staff-1</span></label>
       <label class="field"><span class="small strong">Password</span><span class="input">••••••••••</span></label>
-      <div class="error-line small">${icon("alert", "icon-sm")}The account or the password is not correct.</div>
+      <div class="error-line small">${icon("alert", "icon-sm")}The login name or the password is not correct.</div>
       <button class="btn btn-primary">Sign in</button>
     </section>
   </div></div>${mockLabel("Sign in, after a failed attempt")}</div>`;

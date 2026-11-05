@@ -53,7 +53,7 @@ Only `frontend` changes.
 
 | Screen | Route (proposed) | Roles | Content | Mockup |
 |---|---|---|---|---|
-| Sign in | `/sign-in` | All | Demo account and password ([ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md)). A failed attempt shows the same message for an unknown account and a wrong password | [sign-in.png](assets/console-ui/sign-in.png) |
+| Sign in | `/sign-in` | All | A text field for the login name, with a hint such as `staff-1`, and a password field ([ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md)). No list of accounts is shown. A failed attempt shows the same message for an unknown name, a wrong password, and a deactivated account | [sign-in.png](assets/console-ui/sign-in.png) |
 | Console, no ticket selected | `/console` | Staff, manager | The inbox, and a prompt to select a ticket | [no-ticket-selected.png](assets/console-ui/no-ticket-selected.png) |
 | Ticket workspace | `/console/tickets/{ticket_id}` | Staff, manager | The regions below | [Layout](#layout) |
 | KB document version | Side sheet over the workspace | Staff, manager | Full text of one KB document version ([UI-20](../rules/ui.md#console-interaction)) | [kb-document.png](assets/console-ui/kb-document.png) |
