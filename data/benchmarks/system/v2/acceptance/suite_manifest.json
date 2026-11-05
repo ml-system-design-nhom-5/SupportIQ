@@ -17,7 +17,7 @@
     },
     "kb": {
       "path": "data/knowledge/approved_kb.v1.json",
-      "sha256": "12D9CEDA40F2161FD4C28F0A835C3622D37DDA9C64672D4BAEC0017088216C1C"
+      "sha256": "C06A7148F2612D77D57659F2FECD8A39531E804CA084C6584249DEFDB779D81C"
     },
     "mock_commerce": {
       "path": "data/knowledge/mock_orders.json",

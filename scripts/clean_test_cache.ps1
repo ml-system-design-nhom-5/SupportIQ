@@ -1,128 +1,106 @@
 [CmdletBinding()]
-param(
-    [switch]$Apply
-)
+param([switch]$Apply)
 
 $ErrorActionPreference = "Stop"
+$repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..")).TrimEnd('\', '/')
+$prefix = $repoRoot + [IO.Path]::DirectorySeparatorChar
+$sourceRoots = @('apps', 'services', 'pipeline', 'tests', 'scripts')
+$excluded = @('.git', '.venv', 'venv', 'node_modules')
 
-$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-
-# Protected folders that must NEVER be touched
-$protectedNames = @(
-    ".git",
-    ".venv",
-    "venv",
-    "data",
-    "artifacts",
-    "apps",
-    "services",
-    "pipeline",
-    "tests",
-    "docs",
-    "scripts"
-)
-
-Write-Host "=== SupportIQ Test Cache Cleaner ===" -ForegroundColor Cyan
-Write-Host "Repository root: $repoRoot"
-if ($Apply) {
-    Write-Host "Mode: APPLY (destructive removal of cache items)" -ForegroundColor Yellow
-} else {
-    Write-Host "Mode: DRY RUN (no files will be deleted; pass -Apply to execute)" -ForegroundColor Green
-}
-Write-Host ""
-
-$candidates = [System.Collections.Generic.List[PSCustomObject]]::new()
-
-# 1. Root level .pytest-* and .review-system-probe-* directories
-$rootPatterns = @(".pytest-*", ".pytest_cache", ".review-system-probe-*")
-foreach ($pattern in $rootPatterns) {
-    Get-ChildItem -Path $repoRoot -Filter $pattern -Directory -ErrorAction SilentlyContinue | ForEach-Object {
-        $candidates.Add([PSCustomObject]@{
-            Path = $_.FullName
-            Type = "Directory"
-            Reason = "Test temporary/cache directory ($pattern)"
-        })
+function Test-PlainPath([string]$Path) {
+    $current = [IO.Path]::GetFullPath($Path)
+    while ($current) {
+        if ((Get-Item -LiteralPath $current -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) {
+            return $false
+        }
+        $current = [IO.Path]::GetDirectoryName($current)
     }
+    return $true
 }
 
-# 2. tmp/pytest directory contents
-$tmpPytest = Join-Path $repoRoot "tmp\pytest"
-if (Test-Path $tmpPytest) {
-    Get-ChildItem -Path $tmpPytest -Directory -ErrorAction SilentlyContinue | ForEach-Object {
-        $candidates.Add([PSCustomObject]@{
-            Path = $_.FullName
-            Type = "Directory"
-            Reason = "Temporary pytest basetemp folder"
-        })
-    }
+function Test-Allowlisted([string]$Path) {
+    $full = [IO.Path]::GetFullPath($Path)
+    if (-not $full.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { return $false }
+    $relative = $full.Substring($prefix.Length).Replace('\', '/')
+    return ($relative -match '^\.pytest-[^/]+$' -or $relative -eq '.pytest_cache' -or
+        $relative -match '^\.review-system-probe-[^/]+$' -or
+        $relative -match '^tmp/pytest/[^/]+$' -or
+        ($relative -match '^(apps|services|pipeline|tests|scripts)/(.*/)?__pycache__$' -and
+         -not ($relative.Split('/') | Where-Object { $_ -in $excluded })))
 }
 
-# 3. __pycache__ directories outside protected roots (excluding .venv)
-Get-ChildItem -Path $repoRoot -Filter "__pycache__" -Directory -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
-    $fullPath = $_.FullName
-    if ($fullPath -notlike "*\.venv\*" -and $fullPath -notlike "*\venv\*") {
-        $candidates.Add([PSCustomObject]@{
-            Path = $fullPath
-            Type = "Directory"
-            Reason = "Python bytecode cache (__pycache__)"
-        })
+function Test-SafeTree([string]$Path) {
+    if (-not (Test-Allowlisted $Path) -or -not (Test-PlainPath $Path)) { return $false }
+    $pending = [Collections.Generic.Stack[string]]::new()
+    $pending.Push($Path)
+    while ($pending.Count) {
+        foreach ($entry in Get-ChildItem -LiteralPath $pending.Pop() -Force) {
+            if ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) { return $false }
+            if ($entry.PSIsContainer) { $pending.Push($entry.FullName) }
+        }
     }
+    $relative = $Path.Substring($prefix.Length).Replace('\', '/')
+    $tracked = @(git -C $repoRoot ls-files -- $relative)
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot verify tracked files; refusing cleanup.' }
+    return $tracked.Count -eq 0
 }
 
-if ($candidates.Count -eq 0) {
-    Write-Host "No cache or temporary test directories found. Clean!" -ForegroundColor Green
-    exit 0
+if (-not (Test-PlainPath $repoRoot)) { throw 'Repository path contains a link; refusing cleanup.' }
+$gitStatus = git -C $repoRoot rev-parse --is-inside-work-tree 2>$null
+if ($LASTEXITCODE -ne 0 -or $gitStatus -ne 'true' -or -not (Test-Path -LiteralPath (Join-Path $repoRoot '.git'))) {
+    throw 'Cleaner must be inside the repository root; refusing cleanup.'
 }
-
-Write-Host ("Found {0} cache candidate item(s):" -f $candidates.Count) -ForegroundColor Cyan
-Write-Host ""
-
-$totalBytes = 0
-
-foreach ($item in $candidates) {
-    $itemPath = $item.Path
-    # Safety verification: ensure inside $repoRoot
-    if (-not $itemPath.StartsWith($repoRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
-        Write-Warning "Skipping unsafe candidate outside repo root: $itemPath"
-        continue
-    }
-
-    # Safety check: ensure not a protected top-level folder itself
-    $rel = $itemPath.Substring($repoRoot.Length).TrimStart('\', '/')
-    $firstSegment = ($rel -split '[\\/]', 2)[0]
-    if ($protectedNames -contains $rel) {
-        Write-Warning "Skipping protected root folder: $itemPath"
-        continue
-    }
-
-    # Measure size
-    $size = 0
+$lockPath = Join-Path $repoRoot '.pytest-cleanup.lock'
+if ((Test-Path -LiteralPath $lockPath) -and -not (Test-PlainPath $lockPath)) {
+    throw 'Cleanup lock is a link; refusing cleanup.'
+}
+$lock = $null
+try {
+    # Pytest sessions hold this file open; exclusive access also prevents a new session during cleanup.
     try {
-        $measure = Get-ChildItem -LiteralPath $itemPath -Recurse -File -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum
-        if ($measure -and $measure.Sum) {
-            $size = $measure.Sum
-        }
-    } catch {}
-    $totalBytes += $size
+        $lock = [IO.File]::Open($lockPath, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+    } catch { throw 'An active pytest session or cleaner holds the cleanup lock; refusing cleanup.' }
 
-    $sizeMb = [Math]::Round($size / 1MB, 2)
-    Write-Host ("[{0}] {1} ({2} MB) - {3}" -f $item.Type, $rel, $sizeMb, $item.Reason)
-
-    if ($Apply) {
-        try {
-            Remove-Item -LiteralPath $itemPath -Recurse -Force -ErrorAction Stop
-            Write-Host "  -> REMOVED" -ForegroundColor Green
-        } catch {
-            Write-Warning "  -> FAILED to remove: $($_.Exception.Message)"
+    Write-Host "Repository root: $repoRoot"
+    if ($Apply) { Write-Host 'Mode: APPLY' } else { Write-Host 'Mode: DRY RUN (pass -Apply to remove)' }
+    $candidates = [Collections.Generic.List[string]]::new()
+    foreach ($entry in Get-ChildItem -LiteralPath $repoRoot -Directory -Force) {
+        if (Test-Allowlisted $entry.FullName) { $candidates.Add($entry.FullName) }
+    }
+    $tmpPytest = Join-Path $repoRoot 'tmp/pytest'
+    if ((Test-Path -LiteralPath $tmpPytest -PathType Container) -and (Test-PlainPath $tmpPytest)) {
+        foreach ($entry in Get-ChildItem -LiteralPath $tmpPytest -Directory -Force) {
+            $candidates.Add($entry.FullName)
         }
     }
-}
-
-Write-Host ""
-$totalMb = [Math]::Round($totalBytes / 1MB, 2)
-if ($Apply) {
-    Write-Host ("Cleaned {0} items (~{1} MB reclaimed)." -f $candidates.Count, $totalMb) -ForegroundColor Green
-} else {
-    Write-Host ("Total candidate size: ~{0} MB in {1} items." -f $totalMb, $candidates.Count) -ForegroundColor Yellow
-    Write-Host "Run with -Apply to permanently delete these cache directories." -ForegroundColor Yellow
+    # Walk only source roots, pruning environments and links before descending.
+    $pending = [Collections.Generic.Stack[string]]::new()
+    foreach ($name in $sourceRoots) {
+        $path = Join-Path $repoRoot $name
+        if ((Test-Path -LiteralPath $path -PathType Container) -and (Test-PlainPath $path)) { $pending.Push($path) }
+    }
+    while ($pending.Count) {
+        foreach ($entry in Get-ChildItem -LiteralPath $pending.Pop() -Directory -Force) {
+            if (($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) -or $entry.Name -in $excluded) { continue }
+            if ($entry.Name -eq '__pycache__') { $candidates.Add($entry.FullName) }
+            else { $pending.Push($entry.FullName) }
+        }
+    }
+    $removed = 0
+    foreach ($path in $candidates) {
+        if (-not (Test-SafeTree $path)) {
+            Write-Warning "Skipping linked, tracked, or unsafe candidate: $path"
+            continue
+        }
+        Write-Host "Cache candidate: $path"
+        if ($Apply) {
+            # Revalidate the resolved absolute target immediately before recursive removal.
+            if (-not (Test-SafeTree $path)) { throw "Candidate changed during cleanup: $path" }
+            Remove-Item -LiteralPath $path -Recurse -Force
+            $removed++
+        }
+    }
+    if ($Apply) { Write-Host "Removed $removed cache directories." }
+} finally {
+    if ($lock) { $lock.Dispose() }
 }
