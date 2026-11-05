@@ -1,7 +1,7 @@
 # ADR-0012: Roles v1: customer, staff, manager, and admin
 
-- **Status:** Proposed
-- **Date:** 2026-10-28
+- **Status:** Accepted
+- **Date:** 2026-11-05
 - **Deciders:** Team
 - **Related:** [Requirements](../product/requirements.md) (FR-06, FR-08, FR-10), [ADR-0009](0009-demo-accounts-and-cookie-sessions.md), [ADR-0011](0011-deployment-and-runtime-topology.md), [security rules](../rules/security-and-privacy.md#authentication-and-authorization), [Design: contracts v1](../design/contracts-v1.md#roles-and-permissions)
 

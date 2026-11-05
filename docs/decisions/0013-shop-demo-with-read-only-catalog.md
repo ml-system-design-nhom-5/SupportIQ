@@ -1,9 +1,9 @@
 # ADR-0013: Shop demo with a read-only catalog
 
-- **Status:** Proposed
-- **Date:** 2026-10-28
+- **Status:** Accepted
+- **Date:** 2026-11-05
 - **Deciders:** Team
-- **Related:** Supersedes [ADR-0002](0002-shop-demo-scope.md) once accepted. [Requirements](../product/requirements.md) (FR-11, §2), [ADR-0001](0001-system-architecture.md), [ADR-0009](0009-demo-accounts-and-cookie-sessions.md), [ADR-0012](0012-roles-v1.md), [UI rules](../rules/ui.md#shop), [Design: contracts v1](../design/contracts-v1.md)
+- **Related:** Supersedes [ADR-0002](0002-shop-demo-scope.md). [Requirements](../product/requirements.md) (FR-11, §2), [ADR-0001](0001-system-architecture.md), [ADR-0009](0009-demo-accounts-and-cookie-sessions.md), [ADR-0012](0012-roles-v1.md), [UI rules](../rules/ui.md#shop), [Design: contracts v1](../design/contracts-v1.md)
 
 ## Context
 

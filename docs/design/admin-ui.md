@@ -1,10 +1,10 @@
 # Design: Admin UI
 
-- **Status:** Draft
+- **Status:** Approved
 - **Owner:** frontend engineer
 - **Reviewers:** backend engineer, contracts gatekeeper
 - **Last reviewed:** 2026-11-05
-- **Related:** [Requirements](../product/requirements.md) (FR-08), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0012](../decisions/0012-roles-v1.md) (Proposed), [contracts v1 design](contracts-v1.md#admin-operations) (revision 2, in review), [console UI design](console-ui.md) (tokens and app shell), [UI-45](../rules/ui.md#admin), [SEC-41](../rules/security-and-privacy.md#authentication-and-authorization)
+- **Related:** [Requirements](../product/requirements.md) (FR-08), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0012](../decisions/0012-roles-v1.md), [contracts v1 design](contracts-v1.md#admin-operations) (revision 2, in review), [console UI design](console-ui.md) (tokens and app shell), [UI-45](../rules/ui.md#admin), [SEC-41](../rules/security-and-privacy.md#authentication-and-authorization)
 
 ## Summary
 
@@ -184,7 +184,7 @@ sequenceDiagram
 
 ## Rollout
 
-1. The affected owners review this document. The team sets the status to Approved.
+1. Done on 2026-11-05: the backend and frontend owners approved this design.
 2. Implementation against Prism mocks after contract PR 2: the accounts table and dialogs, then the versions page.
 
 ### Mockup sources
@@ -199,4 +199,4 @@ docs/design/assets/admin-ui/render.sh
 
 - The page size and sort order of the accounts list.
 - The version labels on the Versions page come from the release manifest, which the AI and ML engineers define. The mockups show stand-in labels.
-- This draft depends on ADR-0012 and contracts v1 revision 2, which are in review.
+- This design was approved on 2026-11-05 while contracts v1 revision 2 was still in review. If it changes, this design is revised.

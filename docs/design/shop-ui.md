@@ -1,10 +1,10 @@
 # Design: Shop UI
 
-- **Status:** Draft
+- **Status:** Approved
 - **Owner:** frontend engineer
 - **Reviewers:** backend engineer, contracts gatekeeper
 - **Last reviewed:** 2026-11-05
-- **Related:** [Requirements](../product/requirements.md) (FR-08, FR-11), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0012](../decisions/0012-roles-v1.md) (Proposed), [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md) (Proposed), [contracts v1 design](contracts-v1.md) (revision 2, in review), [console UI design](console-ui.md) (tokens), [UI rules](../rules/ui.md#shop)
+- **Related:** [Requirements](../product/requirements.md) (FR-08, FR-11), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md), [contracts v1 design](contracts-v1.md) (revision 2, in review), [console UI design](console-ui.md) (tokens), [UI rules](../rules/ui.md#shop)
 
 ## Summary
 
@@ -224,7 +224,7 @@ Each badge has an icon and a label, so color is never the only signal. The tones
 ## Rollout
 
 1. Done on 2026-11-05: the team chose the layout.
-2. The affected owners review this document. The team sets the status to Approved.
+2. Done on 2026-11-05: the backend and frontend owners approved this design.
 3. Contract PR 2 implements `ShopTicketView` with `replied` and the `order_id` filter of `listShopTickets`.
 4. Implementation: the shop blocks join the design system with stories first ([UI-38](../rules/ui.md#shop)), then the screens, against Prism mocks.
 
@@ -247,4 +247,4 @@ docs/design/assets/shop-ui/render.sh
 - Whether contract PR 2 keeps `getShopTicket`, which no screen uses.
 - Whether the console order popover adopts the status badges above, so that order, shipment, and refund statuses look the same in both areas (UI-12).
 - The shop name. The mockups use "Demo Shop", a neutral stand-in.
-- This draft depends on ADR-0012, ADR-0013, and contracts v1 revision 2, which are in review.
+- This design was approved on 2026-11-05 while contracts v1 revision 2 was still in review. If it changes, this design is revised.

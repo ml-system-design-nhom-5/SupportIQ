@@ -63,7 +63,7 @@ Revision 2 needs a new approval.
 
 - Requirements and the escalation rules: [requirements](../product/requirements.md#41-escalation-and-fallback-rules).
 - Component responsibilities, data ownership, and boundary rules: [ADR-0001](../decisions/0001-system-architecture.md).
-- Shop scope: [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md), which supersedes [ADR-0002](../decisions/0002-shop-demo-scope.md) once accepted.
+- Shop scope: [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md), which supersedes [ADR-0002](../decisions/0002-shop-demo-scope.md).
 - API style, status codes, and headers: [ADR-0004](../decisions/0004-api-conventions.md) and the [contract rules](../rules/contracts.md).
 - The AI pipeline behind `/v1/analyses` and `/v1/drafts`: [ADR-0005](../decisions/0005-intent-independent-retrieval.md).
 - What is recorded for each staff decision: [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md).
@@ -813,7 +813,7 @@ Every schema property states its data class ([SEC-03](../rules/security-and-priv
 
 1. Done on 2026-10-24: revision 1 was approved and ADR-0009 accepted.
 2. Done on 2026-10-24: UI-16, UI-17, and UI-19 were updated for the reply proposal flow.
-3. Revision 2, dated 2026-10-28 and updated 2026-11-05, is in review together with ADR-0010 to ADR-0014.
+3. Revision 2, dated 2026-10-28 and updated 2026-11-05, is in review together with ADR-0010, ADR-0011, and ADR-0014. ADR-0012 and ADR-0013 were accepted on 2026-11-05.
 4. Contract PR 1: `contracts/README.md` (tooling commands), `CHANGELOG.md`, shared schemas, `ai-service.openapi.yaml` 1.0.0, examples, mock setup.
 5. Contract PR 2: `backend.openapi.yaml` 1.0.0 and examples.
 6. Contract PR 3: `kb-contract.md` structure, completed when the KB files arrive.

@@ -1,10 +1,10 @@
 # Design: Backend foundation
 
-- **Status:** Draft
+- **Status:** Approved
 - **Owner:** backend engineer
 - **Reviewers:** frontend engineer, contracts gatekeeper
 - **Last reviewed:** 2026-11-05
-- **Related:** [Requirements](../product/requirements.md) (FR-08, FR-11, NFR-09), [ADR-0001](../decisions/0001-system-architecture.md), [ADR-0003](../decisions/0003-tech-stack.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md) (Proposed), [ADR-0012](../decisions/0012-roles-v1.md) (Proposed), [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md) (Proposed), [contracts v1 design](contracts-v1.md) (revision 2, in review), [shop UI](shop-ui.md), [admin UI](admin-ui.md), [architecture rules](../rules/architecture.md), [security rules](../rules/security-and-privacy.md)
+- **Related:** [Requirements](../product/requirements.md) (FR-08, FR-11, NFR-09), [ADR-0001](../decisions/0001-system-architecture.md), [ADR-0003](../decisions/0003-tech-stack.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md) (Proposed), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md), [contracts v1 design](contracts-v1.md) (revision 2, in review), [shop UI](shop-ui.md), [admin UI](admin-ui.md), [architecture rules](../rules/architecture.md), [security rules](../rules/security-and-privacy.md)
 
 ## Summary
 
@@ -309,9 +309,9 @@ No scheduler exists outside the suggestion job queue ([ARCH-41](../rules/archite
 
 ## Rollout
 
-1. The backend and frontend owners review this design. The team sets the status to Approved.
+1. Done on 2026-11-05: the backend and frontend owners approved this design.
 2. Contract PR 2 writes the operations listed in Goals, with the points under Data and contracts.
-3. Scaffold `backend` (uv, ruff, pyright, pytest, import-linter, Alembic), `deploy/`, and CI. In `deploy/`, the PostgreSQL container creates `supportiq_owner` and `supportiq_app` on first start, with passwords from secret settings; then `backend-migrate`, two `backend` replicas, and `ingress` start in that order ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)). The README gets a "Demo accounts" section that lists the login names and roles and says that passwords come from each person's `.env`.
+3. Scaffold `backend` (uv, ruff, pyright, pytest, import-linter, Alembic), `deploy/`, and CI. A SQL script, run once as the database owner, creates `supportiq_app` and its privileges, with a password from a secret setting. Migrations run as a one-off step before the `backend` instances start: the `backend-migrate` service in local Docker Compose ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)), or the host's pre-deploy command in a hosted demo. The README gets a "Demo accounts" section that lists the login names and roles and says that passwords come from each person's `.env`.
 4. Implement `platform`, `audit`, and `idempotency`, then `accounts`, then `commerce` with the seed, then `tickets`. `frontend` builds the shop and admin screens against Prism mocks in parallel.
 5. The `backend` ticket workflow design follows, for the console and everything that involves `ai-service`.
 
@@ -320,4 +320,5 @@ No scheduler exists outside the suggestion job queue ([ARCH-41](../rules/archite
 - The ID formats of the shared commerce data of groups 2 and 5. When that data is adopted, the seed formats above change to match it.
 - The content of the seed file: how many products, customers, and orders. The seed PR proposes it.
 - Whether the backend and frontend owners may approve contract PR 2 for the operations above before the ML and RAG engineers approve contracts v1 as a whole.
-- This draft depends on ADR-0011, ADR-0012, ADR-0013, and contracts v1 revision 2, which are in review.
+- Hosting of the demo. The project lead proposes Supabase for PostgreSQL, Render for `backend` with UptimeRobot, and Vercel or Cloudflare Pages for `frontend`, instead of the single-host topology of ADR-0011. It needs an ADR, because it changes ADR-0011 and the session cookie of ADR-0009 requires the browser to reach `backend` on the same site as `frontend`.
+- This design was approved on 2026-11-05 while ADR-0011 and contracts v1 revision 2 were still in review. If either changes, this design is revised.

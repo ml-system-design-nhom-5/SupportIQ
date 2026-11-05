@@ -1,10 +1,10 @@
 # Design: Console UI
 
-- **Status:** Draft
+- **Status:** Approved
 - **Owner:** frontend engineer
 - **Reviewers:** backend engineer, ML engineer, RAG engineer, contracts gatekeeper
 - **Last reviewed:** 2026-11-05
-- **Related:** [Requirements](../product/requirements.md) (FR-01, FR-04 to FR-07, FR-10, NFR-11, ESC-01 to ESC-05), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md) (Proposed), [ADR-0012](../decisions/0012-roles-v1.md) (Proposed), [ADR-0014](../decisions/0014-citations-to-order-context.md) (Proposed), [contracts v1 design](contracts-v1.md) (revision 2, in review), [UI rules](../rules/ui.md)
+- **Related:** [Requirements](../product/requirements.md) (FR-01, FR-04 to FR-07, FR-10, NFR-11, ESC-01 to ESC-05), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md) (Proposed), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0014](../decisions/0014-citations-to-order-context.md) (Proposed), [contracts v1 design](contracts-v1.md) (revision 2, in review), [UI rules](../rules/ui.md)
 
 ## Summary
 
@@ -12,7 +12,7 @@ This design fixes the screens, the one workspace layout ([UI-15](../rules/ui.md#
 
 The team chose the inbox layout on 2026-11-01. It has an inbox on the left, the message, intent, and reply in the middle, and the other AI output on the right. Every screen, state, and dialog below is drawn in that layout.
 
-This draft follows contracts v1 revision 2, ADR-0010, ADR-0012, and ADR-0014, which are still in review. If they change, this document changes with them.
+This design follows ADR-0012 and three documents still in review: contracts v1 revision 2, ADR-0010, and ADR-0014. If they change, this document changes with them.
 
 ## Goals and non-goals
 
@@ -386,7 +386,7 @@ The status `cancelled` has no presentation, because a superseded suggestion is n
 ## Rollout
 
 1. Done on 2026-11-01: the team chose the layout, and this document holds every screen, state, and dialog.
-2. The affected owners review this document. The team sets the status to Approved.
+2. Done on 2026-11-05: the team approved this design.
 3. Contract PR 2 implements `TicketSummary`, `other_orders`, `CitationView`, `intent_override` in `SuggestionView`, and the draft `text` in `backend.openapi.yaml`.
 4. Implementation: token files and primitives, then domain components with stories, then screens against Prism mocks.
 
@@ -406,4 +406,4 @@ The page loads Inter and JetBrains Mono from Google Fonts.
 - Keyboard movement through the inbox (arrow keys, or J and K). [UI-17](../rules/ui.md#console-interaction) forbids single-key shortcuts only for irreversible actions, so this is allowed.
 - The excerpt length and sort parameter of `TicketSummary` (open for contract PR 2), and the polling interval of the inbox and the workspace.
 - The text of the manual-process instructions ([UI-26](../rules/ui.md#states)). The team provides it. The mockups show a stand-in line.
-- This draft depends on ADR-0010, ADR-0012, ADR-0014, and contracts v1 revision 2, which are in review.
+- This design was approved on 2026-11-05 while ADR-0010, ADR-0014, and contracts v1 revision 2 were still in review. If any of them changes, this design is revised.

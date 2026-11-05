@@ -68,7 +68,7 @@ sequenceDiagram
 
 ## Project status
 
-Design phase. Decisions are recorded in [docs/decisions/](docs/decisions/README.md). Revision 2 of the contracts v1 design ([docs/design/contracts-v1.md](docs/design/contracts-v1.md)) aligns the design with the team's specification and is in review, together with ADR-0010 to ADR-0014. Writing the contracts follows their approval. There is no runnable code yet; setup instructions are added here when the first component is scaffolded.
+Design phase. Decisions are recorded in [docs/decisions/](docs/decisions/README.md). Revision 2 of the contracts v1 design ([docs/design/contracts-v1.md](docs/design/contracts-v1.md)) aligns the design with the team's specification and is in review, together with ADR-0010, ADR-0011, and ADR-0014. ADR-0012 and ADR-0013 were accepted on 2026-11-05. Writing the contracts follows their approval. There is no runnable code yet; setup instructions are added here when the first component is scaffolded.
 
 ## Target repository layout
 

@@ -1,7 +1,7 @@
 # ADR-0002: Minimal shop demo scope
 
-- **Status:** Accepted
-- **Date:** 2026-10-23
+- **Status:** Superseded by [ADR-0013](0013-shop-demo-with-read-only-catalog.md)
+- **Date:** 2026-11-05
 - **Deciders:** Team
 - **Related:** [Requirements §2](../product/requirements.md#2-scope), [ADR-0001](0001-system-architecture.md), [UI rules](../rules/ui.md)
 

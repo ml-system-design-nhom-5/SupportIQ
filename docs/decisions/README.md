@@ -1,6 +1,6 @@
 # Architecture decision records
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-04
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-05
 
 An architecture decision record (ADR) captures one significant decision: its context, the options, what we chose, and what it costs. This page lists every ADR and explains the process. Writing rules are in the [documentation handbook](../README.md#adrs).
 
@@ -9,7 +9,7 @@ An architecture decision record (ADR) captures one significant decision: its con
 | ADR | Title | Status | Date |
 |---|---|---|---|
 | [0001](0001-system-architecture.md) | System architecture and component boundaries | Accepted | 2026-10-23 |
-| [0002](0002-shop-demo-scope.md) | Minimal shop demo scope | Accepted | 2026-10-23 |
+| [0002](0002-shop-demo-scope.md) | Minimal shop demo scope | Superseded by ADR-0013 | 2026-11-05 |
 | [0003](0003-tech-stack.md) | Technology stack | Accepted | 2026-10-23 |
 | [0004](0004-api-conventions.md) | API style and conventions | Accepted | 2026-10-23 |
 | [0005](0005-intent-independent-retrieval.md) | Intent-independent retrieval with intent-aware reranking | Accepted | 2026-10-23 |
@@ -19,14 +19,14 @@ An architecture decision record (ADR) captures one significant decision: its con
 | [0009](0009-demo-accounts-and-cookie-sessions.md) | Demo accounts with server-side cookie sessions for v1 | Accepted | 2026-10-24 |
 | [0010](0010-pseudonymization-and-egress-control.md) | Pseudonymization of personal data and egress control | Proposed | 2026-10-28 |
 | [0011](0011-deployment-and-runtime-topology.md) | Deployment and runtime topology | Proposed | 2026-10-28 |
-| [0012](0012-roles-v1.md) | Roles v1: customer, staff, manager, and admin | Proposed | 2026-10-28 |
-| [0013](0013-shop-demo-with-read-only-catalog.md) | Shop demo with a read-only catalog | Proposed | 2026-10-28 |
+| [0012](0012-roles-v1.md) | Roles v1: customer, staff, manager, and admin | Accepted | 2026-11-05 |
+| [0013](0013-shop-demo-with-read-only-catalog.md) | Shop demo with a read-only catalog | Accepted | 2026-11-05 |
 | [0014](0014-citations-to-order-context.md) | Citations to the order context | Proposed | 2026-11-04 |
 
 Notes on the index:
 
-- [ADR-0012](0012-roles-v1.md) renames the role `supervisor` used in ADR-0009 to `manager`, once accepted. ADR-0009's authentication mechanism is unchanged.
-- [ADR-0013](0013-shop-demo-with-read-only-catalog.md) supersedes ADR-0002 once accepted. At that point, ADR-0002 and its row change to "Superseded by ADR-0013".
+- [ADR-0012](0012-roles-v1.md) was accepted on 2026-11-05 and renames the role `supervisor` used in ADR-0009 to `manager`. ADR-0009's authentication mechanism is unchanged.
+- [ADR-0013](0013-shop-demo-with-read-only-catalog.md) was accepted on 2026-11-05 and supersedes [ADR-0002](0002-shop-demo-scope.md).
 
 ## Lifecycle
 
