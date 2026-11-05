@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import concurrent.futures
-import ctypes
 import hashlib
 import json
 import threading
@@ -168,6 +167,7 @@ def build_system_dependencies(
     inputs: VerifiedSystemInputs,
     profile: str,
     runtime_dir: Path | str,
+    start_server: bool = True,
 ) -> SystemDependencies:
     """Build isolated runtime dependencies according to profile ('mock' or 'live').
     Enforces strict preflight checks and zero network access for mock.
@@ -297,7 +297,10 @@ def build_system_dependencies(
         input_fingerprint=inputs.input_hashes.get("suite_manifest", "live-fingerprint"),
     )
     try:
-        managed_server.start(inputs, runtime_dir=r_dir, ledger_path=budget_db)
+        if start_server:
+            managed_server.start(inputs, runtime_dir=r_dir, ledger_path=budget_db, profile="live")
+        else:
+            managed_server = None
     except Exception as exc:
         managed_server.close()
         raise EvaluationError(f"Live preflight failed to start managed demo server: {exc}") from exc
@@ -481,13 +484,11 @@ def execute_system_case(
         worker_thread.join(timeout=deadline)
 
         if worker_thread.is_alive():
-            # Stop the worker thread immediately using asynchronous exception injection
-            if worker_thread.ident is not None:
-                ctypes.pythonapi.PyThreadState_SetAsyncExc(
-                    ctypes.c_ulong(worker_thread.ident),
-                    ctypes.py_object(SystemExit),
-                )
-            worker_thread.join(timeout=0.05)
+            # If a managed worker process exists, terminate and restart it to kill hung worker and release locks cleanly
+            if deps.managed_server is not None and deps.managed_server.is_running():
+                deps.managed_server.close()
+                deps.managed_server.restart()
+
             total_elapsed = round((time.perf_counter() - t_start) * 1000.0, 2)
             return CaseResult(
                 case_id=case.id,

@@ -140,6 +140,21 @@ def decide_route(
         )
     )
 
+    # Gate 1: Explicit human request rule (Verified human request overrides ML errors or classification)
+    is_human_requested = getattr(context, "is_explicit_human_request", False) or getattr(context, "is_human_agent_requested", False)
+    if is_human_requested:
+        return RouteDecision(
+            action="escalate",
+            predicted_intent=predicted,
+            final_intent=final_intent,
+            requested_team="general_support",
+            target_queue="standard",
+            reason_codes=["explicit_human_request"],
+            model_version=model_ver,
+            policy_version=pol_ver,
+        )
+
+    # Gate 1b: Fail-closed on invalid ML output or ML service error
     if (
         prediction.error
         or is_invalid_confidence
@@ -159,20 +174,33 @@ def decide_route(
 
     team = INTENT_TO_QUEUE_MAP.get(final_intent, "general_support")
 
-    # Gate 2: Explicit human request rule
-    if context.is_explicit_human_request:
+    # Gate 2b: human_agent intent always escalates immediately to general_support
+    if final_intent == "human_agent":
         return RouteDecision(
             action="escalate",
             predicted_intent=predicted,
             final_intent=final_intent,
             requested_team="general_support",
             target_queue="standard",
-            reason_codes=["explicit_human_request"],
+            reason_codes=["human_agent_requested"],
             model_version=model_ver,
             policy_version=pol_ver,
         )
 
-    # Gate 3: Confidence and margin check before any sensitive/slot execution
+    # Gate 2c: 34 Escalated intents outside product scope always escalate
+    if final_intent in ESCALATED_34_INTENTS:
+        return RouteDecision(
+            action="escalate",
+            predicted_intent=predicted,
+            final_intent=final_intent,
+            requested_team=team,
+            target_queue="standard",
+            reason_codes=["recognized_outside_product_scope"],
+            model_version=model_ver,
+            policy_version=pol_ver,
+        )
+
+    # Gate 3: Confidence and margin check for the 11 supported product intents
     conf_thresh = policy.confidence_thresholds.get(final_intent, policy.default_confidence_threshold)
     margin_thresh = policy.margin_thresholds.get(final_intent, policy.default_margin_threshold)
 
@@ -205,32 +233,6 @@ def decide_route(
             requested_team=team,
             target_queue="standard",
             reason_codes=reasons,
-            model_version=model_ver,
-            policy_version=pol_ver,
-        )
-
-    # Gate 4: 34 Escalated intents
-    if final_intent in ESCALATED_34_INTENTS:
-        return RouteDecision(
-            action="escalate",
-            predicted_intent=predicted,
-            final_intent=final_intent,
-            requested_team=team,
-            target_queue="standard",
-            reason_codes=["recognized_outside_product_scope"],
-            model_version=model_ver,
-            policy_version=pol_ver,
-        )
-
-    # Gate 5: human_agent intent
-    if final_intent == "human_agent":
-        return RouteDecision(
-            action="escalate",
-            predicted_intent=predicted,
-            final_intent=final_intent,
-            requested_team="general_support",
-            target_queue="standard",
-            reason_codes=["human_agent_requested"],
             model_version=model_ver,
             policy_version=pol_ver,
         )

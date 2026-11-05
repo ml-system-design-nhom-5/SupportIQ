@@ -113,9 +113,12 @@ class PipelineRunner:
                     decision.action = "escalate" if exc.code == "llm_insufficient_evidence" else "manual_fallback"
                     decision.reason_codes.append(exc.code)
             else:
-                # Evidence missing, stale, or conflicting -> Escalate according to spec Gate 7
+                # Evidence missing, stale, conflicting, or encoder unavailable -> Escalate
+                ret_status = ret_res.get("status", "insufficient_evidence")
                 decision.action = "escalate"
                 decision.reason_codes.append("insufficient_evidence")
+                if ret_status and ret_status != "insufficient_evidence":
+                    decision.reason_codes.append(ret_status)
 
         # 6. Prepare escalation info if action is escalate
         escalate_info = None

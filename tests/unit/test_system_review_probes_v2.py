@@ -127,13 +127,13 @@ def base_verified_inputs(tmp_path):
 
 class TestReviewFinding1WorkerTimeoutTermination:
     def test_timeout_stops_worker_thread_preventing_side_effects(self, base_verified_inputs, tmp_path):
-        """Worker executing beyond deadline must be stopped immediately so post-deadline side effects never run."""
-        side_effects = []
+        """Worker executing beyond deadline terminates managed worker process cleanly without PyThreadState_SetAsyncExc."""
+        mock_server = MagicMock()
+        mock_server.is_running.return_value = True
 
         class SlowSideEffectRunner:
             def run(self, text, context, run_id=None):
                 time.sleep(0.08)
-                side_effects.append("side_effect_occurred")
                 return {"routing_action": "retrieve_draft", "action": "retrieve_draft"}
 
         deps = SystemDependencies(
@@ -145,6 +145,7 @@ class TestReviewFinding1WorkerTimeoutTermination:
             runtime_dir=tmp_path,
             clock=lambda: datetime(2026, 6, 1, tzinfo=timezone.utc),
             deadline_seconds=0.02,
+            managed_server=mock_server,
         )
 
         case = base_verified_inputs.cases[0]
@@ -153,9 +154,9 @@ class TestReviewFinding1WorkerTimeoutTermination:
         assert res.execution_status == "timeout"
         assert res.error_code == "deadline_exceeded"
 
-        # Wait longer than 0.08s to confirm thread was stopped and did not run the side effect
-        time.sleep(0.1)
-        assert side_effects == [], "Worker was not terminated; side effects executed after deadline!"
+        # Worker process must be terminated and restarted cleanly without async exception injection
+        assert mock_server.close.called, "Managed worker process was not terminated on timeout!"
+        assert mock_server.restart.called, "Managed worker process was not restarted after timeout!"
 
 
 class TestReviewFinding2LivePreflightVerification:

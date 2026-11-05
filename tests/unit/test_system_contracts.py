@@ -158,8 +158,10 @@ def test_invalid_intent_rejected(minimal_benchmark_env):
 def test_ood_null_intent_accepted(minimal_benchmark_env):
     env = minimal_benchmark_env
     c1 = dict(env["case_1"])
+    c1["expected"] = dict(env["case_1"]["expected"])
     c1["true_intent"] = None  # Valid OOD
     c1["tags"] = ["ood", "uncertainty"]
+    c1["expected"]["actions"] = ["escalate"]
     c1["expected"]["answerable"] = False
     c1["expected"]["gold_sources"] = []
     c1["expected"]["must_escalate"] = True

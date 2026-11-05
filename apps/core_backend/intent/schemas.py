@@ -15,6 +15,7 @@ class RoutingContext(BaseModel):
     verified_scope: str = "ticket:read"
     ticket_customer_id: str
     is_explicit_human_request: bool = False
+    is_human_agent_requested: bool = False
     is_personal_lookup: bool = False  # Differentiates general policy vs personal order inquiry
     extracted_slots: Dict[str, Any] = Field(default_factory=dict)
     clarify_count: int = 0
