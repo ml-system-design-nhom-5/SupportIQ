@@ -35,6 +35,19 @@ class PolicyMetadata(BaseModel):
     allowed_roles: List[str]
     policy_key: Optional[str] = None
     rule_assertions: List[Dict[str, Any]] = Field(default_factory=list)
+    supported_intents: List[str] = Field(default_factory=list)
+    answer_capabilities: List[str] = Field(default_factory=list)
+
+    @field_validator("allowed_roles")
+    @classmethod
+    def validate_allowed_roles(cls, v: List[str]) -> List[str]:
+        if not v:
+            raise ValueError("allowed_roles cannot be empty")
+        valid_roles = {"customer", "agent", "staff", "manager", "admin"}
+        for r in v:
+            if r not in valid_roles:
+                raise ValueError(f"Invalid role '{r}' in allowed_roles (expected one of {valid_roles})")
+        return v
 
     @field_validator("valid_from", "approved_at")
     @classmethod
@@ -203,3 +216,74 @@ def eligible_versions(
         results.append(v)
 
     return results
+
+
+def publish_approved_kb(staging_path: Union[str, Any], output_path: Union[str, Any]) -> Any:
+    """Validate and atomically publish approved knowledge base records.
+    Refuses to overwrite an existing published version file.
+    Verifies human approval metadata, dates, real SHA-256 content hashes,
+    applicability metadata, and absence of rule conflicts.
+    """
+    from pathlib import Path
+    s_path = Path(staging_path)
+    out_path = Path(output_path)
+
+    if not s_path.exists():
+        raise FileNotFoundError(f"Staging KB file not found at {s_path}")
+
+    if out_path.exists():
+        raise FileExistsError(f"Refusing to overwrite existing published KB file at {out_path}")
+
+    with open(s_path, "r", encoding="utf-8") as f:
+        records = json.load(f)
+
+    if not isinstance(records, list) or not records:
+        raise ValueError("Staging KB must contain a non-empty list of document records")
+
+    verified_records = []
+    for rec in records:
+        doc_id = rec.get("doc_id") or rec.get("document_id")
+        if not doc_id:
+            raise ValueError("Record missing document_id or doc_id")
+
+        status = rec.get("status")
+        if status != "approved":
+            raise ValueError(f"Record '{doc_id}' is not approved (status: '{status}')")
+
+        content = rec.get("content", rec.get("sanitized_excerpt", ""))
+        real_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+        declared_hash = rec.get("content_hash")
+        if not declared_hash or declared_hash.lower() != real_hash.lower():
+            raise ValueError(f"Record '{doc_id}' content hash mismatch: declared '{declared_hash}', expected '{real_hash}'")
+
+        # Validate metadata with PolicyMetadata
+        meta = PolicyMetadata(
+            status=status,
+            approved_by=rec.get("approved_by", ""),
+            approved_at=rec.get("approved_at", ""),
+            valid_from=rec.get("valid_from", ""),
+            valid_to=rec.get("valid_to"),
+            allowed_roles=rec.get("allowed_roles", []),
+            policy_key=rec.get("policy_key"),
+            rule_assertions=rec.get("rule_assertions", []),
+            supported_intents=rec.get("supported_intents", []),
+            answer_capabilities=rec.get("answer_capabilities", []),
+        )
+
+        if detect_rule_conflicts(meta.rule_assertions):
+            raise ValueError(f"Record '{doc_id}' has conflicting rule assertions")
+
+        rec_copy = dict(rec)
+        rec_copy["document_id"] = doc_id
+        rec_copy["doc_id"] = doc_id
+        rec_copy["content_hash"] = real_hash
+        rec_copy["supported_intents"] = meta.supported_intents
+        rec_copy["answer_capabilities"] = meta.answer_capabilities
+        verified_records.append(rec_copy)
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_out = out_path.with_suffix(".tmp")
+    tmp_out.write_text(json.dumps(verified_records, indent=2, ensure_ascii=False), encoding="utf-8")
+    tmp_out.replace(out_path)
+    return out_path
+

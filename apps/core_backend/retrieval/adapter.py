@@ -70,6 +70,8 @@ class RetrievalAdapter:
                             valid_to=d.get("valid_to"),
                             allowed_roles=allowed_roles,
                             policy_key=d.get("policy_key"),
+                            supported_intents=d.get("supported_intents", []),
+                            answer_capabilities=d.get("answer_capabilities", []),
                         )
                     except Exception as e:
                         self.quarantined_docs.append({
