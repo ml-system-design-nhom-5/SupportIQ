@@ -161,19 +161,21 @@ class ModelContainer:
         if getattr(self, "_is_dev_fallback", False):
             import re
             patterns = {
-                "track_order": [r"track\b", r"where is my (order|package|shipment)", r"delivery status"],
-                "delivery_time": [r"when will .* arrive", r"delivery date", r"how long .* shipping", r"delivery estimate"],
-                "delivery_issue": [r"damaged", r"package .* not arrived", r"lost package", r"broken item", r"delivery issue", r"wrong delivery"],
-                "cancel_order": [r"cancel (my |the )?order", r"stop shipment", r"cancellation"],
-                "change_order": [r"change (my |the )?order", r"modify order", r"change item", r"update address"],
-                "return_policy": [r"return policy", r"return window", r"how do i return", r"conditions for standard return"],
-                "return_product": [r"return (this|my) (product|item)", r"send back", r"initiate return", r"exchange (this|my) product"],
+                "track_order": [r"track\b", r"where is my (order|package|shipment)", r"delivery status", r"order journey"],
+                "delivery_time": [r"when will .* arrive", r"delivery date", r"how long .* (shipping|delivery)", r"delivery estimate", r"delivery timeline"],
+                "delivery_issue": [r"damaged", r"package .* not arrived", r"lost package", r"broken item", r"delivery issue", r"wrong delivery", r"defective"],
+                "cancel_order": [r"cancel (my |the )?order", r"stop shipment", r"cancellation", r"cancel order"],
+                "change_order": [r"change (my |the )?order", r"modify order", r"change item", r"update address", r"change delivery address"],
+                "return_policy": [r"return policy", r"return window", r"how do i return", r"conditions for standard return", r"conditions to (exchange|return)", r"exchange or return", r"return and exchange", r"return an item", r"return a product", r"how to return"],
+                "return_product": [r"return (this|my) (product|item)", r"send back", r"initiate return", r"exchange (this|my) product", r"request return"],
                 "refund_policy": [r"refund policy", r"money back guarantee", r"reconciliation rules", r"how are refunds issued"],
-                "refund_status": [r"refund status", r"where is my refund", r"has my refund been processed"],
-                "request_refund": [r"request (a )?refund", r"give me my money back", r"issue refund", r"want a refund"],
-                "shipping_costs": [r"shipping fee", r"shipping cost", r"delivery fee", r"cost of shipping", r"how much .* delivery"],
-                "payment_issue": [r"payment failed", r"charged twice", r"payment error", r"credit card declined"],
+                "refund_status": [r"refund status", r"where is my refund", r"has my refund been processed", r"refund timeline"],
+                "request_refund": [r"request (a )?refund", r"give me my money back", r"issue refund", r"want a refund", r"claim refund"],
+                "shipping_costs": [r"shipping fee", r"shipping cost", r"delivery fee", r"cost of shipping", r"how much .* delivery", r"free shipping", r"freeship"],
+                "payment_issue": [r"payment failed", r"charged twice", r"payment error", r"credit card declined", r"double deduction"],
                 "human_agent": [r"human agent", r"talk to a representative", r"speak with a person", r"connect me to a real person", r"operator"],
+                "sales_period": [r"sales?\b", r"discount", r"promotion", r"deal\b", r"flash sale", r"black friday"],
+                "product_information": [r"product info", r"specifications", r"charger", r"details about (this|the) product"],
             }
             matched_intent = "out_of_scope"
             lower_text = text.lower()
