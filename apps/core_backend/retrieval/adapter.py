@@ -133,21 +133,13 @@ class RetrievalAdapter:
         now = current_time or datetime.now(timezone.utc)
         valid_pv = eligible_versions(self.eligible_versions, role=role, as_of=now)
 
-        # Pre-filter by applicability: if a policy document specifies supported_intents, it must match intent
-        if intent:
-            applicable_pv = [
-                pv for pv in valid_pv
-                if not pv.metadata.supported_intents or intent in pv.metadata.supported_intents
-            ]
-        else:
-            applicable_pv = valid_pv
-
-        allowed_doc_version_keys = {(pv.doc_id, pv.version) for pv in applicable_pv}
+        # ADR-0005: Retrieval uses message content only across all valid policies
+        allowed_doc_version_keys = {(pv.doc_id, pv.version) for pv in valid_pv}
 
         if not allowed_doc_version_keys:
             return {"status": "no_match", "evidence": []}
 
-        # Semantic Search with pre-filtering of eligible chunks
+        # Semantic Search across all temporally valid documents
         res = search_policies(
             query=query,
             index=self.index,
@@ -160,9 +152,30 @@ class RetrievalAdapter:
         if res.status != "success":
             return {"status": res.status, "evidence": []}
 
-        pv_by_key = {(pv.doc_id, pv.version): pv for pv in applicable_pv}
-        evidence_list = []
+        pv_by_key = {(pv.doc_id, pv.version): pv for pv in valid_pv}
+
+        # ADR-0005: Additive intent-aware reranking
+        LAMBDA_INTENT = 0.15
+        reranked_docs = []
         for doc in res.documents:
+            pv = pv_by_key.get((doc["doc_id"], doc.get("version")))
+            base_score = float(doc.get("score") or 0.0)
+            boost = LAMBDA_INTENT if (intent and pv and (not pv.metadata.supported_intents or intent in pv.metadata.supported_intents)) else 0.0
+            doc["score"] = round(base_score + boost, 4)
+            reranked_docs.append(doc)
+
+        reranked_docs.sort(key=lambda d: d.get("score") or 0.0, reverse=True)
+
+        # Check for policy conflicts (e.g. multiple distinct versions of the same policy key)
+        retrieved_keys = [
+            pv_by_key[(d["doc_id"], d.get("version"))].metadata.policy_key
+            for d in reranked_docs
+            if (d["doc_id"], d.get("version")) in pv_by_key and pv_by_key[(d["doc_id"], d.get("version"))].metadata.policy_key
+        ]
+        has_conflict = len(retrieved_keys) > 1 and len(retrieved_keys) != len(set(retrieved_keys))
+
+        evidence_list = []
+        for doc in reranked_docs:
             pv = pv_by_key.get((doc["doc_id"], doc.get("version")))
             chunk_ids = [c.get("chunk_id") for c in doc.get("chunks", []) if c.get("chunk_id")]
             capabilities = pv.metadata.answer_capabilities if pv else []
@@ -179,4 +192,4 @@ class RetrievalAdapter:
                 "capabilities": capabilities,
             })
 
-        return {"status": "success", "evidence": evidence_list}
+        return {"status": "success", "evidence": evidence_list, "has_conflict": has_conflict}

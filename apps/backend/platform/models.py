@@ -66,7 +66,7 @@ class Ticket(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     handling_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    current_suggestion_id: Mapped[str | None] = mapped_column(String)
+    current_suggestion_id: Mapped[str | None] = mapped_column(ForeignKey("suggestions.suggestion_id", ondelete="SET NULL", use_alter=True, name="fk_tickets_current_suggestion_id"))
     proposal: Mapped[dict | None] = mapped_column(JSON)
     escalation: Mapped[dict | None] = mapped_column(JSON)
     reply: Mapped[dict | None] = mapped_column(JSON)

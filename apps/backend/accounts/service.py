@@ -7,7 +7,7 @@ import uuid
 from argon2.exceptions import VerificationError, InvalidHashError
 from sqlalchemy import delete, func, select, text
 
-from apps.backend.platform.database import Problem, audit, utcnow
+from apps.backend.platform.database import Problem, audit, utcnow, ensure_utc
 from apps.backend.platform.models import Account, SessionRecord, SignInFailure
 
 COOKIE = "supportiq_session"
@@ -51,14 +51,18 @@ def create_session(database, settings, hasher, dummy_hash, login_name, password)
 def authenticate(session, token, settings, roles=None):
     record = session.get(SessionRecord, hashlib.sha256((token or "").encode()).hexdigest())
     now = utcnow()
-    if not record or record.expires_at <= now or record.last_seen_at + timedelta(milliseconds=settings.session_idle_timeout_ms) <= now:
+    if not record:
+        raise Problem(401, "unauthenticated", "Your session has expired. Sign in to continue.")
+    expires_at = ensure_utc(record.expires_at)
+    last_seen_at = ensure_utc(record.last_seen_at)
+    if expires_at <= now or last_seen_at + timedelta(milliseconds=settings.session_idle_timeout_ms) <= now:
         raise Problem(401, "unauthenticated", "Your session has expired. Sign in to continue.")
     account = session.get(Account, record.account_id)
     if not account or not account.is_active or account.role != record.role:
         raise Problem(401, "unauthenticated", "Sign in again to continue.")
     if roles and account.role not in roles:
         raise Problem(403, "forbidden", "Your account cannot open this area.")
-    if (now - record.last_seen_at).total_seconds() > 60:
+    if (now - last_seen_at).total_seconds() > 60:
         record.last_seen_at = now
     return account
 
@@ -68,7 +72,8 @@ def account_view(account):
 
 
 def change_account(session, actor, target_id, field, value, trace_id):
-    session.execute(text("SELECT pg_advisory_xact_lock(7349621)"))
+    if session.bind and session.bind.dialect.name == "postgresql":
+        session.execute(text("SELECT pg_advisory_xact_lock(7349621)"))
     session.refresh(actor)
     if not actor.is_active or actor.role != "admin":
         raise Problem(401, "unauthenticated", "Your session has changed. Sign in again.")

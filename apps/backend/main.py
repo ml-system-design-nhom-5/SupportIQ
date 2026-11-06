@@ -19,13 +19,15 @@ from sqlalchemy.exc import SQLAlchemyError
 from .accounts import authenticate, create_session, session_view, change_account
 from .accounts.service import COOKIE, account_view
 from .api import OrderInput, ProfileView, ProfileInput, EscalationInput, ReplyInput, RoleInput, SessionInput, SessionView, ShopTicketPage, ShopTicketView, StatusInput, SuggestionInput, TicketInput
-from .commerce import order_view, require_order, page
+from .commerce import order_view, require_order, page, page_query
 from .platform.config import Settings
 from .platform.database import Database, Problem, idempotent, utcnow
 from .platform.models import Account, Order, Product, SessionRecord, Ticket
+from .platform.observability import metrics, logger, error_tracker, trace_stage
 from .tickets.jobs import SuggestionWorker
 from .tickets.reports import report
 from .tickets.service import act, create_ticket, require_ticket, shop_ticket, summary, workspace
+import time
 
 
 def create_app(settings=None, database=None, start_worker=True):
@@ -53,12 +55,24 @@ def create_app(settings=None, database=None, start_worker=True):
 
     @app.middleware("http")
     async def boundary(request, call_next):
+        t0 = time.perf_counter()
         request.state.trace_id = str(uuid.uuid4())
         if request.method in ("POST", "PUT", "PATCH", "DELETE") and request.headers.get("origin") not in settings.allowed_origins:
+            metrics.record_http_request(request.method, request.url.path, 403, (time.perf_counter() - t0) * 1000)
             return problem(request, 403, "forbidden", "This request did not come from an allowed application origin.")
         if int(request.headers.get("content-length", "0")) > 65536:
+            metrics.record_http_request(request.method, request.url.path, 413, (time.perf_counter() - t0) * 1000)
             return problem(request, 413, "payload-too-large", "The request is too large.")
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            duration_ms = (time.perf_counter() - t0) * 1000
+            metrics.record_http_request(request.method, request.url.path, 500, duration_ms)
+            logger.error("http.unhandled_exception", trace_id=request.state.trace_id, error_type=type(exc).__name__, error_message=str(exc))
+            error_tracker.record_error("http", type(exc).__name__, str(exc), trace_id=request.state.trace_id)
+            raise
+        duration_ms = (time.perf_counter() - t0) * 1000
+        metrics.record_http_request(request.method, request.url.path, response.status_code, duration_ms)
         response.headers["X-Trace-ID"] = request.state.trace_id
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -130,7 +144,7 @@ def create_app(settings=None, database=None, start_worker=True):
 
     @app.get("/v1/shop/products", operation_id="listShopProducts")
     def products(request: Request, limit: int = 20, cursor: str | None = None):
-        return execute(request, ["customer"], lambda session, actor: page([product.payload for product in session.scalars(select(Product).order_by(Product.product_id))], limit, cursor))
+        return execute(request, ["customer"], lambda session, actor: page_query(session, select(Product).order_by(Product.product_id), lambda p: p.payload, limit, cursor))
 
     @app.get("/v1/shop/products/{product_id}", operation_id="getShopProduct")
     def product(request: Request, product_id: str):
@@ -194,7 +208,7 @@ def create_app(settings=None, database=None, start_worker=True):
             query = select(Ticket).where(Ticket.customer_id == actor.customer_id).order_by(Ticket.created_at.desc(), Ticket.ticket_id.desc())
             if order_id:
                 query = query.where(Ticket.order_id == order_id)
-            return page([shop_ticket(session, ticket) for ticket in session.scalars(query)], limit, cursor)
+            return page_query(session, query, lambda ticket: shop_ticket(session, ticket), limit, cursor)
         return execute(request, ["customer"], load)
 
     @app.get("/v1/shop/tickets/{ticket_id}", response_model=ShopTicketView, operation_id="getShopTicket")
@@ -208,7 +222,8 @@ def create_app(settings=None, database=None, start_worker=True):
                 raise Problem(403, "forbidden", "Only managers can list handled tickets.")
             if status not in ("open", "awaiting_approval", "escalated", "closed"):
                 raise Problem(422, "invalid-request", "Choose a valid ticket status.")
-            return page([summary(session, ticket) for ticket in session.scalars(select(Ticket).where(Ticket.status == status).order_by(Ticket.created_at, Ticket.ticket_id))], limit, cursor)
+            query = select(Ticket).where(Ticket.status == status).order_by(Ticket.created_at, Ticket.ticket_id)
+            return page_query(session, query, lambda ticket: summary(session, ticket), limit, cursor)
         return execute(request, ["staff", "manager"], load)
 
     @app.get("/v1/console/tickets/{ticket_id}", operation_id="getConsoleTicket")
@@ -267,7 +282,7 @@ def create_app(settings=None, database=None, start_worker=True):
 
     @app.get("/v1/admin/accounts", operation_id="listAdminAccounts")
     def accounts(request: Request, limit: int = 20, cursor: str | None = None):
-        return execute(request, ["admin"], lambda session, actor: page([account_view(account) for account in session.scalars(select(Account).where(Account.role != "customer").order_by(Account.login_name))], limit, cursor))
+        return execute(request, ["admin"], lambda session, actor: page_query(session, select(Account).where(Account.role != "customer").order_by(Account.login_name), account_view, limit, cursor))
 
     @app.post("/v1/admin/accounts/{account_id}/role-changes", status_code=201, operation_id="changeAccountRole")
     def role_change(request: Request, account_id: str, body: RoleInput):
@@ -286,6 +301,19 @@ def create_app(settings=None, database=None, start_worker=True):
             except Problem:
                 return {"backend_build": settings.backend_build, "ai_service_status": "unavailable", "release_id": None, "versions": None}
         return execute(request, ["admin"], load)
+
+    @app.get("/metrics", include_in_schema=False)
+    def prometheus_metrics():
+        from fastapi.responses import PlainTextResponse
+        return PlainTextResponse(metrics.to_prometheus(), media_type="text/plain; version=0.0.4; charset=utf-8")
+
+    @app.get("/v1/admin/observability/metrics", operation_id="getObservabilityMetrics")
+    def admin_metrics(request: Request):
+        return execute(request, ["manager", "admin"], lambda session, actor: metrics.snapshot())
+
+    @app.get("/v1/admin/observability/errors", operation_id="getObservabilityErrors")
+    def admin_errors(request: Request, limit: int = 50):
+        return execute(request, ["manager", "admin"], lambda session, actor: error_tracker.list_recent(limit))
 
     frontend = Path(__file__).resolve().parents[1] / "frontend/dist"
     if (frontend / "assets").exists():

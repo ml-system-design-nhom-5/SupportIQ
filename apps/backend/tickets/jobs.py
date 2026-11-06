@@ -11,6 +11,7 @@ from sqlalchemy import or_, select
 
 from apps.backend.platform.database import audit, utcnow
 from apps.backend.platform.models import Suggestion, SuggestionJob, Ticket
+from apps.backend.platform.observability import metrics, logger
 
 AI_REASONS = {"low_confidence", "signal_disagreement", "out_of_scope_intent", "human_agent_requested", "requires_authority", "no_valid_document", "only_expired_documents", "conflicting_sources", "missing_information", "source_review_overdue", "grounding_failed", "llm_unavailable", "llm_invalid_output", "budget_exceeded"}
 DRAFT_STATES = {"draft_ready", "abstained", "escalation_recommended", "llm_unavailable"}
@@ -115,9 +116,30 @@ class SuggestionWorker:
                 return part, result, round((time.perf_counter() - started) * 1000)
             except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError):
                 return part, None, round((time.perf_counter() - started) * 1000)
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            for future in as_completed([pool.submit(fetch, part) for part in ("analysis", "draft")]):
-                self.store(identifier, token, *future.result())
+        # 1. Fetch analysis first
+        part, analysis_res, latency = fetch("analysis")
+        self.store(identifier, token, part, analysis_res, latency)
+
+        # 2. If analysis abstained or escalated, avoid redundant model inference and LLM call
+        if analysis_res is not None and analysis_res.get("routing", {}).get("recommendation") != "draft":
+            rec = analysis_res["routing"]["recommendation"]
+            codes = analysis_res["routing"]["reason_codes"]
+            synthesized_draft = {
+                "analysis": analysis_res,
+                "status": "escalation_recommended" if rec == "escalate" else "abstained",
+                "reason_codes": codes,
+                "versions": analysis_res.get("versions", {}),
+                "step_latency_ms": analysis_res.get("step_latency_ms", {}),
+                "mask_count_by_type": {}
+            }
+            if "low_confidence" in codes:
+                synthesized_draft["staff_note"] = "The model score or margin is below the routing threshold. Confirm or correct the intent before drafting."
+            self.store(identifier, token, "draft", synthesized_draft, 0)
+            return
+
+        # 3. Otherwise execute draft
+        part, draft_res, latency = fetch("draft")
+        self.store(identifier, token, part, draft_res, latency)
 
     def store(self, identifier, token, part, result, latency_ms):
         with self.database.transaction() as session:
@@ -151,5 +173,16 @@ class SuggestionWorker:
             suggestion.payload = data
             if data["analysis_status"] != "pending" and data["draft_status"] != "pending":
                 suggestion.completed_at, job.finished = utcnow(), True
+            metrics.record_stage(part, latency_ms)
+            if result is not None:
+                if part == "analysis":
+                    intent_obj = result.get("intent") or {}
+                    metrics.record_intent(intent_obj.get("label", "unknown"), float(intent_obj.get("probability", 0.0)), is_ood="out_of_scope_intent" in (result.get("routing") or {}).get("reason_codes", []))
+                elif part == "draft":
+                    metrics.record_draft(result.get("status", "unknown"))
+                    llm_usage = result.get("llm_usage") or {}
+                    metrics.record_llm(result.get("status", "unknown"), latency_ms, prompt_tokens=llm_usage.get("input_tokens", 0) or 0, candidate_tokens=llm_usage.get("output_tokens", 0) or 0)
+                    if "grounding_failed" in (result.get("reason_codes") or []):
+                        metrics.record_citation_failure()
             audit(session, "suggestion.part_completed", None, data["trace_id"], ticket.ticket_id,
                   suggestion_id=identifier, part=part, status=data["analysis_status" if part == "analysis" else "draft_status"], latency_ms=latency_ms)

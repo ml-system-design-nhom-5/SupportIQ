@@ -8,6 +8,7 @@ from sqlalchemy import select, text
 from apps.backend.commerce import order_view, require_order
 from apps.backend.platform.database import Problem, audit, utcnow
 from apps.backend.platform.models import Account, CustomerMessage, Order, Suggestion, SuggestionJob, Ticket
+from apps.backend.platform.observability import metrics, logger
 from .privacy import PLACEHOLDER, pseudonymize, restore
 
 STAFF_REASONS = {"wrong_intent", "wrong_source", "unsupported_claim", "kb_gap", "missing_case_info", "tone_or_clarity", "case_exception", "other"}
@@ -118,6 +119,7 @@ def create_suggestion(session, ticket, settings, trace_id, intent_override=None,
     ticket.current_suggestion_id = identifier
     if intent_override == "request_refund":
         ticket.is_authority_required = True
+    metrics.record_pii({"entities": len(mapping)}, blocked=privacy_failed)
     audit(session, "message.pseudonymized", None, trace_id, ticket.ticket_id, outcome="failed" if privacy_failed else "ready", pseudonym_count=len(mapping))
     return payload
 
@@ -131,7 +133,11 @@ def create_ticket(session, actor, order_id, message, settings, trace_id):
             order_id = matches[0]
     if order_id:
         require_order(session, order_id, actor.customer_id)
-    number = session.scalar(text("SELECT nextval('ticket_number_seq')"))
+    if session.bind and session.bind.dialect.name == "postgresql":
+        number = session.scalar(text("SELECT nextval('ticket_number_seq')"))
+    else:
+        max_id = session.scalar(text("SELECT MAX(CAST(SUBSTR(ticket_id, 5) AS INTEGER)) FROM tickets"))
+        number = (max_id or 1000) + 1
     ticket = Ticket(ticket_id=f"TCK-{number}", customer_id=actor.customer_id, order_id=order_id, created_at=utcnow(), status="open", handling_mode="assisted", is_authority_required=False)
     session.add(ticket)
     session.flush()
@@ -221,6 +227,8 @@ def act(session, actor, ticket_id, action, body, settings, trace_id):
         reason_check(body["staff_reason_codes"], body.get("note"), required=True)
         result = {"escalation_id": str(uuid.uuid4()), **body, "by": actor.display_name, "created_at": utcnow().isoformat()}
         ticket.status, ticket.escalation = "escalated", result
+        for code in body["staff_reason_codes"]:
+            metrics.record_escalation(code)
         audit(session, "ticket.escalated", actor.account_id, trace_id, ticket.ticket_id, staff_reason_codes=body["staff_reason_codes"])
         return result
     if action == "replies" and actor.role == "staff" and ticket.is_authority_required:
@@ -247,6 +255,7 @@ def act(session, actor, ticket_id, action, body, settings, trace_id):
         decision = "reject"
     audit(session, "reply.sent", actor.account_id, trace_id, ticket.ticket_id, reply_id=result["reply_id"], basis=body["basis"])
     if decision:
+        metrics.record_decision(decision)
         audit(session, "decision.recorded", actor.account_id, trace_id, ticket.ticket_id, decision=decision,
               suggestion_id=ticket.current_suggestion_id, change_ratio=1 - SequenceMatcher(None, normalize(canonical), normalize(body["body"])).ratio(),
               staff_reason_codes=origin.get("staff_reason_codes") or [])

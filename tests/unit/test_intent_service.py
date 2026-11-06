@@ -119,3 +119,18 @@ def test_duplicate_or_invalid_label_mapping_fails_bijection():
     bad_container.id2label = {i: "return_policy" for i in range(46)}
     assert bad_container.validate_label_bijection() is False
     assert bad_container.is_ready() is False
+
+
+def test_calibrated_temperature_scaling():
+    import torch
+    container.device = torch.device("cpu")
+    container.tokenizer.return_value = {"input_ids": torch.tensor([[1]])}
+    logits = torch.linspace(-3.17, 4.23, len(container.id2label))
+    container.model.return_value.logits = logits.unsqueeze(0)
+    
+    calibrated_result = container.predict("What is your return policy?", calibrated=True)
+    assert calibrated_result["score_kind"] == "calibrated_probability"
+    
+    expected_probs = torch.softmax(logits / 1.25, dim=-1).tolist()
+    assert abs(calibrated_result["confidence"] - expected_probs[-1]) < 1e-5
+

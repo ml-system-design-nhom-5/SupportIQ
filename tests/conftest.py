@@ -108,8 +108,12 @@ def offline_resources(monkeypatch, request):
     if not request.node.get_closest_marker("real_model"):
         def no_weights(*args, **kwargs):
             raise RuntimeError("loading weights/tokenizer requires explicit real_model profile")
-        monkeypatch.setattr("transformers.AutoTokenizer.from_pretrained", no_weights)
-        monkeypatch.setattr("transformers.models.auto.auto_factory._BaseAutoModelClass.from_pretrained", no_weights)
+        try:
+            import transformers
+            monkeypatch.setattr("transformers.AutoTokenizer.from_pretrained", no_weights)
+            monkeypatch.setattr("transformers.models.auto.auto_factory._BaseAutoModelClass.from_pretrained", no_weights)
+        except ImportError:
+            pass
 
 
 @pytest.fixture
