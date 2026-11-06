@@ -1,0 +1,184 @@
+# Repository-wide checks, run by pre-commit on every commit and in CI (WF-20, RULE-03).
+# pre-commit is the single runner: this file pins every hook by commit SHA, and the
+# default_language_version block pins the runtimes that pre-commit installs for them.
+# Install, commands, and the CI convention: docs/guides/repository-checks.md.
+minimum_pre_commit_version: 4.7.0
+default_install_hook_types:
+  - pre-commit
+# CI runs `pre-commit run --all-files --hook-stage manual`, so every hook without its own
+# `stages` runs both on commit and in CI.
+default_stages:
+  - pre-commit
+  - manual
+default_language_version:
+  golang: 1.27.3
+  node: 24.22.2
+# Generated code is never linted (CON-26).
+exclude: (^|/)generated/
+
+repos:
+  # ===== Repository checks (owner: team) =====
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # frozen: v6.0.0
+    hooks:
+      - id: check-added-large-files
+        args: [--enforce-all, --maxkb=500]
+      - id: check-case-conflict
+      - id: check-executables-have-shebangs
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-yaml
+        # pnpm writes pnpm-lock.yaml as two YAML documents.
+        args: [--allow-multiple-documents]
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: trailing-whitespace
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e  # frozen: v8.30.1
+    hooks:
+      # On commit: the staged changes.
+      - id: gitleaks
+        stages: [pre-commit]
+      # In CI: every commit reachable from HEAD, not other branches of the clone.
+      - id: gitleaks
+        alias: gitleaks-history
+        name: Detect hardcoded secrets in the git history
+        entry: gitleaks git --redact --verbose --log-opts=HEAD
+        stages: [manual]
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: 341e2a331ba578029e66c2e01183e7a6b5ca9ab4  # frozen: v0.24.0
+    hooks:
+      # Markdown style, and every relative link and #fragment (.markdownlint-cli2.yaml).
+      - id: markdownlint-cli2
+        additional_dependencies:
+          - markdownlint-rule-relative-links@5.1.4
+  - repo: https://github.com/rhysd/actionlint
+    rev: 914e7df21a07ef503a81201c76d2b11c789d3fca  # frozen: v1.7.12
+    hooks:
+      - id: actionlint
+        # shellcheck and pyflakes exist on CI runners but not on every machine; turning
+        # them off keeps the result the same everywhere (WF-20).
+        args: [-shellcheck=, -pyflakes=]
+
+  # The workflow convention of docs/guides/repository-checks.md, for every item that a pattern
+  # can check (RULE-03). A hook fails when its pattern matches a line or, with --negate, when
+  # its required pattern is missing from the file. pygrep comes with pre-commit, so no tool is
+  # added. The guide lists the items that stay with the reviewers.
+  - repo: local
+    hooks:
+      - id: workflow-triggers
+        name: "Workflow convention 2: exactly the push and pull_request triggers"
+        language: pygrep
+        entry: '^on:\n  push:\n    branches:\n      - chore/fe-be-supportiq-ecom\n      - "build/\*\*"\n  pull_request:\n    branches:\n      - chore/fe-be-supportiq-ecom\n\n+(?=[^\s#])'
+        args: [--multiline, --negate]
+        files: ^\.github/workflows/
+      - id: workflow-no-path-filters
+        name: "Workflow convention 3: no paths or paths-ignore"
+        language: pygrep
+        entry: '^\s*paths(-ignore)?:'
+        files: ^\.github/workflows/
+      - id: workflow-no-if
+        name: "Workflow convention 3: no job-level or step-level if"
+        language: pygrep
+        entry: '^\s+(-\s+)?if:'
+        files: ^\.github/workflows/
+      - id: workflow-permissions-read
+        name: "Workflow convention 4: permissions contents read at the top"
+        language: pygrep
+        entry: '^permissions:\n  contents: read\n+(?=[^\s#])'
+        args: [--multiline, --negate]
+        files: ^\.github/workflows/
+      - id: workflow-no-job-permissions
+        name: "Workflow convention 4: no job widens the permissions"
+        language: pygrep
+        entry: '^\s+permissions:'
+        files: ^\.github/workflows/
+      - id: workflow-no-pull-request-target
+        name: "Workflow convention 4: no pull_request_target"
+        language: pygrep
+        entry: 'pull_request_target'
+        files: ^\.github/workflows/
+      - id: workflow-pinned-actions
+        name: "Workflow convention 5: every uses names a commit SHA and a version comment"
+        language: pygrep
+        entry: '^\s*(-\s+)?uses:(?!\s+[^@\s]+@[0-9a-f]{40}\s+#\s*v\d)'
+        files: ^\.github/workflows/
+      - id: workflow-checkout-credentials
+        name: "Workflow convention 5: actions/checkout sets persist-credentials false"
+        language: pygrep
+        entry: '^[ \t]*(-[ \t]+)?uses:[ \t]+actions/checkout@[^\n]*\n((?![ \t]*-[ \t])(?![ \t]*persist-credentials:[ \t]*false[ \t]*\n)[^\n]*\n)*([ \t]*-[ \t]|\Z)'
+        args: [--multiline]
+        files: ^\.github/workflows/
+      - id: workflow-pinned-runner
+        name: "Workflow convention 6: jobs run on ubuntu-24.04"
+        language: pygrep
+        entry: '^\s*runs-on:(?!\s*ubuntu-24\.04\s*$)'
+        files: ^\.github/workflows/
+      - id: workflow-concurrency
+        name: "Workflow convention 7: the concurrency group"
+        language: pygrep
+        entry: '^concurrency:\n  group: \$\{\{ github\.workflow \}\}-\$\{\{ github\.ref \}\}\n  cancel-in-progress: true\n'
+        args: [--multiline, --negate]
+        files: ^\.github/workflows/
+      - id: workflow-has-timeout
+        name: "Workflow convention 8: timeout-minutes is present"
+        language: pygrep
+        entry: '^\s+timeout-minutes: [0-9]+\s*$'
+        args: [--negate]
+        files: ^\.github/workflows/
+      - id: workflow-timeout-on-every-job
+        name: "Workflow convention 8: every job sets timeout-minutes"
+        language: pygrep
+        entry: '^jobs:\n([^\n]*\n)*?  [A-Za-z0-9_-]+:\n((?!  [^ \n])(?!    timeout-minutes:)[^\n]*\n)*((?=  [^ \n])|\Z)'
+        args: [--multiline]
+        files: ^\.github/workflows/
+      - id: workflow-frozen-installs
+        name: "Workflow convention 9: frozen installs and the pinned pre-commit"
+        language: pygrep
+        entry: '\bpnpm (install|i)\b(?!.*--frozen-lockfile)|\buv sync\b(?!.*--locked)|\bpip3? install\b|\bnpm (install|i)\b|\binstall\b.*\bpre-commit(?!==4\.7\.0\b)'
+        files: ^\.github/workflows/
+      - id: workflow-no-continue-on-error
+        name: "Workflow convention 10: no continue-on-error"
+        language: pygrep
+        entry: 'continue-on-error'
+        files: ^\.github/workflows/
+      - id: workflow-no-ignored-exit-code
+        name: "Workflow convention 10: no || true or || :"
+        language: pygrep
+        entry: '\|\|\s*(true\b|:(\s|$))'
+        files: ^\.github/workflows/
+      - id: workflow-no-retries
+        name: "Workflow convention 10: no retry actions and no reruns"
+        language: pygrep
+        entry: '^\s*(-\s+)?uses:\s*\S*retry|\bgh\s+run\s+rerun\b'
+        args: [--ignore-case]
+        files: ^\.github/workflows/
+
+  # ===== Contract checks (owner: contracts gatekeeper) =====
+  # The tool versions are pinned in contracts/pnpm-lock.yaml, so the hook calls the
+  # contracts package. It needs `pnpm install --frozen-lockfile` in contracts/ first.
+  # CI runs it in .github/workflows/contracts.yml.
+  - repo: local
+    hooks:
+      - id: contracts-check
+        name: Lint the contracts and validate their examples
+        language: system
+        # Runs inside contracts/, so Corepack and pnpm read its packageManager field.
+        entry: bash -c 'cd contracts && pnpm run check'
+        files: ^contracts/
+        pass_filenames: false
+        stages: [pre-commit]
+
+  # ===== backend hooks (owner: backend engineer) =====
+  # Add the backend hooks between this line and the end marker of this section.
+  # ===== end of backend hooks =====
+
+  # The two component sections stay apart, so changes to both merge without conflicts.
+  # Each component keeps its hook versions in its own lockfile, as contracts-check does,
+  # and its workflow runs its hooks with `pre-commit run <hook-id> --all-files`
+  # (docs/guides/repository-checks.md).
+
+  # ===== frontend hooks (owner: frontend engineer) =====
+  # Add the frontend hooks between this line and the end marker of this section.
+  # ===== end of frontend hooks =====
