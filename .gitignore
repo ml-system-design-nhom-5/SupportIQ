@@ -48,6 +48,8 @@ coverage/
 *.zip
 /logs/
 /tmp/
+/data/queries.active
+/data/wal/
 /infra/compose/volumes/
 
 # Operating system files
