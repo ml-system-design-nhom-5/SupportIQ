@@ -1,0 +1,30 @@
+{
+  "version": "autoeval-v1",
+  "seed": 42,
+  "files": {
+    "benchmark": {
+      "path": "data/benchmarks/system/v1/cases.jsonl",
+      "sha256": "57a13fcf00bc43dfd2e1f961f8c9fcfcaf768c098ecd59fe04b465971a28386c"
+    },
+    "knowledge_base": {
+      "path": "data/knowledge/approved_kb.v2.json",
+      "sha256": "aaa924c4b48dcd53a14269045b278b66f6e5e8ae9d1b614cd59b757102b78594"
+    },
+    "orders": {
+      "path": "data/knowledge/mock_orders.json",
+      "sha256": "4a83a81d1f844aef7a9ba964b13ed4a819bed8eacf9d870a6a79456f1308ddd9"
+    },
+    "ml_noise": {
+      "path": "data/benchmarks/autoeval/v1/ml_noise.jsonl",
+      "sha256": "22acc786772210ea1b1411cb28f450757f6f6e6d0c159ba2cf760bb77bfaea2d"
+    },
+    "ml_oos": {
+      "path": "data/benchmarks/autoeval/v1/ml_oos.jsonl",
+      "sha256": "956abf2c28fa2ccc7fe3c6800f264725c6f4fdd0e99c54f77c498d9c6bbb236c"
+    },
+    "llm_cases": {
+      "path": "data/benchmarks/autoeval/v1/llm_cases.jsonl",
+      "sha256": "dba1302889db49d0338745311afc0f01e03a4b7bfa86f6096140d24114f114bc"
+    }
+  }
+}
