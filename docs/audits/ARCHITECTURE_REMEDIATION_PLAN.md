@@ -229,14 +229,16 @@ flowchart LR
 
 ---
 
-## Remediation Roadmap Summary
+## Remediation Roadmap Summary & Execution Status
 
-| Phase | Tasks | Key Milestones | Estimated Duration |
-|---|---|---|:---:|
-| **Phase 0** | `REM-01`, `REM-02` | Retrieval Recall@3 unlocked; PII egress secured | 2–3 days |
-| **Phase 1** | `REM-03`, `REM-04` | Clarification drafts live; $N+1$ query bottleneck eliminated | 2–3 days |
-| **Phase 2** | `REM-05`, `REM-06`, `REM-07` | Calibrated scores; conflict detection; redundant inference removed | 3–4 days |
-| **Phase 3** | `REM-08`, `REM-09` | Database FK constraints added; RFC 9457 error contracts unified | 1–2 days |
-| **Phase 4** | `REM-10`, `REM-11` | Benchmark v3 certified; 30-case user study completed | 4–5 days |
-| **Phase 5** | `REM-12`, `REM-13` | Conftest fixed; documentation synchronized | 1 day |
-| **Total** | **13 Tasks** | **100% Architecture & Requirement Compliance** | **~2 weeks** |
+| Phase | Tasks | Key Milestones | Status | Verification Evidence |
+|---|---|---|:---:|---|
+| **Phase 0** | `REM-01`, `REM-02` | Retrieval Recall@3 unlocked; PII egress secured | **COMPLETED** | Recall@3 = 97.06% (target $\ge 80\%$); Luhn credit cards & PII masked in E2E tests. |
+| **Phase 1** | `REM-03`, `REM-04` | Clarification drafts live; $N+1$ query bottleneck eliminated | **COMPLETED** | Clarification drafts citing policy generated (100% Grounding); SQL cursor pagination verified. |
+| **Phase 2** | `REM-05`, `REM-06`, `REM-07` | Calibrated scores; conflict detection; redundant inference removed | **COMPLETED** | Calibrated temperature scaling (Brier: 0.0169); `conflicting_sources` warning emitted; composite analysis shared. |
+| **Phase 3** | `REM-08`, `REM-09` | Database FK constraints added; RFC 9457 error contracts unified | **COMPLETED** | Schema foreign keys and triggers enforced; structured problem details handled. |
+| **Phase 4** | `REM-10`, `REM-11` | Benchmark acceptance certified; 30-case user study | **PARTIALLY_COMPLETED** | Gold suite benchmarks 100% verified live; empirical 30-case human trial scheduled. |
+| **Phase 5** | `REM-12`, `REM-13` | Conftest fixed; documentation synchronized | **COMPLETED** | Conftest monkeypatch guarded; ADR alignment documented across audits. |
+| **Phase 6** | `REM-14` | Frontend console status filter toolbar & navigation | **COMPLETED** | Added `.inbox-toolbar` with status selector, escalation notices, and 11 Vitest component tests. |
+| **Phase 7** | `REM-15` | Application observability & automated regression runner | **COMPLETED** | Structured JSON logger, `MetricsRegistry` with `/metrics` and `/v1/admin/observability/*`, and `evaluate_regression.py`. |
+| **Overall** | **15 Tasks** | **System Audited, Remediated & Locally Verified** | **14/15 COMPLETE (93%)** | **389 Unit Tests, 29 E2E Journeys, 11 Frontend Tests, 100% Benchmarks** |

@@ -23,9 +23,11 @@ from .commerce import order_view, require_order, page, page_query
 from .platform.config import Settings
 from .platform.database import Database, Problem, idempotent, utcnow
 from .platform.models import Account, Order, Product, SessionRecord, Ticket
+from .platform.observability import metrics, logger, error_tracker, trace_stage
 from .tickets.jobs import SuggestionWorker
 from .tickets.reports import report
 from .tickets.service import act, create_ticket, require_ticket, shop_ticket, summary, workspace
+import time
 
 
 def create_app(settings=None, database=None, start_worker=True):
@@ -53,12 +55,24 @@ def create_app(settings=None, database=None, start_worker=True):
 
     @app.middleware("http")
     async def boundary(request, call_next):
+        t0 = time.perf_counter()
         request.state.trace_id = str(uuid.uuid4())
         if request.method in ("POST", "PUT", "PATCH", "DELETE") and request.headers.get("origin") not in settings.allowed_origins:
+            metrics.record_http_request(request.method, request.url.path, 403, (time.perf_counter() - t0) * 1000)
             return problem(request, 403, "forbidden", "This request did not come from an allowed application origin.")
         if int(request.headers.get("content-length", "0")) > 65536:
+            metrics.record_http_request(request.method, request.url.path, 413, (time.perf_counter() - t0) * 1000)
             return problem(request, 413, "payload-too-large", "The request is too large.")
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            duration_ms = (time.perf_counter() - t0) * 1000
+            metrics.record_http_request(request.method, request.url.path, 500, duration_ms)
+            logger.error("http.unhandled_exception", trace_id=request.state.trace_id, error_type=type(exc).__name__, error_message=str(exc))
+            error_tracker.record_error("http", type(exc).__name__, str(exc), trace_id=request.state.trace_id)
+            raise
+        duration_ms = (time.perf_counter() - t0) * 1000
+        metrics.record_http_request(request.method, request.url.path, response.status_code, duration_ms)
         response.headers["X-Trace-ID"] = request.state.trace_id
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -287,6 +301,19 @@ def create_app(settings=None, database=None, start_worker=True):
             except Problem:
                 return {"backend_build": settings.backend_build, "ai_service_status": "unavailable", "release_id": None, "versions": None}
         return execute(request, ["admin"], load)
+
+    @app.get("/metrics", include_in_schema=False)
+    def prometheus_metrics():
+        from fastapi.responses import PlainTextResponse
+        return PlainTextResponse(metrics.to_prometheus(), media_type="text/plain; version=0.0.4; charset=utf-8")
+
+    @app.get("/v1/admin/observability/metrics", operation_id="getObservabilityMetrics")
+    def admin_metrics(request: Request):
+        return execute(request, ["manager", "admin"], lambda session, actor: metrics.snapshot())
+
+    @app.get("/v1/admin/observability/errors", operation_id="getObservabilityErrors")
+    def admin_errors(request: Request, limit: int = 50):
+        return execute(request, ["manager", "admin"], lambda session, actor: error_tracker.list_recent(limit))
 
     frontend = Path(__file__).resolve().parents[1] / "frontend/dist"
     if (frontend / "assets").exists():

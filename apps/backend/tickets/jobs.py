@@ -11,6 +11,7 @@ from sqlalchemy import or_, select
 
 from apps.backend.platform.database import audit, utcnow
 from apps.backend.platform.models import Suggestion, SuggestionJob, Ticket
+from apps.backend.platform.observability import metrics, logger
 
 AI_REASONS = {"low_confidence", "signal_disagreement", "out_of_scope_intent", "human_agent_requested", "requires_authority", "no_valid_document", "only_expired_documents", "conflicting_sources", "missing_information", "source_review_overdue", "grounding_failed", "llm_unavailable", "llm_invalid_output", "budget_exceeded"}
 DRAFT_STATES = {"draft_ready", "abstained", "escalation_recommended", "llm_unavailable"}
@@ -172,5 +173,16 @@ class SuggestionWorker:
             suggestion.payload = data
             if data["analysis_status"] != "pending" and data["draft_status"] != "pending":
                 suggestion.completed_at, job.finished = utcnow(), True
+            metrics.record_stage(part, latency_ms)
+            if result is not None:
+                if part == "analysis":
+                    intent_obj = result.get("intent") or {}
+                    metrics.record_intent(intent_obj.get("label", "unknown"), float(intent_obj.get("probability", 0.0)), is_ood="out_of_scope_intent" in (result.get("routing") or {}).get("reason_codes", []))
+                elif part == "draft":
+                    metrics.record_draft(result.get("status", "unknown"))
+                    llm_usage = result.get("llm_usage") or {}
+                    metrics.record_llm(result.get("status", "unknown"), latency_ms, prompt_tokens=llm_usage.get("input_tokens", 0) or 0, candidate_tokens=llm_usage.get("output_tokens", 0) or 0)
+                    if "grounding_failed" in (result.get("reason_codes") or []):
+                        metrics.record_citation_failure()
             audit(session, "suggestion.part_completed", None, data["trace_id"], ticket.ticket_id,
                   suggestion_id=identifier, part=part, status=data["analysis_status" if part == "analysis" else "draft_status"], latency_ms=latency_ms)
