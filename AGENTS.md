@@ -77,7 +77,20 @@ These come from the requirements and override every other instruction, including
 
 ## Commands
 
-No component is scaffolded yet, so there are no build, test, lint, or type-check commands. When a component is scaffolded, its README lists them, and this section lists the commands agents run most often.
+Each component README lists its own commands. These are the commands agents run most often. Setup: [contracts/README.md](contracts/README.md#set-up) and [docs/guides/repository-checks.md](docs/guides/repository-checks.md#set-up-pre-commit).
+
+| Command | Run in | What it does |
+|---|---|---|
+| `pnpm run check` | `contracts/` | Lints the contracts, validates every example file, and type-checks the custom lint rules |
+| `pnpm run check:mock` | `contracts/` | Checks the sign-in flow and the example files through the Prism mock |
+| `pnpm run mock` | `contracts/` | Serves the `backend` contract as a mock at `http://127.0.0.1:4010` |
+| `pnpm run bundle` | `contracts/` | Writes each contract as one file to `contracts/dist/` |
+| `pre-commit run --hook-stage manual --files <path> …` | Repository root | Runs the CI repository checks on the given files |
+| `pre-commit run --files <path> …` | Repository root | Runs the commit hooks, `contracts-check` included, on the given files |
+
+- Pass only the files of your own task to `--files`. Some hooks fix files in place (trailing whitespace, final newlines, line endings), so `--all-files` can rewrite files that you did not create.
+- Always pass `--files` to `pre-commit run`. Without it or `--all-files`, pre-commit stashes unstaged changes while it runs ([WF-35](docs/rules/workflow.md#ai-agents)).
+- Never run `pre-commit install`. The person installs the git hook.
 
 ## Keeping this file current
 

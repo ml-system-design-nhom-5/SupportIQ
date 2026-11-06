@@ -68,7 +68,12 @@ sequenceDiagram
 
 ## Project status
 
-Design phase. Decisions are recorded in [docs/decisions/](docs/decisions/README.md). Revision 2 of the contracts v1 design ([docs/design/contracts-v1.md](docs/design/contracts-v1.md)) aligns the design with the team's specification and is in review, together with ADR-0010, ADR-0011, and ADR-0014. ADR-0012 and ADR-0013 were accepted on 2026-11-05. Writing the contracts follows their approval. There is no runnable code yet; setup instructions are added here when the first component is scaffolded.
+Design phase, with the first contract written. Decisions are recorded in [docs/decisions/](docs/decisions/README.md).
+
+- Revision 2 of the contracts v1 design ([docs/design/contracts-v1.md](docs/design/contracts-v1.md)) aligns the design with the team's specification and is in review, together with ADR-0010, ADR-0011, and ADR-0014. ADR-0012 and ADR-0013 were accepted on 2026-11-05.
+- On 2026-11-05 the project lead approved the `frontend` ↔ `backend` part of revision 2 for contract PR 2. Contract PR 2 adds [`contracts/backend.openapi.yaml`](contracts/backend.openapi.yaml) 1.0.0 with an example for every outcome, a Prism mock, and the contract checks ([contracts/README.md](contracts/README.md)).
+- Repository checks run with pre-commit locally and with GitHub Actions in CI ([docs/guides/repository-checks.md](docs/guides/repository-checks.md)).
+- No component is scaffolded yet, so there is no runnable code; setup instructions are added here when the first component is scaffolded.
 
 ## Target repository layout
 
@@ -77,13 +82,14 @@ supportiq-ecom/
 ├── README.md        # This file
 ├── AGENTS.md        # Instructions for AI coding agents
 ├── docs/            # Requirements, decisions, rules, glossary
-├── contracts/       # API and data contracts (created during contract design)
+├── .github/         # CI workflows (docs/guides/repository-checks.md)
+├── contracts/       # API and data contracts, their examples, and their tooling
 ├── frontend/        # /shop, /console, and /admin (created at scaffold)
 ├── backend/         # Created at scaffold
 ├── ai-service/      # Created at scaffold
 ├── ml/              # Training and offline evaluation (created at scaffold)
 ├── eval/            # Shared test sets and evaluation runs (created at scaffold)
-├── deploy/          # Docker Compose, Nginx, egress proxy, observability (created at scaffold)
+├── deploy/          # Docker Compose, Nginx, egress proxy, observability (created once ADR-0011 or the hosting ADR is accepted)
 └── data/            # Local datasets; large files are not committed
 ```
 
@@ -97,6 +103,8 @@ Start with [docs/README.md](docs/README.md): where every document lives and how 
 | Why we chose what we chose | [Architecture decisions](docs/decisions/README.md) |
 | How we write code | [Engineering rules](docs/rules/README.md) |
 | What a term means | [Glossary](docs/glossary.md) |
+| API contracts and the mock | [contracts/README.md](contracts/README.md) |
+| How to run the repository checks | [Repository checks and CI](docs/guides/repository-checks.md) |
 | Instructions for AI coding agents | [AGENTS.md](AGENTS.md) |
 
 ## Non-negotiable rules

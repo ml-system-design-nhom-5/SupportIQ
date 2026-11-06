@@ -387,7 +387,7 @@ The status `cancelled` has no presentation, because a superseded suggestion is n
 
 1. Done on 2026-11-01: the team chose the layout, and this document holds every screen, state, and dialog.
 2. Done on 2026-11-05: the team approved this design.
-3. Contract PR 2 implements `TicketSummary`, `other_orders`, `CitationView`, `intent_override` in `SuggestionView`, and the draft `text` in `backend.openapi.yaml`.
+3. The contract change that adds the console operations implements `TicketSummary`, `other_orders`, `CitationView`, `intent_override` in `SuggestionView`, and the draft `text` in `backend.openapi.yaml`.
 4. Implementation: token files and primitives, then domain components with stories, then screens against Prism mocks.
 
 ### Mockup sources
@@ -404,6 +404,6 @@ The page loads Inter and JetBrains Mono from Google Fonts.
 
 - With the inbox on screen, whether staff can collapse it to give the reply area more width, for example so a manager sees the proposal next to the AI draft (UI-19). The collapsed state would stay the same for every ticket, as UI-15 requires.
 - Keyboard movement through the inbox (arrow keys, or J and K). [UI-17](../rules/ui.md#console-interaction) forbids single-key shortcuts only for irreversible actions, so this is allowed.
-- The excerpt length and sort parameter of `TicketSummary` (open for contract PR 2), and the polling interval of the inbox and the workspace.
+- The excerpt length and sort parameter of `TicketSummary` (open for the contract change that adds the console operations), and the polling interval of the inbox and the workspace.
 - The text of the manual-process instructions ([UI-26](../rules/ui.md#states)). The team provides it. The mockups show a stand-in line.
 - This design was approved on 2026-11-05 while ADR-0010, ADR-0014, and contracts v1 revision 2 were still in review. If any of them changes, this design is revised.

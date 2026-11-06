@@ -62,7 +62,8 @@ Only `frontend` changes. `backend` enforces every rule. `frontend` hides an acti
 | A `staff` account | Make manager; Deactivate or Reactivate |
 | A `manager` account | Make staff; Deactivate or Reactivate |
 
-- The list is paginated, so `frontend` cannot know whether an account is the last active manager. `backend` refuses that change with `422 invalid-request`, and the page shows the reason in a banner that names the account.
+- The list is ordered by display name, with 20 accounts per page, the default page size of the contract. It is paginated, so `frontend` cannot know whether an account is the last active manager. `backend` refuses that change with `422 invalid-request`, and the page shows the reason in a banner that names the account.
+- The banner follows `violated_rule` of the `422` body ([admin operations](contracts-v1.md#admin-operations)). `last_active_manager` shows the banner of [admin-last-manager.png](assets/admin-ui/admin-last-manager.png). Any other value, an unknown one included, or no value, shows a banner that names the account and asks the admin to reload the list.
 - Each action opens a confirmation dialog that names the account and the change:
 
 | Action | Dialog title | Text | Confirm button |
@@ -95,7 +96,7 @@ Only `frontend` changes. `backend` enforces every rule. `frontend` hides an acti
 | Loading | `listAdminAccounts` or `getAdminVersions` is pending | Skeleton rows in the place of the table or the list ([UI-24](../rules/ui.md#states)) |
 | Load error | Either call fails with a network error, `5xx`, or a response from the ingress | A plain-language message, Try again, and a copyable trace ID when there is one ([UI-25](../rules/ui.md#states)) |
 | Permission denied | `403`: a `customer`, `staff`, or `manager` session opens `/admin` | "The admin area is for admin accounts", with Sign out |
-| Change refused | `422` on a change | A banner that names the account and gives the reason, as in [admin-last-manager.png](assets/admin-ui/admin-last-manager.png) |
+| Change refused | `422` on a change | With `violated_rule` `last_active_manager`: the banner of [admin-last-manager.png](assets/admin-ui/admin-last-manager.png). With any other value, or none: a banner that names the account and asks the admin to reload the list |
 | `ai-service` unreachable | `ai_service_status` is `unavailable` | The banner and "Unknown" rows, as in [admin-versions-unavailable.png](assets/admin-ui/admin-versions-unavailable.png) |
 
 An admin account always exists, so the accounts list is never empty.
@@ -117,9 +118,9 @@ sequenceDiagram
             BE-->>FE: 201, sessions of that account deleted, audit log entry written
             FE->>BE: GET /v1/admin/accounts
             BE-->>FE: Updated list
-        else Own account, admin role, or last active manager
-            BE-->>FE: 422 invalid-request
-            FE-->>Admin: Banner with the reason and the account name
+        else Own account, admin role, unchanged value, or last active manager
+            BE-->>FE: 422 invalid-request with violated_rule
+            FE-->>Admin: Last-manager banner for last_active_manager, otherwise a banner that names the account and asks to reload the list
         else Customer account or unknown account
             BE-->>FE: 404 not-found
             FE-->>Admin: The account was not found, list reloads
@@ -167,7 +168,7 @@ sequenceDiagram
 ## Testing and evaluation
 
 - **Storybook:** the accounts table with every row type, each dialog, the versions page when `ai-service` is reachable and when it is not, and the loading, load error, and permission-denied states, with axe checks ([UI-32](../rules/ui.md#accessibility)).
-- **Component tests:** row actions by role and for the caller's own account, dialog texts that name the account and the change, and the mapping of `422`, `404`, `403`, and `401` to messages.
+- **Component tests:** row actions by role and for the caller's own account, dialog texts that name the account and the change, the mapping of `422` with each `violated_rule` value, an unknown one included, and of `404`, `403`, and `401` to messages.
 - **End-to-end tests (Playwright):** an admin makes a staff account a manager; that account's old session gets `401`, and after signing in again it can open reports.
 - No model metric changes.
 
@@ -185,7 +186,7 @@ sequenceDiagram
 ## Rollout
 
 1. Done on 2026-11-05: the backend and frontend owners approved this design.
-2. Implementation against Prism mocks after contract PR 2: the accounts table and dialogs, then the versions page.
+2. Implementation against Prism mocks: the accounts table and dialogs after contract PR 2, then the versions page after the contract change that adds `getAdminVersions`.
 
 ### Mockup sources
 
@@ -197,6 +198,5 @@ docs/design/assets/admin-ui/render.sh
 
 ## Open questions
 
-- The page size and sort order of the accounts list.
 - The version labels on the Versions page come from the release manifest, which the AI and ML engineers define. The mockups show stand-in labels.
 - This design was approved on 2026-11-05 while contracts v1 revision 2 was still in review. If it changes, this design is revised.

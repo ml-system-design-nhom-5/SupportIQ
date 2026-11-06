@@ -82,7 +82,7 @@ Every column is `NOT NULL` unless it says "optional". Times are `timestamptz` in
 
 | Role | Used by |
 |---|---|
-| `supportiq_owner` | `backend-migrate`, the seed command, and the reset command. Owns the schema and every table |
+| `supportiq_owner` | The migrate, seed, and reset commands. Owns the schema and every table |
 | `supportiq_app` | The `backend` replicas, with the privileges below and nothing else |
 
 | Objects | Privileges of `supportiq_app` |
@@ -197,9 +197,9 @@ sequenceDiagram
         else Target is a customer account or unknown
             BE->>DB: Roll back
             BE-->>FE: 404 not-found
-        else Own account, admin role change, or no active manager or admin afterwards
+        else Own account, admin role change, unchanged value, or no active manager afterwards
             BE->>DB: Roll back
-            BE-->>FE: 422 invalid-request
+            BE-->>FE: 422 invalid-request with violated_rule
         else Allowed
             BE->>DB: Update the account, delete its sessions, insert the audit log entry, commit
             BE-->>FE: 201
@@ -212,7 +212,7 @@ sequenceDiagram
 
 1. The transaction-level advisory lock serializes every account change across replicas.
 2. With the lock held, the use case reloads the caller. Its session may have been deleted by a change that committed while it waited, so an admin deactivated by another admin cannot still act.
-3. The rules of [ADR-0012](../decisions/0012-roles-v1.md) apply after the reload: not the caller, not a customer account, only `staff` to `manager` or back, and at least one active `manager` and one active `admin` afterwards.
+3. The rules of [ADR-0012](../decisions/0012-roles-v1.md) apply after the reload. A customer account or an unknown target returns `404 not-found`. Every other refusal returns `422 invalid-request` with `violated_rule`, in the order that the contract fixes for that field ([contracts v1](contracts-v1.md#admin-operations)): the caller's own account, an `admin` account in a role change, a value that the account already has, and a change that leaves no active `manager`. At least one active `admin` always stays, because the caller is an active admin and cannot change their own account.
 4. The audit log entry `account.role_changed` or `account.status_changed` is written in the same transaction.
 
 ### Seed and reset
@@ -229,7 +229,7 @@ All settings live in one `pydantic-settings` class ([PY-43](../rules/python.md#s
 | Setting | Initial value | Origin |
 |---|---|---|
 | `database_url_app` (secret) | None; required | [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md) |
-| `database_url_owner` (secret) | None; required only by `backend-migrate`, seed, and reset | Database roles above |
+| `database_url_owner` (secret) | None; required only by the migrate, seed, and reset commands | Database roles above |
 | `database_connect_timeout_ms` | 3 000 | [ERR-09](../rules/errors-and-reliability.md#timeouts-and-latency-budget) |
 | `database_statement_timeout_ms` | 5 000 | ERR-09 |
 | `database_lock_timeout_ms` | 3 000 | ERR-09; bounds the idempotency wait and the advisory lock |
@@ -250,10 +250,16 @@ No scheduler exists outside the suggestion job queue ([ARCH-41](../rules/archite
 
 ### Data and contracts
 
-- No contract change beyond contracts v1 revision 2. Contract PR 2 needs these points, which this design proposes:
+- No contract change beyond contracts v1 revision 2. Contract PR 2 needs these points from this design, and `contracts/backend.openapi.yaml` 1.0.0 contains them:
   - `createSession` takes `login_name` and `password`.
   - `deleteCurrentSession`, like `createSession`, takes no `Idempotency-Key` ([contracts v1](contracts-v1.md#common-elements)).
-  - Each list operation documents its maximum `limit` ([CON-14](../rules/contracts.md#api-conventions)). The proposal is 20 by default and 100 at most.
+  - Each list operation documents its maximum `limit` ([CON-14](../rules/contracts.md#api-conventions)). The contract sets 20 by default and 100 at most.
+  - The `422` body of `changeAccountRole` and `changeAccountStatus` carries `violated_rule` ([contracts v1](contracts-v1.md#admin-operations)).
+- Cursors (decided by the project lead on 2026-11-05). No cursor contains a Confidential value ([SEC-01](../rules/security-and-privacy.md#data-classification)), and each one also names the operation that returned it, so a cursor of another operation returns `422`:
+  - `listShopProducts`: the `name` and `product_id` of the last item, both Public, as a keyset.
+  - `listShopTickets`: the `created_at` and `ticket_id` of the last item, both Internal, as a keyset. The `order_id` filter is not in the cursor.
+  - `listAdminAccounts`: the `account_id` of the last item. `backend` reads that account's display name to continue the order by `display_name`.
+  - `listShopOrders`: the position of the next item in the sort order. Orders have no Internal key, and `placed_at` and `order_id` are Confidential. A position is exact because orders are read-only and the seed is deterministic ([ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md)).
 - Migrations: one Alembic migration per schema change, each with a working downgrade ([PY-40](../rules/python.md#persistence-backend)). The first migration creates every table above, the privileges of `supportiq_app`, and the triggers.
 
 ### Errors and guardrails
@@ -275,7 +281,7 @@ No scheduler exists outside the suggestion job queue ([ARCH-41](../rules/archite
 | A session expires | `401`; the session row is deleted | Use-case test with a fake `Clock` |
 | A request without an allowed `Origin` changes state | `403 forbidden` | Handler test |
 | The database is unreachable or a timeout fires | `GET /health/ready` returns `503`; requests return `503 not-ready` and roll back | Integration test |
-| Confidential data or a secret reaches a log | The logging setup drops attributes that are not allow-listed and masks known patterns ([LOG-30](../rules/logging-and-observability.md#privacy-in-telemetry)). Request logs never include headers, so the raw session identifier in the `Cookie` header is never logged | Log-capture test with message text, display names, order IDs, shipping addresses, passwords, and a raw cookie value (TEST-26) |
+| Confidential data or a secret reaches a log | The logging setup drops attributes that are not allow-listed and masks known patterns ([LOG-30](../rules/logging-and-observability.md#privacy-in-telemetry)). Request logs never include headers, so the raw session identifier in the `Cookie` header is never logged. Request logs and traces record the route template, never the raw path or query, because an order ID in a URL is Confidential | Log-capture test with message text, display names, order IDs in URLs and elsewhere, shipping addresses, passwords, and a raw cookie value (TEST-26) |
 | The seed produces different data on two runs | Prevented by design and checked | Test that seeds twice and compares every table except `password_hash`, and checks each seeded password against its hash |
 | Reset leaves changed accounts or tickets behind | Impossible: every table is truncated before the seed | Test that changes a role, creates a ticket, resets, and compares with a fresh seed |
 
@@ -289,8 +295,8 @@ No scheduler exists outside the suggestion job queue ([ARCH-41](../rules/archite
 ## Testing and evaluation
 
 - **Unit:** the admin rules, with a property-based test that no sequence of role and status changes leaves no active manager or no active admin; session expiry with a fake `Clock`; the sign-in throttle; ID formats.
-- **Integration (PostgreSQL in a container):** privileges of `supportiq_app`, the triggers, idempotency under concurrency, the advisory lock with concurrent changes, session deletion on a role change, one audit log entry per successful admin change, seed determinism, and reset.
-- **Contract:** Schemathesis against every operation listed in Goals ([CON-27](../rules/contracts.md#contract-tests)).
+- **Integration (local PostgreSQL 17 or a CI service container):** privileges of `supportiq_app`, the triggers, idempotency under concurrency, the advisory lock with concurrent changes, session deletion on a role change, one audit log entry per successful admin change, seed determinism, and reset.
+- **Contract:** Schemathesis against every operation listed in Goals and the health checks ([CON-27](../rules/contracts.md#contract-tests)).
 - **Guardrail (TEST-26):** the audit log rejects `UPDATE` and `DELETE`; no Confidential data or secret in captured logs; an admin cannot call any `/v1/shop/` or `/v1/console/` operation; no admin operation returns or changes a customer account.
 - No model metric changes.
 
@@ -310,15 +316,16 @@ No scheduler exists outside the suggestion job queue ([ARCH-41](../rules/archite
 ## Rollout
 
 1. Done on 2026-11-05: the backend and frontend owners approved this design.
-2. Contract PR 2 writes the operations listed in Goals, with the points under Data and contracts.
-3. Scaffold `backend` (uv, ruff, pyright, pytest, import-linter, Alembic), `deploy/`, and CI. A SQL script, run once as the database owner, creates `supportiq_app` and its privileges, with a password from a secret setting. Migrations run as a one-off step before the `backend` instances start: the `backend-migrate` service in local Docker Compose ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)), or the host's pre-deploy command in a hosted demo. The README gets a "Demo accounts" section that lists the login names and roles and says that passwords come from each person's `.env`.
-4. Implement `platform`, `audit`, and `idempotency`, then `accounts`, then `commerce` with the seed, then `tickets`. `frontend` builds the shop and admin screens against Prism mocks in parallel.
-5. The `backend` ticket workflow design follows, for the console and everything that involves `ai-service`.
+2. Done on 2026-11-05: the project lead approved the `frontend` ↔ `backend` part of contracts v1 revision 2 for contract PR 2 and its implementation: the operations listed in Goals and the health checks ([contracts v1, Rollout](contracts-v1.md#rollout)).
+3. Contract PR 2 writes the operations listed in Goals and the health checks, with the points under Data and contracts.
+4. Decided by the project lead on 2026-11-05: the scaffold leaves out `deploy/` and Docker Compose until ADR-0011 or the hosting ADR is accepted. Until then, migrate, seed, and reset run as `backend` commands, against Homebrew PostgreSQL 17 locally and a PostgreSQL service container in CI, and CI only builds the `backend` Docker image.
+5. Scaffold `backend` (uv, ruff, pyright, pytest, import-linter, Alembic) and its CI workflow, following step 4. A SQL script, run once as the database owner, creates `supportiq_app` and its privileges, with a password from a secret setting. Migrations run as a one-off `backend` command before the `backend` instances start (step 4). The `backend-migrate` service of [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), or the pre-deploy command of a host, takes over that step once ADR-0011 or the hosting ADR is accepted. The README gets a "Demo accounts" section that lists the login names and roles and says that passwords come from each person's `.env`.
+6. Implement `platform`, `audit`, and `idempotency`, then `accounts`, then `commerce` with the seed, then `tickets`. `frontend` builds the shop and admin screens against Prism mocks in parallel.
+7. The `backend` ticket workflow design follows, for the console and everything that involves `ai-service`.
 
 ## Open questions
 
 - The ID formats of the shared commerce data of groups 2 and 5. When that data is adopted, the seed formats above change to match it.
 - The content of the seed file: how many products, customers, and orders. The seed PR proposes it.
-- Whether the backend and frontend owners may approve contract PR 2 for the operations above before the ML and RAG engineers approve contracts v1 as a whole.
 - Hosting of the demo. The project lead proposes Supabase for PostgreSQL, Render for `backend` with UptimeRobot, and Vercel or Cloudflare Pages for `frontend`, instead of the single-host topology of ADR-0011. It needs an ADR, because it changes ADR-0011 and the session cookie of ADR-0009 requires the browser to reach `backend` on the same site as `frontend`.
 - This design was approved on 2026-11-05 while ADR-0011 and contracts v1 revision 2 were still in review. If either changes, this design is revised.

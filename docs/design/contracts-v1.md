@@ -388,8 +388,10 @@ Both contracts are new at version `1.0.0`. No consumer exists yet, so there is n
 | `not-ready` | `503` | The component is not ready, for example assets not loaded |
 | `internal-error` | `500` | Unexpected failure |
 
-- **Shared schemas** in `contracts/schemas/`, referenced by both OpenAPI files so they never diverge:
+- **Shared schemas** in `contracts/schemas/`, referenced by both OpenAPI files so they never diverge. Contract PR 2 adds `MessageText`, `Money`, `Timestamp`, `ProblemDetails` (with the problem types that the `backend` contract uses), `OrderStatus`, `ShipmentStatus`, and `RefundStatus`; contract PR 1 adds the others:
   - `MessageText`: customer message and reply text, 1 to 2 000 characters.
+  - `Timestamp`: an RFC 3339 time in UTC ([CON-17](../rules/contracts.md#api-conventions)).
+  - `OrderStatus`, `ShipmentStatus`, `RefundStatus`: the status enums of `OrderContext`, also used by the shop view models.
   - `IntentLabel`: the 46 labels.
   - `ConfidenceBand`: `high`, `medium`, `low`.
   - `AiReasonCode`.
@@ -544,7 +546,7 @@ Three audience namespaces keep the guardrails structural:
 | `changeAccountRole` | `POST /v1/admin/accounts/{account_id}/role-changes` | admin | `201` role change |
 | `changeAccountStatus` | `POST /v1/admin/accounts/{account_id}/status-changes` | admin | `201` status change |
 | `getAdminVersions` | `GET /v1/admin/versions` | admin | Versions in use |
-| — | `GET /health/live`, `GET /health/ready` | Anyone | Liveness and readiness |
+| `checkLiveness`, `checkReadiness` | `GET /health/live`, `GET /health/ready` | Anyone | Liveness and readiness |
 
 `createShopTicket` takes `order_id` (required, one of the caller's orders, as [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md) attaches the support form to an order) and `message` (`MessageText`). Tickets imported for evaluation may have no order; they are created by a `backend` import command, not through the shop.
 
@@ -566,7 +568,7 @@ Shop view models:
 - the draft status of the current suggestion, absent in `manual` mode;
 - the predicted intent with its confidence band and probability, absent when there is no analysis.
 
-The excerpt length and the sort parameter are set in contract PR 2.
+The excerpt length and the sort parameter are set in the contract change that adds the console operations.
 
 `TicketWorkspace`, the body of `getConsoleTicket`:
 
@@ -649,6 +651,7 @@ Infrastructure cost (NFR-10) is reported from AWS billing, not from this report.
 | `getAdminVersions` | `release_id` and asset versions from `ai-service`, the `backend` build version, and `ai_service_status` (`available` or `unavailable`) | Returns `200` with `ai_service_status: unavailable` when `ai-service` cannot be reached |
 
 - A request that breaks a rule returns `422 invalid-request`. A request about a customer account returns `404 not-found`, as if the account did not exist.
+- On 2026-11-05 the project lead decided that the `422` body of `changeAccountRole` and `changeAccountStatus` carries the extension member `violated_rule`, an enum: `own_account`, `admin_role_unchangeable`, `role_unchanged`, `status_unchanged`, or `last_active_manager`. It is present exactly when a well-formed request is refused under the admin limits 3 to 5 of [ADR-0012](../decisions/0012-roles-v1.md) or because the value is unchanged, and absent when the request fails validation against the contract ([CON-08](../rules/contracts.md#openapi-style)). When several reasons apply, it holds the first value of that list. Consumers map an unknown value to a generic refusal ([CON-22](../rules/contracts.md#evolution)). The shared `ProblemDetails` does not change.
 - A role change or a deactivation deletes all sessions of the account in the same transaction.
 - Every successful admin change writes one audit log entry.
 
@@ -663,6 +666,7 @@ Infrastructure cost (NFR-10) is reported from AWS billing, not from this report.
 | Refund | `refund_id`, `order_id`, `refund_status`, `refund_amount`, `refund_requested_at`, `updated_at` | Confidential, except `refund_id` (Internal) |
 
 - The data is produced by a deterministic, versioned seed script ([DATA-04](../rules/data-and-ml.md#sources-and-acceptable-use)) and read through the `CommerceGateway` port. No operation writes it.
+- On 2026-11-05 the project lead decided that contract PR 2 uses this `synthetic-dev-only` model, with the status enums of `OrderContext`. Adopting the shared commerce data of groups 2 and 5 is a separate contract change ([Open questions](#open-questions)).
 - Order IDs, tracking codes, and transaction IDs each follow one documented format, so that pseudonymization can detect them in free text ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#detection)).
 - `phone` and `shipping_address` exist so that pseudonymization can detect known values and the NFR-06 suite can seed them.
 
@@ -814,10 +818,12 @@ Every schema property states its data class ([SEC-03](../rules/security-and-priv
 1. Done on 2026-10-24: revision 1 was approved and ADR-0009 accepted.
 2. Done on 2026-10-24: UI-16, UI-17, and UI-19 were updated for the reply proposal flow.
 3. Revision 2, dated 2026-10-28 and updated 2026-11-05, is in review together with ADR-0010, ADR-0011, and ADR-0014. ADR-0012 and ADR-0013 were accepted on 2026-11-05.
-4. Contract PR 1: `contracts/README.md` (tooling commands), `CHANGELOG.md`, shared schemas, `ai-service.openapi.yaml` 1.0.0, examples, mock setup.
-5. Contract PR 2: `backend.openapi.yaml` 1.0.0 and examples.
-6. Contract PR 3: `kb-contract.md` structure, completed when the KB files arrive.
-7. Implementation starts in parallel against mocks. These follow-up design docs come first:
+4. Done on 2026-11-05: the project lead approved the `frontend` ↔ `backend` part of revision 2 for contract PR 2 and its implementation, exactly these operations: `createSession`, `getCurrentSession`, `deleteCurrentSession`, `listShopProducts`, `getShopProduct`, `listShopOrders`, `getShopOrder`, `createShopTicket`, `listShopTickets`, `getShopTicket`, `listAdminAccounts`, `changeAccountRole`, `changeAccountStatus`, and the health checks. The rest of revision 2 stays in review with the AI and ML members: the console operations, `getAdminVersions`, and the `ai-service` contract.
+5. Decided on 2026-11-05: contract PR 2 lands before contract PR 1. It adds only the shared schemas that the `backend` contract needs now ([Common elements](#common-elements)).
+6. Contract PR 2: `backend.openapi.yaml` 1.0.0 with the operations of step 4, its examples, `CHANGELOG.md`, the shared schemas of step 5, and the contract tooling with its commands in `contracts/README.md`.
+7. Contract PR 1: `ai-service.openapi.yaml` 1.0.0, its examples, and the remaining shared schemas. Later `backend` contract changes add the console operations and `getAdminVersions`.
+8. Contract PR 3: `kb-contract.md` structure, completed when the KB files arrive.
+9. Implementation starts in parallel against mocks. These follow-up design docs come first:
    - the `ai-service` pipeline: routing per the escalation rules, the list of sensitive intents, whether the LLM is a third authority signal ([SEC-26](../rules/security-and-privacy.md#prompt-injection) applies) and, if so, how that signal stays known when a correction cancels the draft that would carry it, step budgets, retrieval limits (N, k, and snippet length), the maximum output tokens, an LLM spending limit, the grounding check including order citations, placeholder instructions and the output check, and the `as_of` confirmation;
    - the `backend` foundation: tables, database roles, sessions, idempotency, the audit log schema, and the seed and reset commands, in the [backend foundation design](backend-foundation.md);
    - the `backend` ticket workflow: job queue schema and settings, pseudonymization detectors and the named-entity library, how a storage error while writing the pseudonym map is retried (it is not a `pseudonymization_failed`), report queries, and a decision-record export that keeps original values out ([SEC-37](../rules/security-and-privacy.md#pseudonymization));
@@ -828,7 +834,7 @@ Nothing is deployed yet, so no migration or rollback is needed.
 
 ## Open questions
 
-- Groups 2 and 5 agreed on shared files for the KB and the commerce data, but their origin and approval are not yet confirmed ([requirements §8](../product/requirements.md#8-open-questions)). The commerce model and the product catalog map to them through `CommerceGateway`, and field names in this design may change. These gaps need a decision before contract PR 1 and PR 2:
+- Groups 2 and 5 agreed on shared files for the KB and the commerce data, but their origin and approval are not yet confirmed ([requirements §8](../product/requirements.md#8-open-questions)). The commerce model and the product catalog map to them through `CommerceGateway`, and field names in this design may change. Adopting them is a separate contract change, which needs a decision on these gaps:
   - `OrderContext` has no payment method or payment status, although `payment_issue` is in scope, refund times depend on the payment method, and [SEC-04](../rules/security-and-privacy.md#data-sent-to-llm-providers) forbids payment data in prompts unless it is narrowed to a method type without card digits.
   - `order_status` has no value for the shared statuses `Returned` and `Payment_Failed`, and `Shipping` and `In_Transit` overlap.
   - The shared orders have no `placed_at`, `shipping_address`, seller type, or product category, and customers have no email. The return period depends on the seller type, and return limits depend on the product category.

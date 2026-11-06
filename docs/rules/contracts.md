@@ -1,6 +1,6 @@
 # Contract rules
 
-> **Status:** Active · **Owner:** contracts gatekeeper · **Last reviewed:** 2026-10-24
+> **Status:** Active · **Owner:** contracts gatekeeper · **Last reviewed:** 2026-11-05
 
 Contracts are the only shared truth between components. This file defines how contracts change, how they are written, and the conventions every API follows. The reasons are in [ADR-0001](../decisions/0001-system-architecture.md) and [ADR-0004](../decisions/0004-api-conventions.md).
 
@@ -24,11 +24,16 @@ contracts/
 ├── ai-service.openapi.yaml   # backend ↔ ai-service
 ├── schemas/                  # JSON Schemas referenced by the OpenAPI files
 ├── examples/
-│   └── <operation-id>/
-│       └── <outcome>.json    # for example draft-ready.json, abstained.json, invalid-request.json
+│   ├── <operation-id>/
+│   │   └── <outcome>.json    # for example draft-ready.json, abstained.json
+│   └── problems/
+│       └── <outcome>.json    # error bodies of the responses that several operations share
 ├── kb-contract.md            # data contract for the knowledge base
-└── CHANGELOG.md              # Keep a Changelog format
+├── CHANGELOG.md              # Keep a Changelog format
+└── README.md                 # commands, tools, and how consumers use the files
 ```
+
+An error response that several operations share, such as `401` or `503`, is defined once under `components.responses` (CON-09), so its examples live once in `examples/problems/` instead of being copied into every operation's folder. The example files are OpenAPI Example Objects, which hold the body in `value`. The checks and the tooling are described in [contracts/README.md](../../contracts/README.md).
 
 ## What every contract specifies
 
@@ -77,7 +82,7 @@ contracts/
 
 **CON-12.** Error bodies use Problem Details ([RFC 9457](https://www.rfc-editor.org/rfc/rfc9457)) with `type` values from a registry in the contract, in the form `urn:supportiq:problem:<kebab-case-name>`. Error bodies never include stack traces, internal names, or confidential data.
 
-**CON-13.** Trace context travels in the W3C `traceparent` header ([ADR-0007](../decisions/0007-observability-stack.md)). Write operations accept an `Idempotency-Key` header. Custom `X-` headers are forbidden.
+**CON-13.** Trace context travels in the W3C `traceparent` header ([ADR-0007](../decisions/0007-observability-stack.md)). Write operations that a client may retry take an `Idempotency-Key` header ([ERR-15](errors-and-reliability.md#idempotency)). Sign-in and sign-out take none and are never retried automatically: before sign-in there is no account to scope a key to, a repeated sign-in only creates one more session, and a repeated sign-out gets `401`, which the client treats as signed out. Custom `X-` headers are forbidden.
 
 **CON-14.** Lists are paginated with a cursor: requests take `limit` and `cursor`; responses return `items` and `next_cursor`. Every list has a documented maximum `limit`.
 

@@ -1,6 +1,6 @@
 # TypeScript rules
 
-> **Status:** Active · **Owner:** frontend · **Last reviewed:** 2026-10-23
+> **Status:** Active · **Owner:** frontend · **Last reviewed:** 2026-11-05
 
 TypeScript and React rules for `frontend`. They build on [code.md](code.md) and [ui.md](ui.md); where several apply, all must hold.
 
@@ -119,7 +119,7 @@ frontend/src/
 
 **TS-28.** Only `features/*/api/` calls the client. Components never call `fetch` or the client directly.
 
-**TS-29.** Write mutations send an `Idempotency-Key` created once per user action. Automatic retries reuse the same key. Sending a reply is never retried automatically.
+**TS-29.** Write mutations that the contract gives an `Idempotency-Key` send one, created once per user action, and automatic retries reuse it ([ERR-15](errors-and-reliability.md#idempotency)). Sign-in and sign-out take no key and are never retried automatically ([CON-13](contracts.md#api-conventions)). Sending a reply is never retried automatically.
 
 ## Documentation
 

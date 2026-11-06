@@ -64,7 +64,7 @@ flowchart TD
 
 ### Follow-ups
 
-- Define `Citation` in contract PR 1, and `CitationView` in contract PR 2.
+- Define `Citation` in contract PR 1, and `CitationView` in the contract change that adds the console operations.
 - The `ai-service` pipeline design defines how the prompt exposes field names and how the grounding check compares values.
 - The NFR-04 grading rubric includes order citations.
 
