@@ -43,6 +43,12 @@ credentials = {
 }
 (LOCAL / "demo_credentials.json").write_text(json.dumps(credentials, indent=2))
 
+backend_env = f"""SUPPORTIQ_DATABASE_URL_APP={DB_URL}
+SUPPORTIQ_AI_SERVICE_BASE_URL=http://127.0.0.1:8002
+SUPPORTIQ_SESSION_COOKIE_SECURE=false
+"""
+(LOCAL / "backend.env").write_text(backend_env)
+
 print("✓ Database schema created and seeded successfully!")
 print("Demo logins available (all use password: password123):")
 print("  - Customer: customer-1")

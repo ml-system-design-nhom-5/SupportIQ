@@ -1,9 +1,15 @@
+from pathlib import Path
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_ROOT = Path(__file__).resolve().parents[3]
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="SUPPORTIQ_", env_file=".local/backend.env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="SUPPORTIQ_",
+        env_file=(str(_ROOT / ".env"), str(_ROOT / ".local/backend.env"), ".env", ".local/backend.env"),
+        extra="ignore"
+    )
 
     database_url_app: SecretStr
     database_url_owner: SecretStr | None = None

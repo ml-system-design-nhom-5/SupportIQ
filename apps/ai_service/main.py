@@ -14,8 +14,14 @@ from .engine import Engine
 from .drafting import BudgetedDraftClient
 
 
+_ROOT = Path(__file__).resolve().parents[2]
+
+
 class AiSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=(str(_ROOT / ".env"), ".env"),
+        extra="ignore"
+    )
     gemini_api_key: SecretStr = SecretStr("")
     gemini_model: str = "gemini-3.1-flash-lite"
     supportiq_enable_llm: bool = True
