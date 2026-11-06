@@ -6,7 +6,7 @@ import uuid
 from sqlalchemy import select, text
 
 from apps.backend.commerce import order_view, require_order
-from apps.backend.platform.database import Problem, audit, utcnow
+from apps.backend.platform.database import Problem, audit, utcnow, ensure_utc
 from apps.backend.platform.models import Account, CustomerMessage, Order, Suggestion, SuggestionJob, Ticket
 from apps.backend.platform.observability import metrics, logger
 from .privacy import PLACEHOLDER, pseudonymize, restore
@@ -28,7 +28,7 @@ def require_ticket(session, ticket_id, customer_id=None, lock=False):
 def shop_ticket(session, ticket):
     return {"ticket_id": ticket.ticket_id, "order_id": ticket.order_id,
             "message": session.get(CustomerMessage, ticket.ticket_id).body,
-            "created_at": ticket.created_at.isoformat(), "customer_status": "replied" if ticket.reply else "received",
+            "created_at": ensure_utc(ticket.created_at).isoformat(), "customer_status": "replied" if ticket.reply else "received",
             "reply": {"body": ticket.reply["body"], "sent_at": ticket.reply["sent_at"]} if ticket.reply else None}
 
 
@@ -107,7 +107,7 @@ def create_suggestion(session, ticket, settings, trace_id, intent_override=None,
                "analysis_status": "pending" if available else "unavailable", "draft_status": "pending" if available else "unavailable",
                "reason_codes": [] if available else ["pseudonymization_failed" if privacy_failed else "ai_service_unavailable"],
                "warnings": [], "trace_id": trace_id, "versions": None, "step_latency_ms": {}}
-    request_payload = {"message": message, "order_context": order_context(require_order(session, ticket.order_id)) if ticket.order_id else {}, "as_of": ticket.created_at.isoformat()}
+    request_payload = {"message": message, "order_context": order_context(require_order(session, ticket.order_id)) if ticket.order_id else {}, "as_of": ensure_utc(ticket.created_at).isoformat()}
     if intent_override:
         request_payload["intent_override"] = intent_override
     suggestion = Suggestion(suggestion_id=identifier, ticket_id=ticket.ticket_id, created_at=now, completed_at=None if available else now,
@@ -152,8 +152,8 @@ def summary(session, ticket):
     account = session.scalar(select(Account).where(Account.customer_id == ticket.customer_id))
     suggestion = session.get(Suggestion, ticket.current_suggestion_id) if ticket.current_suggestion_id else None
     data = suggestion.payload if suggestion else {}
-    return {"ticket_id": ticket.ticket_id, "created_at": ticket.created_at.isoformat(), "status": ticket.status, "handling_mode": ticket.handling_mode,
-            "is_authority_required": ticket.is_authority_required, "handling_started_at": ticket.handling_started_at.isoformat() if ticket.handling_started_at else None,
+    return {"ticket_id": ticket.ticket_id, "created_at": ensure_utc(ticket.created_at).isoformat(), "status": ticket.status, "handling_mode": ticket.handling_mode,
+            "is_authority_required": ticket.is_authority_required, "handling_started_at": ensure_utc(ticket.handling_started_at).isoformat() if ticket.handling_started_at else None,
             "customer": {"display_name": account.display_name}, "excerpt": session.get(CustomerMessage, ticket.ticket_id).body[:150],
             "draft_status": data.get("draft_status"), "intent": (data.get("analysis") or {}).get("intent")}
 
@@ -161,7 +161,7 @@ def summary(session, ticket):
 def workspace(session, ticket, actor):
     result = summary(session, ticket)
     suggestion = session.get(Suggestion, ticket.current_suggestion_id) if ticket.current_suggestion_id else None
-    result.update({"message": {"body": session.get(CustomerMessage, ticket.ticket_id).body, "created_at": ticket.created_at.isoformat()},
+    result.update({"message": {"body": session.get(CustomerMessage, ticket.ticket_id).body, "created_at": ensure_utc(ticket.created_at).isoformat()},
                    "order": order_view(require_order(session, ticket.order_id), internal=True) if ticket.order_id else None,
                    "other_orders": [order_view(order) for order in session.scalars(select(Order).where(Order.customer_id == ticket.customer_id, Order.order_id != ticket.order_id))],
                    "suggestion": suggestion_view(suggestion), "proposal": ticket.proposal, "escalation": ticket.escalation,

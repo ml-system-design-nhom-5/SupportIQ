@@ -39,9 +39,15 @@ class SuggestionRequest(BaseModel):
         allowed = {"order_status", "placed_at", "order_total", "shipping_cost", "shipment_status", "estimated_delivery_at", "delivered_at", "refund_status", "refund_amount", "refund_requested_at"}
         if not self.order_context.keys() <= allowed:
             raise ValueError("Order context must not contain identifiers or personal data")
-        from datetime import datetime
-        if datetime.fromisoformat(self.as_of.replace("Z", "+00:00")).tzinfo is None:
-            raise ValueError("as_of requires a timezone")
+        from datetime import datetime, timezone
+        as_of_clean = self.as_of.replace("Z", "+00:00")
+        try:
+            dt = datetime.fromisoformat(as_of_clean)
+        except ValueError:
+            raise ValueError("as_of requires a valid timestamp")
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+            self.as_of = dt.isoformat()
         return self
 
 
