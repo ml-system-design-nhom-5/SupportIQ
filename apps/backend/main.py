@@ -33,7 +33,13 @@ import time
 def create_app(settings=None, database=None, start_worker=True):
     settings = settings or Settings()
     owns_database = database is None
-    database = database or Database(create_engine(settings.database_url_app.get_secret_value(), pool_pre_ping=True, connect_args={"connect_timeout": 3, "options": "-c statement_timeout=5000 -c lock_timeout=3000"}, hide_parameters=True))
+    if database is None:
+        db_url = settings.database_url_app.get_secret_value()
+        engine_kwargs = {"hide_parameters": True}
+        if not db_url.startswith("sqlite"):
+            engine_kwargs["pool_pre_ping"] = True
+            engine_kwargs["connect_args"] = {"connect_timeout": 3, "options": "-c statement_timeout=5000 -c lock_timeout=3000"}
+        database = Database(create_engine(db_url, **engine_kwargs))
     hasher = PasswordHasher()
     dummy_hash = hasher.hash(secrets.token_urlsafe(32))
     worker = SuggestionWorker(database, settings)
@@ -323,6 +329,7 @@ def create_app(settings=None, database=None, start_worker=True):
         app.mount("/product-images", StaticFiles(directory=frontend / "product-images"), name="product-images")
 
     @app.get("/{path:path}", include_in_schema=False)
+    @app.head("/{path:path}", include_in_schema=False)
     def frontend_route(path: str):
         if path.startswith(("v1/", "health/", "api/")):
             raise Problem(404, "not-found", "This resource was not found.")

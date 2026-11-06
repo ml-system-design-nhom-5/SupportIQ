@@ -9,7 +9,7 @@ import uuid
 import httpx
 from sqlalchemy import or_, select
 
-from apps.backend.platform.database import audit, utcnow
+from apps.backend.platform.database import audit, utcnow, ensure_utc
 from apps.backend.platform.models import Suggestion, SuggestionJob, Ticket
 from apps.backend.platform.observability import metrics, logger
 
@@ -147,7 +147,7 @@ class SuggestionWorker:
             snapshot = session.get(Suggestion, identifier)
             ticket = session.scalar(select(Ticket).where(Ticket.ticket_id == snapshot.ticket_id).with_for_update())
             job = session.scalar(select(SuggestionJob).where(SuggestionJob.suggestion_id == identifier).with_for_update())
-            if ticket.current_suggestion_id != identifier or job.lease_token != token or job.lease_until <= utcnow():
+            if ticket.current_suggestion_id != identifier or job.lease_token != token or (job.lease_until and ensure_utc(job.lease_until) <= utcnow()):
                 return
             suggestion = session.get(Suggestion, identifier)
             data = dict(suggestion.payload)
