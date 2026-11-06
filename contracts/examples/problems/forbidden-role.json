@@ -1,0 +1,10 @@
+{
+  "summary": "The role may not call the operation",
+  "value": {
+    "type": "urn:supportiq:problem:forbidden",
+    "title": "Forbidden",
+    "status": 403,
+    "detail": "The role of this account may not call this operation.",
+    "trace_id": "b7ad6b7169203331b7ad6b7169203331"
+  }
+}

@@ -1,0 +1,67 @@
+description: >-
+  The body of every error response, as RFC 9457 defines Problem Details, with
+  the `trace_id` extension member (CON-12, LOG-04). It never contains a stack
+  trace, an internal name, or Confidential data. Data class: Internal.
+type: object
+required:
+  - type
+  - title
+  - status
+  - detail
+  - trace_id
+properties:
+  type:
+    description: >-
+      The problem type, from the registry in the contracts v1 design
+      (`urn:supportiq:problem:` and a kebab-case name). Each value has one
+      meaning:
+      `invalid-request`: the request is malformed or breaks a documented rule;
+      `unauthenticated`: there is no valid session, or the credentials were not
+      accepted;
+      `forbidden`: the caller's role may not perform the operation, or the
+      `Origin` check failed;
+      `not-found`: the resource does not exist, or the caller may not know
+      about it;
+      `idempotency-key-reused`: the `Idempotency-Key` was used before with a
+      different body;
+      `not-ready`: the provider cannot serve the request now, for example
+      because its database is unavailable or a timeout fired;
+      `internal-error`: an unexpected failure in the provider.
+      Consumers map an unknown value to a generic technical failure (CON-22).
+      Data class: Internal.
+    type: string
+    enum:
+      - urn:supportiq:problem:invalid-request
+      - urn:supportiq:problem:unauthenticated
+      - urn:supportiq:problem:forbidden
+      - urn:supportiq:problem:not-found
+      - urn:supportiq:problem:idempotency-key-reused
+      - urn:supportiq:problem:not-ready
+      - urn:supportiq:problem:internal-error
+  title:
+    description: >-
+      A short English summary of the problem type. It is the same for every
+      occurrence of a type. Consumers never parse it. Data class: Internal.
+    type: string
+    minLength: 1
+  status:
+    description: >-
+      The HTTP status code of the response, repeated in the body as RFC 9457
+      defines. Data class: Internal.
+    type: integer
+    minimum: 400
+    maximum: 599
+  detail:
+    description: >-
+      An English explanation of this occurrence for developers, for example
+      which parameter is invalid. Consumers never parse it and never show it
+      to end users (TS-26). Data class: Internal.
+    type: string
+    minLength: 1
+  trace_id:
+    description: >-
+      The W3C trace ID of the trace that `backend` started or continued for
+      this request, as 32 lowercase hexadecimal characters. The UI shows it as
+      a copyable trace ID (UI-25). Data class: Internal.
+    type: string
+    pattern: '^[0-9a-f]{32}$'

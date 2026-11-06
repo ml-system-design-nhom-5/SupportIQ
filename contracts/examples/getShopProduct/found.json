@@ -1,0 +1,13 @@
+{
+  "summary": "One catalog product",
+  "value": {
+    "product_id": "PRD-1002",
+    "name": "Wireless headphones",
+    "description": "Over-ear headphones with a 30-hour battery.",
+    "category": "Audio",
+    "price": {
+      "amount_minor": 8900,
+      "currency": "USD"
+    }
+  }
+}

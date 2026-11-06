@@ -1,0 +1,9 @@
+{
+  "summary": "A manager account became staff",
+  "value": {
+    "account_id": "c3e5a7b9-1d2f-4a6c-8e0b-2d4f6a8c0e14",
+    "display_name": "Hoa Pham",
+    "role": "staff",
+    "is_active": true
+  }
+}

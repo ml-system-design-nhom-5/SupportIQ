@@ -1,0 +1,1548 @@
+openapi: 3.1.0
+info:
+  title: SupportIQ backend API
+  version: 1.0.0
+  description: |
+    The contract between `frontend` and `backend` for sign-in, the read-only shop, and the
+    management of internal accounts. Version 1.0.0 holds the operations of contract PR 2,
+    taken from the [contracts v1 design](../docs/design/contracts-v1.md) (revision 2) and the
+    [backend foundation design](../docs/design/backend-foundation.md). The console operations
+    and `getAdminVersions` come in a later version.
+
+    ## Responsibility
+
+    - `backend` is the only enforcement point for authentication, roles, and object-level
+      access (SEC-16, SEC-17, SEC-20). `frontend` hides an action only as a convenience.
+    - No operation creates, changes, or deletes a product, an order, a shipment, or a refund
+      (ADR-0013). The only writes are sessions, shop tickets, and changes to internal accounts.
+    - No `/v1/shop/` schema has a field that can carry AI output. No `/v1/admin/` schema has a
+      field that can carry a ticket, a message, an order, or a report, and no admin operation
+      reaches a customer account (SEC-41).
+    - `backend` never sends a field that this contract does not define (CON-21).
+
+    ## Authentication and roles
+
+    Sign-in follows ADR-0009. `createSession` sets the `supportiq_session` cookie, and every
+    other operation except the health checks requires it (security scheme `sessionCookie`).
+    The cookie is `HttpOnly`: `frontend` never reads it and learns the account from
+    `getCurrentSession`. Each operation lists the roles that may call it in its description and
+    in `x-supportiq-roles`, which repeats the permission table of the contracts v1 design. A
+    signed-in role that is not listed gets `403 forbidden`.
+
+    The state-changing operations (`createSession`, `deleteCurrentSession`, `createShopTicket`,
+    `changeAccountRole`, and `changeAccountStatus`) check the `Origin` header against the
+    allowed origins before anything else, authentication included. The browser sets that
+    header, so it is not a parameter. A missing or unknown origin returns `403 forbidden`
+    (ADR-0009, statement 7).
+
+    ## Errors
+
+    Every error body is a `ProblemDetails` with a problem type from the registry (CON-12) and
+    the media type `application/problem+json`. `backend` returns `422 invalid-request` for every
+    invalid request, including a body that is not valid JSON, and never returns `400`.
+
+    The ingress can answer `413`, `429`, `502`, or `504` before `backend` sees a request
+    (ADR-0011). Those responses are not part of this contract and their bodies are not
+    `ProblemDetails`. `frontend` treats them as technical failures.
+
+    ## Headers
+
+    - `traceparent` is optional on every request. `backend` starts a new trace when it is absent
+      or invalid, and returns the trace ID in every error body.
+    - `Idempotency-Key` is required on `createShopTicket`, `changeAccountRole`, and
+      `changeAccountStatus`, the writes that a client may retry (ERR-15, CON-13).
+      `createSession` and `deleteCurrentSession` take none and are never retried automatically
+      (TS-29): before sign-in there is no account to scope a key to, a repeated sign-in only
+      creates one more session, and a repeated sign-out gets `401`, which `frontend` treats as
+      signed out.
+    - No operation uses a custom `X-` header (CON-13).
+
+    ## Timeouts
+
+    - **Latency target:** the requirements set none for these operations. NFR-08 covers
+      suggestions, which this version does not include.
+    - **Caller's timeout:** `frontend` stops waiting for a response after 10 000 ms per
+      request, a `frontend` setting. That is the sum of the single bounds of `backend` below: a
+      pool wait of 3 000 ms, one statement of 5 000 ms, and the sign-in delay of 2 000 ms. A
+      request with several statements can take longer: `backend` may then finish a write after
+      `frontend` stopped waiting, and a retry with the same `Idempotency-Key` returns its result.
+    - **Provider bounds:** `backend` bounds every database call with the timeout settings of the
+      backend foundation design (`database_connect_timeout_ms`, `database_statement_timeout_ms`,
+      `database_lock_timeout_ms`, `database_pool_timeout_ms`) and answers `503 not-ready` when
+      one fires. A throttled `createSession` also waits `sign_in_failure_delay_ms`.
+    - **Retries:** reads, and writes with an `Idempotency-Key`, may be retried after `503` as
+      ERR-12 and TS-29 allow.
+
+    ## Compatibility
+
+    Version 1.0.0 is the first version and has no earlier consumer. Compatible and breaking
+    changes follow CON-19 and CON-20. Consumers ignore unknown response fields (CON-21) and
+    map unknown enum values to a safe default (CON-22).
+servers:
+  - url: /
+    description: >-
+      The base URL of `backend`. Every path of this contract is relative to it.
+tags:
+  - name: sessions
+    description: Sign-in, the current session, and sign-out (ADR-0009).
+  - name: shop
+    description: >-
+      The read-only catalog, the customer's own orders, and the customer's own tickets
+      (ADR-0013). Callable by `customer` only.
+  - name: admin
+    description: >-
+      Internal accounts: listing, role changes, and status changes (ADR-0012). Callable by
+      `admin` only.
+  - name: health
+    description: Liveness and readiness of `backend` (ERR-18). No session is required.
+paths:
+  /v1/sessions:
+    post:
+      operationId: createSession
+      tags:
+        - sessions
+      summary: Sign in with a login name and a password
+      description: >-
+        Verifies the credentials and creates a session (ADR-0009). Callable without a session.
+        On success, `backend` stores only the SHA-256 hash of a new random session identifier
+        and returns the identifier in the `supportiq_session` cookie. An unknown login name, a
+        wrong password, and a deactivated account return the same `401`, and the password is
+        verified even for an unknown name, so the response does not reveal which login names
+        exist. While a login name has `sign_in_failure_limit` or more failures within
+        `sign_in_failure_window_ms`, every attempt for it waits `sign_in_failure_delay_ms` and
+        then gets `401` without a password check, even with the right password (backend
+        foundation design, Sign-in and sessions).
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSessionRequest'
+      responses:
+        '201':
+          description: >-
+            The session was created. The body describes the signed-in account, and
+            `Set-Cookie` carries the session identifier.
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/SessionCookie'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionView'
+              examples:
+                created:
+                  $ref: ./examples/createSession/created.json
+        '401':
+          $ref: '#/components/responses/InvalidCredentials'
+        '403':
+          $ref: '#/components/responses/ForbiddenOrigin'
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/sessions/current:
+    get:
+      operationId: getCurrentSession
+      tags:
+        - sessions
+      summary: Read the signed-in account
+      description: >-
+        Returns the account of the current session. Roles: `customer`, `staff`, `manager`, and
+        `admin`. `frontend` uses it after sign-in and on load to choose the area of the role:
+        `/shop` for `customer`, `/console` for `staff` and `manager`, and `/admin` for `admin`.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - customer
+        - staff
+        - manager
+        - admin
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+      responses:
+        '200':
+          description: The account of the current session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionView'
+              examples:
+                customer:
+                  $ref: ./examples/getCurrentSession/customer.json
+                staff:
+                  $ref: ./examples/getCurrentSession/staff.json
+                manager:
+                  $ref: ./examples/getCurrentSession/manager.json
+                admin:
+                  $ref: ./examples/getCurrentSession/admin.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+    delete:
+      operationId: deleteCurrentSession
+      tags:
+        - sessions
+      summary: Sign out
+      description: >-
+        Deletes the current session. Roles: `customer`, `staff`, `manager`, and `admin`. It takes
+        no `Idempotency-Key`: a retry after a success gets `401`, which `frontend` treats as
+        signed out.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - customer
+        - staff
+        - manager
+        - admin
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+      responses:
+        '204':
+          description: >-
+            The session was deleted. There is no body, and no `Set-Cookie`: the browser keeps
+            the cookie, which no longer names a session, so it gets `401`.
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenOrigin'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/shop/products:
+    get:
+      operationId: listShopProducts
+      tags:
+        - shop
+      summary: List the catalog products
+      description: >-
+        Returns one page of the read-only catalog (ADR-0013). Role: `customer`. Products are
+        ordered by `name`, ascending, and products with the same name by `product_id`,
+        ascending. Both are compared by Unicode code point, not by locale.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - customer
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: One page of products.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShopProductPage'
+              examples:
+                first-page:
+                  $ref: ./examples/listShopProducts/first-page.json
+                last-page:
+                  $ref: ./examples/listShopProducts/last-page.json
+                empty:
+                  $ref: ./examples/listShopProducts/empty.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRole'
+        '422':
+          $ref: '#/components/responses/InvalidListRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/shop/products/{product_id}:
+    get:
+      operationId: getShopProduct
+      tags:
+        - shop
+      summary: Read one catalog product
+      description: >-
+        Returns one product of the catalog. Role: `customer`. An unknown `product_id` returns
+        `404`.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - customer
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '200':
+          description: The product.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShopProductView'
+              examples:
+                found:
+                  $ref: ./examples/getShopProduct/found.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRole'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/shop/orders:
+    get:
+      operationId: listShopOrders
+      tags:
+        - shop
+      summary: List the caller's orders
+      description: >-
+        Returns one page of the signed-in customer's own orders, and never another customer's
+        (SEC-17). Role: `customer`. Orders are ordered by `placed_at`, newest first, and orders
+        with the same `placed_at` by `order_id`, ascending by Unicode code point.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - customer
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: One page of the caller's orders.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShopOrderPage'
+              examples:
+                first-page:
+                  $ref: ./examples/listShopOrders/first-page.json
+                last-page:
+                  $ref: ./examples/listShopOrders/last-page.json
+                empty:
+                  $ref: ./examples/listShopOrders/empty.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRole'
+        '422':
+          $ref: '#/components/responses/InvalidListRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/shop/orders/{order_id}:
+    get:
+      operationId: getShopOrder
+      tags:
+        - shop
+      summary: Read one of the caller's orders
+      description: >-
+        Returns one of the signed-in customer's orders with its lines, shipment, and refund.
+        Role: `customer`. An unknown `order_id`, or the ID of another customer's order, returns
+        the same `404`, so the order's existence is not revealed (SEC-17).
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - customer
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: The order.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShopOrderView'
+              examples:
+                in-transit:
+                  $ref: ./examples/getShopOrder/in-transit.json
+                refund-under-review:
+                  $ref: ./examples/getShopOrder/refund-under-review.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRole'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/shop/tickets:
+    get:
+      operationId: listShopTickets
+      tags:
+        - shop
+      summary: List the caller's tickets
+      description: >-
+        Returns one page of the signed-in customer's own tickets, optionally only those about
+        one order. Role: `customer`. Tickets are ordered by `created_at`, newest first, and
+        tickets with the same `created_at` by `ticket_id`, ascending by Unicode code point. The
+        shop lists only tickets created through `createShopTicket`; tickets imported for
+        evaluation never appear here. An `order_id` that is not one of the caller's orders
+        returns `404`.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - customer
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - name: order_id
+          in: query
+          required: false
+          description: >-
+            Lists only the tickets about this order, which must be one of the caller's orders.
+            Absent means every ticket of the caller. Data class: Confidential.
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        '200':
+          description: One page of the caller's tickets.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShopTicketPage'
+              examples:
+                first-page:
+                  $ref: ./examples/listShopTickets/first-page.json
+                last-page:
+                  $ref: ./examples/listShopTickets/last-page.json
+                empty:
+                  $ref: ./examples/listShopTickets/empty.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRole'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/InvalidListRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+    post:
+      operationId: createShopTicket
+      tags:
+        - shop
+      summary: Write to support about one of the caller's orders
+      description: >-
+        Creates a ticket that holds the customer's message about one of their orders (ADR-0013).
+        Role: `customer`. The ticket starts `open` for staff, and the customer sees it as
+        `received`. The customer never waits for AI: `backend` answers before any suggestion
+        runs. An `order_id` that is not one of the caller's orders returns `404` and creates
+        nothing. A retry with the same `Idempotency-Key` and the same body returns the original
+        `201` and creates no second ticket.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - customer
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateShopTicketRequest'
+      responses:
+        '201':
+          description: The ticket was created, or this is the original result of a retry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShopTicketView'
+              examples:
+                created:
+                  $ref: ./examples/createShopTicket/created.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRoleOrOrigin'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/shop/tickets/{ticket_id}:
+    get:
+      operationId: getShopTicket
+      tags:
+        - shop
+      summary: Read one of the caller's tickets
+      description: >-
+        Returns one of the signed-in customer's tickets, with the reply once staff sent it.
+        Role: `customer`. An unknown `ticket_id`, the ID of another customer's ticket, or the ID
+        of an imported ticket returns the same `404` (SEC-17).
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - customer
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/TicketId'
+      responses:
+        '200':
+          description: The ticket.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShopTicketView'
+              examples:
+                received:
+                  $ref: ./examples/getShopTicket/received.json
+                replied:
+                  $ref: ./examples/getShopTicket/replied.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRole'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/admin/accounts:
+    get:
+      operationId: listAdminAccounts
+      tags:
+        - admin
+      summary: List the internal accounts
+      description: >-
+        Returns one page of the `staff`, `manager`, and `admin` accounts, the caller's own
+        included. Customer accounts are never listed (SEC-41). Role: `admin`. Accounts are
+        ordered by `display_name`, ascending, and accounts with the same display name by
+        `account_id`, ascending. Both are compared by Unicode code point, not by locale. The
+        list is never empty, because the caller's account is in it.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - admin
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: One page of internal accounts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAccountPage'
+              examples:
+                first-page:
+                  $ref: ./examples/listAdminAccounts/first-page.json
+                last-page:
+                  $ref: ./examples/listAdminAccounts/last-page.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRole'
+        '422':
+          $ref: '#/components/responses/InvalidListRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/admin/accounts/{account_id}/role-changes:
+    post:
+      operationId: changeAccountRole
+      tags:
+        - admin
+      summary: Change an account's role between staff and manager
+      description: >-
+        Changes the role of a `staff` or `manager` account to the other of those two roles
+        (ADR-0012, admin limits 3 to 6). Role: `admin`. The change deletes every session of the
+        account and writes the audit log entry `account.role_changed` in the same transaction.
+        Changes to accounts are serialized, and the caller is reloaded after the wait, so a
+        caller who is no longer an active admin gets `401`. A customer account or an unknown
+        `account_id` returns `404`, as if it did not exist. The request returns `422` when the
+        target is the caller, when the target is an `admin` account, when `role` is already the
+        account's role, or when the change would leave no active `manager`.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - admin
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/AccountId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeAccountRoleRequest'
+      responses:
+        '201':
+          description: >-
+            The role was changed, or this is the original result of a retry. The body is the
+            account after the change.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAccountView'
+              examples:
+                made-manager:
+                  $ref: ./examples/changeAccountRole/made-manager.json
+                made-staff:
+                  $ref: ./examples/changeAccountRole/made-staff.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRoleOrOrigin'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '422':
+          $ref: '#/components/responses/InvalidRoleChange'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/admin/accounts/{account_id}/status-changes:
+    post:
+      operationId: changeAccountStatus
+      tags:
+        - admin
+      summary: Deactivate or reactivate an internal account
+      description: >-
+        Deactivates or reactivates a `staff`, `manager`, or `admin` account (ADR-0012, admin
+        limits 4 to 6). Role: `admin`. A deactivated account cannot sign in. The change deletes
+        every session of the account and writes the audit log entry `account.status_changed` in
+        the same transaction. Changes to accounts are serialized, and the caller is reloaded
+        after the wait, so a caller who is no longer an active admin gets `401`. A customer
+        account or an unknown `account_id` returns `404`, as if it did not exist. The request
+        returns `422` when the target is the caller, when `is_active` is already the account's
+        status, or when the change would leave no active `manager`.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - admin
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/AccountId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeAccountStatusRequest'
+      responses:
+        '201':
+          description: >-
+            The status was changed, or this is the original result of a retry. The body is the
+            account after the change.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAccountView'
+              examples:
+                deactivated:
+                  $ref: ./examples/changeAccountStatus/deactivated.json
+                reactivated:
+                  $ref: ./examples/changeAccountStatus/reactivated.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRoleOrOrigin'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '422':
+          $ref: '#/components/responses/InvalidStatusChange'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /health/live:
+    get:
+      operationId: checkLiveness
+      tags:
+        - health
+      summary: Check that the backend process runs
+      description: >-
+        Liveness (ERR-18): answers `204` while the process can serve HTTP. It checks no
+        dependency. Callable without a session.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+      responses:
+        '204':
+          description: The process runs. There is no body.
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /health/ready:
+    get:
+      operationId: checkReadiness
+      tags:
+        - health
+      summary: Check that backend can serve requests
+      description: >-
+        Readiness (ERR-18): answers `204` when the settings are valid and the database answers
+        within its timeout, and `503 not-ready` otherwise. An instance that is not ready
+        receives no traffic (ERR-18). Callable without a session.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+      responses:
+        '204':
+          description: The instance is ready. There is no body.
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: supportiq_session
+      description: >-
+        The session cookie set by `createSession` (ADR-0009, statements 4 and 10). Its value is
+        a random session identifier, which is Secret: `backend` stores only its SHA-256 hash, and
+        `frontend` never reads it because the cookie is `HttpOnly`. A missing, unknown, expired,
+        or idle session returns `401`.
+  headers:
+    SessionCookie:
+      description: >-
+        Sets the session cookie `supportiq_session=<session identifier>` with the attributes
+        `HttpOnly`, `SameSite=Strict`, and `Path=/`, and `Secure` outside local development
+        (ADR-0009, statement 4). The attributes may come in any order, and their names and
+        values are case-insensitive, as RFC 6265 defines. The cookie has no `Expires` or
+        `Max-Age` attribute; `backend` enforces the idle timeout and the absolute lifetime of the
+        session. The session identifier is Secret. Data class: Secret.
+      required: true
+      schema:
+        type: string
+        pattern: '^supportiq_session=[^;]+(;.*)?$'
+      example: supportiq_session=EXAMPLE-NOT-A-SESSION-ID; HttpOnly; SameSite=Strict; Path=/
+  parameters:
+    Traceparent:
+      name: traceparent
+      in: header
+      required: false
+      description: >-
+        The W3C Trace Context header (ADR-0004, decision 6; LOG-05). Absent means that `backend`
+        starts a new trace, which is the normal case because `frontend` exports no telemetry in
+        v1 (LOG-04). `backend` also ignores a value that is not a valid `traceparent` and starts a
+        new trace, as the W3C specification requires, so this header never causes `422`. Data
+        class: Internal.
+      schema:
+        type: string
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: >-
+        A key that the client creates once per user action, as a UUID in lowercase hexadecimal
+        with hyphens. A retry of the same action reuses it (TS-29). The same key with the same
+        body returns the original result without repeating the effect, and the same key with a
+        different body returns `409 idempotency-key-reused` (ERR-15). A key belongs to the
+        signed-in account and the operation, and `backend` remembers it for at least 24 hours.
+        Only a success is remembered: after an error response, the same key runs as a new
+        request. A request that arrives while the first one with its key is still running waits
+        for it, and gets `503 not-ready` if the wait exceeds the lock timeout of `backend`. A
+        missing or malformed key returns `422`. Data class: Internal.
+      schema:
+        type: string
+        format: uuid
+        pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: >-
+        The maximum number of items on the page, from 1 to 100 (CON-14). Absent means 20.
+        Another value returns `422`. Data class: Internal.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: >-
+        The position after which the page starts: the `next_cursor` of the previous page.
+        Absent means the first page. The cursor is opaque, and consumers never parse or build it
+        (CON-15). It belongs to the operation that returned it, and it never contains a
+        Confidential value. Send it with the same filter parameters as the first page; `limit`
+        may change from page to page. With another `order_id` on `listShopTickets`, the page
+        holds the tickets of that order that come after the cursor's position in the sort
+        order. Following `next_cursor` from the first page returns each item at most once and
+        skips no item that existed when the first page was read. A malformed cursor, or a cursor
+        returned by another operation, returns `422`. Data class: Internal.
+      schema:
+        $ref: '#/components/schemas/Cursor'
+    ProductId:
+      name: product_id
+      in: path
+      required: true
+      description: >-
+        The identifier of a catalog product (CON-15). Data class: Public.
+      schema:
+        type: string
+        minLength: 1
+    OrderId:
+      name: order_id
+      in: path
+      required: true
+      description: >-
+        The identifier of one of the caller's orders (CON-15). It identifies a person's
+        purchase. Data class: Confidential.
+      schema:
+        type: string
+        minLength: 1
+    TicketId:
+      name: ticket_id
+      in: path
+      required: true
+      description: >-
+        The identifier of one of the caller's tickets (CON-15). Data class: Internal.
+      schema:
+        type: string
+        minLength: 1
+    AccountId:
+      name: account_id
+      in: path
+      required: true
+      description: >-
+        The identifier of an internal account, as `listAdminAccounts` returns it (CON-15). Data
+        class: Internal.
+      schema:
+        type: string
+        minLength: 1
+  responses:
+    Unauthenticated:
+      description: >-
+        `unauthenticated`: no valid session. The `supportiq_session` cookie is missing or
+        unknown, the session expired or was idle too long, or the session was deleted, for
+        example by a sign-out or by a role or status change of its account (ADR-0012, admin limit
+        6). `frontend` goes to sign-in.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            unauthenticated:
+              $ref: ./examples/problems/unauthenticated.json
+    InvalidCredentials:
+      description: >-
+        `unauthenticated`: the credentials were not accepted. The same response for an unknown
+        login name, a wrong password, a deactivated account, and an attempt for a login name at
+        the sign-in failure limit, which gets it after `sign_in_failure_delay_ms` (ADR-0009,
+        statement 8).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            invalid-credentials:
+              $ref: ./examples/problems/invalid-credentials.json
+    ForbiddenRole:
+      description: >-
+        `forbidden`: the caller's role may not call this operation (contracts v1 permission
+        table). For example, an admin calls a `/v1/shop/` operation, or a customer calls a
+        `/v1/admin/` operation.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            forbidden-role:
+              $ref: ./examples/problems/forbidden-role.json
+    ForbiddenOrigin:
+      description: >-
+        `forbidden`: the `Origin` header is missing or not allowed (ADR-0009, statement 7). The
+        request changed nothing.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            forbidden-origin:
+              $ref: ./examples/problems/forbidden-origin.json
+    ForbiddenRoleOrOrigin:
+      description: >-
+        `forbidden`: the `Origin` header is missing or not allowed (ADR-0009, statement 7), or
+        the caller's role may not call this operation (contracts v1 permission table). The
+        `Origin` check runs first. The request changed nothing.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            forbidden-role:
+              $ref: ./examples/problems/forbidden-role.json
+            forbidden-origin:
+              $ref: ./examples/problems/forbidden-origin.json
+    NotFound:
+      description: >-
+        `not-found`: the resource does not exist, or the caller may not know about it (SEC-17).
+        Another customer's order or ticket, and a customer account in an admin operation, return
+        this same response, so their existence is not revealed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            not-found:
+              $ref: ./examples/problems/not-found.json
+    IdempotencyKeyReused:
+      description: >-
+        `idempotency-key-reused`: the `Idempotency-Key` was used before by the same account on
+        the same operation with a different body (ERR-15). Nothing changed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            idempotency-key-reused:
+              $ref: ./examples/problems/idempotency-key-reused.json
+    InvalidRequest:
+      description: >-
+        `invalid-request`: the request breaks the contract. The body is not valid JSON, misses a
+        required field, has an unknown field (CON-07), or has a value outside its type, length,
+        or pattern, or a required header such as `Idempotency-Key` is missing or malformed.
+        Nothing changed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            invalid-request:
+              $ref: ./examples/problems/invalid-request.json
+    InvalidListRequest:
+      description: >-
+        `invalid-request`: `limit` is not an integer from 1 to 100, `cursor` is empty, malformed,
+        or returned by another operation (CON-14), or the `order_id` filter of `listShopTickets`
+        is empty.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            invalid-limit:
+              $ref: ./examples/problems/invalid-limit.json
+            invalid-cursor:
+              $ref: ./examples/problems/invalid-cursor.json
+    InvalidRoleChange:
+      description: >-
+        `invalid-request`: the request fails validation against this contract, as for
+        `InvalidRequest`, or a well-formed request is refused under the admin limits 3 to 5 of
+        ADR-0012 or because the value is unchanged: the target is the caller's own account, the
+        target is an `admin` account, `role` is already the account's role, or the change would
+        leave no active `manager`. `violated_rule` names the reason of a refusal, and is absent
+        when the request fails validation. Nothing changed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/AccountChangeProblemDetails'
+          examples:
+            invalid-request:
+              $ref: ./examples/problems/invalid-request.json
+            own-account:
+              $ref: ./examples/problems/own-account.json
+            admin-role-unchangeable:
+              $ref: ./examples/problems/admin-role-unchangeable.json
+            role-unchanged:
+              $ref: ./examples/problems/role-unchanged.json
+            last-active-manager:
+              $ref: ./examples/problems/last-active-manager.json
+    InvalidStatusChange:
+      description: >-
+        `invalid-request`: the request fails validation against this contract, as for
+        `InvalidRequest`, or a well-formed request is refused under the admin limits 4 and 5 of
+        ADR-0012 or because the value is unchanged: the target is the caller's own account,
+        `is_active` is already the account's status, or the change would leave no active
+        `manager`. `violated_rule` names the reason of a refusal, and is absent when the request
+        fails validation. Nothing changed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/AccountChangeProblemDetails'
+          examples:
+            invalid-request:
+              $ref: ./examples/problems/invalid-request.json
+            own-account:
+              $ref: ./examples/problems/own-account.json
+            status-unchanged:
+              $ref: ./examples/problems/status-unchanged.json
+            last-active-manager:
+              $ref: ./examples/problems/last-active-manager.json
+    NotReady:
+      description: >-
+        `not-ready`: `backend` cannot serve the request now. The database is unavailable, or a
+        database timeout or lock wait limit was reached (ERR-09, ERR-18). The request changed
+        nothing. A client may retry a read, or a write with the same `Idempotency-Key`, as ERR-12
+        and TS-29 allow.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            not-ready:
+              $ref: ./examples/problems/not-ready.json
+    InternalError:
+      description: >-
+        `internal-error`: an unexpected failure in `backend`, logged at `error` level with the
+        trace ID. The body names no internal detail (CON-12).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            internal-error:
+              $ref: ./examples/problems/internal-error.json
+  schemas:
+    MessageText:
+      $ref: ./schemas/MessageText.yaml
+    Money:
+      $ref: ./schemas/Money.yaml
+    Timestamp:
+      $ref: ./schemas/Timestamp.yaml
+    ProblemDetails:
+      $ref: ./schemas/ProblemDetails.yaml
+    OrderStatus:
+      $ref: ./schemas/OrderStatus.yaml
+    ShipmentStatus:
+      $ref: ./schemas/ShipmentStatus.yaml
+    RefundStatus:
+      $ref: ./schemas/RefundStatus.yaml
+    AccountChangeRule:
+      description: >-
+        Why a well-formed admin change was refused: the admin limits 3 to 5 of ADR-0012, or a value
+        that is already the account's value. When several reasons apply, the value is the first
+        of this list.
+        `own_account`: the target is the caller's own account (admin limit 4).
+        `admin_role_unchangeable`: the target of a role change is an `admin` account (admin limit
+        3); only `changeAccountRole` returns it.
+        `role_unchanged`: `role` is already the account's role; only `changeAccountRole` returns
+        it.
+        `status_unchanged`: `is_active` is already the account's status; only
+        `changeAccountStatus` returns it.
+        `last_active_manager`: the change would leave no active `manager` (admin limit 5).
+        Consumers map an unknown value to a generic refusal (CON-22). Data class: Internal.
+      type: string
+      enum:
+        - own_account
+        - admin_role_unchangeable
+        - role_unchanged
+        - status_unchanged
+        - last_active_manager
+    AccountChangeProblemDetails:
+      description: >-
+        The body of a refused admin change: a `ProblemDetails` with the extension member
+        `violated_rule`, used by `changeAccountRole` and `changeAccountStatus` only. Data class:
+        Internal.
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+      properties:
+        violated_rule:
+          $ref: '#/components/schemas/AccountChangeRule'
+          description: >-
+            Why the request was refused. Present exactly when a well-formed request is refused
+            under the admin limits 3 to 5 of ADR-0012 or because the value is unchanged. Absent
+            when the request fails validation against this contract, for example with a malformed
+            body or without an `Idempotency-Key` (CON-08). Data class: Internal.
+    Cursor:
+      description: >-
+        An opaque position in a list, from 1 to 512 characters (CON-14, CON-15). Data class:
+        Internal.
+      type: string
+      minLength: 1
+      maxLength: 512
+    AccountRole:
+      description: >-
+        The role of an account (ADR-0012).
+        `customer`: a simulated shopper who uses `/shop`.
+        `staff`: Tier 1 support staff who use `/console`.
+        `manager`: Tier 2 support managers who use `/console` with authority for FR-06 and view
+        reports.
+        `admin`: manages internal accounts and views the versions in use in `/admin`.
+        Consumers treat an unknown value as a role without any area. Data class: Internal.
+      type: string
+      enum:
+        - customer
+        - staff
+        - manager
+        - admin
+    InternalAccountRole:
+      description: >-
+        The role of an internal account, as `AccountRole` defines it without `customer`.
+        Consumers treat an unknown value as a role that cannot be changed. Data class: Internal.
+      type: string
+      enum:
+        - staff
+        - manager
+        - admin
+    AssignableAccountRole:
+      description: >-
+        A role that an admin can give an account: `staff` or `manager`, as `AccountRole` defines
+        them (ADR-0012, admin limit 3). Data class: Internal.
+      type: string
+      enum:
+        - staff
+        - manager
+    CreateSessionRequest:
+      description: >-
+        The credentials of a seeded account (ADR-0009). Data class: Secret.
+      type: object
+      additionalProperties: false
+      required:
+        - login_name
+        - password
+      properties:
+        login_name:
+          description: >-
+            The login name of the account, from 1 to 64 characters, such as `staff-1`. It names a
+            role and a number, never a person. Data class: Internal.
+          type: string
+          minLength: 1
+          maxLength: 64
+        password:
+          description: >-
+            The password of the account, from 1 to 128 characters. `backend` never stores or
+            logs it. Data class: Secret.
+          type: string
+          format: password
+          minLength: 1
+          maxLength: 128
+    SessionView:
+      description: >-
+        The signed-in account of a session. Data class: Confidential.
+      type: object
+      required:
+        - account_id
+        - display_name
+        - role
+      properties:
+        account_id:
+          description: >-
+            The identifier of the signed-in account, the same identifier that
+            `listAdminAccounts` returns (CON-15). Data class: Internal.
+          type: string
+          minLength: 1
+        display_name:
+          description: >-
+            The name shown for the account: the customer's name, or the staff identity. Data
+            class: Confidential.
+          type: string
+          minLength: 1
+        role:
+          $ref: '#/components/schemas/AccountRole'
+          description: >-
+            The role of the account, which decides the area that `frontend` opens. Data class:
+            Internal.
+    ShopProductView:
+      description: >-
+        A product of the read-only catalog (ADR-0013). Data class: Public.
+      type: object
+      required:
+        - product_id
+        - name
+        - description
+        - category
+        - price
+      properties:
+        product_id:
+          description: >-
+            The identifier of the product (CON-15). Data class: Public.
+          type: string
+          minLength: 1
+        name:
+          description: >-
+            The name of the product. Data class: Public.
+          type: string
+          minLength: 1
+        description:
+          description: >-
+            The description of the product, as plain text, which `frontend` never renders as
+            HTML or Markdown (SEC-22). Data class: Public.
+          type: string
+          minLength: 1
+        category:
+          description: >-
+            The name of the product's category, as plain text. Data class: Public.
+          type: string
+          minLength: 1
+        price:
+          $ref: '#/components/schemas/Money'
+          description: >-
+            The price of one unit of the product. Data class: Public.
+    ShopProductPage:
+      description: >-
+        One page of catalog products (CON-14). Data class: Public.
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          description: >-
+            The products of the page, in the order the operation states, at most `limit` of
+            them. Empty when the catalog has no product. Data class: Public.
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ShopProductView'
+        next_cursor:
+          $ref: '#/components/schemas/Cursor'
+          description: >-
+            The cursor of the next page, present when at least one more item follows. Absent on
+            the last page. Data class: Internal.
+    ShopOrderView:
+      description: >-
+        One of the customer's simulated orders (`synthetic-dev-only` commerce data). It has no
+        shipping address and no transaction ID. Data class: Confidential.
+      type: object
+      required:
+        - order_id
+        - order_status
+        - placed_at
+        - order_total
+        - shipping_cost
+        - lines
+        - shipment
+      properties:
+        order_id:
+          description: >-
+            The identifier of the order (CON-15). It identifies a person's purchase. Data
+            class: Confidential.
+          type: string
+          minLength: 1
+        order_status:
+          $ref: '#/components/schemas/OrderStatus'
+          description: >-
+            The status of the order. Data class: Confidential.
+        placed_at:
+          $ref: '#/components/schemas/Timestamp'
+          description: >-
+            When the customer placed the order. Data class: Confidential.
+        order_total:
+          $ref: '#/components/schemas/Money'
+          description: >-
+            The total the customer paid for the order, including `shipping_cost`. Data class:
+            Confidential.
+        shipping_cost:
+          $ref: '#/components/schemas/Money'
+          description: >-
+            The shipping cost of the order, in the same currency as `order_total`. Data class:
+            Confidential.
+        lines:
+          description: >-
+            The lines of the order, in the order of the order's own line numbers. At least one.
+            Data class: Confidential.
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ShopOrderLine'
+        shipment:
+          $ref: '#/components/schemas/ShopShipmentView'
+          description: >-
+            The shipment of the order. Always present: an order whose commerce data holds no
+            shipment record yet has `shipment_status` `not_shipped` and no dates. Data class:
+            Confidential.
+        refund:
+          $ref: '#/components/schemas/ShopRefundView'
+          description: >-
+            The refund of the order. Absent when no refund was requested for the order. Data
+            class: Confidential.
+    ShopOrderLine:
+      description: >-
+        One line of an order. Data class: Confidential.
+      type: object
+      required:
+        - product_id
+        - product_name
+        - quantity
+      properties:
+        product_id:
+          description: >-
+            The catalog product of the line, which `getShopProduct` returns (CON-15). Data
+            class: Confidential, because it tells what the customer bought.
+          type: string
+          minLength: 1
+        product_name:
+          description: >-
+            The name of that product, as `ShopProductView.name` holds it. Data class:
+            Confidential, because it tells what the customer bought.
+          type: string
+          minLength: 1
+        quantity:
+          description: >-
+            The number of units of the product in the line. Data class: Confidential.
+          type: integer
+          minimum: 1
+    ShopShipmentView:
+      description: >-
+        The shipment of an order. Data class: Confidential.
+      type: object
+      required:
+        - shipment_status
+      properties:
+        shipment_status:
+          $ref: '#/components/schemas/ShipmentStatus'
+          description: >-
+            The status of the shipment. Data class: Confidential.
+        estimated_delivery_at:
+          $ref: '#/components/schemas/Timestamp'
+          description: >-
+            When the carrier expects to deliver the parcel. Absent when the commerce data holds
+            no estimate. Data class: Confidential.
+        delivered_at:
+          $ref: '#/components/schemas/Timestamp'
+          description: >-
+            When the carrier delivered the parcel. Present exactly when `shipment_status` is
+            `delivered`. Data class: Confidential.
+    ShopRefundView:
+      description: >-
+        The refund of an order. Data class: Confidential.
+      type: object
+      required:
+        - refund_status
+        - refund_amount
+        - refund_requested_at
+      properties:
+        refund_status:
+          $ref: '#/components/schemas/RefundStatus'
+          description: >-
+            The status of the refund. Data class: Confidential.
+        refund_amount:
+          $ref: '#/components/schemas/Money'
+          description: >-
+            The amount requested for the refund, in the currency of the order. Data class:
+            Confidential.
+        refund_requested_at:
+          $ref: '#/components/schemas/Timestamp'
+          description: >-
+            When the refund was requested. Data class: Confidential.
+    ShopOrderPage:
+      description: >-
+        One page of the customer's orders (CON-14). Data class: Confidential.
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          description: >-
+            The orders of the page, in the order the operation states, at most `limit` of them.
+            Empty when the customer has no order. Data class: Confidential.
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ShopOrderView'
+        next_cursor:
+          $ref: '#/components/schemas/Cursor'
+          description: >-
+            The cursor of the next page, present when at least one more item follows. Absent on
+            the last page. Data class: Internal.
+    CreateShopTicketRequest:
+      description: >-
+        A customer's message about one of their orders. Data class: Confidential.
+      type: object
+      additionalProperties: false
+      required:
+        - order_id
+        - message
+      properties:
+        order_id:
+          description: >-
+            The order that the message is about, one of the caller's orders (ADR-0013). Data
+            class: Confidential.
+          type: string
+          minLength: 1
+        message:
+          $ref: '#/components/schemas/MessageText'
+          description: >-
+            The customer's message, exactly as written. Data class: Confidential.
+    ShopTicketStatus:
+      description: >-
+        The status of a ticket as the customer sees it. It never shows the internal ticket
+        state, a suggestion, a proposal, or an escalation.
+        `received`: no reply was sent yet.
+        `replied`: staff sent the reply, which the ticket holds.
+        Consumers show an unknown value as `received`. Data class: Internal.
+      type: string
+      enum:
+        - received
+        - replied
+    ShopTicketView:
+      description: >-
+        A customer's ticket as the shop shows it: the message and, once staff sent it, the
+        reply. It has no field that can hold AI output. Data class: Confidential.
+      type: object
+      required:
+        - ticket_id
+        - order_id
+        - message
+        - created_at
+        - customer_status
+      properties:
+        ticket_id:
+          description: >-
+            The identifier of the ticket, which the customer can quote to support (CON-15). Data
+            class: Internal.
+          type: string
+          minLength: 1
+        order_id:
+          description: >-
+            The order that the ticket is about. Data class: Confidential.
+          type: string
+          minLength: 1
+        message:
+          $ref: '#/components/schemas/MessageText'
+          description: >-
+            The customer's message, exactly as written. Data class: Confidential.
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+          description: >-
+            When the customer sent the message. Data class: Internal.
+        customer_status:
+          $ref: '#/components/schemas/ShopTicketStatus'
+          description: >-
+            Whether the reply was sent. Data class: Internal.
+        reply:
+          $ref: '#/components/schemas/ShopReplyView'
+          description: >-
+            The reply that staff sent. Present exactly when `customer_status` is `replied`, and
+            absent while it is `received`. Data class: Confidential.
+    ShopReplyView:
+      description: >-
+        The reply that staff sent to the customer. Data class: Confidential.
+      type: object
+      required:
+        - body
+        - sent_at
+      properties:
+        body:
+          $ref: '#/components/schemas/MessageText'
+          description: >-
+            The text of the reply, exactly as staff sent it. It never contains a placeholder
+            (ADR-0010). Data class: Confidential.
+        sent_at:
+          $ref: '#/components/schemas/Timestamp'
+          description: >-
+            When staff sent the reply. Data class: Internal.
+    ShopTicketPage:
+      description: >-
+        One page of the customer's tickets (CON-14). Data class: Confidential.
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          description: >-
+            The tickets of the page, in the order the operation states, at most `limit` of
+            them. Empty when the customer has no ticket, or none about the given order. Data
+            class: Confidential.
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ShopTicketView'
+        next_cursor:
+          $ref: '#/components/schemas/Cursor'
+          description: >-
+            The cursor of the next page, present when at least one more item follows. Absent on
+            the last page. Data class: Internal.
+    AdminAccountView:
+      description: >-
+        An internal account as the admin area shows it. It has no email, password hash, or
+        session data (ADR-0012, admin limit 9). Data class: Confidential.
+      type: object
+      required:
+        - account_id
+        - display_name
+        - role
+        - is_active
+      properties:
+        account_id:
+          description: >-
+            The identifier of the account, the same identifier that `getCurrentSession` returns
+            (CON-15). `frontend` uses it for requests and to find the caller's own row, and
+            never shows it. Data class: Internal.
+          type: string
+          minLength: 1
+        display_name:
+          description: >-
+            The name shown for the account, a staff identity. Data class: Confidential.
+          type: string
+          minLength: 1
+        role:
+          $ref: '#/components/schemas/InternalAccountRole'
+          description: >-
+            The role of the account. Data class: Internal.
+        is_active:
+          description: >-
+            Whether the account can sign in. `false` means deactivated. Data class: Internal.
+          type: boolean
+    AdminAccountPage:
+      description: >-
+        One page of internal accounts (CON-14). Data class: Confidential.
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          description: >-
+            The accounts of the page, in the order the operation states, at most `limit` of
+            them. Data class: Confidential.
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/AdminAccountView'
+        next_cursor:
+          $ref: '#/components/schemas/Cursor'
+          description: >-
+            The cursor of the next page, present when at least one more item follows. Absent on
+            the last page. Data class: Internal.
+    ChangeAccountRoleRequest:
+      description: >-
+        The new role of a `staff` or `manager` account. Data class: Internal.
+      type: object
+      additionalProperties: false
+      required:
+        - role
+      properties:
+        role:
+          $ref: '#/components/schemas/AssignableAccountRole'
+          description: >-
+            The role that the account gets. The account's current role is refused with
+            `role_unchanged`. Data class: Internal.
+    ChangeAccountStatusRequest:
+      description: >-
+        The new status of an internal account. Data class: Internal.
+      type: object
+      additionalProperties: false
+      required:
+        - is_active
+      properties:
+        is_active:
+          description: >-
+            `true` reactivates the account and `false` deactivates it. The account's current
+            status is refused with `status_unchanged`. Data class: Internal.
+          type: boolean

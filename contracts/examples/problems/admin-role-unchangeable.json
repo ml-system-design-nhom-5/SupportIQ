@@ -1,0 +1,11 @@
+{
+  "summary": "The target is an admin account",
+  "value": {
+    "type": "urn:supportiq:problem:invalid-request",
+    "title": "Invalid request",
+    "status": 422,
+    "detail": "The role of an admin account cannot be changed.",
+    "trace_id": "16cd43dd8448eb211c80319c0af76519",
+    "violated_rule": "admin_role_unchangeable"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "summary": "The cursor is malformed or belongs to another operation",
+  "value": {
+    "type": "urn:supportiq:problem:invalid-request",
+    "title": "Invalid request",
+    "status": 422,
+    "detail": "The parameter cursor is not a cursor of this operation.",
+    "trace_id": "9c0af7651916cd43dd8448eb211c8031"
+  }
+}
