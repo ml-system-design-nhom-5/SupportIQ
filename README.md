@@ -68,12 +68,14 @@ sequenceDiagram
 
 ## Project status
 
-Implementation against mocks, after the first contract. Decisions are recorded in [docs/decisions/](docs/decisions/README.md).
+`frontend` and the `backend` foundation are implemented; the ticket workflow and `ai-service` come next. Decisions are recorded in [docs/decisions/](docs/decisions/README.md).
 
 - Revision 2 of the contracts v1 design ([docs/design/contracts-v1.md](docs/design/contracts-v1.md)) aligns the design with the team's specification and is in review, together with ADR-0010, ADR-0011, and ADR-0014. ADR-0012 and ADR-0013 were accepted on 2026-11-05.
 - On 2026-11-05 the project lead approved the `frontend` ↔ `backend` part of revision 2 for contract PR 2. Contract PR 2 adds [`contracts/backend.openapi.yaml`](contracts/backend.openapi.yaml) 1.0.0 with an example for every outcome, a Prism mock, and the contract checks ([contracts/README.md](contracts/README.md)).
+- Version 1.0.1 of `contracts/backend.openapi.yaml` (2026-11-08) clarifies the reuse of an `Idempotency-Key`, the responses from the ingress, and the products of an order ([CHANGELOG](contracts/CHANGELOG.md)). The [backend foundation design](docs/design/backend-foundation.md) is in review again for the revision that the implementation brought, and the frontend engineer and the contracts gatekeeper approve it.
 - Repository checks run with pre-commit locally and with GitHub Actions in CI ([docs/guides/repository-checks.md](docs/guides/repository-checks.md)).
-- `frontend` is scaffolded and runs against the Prism mock: sign-in, the shop, and the Accounts screen of the admin area ([frontend/README.md](frontend/README.md)). The other components are not scaffolded yet.
+- `backend` is scaffolded: [backend/README.md](backend/README.md) gives setup, commands, and demo accounts.
+- `frontend` is scaffolded and runs against the Prism mock: sign-in, the shop, and the Accounts screen of the admin area ([frontend/README.md](frontend/README.md)). The shop and admin UI designs are in review again for the revision that the implementation brought. `ai-service` is not scaffolded yet.
 
 ## Target repository layout
 
@@ -84,8 +86,8 @@ supportiq-ecom/
 ├── docs/            # Requirements, decisions, rules, glossary
 ├── .github/         # CI workflows (docs/guides/repository-checks.md)
 ├── contracts/       # API and data contracts, their examples, and their tooling
-├── frontend/        # /shop, /console, and /admin
-├── backend/         # Created at scaffold
+├── frontend/        # /shop, /console, and /admin; see frontend/README.md
+├── backend/         # See backend/README.md
 ├── ai-service/      # Created at scaffold
 ├── ml/              # Training and offline evaluation (created at scaffold)
 ├── eval/            # Shared test sets and evaluation runs (created at scaffold)

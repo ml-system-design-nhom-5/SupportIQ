@@ -1,0 +1,45 @@
+"""Public API of idempotency: the records of write requests and the `IdempotencyStore` port."""
+
+from supportiq_backend.idempotency.application import IdempotencyGuard
+from supportiq_backend.idempotency.domain import (
+    CanonicalValue,
+    ClaimOutcome,
+    ExistingRecord,
+    IdempotencyKey,
+    IdempotencyKeyReusedError,
+    IdempotencyRecordIncompleteError,
+    IdempotencyStore,
+    IdempotentRequest,
+    InvalidIdempotencyKeyError,
+    NewRequest,
+    RepeatedRequest,
+    RequesterId,
+    RequestHash,
+    StoredResponse,
+    build_idempotent_request,
+    compute_request_hash,
+    parse_idempotency_key,
+    resolve_existing_record,
+)
+
+__all__ = [
+    "CanonicalValue",
+    "ClaimOutcome",
+    "ExistingRecord",
+    "IdempotencyGuard",
+    "IdempotencyKey",
+    "IdempotencyKeyReusedError",
+    "IdempotencyRecordIncompleteError",
+    "IdempotencyStore",
+    "IdempotentRequest",
+    "InvalidIdempotencyKeyError",
+    "NewRequest",
+    "RepeatedRequest",
+    "RequestHash",
+    "RequesterId",
+    "StoredResponse",
+    "build_idempotent_request",
+    "compute_request_hash",
+    "parse_idempotency_key",
+    "resolve_existing_record",
+]

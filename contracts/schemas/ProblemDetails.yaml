@@ -23,7 +23,7 @@ properties:
       `not-found`: the resource does not exist, or the caller may not know
       about it;
       `idempotency-key-reused`: the `Idempotency-Key` was used before with a
-      different body;
+      different body or different path parameters;
       `not-ready`: the provider cannot serve the request now, for example
       because its database is unavailable or a timeout fired;
       `internal-error`: an unexpected failure in the provider.
