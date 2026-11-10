@@ -1,6 +1,6 @@
 # Architecture rules
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-01
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-07
 
 Rules for where code lives, how parts depend on each other, and how the system grows without rewrites. The component map and its reasons are in [ADR-0001](../decisions/0001-system-architecture.md).
 
@@ -54,7 +54,7 @@ flowchart TB
 |---|---|---|---|
 | Interface | HTTP handlers, request and response mapping, UI routes | Application, its own contract models | Adapters, database drivers, LLM SDKs |
 | Application | Use cases that orchestrate the domain through ports; transaction boundaries | Domain | Interface, adapters, frameworks, SDKs |
-| Domain | Entities, value objects, business rules, domain errors, port interfaces | Standard library only | Everything else |
+| Domain | Entities, value objects, business rules, domain errors, port interfaces | Standard library; the public API of `platform`, for the root error (PY-20) and for shared errors, types, and pure functions; the public API of a lower feature, for its identifiers and errors | Frameworks, drivers, SDKs, adapters, interface code |
 | Adapters | Port implementations | Domain, third-party SDKs and drivers | Interface, application, other adapters |
 | Composition root | Creates adapters, wires them into use cases, configures the framework | Everything | — |
 

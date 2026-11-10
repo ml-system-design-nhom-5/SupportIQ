@@ -1,6 +1,6 @@
 # Python rules
 
-> **Status:** Active · **Owner:** backend and ai-service · **Last reviewed:** 2026-10-23
+> **Status:** Active · **Owner:** backend and ai-service · **Last reviewed:** 2026-11-08
 
 Python-specific rules for `backend`, `ai-service`, `ml`, `eval`, and Python scripts. They build on [code.md](code.md); where both apply, both must hold.
 
@@ -109,7 +109,7 @@ Python-specific rules for `backend`, `ai-service`, `ml`, `eval`, and Python scri
 
 **PY-31.** CPU-bound work that can take more than a few milliseconds, such as model inference, runs in a worker thread (`asyncio.to_thread`) so it never blocks the event loop.
 
-**PY-32.** Every awaited I/O has a timeout: client-level timeouts on `httpx.AsyncClient`, plus `asyncio.timeout()` around composite operations, using values from settings.
+**PY-32.** Every awaited I/O has a timeout: client-level timeouts on `httpx.AsyncClient`, plus `asyncio.timeout()` around composite operations that call another service, using values from settings. The database timeout settings bound each database call, so a transaction needs no timeout of its own.
 
 **PY-33.** Concurrent calls use `asyncio.TaskGroup`. Fire-and-forget tasks are forbidden; every task is awaited or owned by a supervised group.
 
@@ -133,7 +133,7 @@ Python-specific rules for `backend`, `ai-service`, `ml`, `eval`, and Python scri
 
 **PY-41.** Transactions belong to the application layer (unit of work). Repositories and handlers never commit.
 
-**PY-42.** SQL is never built with string formatting. Use the ORM or bound parameters.
+**PY-42.** SQL is never built with string formatting. Use the ORM or bound parameters. Exception: test code may format the identifiers and the password in a DDL statement that PostgreSQL cannot parameterize, such as `CREATE DATABASE` or `CREATE ROLE`, when each value is a constant of the test or matches a fixed pattern.
 
 ## Settings
 
