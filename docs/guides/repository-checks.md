@@ -1,6 +1,6 @@
 # Repository checks and CI
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-05
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-07
 
 How to run the repository-wide checks locally, which GitHub Actions workflows run them, and the convention that every workflow file follows. Read it before you add hooks to `.pre-commit-config.yaml` or a workflow to `.github/workflows/`. The contract tooling itself is described in [contracts/README.md](../../contracts/README.md).
 
@@ -14,8 +14,10 @@ flowchart LR
     Hooks -->|"any hook fails"| Blocked["Commit blocked:<br/>fix and commit again"]
     Push["Push or pull request"] --> Repo["repository.yml:<br/>job repository-checks"]
     Push --> Con["contracts.yml:<br/>job contract-checks"]
+    Push --> Be["backend.yml:<br/>jobs backend-checks,<br/>backend-tests, backend-image"]
     Repo -->|"pre-commit run --all-files<br/>--hook-stage manual"| Result{"All checks pass?"}
     Con -->|"audit, pre-commit run contracts-check,<br/>bundle, mock check"| Result
+    Be -->|"backend hooks, audit, tests with coverage,<br/>image build"| Result
     Result -->|"no"| Red["Merge blocked (WF-19)"]
     Result -->|"yes"| Green["Merge allowed"]
 ```
@@ -33,6 +35,10 @@ Each tool is justified here, as [WF-27](../rules/workflow.md#dependencies) requi
 | Contract lint, custom rules, example validation, and the TypeScript checks | `contracts-check`, with the tools of [contracts/README.md](../../contracts/README.md#tools) | [RULE-03](../rules/README.md#enforcement), CON-04 to CON-18 | Yes | `contract-checks` |
 | High and critical vulnerabilities in the contract tools | `pnpm audit --audit-level=high` in `contracts/` | [WF-31](../rules/workflow.md#dependencies) | — | `contract-checks` |
 | Contract bundle, and the sign-in flow and example files through the Prism mock | `pnpm run bundle`, `pnpm run check:mock` in `contracts/` | Proves that consumers can generate code from the bundle and use the mock | — | `contract-checks` |
+| `backend` formatting, lint, strict types, layer and feature boundaries, and generated models | The hooks `backend-format`, `backend-lint`, `backend-types`, `backend-imports`, and `backend-generated`, with the tools of the [`backend` README](../../backend/README.md#dependencies) | [RULE-03](../rules/README.md#enforcement), CON-26 | Yes | `backend-checks` |
+| Known vulnerabilities in every locked `backend` dependency | pip-audit 2.10.1, Apache-2.0 | [WF-31](../rules/workflow.md#dependencies) | — | `backend-checks` |
+| `backend` tests against PostgreSQL 17, with branch coverage | pytest 9.2.0, MIT, and coverage 7.17.2, Apache-2.0 | TEST-21 | — | `backend-tests` |
+| The `backend` image build | `docker build` of `backend/Dockerfile` | ARCH-10 | — | `backend-image` |
 
 pre-commit installs the runtimes of the hooks at the versions in `default_language_version`: Go 1.27.3 for gitleaks and actionlint, and Node.js 24.22.2 for markdownlint-cli2.
 
@@ -135,20 +141,21 @@ The `workflow-*` hooks are pygrep hooks, which come with pre-commit. Each one fa
 Set these on GitHub for `chore/fe-be-supportiq-ecom` (Settings → Branches, or a ruleset):
 
 - Require a pull request before merging, with at least one approval ([WF-15](../rules/workflow.md#reviews)).
-- Require status checks to pass, with the branch up to date before merging. Required checks: `repository-checks` and `contract-checks`. Add `backend-…` and `frontend-…` jobs when those workflows land.
+- Require status checks to pass, with the branch up to date before merging. Required checks: `repository-checks`, `contract-checks`, `backend-checks`, `backend-tests`, and `backend-image`. Add `frontend-…` jobs when that workflow lands.
 - Block force pushes and deletions ([WF-07](../rules/workflow.md#branches)).
 
 ## The first CI run
 
 GitHub Actions cannot run locally. On the first push, check:
 
-1. Both workflows start, and the jobs `repository-checks` and `contract-checks` appear. A missing workflow means a trigger or syntax problem.
+1. All three workflows start, and the jobs `repository-checks`, `contract-checks`, `backend-checks`, `backend-tests`, and `backend-image` appear. A missing workflow means a trigger or syntax problem.
 2. Every `uses:` step resolves. "Unable to resolve action" means a wrong commit SHA.
 3. `contract-checks` installs pnpm 12.16.1 and Node.js 24.22.2, and `pnpm install --frozen-lockfile` neither reports an outdated lockfile nor stops on an ignored build script.
-4. Both jobs install pre-commit 4.7.0. The first `repository-checks` run downloads Go 1.27.3 and Node.js 24.22.2 for the hooks and saves the cache; the second run is faster.
+4. `repository-checks`, `contract-checks`, and `backend-checks` install pre-commit 4.7.0. The first `repository-checks` run downloads Go 1.27.3 and Node.js 24.22.2 for the hooks and saves the cache; the second run is faster.
 5. `repository-checks` passes `Detect hardcoded secrets in the git history`. It scans only the commits reachable from `HEAD`: other branches of the clone, such as `main`, are not scanned.
 6. `pnpm audit --audit-level=high` reports no high or critical advisory except the one ignored in `contracts/pnpm-workspace.yaml`, and `pnpm run check:mock` prints three `ok` lines.
-7. Both jobs finish within their `timeout-minutes`. Then set the branch protection above.
+7. `backend-tests` reaches the PostgreSQL 17 service, creates `supportiq_owner` and `supportiq_app`, and passes both coverage reports. `backend-image` builds `backend/Dockerfile`, which only CI builds.
+8. All jobs finish within their `timeout-minutes`. Then set the branch protection above.
 
 ## Open questions
 

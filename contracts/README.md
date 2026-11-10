@@ -6,7 +6,7 @@ This folder holds the API and data contracts between `frontend`, `backend`, and 
 
 | Path | Content |
 |---|---|
-| [`backend.openapi.yaml`](backend.openapi.yaml) | The `frontend` ↔ `backend` contract, version 1.0.0 |
+| [`backend.openapi.yaml`](backend.openapi.yaml) | The `frontend` ↔ `backend` contract, version 1.0.1 |
 | [`schemas/`](schemas/) | JSON Schemas shared by the OpenAPI files, one file per schema, named after its key in `components.schemas`, such as `Money.yaml` for `Money` ([CON-09](../docs/rules/contracts.md#openapi-style)). The same name in both places gives each shared schema exactly one name in the bundle and in generated code |
 | [`examples/`](examples/) | One example file per outcome: `<operationId>/<outcome>.json`, and `problems/<outcome>.json` for the error responses that several operations share |
 | [`CHANGELOG.md`](CHANGELOG.md) | Every contract change, with its version ([CON-24](../docs/rules/contracts.md#evolution)) |
@@ -111,10 +111,10 @@ The `backend` and `frontend` work streams build against these files in parallel.
 | Side | Generator ([ADR-0003](../docs/decisions/0003-tech-stack.md)) | Output | Input |
 |---|---|---|---|
 | `frontend` | `openapi-typescript` for the types and `openapi-fetch` for the client | `frontend/src/api/generated/` ([TS-05](../docs/rules/typescript.md#project-layout), [TS-27](../docs/rules/typescript.md#api-access)) | `contracts/backend.openapi.yaml` |
-| `backend` | `datamodel-code-generator` for the Pydantic request and response models | A folder named `generated/` inside `backend/src/supportiq_backend/`; the `backend` README fixes its exact path at scaffold ([PY-35](../docs/rules/python.md#fastapi)) | `contracts/backend.openapi.yaml` |
+| `backend` | `datamodel-code-generator` for the Pydantic request and response models | `backend/src/supportiq_backend/generated/__init__.py` ([PY-35](../docs/rules/python.md#fastapi)) | `contracts/backend.openapi.yaml` |
 
 - Each component pins its generator in its own lockfile and documents the generation command in its README.
-- Both generators read the contract directly and follow its relative `$ref`s. On 2026-11-05, `openapi-typescript` 7.10.1 and `datamodel-code-generator` 0.35.0 both generated code from `backend.openapi.yaml` and from the output of `pnpm run bundle`. From the source file, `openapi-typescript` warns that example names repeat across operations; the warnings do not change the generated types, and the bundle gives none. A tool that cannot follow relative `$ref`s reads the bundle.
+- Both generators read the contract directly and follow its relative `$ref`s. On 2026-11-05, `openapi-typescript` 7.10.1 and `datamodel-code-generator` 0.35.0 both generated code from `backend.openapi.yaml` and from the output of `pnpm run bundle`. From the source file, `openapi-typescript` warns that example names repeat across operations; the warnings do not change the generated types, and the bundle gives none. A tool that cannot follow relative `$ref`s reads the bundle. `backend` now pins `datamodel-code-generator` 0.90.0 in its lockfile.
 - Generated files live only in folders named `generated/`. They are never edited by hand and are excluded from linters and coverage. CI regenerates them and fails when the committed output differs ([CON-25, CON-26](../docs/rules/contracts.md#generated-code)).
 
 ### The mock
