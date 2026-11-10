@@ -3,7 +3,7 @@
 - **Status:** In review
 - **Owner:** frontend engineer
 - **Reviewers:** backend engineer, contracts gatekeeper
-- **Last reviewed:** 2026-11-08
+- **Last reviewed:** 2026-11-10
 - **Related:** [Requirements](../product/requirements.md) (FR-08, FR-11), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md), [contracts v1 design](contracts-v1.md) (revision 2, in review), [console UI design](console-ui.md) (tokens), [UI rules](../rules/ui.md#shop)
 
 ## Summary
@@ -12,7 +12,7 @@ This design fixes the screens of `/shop`, where simulated customers browse a rea
 
 On 2026-11-05 the team chose the layout: My orders is a list, and each order page holds the order details, every ticket about that order with its reply, and a message box. A Support page lists every ticket, and each one opens on the page of its order.
 
-**Revision of 2026-11-07, decided by the project lead:** after a timeout, a lost connection, `502`, or `504`, nobody knows whether a message arrived: `backend` may finish a write after `frontend` stopped waiting (`backend` contract, Timeouts), and a write in flight can fail with `502` ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), Proposed). The contract text on responses from the ingress follows in the next contract change. The same holds for a `2xx` whose body cannot be read, and for a later failure with the same key, unless `backend` refuses it with `422` or `404`. The `Idempotency-Key` now stays with a message until the send succeeds or the text changes, and the banner says that the message may have arrived. The first decision is kept under [Alternatives considered](#alternatives-considered). The revision also records that a product appears at most once in an order, and where the focus goes after sending.
+**Revision of 2026-11-07, decided by the project lead:** after a timeout, a lost connection, `502`, or `504`, nobody knows whether a message arrived: `backend` may finish a write after `frontend` stopped waiting (`backend` contract, Timeouts), and a write in flight can fail with `502` ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), Proposed). Version 1.0.1 of the `backend` contract states this in its text on responses from the ingress. The same holds for a `2xx` whose body cannot be read, and for a later failure with the same key, unless `backend` refuses it with `422` or `404`. The `Idempotency-Key` now stays with a message until the send succeeds or the text changes, and the banner says that the message may have arrived. The first decision is kept under [Alternatives considered](#alternatives-considered). The revision also records that a product appears at most once in an order, and where the focus goes after sending.
 
 ## Goals and non-goals
 
@@ -197,7 +197,7 @@ Each badge has an icon and a label, so color is never the only signal. The tones
 - Every screen maps to `ShopProductView`, `ShopOrderView`, or `ShopTicketView` in [contracts v1](contracts-v1.md#backend-contract-backendopenapiyaml) revision 2. The shop schemas have no field that can hold AI output.
 - The order page lists the tickets of one order with the optional `order_id` query parameter of `listShopTickets` (contracts v1 revision 2, a compatible change under [CON-19](../rules/contracts.md#evolution)).
 - Order lines show the product name and quantity, and the order shows its total. `ShopOrderView` has no price per line, so the shop shows none.
-- A product appears at most once in an order (decided by the project lead on 2026-11-07), so `frontend` keys order lines by `product_id` ([TS-24](../rules/typescript.md#react)). The contract states it in its next change.
+- A product appears at most once in an order (decided by the project lead on 2026-11-07), so `frontend` keys order lines by `product_id` ([TS-24](../rules/typescript.md#react)). Version 1.0.1 of the `backend` contract states it.
 - `getShopTicket` has no screen in this design, because every ticket opens on its order page. Contract PR 2 keeps it, because the Goals of the [backend foundation design](backend-foundation.md#goals) list it.
 - Every list requests the default page of 20 items, and Show more requests the next page with `next_cursor` ([CON-14](../rules/contracts.md#api-conventions)). The contract fixes the orders: products by name, orders newest first by `placed_at`, and tickets newest first by `created_at`.
 

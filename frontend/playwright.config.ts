@@ -5,7 +5,7 @@
  */
 import { defineConfig, devices } from "@playwright/test";
 
-// TODO(#6): package.json pins Playwright to 1.61.1, because later versions dropped macOS 13.
+// TODO(#6): package.json pins Playwright to 1.61.1 so that the browser tests run on macOS 13.
 const PREVIEW_ORIGIN = "http://127.0.0.1:4173";
 const MOCK_ORIGIN = "http://127.0.0.1:4010";
 const SERVER_START_LIMIT_MS = 120_000;

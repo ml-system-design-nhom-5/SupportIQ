@@ -193,7 +193,7 @@ function OrderContent({ order, messageBoxId, support }: OrderContentProps) {
       <OrderSummary
         statuses={buildOrderSummaryStatuses(order)}
         lines={order.lines.map((line) => ({
-          // A product appears at most once in an order (decided by the project lead on 2026-11-07).
+          // A product appears at most once in an order (`backend` contract 1.0.1).
           key: line.productId,
           productName: line.productName,
           quantity: line.quantity,

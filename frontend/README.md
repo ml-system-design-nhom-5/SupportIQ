@@ -180,7 +180,7 @@ The project lead approved OFL-1.1 and MPL-2.0 on 2026-11-07 ([WF-30](../docs/rul
 
 ## Known limits
 
-- Playwright stays on 1.61.1 because later versions dropped macOS 13. Tracked in [#6](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/6).
+- Playwright stays on 1.61.1 so that the browser tests of `frontend` run on macOS 13. Which development platforms these tests support is not recorded yet. Tracked in [#6](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/6).
 - `pnpm audit` reports two moderate advisories in `glob` and `minimatch`, through the docgen of `@storybook/react-vite`. They are development tools, and CI fails only on high or critical advisories ([WF-31](../docs/rules/workflow.md#dependencies)).
 - The build is one bundle, so Vite warns that a chunk is larger than 500 kB. Tracked in [#5](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/5).
 - The keyboard focus falls to the page in five cases. Show more on the last page removes its button: Shift+Tab reaches the last new item, and Tab goes to the top of the page. The reload after an unknown outcome can replace the button that holds the focus. The reload after a change to an account that is gone (`404`) removes its row, the focused button included. Reload list in the refused banner removes the banner with its button. In these two cases, Tab then moves on to the buttons of the list in Chromium. The permission-denied screen replaces the whole screen, buttons included. Tracked in [#7](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/7).
