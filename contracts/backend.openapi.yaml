@@ -1,10 +1,10 @@
 openapi: 3.1.0
 info:
   title: SupportIQ backend API
-  version: 1.0.0
+  version: 1.0.1
   description: |
     The contract between `frontend` and `backend` for sign-in, the read-only shop, and the
-    management of internal accounts. Version 1.0.0 holds the operations of contract PR 2,
+    management of internal accounts. Version 1.0.1 holds the operations of contract PR 2,
     taken from the [contracts v1 design](../docs/design/contracts-v1.md) (revision 2) and the
     [backend foundation design](../docs/design/backend-foundation.md). The console operations
     and `getAdminVersions` come in a later version.
@@ -41,9 +41,11 @@ info:
     the media type `application/problem+json`. `backend` returns `422 invalid-request` for every
     invalid request, including a body that is not valid JSON, and never returns `400`.
 
-    The ingress can answer `413`, `429`, `502`, or `504` before `backend` sees a request
-    (ADR-0011). Those responses are not part of this contract and their bodies are not
-    `ProblemDetails`. `frontend` treats them as technical failures.
+    The ingress can answer `413` or `429` before `backend` sees a request, and `502` or `504`
+    when `backend` is unreachable or a write in flight fails (ADR-0011). Those responses are not
+    part of this contract and their bodies are not `ProblemDetails`. `frontend` treats all four
+    as technical failures. After `502` or `504` the outcome of a write is unknown, and a retry
+    with the same `Idempotency-Key` cannot repeat its effect (ERR-15).
 
     ## Headers
 
@@ -759,9 +761,10 @@ components:
       description: >-
         A key that the client creates once per user action, as a UUID in lowercase hexadecimal
         with hyphens. A retry of the same action reuses it (TS-29). The same key with the same
-        body returns the original result without repeating the effect, and the same key with a
-        different body returns `409 idempotency-key-reused` (ERR-15). A key belongs to the
-        signed-in account and the operation, and `backend` remembers it for at least 24 hours.
+        body and path parameters returns the original result without repeating the effect, and
+        the same key with a different body or different path parameters returns
+        `409 idempotency-key-reused` (ERR-15). A key belongs to the signed-in account and the
+        operation, and `backend` remembers it for at least 24 hours.
         Only a success is remembered: after an error response, the same key runs as a new
         request. A request that arrives while the first one with its key is still running waits
         for it, and gets `503 not-ready` if the wait exceeds the lock timeout of `backend`. A
@@ -915,7 +918,8 @@ components:
     IdempotencyKeyReused:
       description: >-
         `idempotency-key-reused`: the `Idempotency-Key` was used before by the same account on
-        the same operation with a different body (ERR-15). Nothing changed.
+        the same operation with a different body or different path parameters (ERR-15). Nothing
+        changed.
       content:
         application/problem+json:
           schema:
@@ -1256,7 +1260,7 @@ components:
         lines:
           description: >-
             The lines of the order, in the order of the order's own line numbers. At least one.
-            Data class: Confidential.
+            A product appears at most once in an order. Data class: Confidential.
           type: array
           minItems: 1
           items:

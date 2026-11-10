@@ -172,6 +172,52 @@ repos:
 
   # ===== backend hooks (owner: backend engineer) =====
   # Add the backend hooks between this line and the end marker of this section.
+  # The tool versions are pinned in backend/uv.lock, so each hook calls the backend project
+  # through `uv run --locked` (docs/guides/repository-checks.md, convention 12). They need uv
+  # on the PATH. CI runs them in .github/workflows/backend.yml.
+  - repo: local
+    hooks:
+      - id: backend-format
+        name: Check the formatting of the backend code (ruff format)
+        language: system
+        entry: bash -c 'cd backend && uv run --locked ruff format --check .'
+        files: ^backend/
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: backend-lint
+        name: Lint the backend code (ruff)
+        language: system
+        entry: bash -c 'cd backend && uv run --locked ruff check .'
+        files: ^backend/
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: backend-types
+        name: Type-check the backend code in strict mode (pyright)
+        language: system
+        entry: bash -c 'cd backend && uv run --locked pyright'
+        files: ^backend/
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: backend-imports
+        name: Check the layer and feature boundaries of backend (import-linter)
+        language: system
+        entry: bash -c 'cd backend && uv run --locked lint-imports'
+        files: ^backend/
+        pass_filenames: false
+        stages: [pre-commit]
+      # Regenerates the models in place, with the options of backend/pyproject.toml, and fails
+      # when they differ from the file before; stage the regenerated file then.
+      - id: backend-generated
+        name: Check that the generated backend models match the contract (CON-26)
+        language: system
+        entry: >-
+          bash -c 'cd backend && committed="$(mktemp)" &&
+          cp src/supportiq_backend/generated/__init__.py "$committed" &&
+          uv run --locked datamodel-codegen &&
+          diff -u "$committed" src/supportiq_backend/generated/__init__.py'
+        files: ^(backend|contracts)/
+        pass_filenames: false
+        stages: [pre-commit]
   # ===== end of backend hooks =====
 
   # The two component sections stay apart, so changes to both merge without conflicts.

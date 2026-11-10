@@ -3,7 +3,7 @@
 - **Status:** In review
 - **Owner:** contracts gatekeeper
 - **Reviewers:** ML engineer, RAG engineer, backend engineer, frontend engineer
-- **Last reviewed:** 2026-11-05
+- **Last reviewed:** 2026-11-08
 - **Related:** [Requirements](../product/requirements.md) (FR-01 to FR-11, ESC-01 to ESC-05), [ADR-0001](../decisions/0001-system-architecture.md), [ADR-0004](../decisions/0004-api-conventions.md), [ADR-0005](../decisions/0005-intent-independent-retrieval.md), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md), [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md), [ADR-0014](../decisions/0014-citations-to-order-context.md), [contract rules](../rules/contracts.md)
 
 ## Summary
@@ -18,7 +18,7 @@ The team agreed the product behavior:
 - Personal data is pseudonymized before any text leaves `backend`.
 - Sign-in follows ADR-0009, and roles follow ADR-0012.
 
-**Revision 2 (2026-10-28, updated 2026-11-05).** Revision 1 was approved on 2026-10-24. Revision 2 aligns the design with the team's specification:
+**Revision 2 (2026-10-28, updated 2026-11-08).** Revision 1 was approved on 2026-10-24. Revision 2 aligns the design with the team's specification:
 
 - four roles, including `manager` and `admin` ([ADR-0012](../decisions/0012-roles-v1.md));
 - pseudonymization ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md));
@@ -29,7 +29,8 @@ The team agreed the product behavior:
 - the escalation rules ESC-01 to ESC-05;
 - the update of 2026-11-01: a retry of failed suggestions, draft cancellation on an intent change, read-only staff access to tickets that are not open, and the customer's other orders in the workspace;
 - the update of 2026-11-04: citations to the order context ([ADR-0014](../decisions/0014-citations-to-order-context.md)), and intent changes accepted only after an intent is known;
-- the update of 2026-11-05: one pending rule for every role, responses from the ingress, shared `Citation` and `OrderContext` schemas, the shop's `order_id` filter on `listShopTickets`, the ticket status `replied`, the newest-first order of shop lists, the `account_id` of `getCurrentSession`, the data classes of commerce IDs, no `Idempotency-Key` on sign-out, and names that follow CON-18 (`start_at`, `end_at`, `handling_time_ms`, `mask_count_by_type`).
+- the update of 2026-11-05: one pending rule for every role, responses from the ingress, shared `Citation` and `OrderContext` schemas, the shop's `order_id` filter on `listShopTickets`, the ticket status `replied`, the newest-first order of shop lists, the `account_id` of `getCurrentSession`, the data classes of commerce IDs, no `Idempotency-Key` on sign-out, and names that follow CON-18 (`start_at`, `end_at`, `handling_time_ms`, `mask_count_by_type`);
+- the update of 2026-11-08, as `backend.openapi.yaml` 1.0.1 states: the problem type `idempotency-key-reused` also covers the same key with different path parameters; the ingress answers `502` or `504` also when a write in flight fails, and a retry with the same key then cannot repeat its effect; a product appears at most once in an order.
 
 Revision 2 needs a new approval.
 
@@ -371,7 +372,7 @@ Both contracts are new at version `1.0.0`. No consumer exists yet, so there is n
 
 - **Headers:** `traceparent` on every request ([ADR-0004](../decisions/0004-api-conventions.md), decision 6). `Idempotency-Key` on every write except `createSession` and `deleteCurrentSession`.
 - **Status codes:** as in [CON-11](../rules/contracts.md#api-conventions), including `202` for `createSuggestion` and `204` for operations without a response body.
-- **Responses from the ingress:** `ingress` can answer `413` (body over its size limit), `429` (rate limit), `502`, or `504` (`backend` unreachable) before `backend` sees the request ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)). These bodies are not Problem Details. `frontend` treats them as technical failures: a plain-language message, editor text kept, and automatic retries only as [TS-29](../rules/typescript.md#api-access) and [ERR-12](../rules/errors-and-reliability.md#retries) allow, so never for `sendReply` and never after `413`.
+- **Responses from the ingress:** `ingress` can answer `413` (body over its size limit) or `429` (rate limit) before `backend` sees the request, and `502` or `504` when `backend` is unreachable or a write in flight fails ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)). These bodies are not Problem Details. After `502` or `504` the outcome of a write is unknown, and a retry with the same `Idempotency-Key` cannot repeat its effect ([ERR-15](../rules/errors-and-reliability.md#idempotency)). `frontend` treats all four as technical failures: a plain-language message, editor text kept, and automatic retries only as [TS-29](../rules/typescript.md#api-access) and [ERR-12](../rules/errors-and-reliability.md#retries) allow, so never for `sendReply` and never after `413`.
 - **Errors:** Problem Details with a `trace_id` extension member. Problem types:
 
 | Type (`urn:supportiq:problem:` + name) | Status | Meaning |
@@ -384,7 +385,7 @@ Both contracts are new at version `1.0.0`. No consumer exists yet, so there is n
 | `invalid-ticket-state` | `409` | The operation is not allowed in the ticket's current state |
 | `suggestion-pending` | `409` | A part of the current suggestion is still pending |
 | `suggestion-superseded` | `409` | The request refers to a suggestion that is no longer current |
-| `idempotency-key-reused` | `409` | The key was used before with a different body |
+| `idempotency-key-reused` | `409` | The key was used before with a different body or different path parameters |
 | `not-ready` | `503` | The component is not ready, for example assets not loaded |
 | `internal-error` | `500` | Unexpected failure |
 
@@ -661,7 +662,7 @@ Infrastructure cost (NFR-10) is reported from AWS billing, not from this report.
 |---|---|---|
 | Customer | `customer_id`, `display_name`, `email` (synthetic), `phone` (synthetic) | Confidential, except `customer_id` (Internal) |
 | Product | `product_id`, `name`, `description`, `category`, `price` | Public |
-| Order | `order_id`, `customer_id`, `order_status`, `placed_at`, `order_total`, `shipping_cost`, `shipping_address` (synthetic), `transaction_id`, lines (`product_id`, `quantity`) | Confidential, except `customer_id` (Internal) |
+| Order | `order_id`, `customer_id`, `order_status`, `placed_at`, `order_total`, `shipping_cost`, `shipping_address` (synthetic), `transaction_id`, lines (`product_id`, `quantity`; a product appears at most once in an order) | Confidential, except `customer_id` (Internal) |
 | Shipment | `shipment_id`, `order_id`, `shipment_status`, `tracking_code`, `estimated_delivery_at`, `delivered_at` | Confidential, except `shipment_id` (Internal) |
 | Refund | `refund_id`, `order_id`, `refund_status`, `refund_amount`, `refund_requested_at`, `updated_at` | Confidential, except `refund_id` (Internal) |
 
@@ -772,6 +773,7 @@ Values missing from the source files are never invented. A document without a re
 - **A ticket attached to several orders:** rejected. It would change [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md) and the order context. Showing the customer's other orders read-only gives staff the context they need.
 - **Masking only inside `ai-service`** (revision 1): replaced by pseudonymization in `backend` ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md)).
 - **No admin role or admin screens** (revision 1): replaced by the minimal admin area of [ADR-0012](../decisions/0012-roles-v1.md).
+- **`idempotency-key-reused` for a different body only:** the rule until 2026-11-08. Replaced, because the same key and body on another account would return the result of the first account without changing the second.
 
 ## Testing and evaluation
 
