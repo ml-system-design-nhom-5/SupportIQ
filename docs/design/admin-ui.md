@@ -1,9 +1,9 @@
 # Design: Admin UI
 
-- **Status:** Approved
+- **Status:** In review
 - **Owner:** frontend engineer
 - **Reviewers:** backend engineer, contracts gatekeeper
-- **Last reviewed:** 2026-11-05
+- **Last reviewed:** 2026-11-08
 - **Related:** [Requirements](../product/requirements.md) (FR-08), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0012](../decisions/0012-roles-v1.md), [contracts v1 design](contracts-v1.md#admin-operations) (revision 2, in review), [console UI design](console-ui.md) (tokens and app shell), [UI-45](../rules/ui.md#admin), [SEC-41](../rules/security-and-privacy.md#authentication-and-authorization)
 
 ## Summary
@@ -11,6 +11,8 @@
 This design fixes the two screens of `/admin` that [UI-45](../rules/ui.md#admin) allows: the internal accounts and the versions in use. It reuses the app shell and design tokens of the [console UI design](console-ui.md#design-tokens), because the admin area also targets desktop widths ([UI-33](../rules/ui.md#layout-and-performance)).
 
 UI-45 and the [admin operations](contracts-v1.md#admin-operations) fix what each screen holds, so the draft proposes one layout. The team can still ask for alternatives.
+
+**Revision of 2026-11-07, decided by the project lead:** after a timeout, a lost connection, `502`, or `504`, nobody knows whether a change happened: `backend` may finish a write after `frontend` stopped waiting (`backend` contract, Timeouts), and a write in flight can fail with `502` ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), Proposed). The contract text on responses from the ingress follows in the next contract change. The same holds for a `2xx` whose body cannot be read, and for a retry that fails after one of these, unless `backend` refuses it with `422` or `404`. The banner now says that the change may have happened, and the list loads again. Confirming the same change again after a failure reuses its `Idempotency-Key`, so a change that already happened is not repeated. The first decision is kept under [Alternatives considered](#alternatives-considered). The revision also records where the focus goes when a dialog closes.
 
 ## Goals and non-goals
 
@@ -64,6 +66,7 @@ Only `frontend` changes. `backend` enforces every rule. `frontend` hides an acti
 
 - The list is ordered by display name, with 20 accounts per page, the default page size of the contract. It is paginated, so `frontend` cannot know whether an account is the last active manager. `backend` refuses that change with `422 invalid-request`, and the page shows the reason in a banner that names the account.
 - The banner follows `violated_rule` of the `422` body ([admin operations](contracts-v1.md#admin-operations)). `last_active_manager` shows the banner of [admin-last-manager.png](assets/admin-ui/admin-last-manager.png). Any other value, an unknown one included, or no value, shows a banner that names the account and asks the admin to reload the list.
+- When a dialog closes, the focus returns to the button that opened it. A successful change replaces that button (Make manager becomes Make staff), so the focus then moves to the row header of the account ([UI-30](../rules/ui.md#accessibility)).
 - Each action opens a confirmation dialog that names the account and the change:
 
 | Action | Dialog title | Text | Confirm button |
@@ -97,6 +100,7 @@ Only `frontend` changes. `backend` enforces every rule. `frontend` hides an acti
 | Load error | Either call fails with a network error, `5xx`, or a response from the ingress | A plain-language message, Try again, and a copyable trace ID when there is one ([UI-25](../rules/ui.md#states)) |
 | Permission denied | `403`: a `customer`, `staff`, or `manager` session opens `/admin` | "The admin area is for admin accounts", with Sign out |
 | Change refused | `422` on a change | With `violated_rule` `last_active_manager`: the banner of [admin-last-manager.png](assets/admin-ui/admin-last-manager.png). With any other value, or none: a banner that names the account and asks the admin to reload the list |
+| Change outcome unknown | A timeout, a lost connection, `502`, `504`, or a `2xx` with an unreadable body on a change, or a retry or a repeated confirmation that fails after one of these, unless `backend` refuses it with `422` or `404`. A `403` shows the Permission denied state instead, because the caller can no longer act. | A banner names the account and says that the change may have happened and that trying again is safe if the row does not change. The list loads again. Confirming the same change again reuses its key, so it is safe |
 | `ai-service` unreachable | `ai_service_status` is `unavailable` | The banner and "Unknown" rows, as in [admin-versions-unavailable.png](assets/admin-ui/admin-versions-unavailable.png) |
 
 An admin account always exists, so the accounts list is never empty.
@@ -113,7 +117,7 @@ sequenceDiagram
     alt Admin cancels
         FE-->>Admin: Nothing changes
     else Admin confirms
-        FE->>BE: POST role-changes or status-changes with an Idempotency-Key
+        FE->>BE: POST role-changes or status-changes with an Idempotency-Key, the same one when the same change is confirmed again after a failure
         alt Changed
             BE-->>FE: 201, sessions of that account deleted, audit log entry written
             FE->>BE: GET /v1/admin/accounts
@@ -127,7 +131,10 @@ sequenceDiagram
         else Caller is no longer an admin
             BE-->>FE: 401 or 403
             FE-->>Admin: Sign-in, or the permission-denied screen
-        else Network error, 5xx, or a response from the ingress
+        else Timeout, lost connection, 502, 504, or a 2xx with an unreadable body
+            BE-->>FE: No valid response, backend may have finished the write
+            FE-->>Admin: The change may have happened, list reloads
+        else Other 5xx, or another response from the ingress
             BE-->>FE: No valid response
             FE-->>Admin: Error with a trace ID when there is one
         end
@@ -156,6 +163,7 @@ sequenceDiagram
 | An admin changes their own account | No action on that row; `422` from `backend` as the backstop | Component test; use-case test |
 | A change would leave no active manager | `422`: a banner names the account and says to make another account a manager first | Component test; use-case test |
 | A change is made by mistake | Every change needs a confirmation that names the account and the change | Component test |
+| A timeout, a lost connection, `502`, `504`, or a `2xx` with an unreadable body hides the outcome of a change | The banner says that the change may have happened, and the list loads again | Component test; UI flow test |
 | A changed account keeps its old session | Impossible: `backend` deletes its sessions in the same transaction, and the old session gets `401` | Integration test (contracts v1) |
 | `ai-service` is unreachable | Versions page shows the banner and "Unknown" | Component test |
 | Another role opens `/admin` | `403` from `backend`: the permission-denied screen | Permission table test; component test |
@@ -164,11 +172,12 @@ sequenceDiagram
 
 - **A role dropdown in each row:** not chosen. Only one other role is ever possible, so a button that names it ("Make manager") states the change in one word and still opens the confirmation.
 - **Admin screens inside the console app:** not chosen. The admin role may not call any `/v1/console/` operation ([SEC-41](../rules/security-and-privacy.md#authentication-and-authorization)), so a separate area keeps the navigation honest.
+- **A banner that says "was not changed" after every failure:** the first decision of this design, replaced on 2026-11-07. After a timeout, a lost connection, `502`, or `504`, `backend` may still finish the write, so that banner could be false.
 
 ## Testing and evaluation
 
 - **Storybook:** the accounts table with every row type, each dialog, the versions page when `ai-service` is reachable and when it is not, and the loading, load error, and permission-denied states, with axe checks ([UI-32](../rules/ui.md#accessibility)).
-- **Component tests:** row actions by role and for the caller's own account, dialog texts that name the account and the change, the mapping of `422` with each `violated_rule` value, an unknown one included, and of `404`, `403`, and `401` to messages.
+- **Component tests:** row actions by role and for the caller's own account, dialog texts that name the account and the change, the mapping of `422` with each `violated_rule` value, an unknown one included, and of `404`, `403`, and `401` to messages, the banner and the reload after an unknown outcome, the key of a repeated confirmation, and the focus when a dialog closes.
 - **End-to-end tests (Playwright):** an admin makes a staff account a manager; that account's old session gets `401`, and after signing in again it can open reports.
 - No model metric changes.
 

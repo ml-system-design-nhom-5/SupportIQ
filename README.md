@@ -68,12 +68,12 @@ sequenceDiagram
 
 ## Project status
 
-Design phase, with the first contract written. Decisions are recorded in [docs/decisions/](docs/decisions/README.md).
+Implementation against mocks, after the first contract. Decisions are recorded in [docs/decisions/](docs/decisions/README.md).
 
 - Revision 2 of the contracts v1 design ([docs/design/contracts-v1.md](docs/design/contracts-v1.md)) aligns the design with the team's specification and is in review, together with ADR-0010, ADR-0011, and ADR-0014. ADR-0012 and ADR-0013 were accepted on 2026-11-05.
 - On 2026-11-05 the project lead approved the `frontend` ↔ `backend` part of revision 2 for contract PR 2. Contract PR 2 adds [`contracts/backend.openapi.yaml`](contracts/backend.openapi.yaml) 1.0.0 with an example for every outcome, a Prism mock, and the contract checks ([contracts/README.md](contracts/README.md)).
 - Repository checks run with pre-commit locally and with GitHub Actions in CI ([docs/guides/repository-checks.md](docs/guides/repository-checks.md)).
-- No component is scaffolded yet, so there is no runnable code; setup instructions are added here when the first component is scaffolded.
+- `frontend` is scaffolded and runs against the Prism mock: sign-in, the shop, and the Accounts screen of the admin area ([frontend/README.md](frontend/README.md)). The other components are not scaffolded yet.
 
 ## Target repository layout
 
@@ -84,7 +84,7 @@ supportiq-ecom/
 ├── docs/            # Requirements, decisions, rules, glossary
 ├── .github/         # CI workflows (docs/guides/repository-checks.md)
 ├── contracts/       # API and data contracts, their examples, and their tooling
-├── frontend/        # /shop, /console, and /admin (created at scaffold)
+├── frontend/        # /shop, /console, and /admin
 ├── backend/         # Created at scaffold
 ├── ai-service/      # Created at scaffold
 ├── ml/              # Training and offline evaluation (created at scaffold)

@@ -1,6 +1,6 @@
 # Repository checks and CI
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-05
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-07
 
 How to run the repository-wide checks locally, which GitHub Actions workflows run them, and the convention that every workflow file follows. Read it before you add hooks to `.pre-commit-config.yaml` or a workflow to `.github/workflows/`. The contract tooling itself is described in [contracts/README.md](../../contracts/README.md).
 
@@ -14,13 +14,15 @@ flowchart LR
     Hooks -->|"any hook fails"| Blocked["Commit blocked:<br/>fix and commit again"]
     Push["Push or pull request"] --> Repo["repository.yml:<br/>job repository-checks"]
     Push --> Con["contracts.yml:<br/>job contract-checks"]
+    Push --> Fe["frontend.yml:<br/>job frontend-checks"]
     Repo -->|"pre-commit run --all-files<br/>--hook-stage manual"| Result{"All checks pass?"}
     Con -->|"audit, pre-commit run contracts-check,<br/>bundle, mock check"| Result
+    Fe -->|"audit, pre-commit run frontend-check,<br/>tests, stories, build, UI flow tests"| Result
     Result -->|"no"| Red["Merge blocked (WF-19)"]
     Result -->|"yes"| Green["Merge allowed"]
 ```
 
-Each tool is justified here, as [WF-27](../rules/workflow.md#dependencies) requires. All of them have a permissive license ([WF-30](../rules/workflow.md#dependencies)).
+Each tool is justified here, as [WF-27](../rules/workflow.md#dependencies) requires. All of them have a permissive license ([WF-30](../rules/workflow.md#dependencies)), apart from the frontend licenses that [frontend/README.md](../../frontend/README.md#dependencies) says were approved.
 
 | Check | Tool and license | Why this tool | On commit | In CI |
 |---|---|---|---|---|
@@ -33,6 +35,8 @@ Each tool is justified here, as [WF-27](../rules/workflow.md#dependencies) requi
 | Contract lint, custom rules, example validation, and the TypeScript checks | `contracts-check`, with the tools of [contracts/README.md](../../contracts/README.md#tools) | [RULE-03](../rules/README.md#enforcement), CON-04 to CON-18 | Yes | `contract-checks` |
 | High and critical vulnerabilities in the contract tools | `pnpm audit --audit-level=high` in `contracts/` | [WF-31](../rules/workflow.md#dependencies) | — | `contract-checks` |
 | Contract bundle, and the sign-in flow and example files through the Prism mock | `pnpm run bundle`, `pnpm run check:mock` in `contracts/` | Proves that consumers can generate code from the bundle and use the mock | — | `contract-checks` |
+| Format, lint, types, boundaries, and the generated client of frontend | `frontend-check`, with the tools of [frontend/README.md](../../frontend/README.md#dependencies) | [RULE-03](../rules/README.md#enforcement), [TS-02](../rules/typescript.md#toolchain), [TS-27](../rules/typescript.md#api-access) | Yes | `frontend-checks` |
+| High and critical vulnerabilities, unit tests, stories, the build, and the UI flow tests | `pnpm audit`, `test:unit`, `test:stories`, `build`, `test:e2e` in `frontend/` | [WF-31](../rules/workflow.md#dependencies), [TEST-21](../rules/testing.md#coverage), [UI-32](../rules/ui.md#accessibility) | — | `frontend-checks` |
 
 pre-commit installs the runtimes of the hooks at the versions in `default_language_version`: Go 1.27.3 for gitleaks and actionlint, and Node.js 24.22.2 for markdownlint-cli2.
 
@@ -57,6 +61,12 @@ pre-commit installs the runtimes of the hooks at the versions in `default_langua
    cd contracts && pnpm install --frozen-lockfile
    ```
 
+5. Install the frontend tools, which the `frontend-check` hook calls ([frontend/README.md](../../frontend/README.md#set-up)):
+
+   ```bash
+   cd frontend && pnpm install --frozen-lockfile
+   ```
+
 The first run downloads Go and Node.js for the hooks and builds gitleaks and actionlint, which takes several minutes. Later runs reuse `~/.cache/pre-commit`.
 
 ## Commands
@@ -68,13 +78,14 @@ Run every command in the repository root.
 | `pre-commit run --all-files` | Runs the commit hooks on every tracked file |
 | `pre-commit run --all-files --hook-stage manual` | Runs what the `repository-checks` job runs, including the history scan for secrets |
 | `pre-commit run contracts-check --all-files` | Runs what the `contract-checks` job runs before the bundle and the mock check |
+| `pre-commit run frontend-check --all-files` | Runs what the `frontend-checks` job runs before the tests |
 | `pre-commit run --files <path> …` | Runs the hooks on the given files, for example new files that are not tracked yet |
 
 `--all-files` covers tracked files only. A file that is not staged yet is checked with `--files`.
 
 ## Workflow convention
 
-Every file in `.github/workflows/` follows these rules, including the `backend.yml` and `frontend.yml` files that the component owners add ([WF-19](../rules/workflow.md#continuous-integration)). actionlint checks the syntax of every workflow, the `workflow-*` hooks of `.pre-commit-config.yaml` check every rule that a pattern can check, and reviewers check the rest ([Who checks each rule](#who-checks-each-rule)).
+Every file in `.github/workflows/` follows these rules, including the `backend.yml` file that the component owner adds and `frontend.yml` ([WF-19](../rules/workflow.md#continuous-integration)). actionlint checks the syntax of every workflow, the `workflow-*` hooks of `.pre-commit-config.yaml` check every rule that a pattern can check, and reviewers check the rest ([Who checks each rule](#who-checks-each-rule)).
 
 1. **One workflow per area.** The file is `.github/workflows/<area>.yml` with `name: <area>`: `repository`, `contracts`, `backend`, `frontend`.
 2. **Triggers.** Exactly these, and nothing else:
@@ -135,20 +146,20 @@ The `workflow-*` hooks are pygrep hooks, which come with pre-commit. Each one fa
 Set these on GitHub for `chore/fe-be-supportiq-ecom` (Settings → Branches, or a ruleset):
 
 - Require a pull request before merging, with at least one approval ([WF-15](../rules/workflow.md#reviews)).
-- Require status checks to pass, with the branch up to date before merging. Required checks: `repository-checks` and `contract-checks`. Add `backend-…` and `frontend-…` jobs when those workflows land.
+- Require status checks to pass, with the branch up to date before merging. Required checks: `repository-checks`, `contract-checks`, and `frontend-checks`. Add `backend-…` jobs when that workflow lands.
 - Block force pushes and deletions ([WF-07](../rules/workflow.md#branches)).
 
 ## The first CI run
 
 GitHub Actions cannot run locally. On the first push, check:
 
-1. Both workflows start, and the jobs `repository-checks` and `contract-checks` appear. A missing workflow means a trigger or syntax problem.
+1. The three workflows start, and the jobs `repository-checks`, `contract-checks`, and `frontend-checks` appear. A missing workflow means a trigger or syntax problem. `frontend-checks` installs Chromium with `playwright install --with-deps chromium`.
 2. Every `uses:` step resolves. "Unable to resolve action" means a wrong commit SHA.
 3. `contract-checks` installs pnpm 12.16.1 and Node.js 24.22.2, and `pnpm install --frozen-lockfile` neither reports an outdated lockfile nor stops on an ignored build script.
-4. Both jobs install pre-commit 4.7.0. The first `repository-checks` run downloads Go 1.27.3 and Node.js 24.22.2 for the hooks and saves the cache; the second run is faster.
+4. The three jobs install pre-commit 4.7.0. The first `repository-checks` run downloads Go 1.27.3 and Node.js 24.22.2 for the hooks and saves the cache; the second run is faster.
 5. `repository-checks` passes `Detect hardcoded secrets in the git history`. It scans only the commits reachable from `HEAD`: other branches of the clone, such as `main`, are not scanned.
 6. `pnpm audit --audit-level=high` reports no high or critical advisory except the one ignored in `contracts/pnpm-workspace.yaml`, and `pnpm run check:mock` prints three `ok` lines.
-7. Both jobs finish within their `timeout-minutes`. Then set the branch protection above.
+7. The three jobs finish within their `timeout-minutes`. Then set the branch protection above.
 
 ## Open questions
 

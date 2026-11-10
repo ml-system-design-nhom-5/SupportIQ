@@ -1,6 +1,6 @@
 # UI rules
 
-> **Status:** Active · **Owner:** frontend · **Last reviewed:** 2026-11-05
+> **Status:** Active · **Owner:** frontend · **Last reviewed:** 2026-11-08
 
 A strict design system and interaction rules, so every screen looks and behaves the same, staff can work quickly and safely, and developers can build and review UI with confidence. The console exists to help staff check the AI, not to make them trust it blindly. Design-system structure: [ADR-0008](../decisions/0008-ui-design-system.md). Shop scope: [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md). Roles: [ADR-0012](../decisions/0012-roles-v1.md).
 
@@ -21,7 +21,7 @@ flowchart TB
     D -->|"used by"| S["Feature screens<br/>/console, /shop, /admin"]
 ```
 
-**UI-01.** The design system lives in `frontend/src/design-system/` with `tokens/`, `primitives/`, and `components/` ([TS-05](typescript.md#project-layout)).
+**UI-01.** The design system lives in `frontend/src/design-system/` with `tokens/`, `format/`, `primitives/`, and `components/` ([TS-05](typescript.md#project-layout)).
 
 **UI-02.** Feature screens are composed only of design-system components, including layout primitives (stack, grid, panel). Feature code does not style raw HTML elements.
 
