@@ -85,6 +85,8 @@ Each component README lists its own commands. These are the commands agents run 
 | `pnpm run check:mock` | `contracts/` | Checks the sign-in flow and the example files through the Prism mock |
 | `pnpm run mock` | `contracts/` | Serves the `backend` contract as a mock at `http://127.0.0.1:4010` |
 | `pnpm run bundle` | `contracts/` | Writes each contract as one file to `contracts/dist/` |
+| `pnpm run check` | `frontend/` | Format, lint, types, boundaries, and the generated client |
+| `pnpm test` | `frontend/` | Unit tests with coverage, stories, and UI flow tests |
 | `pre-commit run --hook-stage manual --files <path> …` | Repository root | Runs the CI repository checks on the given files |
 | `pre-commit run --files <path> …` | Repository root | Runs the commit hooks, `contracts-check` included, on the given files |
 | `uv run pytest tests/unit` | `backend/` | Runs the `backend` unit tests, which need no database and no `.env` |

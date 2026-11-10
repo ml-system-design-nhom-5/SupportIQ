@@ -1,0 +1,6 @@
+# pnpm settings for frontend (see README.md, Dependencies).
+
+# esbuild comes with Storybook and Vite. Its install script only checks the platform binary,
+# which pnpm already installs as an optional dependency, so it never runs.
+allowBuilds:
+  esbuild: false

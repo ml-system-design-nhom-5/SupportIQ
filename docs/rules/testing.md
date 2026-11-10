@@ -1,6 +1,6 @@
 # Testing rules
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-05
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-08
 
 Tests are executable specifications. They catch hidden bugs early, protect the guardrails, and keep technical debt from accumulating unseen. A behavior without a test does not exist.
 
@@ -12,6 +12,7 @@ Tests are executable specifications. They catch hidden bugs early, protect the g
 | Component (UI) | Design-system and feature components in every state | `*.test.tsx`, stories | Vitest, Testing Library, Storybook with axe | Interact like a user; select by role and label |
 | Adapter and integration | Database, retriever, LLM, and HTTP adapters | `tests/integration/` | pytest | Local instances or fakes; default CI never calls a real LLM |
 | Contract | Each component matches `contracts/` | `tests/contract/` | Schemathesis, Prism mocks | Every outcome of every operation ([contracts.md](contracts.md#contract-tests)) |
+| UI flow | Main flows of one component against its mock | `frontend/e2e/` | Playwright with axe | The production build against Prism |
 | End-to-end | Main staff and customer flows across all components | `e2e/` | Playwright with axe | Few tests, covering the main flow and the main failures |
 | Evaluation | Macro-F1, Recall@3, groundedness, robustness, escalation | `eval/` | Python | Reproducible; reported against the baseline ([data-and-ml.md](data-and-ml.md#evaluation-and-reporting)) |
 

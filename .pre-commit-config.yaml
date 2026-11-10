@@ -226,5 +226,18 @@ repos:
   # (docs/guides/repository-checks.md).
 
   # ===== frontend hooks (owner: frontend engineer) =====
-  # Add the frontend hooks between this line and the end marker of this section.
+  # The tool versions are pinned in frontend/pnpm-lock.yaml, so the hook calls the frontend
+  # package. It needs `pnpm install --frozen-lockfile` in frontend/ first. A change to the backend
+  # contract also runs it, because the generated client must stay up to date (TS-27).
+  # CI runs it in .github/workflows/frontend.yml.
+  - repo: local
+    hooks:
+      - id: frontend-check
+        name: Check the format, lint, types, boundaries, and generated client of frontend
+        language: system
+        # Runs inside frontend/, so Corepack and pnpm read its packageManager field.
+        entry: bash -c 'cd frontend && pnpm run check'
+        files: ^(frontend/|contracts/backend\.openapi\.yaml$|contracts/schemas/)
+        pass_filenames: false
+        stages: [pre-commit]
   # ===== end of frontend hooks =====
