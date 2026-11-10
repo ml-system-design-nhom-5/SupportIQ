@@ -4,6 +4,17 @@ All notable changes to the contracts in this folder. The format follows [Keep a 
 
 ## `backend.openapi.yaml`
 
+### [1.0.1] - 2026-11-08
+
+Clarifies three points that version 1.0.0 left open or stated wrongly: an `Idempotency-Key` reused with different path parameters, the responses of the ingress, and the products of an order. Version 1.0.0 did not cover the first case: read literally, `changeAccountRole` and `changeAccountStatus` would return the result of the first account and leave the second unchanged. No field, status code, or problem type changes. Every consumer regenerates its code, because the descriptions change.
+
+#### Changed
+
+- The `Idempotency-Key` parameter, the `IdempotencyKeyReused` response, and the problem type `idempotency-key-reused` in `ProblemDetails`: the same key with different path parameters returns `409 idempotency-key-reused`, as the same key with a different body does.
+- `examples/problems/idempotency-key-reused.json`: the summary and the detail now say "a different request".
+- Errors, in `info.description`: the ingress answers `413` or `429` before `backend` sees a request, and `502` or `504` when `backend` is unreachable or a write in flight fails, as ADR-0011 states. Version 1.0.0 said that all four come before `backend` sees a request. After `502` or `504` the outcome of a write is unknown, and a retry with the same `Idempotency-Key` cannot repeat its effect (ERR-15).
+- `ShopOrderView.lines`: a product appears at most once in an order. The examples already follow this.
+
 ### [1.0.0] - 2026-11-05
 
 Contract PR 2. The first version of the `frontend` ↔ `backend` contract, for the operations that the project lead approved on 2026-11-05 ([contracts v1 design, Rollout](../docs/design/contracts-v1.md#rollout)). There is no earlier consumer, so the change has no compatibility impact.

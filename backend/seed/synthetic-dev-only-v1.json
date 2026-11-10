@@ -1,0 +1,389 @@
+{
+  "label": "synthetic-dev-only",
+  "version": "v1",
+  "accounts": [
+    {
+      "account_id": "20000000-0000-4000-8000-000000000001",
+      "login_name": "customer-1",
+      "display_name": "Lan Tran",
+      "role": "customer",
+      "is_active": true,
+      "customer_id": "10000000-0000-4000-8000-000000000001",
+      "created_at": "2026-08-01T08:00:00Z"
+    },
+    {
+      "account_id": "20000000-0000-4000-8000-000000000002",
+      "login_name": "customer-2",
+      "display_name": "Minh Le",
+      "role": "customer",
+      "is_active": true,
+      "customer_id": "10000000-0000-4000-8000-000000000002",
+      "created_at": "2026-08-01T08:00:00Z"
+    },
+    {
+      "account_id": "20000000-0000-4000-8000-000000000003",
+      "login_name": "customer-3",
+      "display_name": "Thu Hoang",
+      "role": "customer",
+      "is_active": true,
+      "customer_id": "10000000-0000-4000-8000-000000000003",
+      "created_at": "2026-08-01T08:00:00Z"
+    },
+    {
+      "account_id": "20000000-0000-4000-8000-000000000011",
+      "login_name": "staff-1",
+      "display_name": "Mai Nguyen",
+      "role": "staff",
+      "is_active": true,
+      "customer_id": null,
+      "created_at": "2026-08-01T08:00:00Z"
+    },
+    {
+      "account_id": "20000000-0000-4000-8000-000000000012",
+      "login_name": "staff-2",
+      "display_name": "Tuan Vo",
+      "role": "staff",
+      "is_active": true,
+      "customer_id": null,
+      "created_at": "2026-08-01T08:00:00Z"
+    },
+    {
+      "account_id": "20000000-0000-4000-8000-000000000021",
+      "login_name": "manager-1",
+      "display_name": "Hoa Pham",
+      "role": "manager",
+      "is_active": true,
+      "customer_id": null,
+      "created_at": "2026-08-01T08:00:00Z"
+    },
+    {
+      "account_id": "20000000-0000-4000-8000-000000000022",
+      "login_name": "manager-2",
+      "display_name": "Quang Do",
+      "role": "manager",
+      "is_active": true,
+      "customer_id": null,
+      "created_at": "2026-08-01T08:00:00Z"
+    },
+    {
+      "account_id": "20000000-0000-4000-8000-000000000031",
+      "login_name": "admin-1",
+      "display_name": "Linh Dang",
+      "role": "admin",
+      "is_active": true,
+      "customer_id": null,
+      "created_at": "2026-08-01T08:00:00Z"
+    },
+    {
+      "account_id": "20000000-0000-4000-8000-000000000032",
+      "login_name": "admin-2",
+      "display_name": "Khoa Bui",
+      "role": "admin",
+      "is_active": true,
+      "customer_id": null,
+      "created_at": "2026-08-01T08:00:00Z"
+    }
+  ],
+  "commerce": {
+    "customers": [
+      {
+        "customer_id": "10000000-0000-4000-8000-000000000001",
+        "display_name": "Lan Tran",
+        "email": "lan.tran@example.test",
+        "phone": "+84 90 111 0001"
+      },
+      {
+        "customer_id": "10000000-0000-4000-8000-000000000002",
+        "display_name": "Minh Le",
+        "email": "minh.le@example.test",
+        "phone": "+84 90 111 0002"
+      },
+      {
+        "customer_id": "10000000-0000-4000-8000-000000000003",
+        "display_name": "Thu Hoang",
+        "email": "thu.hoang@example.test",
+        "phone": "+84 90 111 0003"
+      }
+    ],
+    "products": [
+      {
+        "product_id": "PRD-1001",
+        "name": "Desk lamp",
+        "description": "An adjustable desk lamp with a warm light.",
+        "category": "Home office",
+        "price": { "amount_minor": 2450, "currency": "USD" }
+      },
+      {
+        "product_id": "PRD-1002",
+        "name": "Wireless headphones",
+        "description": "Over-ear headphones with 30 hours of battery life.",
+        "category": "Audio",
+        "price": { "amount_minor": 8900, "currency": "USD" }
+      },
+      {
+        "product_id": "PRD-1003",
+        "name": "Notebook set",
+        "description": "Three lined notebooks in A5 format.",
+        "category": "Stationery",
+        "price": { "amount_minor": 900, "currency": "USD" }
+      },
+      {
+        "product_id": "PRD-1004",
+        "name": "Running shoes",
+        "description": "Light road running shoes with a cushioned sole.",
+        "category": "Sports",
+        "price": { "amount_minor": 5600, "currency": "USD" }
+      },
+      {
+        "product_id": "PRD-1005",
+        "name": "Ceramic mug",
+        "description": "A 350 ml ceramic mug in matte white.",
+        "category": "Kitchen",
+        "price": { "amount_minor": 1200, "currency": "USD" }
+      },
+      {
+        "product_id": "PRD-1006",
+        "name": "Backpack",
+        "description": "A 20 liter backpack with a padded laptop sleeve.",
+        "category": "Travel",
+        "price": { "amount_minor": 4300, "currency": "USD" }
+      },
+      {
+        "product_id": "PRD-1007",
+        "name": "Phone stand",
+        "description": "An adjustable aluminum stand for phones and small tablets.",
+        "category": "Accessories",
+        "price": { "amount_minor": 1500, "currency": "USD" }
+      },
+      {
+        "product_id": "PRD-1008",
+        "name": "Yoga mat",
+        "description": "A 6 mm non-slip yoga mat with a carrying strap.",
+        "category": "Sports",
+        "price": { "amount_minor": 3200, "currency": "USD" }
+      }
+    ],
+    "orders": [
+      {
+        "order_id": "ORD-20901",
+        "customer_id": "10000000-0000-4000-8000-000000000001",
+        "order_status": "placed",
+        "placed_at": "2026-10-30T09:15:00Z",
+        "order_total": { "amount_minor": 2450, "currency": "USD" },
+        "shipping_cost": { "amount_minor": 0, "currency": "USD" },
+        "shipping_address": "12 Example Street, Ba Dinh, Hanoi",
+        "transaction_id": "TXN-00020901",
+        "lines": [{ "product_id": "PRD-1001", "quantity": 1 }],
+        "shipment": null,
+        "refund": null
+      },
+      {
+        "order_id": "ORD-20902",
+        "customer_id": "10000000-0000-4000-8000-000000000001",
+        "order_status": "processing",
+        "placed_at": "2026-10-29T10:00:00Z",
+        "order_total": { "amount_minor": 2300, "currency": "USD" },
+        "shipping_cost": { "amount_minor": 500, "currency": "USD" },
+        "shipping_address": "12 Example Street, Ba Dinh, Hanoi",
+        "transaction_id": "TXN-00020902",
+        "lines": [{ "product_id": "PRD-1003", "quantity": 2 }],
+        "shipment": {
+          "shipment_id": "30000000-0000-4000-8000-000000000002",
+          "shipment_status": "not_shipped",
+          "tracking_code": "TRK-0000020902",
+          "estimated_delivery_at": null,
+          "delivered_at": null
+        },
+        "refund": null
+      },
+      {
+        "order_id": "ORD-20903",
+        "customer_id": "10000000-0000-4000-8000-000000000001",
+        "order_status": "shipped",
+        "placed_at": "2026-10-28T08:15:00Z",
+        "order_total": { "amount_minor": 4250, "currency": "USD" },
+        "shipping_cost": { "amount_minor": 0, "currency": "USD" },
+        "shipping_address": "12 Example Street, Ba Dinh, Hanoi",
+        "transaction_id": "TXN-00020903",
+        "lines": [
+          { "product_id": "PRD-1001", "quantity": 1 },
+          { "product_id": "PRD-1003", "quantity": 2 }
+        ],
+        "shipment": {
+          "shipment_id": "30000000-0000-4000-8000-000000000003",
+          "shipment_status": "in_transit",
+          "tracking_code": "TRK-0000020903",
+          "estimated_delivery_at": "2026-11-07T17:00:00Z",
+          "delivered_at": null
+        },
+        "refund": null
+      },
+      {
+        "order_id": "ORD-20904",
+        "customer_id": "10000000-0000-4000-8000-000000000001",
+        "order_status": "delivered",
+        "placed_at": "2026-10-02T19:30:00Z",
+        "order_total": { "amount_minor": 8900, "currency": "USD" },
+        "shipping_cost": { "amount_minor": 0, "currency": "USD" },
+        "shipping_address": "12 Example Street, Ba Dinh, Hanoi",
+        "transaction_id": "TXN-00020904",
+        "lines": [{ "product_id": "PRD-1002", "quantity": 1 }],
+        "shipment": {
+          "shipment_id": "30000000-0000-4000-8000-000000000004",
+          "shipment_status": "delivered",
+          "tracking_code": "TRK-0000020904",
+          "estimated_delivery_at": "2026-10-06T17:00:00Z",
+          "delivered_at": "2026-10-06T12:05:00Z"
+        },
+        "refund": {
+          "refund_id": "40000000-0000-4000-8000-000000000004",
+          "refund_status": "requested",
+          "refund_amount": { "amount_minor": 8900, "currency": "USD" },
+          "refund_requested_at": "2026-10-14T09:20:00Z",
+          "updated_at": "2026-10-14T09:20:00Z"
+        }
+      },
+      {
+        "order_id": "ORD-20905",
+        "customer_id": "10000000-0000-4000-8000-000000000002",
+        "order_status": "shipped",
+        "placed_at": "2026-10-25T07:45:00Z",
+        "order_total": { "amount_minor": 6400, "currency": "USD" },
+        "shipping_cost": { "amount_minor": 800, "currency": "USD" },
+        "shipping_address": "48 Sample Road, District 1, Ho Chi Minh City",
+        "transaction_id": "TXN-00020905",
+        "lines": [{ "product_id": "PRD-1004", "quantity": 1 }],
+        "shipment": {
+          "shipment_id": "30000000-0000-4000-8000-000000000005",
+          "shipment_status": "delayed",
+          "tracking_code": "TRK-0000020905",
+          "estimated_delivery_at": "2026-11-01T17:00:00Z",
+          "delivered_at": null
+        },
+        "refund": null
+      },
+      {
+        "order_id": "ORD-20906",
+        "customer_id": "10000000-0000-4000-8000-000000000002",
+        "order_status": "shipped",
+        "placed_at": "2026-10-10T12:00:00Z",
+        "order_total": { "amount_minor": 2900, "currency": "USD" },
+        "shipping_cost": { "amount_minor": 500, "currency": "USD" },
+        "shipping_address": "48 Sample Road, District 1, Ho Chi Minh City",
+        "transaction_id": "TXN-00020906",
+        "lines": [{ "product_id": "PRD-1005", "quantity": 2 }],
+        "shipment": {
+          "shipment_id": "30000000-0000-4000-8000-000000000006",
+          "shipment_status": "lost",
+          "tracking_code": "TRK-0000020906",
+          "estimated_delivery_at": "2026-10-16T17:00:00Z",
+          "delivered_at": null
+        },
+        "refund": {
+          "refund_id": "40000000-0000-4000-8000-000000000006",
+          "refund_status": "under_review",
+          "refund_amount": { "amount_minor": 2900, "currency": "USD" },
+          "refund_requested_at": "2026-10-20T10:30:00Z",
+          "updated_at": "2026-10-21T08:00:00Z"
+        }
+      },
+      {
+        "order_id": "ORD-20907",
+        "customer_id": "10000000-0000-4000-8000-000000000002",
+        "order_status": "delivered",
+        "placed_at": "2026-09-20T15:20:00Z",
+        "order_total": { "amount_minor": 5100, "currency": "USD" },
+        "shipping_cost": { "amount_minor": 800, "currency": "USD" },
+        "shipping_address": "48 Sample Road, District 1, Ho Chi Minh City",
+        "transaction_id": "TXN-00020907",
+        "lines": [{ "product_id": "PRD-1006", "quantity": 1 }],
+        "shipment": {
+          "shipment_id": "30000000-0000-4000-8000-000000000007",
+          "shipment_status": "delivered",
+          "tracking_code": "TRK-0000020907",
+          "estimated_delivery_at": null,
+          "delivered_at": "2026-09-24T11:00:00Z"
+        },
+        "refund": {
+          "refund_id": "40000000-0000-4000-8000-000000000007",
+          "refund_status": "approved",
+          "refund_amount": { "amount_minor": 4300, "currency": "USD" },
+          "refund_requested_at": "2026-09-28T14:10:00Z",
+          "updated_at": "2026-10-01T09:45:00Z"
+        }
+      },
+      {
+        "order_id": "ORD-20908",
+        "customer_id": "10000000-0000-4000-8000-000000000003",
+        "order_status": "delivered",
+        "placed_at": "2026-09-15T09:05:00Z",
+        "order_total": { "amount_minor": 2000, "currency": "USD" },
+        "shipping_cost": { "amount_minor": 500, "currency": "USD" },
+        "shipping_address": "7 Placeholder Lane, Hai Chau, Da Nang",
+        "transaction_id": "TXN-00020908",
+        "lines": [{ "product_id": "PRD-1007", "quantity": 1 }],
+        "shipment": {
+          "shipment_id": "30000000-0000-4000-8000-000000000008",
+          "shipment_status": "delivered",
+          "tracking_code": "TRK-0000020908",
+          "estimated_delivery_at": null,
+          "delivered_at": "2026-09-19T16:30:00Z"
+        },
+        "refund": {
+          "refund_id": "40000000-0000-4000-8000-000000000008",
+          "refund_status": "rejected",
+          "refund_amount": { "amount_minor": 1500, "currency": "USD" },
+          "refund_requested_at": "2026-10-25T10:00:00Z",
+          "updated_at": "2026-10-27T11:15:00Z"
+        }
+      },
+      {
+        "order_id": "ORD-20909",
+        "customer_id": "10000000-0000-4000-8000-000000000003",
+        "order_status": "cancelled",
+        "placed_at": "2026-09-10T18:40:00Z",
+        "order_total": { "amount_minor": 4000, "currency": "USD" },
+        "shipping_cost": { "amount_minor": 800, "currency": "USD" },
+        "shipping_address": "7 Placeholder Lane, Hai Chau, Da Nang",
+        "transaction_id": "TXN-00020909",
+        "lines": [{ "product_id": "PRD-1008", "quantity": 1 }],
+        "shipment": {
+          "shipment_id": "30000000-0000-4000-8000-000000000009",
+          "shipment_status": "not_shipped",
+          "tracking_code": "TRK-0000020909",
+          "estimated_delivery_at": null,
+          "delivered_at": null
+        },
+        "refund": {
+          "refund_id": "40000000-0000-4000-8000-000000000009",
+          "refund_status": "paid",
+          "refund_amount": { "amount_minor": 4000, "currency": "USD" },
+          "refund_requested_at": "2026-09-11T09:00:00Z",
+          "updated_at": "2026-09-13T15:00:00Z"
+        }
+      },
+      {
+        "order_id": "ORD-20910",
+        "customer_id": "10000000-0000-4000-8000-000000000003",
+        "order_status": "delivered",
+        "placed_at": "2026-08-30T13:10:00Z",
+        "order_total": { "amount_minor": 4400, "currency": "USD" },
+        "shipping_cost": { "amount_minor": 0, "currency": "USD" },
+        "shipping_address": "7 Placeholder Lane, Hai Chau, Da Nang",
+        "transaction_id": "TXN-00020910",
+        "lines": [
+          { "product_id": "PRD-1008", "quantity": 1 },
+          { "product_id": "PRD-1005", "quantity": 1 }
+        ],
+        "shipment": {
+          "shipment_id": "30000000-0000-4000-8000-000000000010",
+          "shipment_status": "delivered",
+          "tracking_code": "TRK-0000020910",
+          "estimated_delivery_at": "2026-09-05T17:00:00Z",
+          "delivered_at": "2026-09-04T10:20:00Z"
+        },
+        "refund": null
+      }
+    ]
+  }
+}

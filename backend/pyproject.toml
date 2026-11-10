@@ -1,0 +1,399 @@
+[project]
+name = "supportiq-backend"
+version = "0.1.0"
+description = "SupportIQ backend: sign-in, the read-only shop, shop tickets, and internal accounts."
+readme = "README.md"
+# One Python version for all Python code, pinned with ../.python-version (PY-01).
+requires-python = "~=3.14.4"
+# Runtime dependencies. Every one is justified in the Dependencies table of README.md (WF-27).
+dependencies = [
+    "alembic==1.20.1",
+    "argon2-cffi==25.1.0",
+    "asyncpg==0.32.0",
+    "fastapi==0.162.0",
+    "opentelemetry-api==1.45.2",
+    "opentelemetry-exporter-otlp-proto-http==1.45.2",
+    "opentelemetry-instrumentation-fastapi==0.66b2",
+    "opentelemetry-instrumentation-sqlalchemy==0.66b2",
+    "opentelemetry-sdk==1.45.2",
+    "pydantic==2.14.3",
+    "pydantic-core==2.50.4",
+    "pydantic-settings==2.16.2",
+    "sqlalchemy[asyncio]==2.0.57",
+    "starlette==1.10.0",
+    "uvicorn==0.54.0",
+]
+
+[project.scripts]
+backend = "supportiq_backend.composition_root:main"
+
+[dependency-groups]
+# Development dependencies, separate from the runtime ones (PY-46).
+dev = [
+    "anyio==4.16.0",
+    "coverage==7.17.2",
+    "datamodel-code-generator==0.90.0",
+    "httpx==0.28.1",
+    "hypothesis==6.170.15",
+    "import-linter==2.16",
+    "pip-audit==2.10.1",
+    "pyright[nodejs]==1.1.414",
+    "pytest==9.2.0",
+    "pytest-cov==7.1.0",
+    "pytest-randomly==5.0.0",
+    "pytest-socket==0.8.1",
+    "pytest-xdist==3.8.0",
+    "ruff==0.17.4",
+    "schemathesis==4.33.1",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.11,<0.12"]
+build-backend = "uv_build"
+
+# ----- Code generation (CON-25, CON-26) -----
+# `uv run datamodel-codegen` reads these options. The output is never edited by hand, and CI
+# regenerates it and fails when the committed file differs.
+[tool.datamodel-codegen]
+input = "../contracts/backend.openapi.yaml"
+input-file-type = "openapi"
+output = "src/supportiq_backend/generated/__init__.py"
+output-model-type = "pydantic_v2.BaseModel"
+target-python-version = "3.14"
+use-annotated = true
+field-constraints = true
+use-standard-collections = true
+use-union-operator = true
+use-specialized-enum = true
+strict-nullable = true
+disable-timestamp = true
+use-double-quotes = true
+formatters = ["builtin"]
+# Pydantic cannot apply the `pattern` of `Timestamp` to a datetime type, so the generator
+# would drop it with a warning. As a string, every timestamp is written by one function of
+# platform.web, which a unit test checks against the contract's pattern.
+type-overrides = { Timestamp = "builtins.str" }
+
+# ----- Formatting and linting (PY-03, PY-04, PY-05) -----
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+src = ["src", "tests"]
+# Generated code is never linted (CON-26).
+extend-exclude = ["src/supportiq_backend/generated"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "N", "D", "ANN", "B", "PIE", "RUF", "S", "ASYNC", "DTZ", "T20",
+    "ERA", "C90", "PL", "PT", "PTH", "RET", "SIM", "C4", "TRY", "EM", "ARG", "TID",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests: `assert` is the pytest assertion (PY-29); test names state the behavior, so a
+# docstring per test function would repeat the name (TEST-03); the credentials are synthetic
+# test values, never secrets (TEST-18).
+"tests/**" = ["S101", "D103", "S105", "S106"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.mccabe]
+max-complexity = 8
+
+[tool.ruff.lint.pylint]
+max-args = 5
+max-branches = 8
+max-returns = 4
+max-statements = 30
+max-nested-blocks = 3
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.isort]
+known-first-party = ["supportiq_backend", "tests"]
+
+# ----- Type checking (PY-03, CODE-26) -----
+[tool.pyright]
+include = ["src", "tests"]
+exclude = ["src/supportiq_backend/generated", "**/__pycache__", ".venv"]
+ignore = ["src/supportiq_backend/generated"]
+typeCheckingMode = "strict"
+pythonVersion = "3.14"
+venvPath = "."
+venv = ".venv"
+reportMissingModuleSource = "error"
+reportUnnecessaryTypeIgnoreComment = "error"
+
+# ----- Tests (TEST-14 to TEST-16, TEST-21) -----
+[tool.pytest.ini_options]
+minversion = "9.0"
+testpaths = ["tests"]
+# The fakes and builders live in the `tests` package, next to the tests that own them (ARCH-27).
+pythonpath = ["."]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--import-mode=importlib",
+    # Parallel workers, each with its own database (TEST-15).
+    "--numprocesses=auto",
+    "--dist=loadfile",
+    # No socket in unit tests (TEST-16). tests/conftest.py limits the integration and contract
+    # layers to the loopback addresses, where the local PostgreSQL runs.
+    "--disable-socket",
+    "--allow-unix-socket",
+]
+xfail_strict = true
+# Zero warnings (PY-03): every warning fails the test run.
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+branch = true
+source = ["supportiq_backend"]
+# Generated code is excluded from coverage (CON-26, TEST-22).
+omit = ["*/supportiq_backend/generated/*"]
+
+[tool.coverage.report]
+# The overall floor of TEST-21. The floor for the domain and application layers is checked by
+# a second `coverage report` with --include (README.md, Test).
+fail_under = 80
+show_missing = true
+skip_covered = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "assert_never\\(",
+    "raise AssertionError",
+    "\\.\\.\\.$",
+]
+
+# ----- Layer and feature boundaries (ARCH-11, ARCH-17, ARCH-18, ARCH-19) -----
+# Third-party contracts follow indirect imports, so a domain module cannot reach a framework
+# through another module. Contracts between modules of backend check direct imports, because
+# a public API of a feature may be imported from any layer.
+[tool.importlinter]
+root_package = "supportiq_backend"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Layers inside each feature: api, then application, then domain (ARCH-11)"
+type = "layers"
+containers = [
+    "supportiq_backend.accounts",
+    "supportiq_backend.commerce",
+    "supportiq_backend.tickets",
+    "supportiq_backend.audit",
+    "supportiq_backend.idempotency",
+]
+layers = ["(api)", "(application)", "domain"]
+
+[[tool.importlinter.contracts]]
+name = "Layers inside platform: web, then application, then domain (ARCH-11, ARCH-19)"
+type = "layers"
+containers = ["supportiq_backend.platform"]
+layers = ["web", "application", "domain"]
+
+[[tool.importlinter.contracts]]
+name = "Features depend on each other without cycles, and platform on no feature (ARCH-18)"
+type = "layers"
+layers = [
+    "supportiq_backend.composition_root",
+    "supportiq_backend.tickets",
+    "supportiq_backend.commerce",
+    "supportiq_backend.accounts",
+    "supportiq_backend.audit | supportiq_backend.idempotency",
+    "supportiq_backend.platform",
+]
+
+[[tool.importlinter.contracts]]
+name = "Domain and application code use no framework, driver, or SDK (ARCH-11, ARCH-12)"
+type = "forbidden"
+source_modules = [
+    "supportiq_backend.accounts.domain",
+    "supportiq_backend.accounts.application",
+    "supportiq_backend.commerce.domain",
+    "supportiq_backend.commerce.application",
+    "supportiq_backend.tickets.domain",
+    "supportiq_backend.tickets.application",
+    "supportiq_backend.audit.domain",
+    "supportiq_backend.idempotency.domain",
+    "supportiq_backend.idempotency.application",
+    "supportiq_backend.platform.domain",
+    "supportiq_backend.platform.application",
+]
+forbidden_modules = [
+    "alembic", "argon2", "asyncpg", "fastapi", "httpx", "opentelemetry", "pydantic",
+    "pydantic_settings", "sqlalchemy", "starlette", "uvicorn",
+    "supportiq_backend.generated",
+    "supportiq_backend.migrations",
+    "supportiq_backend.platform.settings",
+]
+
+[[tool.importlinter.contracts]]
+name = "Domain and application code import no adapter and no interface code (ARCH-11)"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = [
+    "supportiq_backend.accounts.domain",
+    "supportiq_backend.accounts.application",
+    "supportiq_backend.commerce.domain",
+    "supportiq_backend.commerce.application",
+    "supportiq_backend.tickets.domain",
+    "supportiq_backend.tickets.application",
+    "supportiq_backend.audit.domain",
+    "supportiq_backend.idempotency.domain",
+    "supportiq_backend.idempotency.application",
+    "supportiq_backend.platform.domain",
+    "supportiq_backend.platform.application",
+]
+forbidden_modules = [
+    "supportiq_backend.accounts.adapters",
+    "supportiq_backend.accounts.api",
+    "supportiq_backend.commerce.adapters",
+    "supportiq_backend.commerce.api",
+    "supportiq_backend.tickets.adapters",
+    "supportiq_backend.tickets.api",
+    "supportiq_backend.audit.adapters",
+    "supportiq_backend.idempotency.adapters",
+    "supportiq_backend.platform.adapters",
+    "supportiq_backend.platform.web",
+]
+
+[[tool.importlinter.contracts]]
+name = "Adapters use no contract model and no settings (ARCH-11, ARCH-15, ARCH-33)"
+type = "forbidden"
+source_modules = [
+    "supportiq_backend.accounts.adapters",
+    "supportiq_backend.commerce.adapters",
+    "supportiq_backend.tickets.adapters",
+    "supportiq_backend.audit.adapters",
+    "supportiq_backend.idempotency.adapters",
+    "supportiq_backend.platform.adapters",
+]
+forbidden_modules = ["supportiq_backend.generated", "supportiq_backend.platform.settings"]
+
+[[tool.importlinter.contracts]]
+name = "Adapters import no application code, interface code, or other adapter (ARCH-11)"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = [
+    "supportiq_backend.accounts.adapters",
+    "supportiq_backend.commerce.adapters",
+    "supportiq_backend.tickets.adapters",
+    "supportiq_backend.audit.adapters",
+    "supportiq_backend.idempotency.adapters",
+]
+forbidden_modules = [
+    "fastapi",
+    "starlette",
+    "supportiq_backend.accounts.application",
+    "supportiq_backend.accounts.api",
+    "supportiq_backend.commerce.application",
+    "supportiq_backend.commerce.api",
+    "supportiq_backend.tickets.application",
+    "supportiq_backend.tickets.api",
+    "supportiq_backend.idempotency.application",
+    "supportiq_backend.platform.adapters",
+    "supportiq_backend.platform.web",
+]
+
+[[tool.importlinter.contracts]]
+name = "Interface code uses no driver and no settings (ARCH-11)"
+type = "forbidden"
+source_modules = [
+    "supportiq_backend.accounts.api",
+    "supportiq_backend.commerce.api",
+    "supportiq_backend.tickets.api",
+    "supportiq_backend.platform.web",
+]
+forbidden_modules = [
+    "alembic", "argon2", "asyncpg", "sqlalchemy", "uvicorn",
+    "supportiq_backend.migrations",
+    "supportiq_backend.platform.settings",
+]
+
+[[tool.importlinter.contracts]]
+name = "Interface code imports no adapter (ARCH-11)"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = [
+    "supportiq_backend.accounts.api",
+    "supportiq_backend.commerce.api",
+    "supportiq_backend.tickets.api",
+    "supportiq_backend.platform.web",
+]
+forbidden_modules = [
+    "supportiq_backend.accounts.adapters",
+    "supportiq_backend.commerce.adapters",
+    "supportiq_backend.tickets.adapters",
+    "supportiq_backend.audit.adapters",
+    "supportiq_backend.idempotency.adapters",
+    "supportiq_backend.platform.adapters",
+]
+
+[[tool.importlinter.contracts]]
+name = "tickets reaches other features only through their public API (ARCH-17)"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = ["supportiq_backend.tickets"]
+forbidden_modules = [
+    "supportiq_backend.commerce.domain",
+    "supportiq_backend.commerce.application",
+    "supportiq_backend.commerce.adapters",
+    "supportiq_backend.commerce.api",
+    "supportiq_backend.accounts.domain",
+    "supportiq_backend.accounts.application",
+    "supportiq_backend.accounts.adapters",
+    "supportiq_backend.accounts.api",
+    "supportiq_backend.idempotency.domain",
+    "supportiq_backend.idempotency.application",
+    "supportiq_backend.idempotency.adapters",
+    "supportiq_backend.platform.domain",
+    "supportiq_backend.platform.application",
+    "supportiq_backend.platform.adapters",
+    "supportiq_backend.platform.settings",
+]
+
+[[tool.importlinter.contracts]]
+name = "commerce reaches other features only through their public API (ARCH-17)"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = ["supportiq_backend.commerce"]
+forbidden_modules = [
+    "supportiq_backend.accounts.domain",
+    "supportiq_backend.accounts.application",
+    "supportiq_backend.accounts.adapters",
+    "supportiq_backend.accounts.api",
+    "supportiq_backend.platform.domain",
+    "supportiq_backend.platform.application",
+    "supportiq_backend.platform.adapters",
+    "supportiq_backend.platform.settings",
+]
+
+[[tool.importlinter.contracts]]
+name = "accounts reaches other features only through their public API (ARCH-17)"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = ["supportiq_backend.accounts"]
+forbidden_modules = [
+    "supportiq_backend.audit.domain",
+    "supportiq_backend.audit.adapters",
+    "supportiq_backend.idempotency.domain",
+    "supportiq_backend.idempotency.application",
+    "supportiq_backend.idempotency.adapters",
+    "supportiq_backend.platform.domain",
+    "supportiq_backend.platform.application",
+    "supportiq_backend.platform.adapters",
+    "supportiq_backend.platform.settings",
+]
+
+[[tool.importlinter.contracts]]
+name = "audit and idempotency reach platform only through its public API (ARCH-17)"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = ["supportiq_backend.audit", "supportiq_backend.idempotency"]
+forbidden_modules = [
+    "supportiq_backend.platform.domain",
+    "supportiq_backend.platform.application",
+    "supportiq_backend.platform.adapters",
+    "supportiq_backend.platform.settings",
+]
