@@ -1,0 +1,6 @@
+# Build and test output of frontend. The root .gitignore already covers node_modules/,
+# dist/, and coverage/.
+storybook-static/
+playwright-report/
+test-results/
+*.tsbuildinfo
