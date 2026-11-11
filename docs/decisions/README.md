@@ -28,7 +28,7 @@ Notes on the index:
 
 - [ADR-0012](0012-roles-v1.md) was accepted on 2026-11-05 and renames the role `supervisor` used in ADR-0009 to `manager`. ADR-0009's authentication mechanism is unchanged.
 - [ADR-0013](0013-shop-demo-with-read-only-catalog.md) was accepted on 2026-11-05 and supersedes [ADR-0002](0002-shop-demo-scope.md).
-- [ADR-0015](0015-account-creation-and-password-changes.md), once accepted, replaces part of statement 1 of ADR-0009 and admin limit 9 of ADR-0012, and extends the `admin` row of ADR-0012's role table. The rest of both ADRs still holds.
+- [ADR-0015](0015-account-creation-and-password-changes.md), once accepted, replaces part of statement 1 of ADR-0009 and admin limit 9 of ADR-0012, extends the `admin` row of ADR-0012's role table, and adds the own password change to the `/shop` list of ADR-0013. The rest of those ADRs still holds.
 
 ## Lifecycle
 
