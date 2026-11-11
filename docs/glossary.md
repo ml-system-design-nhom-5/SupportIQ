@@ -1,6 +1,6 @@
 # Glossary
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-05
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-11
 
 The canonical meaning of every domain term. Code, contracts, docs, and UI use these terms exactly. Add a term here in the same PR that introduces it.
 
@@ -59,6 +59,7 @@ The canonical meaning of every domain term. Code, contracts, docs, and UI use th
 | Suggestion job | The queued unit of work in `backend` that runs one suggestion, claimed by one worker at a time under a lease ([ADR-0011](decisions/0011-deployment-and-runtime-topology.md#suggestion-job-queue)). | task |
 | Warning | A condition that allows a draft but needs staff attention, identified by a `warning_id` and a reason code. Staff must acknowledge every warning before sending a reply based on the draft. | — |
 | `synthetic-dev-only` | Label for development data that does not come from the approved source. Never used as policy or in evaluation reports. | — |
+| Temporary password | A password that an admin sets when creating a `staff` or `manager` account or resetting its password. It expires after a set lifetime, and its owner must replace it at the first sign-in. Proposed in [ADR-0015](decisions/0015-account-creation-and-password-changes.md). | initial password, one-time password |
 | Ticket | A customer request and everything that happens to it until it is closed. | case, request (reserved for HTTP requests), conversation |
 | Trace | The end-to-end record of one operation across components, identified by a trace ID and propagated with the W3C `traceparent` header ([ADR-0007](decisions/0007-observability-stack.md)). | — |
 
