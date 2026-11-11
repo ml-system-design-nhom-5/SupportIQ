@@ -76,6 +76,7 @@ sequenceDiagram
 - Repository checks run with pre-commit locally and with GitHub Actions in CI ([docs/guides/repository-checks.md](docs/guides/repository-checks.md)).
 - `backend` is scaffolded: [backend/README.md](backend/README.md) gives setup, commands, and demo accounts.
 - `frontend` is scaffolded and runs against the Prism mock: sign-in, the shop, and the Accounts screen of the admin area ([frontend/README.md](frontend/README.md)). The shop and admin UI designs are in review again for the revision that the implementation brought. `ai-service` is not scaffolded yet.
+- [ADR-0015](docs/decisions/0015-account-creation-and-password-changes.md) (Proposed, 2026-11-11) adds account creation, password changes, and password resets. The [account management design](docs/design/account-management.md) is in review, together with revisions of the admin, shop, and console UI designs. `backend` contract 1.1.0 and the implementation follow their approval.
 
 ## Target repository layout
 

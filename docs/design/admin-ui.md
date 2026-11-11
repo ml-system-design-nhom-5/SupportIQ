@@ -3,8 +3,8 @@
 - **Status:** In review
 - **Owner:** frontend engineer
 - **Reviewers:** backend engineer, contracts gatekeeper
-- **Last reviewed:** 2026-11-10
-- **Related:** [Requirements](../product/requirements.md) (FR-08), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0012](../decisions/0012-roles-v1.md), [contracts v1 design](contracts-v1.md#admin-operations) (revision 2, in review), [console UI design](console-ui.md) (tokens and app shell), [UI-45](../rules/ui.md#admin), [SEC-41](../rules/security-and-privacy.md#authentication-and-authorization)
+- **Last reviewed:** 2026-11-11
+- **Related:** [Requirements](../product/requirements.md) (FR-08), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md) (Proposed), [contracts v1 design](contracts-v1.md#admin-operations) (revision 2, in review), [account management design](account-management.md) (in review), [console UI design](console-ui.md) (tokens and app shell), [UI-45](../rules/ui.md#admin), [SEC-41](../rules/security-and-privacy.md#authentication-and-authorization)
 
 ## Summary
 
@@ -14,17 +14,19 @@ UI-45 and the [admin operations](contracts-v1.md#admin-operations) fix what each
 
 **Revision of 2026-11-07, decided by the project lead:** after a timeout, a lost connection, `502`, or `504`, nobody knows whether a change happened: `backend` may finish a write after `frontend` stopped waiting (`backend` contract, Timeouts), and a write in flight can fail with `502` ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), Proposed). Version 1.0.1 of the `backend` contract states this in its text on responses from the ingress. The same holds for a `2xx` whose body cannot be read, and for a retry that fails after one of these, unless `backend` refuses it with `422` or `404`. The banner now says that the change may have happened, and the list loads again. Confirming the same change again after a failure reuses its `Idempotency-Key`, so a change that already happened is not repeated. The first decision is kept under [Alternatives considered](#alternatives-considered). The revision also records where the focus goes when a dialog closes.
 
+**Revision of 2026-11-11, for [ADR-0015](../decisions/0015-account-creation-and-password-changes.md) (Proposed):** the accounts screen gains a Login name column, the button Create account, and the row action Reset password. The account menu replaces the display name and Sign out of the app bar. The dialogs, their texts, and their states are defined once, in the [account management design](account-management.md#screens-and-dialogs); this design places them. UI-45 gains the two new actions in the PR that builds them ([account management design](account-management.md#rule-changes)). The earlier non-goal that excluded account creation and password changes is kept under [Alternatives considered](#alternatives-considered).
+
 ## Goals and non-goals
 
 ### Goals
 
-- Every admin operation has one place on screen: `listAdminAccounts`, `changeAccountRole`, `changeAccountStatus`, and `getAdminVersions`.
+- Every admin operation has one place on screen: `listAdminAccounts`, `changeAccountRole`, `changeAccountStatus`, `createAdminAccount`, `resetAccountPassword`, and `getAdminVersions`.
 - Every change asks for confirmation and names the account and the change (UI-45).
 - An admin never sees a customer account, a ticket, a message, an order, or a report ([SEC-41](../rules/security-and-privacy.md#authentication-and-authorization)).
 
 ### Non-goals
 
-- Creating or deleting accounts, changing names or passwords, and managing customer accounts ([ADR-0012](../decisions/0012-roles-v1.md)).
+- Deleting accounts, changing display names or login names, and managing customer accounts ([ADR-0012](../decisions/0012-roles-v1.md), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md)).
 - Changing a version from a screen. Versions change only through the release process ([requirements appendix](../product/requirements.md#appendix-clarifications-of-the-submitted-specification), row 11).
 - An audit log viewer. The audit log is read by reports and exports, not by this area.
 
@@ -42,7 +44,7 @@ Only `frontend` changes. `backend` enforces every rule. `frontend` hides an acti
 
 ### Layout
 
-- The console app shell with the brand "SupportIQ Admin", the navigation Accounts and Versions, the admin's display name, and Sign out.
+- The console app shell with the brand "SupportIQ Admin", the navigation Accounts and Versions, and the [account menu](account-management.md#account-menu) with the admin's display name, Change password, and Sign out.
 - One content column, at most 1040 px wide.
 - After sign-in, `frontend` opens `/admin/accounts` for the `admin` role.
 
@@ -50,7 +52,7 @@ Only `frontend` changes. `backend` enforces every rule. `frontend` hides an acti
 
 | Screen | Route (proposed) | Content | Mockup |
 |---|---|---|---|
-| Accounts | `/admin/accounts` (`/admin` opens it) | The `staff`, `manager`, and `admin` accounts with role, status, and actions | [admin-accounts.png](assets/admin-ui/admin-accounts.png) |
+| Accounts | `/admin/accounts` (`/admin` opens it) | The `staff`, `manager`, and `admin` accounts with login name, role, status, and actions, and Create account | [admin-accounts.png](assets/admin-ui/admin-accounts.png) |
 | Versions in use | `/admin/versions` | The release ID and asset versions of `ai-service`, the `backend` build, and whether `ai-service` is reachable | [admin-versions.png](assets/admin-ui/admin-versions.png) |
 
 ![Accounts](assets/admin-ui/admin-accounts.png)
@@ -61,9 +63,12 @@ Only `frontend` changes. `backend` enforces every rule. `frontend` hides an acti
 |---|---|
 | The caller's own account | None. The row says "You cannot change your own account" |
 | An `admin` account | Deactivate or Reactivate. The row says "The admin role cannot be changed" |
-| A `staff` account | Make manager; Deactivate or Reactivate |
-| A `manager` account | Make staff; Deactivate or Reactivate |
+| A `staff` account | Make manager; Reset password; Deactivate or Reactivate |
+| A `manager` account | Make staff; Reset password; Deactivate or Reactivate |
 
+- The columns are Account (the display name), Login name in the monospace font, Role, Status, and Actions ([account management design](account-management.md#admin-accounts-screen)).
+- The page header holds the primary button Create account. It and Reset password open the form dialogs of the [account management design](account-management.md#create-account-dialog), which also defines their texts, states, and focus.
+- Reset password is offered on deactivated `staff` and `manager` accounts too.
 - The list is ordered by display name, with 20 accounts per page, the default page size of the contract. It is paginated, so `frontend` cannot know whether an account is the last active manager. `backend` refuses that change with `422 invalid-request`, and the page shows the reason in a banner that names the account.
 - The banner follows `violated_rule` of the `422` body ([admin operations](contracts-v1.md#admin-operations)). `last_active_manager` shows the banner of [admin-last-manager.png](assets/admin-ui/admin-last-manager.png). Any other value, an unknown one included, or no value, shows a banner that names the account and asks the admin to reload the list.
 - When a dialog closes, the focus returns to the button that opened it. A successful change replaces that button (Make manager becomes Make staff), so the focus then moves to the row header of the account ([UI-30](../rules/ui.md#accessibility)).
@@ -81,6 +86,8 @@ Only `frontend` changes. `backend` enforces every rule. `frontend` hides an acti
 ![Confirm a deactivation](assets/admin-ui/admin-confirm-deactivate.png)
 
 ![A change refused because it would leave no active manager](assets/admin-ui/admin-last-manager.png)
+
+The mockups of the form dialogs are shown in the account management design: [admin-create-account.png](assets/admin-ui/admin-create-account.png), [admin-account-created.png](assets/admin-ui/admin-account-created.png), [admin-login-name-taken.png](assets/admin-ui/admin-login-name-taken.png), and [admin-reset-password.png](assets/admin-ui/admin-reset-password.png).
 
 ### Versions in use
 
@@ -151,8 +158,8 @@ sequenceDiagram
 
 ### Data and contracts
 
-- No contract change beyond contracts v1 revision 2. The screens use its [admin operations](contracts-v1.md#admin-operations).
-- Rows show the display name, role, and status only ([SEC-41](../rules/security-and-privacy.md#authentication-and-authorization)). `listAdminAccounts` returns no email, password hash, or session data. `account_id` is used for the requests and is not shown.
+- The screens use the [admin operations](contracts-v1.md#admin-operations) of contracts v1 revision 2, and the operations and fields that `backend` contract 1.1.0 adds ([account management design](account-management.md#backend-contract-110)).
+- Rows show the display name, login name, role, and status only ([SEC-41](../rules/security-and-privacy.md#authentication-and-authorization)). `listAdminAccounts` returns no email, password hash, or session data. `account_id` is used for the requests and is not shown.
 - To find the caller's own row, `frontend` compares the `account_id` of `getCurrentSession` with the `account_id` of each row. Contracts v1 defines them as the same identifier.
 
 ### Errors and guardrails
@@ -166,6 +173,7 @@ sequenceDiagram
 | A timeout, a lost connection, `502`, `504`, or a `2xx` with an unreadable body hides the outcome of a change | The banner says that the change may have happened, and the list loads again | Component test; UI flow test |
 | A changed account keeps its old session | Impossible: `backend` deletes its sessions in the same transaction, and the old session gets `401` | Integration test (contracts v1) |
 | `ai-service` is unreachable | Versions page shows the banner and "Unknown" | Component test |
+| A password is kept after its dialog closes | Impossible: it exists only in the state of the open form ([account management design](account-management.md#shared-behavior-of-the-dialogs-and-the-page)) | Component test |
 | Another role opens `/admin` | `403` from `backend`: the permission-denied screen | Permission table test; component test |
 
 ## Alternatives considered
@@ -173,10 +181,11 @@ sequenceDiagram
 - **A role dropdown in each row:** not chosen. Only one other role is ever possible, so a button that names it ("Make manager") states the change in one word and still opens the confirmation.
 - **Admin screens inside the console app:** not chosen. The admin role may not call any `/v1/console/` operation ([SEC-41](../rules/security-and-privacy.md#authentication-and-authorization)), so a separate area keeps the navigation honest.
 - **A banner that says "was not changed" after every failure:** the first decision of this design, replaced on 2026-11-07. After a timeout, a lost connection, `502`, or `504`, `backend` may still finish the write, so that banner could be false.
+- **No account creation and no password changes in the admin area:** a non-goal of this design until 2026-11-11, following [ADR-0012](../decisions/0012-roles-v1.md). Replaced by [ADR-0015](../decisions/0015-account-creation-and-password-changes.md), so that staff can be onboarded and a forgotten password recovered without a developer.
 
 ## Testing and evaluation
 
-- **Storybook:** the accounts table with every row type, each dialog, the versions page when `ai-service` is reachable and when it is not, and the loading, load error, and permission-denied states, with axe checks ([UI-32](../rules/ui.md#accessibility)).
+- **Storybook:** the accounts table with every row type, each dialog, the versions page when `ai-service` is reachable and when it is not, and the loading, load error, and permission-denied states, with axe checks ([UI-32](../rules/ui.md#accessibility)). The stories and tests of the create and reset dialogs are listed in the [account management design](account-management.md#testing-and-evaluation).
 - **Component tests:** row actions by role and for the caller's own account, dialog texts that name the account and the change, the mapping of `422` with each `violated_rule` value, an unknown one included, and of `404`, `403`, and `401` to messages, the banner and the reload after an unknown outcome, the key of a repeated confirmation, and the focus when a dialog closes.
 - **End-to-end tests (Playwright):** an admin makes a staff account a manager; that account's old session gets `401`, and after signing in again it can open reports.
 - No model metric changes.
@@ -184,11 +193,12 @@ sequenceDiagram
 ## Observability
 
 - `frontend` exports no telemetry in v1 ([LOG-04](../rules/logging-and-observability.md)).
-- `backend` already logs `account.role_changed` and `account.status_changed` and writes one audit log entry per change.
+- `backend` already logs `account.role_changed` and `account.status_changed` and writes one audit log entry per change. With `backend` contract 1.1.0 it also logs `account.created` and `account.password_reset`, each with its audit log entry ([account management design](account-management.md#observability)).
 
 ## Security and privacy
 
-- The admin area shows display names, which are staff identity and Confidential ([SEC-01](../rules/security-and-privacy.md#data-classification)), and roles, account status, and versions, which are Internal. `frontend` never logs or stores display names.
+- The admin area shows display names, which are staff identity and Confidential ([SEC-01](../rules/security-and-privacy.md#data-classification)), and login names, roles, account status, and versions, which are Internal. `frontend` never logs or stores display names.
+- A password that an admin sets is Secret. It exists only in the open dialog and is never stored ([account management design](account-management.md#security-and-privacy)).
 - Authorization is enforced by `backend`. Hiding an action in `frontend` is a convenience ([SEC-20](../rules/security-and-privacy.md#authentication-and-authorization)).
 - The mockups use sample data only (`synthetic-dev-only`). Their names, IDs, and version labels are stand-ins.
 
@@ -196,6 +206,7 @@ sequenceDiagram
 
 1. Done on 2026-11-05: the backend and frontend owners approved this design.
 2. Implementation against Prism mocks: the accounts table and dialogs after contract PR 2, then the versions page after the contract change that adds `getAdminVersions`.
+3. The revision of 2026-11-11 needs a new approval from the same reviewers. Its screens are built after `backend` contract 1.1.0 ([account management design](account-management.md#rollout)).
 
 ### Mockup sources
 

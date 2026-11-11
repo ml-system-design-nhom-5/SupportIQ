@@ -3,14 +3,14 @@
 - **Status:** In review
 - **Owner:** backend engineer
 - **Reviewers:** frontend engineer, contracts gatekeeper
-- **Last reviewed:** 2026-11-08
+- **Last reviewed:** 2026-11-11
 - **Related:** [Requirements](../product/requirements.md) (FR-08, FR-11, NFR-09), [ADR-0001](../decisions/0001-system-architecture.md), [ADR-0003](../decisions/0003-tech-stack.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md) (Proposed), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md), [contracts v1 design](contracts-v1.md) (revision 2, in review), [shop UI](shop-ui.md), [admin UI](admin-ui.md), [architecture rules](../rules/architecture.md), [security rules](../rules/security-and-privacy.md)
 
 ## Summary
 
 This design fixes the part of `backend` that needs no AI: its feature modules, the PostgreSQL tables for accounts, sessions, idempotency, commerce data, tickets, and the audit log, the database roles, the seed and reset commands, and the settings. It lets the team build sign-in, the shop, and the account screens of the admin area before `ai-service` is ready.
 
-The ticket workflow that involves the AI (suggestion jobs, pseudonymization, the `ai-service` client, replies, proposals, escalations, decisions, and reports) is the subject of the `backend` ticket workflow design, which extends the tables below.
+The ticket workflow that involves the AI (suggestion jobs, pseudonymization, the `ai-service` client, replies, proposals, escalations, decisions, and reports) is the subject of the `backend` ticket workflow design, which extends the tables below. Account creation, password changes, and password resets are the subject of the [account management design](account-management.md), which extends `accounts`, its privileges, the settings, and the audit log events.
 
 **Revision of 2026-11-07.** The implementation added the settings `trace_exporter`, `otlp_traces_endpoint`, and `otlp_export_timeout_ms`. The request hash now also covers the path parameters. `supportiq_owner` also runs the create-app-role command, with `CREATEROLE` and `CREATEDB`. The seed file answers the open question about its content: 9 accounts, 3 customers, 8 products, and 10 orders. On 2026-11-08, version 1.0.1 of `contracts/backend.openapi.yaml` recorded the same rule for the `Idempotency-Key`, and stated that a product appears at most once in an order; `order_lines` now enforces this with a unique constraint. The decisions that this revision replaces are under Alternatives considered.
 
@@ -96,7 +96,7 @@ Every column is `NOT NULL` unless it says "optional". Times are `timestamptz` in
 | `ticket_number_seq` | `USAGE` |
 | `sessions`, `sign_in_failures`, `idempotency_records` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
 
-- `supportiq_app` cannot insert or delete an account, so accounts exist only through the seed ([ADR-0012](../decisions/0012-roles-v1.md), admin limits 2 and 3).
+- `supportiq_app` cannot insert or delete an account, so accounts exist only through the seed ([ADR-0012](../decisions/0012-roles-v1.md), admin limits 2 and 3). The [account management design](account-management.md#migration-r0002) adds migration `r0002`, which lets `supportiq_app` insert `staff` and `manager` accounts and update passwords; `admin` and customer accounts still come only from the seed.
 - Triggers add checks that no privilege can express:
   - on `audit_log_entries`, reject every `UPDATE` and `DELETE`, for every role. The reset command uses `TRUNCATE`, which `supportiq_app` may not run ([SEC-39](../rules/security-and-privacy.md#audit-log));
   - on `accounts`, reject a role change unless it goes from `staff` to `manager` or back ([ADR-0012](../decisions/0012-roles-v1.md), admin limit 3);
