@@ -31,7 +31,7 @@ The team agreed the product behavior:
 - the update of 2026-11-04: citations to the order context ([ADR-0014](../decisions/0014-citations-to-order-context.md)), and intent changes accepted only after an intent is known;
 - the update of 2026-11-05: one pending rule for every role, responses from the ingress, shared `Citation` and `OrderContext` schemas, the shop's `order_id` filter on `listShopTickets`, the ticket status `replied`, the newest-first order of shop lists, the `account_id` of `getCurrentSession`, the data classes of commerce IDs, no `Idempotency-Key` on sign-out, and names that follow CON-18 (`start_at`, `end_at`, `handling_time_ms`, `mask_count_by_type`);
 - the update of 2026-11-08, as `backend.openapi.yaml` 1.0.1 states: the problem type `idempotency-key-reused` also covers the same key with different path parameters; the ingress answers `502` or `504` also when a write in flight fails, and a retry with the same key then cannot repeat its effect; a product appears at most once in an order;
-- the update of 2026-11-11, for `backend` contract 1.1.0 ([ADR-0015](../decisions/0015-account-creation-and-password-changes.md), Proposed): the own password change, admin account creation and password reset, the problem type `login-name-taken`, and three audit log events. The [account management design](account-management.md) holds their details.
+- the update of 2026-11-11, for `backend` contract 1.1.0 ([ADR-0015](../decisions/0015-account-creation-and-password-changes.md)): the own password change, admin account creation and password reset, the problem type `login-name-taken`, and three audit log events. The [account management design](account-management.md) holds their details.
 
 Revision 2 needs a new approval.
 

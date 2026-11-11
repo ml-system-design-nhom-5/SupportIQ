@@ -1,10 +1,10 @@
 # Design: Account management
 
-- **Status:** In review
+- **Status:** Approved
 - **Owner:** backend engineer
 - **Reviewers:** frontend engineer, contracts gatekeeper, project lead
 - **Last reviewed:** 2026-11-11
-- **Related:** [Requirements](../product/requirements.md) (FR-08), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md) (Proposed), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0008](../decisions/0008-ui-design-system.md), [backend foundation design](backend-foundation.md), [contracts v1 design](contracts-v1.md), [admin UI design](admin-ui.md), [shop UI design](shop-ui.md), [console UI design](console-ui.md), [security rules](../rules/security-and-privacy.md#authentication-and-authorization), [ERR-15](../rules/errors-and-reliability.md#idempotency), [UI-45](../rules/ui.md#admin)
+- **Related:** [Requirements](../product/requirements.md) (FR-08), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0008](../decisions/0008-ui-design-system.md), [backend foundation design](backend-foundation.md), [contracts v1 design](contracts-v1.md), [admin UI design](admin-ui.md), [shop UI design](shop-ui.md), [console UI design](console-ui.md), [security rules](../rules/security-and-privacy.md#authentication-and-authorization), [ERR-15](../rules/errors-and-reliability.md#idempotency), [UI-45](../rules/ui.md#admin)
 
 ## Summary
 
@@ -408,7 +408,7 @@ Every change is compatible ([CON-19](../rules/contracts.md#evolution)): new oper
 
 - `violated_rule` keeps its rule: when several reasons apply, it holds the first value of the enum list.
 - Examples ([CON-06](../rules/contracts.md#openapi-style)): one per outcome of each new operation. Example passwords are visibly fake values that gitleaks does not flag.
-- PR 2 regenerates the `backend` models and `frontend/src/api/generated/backend.ts` in the same change, because CI checks both against the contract ([CON-26](../rules/contracts.md#generated-code)).
+- Phase 2 regenerates the `backend` models and `frontend/src/api/generated/backend.ts` in the same change, because CI checks both against the contract ([CON-26](../rules/contracts.md#generated-code)).
 
 #### Migration `r0002`
 
@@ -449,13 +449,13 @@ Decided by the project lead on 2026-11-11 ([WF-27 to WF-30](../rules/workflow.md
 | `@radix-ui/react-dropdown-menu` | 2.2.1 | MIT | The account menu: an accessible menu button with keyboard navigation and focus return. UI-31 forbids a menu built from generic elements |
 | `@radix-ui/react-dialog` | 1.3.1, already in the lockfile through `@radix-ui/react-alert-dialog` | MIT | The create and reset form dialogs. AlertDialog has the `alertdialog` role, meant for confirmations, not for forms |
 
-PR 3 pins the versions in `package.json` and adds them to the dependency table of the `frontend` README. The checkbox and the radio group are native inputs styled with tokens, so they add no package.
+Phase 3 pins the versions in `package.json` and adds them to the dependency table of the `frontend` README. The checkbox and the radio group are native inputs styled with tokens, so they add no package.
 
 ### Rule changes
 
-A rule that asks for code or a test changes in the PR that brings them, so that no merged rule is broken by the code of its time: TEST-26 changes with the `backend` PR (PR 2), and UI-38, UI-45, and UI-46 change with the `frontend` PR (PR 3). ERR-15, SEC-41, and SEC-42 only describe the new operations, which no code calls before PR 2, so they change in PR 1 ([RULE-06](../rules/README.md#changing-a-rule)).
+A rule that asks for code or a test changes in the phase that brings them, so that at the end of every phase no rule is broken by the code of that phase: TEST-26 changes with `backend` in phase 2, and UI-38, UI-45, and UI-46 change with `frontend` in phase 3. ERR-15, SEC-41, and SEC-42 only describe the new operations, which no code calls before phase 2, so they change in phase 1 ([RULE-06](../rules/README.md#changing-a-rule)).
 
-| Rule | PR | Change |
+| Rule | Phase | Change |
 |---|---|---|
 | [ERR-15](../rules/errors-and-reliability.md#idempotency) | 1 | Password fields are left out of the request hash ([Idempotency](#idempotency)) |
 | [SEC-41](../rules/security-and-privacy.md#authentication-and-authorization) | 1 | An admin creates `staff` and `manager` accounts and resets their passwords; the list also shows login names |
@@ -465,11 +465,11 @@ A rule that asks for code or a test changes in the PR that brings them, so that 
 | [UI-45](../rules/ui.md#admin) | 3 | The accounts screen gains account creation and password resets |
 | UI-46, new | 3 | Every password field has the show and hide toggle |
 
-The new TEST-26 bullet that PR 2 adds:
+The new TEST-26 bullet that phase 2 adds:
 
 > No password sent to `backend` appears in an idempotency record, a response body, a log line, a span, or an audit log entry. The test sends a known password through every operation that takes one ([ADR-0015](../decisions/0015-account-creation-and-password-changes.md), [ERR-15](../rules/errors-and-reliability.md#idempotency)).
 
-The text that PR 3 gives the UI rules:
+The text that phase 3 gives the UI rules:
 
 > **UI-38.** The shop uses the same design system and adds no components outside it. Its scope is fixed by [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md) and [ADR-0015](../decisions/0015-account-creation-and-password-changes.md): a read-only catalog, "My orders", the support form, sent replies, and the own password change. Every product shows the same neutral product image from the design system.
 >
@@ -477,13 +477,13 @@ The text that PR 3 gives the UI rules:
 >
 > **UI-46**, in a new section "Password fields". Every password field uses the design-system `PasswordInput`. It has a show and hide toggle: a button at the end of the field with a fixed accessible name, "Show password", and `aria-pressed` for its state. The password is hidden on every load and after every successful submission, and the toggle never changes the value or the focus of the field. The field never blocks paste or autofill, never truncates, and sets `autocomplete` to `current-password` or `new-password`.
 
-PR 3 also adds UI-46 to the UI review checklist and to the description of `ui.md` in the [rules index](../rules/README.md#rule-files).
+Phase 3 also adds UI-46 to the UI review checklist and to the description of `ui.md` in the [rules index](../rules/README.md#rule-files).
 
 ### Errors and guardrails
 
 | Failure or risk | Behavior | Test |
 |---|---|---|
-| A password reaches an idempotency record, a response, a log line, a span, or an audit log entry | Impossible by design: no canonical request, response schema, event attribute, or audit field holds one | Guardrail test (the TEST-26 bullet of PR 2): send a known password through each new operation and sign-in, then search every idempotency record, response body, captured log line, exported span, and audit log entry |
+| A password reaches an idempotency record, a response, a log line, a span, or an audit log entry | Impossible by design: no canonical request, response schema, event attribute, or audit field holds one | Guardrail test (the TEST-26 bullet of phase 2): send a known password through each new operation and sign-in, then search every idempotency record, response body, captured log line, exported span, and audit log entry |
 | The current password is guessed through `changeOwnPassword` | Each wrong password is a sign-in failure of the login name; at the limit, every attempt waits `sign_in_failure_delay_ms` and is refused without a check | Integration test with a fake `Clock` that mixes sign-in and password-change failures |
 | A change or a reset should end other sessions | They return `401` on their next request; kept sessions do not | Integration test for each choice of each operation |
 | An admin creates an `admin` or `customer` account | The contract refuses the role with `422`; the trigger and the missing `customer_id` privilege refuse the row | Contract test; integration test as `supportiq_app` |
@@ -529,7 +529,7 @@ The tests follow the Validation of [ADR-0015](../decisions/0015-account-creation
   - every row of [Errors and guardrails](#errors-and-guardrails) that names an integration test.
 - **Permission tests:** every role can change its own password; only `admin` can create accounts and reset passwords; the table of every operation against every role ([SEC-16](../rules/security-and-privacy.md#authentication-and-authorization)).
 - **Contract:** Schemathesis over all 18 operations, one test per documented status, and the new examples ([CON-27](../rules/contracts.md#contract-tests)).
-- **Guardrail (TEST-26, from PR 2):** no password in any record, response, log line, span, or audit log entry; no admin operation reaches a customer account.
+- **Guardrail (TEST-26, from phase 2):** no password in any record, response, log line, span, or audit log entry; no admin operation reaches a customer account.
 - **Unit, `frontend`:** the generator; the length in code points, not UTF-16 units; the key rule (same fields reuse it, any edit creates a new one); the mapping of every `violated_rule`, an unknown one included, and of `409 login-name-taken`; and a test that the password limits and the login number range equal the contract.
 - **Storybook with axe ([UI-32](../rules/ui.md#accessibility)):** `PasswordInput` hidden, shown, and with an error; `AccountMenu` closed and open for each role; `/change-password` with every state of its table; both dialogs with every state of their tables, the copy failure included.
 - **End-to-end (Playwright):**
@@ -549,7 +549,7 @@ The tests follow the Validation of [ADR-0015](../decisions/0015-account-creation
 | `password_change.failed` | info | `account_id` | The current password was wrong |
 | `password_change.throttled` | warning | `account_id` | The login name was at the sign-in failure limit |
 
-- PR 2 adds the five events to the event catalog, `platform/domain/events.py`, and to the Events table of `backend/README.md` ([LOG-12](../rules/logging-and-observability.md)).
+- Phase 2 adds the five events to the event catalog, `platform/domain/events.py`, and to the Events table of `backend/README.md` ([LOG-12](../rules/logging-and-observability.md)).
 - Events never carry a password, a hash, a login name, or a display name ([LOG-29](../rules/logging-and-observability.md#privacy-in-telemetry)). The new attributes join the allow-list of the logging setup.
 - Request logs already exclude bodies and headers, so no password reaches a request log.
 - No new span: HTTP and database spans come from auto-instrumentation ([LOG-20](../rules/logging-and-observability.md#traces)).
@@ -577,14 +577,16 @@ No entry holds a password, a password hash, a login name, or a display name.
 - Copy password puts the password on the admin's clipboard, which the browser does not clear.
 - The admin knows a password that they set until its owner changes it, so the admin can sign in as that account until then. ADR-0015 accepts this under Negative; the audit log records every reset.
 - Brute force through `changeOwnPassword` shares the sign-in throttle of the login name.
-- The PRs of this design touch authentication and need two approvals ([SEC-35](../rules/security-and-privacy.md#security-review), [WF-15](../rules/workflow.md#reviews)).
+- The project lead approved this design in place of a PR review ([Rollout](#rollout)).
 
 ## Rollout
 
-1. PR 1, documents only: this design; the revisions of the admin, shop, and console UI designs with their mockups; the changes to ERR-15, SEC-41, and SEC-42; the glossary; the contracts v1 design; and the edits of ADR-0015. The reviewers set ADR-0015 to Accepted and this design to Approved.
-2. PR 2, the `backend` PR: `backend` contract 1.1.0, migration `r0002`, the use cases and tests, the regenerated `backend` models and `frontend` client, and the new TEST-26 bullet with its test ([Rule changes](#rule-changes)). It needs two approvals and the contracts gatekeeper. Until PR 3, `frontend` maps the new problem type to a technical failure ([CON-22](../rules/contracts.md#evolution)).
-3. PR 3, the `frontend` PR: the design-system components with their stories, the account menu, `/change-password`, the admin dialogs, the password suggestion, the two dependencies, and the changes to UI-38, UI-45, and UI-46 ([Rule changes](#rule-changes)).
-4. Rollback: revert PR 3, then PR 2 with the downgrade of `r0002` ([Migration](#migration-r0002)).
+The three phases are built on one branch, `build/account-passwords`, which is merged once into `chore/fe-be-supportiq-ecom`; CI runs on every push of the branch. On 2026-11-11 the project lead accepted ADR-0015, approved this design and the revisions of the admin, shop, and console UI designs, and decided that this approval replaces the two approvals and the contracts gatekeeper of a PR review ([WF-15](../rules/workflow.md#reviews), [SEC-35](../rules/security-and-privacy.md#security-review)).
+
+1. Phase 1, documents only: this design; the revisions of the admin, shop, and console UI designs with their mockups; the changes to ERR-15, SEC-41, and SEC-42; the glossary; the contracts v1 design; and the edits of ADR-0015.
+2. Phase 2, `backend`: `backend` contract 1.1.0, migration `r0002`, the use cases and tests, the regenerated `backend` models and `frontend` client, and the new TEST-26 bullet with its test ([Rule changes](#rule-changes)). Until phase 3, `frontend` maps the new problem type to a technical failure ([CON-22](../rules/contracts.md#evolution)).
+3. Phase 3, `frontend`: the design-system components with their stories, the account menu, `/change-password`, the admin dialogs, the password suggestion, the two dependencies, and the changes to UI-38, UI-45, and UI-46 ([Rule changes](#rule-changes)).
+4. Rollback after the merge: stop `backend`, downgrade the database to `r0001` with the merged code ([Migration](#migration-r0002)), revert the merge commit, and deploy. The downgrade comes first, because the reverted code no longer contains `r0002`.
 
 ### Mockup sources
 
@@ -598,4 +600,4 @@ docs/design/assets/shop-ui/render.sh
 
 ## Open questions
 
-- This design depends on ADR-0015, which is Proposed.
+None.

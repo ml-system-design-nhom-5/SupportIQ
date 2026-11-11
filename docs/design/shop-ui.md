@@ -1,10 +1,10 @@
 # Design: Shop UI
 
-- **Status:** In review
+- **Status:** Approved
 - **Owner:** frontend engineer
 - **Reviewers:** backend engineer, contracts gatekeeper
 - **Last reviewed:** 2026-11-11
-- **Related:** [Requirements](../product/requirements.md) (FR-08, FR-11), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md) (Proposed), [contracts v1 design](contracts-v1.md) (revision 2, in review), [account management design](account-management.md) (in review), [console UI design](console-ui.md) (tokens), [UI rules](../rules/ui.md#shop)
+- **Related:** [Requirements](../product/requirements.md) (FR-08, FR-11), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md), [contracts v1 design](contracts-v1.md) (revision 2, in review), [account management design](account-management.md), [console UI design](console-ui.md) (tokens), [UI rules](../rules/ui.md#shop)
 
 ## Summary
 
@@ -14,7 +14,7 @@ On 2026-11-05 the team chose the layout: My orders is a list, and each order pag
 
 **Revision of 2026-11-07, decided by the project lead:** after a timeout, a lost connection, `502`, or `504`, nobody knows whether a message arrived: `backend` may finish a write after `frontend` stopped waiting (`backend` contract, Timeouts), and a write in flight can fail with `502` ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), Proposed). Version 1.0.1 of the `backend` contract states this in its text on responses from the ingress. The same holds for a `2xx` whose body cannot be read, and for a later failure with the same key, unless `backend` refuses it with `422` or `404`. The `Idempotency-Key` now stays with a message until the send succeeds or the text changes, and the banner says that the message may have arrived. The first decision is kept under [Alternatives considered](#alternatives-considered). The revision also records that a product appears at most once in an order, and where the focus goes after sending.
 
-**Revision of 2026-11-11, for [ADR-0015](../decisions/0015-account-creation-and-password-changes.md) (Proposed):** the account menu replaces the customer's display name and Sign out in the top bar, and adds Change password, which opens the shared page `/change-password`. Both are defined in the [account management design](account-management.md#account-menu). The earlier top bar is kept under [Alternatives considered](#alternatives-considered).
+**Revision of 2026-11-11, for [ADR-0015](../decisions/0015-account-creation-and-password-changes.md):** the account menu replaces the customer's display name and Sign out in the top bar, and adds Change password, which opens the shared page `/change-password`. Both are defined in the [account management design](account-management.md#account-menu). The earlier top bar is kept under [Alternatives considered](#alternatives-considered).
 
 ## Goals and non-goals
 
@@ -256,7 +256,7 @@ Each badge has an icon and a label, so color is never the only signal. The tones
 2. Done on 2026-11-05: the backend and frontend owners approved this design.
 3. Contract PR 2 implements `ShopTicketView` with `replied` and the `order_id` filter of `listShopTickets`.
 4. Implementation: the shop blocks join the design system with stories first ([UI-38](../rules/ui.md#shop)), then the screens, against Prism mocks.
-5. The revision of 2026-11-11 needs a new approval from the same reviewers. The account menu is built after `backend` contract 1.1.0 ([account management design](account-management.md#rollout)).
+5. Done on 2026-11-11: the project lead approved the revision of 2026-11-11, in place of a PR review. The account menu is built after `backend` contract 1.1.0 ([account management design](account-management.md#rollout)).
 
 ### Mockup sources
 

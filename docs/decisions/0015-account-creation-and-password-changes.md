@@ -1,8 +1,8 @@
 # ADR-0015: Account creation, password changes, and password resets
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-11
-- **Deciders:** Team
+- **Deciders:** Project lead
 - **Related:** [Requirements](../product/requirements.md) (FR-08), [ADR-0009](0009-demo-accounts-and-cookie-sessions.md), [ADR-0012](0012-roles-v1.md), [ADR-0013](0013-shop-demo-with-read-only-catalog.md), [security rules](../rules/security-and-privacy.md#authentication-and-authorization), [ERR-15](../rules/errors-and-reliability.md#idempotency), [account management design](../design/account-management.md)
 
 ## Context

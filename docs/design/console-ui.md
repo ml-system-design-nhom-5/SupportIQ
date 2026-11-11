@@ -1,10 +1,10 @@
 # Design: Console UI
 
-- **Status:** In review
+- **Status:** Approved
 - **Owner:** frontend engineer
 - **Reviewers:** backend engineer, ML engineer, RAG engineer, contracts gatekeeper
 - **Last reviewed:** 2026-11-11
-- **Related:** [Requirements](../product/requirements.md) (FR-01, FR-04 to FR-07, FR-10, NFR-11, ESC-01 to ESC-05), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md) (Proposed), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0014](../decisions/0014-citations-to-order-context.md) (Proposed), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md) (Proposed), [contracts v1 design](contracts-v1.md) (revision 2, in review), [account management design](account-management.md) (in review), [UI rules](../rules/ui.md)
+- **Related:** [Requirements](../product/requirements.md) (FR-01, FR-04 to FR-07, FR-10, NFR-11, ESC-01 to ESC-05), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md) (Proposed), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0014](../decisions/0014-citations-to-order-context.md) (Proposed), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md), [contracts v1 design](contracts-v1.md) (revision 2, in review), [account management design](account-management.md), [UI rules](../rules/ui.md)
 
 ## Summary
 
@@ -14,7 +14,7 @@ The team chose the inbox layout on 2026-11-01. It has an inbox on the left, the 
 
 This design follows ADR-0012 and three documents still in review: contracts v1 revision 2, ADR-0010, and ADR-0014. If they change, this document changes with them.
 
-**Revision of 2026-11-11, for [ADR-0015](../decisions/0015-account-creation-and-password-changes.md) (Proposed):** the app bar shows the account menu instead of the display name and Sign out, and the sign-in password field gets the show and hide toggle of the proposed UI-46 ([account management design](account-management.md#rule-changes)). The shared page `/change-password` joins the screens. All three are defined in the [account management design](account-management.md#screens-and-dialogs). The earlier app bar is kept under [Alternatives considered](#alternatives-considered). This revision needs a new approval from the same reviewers.
+**Revision of 2026-11-11, for [ADR-0015](../decisions/0015-account-creation-and-password-changes.md):** the app bar shows the account menu instead of the display name and Sign out, and the sign-in password field gets the show and hide toggle of the proposed UI-46 ([account management design](account-management.md#rule-changes)). The shared page `/change-password` joins the screens. All three are defined in the [account management design](account-management.md#screens-and-dialogs). The earlier app bar is kept under [Alternatives considered](#alternatives-considered).
 
 ## Goals and non-goals
 
@@ -395,7 +395,7 @@ The status `cancelled` has no presentation, because a superseded suggestion is n
 2. Done on 2026-11-05: the team approved this design.
 3. The contract change that adds the console operations implements `TicketSummary`, `other_orders`, `CitationView`, `intent_override` in `SuggestionView`, and the draft `text` in `backend.openapi.yaml`.
 4. Implementation: token files and primitives, then domain components with stories, then screens against Prism mocks.
-5. The revision of 2026-11-11 needs a new approval from the same reviewers. The account menu, the toggle, and `/change-password` are built after `backend` contract 1.1.0 ([account management design](account-management.md#rollout)).
+5. Done on 2026-11-11: the project lead approved the revision of 2026-11-11, in place of a PR review. The account menu, the toggle, and `/change-password` are built after `backend` contract 1.1.0 ([account management design](account-management.md#rollout)).
 
 ### Mockup sources
 
