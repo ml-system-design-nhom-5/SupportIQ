@@ -30,10 +30,20 @@ const ICONS = {
   refresh: '<path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M8 16H3v5"/>',
   more: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
   copy: '<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2"/>',
+  eye: '<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>',
 };
 
 function icon(name, extraClass = "") {
   return `<svg class="icon ${extraClass}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
+}
+
+// The account menu trigger and the password field (account management design).
+function accountTrigger(name, role) {
+  return `<span class="account-trigger">${icon("user")}<span><b>${name}</b> · ${role}</span>${icon("chevronDown", "icon-sm")}</span>`;
+}
+
+function passwordInput(dots = "••••••••••") {
+  return `<span class="input"><span>${dots}</span><span class="toggle" title="Show password">${icon("eye")}</span></span>`;
 }
 
 // ---------- One presentation per status (UI-12) ----------
@@ -227,8 +237,7 @@ function appBar(user, active = "tickets") {
   return `<header class="appbar">
     <div class="brand">SupportIQ <span>Console</span></div>
     <nav><a class="${active === "tickets" ? "active" : ""}">${icon("inbox")}Tickets</a>${reports}</nav>
-    <div class="user">${icon("user")}<span><b>${user.name}</b> · ${user.role}</span>
-      <button class="btn btn-ghost btn-sm">${icon("logOut", "icon-sm")}Sign out</button></div>
+    <div class="user">${accountTrigger(user.name, user.role)}</div>
   </header>`;
 }
 
@@ -745,7 +754,7 @@ function signInScreen() {
     <section class="panel sign-in">
       <div class="brand">SupportIQ <span>Console</span></div>
       <label class="field"><span class="small strong">Login name</span><span class="input">staff-1</span></label>
-      <label class="field"><span class="small strong">Password</span><span class="input">••••••••••</span></label>
+      <label class="field"><span class="small strong">Password</span>${passwordInput()}</label>
       <div class="error-line small">${icon("alert", "icon-sm")}The login name or the password is not correct.</div>
       <button class="btn btn-primary">Sign in</button>
     </section>
