@@ -1,6 +1,6 @@
 # Architecture decision records
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-12
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-13
 
 An architecture decision record (ADR) captures one significant decision: its context, the options, what we chose, and what it costs. This page lists every ADR and explains the process. Writing rules are in the [documentation handbook](../README.md#adrs).
 
@@ -25,7 +25,8 @@ An architecture decision record (ADR) captures one significant decision: its con
 | [0015](0015-account-creation-and-password-changes.md) | Account creation, password changes, and password resets | Accepted | 2026-11-11 |
 | [0016](0016-hosting-on-free-tiers.md) | Hosting of the demo on free tiers | Accepted | 2026-11-12 |
 | [0017](0017-named-entity-model-from-its-release-url.md) | The named-entity model from its release URL | Accepted | 2026-11-12 |
-| [0018](0018-one-placeholder-label-and-retried-map-storage-errors.md) | One placeholder label and retried map storage errors | Proposed | 2026-11-12 |
+| [0019](0019-one-label-for-text-in-the-placeholder-syntax.md) | One label for text in the placeholder syntax | Proposed | 2026-11-13 |
+| [0020](0020-storage-errors-of-the-pseudonym-map.md) | Storage errors of the pseudonym map | Proposed | 2026-11-13 |
 
 Notes on the index:
 
@@ -33,7 +34,8 @@ Notes on the index:
 - [ADR-0013](0013-shop-demo-with-read-only-catalog.md) was accepted on 2026-11-05 and supersedes [ADR-0002](0002-shop-demo-scope.md).
 - [ADR-0015](0015-account-creation-and-password-changes.md) was accepted on 2026-11-11 by the project lead and replaces part of statement 1 of ADR-0009 and admin limit 9 of ADR-0012, extends the `admin` row of ADR-0012's role table, and adds the own password change to the `/shop` list of ADR-0013. The rest of those ADRs still holds.
 - [ADR-0016](0016-hosting-on-free-tiers.md) was accepted on 2026-11-12 by the project lead and replaces one part of [ADR-0007](0007-observability-stack.md): the telemetry of the deployed demo goes to a hosted service, Grafana Cloud. Local development keeps the local Grafana stack, and the rest of ADR-0007 still holds.
-- [ADR-0018](0018-one-placeholder-label-and-retried-map-storage-errors.md) was proposed on 2026-11-12 by the project lead. Once accepted, it replaces three passages of [ADR-0010](0010-pseudonymization-and-egress-control.md): the separate label of a restored `LITERAL` in Restoring and sending, item 3; the words "or the map cannot be stored" in the first row of Failure handling; and the words "storage error" in the first branch of the Overview sequence diagram. The rest of ADR-0010 still holds.
+- [ADR-0019](0019-one-label-for-text-in-the-placeholder-syntax.md) was proposed on 2026-11-13 by the project lead. Once accepted, it replaces one passage of [ADR-0010](0010-pseudonymization-and-egress-control.md): the separate label of a restored `LITERAL` in Restoring and sending, item 3. The rest of ADR-0010 still holds.
+- [ADR-0020](0020-storage-errors-of-the-pseudonym-map.md) was proposed on 2026-11-13 by the project lead. Once accepted, it replaces two passages of [ADR-0010](0010-pseudonymization-and-egress-control.md): the words "or the map cannot be stored" in the first row of Failure handling, and the words "storage error" in the first branch of the Overview sequence diagram. The rest of ADR-0010 still holds.
 
 ## Lifecycle
 

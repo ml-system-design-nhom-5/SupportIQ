@@ -1,6 +1,6 @@
 # UI rules
 
-> **Status:** Active · **Owner:** frontend · **Last reviewed:** 2026-11-12
+> **Status:** Active · **Owner:** frontend · **Last reviewed:** 2026-11-13
 
 A strict design system and interaction rules, so every screen looks and behaves the same, staff can work quickly and safely, and developers can build and review UI with confidence. The console exists to help staff check the AI, not to make them trust it blindly. Design-system structure: [ADR-0008](../decisions/0008-ui-design-system.md). Shop scope: [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md). Roles: [ADR-0012](../decisions/0012-roles-v1.md).
 
@@ -89,7 +89,7 @@ flowchart TB
 
 **UI-42.** When a draft abstained for low confidence (ESC-01), the console shows the top three candidate intents with their confidence, each with a "Use this intent" action, and says that no draft is created until staff choose. The draft area shows no draft and no filler text.
 
-**UI-43.** AI text is shown exactly as `backend` returns it. Every text that matches the placeholder syntax ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#placeholder-syntax)), whether a mask, a pseudonym that `backend` could not restore, or customer text that only looks like a placeholder (a restored `LITERAL`), is highlighted with one label: "Personal data or reserved text: replace before sending" ([ADR-0018](../decisions/0018-one-placeholder-label-and-retried-map-storage-errors.md)). Send reply and Submit for approval stay disabled while the reply editor contains text in the placeholder syntax. The UI never tries to restore or remove placeholders itself.
+**UI-43.** AI text is shown exactly as `backend` returns it. Every text that matches the placeholder syntax ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#placeholder-syntax)), whether a mask, a pseudonym that `backend` could not restore, or customer text that only looks like a placeholder (a restored `LITERAL`), is highlighted with one label: "Personal data or reserved text: replace before sending" ([ADR-0019](../decisions/0019-one-label-for-text-in-the-placeholder-syntax.md)). Send reply and Submit for approval stay disabled while the reply editor contains text in the placeholder syntax. The UI never tries to restore or remove placeholders itself.
 
 ## States
 

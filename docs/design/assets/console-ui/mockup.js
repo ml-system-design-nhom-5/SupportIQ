@@ -918,8 +918,8 @@ const SCREENS = {
   }, "State · draft rejected"),
   "state-placeholder": () => workspace({
     reply: "editing", warnings: [],
-    editorHtml: 'We have sent the return label to <mark class="placeholder" title="Personal data hidden: replace before sending">[EMAIL]</mark>. Please reply with the tracking number of your return.',
-    editorHint: "Personal data hidden: replace before sending.",
+    editorHtml: 'We have sent the return label to <mark class="placeholder" title="Personal data or reserved text: replace before sending">[EMAIL]</mark>. Please reply with the tracking number of your return.',
+    editorHint: "Personal data or reserved text: replace before sending.",
     actions: { ...BASE.actions, edit: { label: "Discard edits", enabled: true }, reason: "Replace the highlighted text to send the reply." },
   }, "State · placeholder in the editor"),
   "state-error": () => centered(STAFF, "open", "TCK-1042", `<div class="empty-state">${icon("alert")}<b>This ticket could not be loaded</b><span class="muted">Your connection may have dropped. Try again in a moment.</span><button class="btn btn-sm">Try again</button><span class="row small muted">Details: trace 4bf92f35 ${icon("copy", "icon-sm")}</span></div>`, "State · error, with a copyable trace ID"),
