@@ -534,3 +534,66 @@ def test_benign_qualifiers_and_courier_pickup_remain_draftable():
         assert res["routing"]["recommendation"] == "draft", f"Unexpected non-draft for benign query: '{q}': {res['routing']}"
         assert "insufficient_evidence" not in res["routing"]["reason_codes"]
         assert "requires_authority" not in res["routing"]["reason_codes"]
+
+
+def test_verify_report_counts_match_summary_zero_nonzero_mismatch():
+    """Verify verify_report_counts_match_summary handles nonzero, zero, varying rates, and rejects mismatches offline."""
+    import copy
+    import json
+    from pathlib import Path
+    from scripts.run_offline_robustness import (
+        generate_report_from_summary,
+        verify_report_counts_match_summary,
+    )
+
+    summary_path = Path(__file__).resolve().parents[2] / "artifacts/audit/routing_audit_20261112_v2/robustness_summary.json"
+    assert summary_path.exists(), f"Missing frozen summary: {summary_path}"
+    with open(summary_path, "r", encoding="utf-8") as f:
+        base_summary = json.load(f)
+
+    # 1. Nonzero baseline data
+    report_nonzero = generate_report_from_summary(base_summary)
+    assert verify_report_counts_match_summary(report_nonzero, base_summary) is True
+
+    # 2. Zero-drafted case: zero must-not-draft cases drafted and zero must-escalate drafted
+    zero_summary = copy.deepcopy(base_summary)
+    acc = zero_summary["metrics"]["acceptance"]
+    acc["all_must_not_draft_drafted_ids"] = []
+    acc["all_must_not_draft_fault_ids"] = []
+    acc["all_must_not_draft_non_fault_ids"] = []
+    acc["must_not_draft_drafted_count"] = 0
+    acc["must_not_draft_safe_count"] = acc["must_not_draft_denominator"]
+    acc["must_not_draft_safe_rate"] = 1.0
+
+    acc["must_escalate_drafted_ids"] = []
+    acc["must_escalate_fault_ids"] = []
+    acc["must_escalate_non_fault_ids"] = []
+    acc["must_escalate_drafted_count"] = 0
+    acc["must_escalate_safe_count"] = acc["must_escalate_denominator"]
+    acc["must_escalate_safe_rate"] = 1.0
+    acc["unanswerable_drafted_count"] = 0
+
+    report_zero = generate_report_from_summary(zero_summary)
+    assert "0 cases drafted." in report_zero
+    assert "0 cases drafting" in report_zero
+    assert verify_report_counts_match_summary(report_zero, zero_summary) is True
+
+    # 3. Dynamic varying sensitive authority rates (verifying failure cannot report 100%)
+    sens = zero_summary["metrics"]["sensitive_authority"]
+    sens["authority_retained_count"] = 20
+    sens["sensitive_denominator"] = 23
+    sens["authority_retention_rate"] = 20 / 23
+    sens["benign_false_authority_count"] = 1
+    sens["benign_denominator"] = 10
+    sens["benign_specificity_rate"] = 9 / 10
+    report_sens = generate_report_from_summary(zero_summary)
+    assert "100.0% Recall" not in report_sens
+    assert "87.0% Recall" in report_sens
+    assert "90.0% Specificity (10% FPR)" in report_sens
+    assert verify_report_counts_match_summary(report_sens, zero_summary) is True
+
+    # 4. Mismatch rejection: tamper with a count and assert AssertionError
+    mismatch_summary = copy.deepcopy(base_summary)
+    mismatch_summary["metrics"]["acceptance"]["must_not_draft_safe_count"] = 999
+    with pytest.raises(AssertionError, match="must_not_draft_safe count mismatch"):
+        verify_report_counts_match_summary(report_nonzero, mismatch_summary)

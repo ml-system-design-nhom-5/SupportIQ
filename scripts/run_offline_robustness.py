@@ -462,15 +462,34 @@ def run_evaluation(output_dir: Path) -> Tuple[Dict[str, Any], bool]:
         if r["must_not_draft"] and r["primary_slice"] != "unanswerable" and r["fault"] is None
     ]
     ml_unsafe_draft_cases = [r for r in acc_rows if r["is_ml_unsafe_draft"]]
+    ml_must_not_draft_safe = [r for r in ml_must_not_draft_cases if r["raw_recommendation"] != "draft"]
+    ml_must_not_draft_safe_count = len(ml_must_not_draft_safe)
+    ml_must_not_draft_safe_rate = M.rate(ml_must_not_draft_safe_count, len(ml_must_not_draft_cases)) if ml_must_not_draft_cases else 1.0
+    ml_unsafe_drafts_rate = M.rate(len(ml_unsafe_draft_cases), len(ml_must_not_draft_cases)) if ml_must_not_draft_cases else 0.0
+
+    must_not_draft_cases = [r for r in acc_rows if r["must_not_draft"]]
+    must_not_draft_safe = [r for r in must_not_draft_cases if r["raw_recommendation"] != "draft"]
+    must_not_draft_drafted = [r for r in must_not_draft_cases if r["raw_recommendation"] == "draft"]
+
+    all_must_not_draft_drafted_ids = [r["case_id"] for r in must_not_draft_drafted]
+    all_must_not_draft_fault_ids = [r["case_id"] for r in must_not_draft_drafted if r["fault"] is not None]
+    all_must_not_draft_non_fault_ids = [r["case_id"] for r in must_not_draft_drafted if r["fault"] is None]
+
+    unanswerable_cases = [r for r in acc_rows if r["primary_slice"] == "unanswerable"]
+    unanswerable_escalated = [r for r in unanswerable_cases if r["raw_recommendation"] == "escalate"]
+    unanswerable_drafted = [r for r in unanswerable_cases if r["raw_recommendation"] == "draft"]
+    unanswerable_abstained = [r for r in unanswerable_cases if r["raw_recommendation"] == "abstain"]
+
     downstream_unanswerable_cases = [r for r in acc_rows if r["is_downstream_unanswerable"]]
 
     must_esc_cases = [r for r in acc_rows if r["must_escalate"]]
     must_esc_safe = [r for r in must_esc_cases if r["raw_recommendation"] != "draft"]
     must_esc_drafted = [r for r in must_esc_cases if r["raw_recommendation"] == "draft"]
-
-    must_not_draft_cases = [r for r in acc_rows if r["must_not_draft"]]
-    must_not_draft_safe = [r for r in must_not_draft_cases if r["raw_recommendation"] != "draft"]
-    must_not_draft_drafted = [r for r in must_not_draft_cases if r["raw_recommendation"] == "draft"]
+    must_esc_fault_ids = [r["case_id"] for r in must_esc_drafted if r["fault"] is not None]
+    must_esc_non_fault_ids = [r["case_id"] for r in must_esc_drafted if r["fault"] is None]
+    must_esc_escalate = [r for r in must_esc_cases if r["raw_recommendation"] == "escalate"]
+    must_esc_abstain = [r for r in must_esc_cases if r["raw_recommendation"] == "abstain"]
+    must_esc_action_match = [r for r in must_esc_cases if r["action_match"]]
 
     draftable_cases = [r for r in acc_rows if r["is_draftable"]]
     draftable_reached = [r for r in draftable_cases if r["reached_draft"]]
@@ -493,6 +512,12 @@ def run_evaluation(output_dir: Path) -> Tuple[Dict[str, Any], bool]:
         "must_escalate_safe_rate": M.rate(len(must_esc_safe), len(must_esc_cases)),
         "must_escalate_drafted_count": len(must_esc_drafted),
         "must_escalate_drafted_ids": [r["case_id"] for r in must_esc_drafted],
+        "must_escalate_fault_ids": must_esc_fault_ids,
+        "must_escalate_non_fault_ids": must_esc_non_fault_ids,
+        "must_escalate_escalate_count": len(must_esc_escalate),
+        "must_escalate_abstain_count": len(must_esc_abstain),
+        "must_escalate_action_match_count": len(must_esc_action_match),
+        "must_escalate_action_match_rate": M.rate(len(must_esc_action_match), len(must_esc_cases)),
         # Must not draft metrics (all 68 cases)
         "must_not_draft_denominator": len(must_not_draft_cases),
         "must_not_draft_safe_count": len(must_not_draft_safe),
@@ -513,8 +538,18 @@ def run_evaluation(output_dir: Path) -> Tuple[Dict[str, Any], bool]:
         "draftable_coverage_rate": M.rate(len(draftable_reached), len(draftable_cases)),
         # Narrowed ML-attributable unsafe drafts (Target: 0)
         "ml_must_not_draft_denominator": len(ml_must_not_draft_cases),
+        "ml_must_not_draft_safe_count": ml_must_not_draft_safe_count,
+        "ml_must_not_draft_safe_rate": ml_must_not_draft_safe_rate,
         "ml_unsafe_drafts_count": len(ml_unsafe_draft_cases),
+        "ml_unsafe_drafts_rate": ml_unsafe_drafts_rate,
         "ml_unsafe_draft_ids": [r["case_id"] for r in ml_unsafe_draft_cases],
+        "all_must_not_draft_drafted_ids": all_must_not_draft_drafted_ids,
+        "all_must_not_draft_fault_ids": all_must_not_draft_fault_ids,
+        "all_must_not_draft_non_fault_ids": all_must_not_draft_non_fault_ids,
+        "unanswerable_total": len(unanswerable_cases),
+        "unanswerable_escalated_count": len(unanswerable_escalated),
+        "unanswerable_drafted_count": len(unanswerable_drafted),
+        "unanswerable_abstained_count": len(unanswerable_abstained),
         # Downstream unanswerable drafts
         "downstream_unanswerable_drafts_count": len(downstream_unanswerable_cases),
         "raw_action_distribution": dict(Counter(r["raw_recommendation"] for r in acc_rows)),
@@ -523,7 +558,7 @@ def run_evaluation(output_dir: Path) -> Tuple[Dict[str, Any], bool]:
 
     print(f"  Total Acceptance: {acceptance_summary['n_total']}")
     print(f"  HEADLINE Must-Escalate Safe Rate: {acceptance_summary['must_escalate_safe_rate']:.4f} ({acceptance_summary['must_escalate_safe_count']}/{acceptance_summary['must_escalate_denominator']})")
-    print(f"  HEADLINE Must-Escalate Drafting Cases: {acceptance_summary['must_escalate_drafted_count']} ({len(downstream_unanswerable_cases)} unanswerable downstream + 1 simulated fault)")
+    print(f"  HEADLINE Must-Escalate Drafting Cases: {acceptance_summary['must_escalate_drafted_count']} ({acceptance_summary['unanswerable_drafted_count']} unanswerable cases drafting; {len(must_esc_fault_ids)} synthetic faults marked NOT_EXECUTED offline)")
     print(f"  Supported Comparable Action Match: {acceptance_summary['supported_comparable_match_rate']:.4f} ({acceptance_summary['supported_comparable_match_count']}/{acceptance_summary['supported_comparable_denominator']})")
     print(f"  Overall Adapted Action Match Rate: {acceptance_summary['exact_action_match_rate']:.4f} ({acceptance_summary['exact_action_match_count']}/{acceptance_summary['n_total']})")
     print(f"  Exact Reason Match Rate: {acceptance_summary['exact_reason_match_rate']:.4f} ({acceptance_summary['exact_reason_match_count']}/{acceptance_summary['n_total']})")
@@ -799,8 +834,32 @@ def run_evaluation(output_dir: Path) -> Tuple[Dict[str, Any], bool]:
         json.dump(summary, f, indent=2)
 
     # -------------------------------------------------------------------------
-    # 7. Generate ROBUSTNESS_REPORT.md
+    # 7. Generate ROBUSTNESS_REPORT.md & Verify Self-Check
     # -------------------------------------------------------------------------
+    report_md = generate_report_from_summary(summary)
+    verify_report_counts_match_summary(report_md, summary)
+
+    with open(output_dir / "ROBUSTNESS_REPORT.md", "w", encoding="utf-8") as f:
+        f.write(report_md)
+
+    print(f"\n[Worker A] Evaluation completed in {total_duration:.2f}s.")
+    print(f"[Worker A] Summary: {output_dir / 'robustness_summary.json'}")
+    print(f"[Worker A] Report: {output_dir / 'ROBUSTNESS_REPORT.md'}")
+    print(f"[Worker A] Raw predictions: {output_dir / 'raw_predictions.jsonl'}")
+
+    return summary, all_required_passed
+
+
+def generate_report_from_summary(summary: dict) -> str:
+    """Generate ROBUSTNESS_REPORT.md dynamically from a verified robustness summary dictionary."""
+    meta = summary["meta"]
+    metrics = summary["metrics"]
+    gates = summary.get("component_gates", {})
+    mandatory_drafting_details = summary.get("mandatory_drafting_cases", [])
+    acceptance_summary = metrics["acceptance"]
+    noise_summary = metrics["ml_noise"]
+    sensitive_auth = metrics["sensitive_authority"]
+
     ten_cases_table_md = "\n".join([
         f"| `{c['case_id']}` | `{c['primary_slice']}` | `{c['fault'] or 'none'}` | `{c['predicted_intent']}` ({c['confidence']:.3f}) | `{c['raw_recommendation']}` -> `{c['adapted_action']}` (`{','.join(c['reason_codes']) or 'none'}`) | `{','.join(c['expected_actions'])}` | {c['boundary_analysis']} |"
         for c in mandatory_drafting_details
@@ -811,16 +870,76 @@ def run_evaluation(output_dir: Path) -> Tuple[Dict[str, Any], bool]:
         for g in gates.values()
     ])
 
-    report_md = f"""# SupportIQ — Worker A Current-Model Robustness & Safe Routing Report (Followup v3)
+    # Dynamic breakdown of mandatory escalation cases reaching draft
+    mnd_fault_ids = acceptance_summary.get("all_must_not_draft_fault_ids", [])
+    must_esc_drafted_ids = acceptance_summary.get("must_escalate_drafted_ids", [])
+    must_esc_fault_ids = acceptance_summary.get("must_escalate_fault_ids") or [
+        cid for cid in must_esc_drafted_ids if cid in mnd_fault_ids
+    ]
+    must_esc_non_fault_ids = acceptance_summary.get("must_escalate_non_fault_ids") or [
+        cid for cid in must_esc_drafted_ids if cid not in mnd_fault_ids
+    ]
+    una_drafted_cnt = acceptance_summary.get("unanswerable_drafted_count", 0)
 
-**Date:** {utc_now}  
+    if not must_esc_drafted_ids:
+        must_esc_breakdown = "0 cases drafting"
+    else:
+        must_esc_parts = []
+        must_esc_parts.append(f"{una_drafted_cnt} unanswerable cases drafting")
+        if must_esc_fault_ids:
+            fcnt = len(must_esc_fault_ids)
+            flist = ", ".join(f"`{cid}`" for cid in must_esc_fault_ids)
+            must_esc_parts.append(f"{fcnt} synthetic fault{'s' if fcnt != 1 else ''} {flist} marked NOT_EXECUTED offline")
+        if must_esc_non_fault_ids:
+            nfcnt = len(must_esc_non_fault_ids)
+            nflist = ", ".join(f"`{cid}`" for cid in must_esc_non_fault_ids)
+            must_esc_parts.append(f"{nfcnt} non-fault cases drafting ({nflist})")
+        must_esc_breakdown = "; ".join(must_esc_parts) if must_esc_parts else "0 cases drafting"
+
+    # Dynamic breakdown of all must-not-draft cases
+    mnd_drafted_ids = acceptance_summary.get("all_must_not_draft_drafted_ids", [])
+    mnd_non_fault_ids = acceptance_summary.get("all_must_not_draft_non_fault_ids") or [
+        cid for cid in mnd_drafted_ids if cid not in mnd_fault_ids
+    ]
+
+    if not mnd_drafted_ids:
+        mnd_draft_prose = "0 cases drafted."
+    else:
+        mnd_sub_parts = []
+        if mnd_fault_ids:
+            fcnt = len(mnd_fault_ids)
+            flist = ", ".join(mnd_fault_ids)
+            mnd_sub_parts.append(f"{fcnt} synthetic faults ({flist}) marked NOT_EXECUTED offline")
+        if mnd_non_fault_ids:
+            nfcnt = len(mnd_non_fault_ids)
+            nflist = ", ".join(mnd_non_fault_ids)
+            mnd_sub_parts.append(f"{nfcnt} non-fault cases ({nflist})")
+        mnd_draft_prose = f"Drafted cases ({len(mnd_drafted_ids)}, IDs: {', '.join(mnd_drafted_ids)}): {'; '.join(mnd_sub_parts)}."
+
+    all_required_passed = meta.get("component_routing_status") == "PASS"
+
+    sens_denom = sensitive_auth.get("sensitive_denominator", 0)
+    sens_retained = sensitive_auth.get("authority_retained_count", 0)
+    sens_retention_rate = sensitive_auth.get("authority_retention_rate", (sens_retained / sens_denom) if sens_denom else 0.0)
+    sens_recall_pct = sens_retention_rate * 100.0
+
+    benign_denom = sensitive_auth.get("benign_denominator", 0)
+    benign_false = sensitive_auth.get("benign_false_authority_count", 0)
+    benign_spec_rate = sensitive_auth.get("benign_specificity_rate", ((benign_denom - benign_false) / benign_denom) if benign_denom else 0.0)
+    benign_spec_pct = benign_spec_rate * 100.0
+    benign_fpr_pct = (benign_false / benign_denom * 100.0) if benign_denom else 0.0
+    fpr_str = f"{int(benign_fpr_pct)}% FPR" if benign_fpr_pct.is_integer() else f"{benign_fpr_pct:.1f}% FPR"
+
+    return f"""# SupportIQ — Worker A Current-Model Robustness & Safe Routing Report (Followup v3)
+
+**Date:** {meta['created_at']}  
 **Worker:** Worker A (Current-Model Robustness & Safe Routing)  
 **Execution Mode:** Pure Offline (Serving DistilBERT + Approved KB + OfflineSpyLLM)  
-**Git Commit:** `{git_info['commit']}` (dirty={git_info['is_dirty']})  
-**Model Identity:** DistilBERT `distilbert-supportiq` (v1.0.0, mode: trained, verified: True)  
-**Weights SHA-256:** `{weights_hash}`  
-**Tokenizer SHA-256:** `{tokenizer_hash}`  
-**Duration:** {total_duration:.2f} seconds  
+**Git Commit:** `{meta['git']['commit']}` (dirty={meta['git']['is_dirty']})  
+**Model Identity:** DistilBERT `distilbert-supportiq` (v1.0.0, mode: {meta.get('model_mode', 'trained')}, verified: {meta.get('model_verified', True)})  
+**Weights SHA-256:** `{meta['weights_sha256']}`  
+**Tokenizer SHA-256:** `{meta['tokenizer_sha256']}`  
+**Duration:** {meta['total_duration_seconds']:.2f} seconds  
 
 ---
 
@@ -835,7 +954,7 @@ All gate statuses below are **dynamically derived** from actual component execut
 {gates_table_md}
 
 **Component-Level Routing & Offline Robustness:** **{"PASS" if all_required_passed else "FAIL"}**  
-*(Note: Whole-system end-to-end acceptance status remains **UNKNOWN_PENDING_DOWNSTREAM_INTEGRATION** pending Worker C downstream grounding on the 11 unanswerable cases and simulated fault injection harness).*
+*(Note: Whole-system end-to-end acceptance status is determined by live integration suites; offline evaluation verifies component routing, authority precedence, and policy scope boundaries).*
 
 ---
 
@@ -845,16 +964,19 @@ Rather than narrowing the headline to only ML-attributable safety, the complete 
 
 - **Total Acceptance Cases:** {acceptance_summary['n_total']}
 - **In-Scope Draftable Requests:** {acceptance_summary['draftable_reached_count']}/{acceptance_summary['draftable_denominator']} ({acceptance_summary['draftable_coverage_rate'] * 100:.1f}%) legitimate answerable tickets reached draft.
-- **Mandatory Escalation Cases (`must_escalate == True`):** 63 total cases
-  - **Safe Non-Drafting Count:** **{acceptance_summary['must_escalate_safe_count']}/{acceptance_summary['must_escalate_denominator']} ({acceptance_summary['must_escalate_safe_rate'] * 100:.1f}%)**
-  - *(Caveat: 51 safe non-drafting cases does NOT prove 100% expected escalation, as 47 cases safely abstained as `manual_fallback` rather than escalating to human queue).*
-  - **Cases Reaching Draft:** **{acceptance_summary['must_escalate_drafted_count']}/{acceptance_summary['must_escalate_denominator']} ({acceptance_summary['must_escalate_drafted_count'] / acceptance_summary['must_escalate_denominator'] * 100:.1f}%)** (11 downstream unanswerables + 1 un-injected fault; preserved without false pass credit).
-- **Must-Not-Draft Cases (`must_not_draft == True`):** 68 total cases
-  - **Safe Abstentions/Escalations:** **{acceptance_summary['must_not_draft_safe_count']}/{acceptance_summary['must_not_draft_denominator']} ({acceptance_summary['must_not_draft_safe_rate'] * 100:.1f}%)**
-- **Narrowed ML-Attributable Unsafe Drafts:** **0** (Fixed case `uns-return_product_online-01` now safely abstains).
+- **Mandatory Escalation Cases (`must_escalate == True`):** {acceptance_summary['must_escalate_denominator']} total cases
+  - **Observed Non-Drafting Count:** **{acceptance_summary['must_escalate_safe_count']}/{acceptance_summary['must_escalate_denominator']} ({acceptance_summary['must_escalate_safe_rate'] * 100:.1f}%)**
+  - **Explicit Human Escalation Actions:** **{acceptance_summary['must_escalate_escalate_count']}/{acceptance_summary['must_escalate_denominator']} ({acceptance_summary['must_escalate_escalate_count'] / acceptance_summary['must_escalate_denominator'] * 100:.1f}%)** explicitly recommended human queue escalation.
+  - **Safe `manual_fallback` Abstentions:** **{acceptance_summary['must_escalate_abstain_count']}/{acceptance_summary['must_escalate_denominator']} ({acceptance_summary['must_escalate_abstain_count'] / acceptance_summary['must_escalate_denominator'] * 100:.1f}%)** abstained safely, but do not count as expected human escalation when benchmark strictly expects escalation.
+  - **Action Set Matching on Mandatory Escalation:** **{acceptance_summary['must_escalate_action_match_count']}/{acceptance_summary['must_escalate_denominator']} ({acceptance_summary['must_escalate_action_match_rate'] * 100:.1f}%)** matched the expected action set.
+  - **Cases Reaching Draft:** **{acceptance_summary['must_escalate_drafted_count']}/{acceptance_summary['must_escalate_denominator']} ({acceptance_summary['must_escalate_drafted_count'] / acceptance_summary['must_escalate_denominator'] * 100:.1f}%)** ({must_esc_breakdown}).
+- **Must-Not-Draft Cases (`must_not_draft == True`):** {acceptance_summary['must_not_draft_denominator']} total cases
+  - **All Must-Not-Draft Cases (N={acceptance_summary['must_not_draft_denominator']}):** **{acceptance_summary['must_not_draft_safe_count']}/{acceptance_summary['must_not_draft_denominator']} ({acceptance_summary['must_not_draft_safe_rate'] * 100:.1f}%)** observed safe non-drafting. {mnd_draft_prose}
+  - **Pure ML-Attributable Must-Not-Draft Cases (N={acceptance_summary['ml_must_not_draft_denominator']}):** **{acceptance_summary['ml_must_not_draft_safe_count']}/{acceptance_summary['ml_must_not_draft_denominator']} ({acceptance_summary['ml_must_not_draft_safe_rate'] * 100:.1f}%)** safe non-drafting.
+  - **ML-Attributable Unsafe Drafts:** **{acceptance_summary['ml_unsafe_drafts_count']} / {acceptance_summary['ml_must_not_draft_denominator']} ({acceptance_summary['ml_unsafe_drafts_rate'] * 100:.1f}%)** on pure ML slices.
 - **Contract Action Matching (decide_route Vocabulary Adapter):**
   - **Overall Exact Action Match:** {acceptance_summary['exact_action_match_rate'] * 100:.1f}% ({acceptance_summary['exact_action_match_count']}/{acceptance_summary['n_total']}) across all 156 cases.
-  - **Supported Comparable Slices Match:** **{acceptance_summary['supported_comparable_match_rate'] * 100:.1f}% ({acceptance_summary['supported_comparable_match_count']}/{acceptance_summary['supported_comparable_denominator']})** on `supported` + `answerable` slices.
+  - **Supported Comparable Slices Match:** {acceptance_summary['supported_comparable_match_rate'] * 100:.1f}% ({acceptance_summary['supported_comparable_match_count']}/{acceptance_summary['supported_comparable_denominator']}) on `supported` + `answerable` slices (measured without approved numeric target).
   - *(Contract mappings: `draft -> retrieve_draft`, `abstain -> manual_fallback`, `escalate -> escalate`. `abstain` is strictly NOT equated to `escalate`).*
 - **Exact Expected Reason Match Rate:** {acceptance_summary['exact_reason_match_rate'] * 100:.1f}% ({acceptance_summary['exact_reason_match_count']}/{acceptance_summary['n_total']})
 - **Raw Engine Recommendations:** {acceptance_summary['raw_action_distribution']}
@@ -871,14 +993,14 @@ The {len(mandatory_drafting_details)} cases with `must_escalate == True` that re
 {ten_cases_table_md}
 
 ### Key Architectural Takeaways on the {len(mandatory_drafting_details)} Cases:
-1. **Downstream Unanswerability Boundary ({len(downstream_unanswerable_cases)} cases):**
-   The {len(downstream_unanswerable_cases)} `una-*` cases involve supported product categories (`shipping_costs`, `return_policy`, `refund_policy`, `cancel_order`, `payment_issue`). The intent classifier correctly identifies the category with high confidence, and semantic retrieval returns the relevant policy document. The fact that the user's specific request is unanswerable from that document (e.g., customs duty for Tokyo, 2024 promo window, unapproved instant cash, staff internal manual) cannot be determined by intent classification alone; it is the designated responsibility of the downstream LLM grounding layer (`llm_insufficient_evidence` -> fallback).
-2. **Simulated Fault Boundary [NOT EXECUTED] (1 case):**
-   Case `unc-return_policy-04` has synthetic fault `fault="encoder_failure"`. At the offline model/engine boundary without synthetic fault injection harness, the live BGE encoder executes normally and drafts. Recorded as `not_executed_boundary` with no success credit given.
+1. **Policy Scope Boundary & Unanswerable Cases:**
+   Of the {acceptance_summary['unanswerable_total']} unanswerable cases (`una-*`), {acceptance_summary['unanswerable_escalated_count']} route to `escalate` with `insufficient_evidence` under `_policy_scope_requires_review`, {acceptance_summary['unanswerable_abstained_count']} abstain, and {acceptance_summary['unanswerable_drafted_count']} reach draft.
+2. **Simulated Fault Boundary [NOT EXECUTED] ({len(acceptance_summary['all_must_not_draft_fault_ids'])} cases):**
+   Drafted cases with synthetic faults ({', '.join(acceptance_summary['all_must_not_draft_fault_ids']) if acceptance_summary['all_must_not_draft_fault_ids'] else 'none'}) operate at the offline model/engine boundary without synthetic fault injection harness; live components execute normally. Recorded as `not_executed_boundary` with no success credit given.
 
 ---
 
-## 4. Known Model Limitation: Severe Typo Degradation & Casual Variation
+## 4. Observed Model Limitation: Typo Degradation & Casual Variation (Hypothesized Subword Fragmentation)
 
 Recomputed against frozen `ml_noise.jsonl` (84 clean source queries, 84 casual variants, 252 typo variants):
 
@@ -888,8 +1010,8 @@ Recomputed against frozen `ml_noise.jsonl` (84 clean source queries, 84 casual v
 | **Casual** | {noise_summary['casual']['n']} | {noise_summary['casual']['accuracy'] * 100:.2f}% | {noise_summary['casual']['macro_f1']:.4f} | {noise_summary['casual']['median_confidence']:.4f} | **{noise_summary['casual_f1_drop']:.4f}** (4.99 pts) |
 | **Typo** | {noise_summary['typo']['n']} | **{noise_summary['typo']['accuracy'] * 100:.2f}%** | **{noise_summary['typo']['macro_f1']:.4f}** | {noise_summary['typo']['median_confidence']:.4f} | **{noise_summary['typo_f1_drop']:.4f}** (15.91 pts) |
 
-> [!WARNING] Known Model Limitation: Severe Typo Sensitivity & Casual Degradation
-> Under natural casual phrasing, the serving model achieves {noise_summary['casual']['accuracy'] * 100:.2f}% accuracy (macro-F1 {noise_summary['casual']['macro_f1']:.4f}, a {noise_summary['casual_f1_drop'] * 100:.2f} pt drop from clean baseline {noise_summary['clean']['accuracy'] * 100:.2f}%). Under synthetic character-level typos, accuracy drops sharply to **{noise_summary['typo']['accuracy'] * 100:.2f}%** (macro-F1 {noise_summary['typo']['macro_f1']:.4f}, a {noise_summary['typo_f1_drop'] * 100:.2f} pt drop). We do NOT claim high robustness on typos or casual perturbations, nor full unreserved acceptance; typo sensitivity is a documented model limitation requiring spelling normalization or typo-augmented fine-tuning in future model versions.
+> [!WARNING] Observed Model Limitation: Typo Sensitivity & Casual Degradation
+> Under natural casual phrasing, the serving model achieves {noise_summary['casual']['accuracy'] * 100:.2f}% accuracy (macro-F1 {noise_summary['casual']['macro_f1']:.4f}, a {noise_summary['casual_f1_drop'] * 100:.2f} pt drop from clean baseline {noise_summary['clean']['accuracy'] * 100:.2f}%). Under synthetic character-level typos, accuracy drops sharply to **{noise_summary['typo']['accuracy'] * 100:.2f}%** (macro-F1 {noise_summary['typo']['macro_f1']:.4f}, a {noise_summary['typo_f1_drop'] * 100:.2f} pt drop). Hypothesized vulnerability: subword tokenization fragmentation on character-level corruptions, pending formal token-level ablation study. We do NOT claim high robustness on typos or casual perturbations, nor full unreserved acceptance; typo sensitivity is an observed model limitation requiring spelling normalization or typo-augmented fine-tuning in future model versions.
 
 ---
 
@@ -918,23 +1040,61 @@ Denominators are explicitly separated:
 
 | Scenario Group | Denominator (N) | Target | Measured Result | Performance |
 |---|---:|---|---|---|
-| **Explicit Sensitive Requests & Overrides** | **{len(sensitive_test_cases)}** | 100.0% Retention | **{sensitive_auth_correct}/{len(sensitive_test_cases)}** | **100.0% Recall** |
-| **Benign Product Inquiries** | **{len(benign_test_cases)}** | 0 False Positives | **{benign_false_authority}/{len(benign_test_cases)}** | **100.0% Specificity (0% FPR)** |
+| **Explicit Sensitive Requests & Overrides** | **{sens_denom}** | 100.0% Retention | **{sens_retained}/{sens_denom}** | **{sens_recall_pct:.1f}% Recall** |
+| **Benign Product Inquiries** | **{benign_denom}** | 0 False Positives | **{benign_false}/{benign_denom}** | **{benign_spec_pct:.1f}% Specificity ({fpr_str})** |
 
 - **Override Retention:** 3/3 sensitive customer queries retained `requires_authority` even when staff overrode to non-sensitive intents (`track_order`, `delivery_time`, `shipping_costs`).
 - **Override Activation:** 4/4 benign queries activated `requires_authority` when staff overrode to sensitive action intents (`cancel_order`, `request_refund`, `return_product`, `payment_issue`).
 - **Offline LLM Egress Isolation:** Exactly 0 HTTP calls or LLM prompts generated during offline robustness evaluation.
 """
 
-    with open(output_dir / "ROBUSTNESS_REPORT.md", "w", encoding="utf-8") as f:
-        f.write(report_md)
 
-    print(f"\n[Worker A] Evaluation completed in {total_duration:.2f}s.")
-    print(f"[Worker A] Summary: {output_dir / 'robustness_summary.json'}")
-    print(f"[Worker A] Report: {output_dir / 'ROBUSTNESS_REPORT.md'}")
-    print(f"[Worker A] Raw predictions: {output_dir / 'raw_predictions.jsonl'}")
+def verify_report_counts_match_summary(report_md: str, summary: dict) -> bool:
+    """Assertion self-check ensuring numbers and IDs in markdown report match summary metrics."""
+    acc = summary["metrics"]["acceptance"]
+    # Check headline fraction strings appear in report markdown
+    assert f"**{acc['must_escalate_safe_count']}/{acc['must_escalate_denominator']}" in report_md, "must_escalate_safe count mismatch"
+    assert f"**{acc['must_escalate_drafted_count']}/{acc['must_escalate_denominator']}" in report_md, "must_escalate_drafted count mismatch"
+    assert f"**{acc['must_not_draft_safe_count']}/{acc['must_not_draft_denominator']}" in report_md, "must_not_draft_safe count mismatch"
 
-    return summary, all_required_passed
+    mnd_drafted = acc.get("all_must_not_draft_drafted_ids", [])
+    if mnd_drafted:
+        assert f"Drafted cases ({len(mnd_drafted)}," in report_md, "must_not_draft drafted count mismatch"
+    else:
+        assert "0 cases drafted." in report_md, "must_not_draft zero-drafted prose mismatch"
+
+    must_esc_cnt = acc["must_escalate_drafted_count"]
+    if must_esc_cnt == 0:
+        assert "0 cases drafting" in report_md, "must_escalate zero-drafting prose mismatch"
+
+    assert f"**{acc['ml_must_not_draft_safe_count']}/{acc['ml_must_not_draft_denominator']}" in report_md, "ml_must_not_draft safe mismatch"
+    assert f"**{acc['ml_unsafe_drafts_count']} / {acc['ml_must_not_draft_denominator']}" in report_md, "ml_unsafe_drafts mismatch"
+    assert f"({acc['exact_action_match_count']}/{acc['n_total']})" in report_md, "exact action match count mismatch"
+    assert f"({acc['supported_comparable_match_count']}/{acc['supported_comparable_denominator']})" in report_md, "supported comparable match count mismatch"
+
+    sens = summary["metrics"]["sensitive_authority"]
+    assert f"**{sens['authority_retained_count']}/{sens['sensitive_denominator']}**" in report_md, "sensitive authority count mismatch"
+    assert f"**{sens['benign_false_authority_count']}/{sens['benign_denominator']}**" in report_md, "benign specificity count mismatch"
+
+    sens_denom = sens.get("sensitive_denominator", 0)
+    sens_retained = sens.get("authority_retained_count", 0)
+    sens_retention_rate = sens.get("authority_retention_rate", (sens_retained / sens_denom) if sens_denom else 0.0)
+    sens_recall_pct = sens_retention_rate * 100.0
+    assert f"**{sens_recall_pct:.1f}% Recall**" in report_md, "sensitive recall percentage mismatch"
+
+    benign_denom = sens.get("benign_denominator", 0)
+    benign_false = sens.get("benign_false_authority_count", 0)
+    benign_spec_rate = sens.get("benign_specificity_rate", ((benign_denom - benign_false) / benign_denom) if benign_denom else 0.0)
+    benign_spec_pct = benign_spec_rate * 100.0
+    assert f"**{benign_spec_pct:.1f}% Specificity" in report_md, "benign specificity percentage mismatch"
+
+    # Verify drafted case IDs match
+    for cid in mnd_drafted:
+        assert cid in report_md, f"Drafted ID {cid} missing from report"
+    for cid in acc.get("must_escalate_drafted_ids", []):
+        assert cid in report_md, f"Must-escalate drafted ID {cid} missing from report"
+
+    return True
 
 
 def main():
@@ -945,7 +1105,46 @@ def main():
         default=REPO_ROOT / "artifacts/evaluation/final-routing-20261112-v3",
         help="Destination directory for locked hashes, raw predictions, and markdown report",
     )
+    parser.add_argument(
+        "--regenerate-report-only",
+        action="store_true",
+        help="Regenerate ROBUSTNESS_REPORT.md from existing robustness_summary.json without model rerun",
+    )
+    parser.add_argument(
+        "--selfcheck",
+        action="store_true",
+        help="Verify reported counts in existing ROBUSTNESS_REPORT.md match existing robustness_summary.json",
+    )
     args = parser.parse_args()
+
+    if args.selfcheck:
+        summary_path = args.output_dir / "robustness_summary.json"
+        report_path = args.output_dir / "ROBUSTNESS_REPORT.md"
+        if not summary_path.exists() or not report_path.exists():
+            print(f"[Worker A] ERROR: Missing {summary_path} or {report_path}")
+            sys.exit(1)
+        with open(summary_path, "r", encoding="utf-8") as f:
+            summary = json.load(f)
+        with open(report_path, "r", encoding="utf-8") as f:
+            report_md = f.read()
+        verify_report_counts_match_summary(report_md, summary)
+        print(f"[Worker A] Self-check passed: reported counts in {report_path.name} match {summary_path.name}.")
+        sys.exit(0)
+
+    if args.regenerate_report_only:
+        summary_path = args.output_dir / "robustness_summary.json"
+        if not summary_path.exists():
+            print(f"[Worker A] ERROR: Missing {summary_path}")
+            sys.exit(1)
+        with open(summary_path, "r", encoding="utf-8") as f:
+            summary = json.load(f)
+        report_md = generate_report_from_summary(summary)
+        verify_report_counts_match_summary(report_md, summary)
+        with open(args.output_dir / "ROBUSTNESS_REPORT.md", "w", encoding="utf-8", newline="\r\n") as f:
+            f.write(report_md)
+        print(f"[Worker A] Regenerated {args.output_dir / 'ROBUSTNESS_REPORT.md'} successfully from existing summary.")
+        sys.exit(0)
+
     summary, passed = run_evaluation(args.output_dir)
     if not passed:
         print("\n[Worker A] ERROR: One or more required component verification gates failed!")
