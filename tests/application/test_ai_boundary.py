@@ -118,4 +118,3 @@ def test_high_entropy_triggers_ood_low_confidence():
     analysis = subject.analyse(request())
     assert "low_confidence" in analysis["routing"]["reason_codes"]
     assert "out_of_scope_intent" in analysis["routing"]["reason_codes"]
-

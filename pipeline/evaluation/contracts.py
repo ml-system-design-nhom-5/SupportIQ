@@ -351,4 +351,3 @@ def verify_ml_inputs(
         input_hashes=input_hashes,
         source_paths=source_paths,
     )
-

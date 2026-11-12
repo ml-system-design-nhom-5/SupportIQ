@@ -293,4 +293,3 @@ def publish_approved_kb(staging_path: Union[str, Any], output_path: Union[str, A
     tmp_out.write_text(json.dumps(verified_records, indent=2, ensure_ascii=False), encoding="utf-8")
     tmp_out.replace(out_path)
     return out_path
-

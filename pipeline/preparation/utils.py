@@ -222,5 +222,3 @@ def get_near_duplicate_key(text: Any) -> str:
     for i, ph in enumerate(placeholders):
         norm = norm.replace(f"__ph_{i}__", ph)
     return re.sub(r"\s+", " ", norm).strip()
-
-

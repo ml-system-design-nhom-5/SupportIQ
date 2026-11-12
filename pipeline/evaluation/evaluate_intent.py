@@ -249,4 +249,3 @@ def evaluate_robustness(
         "slices": slices_summary,
         "case_details": results,
     }
-

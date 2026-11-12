@@ -22,7 +22,7 @@ def minimal_benchmark_env(tmp_path):
     bench_dir = tmp_path / "benchmarks" / "system" / "v1"
     bench_dir.mkdir(parents=True)
     kb_path = tmp_path / "kb.json"
-    
+
     # Valid KB document
     kb_data = [{
         "doc_id": "KB-RET-001",
@@ -133,7 +133,7 @@ def test_duplicate_case_ids_rejected(minimal_benchmark_env):
     c1 = env["case_1"]
     c2 = dict(c1)  # duplicate ID
     env["cases_path"].write_text(json.dumps(c1) + "\n" + json.dumps(c2) + "\n", encoding="utf-8")
-    
+
     # Update hash in manifest
     env["manifest"]["files"]["cases"]["sha256"] = compute_sha256(env["cases_path"])
     env["manifest_path"].write_text(json.dumps(env["manifest"]), encoding="utf-8")
@@ -147,7 +147,7 @@ def test_invalid_intent_rejected(minimal_benchmark_env):
     c1 = dict(env["case_1"])
     c1["true_intent"] = "non_existent_fake_intent"
     env["cases_path"].write_text(json.dumps(c1) + "\n", encoding="utf-8")
-    
+
     env["manifest"]["files"]["cases"]["sha256"] = compute_sha256(env["cases_path"])
     env["manifest_path"].write_text(json.dumps(env["manifest"]), encoding="utf-8")
 
@@ -167,7 +167,7 @@ def test_ood_null_intent_accepted(minimal_benchmark_env):
     c1["expected"]["must_escalate"] = True
     c1["expected"]["draft_expected"] = False
     env["cases_path"].write_text(json.dumps(c1) + "\n", encoding="utf-8")
-    
+
     env["manifest"]["files"]["cases"]["sha256"] = compute_sha256(env["cases_path"])
     env["manifest_path"].write_text(json.dumps(env["manifest"]), encoding="utf-8")
 
@@ -223,7 +223,7 @@ def test_draft_suite_cannot_be_acceptance_ready(minimal_benchmark_env):
 def test_verify_input_snapshot_detects_mutation(minimal_benchmark_env):
     env = minimal_benchmark_env
     inputs = load_system_inputs(env["root"], env["manifest_path"], env["config_path"], profile="mock")
-    
+
     # Snapshot clean
     verify_input_snapshot(inputs)
 
@@ -261,4 +261,3 @@ def test_official_156_cases_benchmark_suite_loads_and_verifies():
         profile="mock"
     )
     assert len(fix_inputs.cases) == 5
-

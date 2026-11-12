@@ -498,7 +498,7 @@ def evaluate_system_gates(
             if g_info["status"] != "pass":
                 all_mandatory_passed = False
                 failed_gates.append(f"{g_name} ({g_info['status']})")
-        
+
         if all_mandatory_passed:
             summary_reason = "All mandatory acceptance gates passed with certified live evidence."
         else:

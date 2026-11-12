@@ -259,7 +259,7 @@ def load_system_inputs(
     for file_key, file_meta in files_dict.items():
         if not isinstance(file_meta, dict) or "path" not in file_meta or "sha256" not in file_meta:
             raise EvaluationError(f"File declaration for '{file_key}' missing path or sha256 checksum")
-        
+
         target_path = resolve_contained_path(file_meta["path"], manifest_dir, repo_root_p)
         if not target_path.exists():
             raise EvaluationError(f"Declared file '{file_key}' does not exist at {target_path}")
@@ -322,7 +322,7 @@ def load_system_inputs(
                     if doc_key not in kb_docs_map:
                         raise EvaluationError(f"Case '{case.id}' gold source {doc_key} not found in KB snapshot")
                     doc = kb_docs_map[doc_key]
-                    
+
                     # Verify approval status
                     if doc.get("status") != "approved":
                         raise EvaluationError(f"Case '{case.id}' references unapproved gold document {doc_key}")

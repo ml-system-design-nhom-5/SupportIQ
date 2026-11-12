@@ -183,12 +183,12 @@ class ModelContainer:
                 if any(re.search(rgx, lower_text) for rgx in regexes):
                     matched_intent = intent_name
                     break
-            
+
             top1_intent = matched_intent if matched_intent in self.id2label.values() else "customer_service"
             top1_prob = 0.94 if matched_intent in patterns else 0.40
             second_prob = 0.04
             margin = top1_prob - second_prob
-            
+
             top_k = [
                 PredictionItem(intent=top1_intent, probability=top1_prob),
                 PredictionItem(intent="product_information", probability=second_prob),

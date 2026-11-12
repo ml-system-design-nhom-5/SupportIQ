@@ -524,5 +524,3 @@ def refit_final_models(
             metadata=bundle_meta,
         )
     return bundles
-
-
