@@ -4,6 +4,8 @@
 
 This handbook tells you where each document lives and how to write it. It applies to every contributor, human or AI agent. A change is not done until its documentation is correct.
 
+Current Topic 1 work: [initial review](audits/2026-11-12-topic-1-review.md), [specification](superpowers/specs/2026-11-12-topic-1-improvements-design.md), [plan and status](superpowers/plans/2026-11-12-topic-1-improvements.md), and [integration evidence and limits](audits/2026-11-12-topic-1-integration.md).
+
 ## Principles
 
 1. **Docs as code.** Docs live in this repository, change in the same pull request (PR) as the behavior they describe, and are reviewed like code.

@@ -1,0 +1,317 @@
+{
+  "status": "incompatible_benchmark_kb",
+  "answerable_cases": 34,
+  "cases_with_no_gold_source_in_active_release": 34,
+  "recall_at_3": null,
+  "reason": "Shared acceptance suite uses legacy UUID source IDs/version1, whereas app release uses POL-* IDs and version1.0/2.0. No approved mapping supplied; do not remap gold silently or substitute smoke relevance as benchmark recall.",
+  "suite_sha256": "c54c7efcd2d363317a87344cd12c76791db35ec17ca83a2e02b8fcb43f23150b",
+  "kb_sha256": "f8dcfbbdbb9cb2cd7a09d2ec12e0149083fdd4fa04931df6261fc4d1e6425fec",
+  "missing_cases": [
+    {
+      "case_id": "sup-return_policy-01",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000001",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "sup-return_policy-02",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000001",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "sup-return_policy-03",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000001",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "sup-return_policy-04",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000001",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "sup-return_policy-05",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000001",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "sup-refund_policy-01",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000002",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "sup-refund_policy-02",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000002",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "sup-refund_policy-03",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000002",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "sup-refund_policy-04",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000002",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "sup-refund_policy-05",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000002",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "ans-return_policy-01",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000001",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "ans-return_policy-02",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000001",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "ans-return_policy-03",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000001",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "ans-return_policy-04",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000001",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "ans-return_policy-05",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000001",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "ans-return_policy-06",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000001",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "ans-return_policy-07",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000001",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "ans-return_policy-08",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000001",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "ans-return_policy-09",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000001",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "ans-return_policy-10",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000001",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "ans-refund_policy-01",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000002",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "ans-refund_policy-02",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000002",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "ans-refund_policy-03",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000002",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "ans-refund_policy-04",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000002",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "ans-refund_policy-05",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000002",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "ans-refund_policy-06",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000002",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "ans-refund_policy-07",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000002",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "ans-refund_policy-08",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000002",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "ans-cancel_order-01",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000003",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "ans-cancel_order-02",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000003",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "ans-cancel_order-03",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000003",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "ans-cancel_order-04",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000003",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "ans-cancel_order-05",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000003",
+          "version": "1"
+        }
+      ]
+    },
+    {
+      "case_id": "ans-cancel_order-06",
+      "gold_sources": [
+        {
+          "doc_id": "b1000000-0000-0000-0000-000000000003",
+          "version": "1"
+        }
+      ]
+    }
+  ]
+}

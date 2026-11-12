@@ -43,6 +43,8 @@ Native runtime instructions describe the running application; proposed multi-rep
 
 ## Checks
 
+See the [Topic 1 integration report](docs/audits/2026-11-12-topic-1-integration.md) for current verification evidence, AI grading, and acceptance limits. The shared retrieval benchmark targets an older KB; its recall is not certified for the current application release.
+
 ```powershell
 # Python unit and application tests
 .venv\Scripts\python.exe -X utf8 -m pytest tests/unit tests/application -q
