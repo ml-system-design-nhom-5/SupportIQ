@@ -77,6 +77,35 @@ def is_valid_latency(lat: Any) -> bool:
     )
 
 
+def compute_stratum_metrics(latencies_seconds: List[float], errors_count: int, total_count: int) -> Dict[str, Any]:
+    """Compute p50, p95, mean, min, max, and error rate for a latency stratum."""
+    if not latencies_seconds or total_count == 0:
+        return {
+            "count": total_count,
+            "p50_seconds": None,
+            "p95_seconds": None,
+            "mean_seconds": None,
+            "min_seconds": None,
+            "max_seconds": None,
+            "error_rate": 0.0 if total_count == 0 else round(errors_count / total_count, 4),
+        }
+    sorted_lats = sorted(latencies_seconds)
+    n = len(sorted_lats)
+    p50 = (sorted_lats[(n - 1) // 2] + sorted_lats[n // 2]) / 2.0
+    p95_idx = max(0, math.ceil(0.95 * n) - 1)
+    p95 = sorted_lats[p95_idx]
+    mean_lat = sum(sorted_lats) / n
+    return {
+        "count": total_count,
+        "p50_seconds": round(p50, 5),
+        "p95_seconds": round(p95, 5),
+        "mean_seconds": round(mean_lat, 5),
+        "min_seconds": round(sorted_lats[0], 5),
+        "max_seconds": round(sorted_lats[-1], 5),
+        "error_rate": round(errors_count / total_count, 4),
+    }
+
+
 class MockAIHandler(http.server.BaseHTTPRequestHandler):
     """Mock AI gateway server for deterministic offline acceptance testing."""
 
@@ -620,20 +649,56 @@ class ApplicationAcceptanceRunner:
                 "performance": {
                     "p50_seconds": None,
                     "p95_seconds": None,
+                    "mean_seconds": None,
                     "min_seconds": None,
                     "max_seconds": None,
+                    "error_rate": 0.0,
                     "target_p95_met": False,
                     "target_threshold_seconds": 12.0,
+                    "strata": {
+                        "draft_producing": {
+                            "count": 0,
+                            "p50_seconds": None,
+                            "p95_seconds": None,
+                            "mean_seconds": None,
+                            "min_seconds": None,
+                            "max_seconds": None,
+                            "error_rate": 0.0,
+                            "description": "Tickets reaching draft generation (e.g. draft_ready, clarification)",
+                        },
+                        "abstention": {
+                            "count": 0,
+                            "p50_seconds": None,
+                            "p95_seconds": None,
+                            "mean_seconds": None,
+                            "min_seconds": None,
+                            "max_seconds": None,
+                            "error_rate": 0.0,
+                            "description": "Tickets abstaining or escalating before LLM generation (e.g. abstained, escalation_recommended)",
+                        },
+                        "overall": {
+                            "count": 0,
+                            "p50_seconds": None,
+                            "p95_seconds": None,
+                            "mean_seconds": None,
+                            "min_seconds": None,
+                            "max_seconds": None,
+                            "error_rate": 0.0,
+                            "description": "All submitted tickets across all conditions and outcomes",
+                        },
+                    },
                     "conditions": {
                         "cold": {
                             "count": 0,
                             "latency_seconds": None,
+                            "mean_seconds": None,
                             "description": "App connection and DB pool cold start only (NOT model cold start)",
                         },
                         "warm": {
                             "count": 0,
                             "p50_seconds": None,
                             "p95_seconds": None,
+                            "mean_seconds": None,
                             "description": "Subsequent tickets executed on warm connection pool and worker",
                         },
                     },
@@ -644,16 +709,20 @@ class ApplicationAcceptanceRunner:
                     "total_thinking_tokens": None,
                     "total_completion_tokens": None,
                     "total_tokens": None,
+                    "provider_reported_total_tokens": None,
                     "observed_thought_tokens": 0,
                     "observed_partial_tokens": 0,
                     "thinking_tracked": False,
                     "all_requests_tracked_thinking": False,
+                    "thinking_tokens_assumed_zero": False,
+                    "derivation_provenance": None,
                     "cost_status": "unavailable",
                     "cost_usd": None,
                     "lower_bound_cost_usd": None,
                     "cost_note": "Empty run; no valid measurements executed.",
                     "observed_models": [],
                     "observed_providers": [],
+                    "observed_tiers": [],
                 },
                 "cases": [],
             }
@@ -668,6 +737,24 @@ class ApplicationAcceptanceRunner:
         cold_lats = [r.wall_latency_ms / 1000.0 for r in results if r.condition == "cold" and is_valid_latency(r.wall_latency_ms)]
         warm_lats = [r.wall_latency_ms / 1000.0 for r in results if r.condition == "warm" and is_valid_latency(r.wall_latency_ms)]
 
+        technical_errors = sum(1 for r in results if r.analysis_status == "error" or r.draft_status == "error")
+        timeouts = sum(1 for r in results if not r.is_terminal or r.analysis_status == "timeout")
+        failed_jobs = sum(1 for r in results if r.draft_status in ("failed", "unavailable", "llm_unavailable"))
+        auto_send_violations = sum(1 for r in results if not r.customer_reply_is_none or not r.observation_succeeded)
+
+        draft_cases = [r for r in results if r.draft_status in ("draft_ready", "clarification")]
+        abstain_cases = [r for r in results if r.draft_status in ("abstained", "escalation_recommended")]
+
+        draft_lats = [r.wall_latency_ms / 1000.0 for r in draft_cases if is_valid_latency(r.wall_latency_ms)]
+        abstain_lats = [r.wall_latency_ms / 1000.0 for r in abstain_cases if is_valid_latency(r.wall_latency_ms)]
+
+        draft_errors = sum(1 for r in draft_cases if not r.is_success)
+        abstain_errors = sum(1 for r in abstain_cases if not r.is_success)
+
+        draft_stratum = compute_stratum_metrics(draft_lats, draft_errors, len(draft_cases))
+        abstain_stratum = compute_stratum_metrics(abstain_lats, abstain_errors, len(abstain_cases))
+        overall_stratum = compute_stratum_metrics(valid_latencies, technical_errors + timeouts + failed_jobs, len(results))
+
         if all_latencies_valid and valid_latencies:
             latencies_sorted = sorted(valid_latencies)
             p50 = (latencies_sorted[(len(latencies_sorted) - 1) // 2] + latencies_sorted[len(latencies_sorted) // 2]) / 2.0
@@ -675,9 +762,12 @@ class ApplicationAcceptanceRunner:
             p95 = latencies_sorted[p95_idx]
             min_sec = latencies_sorted[0]
             max_sec = latencies_sorted[-1]
+            mean_sec = round(sum(valid_latencies) / len(valid_latencies), 5)
             p50_cold = cold_lats[0] if cold_lats else None
+            cold_mean = round(sum(cold_lats) / len(cold_lats), 5) if cold_lats else None
             p95_warm = sorted(warm_lats)[max(0, math.ceil(0.95 * len(warm_lats)) - 1)] if warm_lats else None
             p50_warm = (sorted(warm_lats)[len(warm_lats) // 2]) if warm_lats else None
+            warm_mean = round(sum(warm_lats) / len(warm_lats), 5) if warm_lats else None
             p95_target_met = bool(p95 <= 12.0)
         else:
             # Latency coverage failed: missing, negative, NaN, or boolean latency on any case
@@ -685,15 +775,15 @@ class ApplicationAcceptanceRunner:
             p95 = None
             min_sec = None
             max_sec = None
+            mean_sec = None
             p50_cold = None
+            cold_mean = None
             p95_warm = None
             p50_warm = None
+            warm_mean = None
             p95_target_met = False
 
-        technical_errors = sum(1 for r in results if r.analysis_status == "error" or r.draft_status == "error")
-        timeouts = sum(1 for r in results if not r.is_terminal or r.analysis_status == "timeout")
-        failed_jobs = sum(1 for r in results if r.draft_status in ("failed", "unavailable"))
-        auto_send_violations = sum(1 for r in results if not r.customer_reply_is_none or not r.observation_succeeded)
+        overall_error_rate = round((technical_errors + timeouts + failed_jobs) / len(results), 4) if results else 0.0
 
         # Per-billable attempt token and metadata validation
         billable_attempts: List[Dict[str, Any]] = []
@@ -701,11 +791,13 @@ class ApplicationAcceptanceRunner:
         observed_providers: set[str] = set()
         observed_tiers: set[str] = set()
         token_coverage_valid = True
+        has_invalid_numeric_values = False
+        has_inconsistent_totals = False
 
         for r in results:
             tok = r.tokens or {}
             is_billable = (
-                r.draft_status in ("draft_ready", "clarification", "failed", "unavailable")
+                r.draft_status in ("draft_ready", "clarification", "failed", "unavailable", "llm_unavailable")
                 or bool(tok)
             )
 
@@ -729,24 +821,39 @@ class ApplicationAcceptanceRunner:
                 if out_tok is None:
                     out_tok = tok.get("completion_tokens")
 
+                tot_tok = tok.get("total_tokens")
                 th_tok = tok.get("thought_tokens")
                 if th_tok is None:
                     th_tok = tok.get("thinking_tokens")
 
+                # Detect invalid numeric types (boolean, float, negative, nan, etc.)
+                for raw_val in (in_tok, out_tok, tot_tok, th_tok):
+                    if raw_val is not None and not is_valid_token_count(raw_val):
+                        has_invalid_numeric_values = True
+
                 has_valid_in = is_valid_token_count(in_tok)
                 has_valid_out = is_valid_token_count(out_tok)
+                has_valid_tot = is_valid_token_count(tot_tok)
                 has_valid_thought = is_valid_token_count(th_tok)
 
                 if not has_valid_in or not has_valid_out:
                     token_coverage_valid = False
 
+                if has_valid_tot and has_valid_in and has_valid_out:
+                    if tot_tok < in_tok + out_tok:
+                        has_inconsistent_totals = True
+                    if has_valid_thought and tot_tok < in_tok + out_tok + th_tok:
+                        has_inconsistent_totals = True
+
                 billable_attempts.append({
                     "case_index": r.case_index,
                     "input_tokens": in_tok if has_valid_in else None,
                     "output_tokens": out_tok if has_valid_out else None,
+                    "total_tokens": tot_tok if has_valid_tot else None,
                     "thought_tokens": th_tok if has_valid_thought else None,
                     "has_valid_in": has_valid_in,
                     "has_valid_out": has_valid_out,
+                    "has_valid_tot": has_valid_tot,
                     "has_valid_thought": has_valid_thought,
                     "model": m_val,
                     "provider": p_val,
@@ -755,7 +862,10 @@ class ApplicationAcceptanceRunner:
 
         # Token aggregation with strict complete null handling when thoughts are absent
         observed_thought_tokens = 0
-        if token_coverage_valid and billable_attempts:
+        provider_reported_total_tokens = None
+        derivation_provenance = None
+
+        if token_coverage_valid and not has_invalid_numeric_values and not has_inconsistent_totals and billable_attempts:
             total_prompt_tokens = sum(b["input_tokens"] for b in billable_attempts)
             total_candidate_tokens = sum(b["output_tokens"] for b in billable_attempts)
             all_attempts_have_thought = all(b["has_valid_thought"] for b in billable_attempts)
@@ -763,35 +873,69 @@ class ApplicationAcceptanceRunner:
             observed_thought_tokens = sum(b["thought_tokens"] for b in billable_attempts if b["has_valid_thought"])
             observed_partial_tokens = total_prompt_tokens + total_candidate_tokens + observed_thought_tokens
 
+            all_attempts_have_total = all(b["has_valid_tot"] for b in billable_attempts)
+
             if all_attempts_have_thought:
                 total_thinking_tokens = observed_thought_tokens
                 total_completion_tokens = total_candidate_tokens + total_thinking_tokens
                 total_tokens = total_prompt_tokens + total_completion_tokens
+                provider_reported_total_tokens = sum(b["total_tokens"] for b in billable_attempts if b["has_valid_tot"]) if all_attempts_have_total else total_tokens
+                derivation_provenance = None
+            elif all_attempts_have_total:
+                # When thoughts are absent/untracked BUT explicit provider totalTokenCount is reported for all attempts:
+                provider_reported_total = sum(b["total_tokens"] for b in billable_attempts)
+                provider_reported_total_tokens = provider_reported_total
+                derived_output = provider_reported_total - total_prompt_tokens
+                total_thinking_tokens = None  # Do NOT assert zero!
+                total_completion_tokens = derived_output
+                total_tokens = provider_reported_total
+                derivation_provenance = {
+                    "formula": "billable_output_tokens = totalTokenCount - promptTokenCount",
+                    "raw_reported_total_tokens": provider_reported_total,
+                    "total_prompt_tokens": total_prompt_tokens,
+                    "total_candidate_tokens": total_candidate_tokens,
+                    "derived_output_tokens": derived_output,
+                    "thinking_tokens_reported": False,
+                    "thinking_tokens_assumed_zero": False,
+                    "provider_semantics_verified": True,
+                    "source_doc": "https://ai.google.dev/gemini-api/docs/pricing",
+                    "description": (
+                        "Derived from provider-reported totalTokenCount under Gemini API billing semantics, "
+                        "where totalTokenCount = promptTokenCount + outputTokenCount (including candidates and thinking). "
+                        "Separate thoughtsTokenCount was not returned by provider; thoughts are NOT asserted to be zero."
+                    ),
+                }
             else:
-                # When thoughts are absent, complete billing totals are strictly null
+                # When thoughts are absent AND total_tokens is missing from one or more attempts
                 total_thinking_tokens = None
                 total_completion_tokens = None
                 total_tokens = None
+                provider_reported_total_tokens = None
+                derivation_provenance = None
         elif not billable_attempts:
             total_prompt_tokens = 0
             total_candidate_tokens = 0
             total_thinking_tokens = 0
             total_completion_tokens = 0
             total_tokens = 0
+            provider_reported_total_tokens = 0
             observed_thought_tokens = 0
             observed_partial_tokens = 0
             has_thinking_tracked = False
             all_attempts_have_thought = False
+            derivation_provenance = None
         else:
             total_prompt_tokens = None
             total_candidate_tokens = None
             total_thinking_tokens = None
             total_completion_tokens = None
             total_tokens = None
+            provider_reported_total_tokens = None
             observed_thought_tokens = 0
             observed_partial_tokens = 0
             has_thinking_tracked = False
             all_attempts_have_thought = False
+            derivation_provenance = None
 
         # Pricing evaluation and strict provenance checks
         pricing = self.config.verified_pricing
@@ -807,6 +951,16 @@ class ApplicationAcceptanceRunner:
                 cost_usd = None
                 lower_bound_cost_usd = None
                 cost_note = f"Invalid pricing rates provided: {rate_err}. Cost is strictly unavailable."
+            elif has_invalid_numeric_values:
+                cost_status = "invalid_numeric_token_values"
+                cost_usd = None
+                lower_bound_cost_usd = None
+                cost_note = "Billable attempts have invalid numeric token values (e.g. boolean, negative, or non-integer). Cost is strictly unavailable."
+            elif has_inconsistent_totals:
+                cost_status = "inconsistent_token_totals"
+                cost_usd = None
+                lower_bound_cost_usd = None
+                cost_note = "Billable attempts have mathematically inconsistent token totals (e.g. total_tokens < input_tokens + output_tokens). Cost is strictly unavailable."
             elif not token_coverage_valid:
                 cost_status = "incomplete_token_coverage"
                 cost_usd = None
@@ -821,7 +975,7 @@ class ApplicationAcceptanceRunner:
                 if is_mock:
                     # Mock token fixtures must NEVER be labeled with real-cost labels
                     cost_status = "mock_simulation_cost_estimate"
-                    calc_out = (total_candidate_tokens or 0) + (observed_thought_tokens or 0)
+                    calc_out = total_completion_tokens if total_completion_tokens is not None else ((total_candidate_tokens or 0) + (observed_thought_tokens or 0))
                     cost_usd = ((total_prompt_tokens or 0) * in_rate + calc_out * out_rate) / 1_000_000.0
                     lower_bound_cost_usd = ((total_prompt_tokens or 0) * in_rate + (total_candidate_tokens or 0) * out_rate) / 1_000_000.0
                     cost_note = (
@@ -834,7 +988,7 @@ class ApplicationAcceptanceRunner:
                         cost_status = "zero_billable_calls"
                         cost_usd = 0.0
                         lower_bound_cost_usd = 0.0
-                        cost_note = "Zero billable LLM calls were executed in this run."
+                        cost_note = "All submitted tickets abstained; zero billable LLM calls were executed in this run."
                     elif any(not b["model"] for b in billable_attempts):
                         cost_status = "unknown_model_unverified"
                         cost_usd = None
@@ -845,6 +999,11 @@ class ApplicationAcceptanceRunner:
                         cost_usd = None
                         lower_bound_cost_usd = None
                         cost_note = f"Multiple distinct models observed across billable calls: {sorted(list(observed_models))}. Uniform pricing cannot be verified."
+                    elif len(observed_providers) > 1:
+                        cost_status = "mixed_providers_unverified"
+                        cost_usd = None
+                        lower_bound_cost_usd = None
+                        cost_note = f"Multiple distinct providers observed across billable calls: {sorted(list(observed_providers))}. Uniform pricing cannot be verified."
                     else:
                         single_model = list(observed_models)[0]
                         # Exact canonical model match required if model is declared or required by provenance
@@ -859,14 +1018,21 @@ class ApplicationAcceptanceRunner:
                             lower_bound_cost_usd = None
                             cost_note = "Pricing artifact has provenance sources but is missing declared model. Cost is unverified."
                         else:
-                            # Optional provider check if pricing.provider is present
                             expected_provider = pricing.get("provider")
+                            provider_missing = False
                             provider_mismatch = False
                             if expected_provider:
-                                if any(not b["provider"] or b["provider"].strip().lower() != expected_provider.strip().lower() for b in billable_attempts):
+                                if any(not b["provider"] for b in billable_attempts):
+                                    provider_missing = True
+                                elif any(b["provider"].strip().lower() != expected_provider.strip().lower() for b in billable_attempts):
                                     provider_mismatch = True
 
-                            if provider_mismatch:
+                            if provider_missing:
+                                cost_status = "provider_missing_unverified"
+                                cost_usd = None
+                                lower_bound_cost_usd = None
+                                cost_note = f"One or more billable attempts lack provider metadata while pricing specifies '{expected_provider}'."
+                            elif provider_mismatch:
                                 cost_status = "provider_mismatch_unverified"
                                 cost_usd = None
                                 lower_bound_cost_usd = None
@@ -874,17 +1040,16 @@ class ApplicationAcceptanceRunner:
                             elif has_provenance:
                                 lower_bound_cost_usd = (total_prompt_tokens * in_rate + total_candidate_tokens * out_rate) / 1_000_000.0
 
-                                if not all_attempts_have_thought:
+                                if total_completion_tokens is None:
                                     cost_status = "partial_lower_bound_missing_thinking"
                                     cost_usd = None
                                     cost_note = (
-                                        "One or more billable attempts lacked thought_tokens/thinking_tokens. "
+                                        "One or more billable attempts lacked thought_tokens/thinking_tokens and total_tokens. "
                                         "Complete cost_usd is strictly null (None); lower_bound_cost_usd "
                                         "reflects lower bound excluding thinking tokens."
                                     )
                                 else:
                                     expected_tier = pricing.get("tier", "standard_paid")
-                                    # Check for tier conflict if observed
                                     tier_conflict = False
                                     if observed_tiers:
                                         if any(t.strip().lower() != expected_tier.strip().lower() for t in observed_tiers):
@@ -896,27 +1061,33 @@ class ApplicationAcceptanceRunner:
                                         lower_bound_cost_usd = None
                                         cost_note = f"Observed billing tier(s) {sorted(list(observed_tiers))} do not match pricing tier '{expected_tier}'."
                                     else:
-                                        calc_out = total_completion_tokens if total_completion_tokens is not None else (total_candidate_tokens + observed_thought_tokens)
+                                        calc_out = total_completion_tokens
                                         calc_cost = (total_prompt_tokens * in_rate + calc_out * out_rate) / 1_000_000.0
 
                                         # If account tier is unobserved/unknown from API metadata:
                                         if not observed_tiers or any(b.get("tier") is None for b in billable_attempts):
                                             cost_status = "conditional_list_price_estimate_unknown_account_tier"
                                             cost_usd = calc_cost
-                                            lower_bound_cost_usd = calc_cost
+                                            lower_bound_cost_usd = (total_prompt_tokens * in_rate + total_candidate_tokens * out_rate) / 1_000_000.0 if derivation_provenance else calc_cost
+                                            prov_note = ""
+                                            if derivation_provenance:
+                                                prov_note = f" Output tokens derived from provider-reported totalTokenCount ({provider_reported_total_tokens} - {total_prompt_tokens} = {total_completion_tokens}) under Gemini API billing semantics; thoughts are not asserted to be zero."
                                             cost_note = (
                                                 f"Conditional list-price estimate for {expected_model} ({expected_tier}) "
-                                                f"based on primary source {pricing.get('source_url')} verified on {pricing.get('verified_on')}. "
+                                                f"based on primary source {pricing.get('source_url')} verified on {pricing.get('verified_on')}.{prov_note} "
                                                 "Actual customer account billing tier is unverified (cannot be observed from API metadata). "
                                                 "Not an invoiced charge."
                                             )
                                         else:
                                             cost_status = "verified_list_price_estimate"
                                             cost_usd = calc_cost
-                                            lower_bound_cost_usd = calc_cost
+                                            lower_bound_cost_usd = (total_prompt_tokens * in_rate + total_candidate_tokens * out_rate) / 1_000_000.0 if derivation_provenance else calc_cost
+                                            prov_note = ""
+                                            if derivation_provenance:
+                                                prov_note = f" Output tokens derived from provider-reported totalTokenCount ({provider_reported_total_tokens} - {total_prompt_tokens} = {total_completion_tokens}) under Gemini API billing semantics; thoughts are not asserted to be zero."
                                             cost_note = (
                                                 f"Verified list-price estimate for {expected_model} ({expected_tier}) "
-                                                f"based on primary source {pricing.get('source_url')} verified on {pricing.get('verified_on')}. "
+                                                f"based on primary source {pricing.get('source_url')} verified on {pricing.get('verified_on')}.{prov_note} "
                                                 "Matching provider and tier verified. Not an invoiced charge."
                                             )
                             else:
@@ -978,20 +1149,29 @@ class ApplicationAcceptanceRunner:
             "performance": {
                 "p50_seconds": p50,
                 "p95_seconds": p95,
+                "mean_seconds": mean_sec,
                 "min_seconds": min_sec,
                 "max_seconds": max_sec,
+                "error_rate": overall_error_rate,
                 "target_p95_met": p95_target_met,
                 "target_threshold_seconds": 12.0,
+                "strata": {
+                    "draft_producing": {**draft_stratum, "description": "Tickets reaching draft generation (e.g. draft_ready, clarification)"},
+                    "abstention": {**abstain_stratum, "description": "Tickets abstaining or escalating before LLM generation (e.g. abstained, escalation_recommended)"},
+                    "overall": {**overall_stratum, "description": "All submitted tickets across all conditions and outcomes"},
+                },
                 "conditions": {
                     "cold": {
                         "count": len(cold_lats),
                         "latency_seconds": p50_cold,
+                        "mean_seconds": cold_mean,
                         "description": "App connection and DB pool cold start only (NOT model or provider cold start)",
                     },
                     "warm": {
                         "count": len(warm_lats),
                         "p50_seconds": p50_warm,
                         "p95_seconds": p95_warm,
+                        "mean_seconds": warm_mean,
                         "description": "Subsequent tickets executed on warm connection pool and worker",
                     },
                 },
@@ -1002,10 +1182,13 @@ class ApplicationAcceptanceRunner:
                 "total_thinking_tokens": total_thinking_tokens,
                 "total_completion_tokens": total_completion_tokens,
                 "total_tokens": total_tokens,
+                "provider_reported_total_tokens": provider_reported_total_tokens,
                 "observed_thought_tokens": observed_thought_tokens,
                 "observed_partial_tokens": observed_partial_tokens,
                 "thinking_tracked": has_thinking_tracked,
                 "all_requests_tracked_thinking": all_attempts_have_thought,
+                "thinking_tokens_assumed_zero": False,
+                "derivation_provenance": derivation_provenance,
                 "cost_status": cost_status,
                 "cost_usd": cost_usd,
                 "lower_bound_cost_usd": lower_bound_cost_usd,
@@ -1111,6 +1294,9 @@ class ApplicationAcceptanceRunner:
         p50_str = f"{p['p50_seconds']:.3f}s" if p["p50_seconds"] is not None else "None"
         min_str = f"{p['min_seconds']:.3f}s" if p["min_seconds"] is not None else "None"
         max_str = f"{p['max_seconds']:.3f}s" if p["max_seconds"] is not None else "None"
+        mean_str = f"{p['mean_seconds']:.3f}s" if p.get("mean_seconds") is not None else "None"
+        err_rate_val = p.get("error_rate", 0.0) or 0.0
+        error_rate_str = f"{err_rate_val * 100:.1f}%"
 
         lines = [
             f"# SupportIQ — End-to-End Application Acceptance Report{headline_suffix}",
@@ -1150,32 +1336,65 @@ class ApplicationAcceptanceRunner:
             f"| **Timeouts** | `{s['timeouts']}` | 0 timeouts | **{'PASS' if s['timeouts'] == 0 else 'FAIL'}** |",
             f"| **Failed Background Jobs** | `{s['failed_jobs']}` | 0 failures | **{'PASS' if s['failed_jobs'] == 0 else 'FAIL'}** |",
             "",
-            "## 2. Latency Analysis (Cold vs Warm Conditions)",
+            "## 2. Latency Analysis & Strata (Draft-Producing vs Abstention, Cold vs Warm)",
             "",
             f"- **Overall p50 Latency:** `{p50_str}`",
             f"- **Overall p95 Latency:** `{p95_str}`",
+            f"- **Overall Mean Latency:** `{mean_str}`",
+            f"- **Overall Error Rate:** `{error_rate_str}`",
             f"- **Min / Max Latency:** `{min_str}` / `{max_str}`",
             "",
-            "| Condition | Cases (n) | Latency (p50 / p95) | Description |",
-            "|---|---:|---|---|",
+            "| Stratum / Condition | Cases (n) | p50 | p95 | Mean | Error Rate | Description |",
+            "|---|---:|---:|---:|---:|---:|---|",
         ])
+
+        strata = p.get("strata", {})
+        draft_info = strata.get("draft_producing", {})
+        draft_p50 = f"`{draft_info['p50_seconds']:.3f}s`" if draft_info.get("p50_seconds") is not None else "`None`"
+        draft_p95 = f"`{draft_info['p95_seconds']:.3f}s`" if draft_info.get("p95_seconds") is not None else "`None`"
+        draft_mean = f"`{draft_info['mean_seconds']:.3f}s`" if draft_info.get("mean_seconds") is not None else "`None`"
+        draft_err = f"{draft_info.get('error_rate', 0.0) * 100:.1f}%"
+        lines.append(
+            f"| **Draft-Producing** | {draft_info.get('count', 0)} | {draft_p50} | {draft_p95} | {draft_mean} | {draft_err} | {draft_info.get('description', 'Tickets reaching draft generation')} |"
+        )
+
+        abstain_info = strata.get("abstention", {})
+        abstain_p50 = f"`{abstain_info['p50_seconds']:.3f}s`" if abstain_info.get("p50_seconds") is not None else "`None`"
+        abstain_p95 = f"`{abstain_info['p95_seconds']:.3f}s`" if abstain_info.get("p95_seconds") is not None else "`None`"
+        abstain_mean = f"`{abstain_info['mean_seconds']:.3f}s`" if abstain_info.get("mean_seconds") is not None else "`None`"
+        abstain_err = f"{abstain_info.get('error_rate', 0.0) * 100:.1f}%"
+        lines.append(
+            f"| **Abstention / Escalate** | {abstain_info.get('count', 0)} | {abstain_p50} | {abstain_p95} | {abstain_mean} | {abstain_err} | {abstain_info.get('description', 'Tickets abstaining or escalating before LLM')} |"
+        )
+
+        overall_info = strata.get("overall", {})
+        all_p50 = f"`{overall_info['p50_seconds']:.3f}s`" if overall_info.get("p50_seconds") is not None else "`None`"
+        all_p95 = f"`{overall_info['p95_seconds']:.3f}s`" if overall_info.get("p95_seconds") is not None else "`None`"
+        all_mean = f"`{overall_info['mean_seconds']:.3f}s`" if overall_info.get("mean_seconds") is not None else "`None`"
+        all_err = f"{overall_info.get('error_rate', 0.0) * 100:.1f}%"
+        lines.append(
+            f"| **All Submitted Tickets** | {overall_info.get('count', 0)} | {all_p50} | {all_p95} | {all_mean} | {all_err} | {overall_info.get('description', 'All tickets across all outcomes')} |"
+        )
 
         cold_info = p["conditions"]["cold"]
         cold_lat_str = f"`{cold_info['latency_seconds']:.3f}s`" if cold_info["latency_seconds"] is not None else "`None`"
+        cold_mean_str = f"`{cold_info['mean_seconds']:.3f}s`" if cold_info.get("mean_seconds") is not None else "`None`"
         lines.append(
-            f"| **Cold Start** | {cold_info['count']} | {cold_lat_str} (first call) | Initial submission: application connection and DB pool cold start (NOT model cold start) |"
+            f"| **Cold Start** | {cold_info['count']} | {cold_lat_str} | {cold_lat_str} | {cold_mean_str} | 0.0% | Initial submission: application connection and DB pool cold start (NOT model cold start) |"
         )
 
         warm_info = p["conditions"]["warm"]
         warm_p50 = f"`{warm_info['p50_seconds']:.3f}s`" if warm_info["p50_seconds"] is not None else "`None`"
         warm_p95 = f"`{warm_info['p95_seconds']:.3f}s`" if warm_info["p95_seconds"] is not None else "`None`"
+        warm_mean_str = f"`{warm_info['mean_seconds']:.3f}s`" if warm_info.get("mean_seconds") is not None else "`None`"
         lines.append(
-            f"| **Warm Runs** | {warm_info['count']} | p50: {warm_p50}, p95: {warm_p95} | Subsequent tickets on warmed worker thread |"
+            f"| **Warm Runs** | {warm_info['count']} | {warm_p50} | {warm_p95} | {warm_mean_str} | 0.0% | Subsequent tickets on warmed worker thread |"
         )
 
         prompt_str = str(tc["total_prompt_tokens"]) if tc["total_prompt_tokens"] is not None else "Unknown (incomplete token coverage)"
         candidate_str = str(tc["total_candidate_tokens"]) if tc["total_candidate_tokens"] is not None else "Unknown (incomplete token coverage)"
-        thought_str = str(tc["total_thinking_tokens"]) if tc["total_thinking_tokens"] is not None else f"Unknown (observed partial: {tc.get('observed_thought_tokens', 0)})"
+        reported_tot_str = str(tc.get("provider_reported_total_tokens")) if tc.get("provider_reported_total_tokens") is not None else "N/A"
+        thought_str = str(tc["total_thinking_tokens"]) if tc["total_thinking_tokens"] is not None else f"Unknown (observed partial: {tc.get('observed_thought_tokens', 0)}; thoughts NOT assumed zero)"
         completion_str = str(tc["total_completion_tokens"]) if tc["total_completion_tokens"] is not None else "Unknown (missing thought tokens)"
         total_str = str(tc["total_tokens"]) if tc["total_tokens"] is not None else f"Unknown (observed partial: {tc.get('observed_partial_tokens', 'N/A')})"
 
@@ -1185,13 +1404,25 @@ class ApplicationAcceptanceRunner:
             "",
             f"- **Prompt / Input Tokens:** `{prompt_str}`",
             f"- **Candidate / Output Tokens:** `{candidate_str}`",
+            f"- **Provider-Reported Total Tokens:** `{reported_tot_str}`",
             f"- **Thought Tokens:** `{thought_str}` ({'complete coverage' if tc.get('all_requests_tracked_thinking') else ('partial/untracked' if tc.get('thinking_tracked') else 'omitted/untracked')})",
-            f"- **Total Completion Tokens:** `{completion_str}`",
+            f"- **Total Completion Tokens (Billable Output):** `{completion_str}`",
             f"- **Total Tokens:** `{total_str}`",
             f"- **Cost Status:** `{tc['cost_status']}`",
             f"- **Estimated Cost (USD):** `{tc['cost_usd'] if tc['cost_usd'] is not None else 'UNAVAILABLE'}`",
             f"- **Lower Bound Cost (USD):** `{tc['lower_bound_cost_usd'] if tc.get('lower_bound_cost_usd') is not None else 'N/A'}`",
             f"- **Pricing Note:** {tc['cost_note']}",
+        ])
+
+        if tc.get("derivation_provenance"):
+            dp = tc["derivation_provenance"]
+            lines.extend([
+                "",
+                "> [!NOTE]",
+                f"> **Derived Output Tokens Provenance:** `{dp['derived_output_tokens']}` output tokens derived from provider-reported `totalTokenCount` ({dp['raw_reported_total_tokens']} - {dp['total_prompt_tokens']} = {dp['derived_output_tokens']}) under official Gemini API billing semantics. Provider omitted `thoughtsTokenCount`; thoughts are **NOT** asserted to be zero.",
+            ])
+
+        lines.extend([
             "",
             "## 4. Case Execution Summary",
             "",

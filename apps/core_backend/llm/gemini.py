@@ -20,11 +20,13 @@ class LLMError(Exception):
         usage: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
         latency_seconds: float | None = None,
+        attempts: list[dict[str, Any]] | None = None,
     ):
         self.code = code
         self.usage = usage or {}
         self.metadata = metadata or {}
         self.latency_seconds = latency_seconds
+        self.attempts = attempts or []
         super().__init__(code)
 
 
@@ -224,27 +226,47 @@ class GeminiDraftClient:
             payload["generationConfig"]["thinkingConfig"] = {"thinkingLevel": "minimal"}
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
         started = time.perf_counter()
+        metadata = {
+            "provider": "google_ai_studio",
+            "model": self.model,
+            "prompt_version": "grounded-v2",
+        }
         try:
             if self._http is None:
                 self._http = httpx.Client(timeout=timeout, follow_redirects=False)
             response = self._http.post(url, headers={"x-goog-api-key": self._api_key}, json=payload,
                                        timeout=timeout)
         except httpx.TimeoutException:
-            raise LLMError("llm_timeout") from None
+            latency_sec = round(time.perf_counter() - started, 4)
+            att = [{"attempt_index": 0, "status": "llm_timeout", "latency_seconds": latency_sec, "usage": {}, "metadata": metadata}]
+            raise LLMError("llm_timeout", metadata=metadata, latency_seconds=latency_sec, attempts=att) from None
         except httpx.HTTPError:
-            raise LLMError("llm_unavailable") from None
+            latency_sec = round(time.perf_counter() - started, 4)
+            att = [{"attempt_index": 0, "status": "llm_unavailable", "latency_seconds": latency_sec, "usage": {}, "metadata": metadata}]
+            raise LLMError("llm_unavailable", metadata=metadata, latency_seconds=latency_sec, attempts=att) from None
+
+        latency_sec = round(time.perf_counter() - started, 4)
         if response.status_code != 200:
+            usage = {}
+            try:
+                err_data = response.json()
+                if isinstance(err_data, dict):
+                    usage_meta = err_data.get("usageMetadata")
+                    if isinstance(usage_meta, dict):
+                        usage = {k: v for k, v in usage_meta.items()
+                                 if k in {"promptTokenCount", "candidatesTokenCount", "totalTokenCount", "thoughtsTokenCount"}
+                                 and type(v) is int and v >= 0}
+                    if "modelVersion" in err_data:
+                        metadata["model_version"] = err_data["modelVersion"]
+            except Exception:
+                pass
             code = {400: "llm_request_rejected", 401: "llm_auth_error", 403: "llm_auth_error",
                     404: "llm_model_unavailable", 429: "llm_rate_limited"}.get(response.status_code, "llm_unavailable")
             # Never expose a provider response body, request headers, or exception repr.
-            raise LLMError(code)
-        latency_sec = round(time.perf_counter() - started, 4)
+            att = [{"attempt_index": 0, "status": code, "latency_seconds": latency_sec, "usage": usage, "metadata": metadata}]
+            raise LLMError(code, usage=usage, metadata=metadata, latency_seconds=latency_sec, attempts=att)
+
         usage = {}
-        metadata = {
-            "provider": "google_ai_studio",
-            "model": self.model,
-            "prompt_version": "grounded-v2",
-        }
         try:
             data = response.json()
             if not isinstance(data, dict):
@@ -261,23 +283,37 @@ class GeminiDraftClient:
                      and type(v) is int and v >= 0}
             candidate = data["candidates"][0]
             if (data.get("promptFeedback") or {}).get("blockReason") or candidate.get("finishReason") != "STOP":
-                raise LLMError("llm_blocked_or_incomplete", usage=usage, metadata=metadata, latency_seconds=latency_sec)
+                att = [{"attempt_index": 0, "status": "llm_blocked_or_incomplete", "latency_seconds": latency_sec, "usage": usage, "metadata": metadata}]
+                raise LLMError("llm_blocked_or_incomplete", usage=usage, metadata=metadata, latency_seconds=latency_sec, attempts=att)
             text = "".join(p.get("text", "") for p in candidate["content"]["parts"] if not p.get("thought"))
             draft = DraftOutput.model_validate_json(text)
             if not draft.answerable:
-                raise LLMError("llm_insufficient_evidence", usage=usage, metadata=metadata, latency_seconds=latency_sec)
+                att = [{"attempt_index": 0, "status": "llm_insufficient_evidence", "latency_seconds": latency_sec, "usage": usage, "metadata": metadata}]
+                raise LLMError("llm_insufficient_evidence", usage=usage, metadata=metadata, latency_seconds=latency_sec, attempts=att)
             known = {s["id"] for s in sources}
             inline = set(re.findall(r"\[(S\d+)\]", draft.answer))
             if not draft.answer.strip() or not draft.citations or set(draft.citations) != inline or not inline.issubset(known):
-                raise LLMError("llm_invalid_citations", usage=usage, metadata=metadata, latency_seconds=latency_sec)
+                att = [{"attempt_index": 0, "status": "llm_invalid_citations", "latency_seconds": latency_sec, "usage": usage, "metadata": metadata}]
+                raise LLMError("llm_invalid_citations", usage=usage, metadata=metadata, latency_seconds=latency_sec, attempts=att)
         except LLMError:
             raise
         except (KeyError, IndexError, AttributeError, TypeError, ValueError, ValidationError):
-            raise LLMError("llm_invalid_response", usage=usage, metadata=metadata, latency_seconds=latency_sec) from None
+            att = [{"attempt_index": 0, "status": "llm_invalid_response", "latency_seconds": latency_sec, "usage": usage, "metadata": metadata}]
+            raise LLMError("llm_invalid_response", usage=usage, metadata=metadata, latency_seconds=latency_sec, attempts=att) from None
         return {"body": draft.answer.strip(), "provider": "google_ai_studio", "model": self.model,
                 "input_snapshot": snapshot, "is_clarification": draft.is_clarification,
                 "model_version": data.get("modelVersion", self.model), "prompt_version": "grounded-v2",
                 "citations": [{"source_id": s["source_id"], "source_type": s["source_type"],
                                "document_id": s["document_id"], "version": s["version"]}
                               for s in sources if s["source_id"] in inline],
-                "usage": usage, "latency_seconds": latency_sec}
+                "usage": usage, "latency_seconds": latency_sec,
+                "attempts": [
+                    {
+                        "attempt_index": 0,
+                        "status": "success",
+                        "latency_seconds": latency_sec,
+                        "usage": usage,
+                        "model": self.model,
+                        "provider": "google_ai_studio",
+                    }
+                ]}
