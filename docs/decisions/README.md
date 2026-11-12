@@ -24,6 +24,8 @@ An architecture decision record (ADR) captures one significant decision: its con
 | [0014](0014-citations-to-order-context.md) | Citations to the order context | Accepted | 2026-11-12 |
 | [0015](0015-account-creation-and-password-changes.md) | Account creation, password changes, and password resets | Accepted | 2026-11-11 |
 | [0016](0016-hosting-on-free-tiers.md) | Hosting of the demo on free tiers | Accepted | 2026-11-12 |
+| [0017](0017-repository-layout-and-ai-ml-migration.md) | Repository layout and migration of the AI and ML code | Proposed | 2026-11-12 |
+| [0018](0018-hosting-of-ai-service-on-modal.md) | Hosting of `ai-service` on Modal | Proposed | 2026-11-12 |
 
 Notes on the index:
 
