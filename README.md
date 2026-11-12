@@ -16,7 +16,7 @@ Full scope and requirements: [docs/product/requirements.md](docs/product/require
 
 ## Architecture
 
-Three components talk only through versioned contracts ([ADR-0001](docs/decisions/0001-system-architecture.md)). They run as one Docker Compose project behind an Nginx ingress, with two replicas of `backend` and of `ai-service` ([ADR-0011](docs/decisions/0011-deployment-and-runtime-topology.md)).
+Three components talk only through versioned contracts ([ADR-0001](docs/decisions/0001-system-architecture.md)). `backend` replicas keep no state between requests, and all shared state lives in PostgreSQL, on any hosting platform ([ADR-0011](docs/decisions/0011-deployment-and-runtime-topology.md)). The demo runs on free plans: `frontend` on Cloudflare Pages behind a same-origin proxy, `backend` on Render, and PostgreSQL on Supabase ([ADR-0016](docs/decisions/0016-hosting-on-free-tiers.md)).
 
 ```mermaid
 flowchart LR
@@ -27,7 +27,7 @@ flowchart LR
     BE -->|"ai-service contract:<br/>pseudonymized text only"| AI["ai-service"]
     BE -->|"SQL"| DB[("PostgreSQL")]
     AI -->|"loads at startup"| ART[("Release manifest:<br/>model, KB, prompts, routing")]
-    AI -->|"egress proxy,<br/>allow-listed host only"| LLM["LLM provider"]
+    AI -->|"allow-listed host only"| LLM["LLM provider"]
     ML["ml/ training"] -.->|"versioned artifact"| ART
 ```
 
@@ -70,13 +70,14 @@ sequenceDiagram
 
 `frontend` and the `backend` foundation are implemented; the ticket workflow and `ai-service` come next. Decisions are recorded in [docs/decisions/](docs/decisions/README.md).
 
-- Revision 2 of the contracts v1 design ([docs/design/contracts-v1.md](docs/design/contracts-v1.md)) aligns the design with the team's specification and is in review, together with ADR-0010, ADR-0011, and ADR-0014. ADR-0012 and ADR-0013 were accepted on 2026-11-05.
+- Revision 2 of the contracts v1 design ([docs/design/contracts-v1.md](docs/design/contracts-v1.md)) aligns the design with the team's specification. Its `ai-service` part is still in review. ADR-0012 and ADR-0013 were accepted on 2026-11-05, and ADR-0010, ADR-0011, and ADR-0014 on 2026-11-12.
 - On 2026-11-05 the project lead approved the `frontend` ↔ `backend` part of revision 2 for contract PR 2. Contract PR 2 adds [`contracts/backend.openapi.yaml`](contracts/backend.openapi.yaml) 1.0.0 with an example for every outcome, a Prism mock, and the contract checks ([contracts/README.md](contracts/README.md)).
-- Version 1.0.1 of `contracts/backend.openapi.yaml` (2026-11-08) clarifies the reuse of an `Idempotency-Key`, the responses from the ingress, and the products of an order ([CHANGELOG](contracts/CHANGELOG.md)). The [backend foundation design](docs/design/backend-foundation.md) is in review again for the revision that the implementation brought, and the frontend engineer and the contracts gatekeeper approve it.
+- Version 1.0.1 of `contracts/backend.openapi.yaml` (2026-11-08) clarifies the reuse of an `Idempotency-Key`, the responses from the ingress, and the products of an order ([CHANGELOG](contracts/CHANGELOG.md)). The [backend foundation design](docs/design/backend-foundation.md) was revised for what the implementation brought, and the project lead approved the revision on 2026-11-12.
 - Repository checks run with pre-commit locally and with GitHub Actions in CI ([docs/guides/repository-checks.md](docs/guides/repository-checks.md)).
 - `backend` is scaffolded: [backend/README.md](backend/README.md) gives setup, commands, and demo accounts.
 - `frontend` is scaffolded and runs against the Prism mock: sign-in, the shop, and the Accounts screen of the admin area ([frontend/README.md](frontend/README.md)). `ai-service` is not scaffolded yet.
-- [ADR-0015](docs/decisions/0015-account-creation-and-password-changes.md), accepted on 2026-11-11 by the project lead, adds account creation, password changes, and password resets. The project lead also approved the [account management design](docs/design/account-management.md) and the admin, shop, and console UI designs with their revisions. `backend` contract 1.1.0 ([CHANGELOG](contracts/CHANGELOG.md)) and its implementation in `backend` and `frontend` are done on the branch `build/account-passwords`, which is merged once into `chore/fe-be-supportiq-ecom`.
+- [ADR-0015](docs/decisions/0015-account-creation-and-password-changes.md), accepted on 2026-11-11 by the project lead, adds account creation, password changes, and password resets. The project lead also approved the [account management design](docs/design/account-management.md) and the admin, shop, and console UI designs with their revisions. `backend` contract 1.1.0 ([CHANGELOG](contracts/CHANGELOG.md)) and its implementation in `backend` and `frontend` were merged into `chore/fe-be-supportiq-ecom` on 2026-11-12.
+- [ADR-0016](docs/decisions/0016-hosting-on-free-tiers.md), accepted on 2026-11-12 by the project lead, puts the demo on free plans: `frontend` on Cloudflare Pages behind a same-origin proxy, `backend` on Render, PostgreSQL on Supabase, and telemetry on Grafana Cloud. A keep-alive keeps `backend` running, and the [backend wake-up design](docs/design/backend-wake-up.md), approved the same day, is its fallback. ADR-0010 and ADR-0011 were revised the same day to leave the platform to it, and accepted together with ADR-0014. The project lead also approved the console operations and `getAdminVersions` of the contracts v1 design; its `ai-service` part stays in review. The `backend` ticket workflow design comes next.
 
 ## Target repository layout
 
@@ -92,7 +93,7 @@ supportiq-ecom/
 ├── ai-service/      # Created at scaffold
 ├── ml/              # Training and offline evaluation (created at scaffold)
 ├── eval/            # Shared test sets and evaluation runs (created at scaffold)
-├── deploy/          # Docker Compose, Nginx, egress proxy, observability (created once ADR-0011 or the hosting ADR is accepted)
+├── deploy/          # Hosting setup, platform settings, observability (created once ADR-0016 is accepted)
 └── data/            # Local datasets; large files are not committed
 ```
 

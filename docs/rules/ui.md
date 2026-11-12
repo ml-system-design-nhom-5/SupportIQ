@@ -1,6 +1,6 @@
 # UI rules
 
-> **Status:** Active · **Owner:** frontend · **Last reviewed:** 2026-11-11
+> **Status:** Active · **Owner:** frontend · **Last reviewed:** 2026-11-12
 
 A strict design system and interaction rules, so every screen looks and behaves the same, staff can work quickly and safely, and developers can build and review UI with confidence. The console exists to help staff check the AI, not to make them trust it blindly. Design-system structure: [ADR-0008](../decisions/0008-ui-design-system.md). Shop scope: [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md). Roles: [ADR-0012](../decisions/0012-roles-v1.md).
 
@@ -125,7 +125,12 @@ flowchart TB
 
 ## Developer views
 
-**UI-35.** When the developer-details setting is enabled (off by default in demo mode), the ticket workspace shows a collapsible "Developer details" panel: trace ID with a link to the trace in Grafana ([ADR-0007](../decisions/0007-observability-stack.md)), the release ID with the model, KB, and prompt versions, latency per step, and raw statuses and reason codes.
+**UI-35.** Dev mode adds developer details to the screens of `staff`, `manager`, and `admin`, and changes nothing else. It has two layers:
+
+- An environment setting makes dev mode available. It is on in local development and off in the demo deployment.
+- Where dev mode is available, each `staff`, `manager`, and `admin` user switches it on or off for themselves. The choice is a display preference stored in the browser.
+
+Customers never get dev mode. It never changes permissions, never shows data that the role cannot already see, and offers no sign-in as another account. In dev mode, the ticket workspace shows a collapsible "Developer details" panel: trace ID with a link to the trace in Grafana ([ADR-0007](../decisions/0007-observability-stack.md)), the release ID with the model, KB, and prompt versions, latency per step, and raw statuses and reason codes.
 
 **UI-36.** Storybook is the catalog of every design-system component and the place to review UI changes in isolation. A UI PR links the affected stories.
 

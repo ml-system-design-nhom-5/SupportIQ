@@ -1,6 +1,6 @@
 # Testing rules
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-11
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-12
 
 Tests are executable specifications. They catch hidden bugs early, protect the guardrails, and keep technical debt from accumulating unseen. A behavior without a test does not exist.
 
@@ -144,7 +144,7 @@ describe("DraftEditor", () => {
 - No reply or reply proposal body that contains a placeholder is accepted ([SEC-38](security-and-privacy.md#pseudonymization)).
 - An admin cannot call any `/v1/shop/` or `/v1/console/` operation, and no other role can call a `/v1/admin/` operation ([SEC-41](security-and-privacy.md#authentication-and-authorization)).
 - `UPDATE` and `DELETE` on the audit log are rejected by the database ([SEC-39](security-and-privacy.md#audit-log)).
-- From the `backend` container, no internet host is reachable, directly or through the egress proxy. From the `ai-service` container, only allow-listed hosts are reachable, and only through the proxy ([SEC-40](security-and-privacy.md#transport-and-runtime)).
+- `backend` connects only to its database, `ai-service`, and the telemetry destination in its settings, and `ai-service` only to the hosts on the egress allow-list ([SEC-40](security-and-privacy.md#transport-and-runtime)).
 - No admin operation returns or changes a customer account ([SEC-41](security-and-privacy.md#authentication-and-authorization)).
 
 ## End-to-end scenarios

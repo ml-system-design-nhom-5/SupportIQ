@@ -1,6 +1,6 @@
 # Security and privacy rules
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-11
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-12
 
 Strict rules for protecting data and keys, especially when calling LLM providers (FR-08, FR-09). All data in this project is simulated, but it is handled exactly as real data would be, so the habits and the controls are right from the start.
 
@@ -43,7 +43,7 @@ Everything else is forbidden, including names, emails, phone numbers, addresses,
 
 **SEC-07.** The LLM provider and plan are chosen so that API data is not used for training and is retained as briefly as the provider allows. The LLM provider ADR records the terms that were checked.
 
-**SEC-08.** Only `ai-service` calls LLM providers, over TLS, through the egress proxy ([SEC-40](#transport-and-runtime)), with a key used for nothing else.
+**SEC-08.** Only `ai-service` calls LLM providers, over TLS, only to the hosts on the egress allow-list ([SEC-40](#transport-and-runtime)), with a key used for nothing else.
 
 ## Pseudonymization
 
@@ -107,17 +107,16 @@ The mechanism, the placeholder syntax, and the detectors are defined in [ADR-001
 
 ## Transport and runtime
 
-**SEC-28.** Outside local development, all traffic that enters or leaves the host uses TLS, terminated by the `ingress` service ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)). Traffic between containers stays on the host's internal Docker networks. Only `ingress` publishes ports: the system port, and Grafana on the host loopback interface only.
+**SEC-28.** Outside local development, every connection that leaves a host uses TLS: from the browser to the ingress, from the ingress to `backend`, and from `backend` and `ai-service` to every host they call ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md#ingress), [ADR-0016](../decisions/0016-hosting-on-free-tiers.md)). Browsers reach the system only through the ingress.
 
 **SEC-29.** Containers run as non-root users. Images contain no secrets and no development credentials.
 
-**SEC-40.** Among the application services, only `ai-service` reaches the internet. It does so only through the egress proxy, and only to the LLM provider hosts on the proxy's allow-list ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#egress-control)). The other services are limited by their networks ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md#topology)):
+**SEC-40.** Each component makes outbound connections only to the hosts that [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#egress-control) lists for it:
 
-- `egress-proxy` shares a network only with `ai-service`.
-- `backend`, `backend-migrate`, PostgreSQL, and the observability stack sit only on networks without an internet route, so they can reach no internet host, directly or through the proxy.
-- `ingress` accepts inbound connections and connects only to its upstreams.
+- `ai-service`: only the LLM provider hosts on the egress allow-list;
+- `backend`: only its database, `ai-service`, and the telemetry destination in its settings. Its one-off commands connect only to its database.
 
-The allow-list is a versioned file, and changing it needs the security review of SEC-35.
+[ADR-0016](../decisions/0016-hosting-on-free-tiers.md#outbound-connections) decides how each list is enforced. The allow-list is a versioned file, and changing it needs the security review of SEC-35.
 
 ## Dependencies
 
