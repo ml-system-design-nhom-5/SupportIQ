@@ -15,8 +15,8 @@
 | Task | Evidence and status |
 |---|---|
 | B1 | Worker `98e6469` + reviewed followup `ff6a0fb` integrated as `0a1caae` + `42936f8`; coordinator PostgreSQL safety/boundary/retry subset: 24 passed. Worker reports broader focused suite 60 passed, 1 skipped. |
-| B2 | Work remains isolated in retrieval worker; revised local gold not yet approved. Exploratory results do not certify Recall@3. |
-| B3 | Runner/provenance work remains in worker; published model list prices verified separately at `artifacts/evaluation/pricing/gemini-3.1-flash-lite-20261112.json`. No complete final latency/cost acceptance yet. |
+| B2 | Reviewed worker through `e53744d`, integrated through `b0a3876`. Local gold v2.1 approved before acceptance: oracle-intent Recall@3 0.9839 on 31 answerable cases; OOD retrieval false-answer rate 0.6000 remains visible. Coordinator integrated B1+B2 subset: 84 passed. See `docs/audits/2026-11-12-retrieval-evaluation-integration.md` for scope and limitations. |
+| B3 | Reviewed worker through `34a4e35`, integrated through `55f4eb1`. Coordinator integrated Python suite: 622 passed, 2 skipped, 2 deselected. Reloaded services; bounded live 5-case run p95 3.568s, no technical errors or auto-sends, 2 drafts/3 abstentions. Cost is a partial lower bound, not complete billing evidence. See integration audit. |
 | F1 | Worker baseline `04433ec` integrated as `ba43381`; coordinator finished review fixes after repeated provider503. Final 18 frontend tests, production build and 12 Edge E2E passed. Exact route/check scope and visual review in `docs/design/2026-11-12-frontend-usability-notes.md`. |
 
 Task checklists below describe the intended deliverables; this table and linked reports state actual evidence. Entire-plan completion is not implied by a component pass.
