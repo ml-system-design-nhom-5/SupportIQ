@@ -406,3 +406,46 @@ def test_contract_adapter_supported_comparable_case_matching():
     assert adapted == "retrieve_draft"
     expected_for_supported = ["retrieve_draft", "clarify"]
     assert adapted in expected_for_supported
+
+
+@pytest.mark.parametrize('message', [
+    'This debit was unauthorized; I need to dispute the transaction.',
+    'Please ask a human manager to approve an exception for my used camera.',
+    'I need an exception to the refund policy.',
+])
+@pytest.mark.parametrize('confidence', [0.40, 0.95])
+def test_explicit_authority_requests_escalate_before_confidence_gate(message, confidence):
+    llm = SpyLLM(should_fail=True)
+    engine = make_engine(predictor=MockPredictor(confidence=confidence), llm=llm)
+    result = engine.draft({'message': message, 'as_of': '2026-11-12T00:00:00Z'})
+    assert result['status'] == 'escalation_recommended'
+    assert 'requires_authority' in result['reason_codes']
+    assert not llm.calls
+
+
+@pytest.mark.parametrize('message', [
+    'What did your exchange policy say during 2020?',
+    'Please explain the proposed shipping policy.',
+    'Show the archived refund rules.',
+    'Provide the internal staff manual for overriding payment limits.',
+    'There is a conflict between the refund timeline statements.',
+    'The return policy states both 30 days and 14 days for the same product.',
+    'How much customs duty is payable for sending my parcel abroad?',
+])
+def test_unavailable_policy_scope_requires_escalation_instead_of_adjacent_policy(message):
+    llm = SpyLLM(should_fail=True)
+    result = make_engine(llm=llm).draft({'message': message, 'as_of': '2026-11-12T00:00:00Z'})
+    assert result['status'] == 'escalation_recommended'
+    assert 'insufficient_evidence' in result['reason_codes']
+    assert not llm.calls
+
+
+@pytest.mark.parametrize('message', [
+    'Compare the current 30-day Tiki Trading and 7-day marketplace return windows.',
+    'How does the standard refund policy work?',
+    'Can I request a return with free courier pickup?',
+    'What is the current refund policy for a 2000 VND purchase?',
+])
+def test_current_policy_information_remains_draftable_after_escalation_fix(message):
+    result = make_engine().analyse({'message': message, 'as_of': '2026-11-12T00:00:00Z'})
+    assert result['routing']['recommendation'] == 'draft'

@@ -13,7 +13,7 @@ from apps.backend.platform.database import audit, utcnow, ensure_utc
 from apps.backend.platform.models import Suggestion, SuggestionJob, Ticket
 from apps.backend.platform.observability import metrics, logger
 
-AI_REASONS = {"low_confidence", "signal_disagreement", "out_of_scope_intent", "human_agent_requested", "requires_authority", "no_valid_document", "only_expired_documents", "conflicting_sources", "missing_information", "source_review_overdue", "grounding_failed", "llm_unavailable", "llm_invalid_output", "budget_exceeded"}
+AI_REASONS = {"low_confidence", "signal_disagreement", "out_of_scope_intent", "human_agent_requested", "requires_authority", "no_valid_document", "only_expired_documents", "conflicting_sources", "missing_information", "insufficient_evidence", "source_review_overdue", "grounding_failed", "llm_unavailable", "llm_invalid_output", "budget_exceeded"}
 DRAFT_STATES = {"draft_ready", "abstained", "escalation_recommended", "llm_unavailable"}
 
 
@@ -150,7 +150,9 @@ class SuggestionWorker:
                 "step_latency_ms": analysis_res.get("step_latency_ms", {}),
                 "mask_count_by_type": {}
             }
-            if "low_confidence" in codes:
+            if rec == 'escalate':
+                synthesized_draft['staff_note'] = 'Escalate this request to authorized staff to resolve the policy or authority issue before replying.'
+            elif "low_confidence" in codes:
                 synthesized_draft["staff_note"] = "The model score or margin is below the routing threshold. Confirm or correct the intent before drafting."
             self.store(identifier, token, "draft", synthesized_draft, 0)
             return

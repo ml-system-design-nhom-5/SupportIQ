@@ -48,6 +48,15 @@ def test_sensitive_override_requires_manager_authority():
     assert "requires_authority" in result["routing"]["reason_codes"]
 
 
+def test_uncovered_policy_escalation_is_accepted_by_application_contract():
+    from apps.backend.tickets.jobs import validate_analysis
+    payload = {**request(), 'message': 'Explain the archived shipping policy.'}
+    result = engine().analyse(payload)
+    assert result['routing']['recommendation'] == 'escalate'
+    assert 'insufficient_evidence' in result['routing']['reason_codes']
+    assert validate_analysis(result) is result
+
+
 def test_unknown_placeholder_blocks_draft():
     class UnsafeLLM(LLM):
         def generate(self, *args, **kwargs):

@@ -112,6 +112,8 @@ def e2e_env():
 def ai_engine():
     """Build an AI service engine backed by deterministic offline retrieval and configured mock components."""
     adapter = MagicMock()
+    # Match the real RetrievalAdapter's numeric configuration contract.
+    adapter.relevance_threshold = 0.55
     mock_doc = {
         "source_type": "policy",
         "document_id": "b1000000-0000-0000-0000-000000000001",

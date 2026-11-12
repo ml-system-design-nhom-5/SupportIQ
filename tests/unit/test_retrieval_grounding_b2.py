@@ -206,8 +206,8 @@ def test_chargeback_unauthorized_payment_fails_when_giving_duplicate_charge_advi
         "order_context": {},
     }
     res = engine.draft(req)
-    assert res["status"] == "llm_unavailable"
-    assert "grounding_failed" in res["reason_codes"]
+    assert res["status"] == "escalation_recommended"
+    assert "requires_authority" in res["reason_codes"]
 
 
 def test_sensitive_routing_retains_requires_authority_after_staff_override():

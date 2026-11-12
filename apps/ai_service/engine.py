@@ -20,7 +20,7 @@ SENSITIVE_AUTHORITY_PATTERN = re.compile(
     r"|unauthorized(?:\s+(?:transaction|payment|charge|debit|deduction|activity|use|withdrawal))?"
     r"|not\s+authorized"
     r"|(?:policy|refund|return|order|warranty)\s+exception"
-    r"|(?:make|request|grant|demand|ask\s+for|need|want|seek)\s+(?:an?\s+)?exception"
+    r"|(?:make|request|grant|approve|demand|ask\s+for|need|want|seek)\s+(?:an?\s+)?exception"
     r"|exception\s+(?:request|to|clause)"
     r")\b",
     re.I,
@@ -30,6 +30,39 @@ SENSITIVE_AUTHORITY_PATTERN = re.compile(
 class Engine:
     def __init__(self, model, retriever, llm, versions, policy):
         self.model, self.retriever, self.llm, self.versions, self.policy = model, retriever, llm, versions, policy
+
+    def _policy_scope_requires_review(self, message, evidence):
+        """Reject adjacent policy evidence for explicitly unsupported policy scopes.
+
+        These conservative English-language rules supplement retrieval; they are
+        not a general semantic entailment or contradiction detector.
+        """
+        policy_topic = re.search(r'\b(polic(?:y|ies)|rules?|terms?|refund|returns?|shipping|cancellation)\b', message, re.I)
+        if re.search(r'\binternal\s+(?:staff\s+)?(?:manual|procedures?)\b', message, re.I):
+            return True
+        if policy_topic and re.search(r'\b(unapproved|proposed|draft|archived|discontinued|expired|legacy)\b', message, re.I):
+            return True
+        if policy_topic and (
+            re.search(r'\b(conflict|contradict\w*|inconsistent)\b', message, re.I)
+            or re.search(r'\bstates?\s+both\b.+\bfor\s+the\s+same\b', message, re.I)
+        ):
+            return True
+        if re.search(r'\b(customs|import\s+dut(?:y|ies))\b', message, re.I):
+            if not any(re.search(r'\b(customs|import\s+dut(?:y|ies))\b', item.get('excerpt', ''), re.I) for item in evidence):
+                return True
+        # A four-digit price or order number is not a request for a historical policy.
+        years = [int(year) for year in re.findall(
+            r'\b(?:in|during|from|since|year|old|before|after)\s+(?:the\s+)?(?:old\s+)?'
+            r'((?:19|20)\d{2})\b(?!\s*(?:VND|USD|EUR|GBP)\b)', message, re.I)]
+        if policy_topic and years:
+            matching_docs = [doc for doc in self.retriever.eligible_versions
+                             if any(doc.doc_id == item['document_id'] and str(doc.version) == str(item['version']) for item in evidence)]
+            for year in years:
+                if not any(int(str(doc.metadata.valid_from)[:4]) <= year <=
+                           (int(str(doc.metadata.valid_to)[:4]) if doc.metadata.valid_to else 9999)
+                           for doc in matching_docs):
+                    return True
+        return False
 
     @staticmethod
     def _extract_llm_usage_and_metadata(raw_source: dict) -> tuple[dict, dict]:
@@ -105,6 +138,10 @@ class Engine:
                         codes.append("low_confidence")
                     if "out_of_scope_intent" not in codes:
                         codes.append("out_of_scope_intent")
+        explicit_authority = bool(
+            SENSITIVE_AUTHORITY_PATTERN.search(request["message"])
+            or re.search(r'\b(?:human\s+manager|(?:speak|talk|connect|escalate).{0,30}\bmanager)\b', request['message'], re.I)
+        )
         sensitive = (
             label in self.policy.get("sensitive_action_intents", [])
             or prediction.get("intent") in self.policy.get("sensitive_action_intents", [])
@@ -113,7 +150,7 @@ class Engine:
                 and item.get("probability", 0) >= self.policy.get("default_margin_threshold", 0.1)
                 for item in candidates
             )
-            or bool(SENSITIVE_AUTHORITY_PATTERN.search(request["message"]))
+            or explicit_authority
         )
         if sensitive:
             if "requires_authority" not in codes:
@@ -132,6 +169,9 @@ class Engine:
         if not evidence or (has_scores and max_evidence_score < retrieval_threshold) or "below_relevance_threshold" in retrieved.get("reason_codes", []):
             if "no_valid_document" not in codes:
                 codes.append("no_valid_document")
+        scope_review = self._policy_scope_requires_review(request["message"], evidence)
+        if scope_review:
+            codes.append("insufficient_evidence")
         documents = []
         for index, item in enumerate(evidence, 1):
             original = next((document for document in self.retriever.eligible_versions if document.doc_id == item["document_id"] and str(document.version) == str(item["version"])), None)
@@ -139,7 +179,7 @@ class Engine:
                               "snippet": item["excerpt"], "score": item.get("score"), "rank": index, "validity": "valid",
                               "effective_from": str(original.metadata.valid_from) if original else None,
                               "effective_to": str(original.metadata.valid_to) if original and original.metadata.valid_to else None})
-        recommendation = "escalate" if "human_agent_requested" in codes else "abstain" if set(codes) & {"low_confidence", "out_of_scope_intent", "no_valid_document", "conflicting_sources"} else "draft"
+        recommendation = "escalate" if ("human_agent_requested" in codes or explicit_authority or scope_review) else "abstain" if set(codes) & {"low_confidence", "out_of_scope_intent", "no_valid_document", "conflicting_sources"} else "draft"
         analysis = {"intent": {"label": label, "probability": probability, "confidence_band": "low" if (low or "low_confidence" in codes) else "high" if probability >= .9 else "medium", "source": "staff" if override else "model", "score_kind": "staff_choice" if override else prediction.get("score_kind", "unknown"), "model_mode": "override" if override else prediction.get("model_mode", "unknown"), "verified": False if override else bool(prediction.get("verified", False))},
                     "alternatives": [{"label": item["intent"], "probability": item["probability"], "confidence_band": "low"} for item in candidates if item["intent"] != label][:4],
                     "is_in_scope": label in self.policy["supported_12_intents"], "documents": documents,
@@ -156,7 +196,9 @@ class Engine:
         result = {"analysis": analysis, "reason_codes": codes, "versions": self.versions, "step_latency_ms": analysis["step_latency_ms"], "mask_count_by_type": {}}
         if analysis["routing"]["recommendation"] != "draft":
             result["status"] = "escalation_recommended" if analysis["routing"]["recommendation"] == "escalate" else "abstained"
-            if "low_confidence" in codes:
+            if result['status'] == 'escalation_recommended':
+                result['staff_note'] = 'Escalate this request to authorized staff to resolve the policy or authority issue before replying.'
+            elif "low_confidence" in codes:
                 result["staff_note"] = "The model score or margin is below the routing threshold. Confirm or correct the intent before drafting."
             return result
         try:
