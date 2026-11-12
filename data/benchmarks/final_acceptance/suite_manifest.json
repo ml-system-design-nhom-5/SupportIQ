@@ -1,0 +1,50 @@
+{
+  "benchmark_id": "supportiq-final-acceptance-24",
+  "version": "1.0.0",
+  "status": "frozen_pending_coordinator_approval",
+  "owner": "Worker C (Current-Release Evidence Collector)",
+  "created_at": "2026-11-12T13:05:00Z",
+  "delegation_note": "Frozen synthetic suite locked by Worker C before inference. Gold source expectations derived directly from active approved KB prior to inference; honest separate fixture boundary used for temporal expiry and conflict detection.",
+  "provenance": {
+    "active_kb_file": "data/knowledge/approved_kb.v2.json",
+    "active_kb_sha256": "aaa924c4b48dcd53a14269045b278b66f6e5e8ae9d1b614cd59b757102b78594",
+    "active_kb_release_file": "apps/ai_service/kb-release.json",
+    "active_kb_release_sha256": "33cf05b50c25384fbb208cd0c0c5cae71991d29a0f754cb1b20a1d6d7285cdaa",
+    "cases_file": "data/benchmarks/final_acceptance/cases.jsonl",
+    "cases_sha256": "e07a05f8f455d505fdb5cbb249a750b00265d0c4a132b39d22c392a99448444e",
+    "injected_fixtures_file": "data/benchmarks/final_acceptance/injected_robustness_fixtures.json",
+    "injected_fixtures_sha256": "a630e28bd643a4ca216337671432c23b7da2508847bcaf0bfb4ffbaec8990971",
+    "paired_tasks_file": "data/benchmarks/final_acceptance/paired_agent_tasks.json",
+    "paired_tasks_sha256": "1fce7e94728cc4479046be4c149ffc1aa003a57309705da14f92b1ac418ce827"
+  },
+  "total_cases": 24,
+  "slice_counts": {
+    "product_12_answerable": 12,
+    "sensitive_escalation": 2,
+    "human_agent_escalation": 1,
+    "unsupported_no_source": 2,
+    "out_of_domain": 3,
+    "expired_injected_boundary": 2,
+    "conflict_injected_boundary": 2
+  },
+  "fixture_boundaries": {
+    "active_kb_cases": 20,
+    "injected_synthetic_cases": 4
+  },
+  "derived_active_doc_versions": {
+    "POL-RET-001": "2.0",
+    "POL-RET-002": "2.0",
+    "POL-RET-003": "2.0",
+    "POL-REFUND-001": "1.0",
+    "POL-REFUND-002": "2.0",
+    "POL-REFUND-007": "1.0",
+    "POL-ORD-001": "1.0",
+    "POL-ORD-002": "1.0",
+    "POL-ORD-003": "1.0",
+    "POL-SHIP-001": "1.0",
+    "POL-SHIP-002": "1.0",
+    "POL-SHIP-004": "1.0",
+    "POL-PAY-001": "1.0",
+    "POL-PAY-004": "1.0"
+  }
+}
