@@ -140,7 +140,8 @@ class MockAcceptanceGatewayHandler(http.server.BaseHTTPRequestHandler):
     active_docs: Dict[Tuple[str, str], Dict[str, Any]] = {}
     injected_docs: Dict[Tuple[str, str], Dict[str, Any]] = {}
     allowed_release_versions: Dict[str, str] = {}
-    server_mode: str = "normal"  # "normal", "error", "timeout"
+    server_mode: str = "normal"  # "normal", "error", "timeout", "abstain_initial"
+    initial_abstain_cases: Set[str] = set()
 
     def log_message(self, format, *args):
         # Suppress stdout noise during testing
@@ -193,9 +194,22 @@ class MockAcceptanceGatewayHandler(http.server.BaseHTTPRequestHandler):
                     best_score = score
                     matched_case = c
 
-        intent_label = matched_case.get("intent", "return_policy") if matched_case else "return_policy"
-        expected_action = matched_case.get("expected_action", "draft") if matched_case else "draft"
-        expected_reasons = matched_case.get("expected_reasons", []) if matched_case else []
+        intent_override = body.get("intent_override")
+        initial_abstain = getattr(self.server, "initial_abstain_cases", set())
+        case_id = matched_case.get("id") if matched_case else None
+
+        if intent_override:
+            intent_label = intent_override
+            expected_action = "draft"
+            expected_reasons = []
+        elif case_id in initial_abstain or getattr(self.server, "mode", self.server_mode) == "abstain_initial":
+            intent_label = matched_case.get("intent", "return_policy") if matched_case else "return_policy"
+            expected_action = "abstain"
+            expected_reasons = ["low_confidence"]
+        else:
+            intent_label = matched_case.get("intent", "return_policy") if matched_case else "return_policy"
+            expected_action = matched_case.get("expected_action", "draft") if matched_case else "draft"
+            expected_reasons = matched_case.get("expected_reasons", []) if matched_case else []
         expected_docs = matched_case.get("expected_docs", []) if matched_case else []
 
         # Build analysis response
@@ -218,8 +232,12 @@ class MockAcceptanceGatewayHandler(http.server.BaseHTTPRequestHandler):
         analysis_res = {
             "intent": {
                 "label": intent_label,
-                "probability": 0.95 if expected_action == "draft" else 0.50,
-                "confidence_band": "high" if expected_action == "draft" else "medium",
+                "probability": 1.0 if intent_override else (0.95 if expected_action == "draft" else 0.44),
+                "confidence_band": "high" if (intent_override or expected_action == "draft") else "low",
+                "source": "staff" if intent_override else "model",
+                "score_kind": "staff_choice" if intent_override else "uncalibrated_softmax",
+                "model_mode": "override" if intent_override else "trained",
+                "verified": False if intent_override else True,
             },
             "routing": {
                 "recommendation": expected_action,
@@ -323,12 +341,19 @@ class EphemeralMockAIGateway:
 
     def __init__(
         self,
-        cases: List[Dict[str, Any]],
-        active_docs: Dict[Tuple[str, str], Dict[str, Any]],
-        injected_docs: Dict[Tuple[str, str], Dict[str, Any]],
-        allowed_release_versions: Dict[str, str],
+        cases: Optional[List[Dict[str, Any]]] = None,
+        active_docs: Optional[Dict[Tuple[str, str], Dict[str, Any]]] = None,
+        injected_docs: Optional[Dict[Tuple[str, str], Dict[str, Any]]] = None,
+        allowed_release_versions: Optional[Dict[str, str]] = None,
         mode: str = "normal",
     ):
+        if cases is None:
+            col = AcceptanceEvidenceCollector(mode="mock")
+            cases = col.cases
+            active_docs = col.active_docs
+            injected_docs = col.injected_docs
+            allowed_release_versions = col.allowed_release_versions
+
         handler_cls = MockAcceptanceGatewayHandler
         handler_cls.cases_by_query = {c["query"]: c for c in cases}
         handler_cls.active_docs = active_docs
@@ -338,12 +363,16 @@ class EphemeralMockAIGateway:
 
         self.server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), handler_cls)
         self.server.mode = mode
+        self.server.initial_abstain_cases = set()
         self.port = self.server.server_address[1]
         self.base_url = f"http://127.0.0.1:{self.port}"
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
 
     def set_mode(self, mode: str):
         self.server.mode = mode
+
+    def set_initial_abstain_cases(self, cases: Set[str]):
+        self.server.initial_abstain_cases = set(cases)
 
     def start(self):
         self.thread.start()
