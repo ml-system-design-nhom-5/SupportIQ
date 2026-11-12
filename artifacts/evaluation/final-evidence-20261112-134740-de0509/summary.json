@@ -1,0 +1,57 @@
+{
+  "run_id": "final-evidence-20261112-134740-de0509",
+  "created_at": "2026-11-12T13:47:51.440384+00:00",
+  "git_commit": "cb3154f1113993db4840ae0918401f0dcfa22658",
+  "mode": "mock",
+  "acceptance_status": "mock_dry_run_pending_coordinator_live_authorization",
+  "total_cases_submitted": 24,
+  "total_all_criteria_passed": 24,
+  "total_errors": 0,
+  "application_metrics": {
+    "cases_submitted": 20,
+    "collection_success_count": 20,
+    "collection_failure_count": 0,
+    "action_correctness_count": 20,
+    "reasons_correctness_count": 20,
+    "authority_check_passed_count": 20,
+    "source_verification_passed_count": 20,
+    "all_criteria_passed_count": 20,
+    "errors": 0,
+    "customer_tickets_inspected": 20,
+    "customer_no_auto_send_verified_all": true,
+    "p50_latency_ms": 148.34,
+    "p95_latency_ms": 199.52,
+    "target_p95_under_12s": true
+  },
+  "component_fixture_metrics": {
+    "cases_submitted": 4,
+    "collection_success_count": 4,
+    "expiry_filtering_verified_count": 2,
+    "conflict_detection_verified_count": 2,
+    "source_verification_passed_count": 4,
+    "all_criteria_passed_count": 4,
+    "errors": 0,
+    "p50_latency_ms": 82.59,
+    "p95_latency_ms": 4300.07
+  },
+  "slice_distribution": {
+    "conflict_injected_boundary": 2,
+    "expired_injected_boundary": 2,
+    "human_agent_escalation": 1,
+    "out_of_domain": 3,
+    "product_12_answerable": 12,
+    "sensitive_escalation": 2,
+    "unsupported_no_source": 2
+  },
+  "fixture_boundaries": {
+    "active_kb": 20,
+    "injected_synthetic": 4
+  },
+  "component_evidence_distribution": {
+    "application_postgresql_gateway": 20,
+    "retrieval_adapter_injected_fixture_execution": 4
+  },
+  "immutable_source_snapshots_captured": 18,
+  "manifest_cases_sha256": "fcb1007bf026e7406f3270ccf54770f262ed22a708c2fcf3aae3600195641b9b",
+  "disclaimer": "AI claim grading and manual/assisted agent trials are delegated to coordinator; no manual answers, times, or signoffs invented. In mock mode, synthetic gold responses are dry-run verification only and are never used to assert 100% production safety. Local evaluation approved by coordinator under delegated AI stakeholder authority (msg_01db6107a2e0); no instructor or crossgroup claim."
+}

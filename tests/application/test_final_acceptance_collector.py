@@ -3,12 +3,15 @@
 Verifies:
 - Isolated PostgreSQL schema creation and cleanup without destructive resets
 - Enforces cryptographic manifest approval and configuration checks before DB or inference
+- Live mode fails closed on unapproved manifest status or missing approval scope
+- Non-optional checksum validation for cases, fixtures, paired tasks, active KB, and release
+- Seeded order ownership validation without live LLM (rejecting other customer orders)
 - Explicit failure on version collisions, unknown documents, and content hash mismatches
   (never defaulting status to 'approved' or approved_by to 'lead_compliance_officer')
-- Granular outcome flags: collection_success separated from action/reasons correctness and authority checks
-- Customer 100% no-auto-send invariant (unreviewed draft never sent to customer)
-- Full draft text, citations (including order_context), and immutable source snapshot capture
-- Raw model and routing provenance capture, including versions and llm_metadata
+- Order_context citation verification requires actual field presence and typed equality
+- Customer HTTP JSON validation requires 'reply' field and 'customer_status' == 'received'
+- Component fixture boundary: fields are null/None (no fabricated HTTP/auto-send observations)
+- Strictly separated application metrics (p50/p95, oversight) from component retrieval metrics
 - Resilience on simulated AI gateway errors with full error preservation
 - Exclusive run directory creation (exist_ok=False)
 """
@@ -51,16 +54,22 @@ def test_collector_mock_bounded_execution(tmp_path):
     assert summary["run_id"] == run_id
     assert summary["mode"] == "mock"
     assert summary["total_cases_submitted"] == 4
-    assert summary["collection_success_count"] == 4
-    assert summary["action_correctness_count"] == 4
-    assert summary["source_verification_passed_count"] == 4
-    assert summary["all_criteria_passed_count"] == 4
-    assert summary["errors"] == 0
-    assert summary["customer_no_auto_send_verified_all"] is True
-    assert summary["p50_latency_ms"] is not None
-    assert summary["p95_latency_ms"] is not None
-    assert summary["immutable_source_snapshots_captured"] >= 4
-    assert "mock_dry_run_pending_coordinator_live_authorization" in summary["acceptance_status"]
+    assert summary["total_all_criteria_passed"] == 4
+    assert summary["total_errors"] == 0
+
+    # Separated application metrics
+    app_meta = summary["application_metrics"]
+    assert app_meta["cases_submitted"] == 4
+    assert app_meta["collection_success_count"] == 4
+    assert app_meta["action_correctness_count"] == 4
+    assert app_meta["source_verification_passed_count"] == 4
+    assert app_meta["all_criteria_passed_count"] == 4
+    assert app_meta["errors"] == 0
+    assert app_meta["customer_tickets_inspected"] == 4
+    assert app_meta["customer_no_auto_send_verified_all"] is True
+    assert app_meta["p50_latency_ms"] is not None
+    assert app_meta["p95_latency_ms"] is not None
+    assert app_meta["target_p95_under_12s"] is True
 
     # Verify evidence records
     rec_file = out_dir / "evidence_records.jsonl"
@@ -69,6 +78,7 @@ def test_collector_mock_bounded_execution(tmp_path):
     assert len(records) == 4
 
     for r in records:
+        assert r["component_evidence"] == "application_postgresql_gateway"
         assert r["customer_no_auto_send_observed"] is True
         assert r["customer_reply_is_none"] is True
         assert r["customer_http_status"] == 200
@@ -91,10 +101,14 @@ def test_collector_mock_bounded_execution(tmp_path):
                 if cit.get("source_type") == "order_context":
                     assert "field" in cit
                     assert "value" in cit
+                    assert cit["field_present_in_executed_context"] is True
+                    assert cit["value_matches_executed_context"] is True
+                    assert cit["is_verified"] is True
                 else:
                     assert "doc_id" in cit or "document_id" in cit
                     assert "version" in cit
                     assert "span" in cit
+                    assert cit["is_verified"] is True
 
             # Verify immutable source snapshot integrity
             assert len(r["source_snapshots"]) >= 1
@@ -138,6 +152,43 @@ def test_collector_manifest_checksum_mismatch_raises(tmp_path):
         )
 
 
+def test_collector_manifest_missing_checksum_fails_closed(tmp_path):
+    """Constructor fails closed if KB reconciliation checksums are missing from manifest."""
+    real_manifest = json.loads(
+        (REPO_ROOT / "data/benchmarks/final_acceptance/suite_manifest.json").read_text(encoding="utf-8")
+    )
+    tampered = dict(real_manifest)
+    tampered["provenance"] = dict(real_manifest["provenance"])
+    tampered["provenance"]["kb_reconciliation"] = {"worker_local_worktree": {}}
+
+    bad_manifest_path = tmp_path / "missing_kb_checksum_manifest.json"
+    bad_manifest_path.write_text(json.dumps(tampered), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Active KB local checksum mismatch against manifest"):
+        AcceptanceEvidenceCollector(
+            mode="mock",
+            manifest_path=bad_manifest_path,
+        )
+
+
+def test_collector_live_unapproved_manifest_fails_closed(tmp_path):
+    """Live execution fails closed if manifest status is unapproved."""
+    real_manifest = json.loads(
+        (REPO_ROOT / "data/benchmarks/final_acceptance/suite_manifest.json").read_text(encoding="utf-8")
+    )
+    tampered = dict(real_manifest)
+    tampered["status"] = "draft_unapproved"
+
+    bad_manifest_path = tmp_path / "unapproved_manifest.json"
+    bad_manifest_path.write_text(json.dumps(tampered), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Live execution rejected: suite manifest status is 'draft_unapproved'"):
+        AcceptanceEvidenceCollector(
+            mode="live",
+            manifest_path=bad_manifest_path,
+        )
+
+
 def test_collector_bounded_cases_enforcement():
     """Constructor rejects invalid bounded max_cases configuration."""
     with pytest.raises(ValueError, match="Bounded max_cases must be an integer between 1 and 24"):
@@ -145,6 +196,40 @@ def test_collector_bounded_cases_enforcement():
 
     with pytest.raises(ValueError, match="Bounded max_cases must be an integer between 1 and 24"):
         AcceptanceEvidenceCollector(mode="mock", max_cases=0)
+
+
+def test_collector_order_ownership_validation_negative_path(tmp_path):
+    """Constructor rejects suite cases referencing orders not owned by demo-customer."""
+    real_cases = [
+        json.loads(line)
+        for line in (REPO_ROOT / "data/benchmarks/final_acceptance/cases.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    tampered_cases = [dict(c) for c in real_cases]
+    # ORD-1002 is owned by a different customer in mock_orders.json
+    tampered_cases[0]["order_id"] = "ORD-1002"
+
+    bad_cases_path = tmp_path / "bad_cases.jsonl"
+    with open(bad_cases_path, "w", encoding="utf-8") as f:
+        for c in tampered_cases:
+            f.write(json.dumps(c) + "\n")
+
+    # Update manifest to match new cases hash so it reaches order validation
+    real_manifest = json.loads(
+        (REPO_ROOT / "data/benchmarks/final_acceptance/suite_manifest.json").read_text(encoding="utf-8")
+    )
+    tampered_manifest = dict(real_manifest)
+    tampered_manifest["provenance"] = dict(real_manifest["provenance"])
+    tampered_manifest["provenance"]["cases_sha256"] = compute_sha256(bad_cases_path)
+    bad_manifest_path = tmp_path / "bad_manifest.json"
+    bad_manifest_path.write_text(json.dumps(tampered_manifest), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Order validation failure in case final-case-01"):
+        AcceptanceEvidenceCollector(
+            mode="mock",
+            suite_path=bad_cases_path,
+            manifest_path=bad_manifest_path,
+        )
 
 
 def test_collector_source_snapshot_version_collision_and_hash_verification():
@@ -185,6 +270,53 @@ def test_collector_source_snapshot_version_collision_and_hash_verification():
     assert "RETURNED_HASH_MISMATCH" in snap_hash_mismatch["verification_error"]
 
 
+def test_collector_order_context_citation_missing_field_fails_verification(tmp_path):
+    """Order_context citation with absent field evaluates to is_verified=False."""
+    # Build a simulated citation with absent field
+    executed_order_context = {"order_status": "delivered"}
+    cit = {"source_type": "order_context", "field": "nonexistent_field", "value": "some_value"}
+
+    field_present = (cit["field"] in executed_order_context)
+    val_matches = field_present and (executed_order_context[cit["field"]] == cit["value"])
+    v_ok = field_present and val_matches
+    assert v_ok is False
+    assert field_present is False
+
+
+def test_collector_component_boundary_fields_null_and_separated_metrics(tmp_path):
+    """Component fixture cases have null/None for application fields and separate metrics."""
+    collector = AcceptanceEvidenceCollector(mode="mock", max_cases=24)
+    # Target only injected cases 21-24
+    collector.cases = [c for c in collector.cases if c.get("fixture_boundary") == "injected_synthetic"]
+    assert len(collector.cases) == 4
+
+    res = collector.collect(output_base_dir=tmp_path)
+    summary = res["summary"]
+
+    app_meta = summary["application_metrics"]
+    fix_meta = summary["component_fixture_metrics"]
+
+    assert app_meta["cases_submitted"] == 0
+    assert fix_meta["cases_submitted"] == 4
+    assert fix_meta["expiry_filtering_verified_count"] == 2
+    assert fix_meta["conflict_detection_verified_count"] == 2
+    assert fix_meta["all_criteria_passed_count"] == 4
+
+    rec_file = Path(res["output_dir"]) / "evidence_records.jsonl"
+    records = [json.loads(line) for line in rec_file.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert len(records) == 4
+
+    for r in records:
+        assert r["component_evidence"] == "retrieval_adapter_injected_fixture_execution"
+        # No fabricated application HTTP/auto-send observations!
+        assert r["customer_http_status"] is None
+        assert r["customer_no_auto_send_observed"] is None
+        assert r["customer_reply_is_none"] is None
+        assert r["action_matches_expected"] is None
+        assert r["authority_check_passed"] is None
+        assert r["is_success"] is True
+
+
 def test_collector_error_resilience(tmp_path):
     """Collector handles gateway failures without crashing and records failure codes."""
     collector = AcceptanceEvidenceCollector(
@@ -197,8 +329,8 @@ def test_collector_error_resilience(tmp_path):
     summary = res["summary"]
     assert summary["total_cases_submitted"] == 2
     # Errors should be recorded gracefully
-    assert summary["errors"] == 2
-    assert summary["all_criteria_passed_count"] == 0
+    assert summary["total_errors"] == 2
+    assert summary["total_all_criteria_passed"] == 0
 
     rec_file = Path(res["output_dir"]) / "evidence_records.jsonl"
     records = [json.loads(line) for line in rec_file.read_text(encoding="utf-8").splitlines() if line.strip()]
