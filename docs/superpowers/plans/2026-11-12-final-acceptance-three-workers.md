@@ -72,6 +72,10 @@ Worker C commits `34d4784`, `cb3154f`, `85ba113`, `f632e12`, and `b52dc9f` were 
 
 The coordinator-owned supplement is frozen at `data/benchmarks/final_acceptance_supplement/manifest.json` (11 unchanged original cases, SHA-256 `5659c7070064aa36b328a7e4087ab939c43d210863591e2dff3642431832dc0a`). Neither that supplement nor the final 24-case suite has been executed against the final integrated release. Worker B accounting corrections, gateway reload, live collection, semantic claim grading, and paired agent trials remain outstanding.
 
+### Worker B delivery recovery
+
+The first B dispatch `ctx_ddca3bb61436` remained open with an idle terminal. Inspection showed the coordinator reply and review messages unread with null delivery timestamps; a successful `send` receipt had not proved worker resumption. After confirming this delivery failure, a guarded stop confirmed `ptyKilled=true`. The same task `task_70a55303a942` was retried in the existing accounting workspace as dispatch `ctx_62e9dc4efdac`, terminal `term_b1a4118b-8911-4d53-b96d-6814d0a86c0b`; uncommitted work was preserved. The new terminal displayed the assignment, a working indicator, and a queued orchestration notification. Review corrections were sent to the new dispatch as `msg_401f9117eb88`. Implementation completion and receipt of that guidance still require worker evidence.
+
 - [ ] Approve independent local gold before scored runs and synchronize workers on reviewed commits. Review changes and tests before cherry-picking; resolve overlap preserving B1 safety and persisted metadata.
 - [ ] Run the current-model routing suite and bounded live application evaluation after final reload. AI-grade all factual claims against captured sources; separate supported, unsupported, unverifiable and business-inappropriate advice. Target >=90% supported; mandatory escalation scenarios all correct, no auto-sends/transactions.
 - [ ] Execute paired agent trials on >=12 same-case tasks, record real wall times, order, outputs and approve/edit/reject decisions; report denominators and simulation limits.
