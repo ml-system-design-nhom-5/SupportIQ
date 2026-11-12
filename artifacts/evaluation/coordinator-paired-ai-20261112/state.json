@@ -1,0 +1,247 @@
+{
+  "index": 24,
+  "active": null,
+  "events": [
+    {
+      "case_id": "final-case-01",
+      "condition": "assisted",
+      "started_at": "2026-11-12T16:46:26.390114+00:00",
+      "started_monotonic_ns": 42306902743000,
+      "completed_at": "2026-11-12T16:46:35.539960+00:00",
+      "duration_seconds": 9.1499054,
+      "response": "For products sold directly by Tiki Trading, you may request a return or exchange within 30 days after successful delivery. For marketplace partner sellers, the window is 7 days after delivery. Items must retain their security seals, original packaging, accessories, invoice and promotional gifts, with no signs of use or washing.",
+      "decision": "manual_fallback",
+      "reason": "No generated draft was available; composed from the provided return policy."
+    },
+    {
+      "case_id": "final-case-01",
+      "condition": "manual",
+      "started_at": "2026-11-12T16:46:35.539960+00:00",
+      "started_monotonic_ns": 42316052664900,
+      "completed_at": "2026-11-12T16:46:42.944428+00:00",
+      "duration_seconds": 7.403896,
+      "response": "The return or exchange window starts on the date of successful delivery: 30 days for items distributed directly by Tiki Trading and 7 days for items from marketplace partner sellers. Returned items must be unused, with intact security seals and all original packaging, accessories, invoices and promotional gifts."
+    },
+    {
+      "case_id": "final-case-02",
+      "condition": "manual",
+      "started_at": "2026-11-12T16:46:42.944428+00:00",
+      "started_monotonic_ns": 42323456577000,
+      "completed_at": "2026-11-12T16:46:50.527660+00:00",
+      "duration_seconds": 7.5842011,
+      "response": "In the Tiki app, open Account > Order Management, choose the delivered order and tap Request Return/Exchange. Select the reason and upload 3-5 clear photos or a video showing the defect. After Tiki receives the request, a courier collects the item free of charge within 1-2 business days. You can alternatively drop it off at a designated Tiki partner post office."
+    },
+    {
+      "case_id": "final-case-02",
+      "condition": "assisted",
+      "started_at": "2026-11-12T16:46:50.527660+00:00",
+      "started_monotonic_ns": 42331040793800,
+      "completed_at": "2026-11-12T16:47:01.343337+00:00",
+      "duration_seconds": 10.8150282,
+      "response": "To submit a return or exchange request, go to 'Account' > 'Order Management' in the Tiki app and select the order with 'Delivered' status. Tap 'Request Return/Exchange', select your reason, and upload 3-5 clear photos or a video showing the product defect. Once your request is received, a courier will pick up the item from your address for free within 1-2 business days, or you may choose to drop off the package at a designated Tiki partner post office.",
+      "decision": "approve",
+      "reason": "Navigation, evidence upload, free pickup timing and partner dropoff all match POL-RET-002:2.0."
+    },
+    {
+      "case_id": "final-case-03",
+      "condition": "assisted",
+      "started_at": "2026-11-12T16:47:01.343337+00:00",
+      "started_monotonic_ns": 42341855838400,
+      "completed_at": "2026-11-12T16:47:09.864170+00:00",
+      "duration_seconds": 8.5210434,
+      "response": "Refund requests are processed only if an order is successfully canceled prior to dispatch, or once the Tiki warehouse receives and inspects the returned product to standard. Please note that all refund decisions must undergo reconciliation by authorized customer service personnel. Regarding your query on shipping fees, original shipping fees are non-refundable if the return reason is based on personal preference.",
+      "decision": "approve",
+      "reason": "All four refund prerequisites, authority and shipping-fee propositions match POL-REFUND-001. This describes policy and does not approve or execute a refund."
+    },
+    {
+      "case_id": "final-case-03",
+      "condition": "manual",
+      "started_at": "2026-11-12T16:47:09.864170+00:00",
+      "started_monotonic_ns": 42350376898200,
+      "completed_at": "2026-11-12T16:47:18.544058+00:00",
+      "duration_seconds": 8.6799942,
+      "response": "A refund can be processed after an order is successfully cancelled before dispatch, or after the warehouse receives and satisfactorily inspects the returned product. Authorized customer service personnel must reconcile the refund decision. If you return an item because of personal preference, the original shipping fee is not refundable."
+    },
+    {
+      "case_id": "final-case-04",
+      "condition": "manual",
+      "started_at": "2026-11-12T16:47:18.544058+00:00",
+      "started_monotonic_ns": 42359056912100,
+      "completed_at": "2026-11-12T16:47:25.947355+00:00",
+      "duration_seconds": 7.4038829,
+      "response": "Refund timing depends on the original payment method: linked e-wallets such as MoMo, ZaloPay, VNPay and Viettel Money take 1-2 business days; domestic Napas ATM cards take 3-5 business days; international Visa, Mastercard and JCB cards take 7-15 business days. The international-card timeline excludes Saturdays, Sundays and public holidays."
+    },
+    {
+      "case_id": "final-case-04",
+      "condition": "assisted",
+      "started_at": "2026-11-12T16:47:25.947355+00:00",
+      "started_monotonic_ns": 42366460814200,
+      "completed_at": "2026-11-12T16:47:32.668293+00:00",
+      "duration_seconds": 6.7196658,
+      "response": "For a linked e-wallet refund, allow 1-2 business days. Domestic Napas ATM card refunds take 3-5 business days, while international Visa, Mastercard or JCB card refunds take 7-15 business days, excluding Saturdays, Sundays and public holidays. These windows depend on the original payment method.",
+      "decision": "manual_fallback",
+      "reason": "The cached assisted diagnostic ended llm_unavailable; response was composed from POL-REFUND-002."
+    },
+    {
+      "case_id": "final-case-05",
+      "condition": "assisted",
+      "started_at": "2026-11-12T16:47:32.668293+00:00",
+      "started_monotonic_ns": 42373180502400,
+      "completed_at": "2026-11-12T16:47:44.260288+00:00",
+      "duration_seconds": 11.5922961,
+      "response": "You can monitor the progress of your refund by navigating to 'Account Details' > 'Return & Refund Management' on Tiki. In this section, you can view your refund status, such as 'Reconciliation Processing', 'Transferred to Bank', or 'Refund Succeeded'. Once the status is 'Refund Succeeded', the bank's transaction tracing reference code will be available for you to view.",
+      "decision": "approve",
+      "reason": "Location, status names and tracing-code availability match POL-REFUND-007. No false claim that this under-review refund has already succeeded."
+    },
+    {
+      "case_id": "final-case-05",
+      "condition": "manual",
+      "started_at": "2026-11-12T16:47:52.271430+00:00",
+      "started_monotonic_ns": 42392784492200,
+      "completed_at": "2026-11-12T16:47:58.362234+00:00",
+      "duration_seconds": 6.0899749,
+      "response": "Open Account Details > Return & Refund Management to check refund progress. Reconciliation Processing means support is reviewing the refund; Transferred to Bank means funds have been dispatched and await bank credit; Refund Succeeded is shown with the bank transaction tracing reference code."
+    },
+    {
+      "case_id": "final-case-06",
+      "condition": "manual",
+      "started_at": "2026-11-12T16:47:58.362234+00:00",
+      "started_monotonic_ns": 42398874483600,
+      "completed_at": "2026-11-12T16:48:07.966251+00:00",
+      "duration_seconds": 9.6040668,
+      "response": "Yes. You can use Cancel Order in the Tiki app while the order is Processing or Awaiting Packing, provided it has not been handed to the shipping carrier. Once it is In Transit, direct cancellation is disabled. A cancelled prepaid order is refunded according to the refund policy; no cancellation has been performed by this message."
+    },
+    {
+      "case_id": "final-case-06",
+      "condition": "assisted",
+      "started_at": "2026-11-12T16:48:07.966251+00:00",
+      "started_monotonic_ns": 42408478566100,
+      "completed_at": "2026-11-12T16:48:15.787391+00:00",
+      "duration_seconds": 7.8210536,
+      "response": "You may tap Cancel Order in the app when the order is Awaiting Packing or Processing and has not yet been handed to the courier. Direct cancellation becomes unavailable once it changes to In Transit. Refunds for cancelled prepaid orders follow the refund policy.",
+      "decision": "manual_fallback",
+      "reason": "No draft was produced after the intent override; composed conditional cancellation guidance from POL-ORD-002 without executing a transaction."
+    },
+    {
+      "case_id": "final-case-07",
+      "condition": "assisted",
+      "started_at": "2026-11-12T16:48:15.787391+00:00",
+      "started_monotonic_ns": 42416299635100,
+      "completed_at": "2026-11-12T16:48:22.146715+00:00",
+      "duration_seconds": 6.3599735,
+      "response": "To view the details of each transit hub your parcel has passed through, please navigate to 'My Orders' on the Tiki app and tap on your tracking code.",
+      "decision": "approve",
+      "reason": "The policy explicitly describes My Orders and tapping the tracking code to view transit hubs. No specific tracking code or hub event is invented from the null tracking snapshot."
+    },
+    {
+      "case_id": "final-case-07",
+      "condition": "manual",
+      "started_at": "2026-11-12T16:48:22.146715+00:00",
+      "started_monotonic_ns": 42422659625300,
+      "completed_at": "2026-11-12T16:48:29.517510+00:00",
+      "duration_seconds": 7.3700226,
+      "response": "Go to My Orders in the Tiki app and tap the tracking code. The tracking view shows the transit hubs the parcel has passed through."
+    },
+    {
+      "case_id": "final-case-08",
+      "condition": "manual",
+      "started_at": "2026-11-12T16:48:29.517510+00:00",
+      "started_monotonic_ns": 42430029666900,
+      "completed_at": "2026-11-12T16:48:41.939635+00:00",
+      "duration_seconds": 12.4222827,
+      "response": "Base shipping fees are 18,000-25,000 VND within a city and 35,000-55,000 VND between provinces, calculated from distance and parcel weight. TikiPRO members or orders worth at least 149,000 VND can apply Freeship vouchers with shipping-discount limits of up to 30,000-70,000 VND. Check checkout for the final shipping fee."
+    },
+    {
+      "case_id": "final-case-08",
+      "condition": "assisted",
+      "started_at": "2026-11-12T16:48:41.939635+00:00",
+      "started_monotonic_ns": 42442451965600,
+      "completed_at": "2026-11-12T16:48:50.996944+00:00",
+      "duration_seconds": 9.0575438,
+      "response": "Tiki calculates shipping by distance and parcel weight. Intra-city base fees are 18,000-25,000 VND; inter-provincial base fees are 35,000-55,000 VND. TikiPRO members or orders of at least 149,000 VND may use Freeship vouchers for discounts of up to 30,000-70,000 VND. The final fee is shown at checkout.",
+      "decision": "manual_fallback",
+      "reason": "No automatic draft is available. Composed from the policy while retaining the up-to discount qualifier and checkout confirmation."
+    },
+    {
+      "case_id": "final-case-09",
+      "condition": "assisted",
+      "started_at": "2026-11-12T16:48:59.493499+00:00",
+      "started_monotonic_ns": 42460006605000,
+      "completed_at": "2026-11-12T16:49:07.058768+00:00",
+      "duration_seconds": 7.564692,
+      "response": "TikiNOW Express has an estimated delivery time within 2 hours in inner Ho Chi Minh City districts. Severe weather or peak holiday periods can extend delivery by 1-2 additional days.",
+      "decision": "manual_fallback",
+      "reason": "The automatic request had no draft. Used the TikiNOW service estimate and its documented weather/holiday exception."
+    },
+    {
+      "case_id": "final-case-09",
+      "condition": "manual",
+      "started_at": "2026-11-12T16:49:07.058768+00:00",
+      "started_monotonic_ns": 42467571314300,
+      "completed_at": "2026-11-12T16:49:14.867263+00:00",
+      "duration_seconds": 7.8089421,
+      "response": "For inner districts of Ho Chi Minh City, TikiNOW Express is estimated to deliver within 2 hours. Allow for a possible extension of 1-2 days during severe weather or peak holiday seasons."
+    },
+    {
+      "case_id": "final-case-10",
+      "condition": "manual",
+      "started_at": "2026-11-12T16:49:14.867263+00:00",
+      "started_monotonic_ns": 42475380272100,
+      "completed_at": "2026-11-12T16:49:32.216183+00:00",
+      "duration_seconds": 17.3487841,
+      "response": "For the delivered-but-not-received issue you reported, please contact Tiki Customer Support at 1900 6035 within 24-48 hours. The dispatch team will verify courier GPS logs and coordinate with the delivery hub to investigate. Your linked order is ORD-1005; its current record shows a delay, so the delivery-status discrepancy needs verification."
+    },
+    {
+      "case_id": "final-case-10",
+      "condition": "assisted",
+      "started_at": "2026-11-12T16:49:32.216183+00:00",
+      "started_monotonic_ns": 42492729072600,
+      "completed_at": "2026-11-12T16:49:47.901359+00:00",
+      "duration_seconds": 15.6858889,
+      "response": "If a courier marks an order as Successfully Delivered but you have not received it, please contact Tiki Customer Support within 24-48 hours at 1900 6035. The dispatch team will verify courier GPS logs and coordinate with the delivery hub to investigate. Your linked order ORD-1005 currently shows delayed in the available record, so the reported delivered status needs verification.",
+      "decision": "edit",
+      "reason": "Replaced unresolved [PHONE_OR_NUMBER] with the verified public policy hotline, removed a redundant request for the linked order ID, and made the conflicting order status explicit without claiming delivery or investigation already occurred."
+    },
+    {
+      "case_id": "final-case-11",
+      "condition": "assisted",
+      "started_at": "2026-11-12T16:49:47.901359+00:00",
+      "started_monotonic_ns": 42508414978400,
+      "completed_at": "2026-11-12T16:49:55.051979+00:00",
+      "duration_seconds": 7.1499137,
+      "response": "Cosmetics with unsealed protective packaging cannot be returned just because you changed your mind. These items are eligible for return or exchange only if Tiki sent the wrong item or there is a verified manufacturer defect.",
+      "decision": "manual_fallback",
+      "reason": "No automatic draft was available. Used the specific cosmetics exclusion and preserved the documented exceptions."
+    },
+    {
+      "case_id": "final-case-11",
+      "condition": "manual",
+      "started_at": "2026-11-12T16:49:55.051979+00:00",
+      "started_monotonic_ns": 42515564908400,
+      "completed_at": "2026-11-12T16:50:03.344855+00:00",
+      "duration_seconds": 8.2927361,
+      "response": "If the protective packaging of the cosmetics has been unsealed, a change-of-mind return is not supported. Return or exchange is available only for a wrong item delivered by Tiki or a verified manufacturer defect."
+    },
+    {
+      "case_id": "final-case-12",
+      "condition": "manual",
+      "started_at": "2026-11-12T16:50:03.344855+00:00",
+      "started_monotonic_ns": 42523857661200,
+      "completed_at": "2026-11-12T16:50:11.031354+00:00",
+      "duration_seconds": 7.6862283,
+      "response": "This is typically caused by payment-gateway transmission latency. The payment gateway and Tiki normally reconcile the payment and update the order within 15-30 minutes. Under the payment incident policy, if the order remains unconfirmed after 1 hour, the system refunds the original payment account within 24-72 business hours."
+    },
+    {
+      "case_id": "final-case-12",
+      "condition": "assisted",
+      "started_at": "2026-11-12T16:50:11.031354+00:00",
+      "started_monotonic_ns": 42531543910400,
+      "completed_at": "2026-11-12T16:50:18.236964+00:00",
+      "duration_seconds": 7.2059286,
+      "response": "If your bank account or e-wallet is debited but your order status remains 'Awaiting Payment', this is typically due to transmission latency from the payment gateway. The Tiki system and payment gateway usually reconcile and update the order status automatically within 15-30 minutes. If your order remains unconfirmed after 1 hour, the system will automatically refund the original payment account within 24-72 business hours.",
+      "decision": "approve",
+      "reason": "The latency explanation, reconciliation interval and conditional refund destination/window match POL-PAY-001. This is policy guidance and does not execute a refund."
+    }
+  ],
+  "invalidated": []
+}

@@ -1,0 +1,466 @@
+[
+  {
+    "case_id": "final-case-01",
+    "query": "What is the return window for products directly distributed by Tiki Trading compared to marketplace partner sellers?",
+    "order_context": {
+      "order_status": "delivered",
+      "order_total": {
+        "amount_minor": 4650000,
+        "currency": "VND"
+      },
+      "shipping_cost": {
+        "amount_minor": 0,
+        "currency": "VND"
+      },
+      "shipment_status": "delivered"
+    },
+    "source_cards": [
+      {
+        "source_key": "POL-RET-001:2.0",
+        "content": "Customers may request an exchange or return within 30 days (for products directly distributed by Tiki Trading) or within 7 days (for products from marketplace partner sellers on Tiki) from the date of successful delivery. Returned products must have intact security seals, complete original packaging, accessories, invoices, and included promotional gifts, and show no signs of usage or laundering.",
+        "content_hash": "075d205d4ef549f7dba225923903de5f1eca03f55810b8fe140617ba8e7dab5e"
+      }
+    ],
+    "draft": null,
+    "status": "llm_unavailable",
+    "assistance_origin": "automatic_r3"
+  },
+  {
+    "case_id": "final-case-02",
+    "query": "How do I submit a return request on the Tiki app and schedule the free courier pickup?",
+    "order_context": {
+      "order_status": "delivered",
+      "order_total": {
+        "amount_minor": 4650000,
+        "currency": "VND"
+      },
+      "shipping_cost": {
+        "amount_minor": 0,
+        "currency": "VND"
+      },
+      "shipment_status": "delivered"
+    },
+    "source_cards": [
+      {
+        "source_key": "POL-RET-002:2.0",
+        "content": "To create a return or exchange request, customers navigate to 'Account' > 'Order Management' > select the order with 'Delivered' status > tap 'Request Return/Exchange'. Customers select the reason and upload 3-5 clear photos or a video demonstrating the product defect. Once the request is received by Tiki, shipping couriers will pick up the item directly from the customer's address for free within 1-2 business days, or customers may drop off the package at designated Tiki partner post offices.",
+        "content_hash": "2deef738f75b3f0cd7c6dd4f942b6fd98272d36d9db67f73b07912125aab410a"
+      }
+    ],
+    "draft": "To submit a return or exchange request, go to 'Account' > 'Order Management' in the Tiki app and select the order with 'Delivered' status. Tap 'Request Return/Exchange', select your reason, and upload 3-5 clear photos or a video showing the product defect. Once your request is received, a courier will pick up the item from your address for free within 1-2 business days, or you may choose to drop off the package at a designated Tiki partner post office.",
+    "status": "draft_ready",
+    "assistance_origin": "automatic_r3"
+  },
+  {
+    "case_id": "final-case-03",
+    "query": "What are the requirements for refund approval and are shipping fees refunded if I return due to personal preference?",
+    "order_context": {
+      "order_id": "ORD-1051",
+      "order_status": "delivered",
+      "source_status": "Returned",
+      "placed_at": "2026-10-09T07:00:00Z",
+      "date_is_synthetic": true,
+      "order_total": {
+        "amount_minor": 890000,
+        "currency": "VND"
+      },
+      "shipping_cost": {
+        "amount_minor": 0,
+        "currency": "VND"
+      },
+      "lines": [
+        {
+          "product_id": "PROD-51",
+          "product_name": "Biti's Hunter Breathable Running Shoes",
+          "quantity": 1
+        }
+      ],
+      "shipment": {
+        "shipment_status": "delivered",
+        "tracking_code": null,
+        "carrier": null,
+        "estimated_delivery_text": null,
+        "delivered_at": null,
+        "timeline": []
+      },
+      "refund": {
+        "refund_status": "under_review",
+        "refund_amount": {
+          "amount_minor": 890000,
+          "currency": "VND"
+        },
+        "expected_refund_time": "1 to 2 business days"
+      },
+      "payment_status": "Refund_Processing"
+    },
+    "source_cards": [
+      {
+        "source_key": "POL-REFUND-001:1.0",
+        "content": "Refund requests are only processed once an order has been successfully canceled prior to dispatch, or after the Tiki warehouse receives and inspects the returned product to standard. All refund decisions must undergo reconciliation by authorized customer service personnel; AI is prohibited from autonomously approving monetary transactions. Original shipping fees are non-refundable if the return reason is based on personal preference.",
+        "content_hash": "e925c3cbfe7ad12063e1fbd2499b8867f29160a8ad53c5c42155b9d74be0776c"
+      }
+    ],
+    "draft": "Refund requests are processed only if an order is successfully canceled prior to dispatch, or once the Tiki warehouse receives and inspects the returned product to standard. Please note that all refund decisions must undergo reconciliation by authorized customer service personnel. Regarding your query on shipping fees, original shipping fees are non-refundable if the return reason is based on personal preference.",
+    "status": "draft_ready",
+    "assistance_origin": "oracle_staff_override_diagnostic"
+  },
+  {
+    "case_id": "final-case-04",
+    "query": "How many business days does it take to receive a refund back to my linked e-wallet or bank card?",
+    "order_context": {
+      "order_id": "ORD-1060",
+      "order_status": "cancelled",
+      "source_status": "Cancelled",
+      "placed_at": "2026-10-10T07:00:00Z",
+      "date_is_synthetic": true,
+      "order_total": {
+        "amount_minor": 210000,
+        "currency": "VND"
+      },
+      "shipping_cost": {
+        "amount_minor": 0,
+        "currency": "VND"
+      },
+      "lines": [
+        {
+          "product_id": "PROD-60",
+          "product_name": "Mini Rechargeable Desktop Fan",
+          "quantity": 1
+        }
+      ],
+      "shipment": {
+        "shipment_status": "not_shipped",
+        "tracking_code": null,
+        "carrier": null,
+        "estimated_delivery_text": null,
+        "delivered_at": null,
+        "timeline": []
+      },
+      "refund": {
+        "refund_status": "under_review",
+        "refund_amount": {
+          "amount_minor": 210000,
+          "currency": "VND"
+        },
+        "expected_refund_time": "1 to 2 business days"
+      },
+      "payment_status": "Refund_Processing"
+    },
+    "source_cards": [
+      {
+        "source_key": "POL-REFUND-002:2.0",
+        "content": "The timeline for receiving a refund on Tiki depends on the original payment method: For Tiki Coins Wallet, refunds are credited within 24 hours. For linked e-wallets (MoMo, ZaloPay, VNPay, Viettel Money), funds are returned to the wallet within 1-2 business days. For domestic Napas ATM cards, the timeline is 3-5 business days. For international credit/debit cards (Visa, Mastercard, JCB), issuing banks process within 7-15 business days (excluding Saturdays, Sundays, and public holidays).",
+        "content_hash": "70af80d7b05c4c7876aa198654c1e5dd202f6a69b2b76e23cc630a6288534f21"
+      }
+    ],
+    "draft": null,
+    "status": "llm_unavailable",
+    "assistance_origin": "oracle_staff_override_diagnostic"
+  },
+  {
+    "case_id": "final-case-05",
+    "query": "Where can I check my refund tracking status and transaction tracing code on Tiki?",
+    "order_context": {
+      "order_id": "ORD-1060",
+      "order_status": "cancelled",
+      "source_status": "Cancelled",
+      "placed_at": "2026-10-10T07:00:00Z",
+      "date_is_synthetic": true,
+      "order_total": {
+        "amount_minor": 210000,
+        "currency": "VND"
+      },
+      "shipping_cost": {
+        "amount_minor": 0,
+        "currency": "VND"
+      },
+      "lines": [
+        {
+          "product_id": "PROD-60",
+          "product_name": "Mini Rechargeable Desktop Fan",
+          "quantity": 1
+        }
+      ],
+      "shipment": {
+        "shipment_status": "not_shipped",
+        "tracking_code": null,
+        "carrier": null,
+        "estimated_delivery_text": null,
+        "delivered_at": null,
+        "timeline": []
+      },
+      "refund": {
+        "refund_status": "under_review",
+        "refund_amount": {
+          "amount_minor": 210000,
+          "currency": "VND"
+        },
+        "expected_refund_time": "1 to 2 business days"
+      },
+      "payment_status": "Refund_Processing"
+    },
+    "source_cards": [
+      {
+        "source_key": "POL-REFUND-007:1.0",
+        "content": "Customers can monitor refund progress by accessing 'Account Details' > 'Return & Refund Management'. Refund statuses include: 'Reconciliation Processing' (under customer support review), 'Transferred to Bank' (funds dispatched from Tiki, awaiting bank credit), and 'Refund Succeeded' along with the bank's transaction tracing reference code.",
+        "content_hash": "5117530806c7506651c72e1d91249047a832da1f95caae4d0c18482ec2392331"
+      }
+    ],
+    "draft": "You can monitor the progress of your refund by navigating to 'Account Details' > 'Return & Refund Management' on Tiki. In this section, you can view your refund status, such as 'Reconciliation Processing', 'Transferred to Bank', or 'Refund Succeeded'. Once the status is 'Refund Succeeded', the bank's transaction tracing reference code will be available for you to view.",
+    "status": "draft_ready",
+    "assistance_origin": "oracle_staff_override_diagnostic"
+  },
+  {
+    "case_id": "final-case-06",
+    "query": "Can I cancel my order directly on the app while it is still in Awaiting Packing status?",
+    "order_context": {
+      "order_id": "ORD-1026",
+      "order_status": "processing",
+      "source_status": "Processing",
+      "placed_at": "2026-10-05T07:00:00Z",
+      "date_is_synthetic": true,
+      "order_total": {
+        "amount_minor": 2780000,
+        "currency": "VND"
+      },
+      "shipping_cost": {
+        "amount_minor": 0,
+        "currency": "VND"
+      },
+      "lines": [
+        {
+          "product_id": "PROD-26",
+          "product_name": "Logitech MX Mechanical Wireless Keyboard",
+          "quantity": 1
+        }
+      ],
+      "shipment": {
+        "shipment_status": "not_shipped",
+        "tracking_code": null,
+        "carrier": "TikiNOW Express",
+        "estimated_delivery_text": null,
+        "delivered_at": null,
+        "timeline": []
+      },
+      "refund": null,
+      "payment_status": "Captured"
+    },
+    "source_cards": [
+      {
+        "source_key": "POL-ORD-002:1.0",
+        "content": "Customers can click 'Cancel Order' directly on the Tiki app if the order is in 'Processing' or 'Awaiting Packing' status and has not yet been handed over to the shipping carrier. Once the order transitions to 'In Transit', the direct cancellation button is disabled; customers should reject the package upon courier contact. For canceled prepaid orders, refunds will be issued automatically according to Tiki refund policies.",
+        "content_hash": "b1cf02ac170e19895e5f685fec15a6a8e6ade325a43640fb2d001be551cfd380"
+      }
+    ],
+    "draft": null,
+    "status": "llm_unavailable",
+    "assistance_origin": "oracle_staff_override_diagnostic"
+  },
+  {
+    "case_id": "final-case-07",
+    "query": "How do I track the transit hubs my parcel has passed through using the tracking code?",
+    "order_context": {
+      "order_id": "ORD-1040",
+      "order_status": "shipped",
+      "source_status": "In_Transit",
+      "placed_at": "2026-10-07T07:00:00Z",
+      "date_is_synthetic": true,
+      "order_total": {
+        "amount_minor": 2780000,
+        "currency": "VND"
+      },
+      "shipping_cost": {
+        "amount_minor": 0,
+        "currency": "VND"
+      },
+      "lines": [
+        {
+          "product_id": "PROD-40",
+          "product_name": "Logitech MX Mechanical Wireless Keyboard",
+          "quantity": 1
+        }
+      ],
+      "shipment": {
+        "shipment_status": "in_transit",
+        "tracking_code": null,
+        "carrier": "GHN Express",
+        "estimated_delivery_text": null,
+        "delivered_at": null,
+        "timeline": []
+      },
+      "refund": null,
+      "payment_status": "Captured"
+    },
+    "source_cards": [
+      {
+        "source_key": "POL-ORD-001:1.0",
+        "content": "Customers can check order status by navigating to 'My Orders' on the Tiki app. Order statuses include: 'Pending Confirmation' (seller preparing), 'Pick Up in Progress' (packed, awaiting courier), 'In Transit' (courier delivering, real-time tracking code provided), 'Delivered' (completed), and 'Canceled'. Customers tap the tracking code to view details of each transit hub the parcel has passed through.",
+        "content_hash": "cfecb27c7546ff35f2b47b0803b86fea6cd8d866c96096733cb412e9aae2c679"
+      }
+    ],
+    "draft": "To view the details of each transit hub your parcel has passed through, please navigate to 'My Orders' on the Tiki app and tap on your tracking code.",
+    "status": "draft_ready",
+    "assistance_origin": "oracle_staff_override_diagnostic"
+  },
+  {
+    "case_id": "final-case-08",
+    "query": "What are the base shipping fees for intra-city versus inter-provincial orders and how does Freeship apply?",
+    "order_context": {},
+    "source_cards": [
+      {
+        "source_key": "POL-SHIP-002:1.0",
+        "content": "Shipping fees on Tiki are calculated automatically based on distance and parcel weight: Intra-city orders carry a base fee of 18,000 VND to 25,000 VND. Inter-provincial orders range from 35,000 VND to 55,000 VND. Customers with TikiPRO memberships or orders meeting the minimum value of 149,000 VND can apply Freeship discount vouchers for up to 30,000 VND - 70,000 VND in shipping discounts. The final shipping fee is displayed transparently on the checkout page.",
+        "content_hash": "d9f0d1fbdf821d39aa586177c2e7b9922c6e743e6f678496ad1d42851095f20b"
+      }
+    ],
+    "draft": null,
+    "status": "llm_unavailable",
+    "assistance_origin": "automatic_r3"
+  },
+  {
+    "case_id": "final-case-09",
+    "query": "What is the delivery timeline for TikiNOW 2-hour express delivery in inner Ho Chi Minh City?",
+    "order_context": {},
+    "source_cards": [
+      {
+        "source_key": "POL-SHIP-001:1.0",
+        "content": "Estimated delivery times on Tiki are categorized by service package: TikiNOW Express delivers within 2 hours in inner districts of Hanoi, Ho Chi Minh City, and Da Nang. Fast Delivery delivers within 1-2 business days across major urban centers. Standard Delivery takes 3-5 business days for inter-provincial orders or rural districts. During severe weather or peak holiday seasons, delivery may be extended by 1-2 additional days.",
+        "content_hash": "67497ea44ce12dc56ca18bc742819e39e1f2662f994c61b77b0592a9e1908c55"
+      }
+    ],
+    "draft": null,
+    "status": "llm_unavailable",
+    "assistance_origin": "automatic_r3"
+  },
+  {
+    "case_id": "final-case-10",
+    "query": "The app shows my order was delivered but I never received the package from the courier.",
+    "order_context": {
+      "order_id": "ORD-1005",
+      "order_status": "shipped",
+      "source_status": "Delivery_Delayed",
+      "placed_at": "2026-10-01T07:00:00Z",
+      "date_is_synthetic": true,
+      "order_total": {
+        "amount_minor": 1802000,
+        "currency": "VND"
+      },
+      "shipping_cost": {
+        "amount_minor": 22000,
+        "currency": "VND"
+      },
+      "lines": [
+        {
+          "product_id": "PROD-5",
+          "product_name": "Biti's Hunter Breathable Running Shoes",
+          "quantity": 2
+        }
+      ],
+      "shipment": {
+        "shipment_status": "delayed",
+        "tracking_code": "VIET98753260",
+        "carrier": "Viettel Post",
+        "estimated_delivery_text": "Delayed 1-2 days due to weather conditions",
+        "delivered_at": null,
+        "timeline": [
+          {
+            "time": "2026-10-19 14:00",
+            "status": "Package has left the Tiki fulfillment center"
+          },
+          {
+            "time": "2026-10-20 09:30",
+            "status": "Arrived at central district delivery hub"
+          },
+          {
+            "time": "2026-10-21 08:15",
+            "status": "Tiki courier is out for delivery to destination address"
+          }
+        ]
+      },
+      "refund": null,
+      "payment_status": "Pending_COD"
+    },
+    "source_cards": [
+      {
+        "source_key": "POL-SHIP-004:1.0",
+        "content": "In the event a Tiki order exceeds its estimated delivery date without arrival, or if a courier marks an order as 'Successfully Delivered' when the customer has not received the parcel, the customer must contact Tiki Customer Support within 24-48 hours via hotline 1900 6035. Tiki's dispatch team will verify courier GPS logs, coordinate with the delivery hub, and resolve the complaint. If an order is lost, Tiki will dispatch a replacement or issue a 100% refund.",
+        "content_hash": "ea5d0d68a1c2e927cfc5aba386bacbc3a3e2ed14cfa9cf132fd46bfff0370bbe"
+      }
+    ],
+    "draft": "If a courier marks an order as 'Successfully Delivered' but you have not received the parcel, please contact Tiki Customer Support within 24-48 hours via our hotline at [PHONE_OR_NUMBER]. Our dispatch team will verify courier GPS logs and coordinate with the delivery hub to resolve the complaint. To assist us further, could you please provide your order ID?",
+    "status": "draft_ready",
+    "assistance_origin": "oracle_staff_override_diagnostic"
+  },
+  {
+    "case_id": "final-case-11",
+    "query": "Can I return opened or unsealed cosmetics if I simply changed my mind after delivery?",
+    "order_context": {
+      "order_status": "delivered",
+      "order_total": {
+        "amount_minor": 4650000,
+        "currency": "VND"
+      },
+      "shipping_cost": {
+        "amount_minor": 0,
+        "currency": "VND"
+      },
+      "shipment_status": "delivered"
+    },
+    "source_cards": [
+      {
+        "source_key": "POL-RET-003:2.0",
+        "content": "Product categories that do not support returns due to change of mind or personal preference include: Underwear, swimwear, cosmetics and chemicals with unsealed protective packaging, Tiki Ngon fresh groceries, dietary supplements, mobile top-up scratch cards, electronic service vouchers, and clearance outlet items marked as non-returnable. These items are only eligible for return or exchange if Tiki delivered an incorrect item or if there is a verified manufacturer defect.",
+        "content_hash": "94bdfee5529f268548ee30c7537c47403b8a2a6f5fd2622dd2a877c797ee6bc5"
+      }
+    ],
+    "draft": null,
+    "status": "llm_unavailable",
+    "assistance_origin": "automatic_r3"
+  },
+  {
+    "case_id": "final-case-12",
+    "query": "My bank account was debited but my order status on Tiki still shows Awaiting Payment.",
+    "order_context": {
+      "order_id": "ORD-1076",
+      "order_status": "placed",
+      "source_status": "Payment_Failed",
+      "placed_at": "2026-10-13T07:00:00Z",
+      "date_is_synthetic": true,
+      "order_total": {
+        "amount_minor": 520000,
+        "currency": "VND"
+      },
+      "shipping_cost": {
+        "amount_minor": 0,
+        "currency": "VND"
+      },
+      "lines": [
+        {
+          "product_id": "PROD-76",
+          "product_name": "Premium Waterproof Laptop Backpack",
+          "quantity": 1
+        }
+      ],
+      "shipment": {
+        "shipment_status": "not_shipped",
+        "tracking_code": null,
+        "carrier": null,
+        "estimated_delivery_text": null,
+        "delivered_at": null,
+        "timeline": []
+      },
+      "refund": null,
+      "payment_status": "Failed_Reconciling"
+    },
+    "source_cards": [
+      {
+        "source_key": "POL-PAY-001:1.0",
+        "content": "If a customer's bank account or e-wallet is debited but the order on Tiki remains in 'Awaiting Payment' status or fails to display, this is typically due to transmission latency from the payment gateway. The Tiki system and payment gateway automatically reconcile and update the order within 15-30 minutes. If the order remains unconfirmed after 1 hour, the system will automatically refund the original payment account within 24-72 business hours.",
+        "content_hash": "73825384b0db5224039de9e478ad19756c948d641ec5667079509db6bea0eda4"
+      }
+    ],
+    "draft": "If your bank account or e-wallet is debited but your order status remains 'Awaiting Payment', this is typically due to transmission latency from the payment gateway. The Tiki system and payment gateway usually reconcile and update the order status automatically within 15-30 minutes. If your order remains unconfirmed after 1 hour, the system will automatically refund the original payment account within 24-72 business hours.",
+    "status": "draft_ready",
+    "assistance_origin": "oracle_staff_override_diagnostic"
+  }
+]
