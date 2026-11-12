@@ -34,31 +34,38 @@ Under delegated stakeholder authority from the coordinator and user instructions
   - Verified that staff direct send is blocked with HTTP 403 (`authority-required`); staff must submit a proposal (`/reply-proposals`), which only a manager can approve and send.
 
 ### Gap 2: Duplicate Send Under Concurrency (FR-04, FR-08)
-- **Problem:**
-  - Concurrency tests previously only checked distinct idempotency keys across requests, leaving identical-key rapid double-clicks untested.
-- **Fix & Verification:**
-  - Verified transactional locking via PostgreSQL row-level lock `with_for_update()` in `require_ticket` and distributed advisory lock `pg_advisory_xact_lock` in `idempotent()`.
-  - Added concurrent `ThreadPoolExecutor` tests:
+- **Status:** Existing Architectural Behavior Newly Verified (No Production Code Changes Required).
+- **Background & Verification:**
+  - SupportIQ's existing architecture enforces idempotency and transaction boundaries through two layers:
+    1. Transactional row-level lock `with_for_update()` in `require_ticket()`.
+    2. PostgreSQL transactional advisory lock `pg_advisory_xact_lock()` in `idempotent()`.
+  - Previously, test coverage only exercised distinct idempotency keys across serialized requests, leaving simultaneous identical-key requests and distinct-key rapid race conditions unexercised under concurrency.
+  - Added concurrent `ThreadPoolExecutor` integration tests verifying existing production behavior:
     - **Identical Idempotency-Key:** Concurrent requests return identical HTTP 201 responses with identical `reply_id`. Exactly one reply is recorded in `tickets` and exactly one `reply.sent` audit entry is created.
     - **Distinct Idempotency-Keys:** Exactly one request receives HTTP 201; the conflicting concurrent request receives HTTP 409 (`invalid-ticket-state: A colleague already sent the reply.`).
+  - **Conclusion:** No production code modifications were needed or added for concurrency; existing safeguards are now formally verified with multi-threaded test coverage.
 
 ### Gap 3: Manual Fallback on AI Errors (FR-05, FR-08)
 - **Problem:**
   - When the AI service failed on analysis (503 / timeout / connection error), the worker left `draft_status` as `pending` and redundantly attempted a draft request, causing unnecessary latency before manual handling was unblocked.
   - If draft generation failed, `staff_note` guidance was missing.
-- **Fix:**
+- **Fix & Fact-Safe Verification:**
   - In `SuggestionWorker.process`, if analysis fails (`analysis_res is None`), the worker immediately fails closed, records both analysis and draft as `unavailable`, sets `staff_note="The AI service is unavailable. Review the customer message and order records to write a reply manually."`, and finishes the job without attempting a doomed draft call.
   - If analysis succeeds but drafting fails (`draft_res is None`), the worker retains the retrieved policy sources and sets `staff_note="Draft generation is unavailable. Review the retrieved sources and write a reply manually."`.
   - If worker retries are exhausted (`attempts >= 3`), `staff_note` provides explicit manual fallback guidance.
   - In `service.py`, `validate_reply` allows `basis="no_ai_draft"` whenever AI is unavailable or abstained. If authority is required, staff can submit a manual proposal for manager approval.
+  - **Fact-Safe Manual Reply Test:** Verified that staff immediately sends fact-safe manual acknowledgement and investigation notes (e.g. acknowledging damaged packaging and confirming investigation with fulfillment) without inventing fabricated shipping status or claiming unverified replacement dispatch.
 
-### Gap 4: Audit Immutability Under Runtime Role (FR-07, FR-08)
+### Gap 4: Audit Immutability Under Deployment Grants and Owner Triggers (FR-07, FR-08)
 - **Problem:**
-  - Prior immutability tests only executed as database owner, without exercising the least-privilege `supportiq_app` runtime role or recording role boundaries.
+  - Prior immutability tests only executed as database owner, without exercising the least-privilege `supportiq_app` runtime role or verifying actual deployment grant definitions.
 - **Fix & Verification:**
-  - Verified immutability under both database owner and runtime application role:
+  - **Deployment Grant Definition Assertion:** Added automated assertions on `apps/backend/manage.py` verifying that canonical deployment grants to `supportiq_app` strictly omit `UPDATE` and `DELETE` on `audit_log_entries` and `customer_messages`, restricting permissions to `SELECT` and `INSERT`.
+  - **Disposable Schema Bootstrap:** Bootstrapped the exact deployment grant statements from `apps/backend/manage.py` inside the disposable test schema using a safely disposed engine (`grant_engine.dispose()`).
+  - **Explicit Skip Semantics:** If `database_url_app` is absent from `.local/application.json`, the test explicitly skips (`pytest.skip("Runtime-role NOT verified: database_url_app is absent in credentials configuration")`), preventing false-positive claims of runtime coverage.
+  - **Multi-Role Enforcement:**
     - **Owner Role (`supportiq_owner`):** PostgreSQL `immutable_record` row triggers block `UPDATE` and `DELETE` on `audit_log_entries` and `customer_messages` with exception `'Append-only record'`.
-    - **Runtime Role (`supportiq_app`):** PostgreSQL privilege grants deny `UPDATE` and `DELETE` permissions at the database engine level (SQL 42501). Verified that `supportiq_app` can execute `SELECT` and `INSERT` on `audit_log_entries`, but is strictly forbidden from mutating or deleting records.
+    - **Runtime Role (`supportiq_app`):** PostgreSQL privilege grants deny `UPDATE` and `DELETE` permissions at the database engine level (SQL 42501). Verified that `supportiq_app` can execute `SELECT` and `INSERT` on `audit_log_entries`, but is strictly forbidden from mutating or deleting records. All engines are safely disposed in `finally` blocks.
 
 ### Gap 5: Outbound Gateway Transport Synthetic PII & Log Redaction (FR-08)
 - **Problem:**

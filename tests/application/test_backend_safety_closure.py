@@ -416,17 +416,19 @@ def test_manual_fallback_on_ai_service_analysis_failure(pg_application):
     assert "send_reply" in ws["allowed_actions"]
     assert "retry_suggestion" in ws["allowed_actions"]
 
-    # Staff can immediately send manual reply
+    # Staff can immediately send manual reply (fact-safe acknowledgement and investigation, no invented shipment/replacement status)
+    safe_body = "We have received your report regarding the damaged packaging for order ORD-1001. A support agent is investigating this issue with our fulfillment team."
     send_res = post_with_key(staff, f"/v1/console/tickets/{ticket_id}/replies", {
         "basis": "no_ai_draft",
-        "body": "We apologize for the damaged box. A replacement is on its way."
+        "body": safe_body
     })
     assert send_res.status_code == 201
 
-    # Customer verifies reply received
+    # Customer verifies reply received with matching fact-safe text and no business status invention
     cust_res = customer.get(f"/v1/shop/tickets/{ticket_id}").json()
     assert cust_res["customer_status"] == "replied"
-    assert "replacement is on its way" in cust_res["reply"]["body"]
+    assert "investigating this issue" in cust_res["reply"]["body"]
+    assert "ORD-1001" in cust_res["reply"]["body"]
 
 
 def test_manual_fallback_on_draft_failure_retains_retrieved_sources(pg_application):
@@ -512,7 +514,18 @@ def test_audit_immutability_under_owner_and_runtime_role(pg_application):
     owner_url = local["database_url_owner"]
     app_url = local.get("database_url_app")
 
-    # 1. Under Owner role: SQL triggers protect_audit must block UPDATE and DELETE
+    # 1. Verify deployment grant definition in apps/backend/manage.py
+    # Canonical manage.py initialize() grants to supportiq_app must strictly omit UPDATE and DELETE on audit and messages
+    manage_py_path = Path(__file__).resolve().parents[2] / "apps/backend/manage.py"
+    manage_source = manage_py_path.read_text(encoding="utf-8")
+    assert "GRANT SELECT ON accounts, products, orders, tickets, customer_messages, suggestions, audit_log_entries TO supportiq_app" in manage_source
+    assert "GRANT INSERT ON orders, tickets, customer_messages, suggestions, audit_log_entries TO supportiq_app" in manage_source
+    audit_grant_lines = [line for line in manage_source.splitlines() if "audit_log_entries" in line and "GRANT" in line]
+    assert all("UPDATE" not in line and "DELETE" not in line for line in audit_grant_lines), "manage.py must not grant UPDATE/DELETE on audit_log_entries"
+    message_grant_lines = [line for line in manage_source.splitlines() if "customer_messages" in line and "GRANT" in line]
+    assert all("UPDATE" not in line and "DELETE" not in line for line in message_grant_lines), "manage.py must not grant UPDATE/DELETE on customer_messages"
+
+    # 2. Under Owner role: SQL triggers protect_audit must block UPDATE and DELETE
     owner_engine = create_engine(owner_url, connect_args={"options": f"-csearch_path={schema}"})
     try:
         # Query existing ticket to safely insert into customer_messages without foreign key error
@@ -539,50 +552,59 @@ def test_audit_immutability_under_owner_and_runtime_role(pg_application):
     finally:
         owner_engine.dispose()
 
-    # 2. Under Runtime role supportiq_app: grants and triggers must enforce immutability
-    if app_url:
-        # Grant usage on test schema to supportiq_app to simulate deployment environment
-        with create_engine(owner_url).begin() as conn:
+    # 3. Under Runtime role supportiq_app: grants and triggers must enforce immutability
+    if not app_url:
+        pytest.skip("Runtime-role NOT verified: database_url_app is absent in credentials configuration")
+
+    # Bootstrap the exact manage.py grants inside the disposable test schema
+    grant_engine = create_engine(owner_url)
+    try:
+        with grant_engine.begin() as conn:
             conn.execute(text(f'GRANT USAGE ON SCHEMA "{schema}" TO supportiq_app'))
-            conn.execute(text(f'GRANT SELECT, INSERT ON "{schema}".audit_log_entries TO supportiq_app'))
-            conn.execute(text(f'GRANT SELECT, INSERT ON "{schema}".customer_messages TO supportiq_app'))
-            conn.execute(text(f'GRANT SELECT, INSERT, UPDATE, DELETE ON "{schema}".sessions TO supportiq_app'))
-            conn.execute(text(f'GRANT SELECT, INSERT, UPDATE, DELETE ON "{schema}".idempotency_records TO supportiq_app'))
-            conn.execute(text(f'GRANT SELECT, UPDATE ON "{schema}".tickets TO supportiq_app'))
+            conn.execute(text(f'GRANT SELECT ON "{schema}".accounts, "{schema}".products, "{schema}".orders, "{schema}".tickets, "{schema}".customer_messages, "{schema}".suggestions, "{schema}".audit_log_entries TO supportiq_app'))
+            conn.execute(text(f'GRANT SELECT, INSERT, UPDATE, DELETE ON "{schema}".sessions, "{schema}".sign_in_failures, "{schema}".idempotency_records, "{schema}".suggestion_jobs TO supportiq_app'))
+            conn.execute(text(f'GRANT INSERT ON "{schema}".orders, "{schema}".tickets, "{schema}".customer_messages, "{schema}".suggestions, "{schema}".audit_log_entries TO supportiq_app'))
+            conn.execute(text(f'GRANT UPDATE (role, is_active, display_name, email, phone, address, avatar_data_url) ON "{schema}".accounts TO supportiq_app'))
+            conn.execute(text(f'GRANT UPDATE (payload) ON "{schema}".orders TO supportiq_app'))
+            conn.execute(text(f'GRANT UPDATE (status, is_authority_required, handling_started_at, closed_at, current_suggestion_id, proposal, escalation, reply) ON "{schema}".tickets TO supportiq_app'))
+            conn.execute(text(f'GRANT UPDATE (payload, completed_at) ON "{schema}".suggestions TO supportiq_app'))
+            conn.execute(text(f'GRANT USAGE ON ALL SEQUENCES IN SCHEMA "{schema}" TO supportiq_app'))
+    finally:
+        grant_engine.dispose()
 
-        app_engine = create_engine(app_url, connect_args={"options": f"-csearch_path={schema}"})
-        try:
-            with app_engine.connect() as conn:
-                current_user = conn.execute(text("SELECT current_user")).scalar()
-                assert current_user == "supportiq_app", f"Expected supportiq_app, got {current_user}"
+    app_engine = create_engine(app_url, connect_args={"options": f"-csearch_path={schema}"})
+    try:
+        with app_engine.connect() as conn:
+            current_user = conn.execute(text("SELECT current_user")).scalar()
+            assert current_user == "supportiq_app", f"Expected supportiq_app, got {current_user}"
 
-            with app_engine.begin() as conn:
-                # UPDATE or DELETE on audit_log_entries must be denied (permission denied by PostgreSQL grant)
-                with pytest.raises(DBAPIError):
-                    conn.execute(text("UPDATE audit_log_entries SET event_type='tampered'"))
-            with app_engine.begin() as conn:
-                with pytest.raises(DBAPIError):
-                    conn.execute(text("DELETE FROM audit_log_entries"))
+        with app_engine.begin() as conn:
+            # UPDATE or DELETE on audit_log_entries must be denied (permission denied by PostgreSQL grant)
+            with pytest.raises(DBAPIError):
+                conn.execute(text("UPDATE audit_log_entries SET event_type='tampered'"))
+        with app_engine.begin() as conn:
+            with pytest.raises(DBAPIError):
+                conn.execute(text("DELETE FROM audit_log_entries"))
 
-            with app_engine.begin() as conn:
-                # UPDATE or DELETE on customer_messages must be denied
-                with pytest.raises(DBAPIError):
-                    conn.execute(text("UPDATE customer_messages SET body='tampered'"))
-            with app_engine.begin() as conn:
-                with pytest.raises(DBAPIError):
-                    conn.execute(text("DELETE FROM customer_messages"))
+        with app_engine.begin() as conn:
+            # UPDATE or DELETE on customer_messages must be denied
+            with pytest.raises(DBAPIError):
+                conn.execute(text("UPDATE customer_messages SET body='tampered'"))
+        with app_engine.begin() as conn:
+            with pytest.raises(DBAPIError):
+                conn.execute(text("DELETE FROM customer_messages"))
 
-            with app_engine.begin() as conn:
-                # SELECT and INSERT on audit_log_entries must succeed for runtime role
-                entry_id = str(uuid.uuid4())
-                conn.execute(text("""
-                    INSERT INTO audit_log_entries (entry_id, occurred_at, event_type, trace_id, data)
-                    VALUES (:id, now(), 'test.runtime_role_probe', 'trace-probe', '{}'::jsonb)
-                """), {"id": entry_id})
-                row = conn.execute(text("SELECT event_type FROM audit_log_entries WHERE entry_id = :id"), {"id": entry_id}).scalar()
-                assert row == "test.runtime_role_probe"
-        finally:
-            app_engine.dispose()
+        with app_engine.begin() as conn:
+            # SELECT and INSERT on audit_log_entries must succeed for runtime role
+            entry_id = str(uuid.uuid4())
+            conn.execute(text("""
+                INSERT INTO audit_log_entries (entry_id, occurred_at, event_type, trace_id, data)
+                VALUES (:id, now(), 'test.runtime_role_probe', 'trace-probe', '{}'::jsonb)
+            """), {"id": entry_id})
+            row = conn.execute(text("SELECT event_type FROM audit_log_entries WHERE entry_id = :id"), {"id": entry_id}).scalar()
+            assert row == "test.runtime_role_probe"
+    finally:
+        app_engine.dispose()
 
 
 # ---------------------------------------------------------------------------
