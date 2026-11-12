@@ -199,6 +199,8 @@ class SuggestionWorker:
                     if result.get("draft"):
                         data["draft"] = result["draft"]
                     data["llm_usage"] = result.get("llm_usage")
+                    if result.get("llm_metadata"):
+                        data["llm_metadata"] = result.get("llm_metadata")
                     data["failure_code"] = result.get("failure_code")
                     data["step_latency_ms"] = {**data["step_latency_ms"], **result.get("step_latency_ms", {})}
                 codes = set((analysis or {}).get("routing", {}).get("reason_codes", [])) | set(result.get("reason_codes", []))

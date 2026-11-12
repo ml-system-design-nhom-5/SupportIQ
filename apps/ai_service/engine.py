@@ -16,6 +16,32 @@ class Engine:
     def __init__(self, model, retriever, llm, versions, policy):
         self.model, self.retriever, self.llm, self.versions, self.policy = model, retriever, llm, versions, policy
 
+    @staticmethod
+    def _extract_llm_usage_and_metadata(raw_source: dict) -> tuple[dict, dict]:
+        raw_usage = raw_source.get("usage", {}) or {}
+        llm_usage = {}
+        if "promptTokenCount" in raw_usage and raw_usage["promptTokenCount"] is not None:
+            llm_usage["input_tokens"] = raw_usage["promptTokenCount"]
+        if "candidatesTokenCount" in raw_usage and raw_usage["candidatesTokenCount"] is not None:
+            llm_usage["output_tokens"] = raw_usage["candidatesTokenCount"]
+        if "totalTokenCount" in raw_usage and raw_usage["totalTokenCount"] is not None:
+            llm_usage["total_tokens"] = raw_usage["totalTokenCount"]
+        elif "input_tokens" in llm_usage and "output_tokens" in llm_usage:
+            llm_usage["total_tokens_partial"] = llm_usage["input_tokens"] + llm_usage["output_tokens"]
+        if "thoughtsTokenCount" in raw_usage and raw_usage["thoughtsTokenCount"] is not None:
+            llm_usage["thought_tokens"] = raw_usage["thoughtsTokenCount"]
+
+        llm_metadata = {}
+        for meta_key, gen_key in (
+            ("provider", "provider"),
+            ("model", "model"),
+            ("model_version", "model_version"),
+            ("prompt_version", "prompt_version"),
+        ):
+            if raw_source.get(gen_key):
+                llm_metadata[meta_key] = raw_source[gen_key]
+        return llm_usage, llm_metadata
+
     def _analyse(self, request):
         started = time.perf_counter()
         prediction = self.model.predict(request["message"])
@@ -97,32 +123,32 @@ class Engine:
         except Exception as error:
             code = getattr(error, 'code', 'llm_unavailable')
             failure = 'grounding_failed' if code in ('llm_insufficient_evidence', 'llm_invalid_citations') else 'llm_invalid_output' if code in ('llm_invalid_response',) else 'llm_unavailable'
-            return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {failure}), "failure_code": code if code.startswith("llm_") else "llm_unavailable", "staff_note": "The LLM timed out after a bounded retry. Try AI again or use the retrieved sources to write a reply." if code == "llm_timeout" else "Draft generation is unavailable. Review the retrieved sources and write a reply manually."}
+            err_result = {
+                **result,
+                "status": "llm_unavailable",
+                "reason_codes": list(set(codes) | {failure}),
+                "failure_code": code if code.startswith("llm_") else "llm_unavailable",
+                "staff_note": "The LLM timed out after a bounded retry. Try AI again or use the retrieved sources to write a reply." if code == "llm_timeout" else "Draft generation is unavailable. Review the retrieved sources and write a reply manually.",
+            }
+            err_usage_dict = getattr(error, "usage", {}) or {}
+            err_meta_dict = getattr(error, "metadata", {}) or {}
+            err_latency = getattr(error, "latency_seconds", None)
+            if err_usage_dict or err_meta_dict:
+                err_bundle = {"usage": err_usage_dict, **err_meta_dict}
+                err_usage, err_metadata = self._extract_llm_usage_and_metadata(err_bundle)
+                if err_usage:
+                    err_result["llm_usage"] = err_usage
+                if err_metadata:
+                    err_result["llm_metadata"] = err_metadata
+            if err_latency is not None:
+                err_result["step_latency_ms"] = {
+                    **analysis["step_latency_ms"],
+                    "llm": round(err_latency * 1000),
+                }
+            return err_result
 
         # Preserve complete LLM usage and provenance even if post-generation grounding fails
-        raw_usage = generated.get("usage", {})
-        llm_usage = {}
-        if "promptTokenCount" in raw_usage and raw_usage["promptTokenCount"] is not None:
-            llm_usage["input_tokens"] = raw_usage["promptTokenCount"]
-        if "candidatesTokenCount" in raw_usage and raw_usage["candidatesTokenCount"] is not None:
-            llm_usage["output_tokens"] = raw_usage["candidatesTokenCount"]
-        if "totalTokenCount" in raw_usage and raw_usage["totalTokenCount"] is not None:
-            llm_usage["total_tokens"] = raw_usage["totalTokenCount"]
-        elif "input_tokens" in llm_usage and "output_tokens" in llm_usage:
-            llm_usage["total_tokens"] = llm_usage["input_tokens"] + llm_usage["output_tokens"]
-        if "thoughtsTokenCount" in raw_usage and raw_usage["thoughtsTokenCount"] is not None:
-            llm_usage["thought_tokens"] = raw_usage["thoughtsTokenCount"]
-
-        llm_metadata = {}
-        for meta_key, gen_key in (
-            ("provider", "provider"),
-            ("model", "model"),
-            ("model_version", "model_version"),
-            ("prompt_version", "prompt_version"),
-        ):
-            if generated.get(gen_key):
-                llm_metadata[meta_key] = generated[gen_key]
-
+        llm_usage, llm_metadata = self._extract_llm_usage_and_metadata(generated)
         result["step_latency_ms"] = {**analysis["step_latency_ms"], "llm": round(generated.get("latency_seconds", 0) * 1000)}
         result["llm_usage"] = llm_usage
         if llm_metadata:

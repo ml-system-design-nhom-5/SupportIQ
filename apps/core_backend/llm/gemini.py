@@ -13,8 +13,18 @@ from pydantic import BaseModel, ConfigDict, StrictBool, StrictStr, ValidationErr
 
 
 class LLMError(Exception):
-    def __init__(self, code: str):
+    def __init__(
+        self,
+        code: str,
+        *,
+        usage: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
+        latency_seconds: float | None = None,
+    ):
         self.code = code
+        self.usage = usage or {}
+        self.metadata = metadata or {}
+        self.latency_seconds = latency_seconds
         super().__init__(code)
 
 
@@ -228,28 +238,46 @@ class GeminiDraftClient:
                     404: "llm_model_unavailable", 429: "llm_rate_limited"}.get(response.status_code, "llm_unavailable")
             # Never expose a provider response body, request headers, or exception repr.
             raise LLMError(code)
+        latency_sec = round(time.perf_counter() - started, 4)
+        usage = {}
+        metadata = {
+            "provider": "google_ai_studio",
+            "model": self.model,
+            "prompt_version": "grounded-v2",
+        }
         try:
             data = response.json()
+            if not isinstance(data, dict):
+                raise ValueError("Response payload is not a JSON object")
+            if "modelVersion" in data:
+                metadata["model_version"] = data["modelVersion"]
+            else:
+                metadata["model_version"] = self.model
+            usage_meta = data.get("usageMetadata", {})
+            if usage_meta is None:
+                raise ValueError("usageMetadata cannot be null")
+            usage = {k: v for k, v in usage_meta.items()
+                     if k in {"promptTokenCount", "candidatesTokenCount", "totalTokenCount", "thoughtsTokenCount"}
+                     and type(v) is int and v >= 0}
             candidate = data["candidates"][0]
-            if data.get("promptFeedback", {}).get("blockReason") or candidate.get("finishReason") != "STOP":
-                raise LLMError("llm_blocked_or_incomplete")
+            if (data.get("promptFeedback") or {}).get("blockReason") or candidate.get("finishReason") != "STOP":
+                raise LLMError("llm_blocked_or_incomplete", usage=usage, metadata=metadata, latency_seconds=latency_sec)
             text = "".join(p.get("text", "") for p in candidate["content"]["parts"] if not p.get("thought"))
             draft = DraftOutput.model_validate_json(text)
             if not draft.answerable:
-                raise LLMError("llm_insufficient_evidence")
+                raise LLMError("llm_insufficient_evidence", usage=usage, metadata=metadata, latency_seconds=latency_sec)
             known = {s["id"] for s in sources}
             inline = set(re.findall(r"\[(S\d+)\]", draft.answer))
             if not draft.answer.strip() or not draft.citations or set(draft.citations) != inline or not inline.issubset(known):
-                raise LLMError("llm_invalid_citations")
-            usage = {k: v for k, v in data.get("usageMetadata", {}).items()
-                     if k in {"promptTokenCount", "candidatesTokenCount", "totalTokenCount", "thoughtsTokenCount"}
-                     and type(v) is int and v >= 0}
+                raise LLMError("llm_invalid_citations", usage=usage, metadata=metadata, latency_seconds=latency_sec)
+        except LLMError:
+            raise
         except (KeyError, IndexError, AttributeError, TypeError, ValueError, ValidationError):
-            raise LLMError("llm_invalid_response") from None
+            raise LLMError("llm_invalid_response", usage=usage, metadata=metadata, latency_seconds=latency_sec) from None
         return {"body": draft.answer.strip(), "provider": "google_ai_studio", "model": self.model,
                 "input_snapshot": snapshot, "is_clarification": draft.is_clarification,
                 "model_version": data.get("modelVersion", self.model), "prompt_version": "grounded-v2",
                 "citations": [{"source_id": s["source_id"], "source_type": s["source_type"],
                                "document_id": s["document_id"], "version": s["version"]}
                               for s in sources if s["source_id"] in inline],
-                "usage": usage, "latency_seconds": round(time.perf_counter() - started, 4)}
+                "usage": usage, "latency_seconds": latency_sec}

@@ -1,3 +1,5 @@
+import json
+from pathlib import Path
 import pytest
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -60,8 +62,10 @@ class MockLLM:
             {"source_id": "S1", "source_type": "policy", "document_id": "POL-RET-003", "version": "2.0", "excerpt": "Excerpt"}
         ]
         self.is_clarification = is_clarification
+        self.calls = []
 
     def generate(self, message, intent, evidence, business_context=None):
+        self.calls.append({"message": message, "intent": intent})
         return {
             "body": self.body,
             "input_snapshot": {"sources": self.sources},
@@ -296,8 +300,8 @@ def test_expired_policy_returns_no_match():
 
 
 def test_conflicting_policy_sources_flags_conflicting_sources():
-    """When retriever detects conflicting policy documents, Engine.analyse flags conflicting_sources
-    and recommends abstain.
+    """Flag propagation test: when retriever signals has_conflict=True, Engine.analyse
+    propagates conflicting_sources into reason_codes and recommends abstain.
     """
     retriever = MockRetriever(has_conflict=True)
     engine = make_engine(retriever=retriever)
@@ -466,5 +470,282 @@ def test_llm_usage_does_not_add_fake_zero_thought_tokens():
     assert res["llm_usage"]["output_tokens"] == 20
     assert res["llm_usage"]["total_tokens"] == 120
     assert "thought_tokens" not in res["llm_usage"]  # Must not invent fake 0!
+
+
+def test_contradictory_versioned_kb_fixture_detected_by_retrieval_adapter(tmp_path):
+    """Real conflict detection test: when multiple active eligible documents share
+    the same policy_key (e.g. contradictory return window rules), RetrievalAdapter detects has_conflict=True.
+    """
+    from apps.core_backend.retrieval.adapter import RetrievalAdapter
+
+    kb_fixture = [
+        {
+            "document_id": "POL-RET-TEST-001",
+            "version": "1.0",
+            "title": "Standard Return Policy 30 Days",
+            "content": "Customers can return items within 30 days of delivery.",
+            "status": "approved",
+            "approved_by": "qa-lead",
+            "approved_at": "2026-01-01T00:00:00Z",
+            "valid_from": "2026-01-01T00:00:00Z",
+            "valid_to": None,
+            "allowed_roles": ["agent"],
+            "policy_key": "standard_return_window",
+            "supported_intents": ["return_policy"],
+            "answer_capabilities": ["return_window"],
+        },
+        {
+            "document_id": "POL-RET-TEST-002",
+            "version": "2.0",
+            "title": "Standard Return Policy 14 Days Contradictory",
+            "content": "Customers can return items within 14 days of delivery.",
+            "status": "approved",
+            "approved_by": "qa-lead",
+            "approved_at": "2026-01-01T00:00:00Z",
+            "valid_from": "2026-01-01T00:00:00Z",
+            "valid_to": None,
+            "allowed_roles": ["agent"],
+            "policy_key": "standard_return_window",  # Same policy_key -> conflict!
+            "supported_intents": ["return_policy"],
+            "answer_capabilities": ["return_window"],
+        },
+    ]
+    kb_file = tmp_path / "conflict_kb.json"
+    kb_file.write_text(json.dumps(kb_fixture), encoding="utf-8")
+
+    from pipeline.evaluation.mock_dependencies import MockPolicyEncoder
+
+    adapter = RetrievalAdapter(
+        kb_path=str(kb_file),
+        allowed_document_versions={
+            ("POL-RET-TEST-001", "1.0"),
+            ("POL-RET-TEST-002", "2.0"),
+        },
+        encoder=MockPolicyEncoder(),
+        relevance_threshold=0.0,
+    )
+    res = adapter.retrieve("What is the return window for items?", intent="return_policy")
+    assert res["status"] == "success"
+    assert len(res["evidence"]) == 2
+    assert res["has_conflict"] is True
+
+
+def test_all_five_gold_ood_queries_route_to_abstention_in_engine():
+    """End-to-end Engine routing test: ALL 5 gold benchmark OOD queries route to abstention,
+    verifying that no draft is generated and no false policy statements are served.
+    """
+    gold_path = Path(__file__).resolve().parents[2] / "data/benchmarks/app_retrieval_gold_v2.json"
+    cases = json.loads(gold_path.read_text(encoding="utf-8"))
+    ood_cases = [c for c in cases if c["slice"] == "ood"]
+    assert len(ood_cases) == 5, f"Expected 5 OOD cases, got {len(ood_cases)}"
+
+    for case in ood_cases:
+        model = MockModel(intent=case["intent"], confidence=0.85, margin=0.70)
+        mock_llm = MockLLM()
+        engine = make_engine(model=model, llm=mock_llm)
+
+        req = {
+            "message": case["query"],
+            "as_of": case["as_of"],
+            "order_context": {},
+        }
+        res = engine.draft(req)
+        assert res["status"] == "abstained", f"Case {case['id']} did not abstain: {res['status']}"
+        assert "out_of_scope_intent" in res["reason_codes"], f"Case {case['id']} missing out_of_scope_intent"
+        assert len(mock_llm.calls) == 0, f"Case {case['id']} unexpectedly called LLM"
+
+
+def test_validate_preconditions_rejects_corrupted_manifest_or_hashes():
+    """Verify that validate_preconditions raises explicit ValueError when manifest
+    status, scope, gold hash, or KB/release hashes do not match.
+    """
+    from scripts.run_app_retrieval_benchmark import validate_preconditions
+
+    manifest = {
+        "status": "approved",
+        "approval": {
+            "approved": True,
+            "approval_scope": "local_application_retrieval_evaluation",
+        },
+        "target_release": "release-v1",
+        "sha256": "gold_hash_123",
+        "provenance": {
+            "kb_source_sha256": "kb_hash_123",
+            "kb_release_sha256": "rel_hash_123",
+        },
+    }
+    release_data = {"release": "release-v1"}
+
+    # Valid case passes
+    validate_preconditions(manifest, "gold_hash_123", "kb_hash_123", "rel_hash_123", release_data)
+
+    # 1. Unapproved status
+    bad_manifest = dict(manifest, status="pending")
+    with pytest.raises(ValueError, match="status must be 'approved'"):
+        validate_preconditions(bad_manifest, "gold_hash_123", "kb_hash_123", "rel_hash_123", release_data)
+
+    # 2. Corrupted gold hash
+    with pytest.raises(ValueError, match="Gold sha256 mismatch"):
+        validate_preconditions(manifest, "corrupted_gold", "kb_hash_123", "rel_hash_123", release_data)
+
+    # 3. Mismatched KB source hash
+    with pytest.raises(ValueError, match="KB source sha256 mismatch"):
+        validate_preconditions(manifest, "gold_hash_123", "wrong_kb", "rel_hash_123", release_data)
+
+    # 4. Mismatched release hash
+    with pytest.raises(ValueError, match="KB release sha256 mismatch"):
+        validate_preconditions(manifest, "gold_hash_123", "kb_hash_123", "wrong_rel", release_data)
+
+
+def test_llm_usage_does_not_synthesize_complete_total_when_total_token_count_absent():
+    """When totalTokenCount is absent from provider raw usage, Engine does not synthesize
+    it as total_tokens, preserving total_tokens_partial or leaving total_tokens unknown.
+    """
+    evidence = [{
+        "document_id": "POL-RET-001",
+        "version": "2.0",
+        "title": "Standard Return Policy",
+        "excerpt": "Return within 30 days.",
+        "score": 0.90,
+    }]
+    sources = [{
+        "source_id": "S1",
+        "source_type": "policy",
+        "document_id": "POL-RET-001",
+        "version": "2.0",
+        "excerpt": evidence[0]["excerpt"],
+    }]
+
+    class NoTotalLLM:
+        def generate(self, message, intent, evidence, business_context=None):
+            return {
+                "body": "Return within 30 days. [S1]",
+                "input_snapshot": {"sources": sources},
+                "is_clarification": False,
+                "latency_seconds": 0.20,
+                "provider": "google_ai_studio",
+                "model": "gemini-3.1-flash-lite",
+                "usage": {
+                    "promptTokenCount": 150,
+                    "candidatesTokenCount": 35,
+                    # No totalTokenCount!
+                },
+            }
+
+    engine = make_engine(
+        retriever=MockRetriever(evidence=evidence),
+        llm=NoTotalLLM(),
+    )
+    req = {
+        "message": "What is the return window?",
+        "as_of": datetime.now(timezone.utc).isoformat(),
+        "order_context": {},
+    }
+    res = engine.draft(req)
+    assert res["status"] == "draft_ready"
+    assert "total_tokens" not in res["llm_usage"]  # Must not present synthesized sum as complete total!
+    assert res["llm_usage"]["total_tokens_partial"] == 185
+
+
+def test_gemini_client_and_engine_preserve_usage_on_insufficient_evidence():
+    """When the provider returns answerable=false, GeminiDraftClient attaches usage/metadata
+    to LLMError, and Engine.draft preserves llm_usage and llm_metadata on the failure path.
+    """
+    from apps.core_backend.llm.gemini import LLMError
+
+    class RaisingLLM:
+        def generate(self, message, intent, evidence, business_context=None):
+            raise LLMError(
+                "llm_insufficient_evidence",
+                usage={"promptTokenCount": 200, "candidatesTokenCount": 25, "totalTokenCount": 225},
+                metadata={"provider": "google_ai_studio", "model": "gemini-3.1-flash-lite"},
+                latency_seconds=0.42,
+            )
+
+    evidence = [{
+        "document_id": "POL-REFUND-001",
+        "version": "1.0",
+        "title": "Refund Policy",
+        "excerpt": "Refund rules...",
+        "score": 0.90,
+    }]
+    engine = make_engine(retriever=MockRetriever(evidence=evidence), llm=RaisingLLM())
+    req = {
+        "message": "What is your refund policy?",
+        "as_of": datetime.now(timezone.utc).isoformat(),
+        "order_context": {},
+    }
+    res = engine.draft(req)
+    assert res["status"] == "llm_unavailable"
+    assert "grounding_failed" in res["reason_codes"]
+    assert res["failure_code"] == "llm_insufficient_evidence"
+    assert res["llm_usage"]["input_tokens"] == 200
+    assert res["llm_usage"]["output_tokens"] == 25
+    assert res["llm_usage"]["total_tokens"] == 225
+    assert res["llm_metadata"]["provider"] == "google_ai_studio"
+    assert res["step_latency_ms"]["llm"] == 420
+
+
+def test_jobs_store_persists_llm_metadata_additively():
+    """Verify that SuggestionWorker.store persists llm_metadata into suggestion payload
+    alongside llm_usage.
+    """
+    from apps.backend.tickets.jobs import SuggestionWorker
+    from apps.backend.platform.models import Suggestion, Ticket, SuggestionJob
+    from unittest.mock import MagicMock
+    from contextlib import contextmanager
+
+    session = MagicMock()
+    ticket = MagicMock(spec=Ticket)
+    ticket.ticket_id = "tick-123"
+    ticket.current_suggestion_id = "sugg-123"
+
+    job = MagicMock(spec=SuggestionJob)
+    job.lease_token = "tok-abc"
+    job.lease_until = None
+
+    suggestion = MagicMock(spec=Suggestion)
+    suggestion.ticket_id = "tick-123"
+    suggestion.payload = {"analysis_status": "ready", "draft_status": "pending", "trace_id": "tr-123"}
+
+    session.get.side_effect = lambda model, ident: suggestion if model is Suggestion else None
+    session.scalar.side_effect = lambda query: ticket if "ticket" in str(query).lower() else job
+
+    @contextmanager
+    def mock_tx():
+        yield session
+
+    mock_db = MagicMock()
+    mock_db.transaction = mock_tx
+
+    worker = SuggestionWorker(database=mock_db, settings=MagicMock())
+
+    draft_result = {
+        "status": "draft_ready",
+        "reason_codes": [],
+        "draft": {"reply": "Here is your answer"},
+        "analysis": {
+            "versions": {"model_version": "v1.0"},
+            "routing": {"reason_codes": []},
+        },
+        "llm_usage": {"input_tokens": 120, "output_tokens": 30},
+        "llm_metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "model_version": "gemini-3.1-flash-lite-001",
+            "prompt_version": "grounded-v2",
+        },
+    }
+
+    worker.store("sugg-123", "tok-abc", "draft", draft_result, 150)
+
+    payload = suggestion.payload
+    assert payload["llm_usage"] == {"input_tokens": 120, "output_tokens": 30}
+    assert payload["llm_metadata"] == {
+        "provider": "google_ai_studio",
+        "model": "gemini-3.1-flash-lite",
+        "model_version": "gemini-3.1-flash-lite-001",
+        "prompt_version": "grounded-v2",
+    }
 
 
