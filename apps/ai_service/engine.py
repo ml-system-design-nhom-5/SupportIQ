@@ -98,6 +98,36 @@ class Engine:
             code = getattr(error, 'code', 'llm_unavailable')
             failure = 'grounding_failed' if code in ('llm_insufficient_evidence', 'llm_invalid_citations') else 'llm_invalid_output' if code in ('llm_invalid_response',) else 'llm_unavailable'
             return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {failure}), "failure_code": code if code.startswith("llm_") else "llm_unavailable", "staff_note": "The LLM timed out after a bounded retry. Try AI again or use the retrieved sources to write a reply." if code == "llm_timeout" else "Draft generation is unavailable. Review the retrieved sources and write a reply manually."}
+
+        # Preserve complete LLM usage and provenance even if post-generation grounding fails
+        raw_usage = generated.get("usage", {})
+        llm_usage = {}
+        if "promptTokenCount" in raw_usage and raw_usage["promptTokenCount"] is not None:
+            llm_usage["input_tokens"] = raw_usage["promptTokenCount"]
+        if "candidatesTokenCount" in raw_usage and raw_usage["candidatesTokenCount"] is not None:
+            llm_usage["output_tokens"] = raw_usage["candidatesTokenCount"]
+        if "totalTokenCount" in raw_usage and raw_usage["totalTokenCount"] is not None:
+            llm_usage["total_tokens"] = raw_usage["totalTokenCount"]
+        elif "input_tokens" in llm_usage and "output_tokens" in llm_usage:
+            llm_usage["total_tokens"] = llm_usage["input_tokens"] + llm_usage["output_tokens"]
+        if "thoughtsTokenCount" in raw_usage and raw_usage["thoughtsTokenCount"] is not None:
+            llm_usage["thought_tokens"] = raw_usage["thoughtsTokenCount"]
+
+        llm_metadata = {}
+        for meta_key, gen_key in (
+            ("provider", "provider"),
+            ("model", "model"),
+            ("model_version", "model_version"),
+            ("prompt_version", "prompt_version"),
+        ):
+            if generated.get(gen_key):
+                llm_metadata[meta_key] = generated[gen_key]
+
+        result["step_latency_ms"] = {**analysis["step_latency_ms"], "llm": round(generated.get("latency_seconds", 0) * 1000)}
+        result["llm_usage"] = llm_usage
+        if llm_metadata:
+            result["llm_metadata"] = llm_metadata
+
         text = generated["body"]
         allowed_placeholders = {match.group() for match in PLACEHOLDER.finditer(request["message"])}
         if any(match.group() not in allowed_placeholders for match in PLACEHOLDER.finditer(text)):
@@ -140,8 +170,6 @@ class Engine:
                              "text": re.sub(r"\s*\[S\d+\]", "", paragraph).strip(), "citation_ids": list(dict.fromkeys(citation_ids))})
         if not segments or not citations:
             return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
-        result['step_latency_ms'] = {**analysis['step_latency_ms'], 'llm': round(generated.get('latency_seconds', 0) * 1000)}
-        result['llm_usage'] = {'input_tokens': generated.get('usage', {}).get('promptTokenCount'), 'output_tokens': generated.get('usage', {}).get('candidatesTokenCount')}
         is_clarification = generated.get("is_clarification", False)
         final_codes = list(set(codes) | ({"missing_information"} if is_clarification else set()))
         staff_note = (

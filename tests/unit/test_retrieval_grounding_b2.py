@@ -349,3 +349,122 @@ def test_unanswerable_out_of_scope_abstains():
     draft_res = engine.draft(req)
     assert draft_res["status"] == "abstained"
 
+
+def test_llm_usage_and_metadata_preserved_when_grounding_fails():
+    """When LLM generation succeeds but grounding validation fails,
+    Engine must retain complete llm_usage and llm_metadata rather than dropping them.
+    """
+    evidence = [{
+        "document_id": "POL-RET-003",
+        "version": "2.0",
+        "title": "Restricted Return Categories",
+        "excerpt": "Cosmetics with unsealed protective packaging cannot be returned...",
+        "score": 0.85,
+    }]
+    sources = [{
+        "source_id": "S1",
+        "source_type": "policy",
+        "document_id": "POL-RET-003",
+        "version": "2.0",
+        "excerpt": evidence[0]["excerpt"],
+    }]
+
+    class UsageReportingLLM:
+        def generate(self, message, intent, evidence, business_context=None):
+            return {
+                "body": "Cosmetics cannot be returned at all. [S1]",  # Will fail overgeneralization check
+                "input_snapshot": {"sources": sources},
+                "is_clarification": False,
+                "latency_seconds": 0.35,
+                "provider": "google_ai_studio",
+                "model": "gemini-3.1-flash-lite",
+                "model_version": "gemini-3.1-flash-lite-001",
+                "prompt_version": "grounded-v2",
+                "usage": {
+                    "promptTokenCount": 250,
+                    "candidatesTokenCount": 40,
+                    "totalTokenCount": 290,
+                    "thoughtsTokenCount": 15,
+                },
+            }
+
+    engine = make_engine(
+        retriever=MockRetriever(evidence=evidence),
+        llm=UsageReportingLLM(),
+    )
+
+    req = {
+        "message": "Can I return a cosmetic lotion I purchased?",
+        "as_of": datetime.now(timezone.utc).isoformat(),
+        "order_context": {},
+    }
+    res = engine.draft(req)
+    assert res["status"] == "llm_unavailable"
+    assert "grounding_failed" in res["reason_codes"]
+
+    # Usage and latency must be retained despite grounding failure
+    assert "llm_usage" in res
+    assert res["llm_usage"]["input_tokens"] == 250
+    assert res["llm_usage"]["output_tokens"] == 40
+    assert res["llm_usage"]["total_tokens"] == 290
+    assert res["llm_usage"]["thought_tokens"] == 15
+    assert res["step_latency_ms"].get("llm") == 350
+    assert res.get("llm_metadata", {}).get("provider") == "google_ai_studio"
+    assert res.get("llm_metadata", {}).get("model") == "gemini-3.1-flash-lite"
+
+
+def test_llm_usage_does_not_add_fake_zero_thought_tokens():
+    """When thoughtsTokenCount is not present in raw usage, thought_tokens must be omitted,
+    never fabricated as 0.
+    """
+    evidence = [{
+        "document_id": "POL-RET-001",
+        "version": "2.0",
+        "title": "Standard Return Policy",
+        "excerpt": "Return within 30 days.",
+        "score": 0.90,
+    }]
+    sources = [{
+        "source_id": "S1",
+        "source_type": "policy",
+        "document_id": "POL-RET-001",
+        "version": "2.0",
+        "excerpt": evidence[0]["excerpt"],
+    }]
+
+    class NoThoughtLLM:
+        def generate(self, message, intent, evidence, business_context=None):
+            return {
+                "body": "Return within 30 days. [S1]",
+                "input_snapshot": {"sources": sources},
+                "is_clarification": False,
+                "latency_seconds": 0.20,
+                "provider": "google_ai_studio",
+                "model": "gemini-3.1-flash-lite",
+                "usage": {
+                    "promptTokenCount": 100,
+                    "candidatesTokenCount": 20,
+                    "totalTokenCount": 120,
+                    # No thoughtsTokenCount
+                },
+            }
+
+    engine = make_engine(
+        retriever=MockRetriever(evidence=evidence),
+        llm=NoThoughtLLM(),
+    )
+
+    req = {
+        "message": "What is the return window?",
+        "as_of": datetime.now(timezone.utc).isoformat(),
+        "order_context": {},
+    }
+    res = engine.draft(req)
+    assert res["status"] == "draft_ready"
+    assert "llm_usage" in res
+    assert res["llm_usage"]["input_tokens"] == 100
+    assert res["llm_usage"]["output_tokens"] == 20
+    assert res["llm_usage"]["total_tokens"] == 120
+    assert "thought_tokens" not in res["llm_usage"]  # Must not invent fake 0!
+
+
