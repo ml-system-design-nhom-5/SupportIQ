@@ -1,8 +1,8 @@
 {
   "meta": {
-    "run_id": "accept-20261112-141929-18efc2",
-    "timestamp": "2026-11-12T14:19:29.659974+00:00",
-    "git_commit": "2b89e75dc104b760acb101607955b7555963c86f",
+    "run_id": "accept-20261112-143218-1fab27",
+    "timestamp": "2026-11-12T14:32:18.478793+00:00",
+    "git_commit": "4d0bedfe5732de418392c73edfe416a4ca5374c7",
     "mode": "mock",
     "boundary_kind": "in_process_asgi_testclient",
     "evidence_kind": "mock_runner_simulation",
@@ -21,7 +21,7 @@
       "analysis_timeout_ms": 3000,
       "draft_timeout_ms": 11000
     },
-    "raw_records_sha256": "5CF380952C55B374BDE9B6F986CCA97C3764EC46A72581A5DBED28633482AE28",
+    "raw_records_sha256": "34AB74513379F090B2946B29C58FFDFB854E671CAAC1C87553B2679543A484C6",
     "local_expected_provenance_hashes": {
       "approved_kb_v2_sha256": "AAA924C4B48DCD53A14269045B278B66F6E5E8AE9D1B614CD59B757102B78594",
       "ai_service_kb_release_sha256": "33CF05B50C25384FBB208CD0C0C5CAE71991D29A0F754CB1B20A1D6D7285CDAA",
@@ -64,22 +64,22 @@
     "latency_coverage_complete": true
   },
   "performance": {
-    "p50_seconds": 0.42313,
-    "p95_seconds": 0.6658,
-    "mean_seconds": 0.42287,
-    "min_seconds": 0.2041,
-    "max_seconds": 0.6658,
+    "p50_seconds": 0.32817,
+    "p95_seconds": 0.5658500000000001,
+    "mean_seconds": 0.3439,
+    "min_seconds": 0.23109,
+    "max_seconds": 0.5658500000000001,
     "error_rate": 0.0,
     "target_p95_met": true,
     "target_threshold_seconds": 12.0,
     "strata": {
       "draft_producing": {
         "count": 5,
-        "p50_seconds": 0.42313,
-        "p95_seconds": 0.6658,
-        "mean_seconds": 0.42287,
-        "min_seconds": 0.2041,
-        "max_seconds": 0.6658,
+        "p50_seconds": 0.32817,
+        "p95_seconds": 0.56585,
+        "mean_seconds": 0.3439,
+        "min_seconds": 0.23109,
+        "max_seconds": 0.56585,
         "error_rate": 0.0,
         "description": "Tickets reaching draft generation (e.g. draft_ready, clarification)"
       },
@@ -95,11 +95,11 @@
       },
       "overall": {
         "count": 5,
-        "p50_seconds": 0.42313,
-        "p95_seconds": 0.6658,
-        "mean_seconds": 0.42287,
-        "min_seconds": 0.2041,
-        "max_seconds": 0.6658,
+        "p50_seconds": 0.32817,
+        "p95_seconds": 0.56585,
+        "mean_seconds": 0.3439,
+        "min_seconds": 0.23109,
+        "max_seconds": 0.56585,
         "error_rate": 0.0,
         "description": "All submitted tickets across all conditions and outcomes"
       }
@@ -107,15 +107,17 @@
     "conditions": {
       "cold": {
         "count": 1,
-        "latency_seconds": 0.6658,
-        "mean_seconds": 0.6658,
+        "latency_seconds": 0.5658500000000001,
+        "mean_seconds": 0.56585,
+        "error_rate": 0.0,
         "description": "App connection and DB pool cold start only (NOT model or provider cold start)"
       },
       "warm": {
         "count": 4,
-        "p50_seconds": 0.42313,
-        "p95_seconds": 0.48466000000000004,
-        "mean_seconds": 0.36214,
+        "p50_seconds": 0.32817,
+        "p95_seconds": 0.35247,
+        "mean_seconds": 0.28841,
+        "error_rate": 0.0,
         "description": "Subsequent tickets executed on warm connection pool and worker"
       }
     }
@@ -123,16 +125,27 @@
   "tokens_and_cost": {
     "total_prompt_tokens": 640,
     "total_candidate_tokens": 210,
-    "total_thinking_tokens": 0,
+    "total_thinking_tokens": null,
     "total_completion_tokens": 210,
     "total_tokens": 850,
     "provider_reported_total_tokens": 850,
     "observed_thought_tokens": 0,
     "observed_partial_tokens": 850,
-    "thinking_tracked": true,
-    "all_requests_tracked_thinking": true,
+    "thinking_tracked": false,
+    "all_requests_tracked_thinking": false,
     "thinking_tokens_assumed_zero": false,
-    "derivation_provenance": null,
+    "derivation_provenance": {
+      "formula": "billable_output_tokens = totalTokenCount - promptTokenCount",
+      "raw_reported_total_tokens": 850,
+      "total_prompt_tokens": 640,
+      "total_candidate_tokens": 210,
+      "derived_output_tokens": 210,
+      "thinking_tokens_reported": false,
+      "thinking_tokens_assumed_zero": false,
+      "provider_semantics_verified": true,
+      "source_doc": "https://ai.google.dev/gemini-api/docs/pricing",
+      "description": "Derived from provider-reported totalTokenCount under Gemini API billing semantics, where totalTokenCount = promptTokenCount + outputTokenCount (including candidates and thinking). Separate thoughtsTokenCount was not returned by provider; thoughts are NOT asserted to be zero."
+    },
     "cost_status": "mock_simulation_cost_estimate",
     "cost_usd": 0.000475,
     "lower_bound_cost_usd": 0.000475,
@@ -151,14 +164,14 @@
       "condition": "cold",
       "message": "What is your return policy?",
       "ticket_id": "TCK-1001",
-      "wall_latency_ms": 665.8,
+      "wall_latency_ms": 565.85,
       "analysis_status": "ready",
       "draft_status": "draft_ready",
       "reply_is_none": true,
       "observation_succeeded": true,
       "step_latency_ms": {
-        "analysis": 273,
-        "draft": 88,
+        "analysis": 202,
+        "draft": 18,
         "analysis_ms": 42,
         "draft_ms": 180,
         "llm_ms": 150
@@ -190,14 +203,14 @@
       "condition": "warm",
       "message": "Can I return an item I bought last week?",
       "ticket_id": "TCK-1002",
-      "wall_latency_ms": 484.66,
+      "wall_latency_ms": 231.09,
       "analysis_status": "ready",
       "draft_status": "draft_ready",
       "reply_is_none": true,
       "observation_succeeded": true,
       "step_latency_ms": {
-        "analysis": 83,
-        "draft": 89,
+        "analysis": 69,
+        "draft": 18,
         "analysis_ms": 42,
         "draft_ms": 180,
         "llm_ms": 150
@@ -229,14 +242,14 @@
       "condition": "warm",
       "message": "How long do I have to make a return?",
       "ticket_id": "TCK-1003",
-      "wall_latency_ms": 336.68,
+      "wall_latency_ms": 241.9,
       "analysis_status": "ready",
       "draft_status": "draft_ready",
       "reply_is_none": true,
       "observation_succeeded": true,
       "step_latency_ms": {
-        "analysis": 61,
-        "draft": 41,
+        "analysis": 31,
+        "draft": 28,
         "analysis_ms": 42,
         "draft_ms": 180,
         "llm_ms": 150
@@ -268,14 +281,14 @@
       "condition": "warm",
       "message": "Do you offer refunds for returned items?",
       "ticket_id": "TCK-1004",
-      "wall_latency_ms": 423.13,
+      "wall_latency_ms": 352.47,
       "analysis_status": "ready",
       "draft_status": "draft_ready",
       "reply_is_none": true,
       "observation_succeeded": true,
       "step_latency_ms": {
-        "analysis": 77,
-        "draft": 86,
+        "analysis": 83,
+        "draft": 54,
         "analysis_ms": 42,
         "draft_ms": 180,
         "llm_ms": 150
@@ -307,14 +320,14 @@
       "condition": "warm",
       "message": "What are the return shipping costs?",
       "ticket_id": "TCK-1005",
-      "wall_latency_ms": 204.1,
+      "wall_latency_ms": 328.17,
       "analysis_status": "ready",
       "draft_status": "draft_ready",
       "reply_is_none": true,
       "observation_succeeded": true,
       "step_latency_ms": {
-        "analysis": 40,
-        "draft": 16,
+        "analysis": 23,
+        "draft": 29,
         "analysis_ms": 42,
         "draft_ms": 180,
         "llm_ms": 150

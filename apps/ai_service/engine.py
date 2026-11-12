@@ -55,6 +55,8 @@ class Engine:
         ):
             if raw_source.get(gen_key):
                 llm_metadata[meta_key] = raw_source[gen_key]
+        if "attempts" in raw_source and raw_source["attempts"]:
+            llm_metadata["attempts"] = list(raw_source["attempts"])
         return llm_usage, llm_metadata
 
     def _analyse(self, request):
@@ -173,8 +175,9 @@ class Engine:
             err_usage_dict = getattr(error, "usage", {}) or {}
             err_meta_dict = getattr(error, "metadata", {}) or {}
             err_latency = getattr(error, "latency_seconds", None)
-            if err_usage_dict or err_meta_dict:
-                err_bundle = {"usage": err_usage_dict, **err_meta_dict}
+            err_attempts = getattr(error, "attempts", []) or []
+            if err_usage_dict or err_meta_dict or err_attempts:
+                err_bundle = {"usage": err_usage_dict, "attempts": err_attempts, **err_meta_dict}
                 err_usage, err_metadata = self._extract_llm_usage_and_metadata(err_bundle)
                 if err_usage:
                     err_result["llm_usage"] = err_usage

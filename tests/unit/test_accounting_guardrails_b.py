@@ -500,7 +500,7 @@ class TestBudgetedDraftClientRetryAccounting:
                 if self.calls == 1:
                     raise LLMError(
                         "llm_timeout",
-                        usage={"promptTokenCount": 500},
+                        usage={"promptTokenCount": 500, "totalTokenCount": 500},
                         metadata={"provider": "google_ai_studio", "model": "gemini-3.1-flash-lite"},
                         latency_seconds=2.5,
                     )
@@ -750,3 +750,262 @@ class TestModelTierAndMissingTotalEdgeCases:
         assert tc["cost_status"] == "partial_lower_bound_missing_thinking"
         assert tc["cost_usd"] is None
         assert tc["lower_bound_cost_usd"] == pytest.approx((1000 * 0.25 + 100 * 1.50) / 1_000_000.0)
+
+    def test_missing_pricing_provider_cannot_yield_verified_label(self):
+        """When pricing artifact omits declared provider, runner cannot yield a verified label."""
+        pricing_no_provider = dict(OFFICIAL_PRICING)
+        del pricing_no_provider["provider"]
+
+        results = [
+            TicketCaseResult(
+                case_index=0,
+                condition="cold",
+                message="Query",
+                ticket_id="TCK-1001",
+                wall_latency_ms=1500.0,
+                analysis_status="ready",
+                draft_status="draft_ready",
+                customer_reply_is_none=True,
+                tokens={"input_tokens": 1000, "output_tokens": 100, "total_tokens": 1100},
+                llm_metadata={"provider": "google_ai_studio", "model": "gemini-3.1-flash-lite", "tier": "standard_paid"},
+                is_terminal=True,
+                is_success=True,
+            )
+        ]
+        config = ApplicationAcceptanceConfig(mode="live", verified_pricing=pricing_no_provider)
+        summary = ApplicationAcceptanceRunner(config)._compute_summary(results, output_dir=None)
+        tc = summary["tokens_and_cost"]
+
+        # Even with matching tier, missing pricing provider prevents VERIFIED label!
+        assert tc["cost_status"] != "verified_list_price_estimate"
+        assert tc["cost_status"] == "conditional_list_price_estimate_unknown_account_tier"
+        assert "unverified or unspecified" in tc["cost_note"].lower()
+
+
+class TestRetryAccountingAndMetadataSurvivalRegressions:
+    """Regressions for retry accounting, metadata survival through Engine, and timeout handling."""
+
+    def test_retry_timeout_unknown_then_success_fails_closed(self):
+        """When Attempt 0 timed out with unmeasured provider usage and Attempt 1 succeeded:
+        Runner must keep unknown timeout usage as incomplete, failing closed with incomplete_token_coverage.
+        """
+        results = [
+            TicketCaseResult(
+                case_index=0,
+                condition="cold",
+                message="Query with retry",
+                ticket_id="TCK-1001",
+                wall_latency_ms=3500.0,
+                analysis_status="ready",
+                draft_status="draft_ready",
+                customer_reply_is_none=True,
+                tokens={"input_tokens": 500, "output_tokens": 80, "total_tokens": 580},
+                llm_metadata={
+                    "provider": "google_ai_studio",
+                    "model": "gemini-3.1-flash-lite",
+                    "attempts": [
+                        {
+                            "attempt_index": 0,
+                            "status": "llm_timeout",
+                            "latency_seconds": 2.5,
+                            "usage": {},  # Unmeasured usage before timeout
+                            "metadata": {"provider": "google_ai_studio", "model": "gemini-3.1-flash-lite"},
+                        },
+                        {
+                            "attempt_index": 1,
+                            "status": "success",
+                            "latency_seconds": 1.0,
+                            "usage": {"promptTokenCount": 500, "candidatesTokenCount": 80, "totalTokenCount": 580},
+                            "metadata": {"provider": "google_ai_studio", "model": "gemini-3.1-flash-lite"},
+                        },
+                    ],
+                },
+                is_terminal=True,
+                is_success=True,
+            )
+        ]
+        config = ApplicationAcceptanceConfig(mode="live", verified_pricing=OFFICIAL_PRICING)
+        summary = ApplicationAcceptanceRunner(config)._compute_summary(results, output_dir=None)
+        tc = summary["tokens_and_cost"]
+
+        assert tc["cost_status"] == "incomplete_token_coverage"
+        assert tc["cost_usd"] is None
+        assert "timed out with unmeasured provider usage" in tc["cost_note"].lower()
+
+    def test_mixed_models_across_retries_detected_and_fails_closed(self):
+        """When Attempt 0 used gemini-2.5-flash and Attempt 1 used gemini-3.1-flash-lite:
+        Runner detects mixed models across retries and fails closed with mixed_models_unverified.
+        """
+        results = [
+            TicketCaseResult(
+                case_index=0,
+                condition="cold",
+                message="Query with retry",
+                ticket_id="TCK-1001",
+                wall_latency_ms=3000.0,
+                analysis_status="ready",
+                draft_status="draft_ready",
+                customer_reply_is_none=True,
+                tokens={"input_tokens": 1000, "output_tokens": 80, "total_tokens": 1080},
+                llm_metadata={
+                    "attempts": [
+                        {
+                            "attempt_index": 0,
+                            "status": "llm_unavailable",
+                            "latency_seconds": 1.5,
+                            "usage": {"promptTokenCount": 500},
+                            "metadata": {"provider": "google_ai_studio", "model": "gemini-2.5-flash"},
+                        },
+                        {
+                            "attempt_index": 1,
+                            "status": "success",
+                            "latency_seconds": 1.5,
+                            "usage": {"promptTokenCount": 500, "candidatesTokenCount": 80, "totalTokenCount": 580},
+                            "metadata": {"provider": "google_ai_studio", "model": "gemini-3.1-flash-lite"},
+                        },
+                    ],
+                },
+                is_terminal=True,
+                is_success=True,
+            )
+        ]
+        config = ApplicationAcceptanceConfig(mode="live", verified_pricing=OFFICIAL_PRICING)
+        summary = ApplicationAcceptanceRunner(config)._compute_summary(results, output_dir=None)
+        tc = summary["tokens_and_cost"]
+
+        assert tc["cost_status"] == "mixed_models_unverified"
+        assert tc["cost_usd"] is None
+
+    def test_engine_metadata_survival_on_success_and_error(self):
+        """Verify that Engine.draft persists attempts list into llm_metadata on both success and error."""
+        from apps.ai_service.engine import Engine
+
+        class DummyModel:
+            def predict(self, text):
+                return {"intent": "return_policy", "confidence": 0.95, "margin": 0.90}
+
+        class DummyRetriever:
+            def __init__(self):
+                self.eligible_versions = []
+
+            def retrieve(self, *a, **k):
+                return {
+                    "status": "success",
+                    "evidence": [{"document_id": "POL-1", "version": "1.0", "title": "T", "excerpt": "Excerpt"}],
+                }
+
+        class MockLLMSuccess:
+            def generate(self, *a, **k):
+                return {
+                    "body": "Reply [S1]",
+                    "input_snapshot": {"sources": [{"source_id": "S1", "source_type": "policy", "document_id": "POL-1", "version": "1.0", "excerpt": "Excerpt"}]},
+                    "is_clarification": False,
+                    "latency_seconds": 0.2,
+                    "usage": {"promptTokenCount": 100, "candidatesTokenCount": 20, "totalTokenCount": 120},
+                    "provider": "google_ai_studio",
+                    "model": "gemini-3.1-flash-lite",
+                    "attempts": [
+                        {"attempt_index": 0, "status": "success", "latency_seconds": 0.2, "usage": {"promptTokenCount": 100}}
+                    ],
+                }
+
+        dummy_policy = {
+            "supported_12_intents": ["return_policy"],
+            "sensitive_action_intents": [],
+            "default_confidence_threshold": 0.70,
+            "default_margin_threshold": 0.10,
+        }
+
+        engine = Engine(
+            model=DummyModel(),
+            retriever=DummyRetriever(),
+            llm=MockLLMSuccess(),
+            versions={"model_version": "v1.0.0", "kb_version": "kb-v2"},
+            policy=dummy_policy,
+        )
+        from datetime import datetime, timezone
+        now_iso = datetime.now(timezone.utc).isoformat()
+        res = engine.draft({"message": "Return query", "order_context": {}, "as_of": now_iso})
+        assert "llm_metadata" in res
+        assert "attempts" in res["llm_metadata"]
+        assert len(res["llm_metadata"]["attempts"]) == 1
+        assert res["llm_metadata"]["attempts"][0]["status"] == "success"
+
+        # On error path:
+        class MockLLMError:
+            def generate(self, *a, **k):
+                raise LLMError(
+                    "llm_unavailable",
+                    usage={"promptTokenCount": 100},
+                    metadata={"provider": "google_ai_studio", "model": "gemini-3.1-flash-lite"},
+                    latency_seconds=0.5,
+                    attempts=[{"attempt_index": 0, "status": "llm_unavailable", "latency_seconds": 0.5}],
+                )
+
+        engine_err = Engine(
+            model=DummyModel(),
+            retriever=DummyRetriever(),
+            llm=MockLLMError(),
+            versions={"model_version": "v1.0.0", "kb_version": "kb-v2"},
+            policy=dummy_policy,
+        )
+        err_res = engine_err.draft({"message": "Return query", "order_context": {}, "as_of": now_iso})
+        assert "llm_metadata" in err_res
+        assert "attempts" in err_res["llm_metadata"]
+        assert len(err_res["llm_metadata"]["attempts"]) == 1
+        assert err_res["llm_metadata"]["attempts"][0]["status"] == "llm_unavailable"
+
+    def test_cold_warm_error_rates_measured_from_actual_failures(self):
+        """Runner reports measured error rates for cold and warm strata, not hardcoded 0.0%."""
+        results = [
+            # Cold case failed
+            TicketCaseResult(
+                case_index=0,
+                condition="cold",
+                message="Cold query",
+                ticket_id="TCK-1001",
+                wall_latency_ms=1000.0,
+                analysis_status="error",
+                draft_status="error",
+                customer_reply_is_none=True,
+                is_terminal=True,
+                is_success=False,
+            ),
+            # Warm case succeeded
+            TicketCaseResult(
+                case_index=1,
+                condition="warm",
+                message="Warm query",
+                ticket_id="TCK-1002",
+                wall_latency_ms=200.0,
+                analysis_status="ready",
+                draft_status="abstained",
+                customer_reply_is_none=True,
+                is_terminal=True,
+                is_success=True,
+            ),
+        ]
+        config = ApplicationAcceptanceConfig(mode="mock")
+        runner = ApplicationAcceptanceRunner(config)
+        summary = runner._compute_summary(results, output_dir=None)
+        p = summary["performance"]
+
+        assert p["conditions"]["cold"]["error_rate"] == 1.0
+        assert p["conditions"]["warm"]["error_rate"] == 0.0
+        assert p["error_rate"] == 0.5
+
+        # In markdown report
+        md = runner._render_markdown(summary)
+        assert "| **Cold Start** | 1 | `1.000s` | `1.000s` | `1.000s` | 100.0% |" in md
+        assert "| **Warm Runs** | 1 | `0.200s` | `0.200s` | `0.200s` | 0.0% |" in md
+
+    def test_aggregate_usage_boolean_token_is_invalid(self):
+        """BudgetedDraftClient._aggregate_usage marks boolean token counts as invalid and incomplete."""
+        budgeted = BudgetedDraftClient(None)
+        attempts = [
+            {"attempt_index": 0, "status": "success", "usage": {"promptTokenCount": True, "candidatesTokenCount": 20}}
+        ]
+        combined = budgeted._aggregate_usage(attempts)
+        assert combined.get("has_invalid_fields") is True
+        assert combined.get("incomplete") is True
+        assert "promptTokenCount" not in combined  # True is not counted as 1!
