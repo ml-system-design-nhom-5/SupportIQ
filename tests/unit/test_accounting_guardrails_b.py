@@ -145,6 +145,8 @@ class TestGeminiUsageSemanticsAndDerivation:
         assert dp["raw_reported_total_tokens"] == 3269
         assert dp["thinking_tokens_assumed_zero"] is False
         assert "Gemini API billing semantics" in dp["description"]
+        assert "text-only/no-tools" in dp["formula"]
+        assert "aistudio.google.com" in dp["source_doc"]
 
         # Cost calculation: (2988 * 0.25 + 281 * 1.50) / 1,000,000 = 0.0011685 USD
         expected_cost = (2988 * 0.25 + 281 * 1.50) / 1_000_000.0
@@ -1009,3 +1011,173 @@ class TestRetryAccountingAndMetadataSurvivalRegressions:
         assert combined.get("has_invalid_fields") is True
         assert combined.get("incomplete") is True
         assert "promptTokenCount" not in combined  # True is not counted as 1!
+
+    def test_missing_output_with_known_thoughts_fails_closed_and_keeps_tokens_unknown(self):
+        """When draft_ready has input_tokens: 100, thought_tokens: 5, but output and total are absent:
+        total_candidate_tokens and completion must stay unknown (None, not 0 or 5),
+        provider_reported_total_tokens must be None (not 105), and cost_status must be incomplete_token_coverage.
+        """
+        results = [
+            TicketCaseResult(
+                case_index=0,
+                condition="cold",
+                message="Missing output query",
+                ticket_id="TCK-1001",
+                wall_latency_ms=1200.0,
+                analysis_status="ready",
+                draft_status="draft_ready",
+                customer_reply_is_none=True,
+                tokens={"input_tokens": 100, "thought_tokens": 5},
+                llm_metadata={"provider": "google_ai_studio", "model": "gemini-3.1-flash-lite", "tier": "standard_paid"},
+                is_terminal=True,
+                is_success=True,
+            )
+        ]
+        config = ApplicationAcceptanceConfig(mode="live", verified_pricing=OFFICIAL_PRICING)
+        summary = ApplicationAcceptanceRunner(config)._compute_summary(results, output_dir=None)
+        tc = summary["tokens_and_cost"]
+
+        assert tc["total_candidate_tokens"] is None, "Missing candidate tokens must not be defaulted to 0"
+        assert tc["total_completion_tokens"] is None, "Completion tokens must not be fabricated from thoughts alone"
+        assert tc["total_tokens"] is None, "Total tokens must not be fabricated"
+        assert tc["provider_reported_total_tokens"] is None, "Provider total must be null when omitted by provider"
+        assert tc["cost_status"] == "incomplete_token_coverage"
+        assert tc["cost_usd"] is None
+
+    def test_missing_provider_total_with_explicit_counts_reports_null_reported_total(self):
+        """When explicit input (100), candidate (20), and thought (5) are present, but provider omitted total:
+        total_tokens is computed (125), completion is 25, cost is verified, but provider_reported_total_tokens MUST be None.
+        """
+        results = [
+            TicketCaseResult(
+                case_index=0,
+                condition="cold",
+                message="Explicit counts query",
+                ticket_id="TCK-1002",
+                wall_latency_ms=1200.0,
+                analysis_status="ready",
+                draft_status="draft_ready",
+                customer_reply_is_none=True,
+                tokens={"input_tokens": 100, "candidate_tokens": 20, "thought_tokens": 5},  # totalTokenCount omitted
+                llm_metadata={"provider": "google_ai_studio", "model": "gemini-3.1-flash-lite", "tier": "standard_paid"},
+                is_terminal=True,
+                is_success=True,
+            )
+        ]
+        config = ApplicationAcceptanceConfig(mode="live", verified_pricing=OFFICIAL_PRICING)
+        summary = ApplicationAcceptanceRunner(config)._compute_summary(results, output_dir=None)
+        tc = summary["tokens_and_cost"]
+
+        assert tc["total_prompt_tokens"] == 100
+        assert tc["total_candidate_tokens"] == 20
+        assert tc["total_thinking_tokens"] == 5
+        assert tc["total_completion_tokens"] == 25
+        assert tc["total_tokens"] == 125
+        assert tc["provider_reported_total_tokens"] is None, "provider_reported_total_tokens MUST be null if provider omitted it"
+        assert tc["cost_status"] == "verified_list_price_estimate"
+        assert tc["cost_usd"] is not None
+
+    def test_zero_aliases_and_invalid_boolean_distinctly_preserved(self):
+        """Zero counts (0) in completion_tokens / prompt_tokens must be preserved and not treated as falsy,
+        while boolean False is preserved and rejected as invalid_numeric_token_values.
+        """
+        # Part A: Valid zero aliases with completion_tokens compatibility
+        results_zero = [
+            TicketCaseResult(
+                case_index=0,
+                condition="cold",
+                message="Zero query",
+                ticket_id="TCK-1003",
+                wall_latency_ms=800.0,
+                analysis_status="ready",
+                draft_status="draft_ready",
+                customer_reply_is_none=True,
+                tokens={"prompt_tokens": 0, "completion_tokens": 0, "thought_tokens": 0},
+                llm_metadata={"provider": "google_ai_studio", "model": "gemini-3.1-flash-lite", "tier": "standard_paid"},
+                is_terminal=True,
+                is_success=True,
+            )
+        ]
+        config = ApplicationAcceptanceConfig(mode="live", verified_pricing=OFFICIAL_PRICING)
+        summary_zero = ApplicationAcceptanceRunner(config)._compute_summary(results_zero, output_dir=None)
+        tc_zero = summary_zero["tokens_and_cost"]
+
+        assert tc_zero["total_prompt_tokens"] == 0
+        assert tc_zero["total_candidate_tokens"] == 0
+        assert tc_zero["total_completion_tokens"] == 0
+        assert tc_zero["cost_status"] == "verified_list_price_estimate"
+        assert tc_zero["cost_usd"] == 0.0
+
+        # Part B: Invalid boolean False must NOT be masked by alias fallback
+        results_bool = [
+            TicketCaseResult(
+                case_index=0,
+                condition="cold",
+                message="Bool query",
+                ticket_id="TCK-1004",
+                wall_latency_ms=800.0,
+                analysis_status="ready",
+                draft_status="draft_ready",
+                customer_reply_is_none=True,
+                tokens={"input_tokens": False, "completion_tokens": 10},
+                llm_metadata={"provider": "google_ai_studio", "model": "gemini-3.1-flash-lite", "tier": "standard_paid"},
+                is_terminal=True,
+                is_success=True,
+            )
+        ]
+        summary_bool = ApplicationAcceptanceRunner(config)._compute_summary(results_bool, output_dir=None)
+        tc_bool = summary_bool["tokens_and_cost"]
+
+        assert tc_bool["cost_status"] == "invalid_numeric_token_values"
+        assert tc_bool["cost_usd"] is None
+
+    def test_per_attempt_missing_metadata_does_not_inherit_ticket_level_metadata(self):
+        """When explicit raw attempts are present, Attempt 0 with missing provider/model/tier
+        must NOT inherit from ticket-level llm_metadata; it must fail verification.
+        """
+        results = [
+            TicketCaseResult(
+                case_index=0,
+                condition="cold",
+                message="Retry query",
+                ticket_id="TCK-1005",
+                wall_latency_ms=2500.0,
+                analysis_status="ready",
+                draft_status="draft_ready",
+                customer_reply_is_none=True,
+                tokens={"input_tokens": 1000, "output_tokens": 50, "total_tokens": 1050},
+                llm_metadata={
+                    # Ticket level has valid metadata from final success:
+                    "provider": "google_ai_studio",
+                    "model": "gemini-3.1-flash-lite",
+                    "tier": "standard_paid",
+                    "attempts": [
+                        {
+                            "attempt_index": 0,
+                            "status": "llm_unavailable",
+                            "usage": {"promptTokenCount": 500},
+                            # Missing metadata dict: provider and model are None
+                        },
+                        {
+                            "attempt_index": 1,
+                            "status": "success",
+                            "usage": {"promptTokenCount": 500, "candidatesTokenCount": 50, "totalTokenCount": 550},
+                            "metadata": {
+                                "provider": "google_ai_studio",
+                                "model": "gemini-3.1-flash-lite",
+                                "tier": "standard_paid",
+                            },
+                        },
+                    ],
+                },
+                is_terminal=True,
+                is_success=True,
+            )
+        ]
+        config = ApplicationAcceptanceConfig(mode="live", verified_pricing=OFFICIAL_PRICING)
+        summary = ApplicationAcceptanceRunner(config)._compute_summary(results, output_dir=None)
+        tc = summary["tokens_and_cost"]
+
+        # Attempt 0 lacks model and provider metadata, and must not have inherited it from ticket-level
+        assert tc["cost_status"] in ("unknown_model_unverified", "provider_missing_unverified")
+        assert tc["cost_usd"] is None

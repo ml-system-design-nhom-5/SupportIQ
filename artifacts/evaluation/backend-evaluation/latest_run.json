@@ -1,9 +1,9 @@
 {
-  "latest_run_id": "accept-20261112-143218-1fab27",
-  "run_dir": "artifacts\\evaluation\\backend-evaluation\\runs\\accept-20261112-143218-1fab27",
-  "timestamp": "2026-11-12T14:32:18.478793+00:00",
+  "latest_run_id": "accept-20261112-144753-b8b022",
+  "run_dir": "artifacts\\evaluation\\backend-evaluation\\runs\\accept-20261112-144753-b8b022",
+  "timestamp": "2026-11-12T14:47:53.849656+00:00",
   "runner_checks_passed": true,
   "mode": "mock",
   "boundary_kind": "in_process_asgi_testclient",
-  "raw_records_sha256": "34AB74513379F090B2946B29C58FFDFB854E671CAAC1C87553B2679543A484C6"
+  "raw_records_sha256": "74D2BDCEF15FDDC43EDA7DF793B7C78B0F6D8905DB7BFB50ACF64807EB673336"
 }

@@ -839,12 +839,14 @@ class ApplicationAcceptanceRunner:
                 has_invalid_numeric_values = True
 
             attempts_to_process = []
+            is_legacy_ticket = False
             if isinstance(raw_attempts, list) and raw_attempts:
                 for att in raw_attempts:
                     if isinstance(att, dict):
                         attempts_to_process.append(att)
 
             if not attempts_to_process:
+                is_legacy_ticket = True
                 attempts_to_process = [{
                     "attempt_index": 0,
                     "status": r.draft_status,
@@ -857,9 +859,32 @@ class ApplicationAcceptanceRunner:
                 att_u = att.get("usage") or {}
                 att_m = att.get("metadata") or {}
 
-                m_val = att_m.get("model") or att.get("model") or meta.get("model") or r.versions.get("llm_model") or r.llm_model
-                p_val = att_m.get("provider") or att.get("provider") or meta.get("provider") or r.versions.get("provider")
-                t_val = att_m.get("tier") or att.get("tier") or meta.get("tier") or r.versions.get("tier")
+                if is_legacy_ticket:
+                    # Legacy ticket with no raw attempts: can fall back to ticket-level meta / versions / llm_model
+                    m_val = att_m.get("model") if att_m.get("model") is not None else att.get("model")
+                    if m_val is None:
+                        m_val = meta.get("model")
+                    if m_val is None:
+                        m_val = r.versions.get("llm_model") if r.versions else None
+                    if m_val is None:
+                        m_val = r.llm_model
+
+                    p_val = att_m.get("provider") if att_m.get("provider") is not None else att.get("provider")
+                    if p_val is None:
+                        p_val = meta.get("provider")
+                    if p_val is None:
+                        p_val = r.versions.get("provider") if r.versions else None
+
+                    t_val = att_m.get("tier") if att_m.get("tier") is not None else att.get("tier")
+                    if t_val is None:
+                        t_val = meta.get("tier")
+                    if t_val is None:
+                        t_val = r.versions.get("tier") if r.versions else None
+                else:
+                    # Explicit raw attempts must NOT inherit last-success provider/model/tier
+                    m_val = att_m.get("model") if att_m.get("model") is not None else att.get("model")
+                    p_val = att_m.get("provider") if att_m.get("provider") is not None else att.get("provider")
+                    t_val = att_m.get("tier") if att_m.get("tier") is not None else att.get("tier")
 
                 if m_val:
                     observed_models.add(str(m_val))
@@ -876,16 +901,27 @@ class ApplicationAcceptanceRunner:
 
                 in_tok = att_u.get("promptTokenCount")
                 if in_tok is None:
-                    in_tok = att_u.get("input_tokens") or att_u.get("prompt_tokens")
+                    in_tok = att_u.get("input_tokens")
+                if in_tok is None:
+                    in_tok = att_u.get("prompt_tokens")
+
                 out_tok = att_u.get("candidatesTokenCount")
                 if out_tok is None:
-                    out_tok = att_u.get("output_tokens") or att_u.get("candidate_tokens")
+                    out_tok = att_u.get("output_tokens")
+                if out_tok is None:
+                    out_tok = att_u.get("candidate_tokens")
+                if out_tok is None:
+                    out_tok = att_u.get("completion_tokens")
+
                 tot_tok = att_u.get("totalTokenCount")
                 if tot_tok is None:
                     tot_tok = att_u.get("total_tokens")
+
                 th_tok = att_u.get("thoughtsTokenCount")
                 if th_tok is None:
-                    th_tok = att_u.get("thought_tokens") or att_u.get("thinking_tokens")
+                    th_tok = att_u.get("thought_tokens")
+                if th_tok is None:
+                    th_tok = att_u.get("thinking_tokens")
 
                 # Detect unknown timeout usage (timeout occurred with unknown provider token usage)
                 if att_status in ("llm_timeout", "timeout") and in_tok is None:
@@ -901,8 +937,27 @@ class ApplicationAcceptanceRunner:
                 has_valid_tot = is_valid_token_count(tot_tok)
                 has_valid_thought = is_valid_token_count(th_tok)
 
-                # For an attempt that was executed, if input tokens is missing, coverage is incomplete
+                is_draft_producing_status = att_status in ("draft_ready", "clarification", "success")
+
+                # If output is missing but provider reported totalTokenCount:
+                if not has_valid_out and has_valid_tot and has_valid_in:
+                    if has_valid_thought:
+                        # candidate tokens derivable = total - prompt - thought
+                        if tot_tok >= in_tok + th_tok:
+                            out_tok = tot_tok - in_tok - th_tok
+                            has_valid_out = True
+
+                # For a failed attempt before candidate generation (e.g. llm_unavailable), output tokens is 0
+                if not has_valid_out and not is_draft_producing_status and not (att_status in ("abstained", "escalation_recommended")):
+                    out_tok = 0
+                    has_valid_out = True
+
+                # Input coverage: executed attempt must have valid input tokens
                 if not has_valid_in and not (att_status in ("abstained", "escalation_recommended")):
+                    token_coverage_valid = False
+
+                # Output coverage: draft-producing attempt must have valid output tokens OR provider total to derive billable output
+                if not has_valid_out and not has_valid_tot and is_draft_producing_status:
                     token_coverage_valid = False
 
                 if has_valid_tot and has_valid_in and has_valid_out:
@@ -915,8 +970,8 @@ class ApplicationAcceptanceRunner:
                     "case_index": r.case_index,
                     "attempt_index": att.get("attempt_index", 0),
                     "status": att_status,
-                    "input_tokens": in_tok if has_valid_in else 0,
-                    "output_tokens": out_tok if has_valid_out else 0,
+                    "input_tokens": in_tok if has_valid_in else None,
+                    "output_tokens": out_tok if has_valid_out else None,
                     "total_tokens": tot_tok if has_valid_tot else None,
                     "thought_tokens": th_tok if has_valid_thought else None,
                     "has_valid_in": has_valid_in,
@@ -935,19 +990,21 @@ class ApplicationAcceptanceRunner:
 
         if token_coverage_valid and not has_invalid_numeric_values and not has_inconsistent_totals and billable_attempts:
             total_prompt_tokens = sum(b["input_tokens"] for b in billable_attempts)
-            total_candidate_tokens = sum(b["output_tokens"] for b in billable_attempts)
+            all_attempts_have_out = all(b["has_valid_out"] for b in billable_attempts)
+            total_candidate_tokens = sum(b["output_tokens"] for b in billable_attempts) if all_attempts_have_out else None
+
             all_attempts_have_thought = all(b["has_valid_thought"] for b in billable_attempts)
             has_thinking_tracked = any(b["has_valid_thought"] for b in billable_attempts)
             observed_thought_tokens = sum(b["thought_tokens"] for b in billable_attempts if b["has_valid_thought"])
-            observed_partial_tokens = total_prompt_tokens + total_candidate_tokens + observed_thought_tokens
+            observed_partial_tokens = total_prompt_tokens + (total_candidate_tokens or 0) + observed_thought_tokens
 
             all_attempts_have_total = all(b["has_valid_tot"] for b in billable_attempts)
 
-            if all_attempts_have_thought:
+            if all_attempts_have_thought and all_attempts_have_out:
                 total_thinking_tokens = observed_thought_tokens
                 total_completion_tokens = total_candidate_tokens + total_thinking_tokens
                 total_tokens = total_prompt_tokens + total_completion_tokens
-                provider_reported_total_tokens = sum(b["total_tokens"] for b in billable_attempts if b["has_valid_tot"]) if all_attempts_have_total else total_tokens
+                provider_reported_total_tokens = sum(b["total_tokens"] for b in billable_attempts) if all_attempts_have_total else None
                 derivation_provenance = None
             elif all_attempts_have_total:
                 # When thoughts are absent/untracked BUT explicit provider totalTokenCount is reported for all attempts:
@@ -958,7 +1015,7 @@ class ApplicationAcceptanceRunner:
                 total_completion_tokens = derived_output
                 total_tokens = provider_reported_total
                 derivation_provenance = {
-                    "formula": "billable_output_tokens = totalTokenCount - promptTokenCount",
+                    "formula": "billable_output_tokens = totalTokenCount - promptTokenCount (text-only/no-tools requests)",
                     "raw_reported_total_tokens": provider_reported_total,
                     "total_prompt_tokens": total_prompt_tokens,
                     "total_candidate_tokens": total_candidate_tokens,
@@ -966,10 +1023,11 @@ class ApplicationAcceptanceRunner:
                     "thinking_tokens_reported": False,
                     "thinking_tokens_assumed_zero": False,
                     "provider_semantics_verified": True,
-                    "source_doc": "https://ai.google.dev/gemini-api/docs/pricing",
+                    "source_doc": "https://aistudio.google.com/api-reference/generate-content UsageMetadata plus pricing",
                     "description": (
-                        "Derived from provider-reported totalTokenCount under Gemini API billing semantics, "
-                        "where totalTokenCount = promptTokenCount + outputTokenCount (including candidates and thinking). "
+                        "Derived from provider-reported totalTokenCount under Gemini API billing semantics "
+                        "for this client's text-only/no-tools requests (where totalTokenCount = promptTokenCount + "
+                        "candidatesTokenCount + thoughtsTokenCount, with toolUsePromptTokenCount not applicable). "
                         "Separate thoughtsTokenCount was not returned by provider; thoughts are NOT asserted to be zero."
                     ),
                 }
@@ -986,7 +1044,7 @@ class ApplicationAcceptanceRunner:
             total_thinking_tokens = 0
             total_completion_tokens = 0
             total_tokens = 0
-            provider_reported_total_tokens = 0
+            provider_reported_total_tokens = None
             observed_thought_tokens = 0
             observed_partial_tokens = 0
             has_thinking_tracked = False
@@ -999,9 +1057,9 @@ class ApplicationAcceptanceRunner:
             total_completion_tokens = None
             total_tokens = None
             provider_reported_total_tokens = None
-            observed_thought_tokens = 0
+            observed_thought_tokens = sum(b["thought_tokens"] for b in billable_attempts if b["has_valid_thought"])
             observed_partial_tokens = 0
-            has_thinking_tracked = False
+            has_thinking_tracked = any(b["has_valid_thought"] for b in billable_attempts)
             all_attempts_have_thought = False
             derivation_provenance = None
 
@@ -1102,7 +1160,7 @@ class ApplicationAcceptanceRunner:
                             lower_bound_cost_usd = None
                             cost_note = "Pricing artifact has provenance sources but is missing declared model. Cost is unverified."
                         elif has_provenance:
-                            lower_bound_cost_usd = (total_prompt_tokens * in_rate + total_candidate_tokens * out_rate) / 1_000_000.0
+                            lower_bound_cost_usd = (total_prompt_tokens * in_rate + (total_candidate_tokens or 0) * out_rate) / 1_000_000.0
 
                             if total_completion_tokens is None:
                                 cost_status = "partial_lower_bound_missing_thinking"
@@ -1142,10 +1200,10 @@ class ApplicationAcceptanceRunner:
                                     if not has_verified_provider or not has_verified_tier:
                                         cost_status = "conditional_list_price_estimate_unknown_account_tier"
                                         cost_usd = calc_cost
-                                        lower_bound_cost_usd = (total_prompt_tokens * in_rate + total_candidate_tokens * out_rate) / 1_000_000.0 if derivation_provenance else calc_cost
+                                        lower_bound_cost_usd = (total_prompt_tokens * in_rate + (total_candidate_tokens or 0) * out_rate) / 1_000_000.0 if derivation_provenance else calc_cost
                                         prov_note = ""
                                         if derivation_provenance:
-                                            prov_note = f" Output tokens derived from provider-reported totalTokenCount ({provider_reported_total_tokens} - {total_prompt_tokens} = {total_completion_tokens}) under Gemini API billing semantics; thoughts are not asserted to be zero."
+                                            prov_note = f" Output tokens derived from provider-reported totalTokenCount ({provider_reported_total_tokens} - {total_prompt_tokens} = {total_completion_tokens}) under Gemini API billing semantics (text-only/no-tools); thoughts are not asserted to be zero."
                                         reason = "Actual customer account billing tier is unverified (cannot be observed from API metadata)." if has_verified_provider else "Pricing provider is unverified or unspecified."
                                         cost_note = (
                                             f"Conditional list-price estimate for {expected_model} ({expected_tier}) "
@@ -1155,10 +1213,10 @@ class ApplicationAcceptanceRunner:
                                     else:
                                         cost_status = "verified_list_price_estimate"
                                         cost_usd = calc_cost
-                                        lower_bound_cost_usd = (total_prompt_tokens * in_rate + total_candidate_tokens * out_rate) / 1_000_000.0 if derivation_provenance else calc_cost
+                                        lower_bound_cost_usd = (total_prompt_tokens * in_rate + (total_candidate_tokens or 0) * out_rate) / 1_000_000.0 if derivation_provenance else calc_cost
                                         prov_note = ""
                                         if derivation_provenance:
-                                            prov_note = f" Output tokens derived from provider-reported totalTokenCount ({provider_reported_total_tokens} - {total_prompt_tokens} = {total_completion_tokens}) under Gemini API billing semantics; thoughts are not asserted to be zero."
+                                            prov_note = f" Output tokens derived from provider-reported totalTokenCount ({provider_reported_total_tokens} - {total_prompt_tokens} = {total_completion_tokens}) under Gemini API billing semantics (text-only/no-tools); thoughts are not asserted to be zero."
                                         cost_note = (
                                             f"Verified list-price estimate for {expected_model} ({expected_tier}) "
                                             f"based on primary source {pricing.get('source_url')} verified on {pricing.get('verified_on')}.{prov_note} "
@@ -1166,9 +1224,9 @@ class ApplicationAcceptanceRunner:
                                         )
                         else:
                             cost_status = "arithmetic_fixture_unverified"
-                            calc_out = total_completion_tokens if total_completion_tokens is not None else total_candidate_tokens
+                            calc_out = total_completion_tokens if total_completion_tokens is not None else (total_candidate_tokens or 0)
                             cost_usd = (total_prompt_tokens * in_rate + calc_out * out_rate) / 1_000_000.0
-                            lower_bound_cost_usd = (total_prompt_tokens * in_rate + total_candidate_tokens * out_rate) / 1_000_000.0
+                            lower_bound_cost_usd = (total_prompt_tokens * in_rate + (total_candidate_tokens or 0) * out_rate) / 1_000_000.0
                             cost_note = "Arithmetic unit test fixture only; rates lack primary source URL or verified_on provenance."
 
         oversight_target_met = bool(len(results) > 0 and auto_send_violations == 0)
@@ -1497,7 +1555,7 @@ class ApplicationAcceptanceRunner:
             lines.extend([
                 "",
                 "> [!NOTE]",
-                f"> **Derived Output Tokens Provenance:** `{dp['derived_output_tokens']}` output tokens derived from provider-reported `totalTokenCount` ({dp['raw_reported_total_tokens']} - {dp['total_prompt_tokens']} = {dp['derived_output_tokens']}) under official Gemini API billing semantics. Provider omitted `thoughtsTokenCount`; thoughts are **NOT** asserted to be zero.",
+                f"> **Derived Output Tokens Provenance:** `{dp['derived_output_tokens']}` output tokens derived from provider-reported `totalTokenCount` ({dp['raw_reported_total_tokens']} - {dp['total_prompt_tokens']} = {dp['derived_output_tokens']}) under official Gemini API billing semantics for text-only/no-tools requests (source: `{dp['source_doc']}`). Provider omitted `thoughtsTokenCount`; thoughts are **NOT** asserted to be zero.",
             ])
 
         lines.extend([
