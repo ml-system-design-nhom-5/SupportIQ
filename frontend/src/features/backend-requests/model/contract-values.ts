@@ -30,6 +30,17 @@ export function requireMembers<Body extends object>(
 }
 
 /**
+ * Count the characters of a text as the contract counts them: JSON Schema counts the length of a
+ * string in Unicode code points, so an emoji counts once and a password of 128 emoji is allowed.
+ *
+ * @param text - The text, exactly as typed.
+ * @returns The number of Unicode code points.
+ */
+export function countContractCharacters(text: string): number {
+  return Array.from(text).length;
+}
+
+/**
  * Map the contract's `Money` to the view model of the shared money formatter.
  *
  * @param money - An amount in minor units with its ISO 4217 code.

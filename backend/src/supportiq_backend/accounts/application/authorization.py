@@ -2,7 +2,7 @@
 
 from typing import assert_never
 
-from supportiq_backend.accounts.domain.errors import ForbiddenRoleError
+from supportiq_backend.accounts.domain.errors import ForbiddenRoleError, SessionRequiredError
 from supportiq_backend.accounts.domain.identity import (
     AdminPrincipal,
     CustomerPrincipal,
@@ -11,6 +11,7 @@ from supportiq_backend.accounts.domain.identity import (
     Principal,
     Role,
 )
+from supportiq_backend.accounts.domain.ports import InternalAccountStore
 from supportiq_backend.platform import EventName, EventRecorder, OperationId
 
 
@@ -67,6 +68,24 @@ class Authorizer:
             operation_id=operation.value,
         )
         return ForbiddenRoleError()
+
+
+async def require_active_admin(accounts: InternalAccountStore, admin: AdminPrincipal) -> None:
+    """Reload the caller of an admin change after the advisory lock of account changes.
+
+    A change that committed while this request waited for the lock may have deactivated the
+    caller, whose session it deleted, so an admin deactivated by another cannot still act.
+
+    Args:
+        accounts: The store bound to the transaction that holds the lock.
+        admin: The caller, whose role check passed before the lock.
+
+    Raises:
+        SessionRequiredError: The caller is no longer an active admin.
+    """
+    caller = await accounts.load_internal(admin.account_id)
+    if caller is None or not caller.is_active or caller.role is not InternalRole.ADMIN:
+        raise SessionRequiredError
 
 
 def _role_of(principal: Principal) -> str:

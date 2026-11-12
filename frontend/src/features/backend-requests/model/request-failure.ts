@@ -8,7 +8,11 @@
 import { assertNever } from "@/features/backend-requests/model/assert-never";
 
 /** The problem types of a write that `backend` looked at and refused. */
-const problemTypesOfRefusals: ReadonlySet<ProblemType> = new Set(["invalid_request", "not_found"]);
+const problemTypesOfRefusals: ReadonlySet<ProblemType> = new Set([
+  "invalid_request",
+  "not_found",
+  "login_name_taken",
+]);
 
 /** The statuses of a write in flight that the ingress lost (ADR-0011, Proposed). */
 const unknownOutcomeStatuses: ReadonlySet<number> = new Set([502, 504]);
@@ -19,6 +23,7 @@ const problemTypeByUrn: ReadonlyMap<string, ProblemType> = new Map([
   ["urn:supportiq:problem:forbidden", "forbidden"],
   ["urn:supportiq:problem:not-found", "not_found"],
   ["urn:supportiq:problem:idempotency-key-reused", "idempotency_key_reused"],
+  ["urn:supportiq:problem:login-name-taken", "login_name_taken"],
   ["urn:supportiq:problem:not-ready", "not_ready"],
   ["urn:supportiq:problem:internal-error", "internal_error"],
 ]);
@@ -32,6 +37,7 @@ export type ProblemType =
   | "forbidden"
   | "not_found"
   | "idempotency_key_reused"
+  | "login_name_taken"
   | "not_ready"
   | "internal_error"
   | "unknown";
@@ -91,11 +97,13 @@ export function isWriteOutcomeUnknown(failure: RequestFailure): boolean {
 /**
  * Tell whether `backend` looked at a write and refused it. `backend` remembers only a success, and
  * it answers a repeated key with that success (contract, `Idempotency-Key`), so these answers also
- * mean that no earlier attempt with the key succeeded. `401`, `403`, and `409` do not: they come
- * before `backend` reads the key, or they say that the key was used.
+ * mean that no earlier attempt with the key succeeded. `409 login-name-taken` comes after the key
+ * is claimed (account management design, Creating an account). `401`, `403`, and
+ * `409 idempotency-key-reused` do not: they come before `backend` reads the key, or they say that
+ * the key was used.
  *
  * @param failure - The failure of a write.
- * @returns True for `422 invalid-request` and `404 not-found`.
+ * @returns True for `422 invalid-request`, `404 not-found`, and `409 login-name-taken`.
  */
 export function isRefusedByBackend(failure: RequestFailure): boolean {
   return failure.kind === "problem" && problemTypesOfRefusals.has(failure.problemType);

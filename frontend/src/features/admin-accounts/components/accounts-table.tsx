@@ -1,12 +1,14 @@
 /**
- * The accounts table (admin UI design, Accounts): the display name, the role, the status, and the
- * actions of each row. The table shows no email, password hash, or session data (SEC-41).
+ * The accounts table (admin UI design, Accounts): the display name, the login name in the
+ * monospace font, the role, the status, and the actions of each row. The table shows no email,
+ * password, password hash, or session data (SEC-41).
  */
 import {
   Button,
   DataTable,
   type DataTableColumn,
   type DataTableRow,
+  Identifier,
   presentationByAccountStatus,
   presentationByInternalRole,
   Stack,
@@ -16,21 +18,23 @@ import {
 } from "@/design-system";
 import {
   type Account,
+  type AccountAction,
   type AccountChange,
-  type AccountChangeKind,
-  getAvailableChanges,
+  getAvailableActions,
 } from "@/features/admin-accounts/model/account";
 import { getChangeLabel } from "@/features/admin-accounts/model/account-change-text";
+import { accountFormText } from "@/features/admin-accounts/model/account-form-text";
 
 const accountColumns: readonly DataTableColumn<AccountColumn>[] = [
   { key: "account", label: "Account", isRowHeader: true },
+  { key: "loginName", label: "Login name" },
   { key: "role", label: "Role" },
   { key: "status", label: "Status" },
   { key: "actions", label: "Actions", align: "end" },
 ];
 
 /** The columns of the table. */
-type AccountColumn = "account" | "role" | "status" | "actions";
+type AccountColumn = "account" | "loginName" | "role" | "status" | "actions";
 
 /** A change that the admin chose, with the button that asked for it. */
 export type ChosenAccountChange = {
@@ -39,21 +43,33 @@ export type ChosenAccountChange = {
   readonly opener: HTMLElement;
 };
 
+/** An account whose password the admin chose to reset, with the button that asked for it. */
+export type ChosenPasswordReset = {
+  readonly account: Account;
+  /** Gets the focus back when the reset dialog closes (UI-30). */
+  readonly opener: HTMLElement;
+};
+
+/** The handlers of the row actions. */
+export type RowActionHandlers = {
+  /** Opens the confirmation of a change. */
+  readonly onChooseChange: (chosen: ChosenAccountChange) => void;
+  /** Opens the reset dialog. */
+  readonly onChooseReset: (chosen: ChosenPasswordReset) => void;
+};
+
 /** Props of {@link AccountsTable}. */
-export type AccountsTableProps = {
+export type AccountsTableProps = RowActionHandlers & {
   readonly accounts: readonly Account[];
   /** The `account_id` of the signed-in admin, which marks the caller's own row. */
   readonly callerAccountId: string | undefined;
-  /** Opens the confirmation of a change. */
-  readonly onChooseChange: (chosen: ChosenAccountChange) => void;
 };
 
 /** What renders the actions of a row. */
-type RowActionsProps = {
+type RowActionsProps = RowActionHandlers & {
   readonly account: Account;
-  readonly changes: readonly AccountChangeKind[];
+  readonly actions: readonly AccountAction[];
   readonly isOwnAccount: boolean;
-  readonly onChooseChange: (chosen: ChosenAccountChange) => void;
 };
 
 /**
@@ -62,12 +78,12 @@ type RowActionsProps = {
  * @param props - The accounts, the caller's ID, and the handler.
  * @returns The table.
  */
-export function AccountsTable({ accounts, callerAccountId, onChooseChange }: AccountsTableProps) {
+export function AccountsTable({ accounts, ...rowProps }: AccountsTableProps) {
   return (
     <DataTable
       caption="Internal accounts"
       columns={accountColumns}
-      rows={accounts.map((account) => buildRow(account, { callerAccountId, onChooseChange }))}
+      rows={accounts.map((account) => buildRow(account, rowProps))}
     />
   );
 }
@@ -75,10 +91,16 @@ export function AccountsTable({ accounts, callerAccountId, onChooseChange }: Acc
 /**
  * Render the actions of a row, with the note that explains a missing action.
  *
- * @param props - The account, its changes, whether it is the caller's, and the handler.
+ * @param props - The account, its actions, whether it is the caller's, and the handlers.
  * @returns The note, the buttons, or both.
  */
-function RowActions({ account, changes, isOwnAccount, onChooseChange }: RowActionsProps) {
+function RowActions({
+  account,
+  actions,
+  isOwnAccount,
+  onChooseChange,
+  onChooseReset,
+}: RowActionsProps) {
   if (isOwnAccount) {
     return (
       <Text tone="muted" size="xs">
@@ -93,15 +115,20 @@ function RowActions({ account, changes, isOwnAccount, onChooseChange }: RowActio
           The admin role cannot be changed
         </Text>
       ) : null}
-      {changes.map((kind) => (
+      {actions.map((action) => (
         <Button
-          key={kind}
+          key={action}
           size="sm"
           onClick={(event) => {
-            onChooseChange({ change: { kind, account }, opener: event.currentTarget });
+            const opener = event.currentTarget;
+            if (action === "reset_password") {
+              onChooseReset({ account, opener });
+              return;
+            }
+            onChooseChange({ change: { kind: action, account }, opener });
           }}
         >
-          {getChangeLabel(kind)}
+          {action === "reset_password" ? accountFormText.resetLabel : getChangeLabel(action)}
           <VisuallyHidden>: {account.displayName}</VisuallyHidden>
         </Button>
       ))}
@@ -113,12 +140,12 @@ function RowActions({ account, changes, isOwnAccount, onChooseChange }: RowActio
  * Build the row of an account.
  *
  * @param account - The account.
- * @param props - The caller's ID and the handler.
+ * @param props - The caller's ID and the handlers.
  * @returns The table row.
  */
 function buildRow(
   account: Account,
-  { callerAccountId, onChooseChange }: Omit<AccountsTableProps, "accounts">,
+  { callerAccountId, ...handlers }: Omit<AccountsTableProps, "accounts">,
 ): DataTableRow<AccountColumn> {
   const isOwnAccount = account.accountId === callerAccountId;
   return {
@@ -130,6 +157,7 @@ function buildRow(
           {isOwnAccount ? <Text tone="muted"> (you)</Text> : null}
         </>
       ),
+      loginName: <Identifier>{account.loginName}</Identifier>,
       role: <StatusBadge presentation={presentationByInternalRole[account.role]} />,
       status: (
         <StatusBadge
@@ -139,9 +167,9 @@ function buildRow(
       actions: (
         <RowActions
           account={account}
-          changes={getAvailableChanges(account, callerAccountId)}
+          actions={getAvailableActions(account, callerAccountId)}
           isOwnAccount={isOwnAccount}
-          onChooseChange={onChooseChange}
+          {...handlers}
         />
       ),
     },

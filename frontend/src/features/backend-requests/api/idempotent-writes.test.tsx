@@ -6,6 +6,7 @@ import {
   IdempotencyKeyFactoryContext,
   idempotentWriteMutationKey,
   useCreateIdempotencyKey,
+  useFormIdempotencyKey,
 } from "@/features/backend-requests/api/idempotent-writes";
 
 describe("useCreateIdempotencyKey", () => {
@@ -38,5 +39,28 @@ describe("buildIdempotentWriteKey", () => {
       ...idempotentWriteMutationKey,
       "createShopTicket",
     ]);
+  });
+});
+
+describe("useFormIdempotencyKey (account management design, Shared behavior)", () => {
+  it("reuses the key while the fields stay the same, and creates a new one after an edit", () => {
+    let keyCount = 0;
+    const createKey = () => {
+      keyCount += 1;
+      return `00000000-0000-4000-8000-${String(keyCount).padStart(12, "0")}`;
+    };
+    const { result } = renderHook(useFormIdempotencyKey, {
+      wrapper: ({ children }) => (
+        <IdempotencyKeyFactoryContext value={createKey}>{children}</IdempotencyKeyFactoryContext>
+      ),
+    });
+
+    const firstKey = result.current.getOrCreateKey();
+    const keyOfSameFields = result.current.getOrCreateKey();
+    result.current.forgetKey();
+    const keyAfterEdit = result.current.getOrCreateKey();
+
+    expect(keyOfSameFields).toBe(firstKey);
+    expect(keyAfterEdit).not.toBe(firstKey);
   });
 });

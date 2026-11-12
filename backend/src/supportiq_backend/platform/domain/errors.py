@@ -13,6 +13,7 @@ class ErrorCode(StrEnum):
     FORBIDDEN = "forbidden"
     NOT_FOUND = "not-found"
     IDEMPOTENCY_KEY_REUSED = "idempotency-key-reused"
+    LOGIN_NAME_TAKEN = "login-name-taken"
     NOT_READY = "not-ready"
     INTERNAL_ERROR = "internal-error"
 

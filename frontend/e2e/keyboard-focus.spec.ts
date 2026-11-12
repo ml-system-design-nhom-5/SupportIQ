@@ -1,10 +1,13 @@
 /**
  * The keyboard stays in place in the production build (UI-30): a button that waits for `backend`
- * keeps the focus, and a confirmation returns it to where it was. Only a browser shows this,
- * because jsdom does not drop the focus from a disabled button.
+ * keeps the focus, a confirmation returns it to where it was, and a success that replaces a form
+ * takes it. Only a browser shows this, because jsdom does not drop the focus from a disabled
+ * button.
  */
 import { expect, type Locator, type Page, test } from "@playwright/test";
 
+import { findAccountMenuButton } from "./support/account-menu.ts";
+import { fillPasswordChange } from "./support/change-password.ts";
 import { preferOutcome } from "./support/mock-outcomes.ts";
 import { createSessionCookie } from "./support/sign-in.ts";
 
@@ -145,7 +148,7 @@ test("Sign in keeps the focus when the sign-in is refused", async ({ page }) => 
   await preferOutcome(page, { method: "POST", path: "/v1/sessions" }, "code=401");
   await page.goto("/sign-in");
   await page.getByRole("textbox", { name: "Login name" }).fill("customer-1");
-  await page.getByLabel("Password").fill("not-a-real-password");
+  await page.getByLabel("Password", { exact: true }).fill("not-a-real-password");
   const signIn = page.getByRole("button", { name: "Sign in" });
 
   await pressEnterOn(page, signIn);
@@ -154,16 +157,31 @@ test("Sign in keeps the focus when the sign-in is refused", async ({ page }) => 
   await expect(signIn).toBeFocused();
 });
 
-test("Sign out keeps the focus when it fails", async ({ page }) => {
+test("Sign out in the account menu returns the focus to the menu button when it fails", async ({
+  page,
+}) => {
   await preferOutcome(page, { method: "DELETE", path: "/v1/sessions/current" }, "code=503");
   await createSessionCookie(page);
   await page.goto("/shop");
-  const signOut = page.getByRole("button", { name: "Sign out" });
+  const menuButton = findAccountMenuButton(page);
+  await pressEnterOn(page, menuButton);
 
-  await pressEnterOn(page, signOut);
+  await pressEnterOn(page, page.getByRole("menuitem", { name: "Sign out" }));
 
   await expect(page.getByRole("alert")).toBeVisible();
-  await expect(signOut).toBeFocused();
+  await expect(menuButton).toBeFocused();
+});
+
+test("a successful password change moves the focus to the success notice", async ({ page }) => {
+  await createSessionCookie(page);
+  await page.goto("/change-password");
+  await fillPasswordChange(page);
+
+  await pressEnterOn(page, page.getByRole("button", { name: "Change password" }));
+
+  await expect(
+    page.getByRole("status").filter({ hasText: "Your password was changed." }),
+  ).toBeFocused();
 });
 
 test("Escape returns the focus to the button that opened the dialog", async ({ page }) => {
@@ -195,4 +213,38 @@ test("a confirmed change moves the focus to the row, because its button changed"
   const rowHeader = page.getByRole("rowheader", { name: "Mai Nguyen" });
   await expect(rowHeader).toBeFocused();
   await expect(rowHeader).toHaveCSS("outline-style", "solid");
+});
+
+test("the account menu and the show and hide toggle work with the keyboard only", async ({
+  page,
+}) => {
+  await createSessionCookie(page);
+  await page.goto("/shop");
+  const menuButton = findAccountMenuButton(page);
+  await menuButton.focus();
+
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("menuitem", { name: "Change password" })).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByRole("menuitem", { name: "Sign out" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toBeHidden();
+  await expect(menuButton).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/change-password$/);
+
+  const currentPassword = page.getByLabel("Current password", { exact: true });
+  await currentPassword.focus();
+  await page.keyboard.type("not-a-real-password");
+  await page.keyboard.press("Tab");
+  const toggle = page.getByRole("button", { name: "Show password" }).first();
+  await expect(toggle).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await expect(currentPassword).toHaveAttribute("type", "text");
+  await expect(currentPassword).toHaveValue("not-a-real-password");
+  await page.keyboard.press("Space");
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await expect(currentPassword).toHaveAttribute("type", "password");
 });

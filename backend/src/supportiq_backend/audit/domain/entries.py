@@ -31,6 +31,9 @@ class AuditEventType(StrEnum):
     TICKET_ESCALATED = "ticket.escalated"
     ACCOUNT_ROLE_CHANGED = "account.role_changed"
     ACCOUNT_STATUS_CHANGED = "account.status_changed"
+    ACCOUNT_CREATED = "account.created"
+    ACCOUNT_PASSWORD_CHANGED = "account.password_changed"  # noqa: S105  # an event type
+    ACCOUNT_PASSWORD_RESET = "account.password_reset"  # noqa: S105  # an event type
 
 
 @dataclass(frozen=True, slots=True)

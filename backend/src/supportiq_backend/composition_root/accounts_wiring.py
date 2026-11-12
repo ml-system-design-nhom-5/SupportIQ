@@ -1,5 +1,6 @@
 """The wiring of accounts: adapters, use cases, and routers (ARCH-21)."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -8,32 +9,29 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from supportiq_backend.accounts import (
     AccountChangePorts,
-    AccountChangeStores,
     AuthenticateSession,
     Authorizer,
     ChangeAccount,
+    ChangeOwnPassword,
+    CreateAccount,
     ListAdminAccounts,
     OriginPolicy,
+    OwnPasswordChangePorts,
+    ResetAccountPassword,
     SessionPolicy,
     SignIn,
     SignInPorts,
     SignInRules,
-    SignInStores,
     SignOut,
     ThrottlePolicy,
 )
-from supportiq_backend.accounts.adapters.account_store import PostgresAccountStore
 from supportiq_backend.accounts.adapters.credentials import (
     Argon2Passwords,
     RandomSessionTokens,
     create_dummy_password_hash,
 )
-from supportiq_backend.accounts.adapters.internal_accounts import (
-    PostgresAccountChangeLock,
-    PostgresInternalAccountStore,
-)
+from supportiq_backend.accounts.adapters.internal_accounts import PostgresInternalAccountStore
 from supportiq_backend.accounts.adapters.session_store import PostgresSessionStore
-from supportiq_backend.accounts.adapters.sign_in_failure_store import PostgresSignInFailureStore
 from supportiq_backend.accounts.api.admin import (
     AdminRoutes,
     build_admin_router,
@@ -45,10 +43,19 @@ from supportiq_backend.accounts.api.dependencies import (
     build_current_session,
     build_origin_check,
 )
-from supportiq_backend.accounts.api.sessions import SessionRoutes, build_session_router
-from supportiq_backend.audit.adapters.audit_log import PostgresAuditLog
+from supportiq_backend.accounts.api.sessions import (
+    SessionRoutes,
+    build_session_router,
+    render_changed_password,
+)
+from supportiq_backend.composition_root.accounts_stores import (
+    build_account_change_stores,
+    build_account_creation_stores,
+    build_own_password_change_stores,
+    build_password_reset_stores,
+    build_sign_in_stores,
+)
 from supportiq_backend.composition_root.shared_ports import SharedPorts
-from supportiq_backend.idempotency.adapters.idempotency_store import PostgresIdempotencyStore
 from supportiq_backend.platform.adapters.database import SqlAlchemyTransactionRunner
 from supportiq_backend.platform.settings import Settings
 
@@ -68,6 +75,22 @@ class AccountsWiring:
     authorizer: Authorizer
     check_origin: OriginCheck
     current_session: CurrentSession
+
+
+@dataclass(frozen=True, slots=True)
+class _AccountsResources:
+    # What every use case of accounts is built from. One Argon2id adapter serves sign-in and
+    # every write that sets a password.
+    settings: Settings
+    session_factory: async_sessionmaker[AsyncSession]
+    shared: SharedPorts
+    passwords: Argon2Passwords
+    authorizer: Authorizer
+
+    def runner[StoresT](
+        self, build_stores: Callable[[AsyncSession], StoresT]
+    ) -> SqlAlchemyTransactionRunner[StoresT]:
+        return SqlAlchemyTransactionRunner(self.session_factory, build_stores)
 
 
 def build_session_policy(settings: Settings) -> SessionPolicy:
@@ -102,40 +125,6 @@ def build_throttle_policy(settings: Settings) -> ThrottlePolicy:
     )
 
 
-def build_sign_in_stores(session: AsyncSession) -> SignInStores:
-    """Build the stores of sign-in on one session.
-
-    Args:
-        session: The session of the transaction.
-
-    Returns:
-        The stores.
-    """
-    return SignInStores(
-        accounts=PostgresAccountStore(session),
-        sessions=PostgresSessionStore(session),
-        failures=PostgresSignInFailureStore(session),
-    )
-
-
-def build_account_change_stores(session: AsyncSession) -> AccountChangeStores:
-    """Build the stores of an account change on one session, so all commit together.
-
-    Args:
-        session: The session of the transaction.
-
-    Returns:
-        The stores.
-    """
-    return AccountChangeStores(
-        lock=PostgresAccountChangeLock(session),
-        accounts=PostgresInternalAccountStore(session),
-        sessions=PostgresSessionStore(session),
-        audit_log=PostgresAuditLog(session),
-        idempotency=PostgresIdempotencyStore(session),
-    )
-
-
 def wire_accounts(
     settings: Settings,
     session_factory: async_sessionmaker[AsyncSession],
@@ -151,71 +140,103 @@ def wire_accounts(
     Returns:
         The routers and the dependencies that other features need.
     """
-    session_transactions = SqlAlchemyTransactionRunner(session_factory, PostgresSessionStore)
-    authorizer = Authorizer(shared.events)
+    resources = _AccountsResources(
+        settings, session_factory, shared, Argon2Passwords(), Authorizer(shared.events)
+    )
+    session_transactions = resources.runner(PostgresSessionStore)
     current_session = build_current_session(
         AuthenticateSession(session_transactions, shared.clock, build_session_policy(settings))
     )
     check_origin = build_origin_check(OriginPolicy(frozenset(settings.allowed_origins)))
     session_router = build_session_router(
         SessionRoutes(
-            sign_in=_build_sign_in(settings, session_factory, shared),
+            sign_in=_build_sign_in(resources),
             sign_out=SignOut(session_transactions),
+            change_own_password=_build_change_own_password(resources),
             check_origin=check_origin,
             current_session=current_session,
             is_cookie_secure=settings.session_cookie_secure,
         )
     )
-    admin_router = build_admin_router(
-        AdminRoutes(
-            list_accounts=ListAdminAccounts(
-                SqlAlchemyTransactionRunner(session_factory, PostgresInternalAccountStore),
-                authorizer,
-            ),
-            change_account=_build_change_account(session_factory, shared, authorizer),
-            check_origin=check_origin,
-            current_session=current_session,
-        )
-    )
+    admin_router = build_admin_router(_build_admin_routes(resources, check_origin, current_session))
     return AccountsWiring(
         routers=(session_router, admin_router),
-        authorizer=authorizer,
+        authorizer=resources.authorizer,
         check_origin=check_origin,
         current_session=current_session,
     )
 
 
-def _build_sign_in(
-    settings: Settings,
-    session_factory: async_sessionmaker[AsyncSession],
-    shared: SharedPorts,
-) -> SignIn:
-    passwords = Argon2Passwords()
+def _build_sign_in(resources: _AccountsResources) -> SignIn:
     return SignIn(
-        SqlAlchemyTransactionRunner(session_factory, build_sign_in_stores),
-        SignInPorts(passwords, RandomSessionTokens(), shared.clock, shared.events),
+        resources.runner(build_sign_in_stores),
+        SignInPorts(
+            resources.passwords,
+            RandomSessionTokens(),
+            resources.shared.clock,
+            resources.shared.events,
+        ),
         SignInRules(
-            sessions=build_session_policy(settings),
-            throttle=build_throttle_policy(settings),
-            dummy_password_hash=create_dummy_password_hash(passwords),
+            sessions=build_session_policy(resources.settings),
+            throttle=build_throttle_policy(resources.settings),
+            dummy_password_hash=create_dummy_password_hash(resources.passwords),
         ),
     )
 
 
-def _build_change_account(
-    session_factory: async_sessionmaker[AsyncSession],
-    shared: SharedPorts,
-    authorizer: Authorizer,
-) -> ChangeAccount:
-    return ChangeAccount(
-        SqlAlchemyTransactionRunner(session_factory, build_account_change_stores),
-        AccountChangePorts(
+def _build_change_own_password(resources: _AccountsResources) -> ChangeOwnPassword:
+    shared = resources.shared
+    return ChangeOwnPassword(
+        resources.runner(build_own_password_change_stores),
+        OwnPasswordChangePorts(
+            hasher=resources.passwords,
+            verifier=resources.passwords,
             guard=shared.guard,
-            authorizer=authorizer,
             clock=shared.clock,
             ids=shared.ids,
             traces=shared.traces,
             events=shared.events,
         ),
-        render_changed_account,
+        build_throttle_policy(resources.settings),
+        render_changed_password,
+    )
+
+
+def _build_admin_routes(
+    resources: _AccountsResources, check_origin: OriginCheck, current_session: CurrentSession
+) -> AdminRoutes:
+    ports = _build_account_change_ports(resources)
+    return AdminRoutes(
+        list_accounts=ListAdminAccounts(
+            resources.runner(PostgresInternalAccountStore), resources.authorizer
+        ),
+        change_account=ChangeAccount(
+            resources.runner(build_account_change_stores), ports, render_changed_account
+        ),
+        create_account=CreateAccount(
+            resources.runner(build_account_creation_stores),
+            ports,
+            resources.passwords,
+            render_changed_account,
+        ),
+        reset_password=ResetAccountPassword(
+            resources.runner(build_password_reset_stores),
+            ports,
+            resources.passwords,
+            render_changed_account,
+        ),
+        check_origin=check_origin,
+        current_session=current_session,
+    )
+
+
+def _build_account_change_ports(resources: _AccountsResources) -> AccountChangePorts:
+    shared = resources.shared
+    return AccountChangePorts(
+        guard=shared.guard,
+        authorizer=resources.authorizer,
+        clock=shared.clock,
+        ids=shared.ids,
+        traces=shared.traces,
+        events=shared.events,
     )

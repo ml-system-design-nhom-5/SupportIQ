@@ -5,12 +5,14 @@
     "items": [
       {
         "account_id": "0b2d4f6a-8c1e-4a3b-9d5f-7e9a1c3e5b18",
+        "login_name": "staff-2",
         "display_name": "Minh Le",
         "role": "staff",
         "is_active": false
       },
       {
         "account_id": "e1f3a5c7-9b2d-4e6f-a8c0-4b6d8f0a2c16",
+        "login_name": "admin-1",
         "display_name": "Quang Vo",
         "role": "admin",
         "is_active": true

@@ -18,3 +18,12 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const WithTextInput: Story = {};
+export const WithHint: Story = {
+  args: { hint: "Leave empty for the next free number, or enter 1 to 9999." },
+};
+export const WithError: Story = {
+  args: {
+    hint: "Leave empty for the next free number, or enter 1 to 9999.",
+    error: "Enter a whole number from 1 to 9999, or leave it empty.",
+  },
+};

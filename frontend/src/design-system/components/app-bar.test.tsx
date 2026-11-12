@@ -2,11 +2,13 @@ import { screen } from "@testing-library/react";
 import { LayoutGrid, ShoppingBag } from "lucide-react";
 import { describe, expect, it } from "vitest";
 
-import { AccountLabel } from "@/design-system/components/account-label";
+import { AccountMenu } from "@/design-system/components/account-menu";
 import { AppBar } from "@/design-system/components/app-bar";
-import { Button } from "@/design-system/primitives/button";
 import { NavItem } from "@/design-system/primitives/nav-item";
 import { renderUi } from "@/test/render-app";
+
+/** The handlers of the account menu, which these tests do not open. */
+const menuHandlers = { onChangePassword: () => undefined, onSignOut: () => undefined };
 
 describe("AppBar", () => {
   it("shows the shop brand, the main navigation, and the account", () => {
@@ -21,18 +23,20 @@ describe("AppBar", () => {
           </NavItem>
         }
         account={
-          <>
-            <AccountLabel displayName="Linh Tran" />
-            <Button variant="ghost">Sign out</Button>
-          </>
+          <AccountMenu
+            variant="shop"
+            displayName="Linh Tran"
+            roleLabel="Customer"
+            isSigningOut={false}
+            {...menuHandlers}
+          />
         }
       />,
     );
 
     expect(screen.getByRole("banner")).toHaveTextContent("Demo Shop");
     expect(screen.getByRole("navigation", { name: "Main" })).toHaveTextContent("Products");
-    expect(screen.getByText("Linh Tran")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Sign out" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Linh Tran · Customer" })).toBeVisible();
   });
 
   it("shows the console brand with its area name and the role of the account", () => {
@@ -41,7 +45,15 @@ describe("AppBar", () => {
         variant="console"
         brandName="SupportIQ"
         areaName="Console"
-        account={<AccountLabel displayName="Mai Nguyen" roleLabel="Staff" />}
+        account={
+          <AccountMenu
+            variant="console"
+            displayName="Mai Nguyen"
+            roleLabel="Staff"
+            isSigningOut={false}
+            {...menuHandlers}
+          />
+        }
       />,
     );
 

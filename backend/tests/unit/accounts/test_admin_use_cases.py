@@ -17,7 +17,6 @@ from supportiq_backend.accounts import (
     AssignableRole,
     Authorizer,
     ChangeAccount,
-    DisplayName,
     ForbiddenRoleError,
     InternalAccount,
     InternalPrincipal,
@@ -45,6 +44,7 @@ from tests.unit.accounts.fakes import (
     FakeAccountChangeLock,
     FakeInternalAccountStore,
     FakeSessionRevoker,
+    build_internal_account,
 )
 from tests.unit.audit.fakes import FakeAuditLog
 from tests.unit.idempotency.fakes import FakeIdempotencyStore
@@ -75,16 +75,6 @@ def render(account: InternalAccount) -> StoredResponse:
     return StoredResponse(RESPONSE_STATUS, f'{{"role":"{account.role.value}"}}')
 
 
-def build_account(
-    account_id: AccountId,
-    role: InternalRole,
-    *,
-    is_active: bool = True,
-    name: str = "Mai Nguyen",
-) -> InternalAccount:
-    return InternalAccount(account_id, DisplayName(name), role, is_active)
-
-
 @dataclass(slots=True)
 class ChangeHarness:
     """The change use case with its fakes."""
@@ -103,9 +93,9 @@ class ChangeHarness:
     def __post_init__(self) -> None:
         """Wire the use case on the fakes, with an admin, a staff, and a manager account."""
         self.accounts.accounts = {
-            ADMIN_ID: build_account(ADMIN_ID, InternalRole.ADMIN),
-            TARGET_ID: build_account(TARGET_ID, InternalRole.STAFF),
-            MANAGER_ID: build_account(MANAGER_ID, InternalRole.MANAGER),
+            ADMIN_ID: build_internal_account(ADMIN_ID, InternalRole.ADMIN),
+            TARGET_ID: build_internal_account(TARGET_ID, InternalRole.STAFF),
+            MANAGER_ID: build_internal_account(MANAGER_ID, InternalRole.MANAGER),
         }
         self.transactions = FakeTransactionRunner(
             AccountChangeStores(
@@ -237,7 +227,7 @@ async def test_same_key_with_another_body_is_refused(harness: ChangeHarness) -> 
 
 
 async def test_caller_no_longer_active_gets_session_required(harness: ChangeHarness) -> None:
-    harness.accounts.accounts[ADMIN_ID] = build_account(
+    harness.accounts.accounts[ADMIN_ID] = build_internal_account(
         ADMIN_ID, InternalRole.ADMIN, is_active=False
     )
 
@@ -315,7 +305,7 @@ def build_list(
 
 
 async def test_failure_of_the_list_reaches_the_caller() -> None:
-    use_case, store = build_list(build_account(ADMIN_ID, InternalRole.ADMIN))
+    use_case, store = build_list(build_internal_account(ADMIN_ID, InternalRole.ADMIN))
     store.page_failure = DatabaseUnavailableError()
 
     with pytest.raises(DatabaseUnavailableError):
@@ -323,8 +313,8 @@ async def test_failure_of_the_list_reaches_the_caller() -> None:
 
 
 async def test_list_returns_a_next_position_when_more_accounts_follow() -> None:
-    first = build_account(ADMIN_ID, InternalRole.ADMIN, name="An")
-    second = build_account(TARGET_ID, InternalRole.STAFF, name="Binh")
+    first = build_internal_account(ADMIN_ID, InternalRole.ADMIN, name="An")
+    second = build_internal_account(TARGET_ID, InternalRole.STAFF, name="Binh")
     use_case, _ = build_list(first, second)
 
     page = await use_case.execute(ADMIN, None, 1)
@@ -334,7 +324,7 @@ async def test_list_returns_a_next_position_when_more_accounts_follow() -> None:
 
 
 async def test_list_has_no_next_position_on_the_last_page() -> None:
-    first = build_account(ADMIN_ID, InternalRole.ADMIN, name="An")
+    first = build_internal_account(ADMIN_ID, InternalRole.ADMIN, name="An")
     use_case, _ = build_list(first)
 
     page = await use_case.execute(ADMIN, None, 1)
@@ -343,8 +333,8 @@ async def test_list_has_no_next_position_on_the_last_page() -> None:
 
 
 async def test_list_continues_after_the_account_of_the_cursor() -> None:
-    first = build_account(ADMIN_ID, InternalRole.ADMIN, name="An")
-    second = build_account(TARGET_ID, InternalRole.STAFF, name="Binh")
+    first = build_internal_account(ADMIN_ID, InternalRole.ADMIN, name="An")
+    second = build_internal_account(TARGET_ID, InternalRole.STAFF, name="Binh")
     use_case, _ = build_list(first, second)
 
     page = await use_case.execute(ADMIN, ADMIN_ID, 1)
@@ -353,7 +343,7 @@ async def test_list_continues_after_the_account_of_the_cursor() -> None:
 
 
 async def test_list_refuses_a_cursor_that_names_no_internal_account() -> None:
-    use_case, _ = build_list(build_account(ADMIN_ID, InternalRole.ADMIN))
+    use_case, _ = build_list(build_internal_account(ADMIN_ID, InternalRole.ADMIN))
 
     with pytest.raises(InvalidCursorError):
         await use_case.execute(ADMIN, AccountId("unknown"), 1)

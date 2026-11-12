@@ -38,6 +38,11 @@ class EventName(StrEnum):
     TICKET_CREATED = "ticket.created"
     ACCOUNT_ROLE_CHANGED = "account.role_changed"
     ACCOUNT_STATUS_CHANGED = "account.status_changed"
+    ACCOUNT_CREATED = "account.created"
+    ACCOUNT_PASSWORD_CHANGED = "account.password_changed"  # noqa: S105  # an event name
+    ACCOUNT_PASSWORD_RESET = "account.password_reset"  # noqa: S105  # an event name
+    PASSWORD_CHANGE_FAILED = "password_change.failed"  # noqa: S105  # an event name
+    PASSWORD_CHANGE_THROTTLED = "password_change.throttled"  # noqa: S105  # an event name
 
 
 class EventLevel(StrEnum):
@@ -106,6 +111,20 @@ EVENT_DESCRIPTIONS: Mapping[EventName, EventDescription] = MappingProxyType(
         EventName.ACCOUNT_ROLE_CHANGED: EventDescription(EventLevel.INFO, "Account role changed"),
         EventName.ACCOUNT_STATUS_CHANGED: EventDescription(
             EventLevel.INFO, "Account status changed"
+        ),
+        EventName.ACCOUNT_CREATED: EventDescription(EventLevel.INFO, "Account created"),
+        EventName.ACCOUNT_PASSWORD_CHANGED: EventDescription(
+            EventLevel.INFO, "Password changed by the owner of the account"
+        ),
+        EventName.ACCOUNT_PASSWORD_RESET: EventDescription(
+            EventLevel.INFO, "Password reset by an admin"
+        ),
+        EventName.PASSWORD_CHANGE_FAILED: EventDescription(
+            EventLevel.INFO, "Password change refused because the current password was not correct"
+        ),
+        EventName.PASSWORD_CHANGE_THROTTLED: EventDescription(
+            EventLevel.WARNING,
+            "Password change refused because the login name reached the failure limit",
         ),
     }
 )

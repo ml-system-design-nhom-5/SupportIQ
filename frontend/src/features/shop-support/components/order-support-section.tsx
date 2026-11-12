@@ -9,6 +9,7 @@ import { useState } from "react";
 
 import { MessageBox, Panel, PanelHeader, PanelSection, Stack, StatusBanner } from "@/design-system";
 import {
+  countContractCharacters,
   describeFailure,
   FailureBanner,
   getRequestFailure,
@@ -19,10 +20,7 @@ import {
 import { useCreateShopTicket } from "@/features/shop-support/api/use-create-shop-ticket";
 import { useOrderTickets } from "@/features/shop-support/api/use-ticket-lists";
 import { OrderTickets } from "@/features/shop-support/components/order-tickets";
-import {
-  countMessageCharacters,
-  MESSAGE_MAX_LENGTH,
-} from "@/features/shop-support/model/message-text";
+import { MESSAGE_MAX_LENGTH } from "@/features/shop-support/model/message-text";
 
 /** Props of {@link OrderSupportSection}. */
 export type OrderSupportSectionProps = {
@@ -78,7 +76,7 @@ export function OrderSupportSection({ orderId, messageBoxId }: OrderSupportSecti
             inputId={messageBoxId}
             label="Write to support about this order"
             text={{ value: message, onChange: setMessage }}
-            limit={{ count: countMessageCharacters(message), max: MESSAGE_MAX_LENGTH }}
+            limit={{ count: countContractCharacters(message), max: MESSAGE_MAX_LENGTH }}
             isSending={createTicket.isPending}
             onSend={handleSend}
           >

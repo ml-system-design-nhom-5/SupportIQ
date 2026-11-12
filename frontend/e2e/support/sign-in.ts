@@ -14,7 +14,7 @@ const DUMMY_PASSWORD = "not-a-real-password";
  */
 export async function submitSignIn(page: Page): Promise<void> {
   await page.getByRole("textbox", { name: "Login name" }).fill(LOGIN_NAME);
-  await page.getByLabel("Password").fill(DUMMY_PASSWORD);
+  await page.getByLabel("Password", { exact: true }).fill(DUMMY_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
 }
 

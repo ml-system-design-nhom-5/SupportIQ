@@ -48,6 +48,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sessions/current/password-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change the password of the signed-in account
+         * @description Replaces the password of the caller's own account (ADR-0015). Roles: `customer`, `staff`, `manager`, and `admin`. A wrong `current_password` counts as a sign-in failure of the account's login name. While that name has `sign_in_failure_limit` or more failures within `sign_in_failure_window_ms`, every attempt waits `sign_in_failure_delay_ms` and is refused without a password check, even with the right password (ADR-0009, statement 8). Both return `422` with `current_password_incorrect`, never `401`, so the session stays. On success, in one transaction, `backend` stores only the Argon2id hash of `new_password`, deletes every other session of the account when `is_signed_out_elsewhere` is true, deletes the sign-in failures of the login name, and writes the audit log entry `account.password_changed`. The current session always stays. The `Idempotency-Key` is compared without the password fields (ERR-15): a retry with the same key and the same `is_signed_out_elsewhere` returns the original `201`, whatever the passwords.
+         */
+        post: operations["changeOwnPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/shop/products": {
         parameters: {
             query?: never;
@@ -185,7 +205,11 @@ export interface paths {
          */
         get: operations["listAdminAccounts"];
         put?: never;
-        post?: never;
+        /**
+         * Create a staff or manager account
+         * @description Creates an active `staff` or `manager` account with the password that the admin sets (ADR-0015). Role: `admin`. The login name is `<role>-<number>`. With `login_number`, `backend` uses that number and returns `409 login-name-taken` when an account already has the login name. Without it, `backend` takes one more than the largest number of any login name with the prefix `<role>-`, whatever the current role or status of that account, or 1 when there is none. A role change never renames an account. In the same transaction, `backend` stores only the Argon2id hash of `password` and writes the audit log entry `account.created`. Changes to accounts are serialized, and the caller is reloaded after the wait, so a caller who is no longer an active admin gets `401`. A `role` other than `staff` or `manager` returns `422`. The `Idempotency-Key` is compared without `password` (ERR-15): a retry with the same key and the same other fields returns the original `201`, whatever the password.
+         */
+        post: operations["createAdminAccount"];
         delete?: never;
         options?: never;
         head?: never;
@@ -226,6 +250,26 @@ export interface paths {
          * @description Deactivates or reactivates a `staff`, `manager`, or `admin` account (ADR-0012, admin limits 4 to 6). Role: `admin`. A deactivated account cannot sign in. The change deletes every session of the account and writes the audit log entry `account.status_changed` in the same transaction. Changes to accounts are serialized, and the caller is reloaded after the wait, so a caller who is no longer an active admin gets `401`. A customer account or an unknown `account_id` returns `404`, as if it did not exist. The request returns `422` when the target is the caller, when `is_active` is already the account's status, or when the change would leave no active `manager`.
          */
         post: operations["changeAccountStatus"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/accounts/{account_id}/password-resets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset the password of a staff or manager account
+         * @description Replaces the password of a `staff` or `manager` account with the password that the admin sets (ADR-0015). Role: `admin`. A deactivated account can be reset, and it still cannot sign in until an admin reactivates it. In one transaction, `backend` stores only the Argon2id hash of `password`, deletes every session of the account when `is_signed_out_everywhere` is true, deletes the sign-in failures of the account's login name, and writes the audit log entry `account.password_reset`. Changes to accounts are serialized, and the caller is reloaded after the wait, so a caller who is no longer an active admin gets `401`. A customer account or an unknown `account_id` returns `404`, as if it did not exist. The request returns `422` when the target is the caller, who changes their own password with `changeOwnPassword`, or an `admin` account. The `Idempotency-Key` is compared without `password` (ERR-15): a retry with the same key, the same `account_id`, and the same `is_signed_out_everywhere` returns the original `201`, whatever the password.
+         */
+        post: operations["resetAccountPassword"];
         delete?: never;
         options?: never;
         head?: never;
@@ -293,10 +337,10 @@ export interface components {
         /** @description The body of every error response, as RFC 9457 defines Problem Details, with the `trace_id` extension member (CON-12, LOG-04). It never contains a stack trace, an internal name, or Confidential data. Data class: Internal. */
         ProblemDetails: {
             /**
-             * @description The problem type, from the registry in the contracts v1 design (`urn:supportiq:problem:` and a kebab-case name). Each value has one meaning: `invalid-request`: the request is malformed or breaks a documented rule; `unauthenticated`: there is no valid session, or the credentials were not accepted; `forbidden`: the caller's role may not perform the operation, or the `Origin` check failed; `not-found`: the resource does not exist, or the caller may not know about it; `idempotency-key-reused`: the `Idempotency-Key` was used before with a different body or different path parameters; `not-ready`: the provider cannot serve the request now, for example because its database is unavailable or a timeout fired; `internal-error`: an unexpected failure in the provider. Consumers map an unknown value to a generic technical failure (CON-22). Data class: Internal.
+             * @description The problem type, from the registry in the contracts v1 design (`urn:supportiq:problem:` and a kebab-case name). Each value has one meaning: `invalid-request`: the request is malformed or breaks a documented rule; `unauthenticated`: there is no valid session, or the credentials were not accepted; `forbidden`: the caller's role may not perform the operation, or the `Origin` check failed; `not-found`: the resource does not exist, or the caller may not know about it; `idempotency-key-reused`: the `Idempotency-Key` was used before with a different body or different path parameters; `login-name-taken`: the login name that the request composes is already an account's login name; `not-ready`: the provider cannot serve the request now, for example because its database is unavailable or a timeout fired; `internal-error`: an unexpected failure in the provider. Consumers map an unknown value to a generic technical failure (CON-22). Data class: Internal.
              * @enum {string}
              */
-            type: "urn:supportiq:problem:invalid-request" | "urn:supportiq:problem:unauthenticated" | "urn:supportiq:problem:forbidden" | "urn:supportiq:problem:not-found" | "urn:supportiq:problem:idempotency-key-reused" | "urn:supportiq:problem:not-ready" | "urn:supportiq:problem:internal-error";
+            type: "urn:supportiq:problem:invalid-request" | "urn:supportiq:problem:unauthenticated" | "urn:supportiq:problem:forbidden" | "urn:supportiq:problem:not-found" | "urn:supportiq:problem:idempotency-key-reused" | "urn:supportiq:problem:login-name-taken" | "urn:supportiq:problem:not-ready" | "urn:supportiq:problem:internal-error";
             /** @description A short English summary of the problem type. It is the same for every occurrence of a type. Consumers never parse it. Data class: Internal. */
             title: string;
             /** @description The HTTP status code of the response, repeated in the body as RFC 9457 defines. Data class: Internal. */
@@ -322,13 +366,13 @@ export interface components {
          */
         RefundStatus: "requested" | "under_review" | "approved" | "rejected" | "paid";
         /**
-         * @description Why a well-formed admin change was refused: the admin limits 3 to 5 of ADR-0012, or a value that is already the account's value. When several reasons apply, the value is the first of this list. `own_account`: the target is the caller's own account (admin limit 4). `admin_role_unchangeable`: the target of a role change is an `admin` account (admin limit 3); only `changeAccountRole` returns it. `role_unchanged`: `role` is already the account's role; only `changeAccountRole` returns it. `status_unchanged`: `is_active` is already the account's status; only `changeAccountStatus` returns it. `last_active_manager`: the change would leave no active `manager` (admin limit 5). Consumers map an unknown value to a generic refusal (CON-22). Data class: Internal.
+         * @description Why a well-formed account change was refused: the admin limits 3 to 5 of ADR-0012, a value that is already the account's value, or a limit of ADR-0015. When several reasons apply, the value is the first of this list. `own_account`: the target is the caller's own account (admin limit 4, ADR-0015). `admin_role_unchangeable`: the target of a role change is an `admin` account (admin limit 3); only `changeAccountRole` returns it. `role_unchanged`: `role` is already the account's role; only `changeAccountRole` returns it. `status_unchanged`: `is_active` is already the account's status; only `changeAccountStatus` returns it. `last_active_manager`: the change would leave no active `manager` (admin limit 5). `admin_password_unresettable`: the target of a password reset is an `admin` account (ADR-0015); only `resetAccountPassword` returns it. `current_password_incorrect`: `current_password` is wrong, or the login name of the account is at the sign-in failure limit (ADR-0009, statement 8); only `changeOwnPassword` returns it. Consumers map an unknown value to a generic refusal (CON-22). Data class: Internal.
          * @enum {string}
          */
-        AccountChangeRule: "own_account" | "admin_role_unchangeable" | "role_unchanged" | "status_unchanged" | "last_active_manager";
-        /** @description The body of a refused admin change: a `ProblemDetails` with the extension member `violated_rule`, used by `changeAccountRole` and `changeAccountStatus` only. Data class: Internal. */
+        AccountChangeRule: "own_account" | "admin_role_unchangeable" | "role_unchanged" | "status_unchanged" | "last_active_manager" | "admin_password_unresettable" | "current_password_incorrect";
+        /** @description The body of a refused account change: a `ProblemDetails` with the extension member `violated_rule`, used by `changeAccountRole`, `changeAccountStatus`, `resetAccountPassword`, and `changeOwnPassword` only. Data class: Internal. */
         AccountChangeProblemDetails: {
-            /** @description Why the request was refused. Present exactly when a well-formed request is refused under the admin limits 3 to 5 of ADR-0012 or because the value is unchanged. Absent when the request fails validation against this contract, for example with a malformed body or without an `Idempotency-Key` (CON-08). Data class: Internal. */
+            /** @description Why the request was refused. Present exactly when a well-formed request is refused for one of the reasons of `AccountChangeRule`. Absent when the request fails validation against this contract, for example with a malformed body or without an `Idempotency-Key` (CON-08). Data class: Internal. */
             violated_rule?: components["schemas"]["AccountChangeRule"];
         } & components["schemas"]["ProblemDetails"];
         /** @description An opaque position in a list, from 1 to 512 characters (CON-14, CON-15). Data class: Internal. */
@@ -348,6 +392,11 @@ export interface components {
          * @enum {string}
          */
         AssignableAccountRole: "staff" | "manager";
+        /**
+         * Format: password
+         * @description A password that an account owner or an admin sets, from 1 to 128 characters counted in Unicode code points: the limits of `CreateSessionRequest.password`, so every password that can be set can sign in. No other rule applies (ADR-0015). `backend` hashes it exactly as received with Argon2id, and never stores, logs, or returns it. Data class: Secret.
+         */
+        Password: string;
         /** @description The credentials of a seeded account (ADR-0009). Data class: Secret. */
         CreateSessionRequest: {
             /** @description The login name of the account, from 1 to 64 characters, such as `staff-1`. It names a role and a number, never a person. Data class: Internal. */
@@ -362,7 +411,7 @@ export interface components {
         SessionView: {
             /** @description The identifier of the signed-in account, the same identifier that `listAdminAccounts` returns (CON-15). Data class: Internal. */
             account_id: string;
-            /** @description The name shown for the account: the customer's name, or the staff identity. Data class: Confidential. */
+            /** @description The name shown for the account: the customer's name, or the staff identity. From 1 to 100 characters. Data class: Confidential. */
             display_name: string;
             /** @description The role of the account, which decides the area that `frontend` opens. Data class: Internal. */
             role: components["schemas"]["AccountRole"];
@@ -481,11 +530,13 @@ export interface components {
             /** @description The cursor of the next page, present when at least one more item follows. Absent on the last page. Data class: Internal. */
             next_cursor?: components["schemas"]["Cursor"];
         };
-        /** @description An internal account as the admin area shows it. It has no email, password hash, or session data (ADR-0012, admin limit 9). Data class: Confidential. */
+        /** @description An internal account as the admin area shows it. It has no email, password, password hash, or session data (ADR-0012, ADR-0015). Data class: Confidential. */
         AdminAccountView: {
             /** @description The identifier of the account, the same identifier that `getCurrentSession` returns (CON-15). `frontend` uses it for requests and to find the caller's own row, and never shows it. Data class: Internal. */
             account_id: string;
-            /** @description The name shown for the account, a staff identity. Data class: Confidential. */
+            /** @description The login name that the account signs in with, from 1 to 64 characters, such as `staff-4`. It names a role and a number, never a person, and a role change does not rename it (ADR-0015). Data class: Internal. */
+            login_name: string;
+            /** @description The name shown for the account, a staff identity, from 1 to 100 characters. Data class: Confidential. */
             display_name: string;
             /** @description The role of the account. Data class: Internal. */
             role: components["schemas"]["InternalAccountRole"];
@@ -509,9 +560,36 @@ export interface components {
             /** @description `true` reactivates the account and `false` deactivates it. The account's current status is refused with `status_unchanged`. Data class: Internal. */
             is_active: boolean;
         };
+        /** @description A new `staff` or `manager` account with the password that the admin sets (ADR-0015). Data class: Secret. */
+        CreateAdminAccountRequest: {
+            /** @description The role of the new account, which is also the first part of its login name. Data class: Internal. */
+            role: components["schemas"]["AssignableAccountRole"];
+            /** @description The number of the new login name `<role>-<number>`, from 1 to 9 999. Absent means the next free number: one more than the largest number of any login name with the prefix `<role>-`, or 1 when there is none. A number whose login name an account already has returns `409 login-name-taken`. Data class: Internal. */
+            login_number?: number;
+            /** @description The name shown for the new account, a staff identity, from 1 to 100 characters counted in Unicode code points. It does not start or end with whitespace and holds no control character (Unicode category Cc: U+0000 to U+001F and U+007F to U+009F). `backend` never trims or repairs it: a value outside these limits returns `422` (SEC-21). Display names need not be unique; the login name tells accounts apart. Data class: Confidential. */
+            display_name: string;
+            /** @description The password of the new account, which the admin hands to its owner outside the system. Data class: Secret. */
+            password: components["schemas"]["Password"];
+        };
+        /** @description The new password of a `staff` or `manager` account, which the admin sets, and whether the account's sessions end (ADR-0015). Data class: Secret. */
+        ResetAccountPasswordRequest: {
+            /** @description The password that replaces the account's password, which the admin hands to its owner outside the system. Data class: Secret. */
+            password: components["schemas"]["Password"];
+            /** @description `true` deletes every session of the account, and `false` keeps them. Data class: Internal. */
+            is_signed_out_everywhere: boolean;
+        };
+        /** @description The current and the new password of the caller's own account, and whether its other sessions end (ADR-0015). Data class: Secret. */
+        ChangeOwnPasswordRequest: {
+            /** @description The account's password before the change. Data class: Secret. */
+            current_password: components["schemas"]["Password"];
+            /** @description The password that replaces it. Data class: Secret. */
+            new_password: components["schemas"]["Password"];
+            /** @description `true` deletes every other session of the account, and `false` keeps them. The current session always stays. Data class: Internal. */
+            is_signed_out_elsewhere: boolean;
+        };
     };
     responses: {
-        /** @description `unauthenticated`: no valid session. The `supportiq_session` cookie is missing or unknown, the session expired or was idle too long, or the session was deleted, for example by a sign-out or by a role or status change of its account (ADR-0012, admin limit 6). `frontend` goes to sign-in. */
+        /** @description `unauthenticated`: no valid session. The `supportiq_session` cookie is missing or unknown, the session expired or was idle too long, or the session was deleted, for example by a sign-out, by a role or status change of its account (ADR-0012, admin limit 6), or by a password change or reset of its account (ADR-0015). `frontend` goes to sign-in. */
         Unauthenticated: {
             headers: {
                 [name: string]: unknown;
@@ -574,6 +652,15 @@ export interface components {
                 "application/problem+json": components["schemas"]["ProblemDetails"];
             };
         };
+        /** @description `idempotency-key-reused`: the `Idempotency-Key` was used before by the same account on the same operation with different fields other than the password (ERR-15). Or `login-name-taken`: the login name composed from `role` and `login_number` is already an account's login name (ADR-0015). Nothing changed. */
+        IdempotencyKeyReusedOrLoginNameTaken: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ProblemDetails"];
+            };
+        };
         /** @description `invalid-request`: the request breaks the contract. The body is not valid JSON, misses a required field, has an unknown field (CON-07), or has a value outside its type, length, or pattern, or a required header such as `Idempotency-Key` is missing or malformed. Nothing changed. */
         InvalidRequest: {
             headers: {
@@ -610,6 +697,24 @@ export interface components {
                 "application/problem+json": components["schemas"]["AccountChangeProblemDetails"];
             };
         };
+        /** @description `invalid-request`: the request fails validation against this contract, as for `InvalidRequest`, or `current_password` was not accepted: it is wrong, or the login name of the account is at the sign-in failure limit, which gets this response after `sign_in_failure_delay_ms` (ADR-0009, statement 8). `violated_rule` is `current_password_incorrect` for a refusal, and is absent when the request fails validation. Nothing changed, and the session stays. */
+        InvalidPasswordChange: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["AccountChangeProblemDetails"];
+            };
+        };
+        /** @description `invalid-request`: the request fails validation against this contract, as for `InvalidRequest`, or a well-formed request is refused under ADR-0015: the target is the caller's own account, or the target is an `admin` account. `violated_rule` names the reason of a refusal, and is absent when the request fails validation. Nothing changed. */
+        InvalidPasswordReset: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["AccountChangeProblemDetails"];
+            };
+        };
         /** @description `not-ready`: `backend` cannot serve the request now. The database is unavailable, or a database timeout or lock wait limit was reached (ERR-09, ERR-18). The request changed nothing. A client may retry a read, or a write with the same `Idempotency-Key`, as ERR-12 and TS-29 allow. */
         NotReady: {
             headers: {
@@ -632,7 +737,7 @@ export interface components {
     parameters: {
         /** @description The W3C Trace Context header (ADR-0004, decision 6; LOG-05). Absent means that `backend` starts a new trace, which is the normal case because `frontend` exports no telemetry in v1 (LOG-04). `backend` also ignores a value that is not a valid `traceparent` and starts a new trace, as the W3C specification requires, so this header never causes `422`. Data class: Internal. */
         Traceparent: string;
-        /** @description A key that the client creates once per user action, as a UUID in lowercase hexadecimal with hyphens. A retry of the same action reuses it (TS-29). The same key with the same body and path parameters returns the original result without repeating the effect, and the same key with a different body or different path parameters returns `409 idempotency-key-reused` (ERR-15). A key belongs to the signed-in account and the operation, and `backend` remembers it for at least 24 hours. Only a success is remembered: after an error response, the same key runs as a new request. A request that arrives while the first one with its key is still running waits for it, and gets `503 not-ready` if the wait exceeds the lock timeout of `backend`. A missing or malformed key returns `422`. Data class: Internal. */
+        /** @description A key that the client creates once per user action, as a UUID in lowercase hexadecimal with hyphens. A retry of the same action reuses it (TS-29). The same key with the same body and path parameters returns the original result without repeating the effect, and the same key with a different body or different path parameters returns `409 idempotency-key-reused` (ERR-15). Password fields are not compared, because no password is ever stored: on `changeOwnPassword`, `createAdminAccount`, and `resetAccountPassword`, the same key with the same other fields and a different password returns the original result. A key belongs to the signed-in account and the operation, and `backend` remembers it for at least 24 hours. Only a success is remembered: after an error response, the same key runs as a new request. A request that arrives while the first one with its key is still running waits for it, and gets `503 not-ready` if the wait exceeds the lock timeout of `backend`. A missing or malformed key returns `422`. Data class: Internal. */
         IdempotencyKey: string;
         /** @description The maximum number of items on the page, from 1 to 100 (CON-14). Absent means 20. Another value returns `422`. Data class: Internal. */
         Limit: number;
@@ -739,6 +844,41 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["ForbiddenOrigin"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["NotReady"];
+        };
+    };
+    changeOwnPassword: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The W3C Trace Context header (ADR-0004, decision 6; LOG-05). Absent means that `backend` starts a new trace, which is the normal case because `frontend` exports no telemetry in v1 (LOG-04). `backend` also ignores a value that is not a valid `traceparent` and starts a new trace, as the W3C specification requires, so this header never causes `422`. Data class: Internal. */
+                traceparent?: components["parameters"]["Traceparent"];
+                /** @description A key that the client creates once per user action, as a UUID in lowercase hexadecimal with hyphens. A retry of the same action reuses it (TS-29). The same key with the same body and path parameters returns the original result without repeating the effect, and the same key with a different body or different path parameters returns `409 idempotency-key-reused` (ERR-15). Password fields are not compared, because no password is ever stored: on `changeOwnPassword`, `createAdminAccount`, and `resetAccountPassword`, the same key with the same other fields and a different password returns the original result. A key belongs to the signed-in account and the operation, and `backend` remembers it for at least 24 hours. Only a success is remembered: after an error response, the same key runs as a new request. A request that arrives while the first one with its key is still running waits for it, and gets `503 not-ready` if the wait exceeds the lock timeout of `backend`. A missing or malformed key returns `422`. Data class: Internal. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeOwnPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description The password was changed, or this is the original result of a retry. The body describes the caller's account, as `getCurrentSession` does. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionView"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["ForbiddenOrigin"];
+            409: components["responses"]["IdempotencyKeyReused"];
+            422: components["responses"]["InvalidPasswordChange"];
             500: components["responses"]["InternalError"];
             503: components["responses"]["NotReady"];
         };
@@ -913,7 +1053,7 @@ export interface operations {
             header: {
                 /** @description The W3C Trace Context header (ADR-0004, decision 6; LOG-05). Absent means that `backend` starts a new trace, which is the normal case because `frontend` exports no telemetry in v1 (LOG-04). `backend` also ignores a value that is not a valid `traceparent` and starts a new trace, as the W3C specification requires, so this header never causes `422`. Data class: Internal. */
                 traceparent?: components["parameters"]["Traceparent"];
-                /** @description A key that the client creates once per user action, as a UUID in lowercase hexadecimal with hyphens. A retry of the same action reuses it (TS-29). The same key with the same body and path parameters returns the original result without repeating the effect, and the same key with a different body or different path parameters returns `409 idempotency-key-reused` (ERR-15). A key belongs to the signed-in account and the operation, and `backend` remembers it for at least 24 hours. Only a success is remembered: after an error response, the same key runs as a new request. A request that arrives while the first one with its key is still running waits for it, and gets `503 not-ready` if the wait exceeds the lock timeout of `backend`. A missing or malformed key returns `422`. Data class: Internal. */
+                /** @description A key that the client creates once per user action, as a UUID in lowercase hexadecimal with hyphens. A retry of the same action reuses it (TS-29). The same key with the same body and path parameters returns the original result without repeating the effect, and the same key with a different body or different path parameters returns `409 idempotency-key-reused` (ERR-15). Password fields are not compared, because no password is ever stored: on `changeOwnPassword`, `createAdminAccount`, and `resetAccountPassword`, the same key with the same other fields and a different password returns the original result. A key belongs to the signed-in account and the operation, and `backend` remembers it for at least 24 hours. Only a success is remembered: after an error response, the same key runs as a new request. A request that arrives while the first one with its key is still running waits for it, and gets `503 not-ready` if the wait exceeds the lock timeout of `backend`. A missing or malformed key returns `422`. Data class: Internal. */
                 "Idempotency-Key": components["parameters"]["IdempotencyKey"];
             };
             path?: never;
@@ -1007,13 +1147,48 @@ export interface operations {
             503: components["responses"]["NotReady"];
         };
     };
+    createAdminAccount: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The W3C Trace Context header (ADR-0004, decision 6; LOG-05). Absent means that `backend` starts a new trace, which is the normal case because `frontend` exports no telemetry in v1 (LOG-04). `backend` also ignores a value that is not a valid `traceparent` and starts a new trace, as the W3C specification requires, so this header never causes `422`. Data class: Internal. */
+                traceparent?: components["parameters"]["Traceparent"];
+                /** @description A key that the client creates once per user action, as a UUID in lowercase hexadecimal with hyphens. A retry of the same action reuses it (TS-29). The same key with the same body and path parameters returns the original result without repeating the effect, and the same key with a different body or different path parameters returns `409 idempotency-key-reused` (ERR-15). Password fields are not compared, because no password is ever stored: on `changeOwnPassword`, `createAdminAccount`, and `resetAccountPassword`, the same key with the same other fields and a different password returns the original result. A key belongs to the signed-in account and the operation, and `backend` remembers it for at least 24 hours. Only a success is remembered: after an error response, the same key runs as a new request. A request that arrives while the first one with its key is still running waits for it, and gets `503 not-ready` if the wait exceeds the lock timeout of `backend`. A missing or malformed key returns `422`. Data class: Internal. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAdminAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description The account was created, or this is the original result of a retry. The body is the new account with its login name. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAccountView"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["ForbiddenRoleOrOrigin"];
+            409: components["responses"]["IdempotencyKeyReusedOrLoginNameTaken"];
+            422: components["responses"]["InvalidRequest"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["NotReady"];
+        };
+    };
     changeAccountRole: {
         parameters: {
             query?: never;
             header: {
                 /** @description The W3C Trace Context header (ADR-0004, decision 6; LOG-05). Absent means that `backend` starts a new trace, which is the normal case because `frontend` exports no telemetry in v1 (LOG-04). `backend` also ignores a value that is not a valid `traceparent` and starts a new trace, as the W3C specification requires, so this header never causes `422`. Data class: Internal. */
                 traceparent?: components["parameters"]["Traceparent"];
-                /** @description A key that the client creates once per user action, as a UUID in lowercase hexadecimal with hyphens. A retry of the same action reuses it (TS-29). The same key with the same body and path parameters returns the original result without repeating the effect, and the same key with a different body or different path parameters returns `409 idempotency-key-reused` (ERR-15). A key belongs to the signed-in account and the operation, and `backend` remembers it for at least 24 hours. Only a success is remembered: after an error response, the same key runs as a new request. A request that arrives while the first one with its key is still running waits for it, and gets `503 not-ready` if the wait exceeds the lock timeout of `backend`. A missing or malformed key returns `422`. Data class: Internal. */
+                /** @description A key that the client creates once per user action, as a UUID in lowercase hexadecimal with hyphens. A retry of the same action reuses it (TS-29). The same key with the same body and path parameters returns the original result without repeating the effect, and the same key with a different body or different path parameters returns `409 idempotency-key-reused` (ERR-15). Password fields are not compared, because no password is ever stored: on `changeOwnPassword`, `createAdminAccount`, and `resetAccountPassword`, the same key with the same other fields and a different password returns the original result. A key belongs to the signed-in account and the operation, and `backend` remembers it for at least 24 hours. Only a success is remembered: after an error response, the same key runs as a new request. A request that arrives while the first one with its key is still running waits for it, and gets `503 not-ready` if the wait exceeds the lock timeout of `backend`. A missing or malformed key returns `422`. Data class: Internal. */
                 "Idempotency-Key": components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -1052,7 +1227,7 @@ export interface operations {
             header: {
                 /** @description The W3C Trace Context header (ADR-0004, decision 6; LOG-05). Absent means that `backend` starts a new trace, which is the normal case because `frontend` exports no telemetry in v1 (LOG-04). `backend` also ignores a value that is not a valid `traceparent` and starts a new trace, as the W3C specification requires, so this header never causes `422`. Data class: Internal. */
                 traceparent?: components["parameters"]["Traceparent"];
-                /** @description A key that the client creates once per user action, as a UUID in lowercase hexadecimal with hyphens. A retry of the same action reuses it (TS-29). The same key with the same body and path parameters returns the original result without repeating the effect, and the same key with a different body or different path parameters returns `409 idempotency-key-reused` (ERR-15). A key belongs to the signed-in account and the operation, and `backend` remembers it for at least 24 hours. Only a success is remembered: after an error response, the same key runs as a new request. A request that arrives while the first one with its key is still running waits for it, and gets `503 not-ready` if the wait exceeds the lock timeout of `backend`. A missing or malformed key returns `422`. Data class: Internal. */
+                /** @description A key that the client creates once per user action, as a UUID in lowercase hexadecimal with hyphens. A retry of the same action reuses it (TS-29). The same key with the same body and path parameters returns the original result without repeating the effect, and the same key with a different body or different path parameters returns `409 idempotency-key-reused` (ERR-15). Password fields are not compared, because no password is ever stored: on `changeOwnPassword`, `createAdminAccount`, and `resetAccountPassword`, the same key with the same other fields and a different password returns the original result. A key belongs to the signed-in account and the operation, and `backend` remembers it for at least 24 hours. Only a success is remembered: after an error response, the same key runs as a new request. A request that arrives while the first one with its key is still running waits for it, and gets `503 not-ready` if the wait exceeds the lock timeout of `backend`. A missing or malformed key returns `422`. Data class: Internal. */
                 "Idempotency-Key": components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -1081,6 +1256,45 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["IdempotencyKeyReused"];
             422: components["responses"]["InvalidStatusChange"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["NotReady"];
+        };
+    };
+    resetAccountPassword: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The W3C Trace Context header (ADR-0004, decision 6; LOG-05). Absent means that `backend` starts a new trace, which is the normal case because `frontend` exports no telemetry in v1 (LOG-04). `backend` also ignores a value that is not a valid `traceparent` and starts a new trace, as the W3C specification requires, so this header never causes `422`. Data class: Internal. */
+                traceparent?: components["parameters"]["Traceparent"];
+                /** @description A key that the client creates once per user action, as a UUID in lowercase hexadecimal with hyphens. A retry of the same action reuses it (TS-29). The same key with the same body and path parameters returns the original result without repeating the effect, and the same key with a different body or different path parameters returns `409 idempotency-key-reused` (ERR-15). Password fields are not compared, because no password is ever stored: on `changeOwnPassword`, `createAdminAccount`, and `resetAccountPassword`, the same key with the same other fields and a different password returns the original result. A key belongs to the signed-in account and the operation, and `backend` remembers it for at least 24 hours. Only a success is remembered: after an error response, the same key runs as a new request. A request that arrives while the first one with its key is still running waits for it, and gets `503 not-ready` if the wait exceeds the lock timeout of `backend`. A missing or malformed key returns `422`. Data class: Internal. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description The identifier of an internal account, as `listAdminAccounts` returns it (CON-15). Data class: Internal. */
+                account_id: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetAccountPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description The password was reset, or this is the original result of a retry. The body is the account after the reset. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAccountView"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["ForbiddenRoleOrOrigin"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["IdempotencyKeyReused"];
+            422: components["responses"]["InvalidPasswordReset"];
             500: components["responses"]["InternalError"];
             503: components["responses"]["NotReady"];
         };

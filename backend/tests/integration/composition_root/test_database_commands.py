@@ -21,7 +21,7 @@ async def test_migrate_on_a_migrated_database_records_the_head_revision(
     await migrate(settings, events)
 
     (migrated,) = events.of(EventName.DATABASE_MIGRATED)
-    assert migrated.attributes == {"revision": "0001"}
+    assert migrated.attributes == {"revision": "0002"}
 
 
 async def test_create_app_role_records_that_the_role_was_applied(

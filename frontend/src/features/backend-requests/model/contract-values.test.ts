@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { requireMembers, toMoney } from "@/features/backend-requests/model/contract-values";
+import {
+  countContractCharacters,
+  requireMembers,
+  toMoney,
+} from "@/features/backend-requests/model/contract-values";
 import { readOperationExample } from "@/test/contract-examples";
 
 describe("requireMembers", () => {
@@ -18,6 +22,20 @@ describe("requireMembers", () => {
     expect(() => {
       requireMembers({ order_id: value }, ["order_id"]);
     }).toThrow("The response has no order_id.");
+  });
+});
+
+describe("countContractCharacters", () => {
+  it.each([
+    ["", 0],
+    ["Hello", 5],
+    ["Tiền hoàn", 9],
+    ["👍🏽", 2],
+    ["😊", 1],
+    ["   ", 3],
+    ["a\nb", 3],
+  ])("counts %j as %i code points, as JSON Schema counts length", (text, count) => {
+    expect(countContractCharacters(text)).toBe(count);
   });
 });
 

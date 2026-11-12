@@ -35,6 +35,19 @@ HASH_OF_KNOWN_PASSWORD = PasswordHash("hash-of-the-known-password")
 DUMMY_HASH = PasswordHash("hash-of-nothing")
 TOKEN_VALUE = "fixed-session-identifier"
 DEFAULT_SESSION_ID_HASH = SessionIdHash(b"hash")
+LOGIN_NAME = LoginName("staff-1")
+
+
+def build_internal_account(
+    account_id: AccountId,
+    role: InternalRole,
+    *,
+    is_active: bool = True,
+    name: str = "Mai Nguyen",
+    login_name: LoginName = LOGIN_NAME,
+) -> InternalAccount:
+    """Build an internal account as the admin area sees it."""
+    return InternalAccount(account_id, login_name, DisplayName(name), role, is_active)
 
 
 def build_session_account(
@@ -216,13 +229,20 @@ class FakeAccountChangeLock:
 
 @dataclass(slots=True)
 class FakeSessionRevoker:
-    """Remember the accounts whose sessions were deleted."""
+    """Remember the accounts whose sessions were deleted, and the session that each kept."""
 
     revoked: list[AccountId] = field(default_factory=list[AccountId])
+    revoked_except: list[tuple[AccountId, SessionIdHash]] = field(
+        default_factory=list[tuple[AccountId, SessionIdHash]]
+    )
 
     async def delete_sessions_of(self, account_id: AccountId) -> None:
         """Remember the account."""
         self.revoked.append(account_id)
+
+    async def delete_other_sessions_of(self, account_id: AccountId, kept: SessionIdHash) -> None:
+        """Remember the account and the session that stays."""
+        self.revoked_except.append((account_id, kept))
 
 
 @dataclass(slots=True)

@@ -10,6 +10,10 @@ export const deleteCurrentSessionRoute: FakeRoute = {
   method: "DELETE",
   path: "/v1/sessions/current",
 };
+export const changeOwnPasswordRoute: FakeRoute = {
+  method: "POST",
+  path: "/v1/sessions/current/password-changes",
+};
 export const listShopProductsRoute: FakeRoute = { method: "GET", path: "/v1/shop/products" };
 export const getShopProductRoute: FakeRoute = {
   method: "GET",
@@ -20,6 +24,7 @@ export const getShopOrderRoute: FakeRoute = { method: "GET", path: /^\/v1\/shop\
 export const listShopTicketsRoute: FakeRoute = { method: "GET", path: "/v1/shop/tickets" };
 export const createShopTicketRoute: FakeRoute = { method: "POST", path: "/v1/shop/tickets" };
 export const listAdminAccountsRoute: FakeRoute = { method: "GET", path: "/v1/admin/accounts" };
+export const createAdminAccountRoute: FakeRoute = { method: "POST", path: "/v1/admin/accounts" };
 export const changeAccountRoleRoute: FakeRoute = {
   method: "POST",
   path: /^\/v1\/admin\/accounts\/[^/]+\/role-changes$/,
@@ -27,4 +32,8 @@ export const changeAccountRoleRoute: FakeRoute = {
 export const changeAccountStatusRoute: FakeRoute = {
   method: "POST",
   path: /^\/v1\/admin\/accounts\/[^/]+\/status-changes$/,
+};
+export const resetAccountPasswordRoute: FakeRoute = {
+  method: "POST",
+  path: /^\/v1\/admin\/accounts\/[^/]+\/password-resets$/,
 };

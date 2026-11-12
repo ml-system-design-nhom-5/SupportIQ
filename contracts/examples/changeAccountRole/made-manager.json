@@ -2,6 +2,7 @@
   "summary": "A staff account became a manager",
   "value": {
     "account_id": "9a7d3e21-6c4b-4f8e-b1a2-3c5d7e9f0a12",
+    "login_name": "staff-1",
     "display_name": "Mai Nguyen",
     "role": "manager",
     "is_active": true

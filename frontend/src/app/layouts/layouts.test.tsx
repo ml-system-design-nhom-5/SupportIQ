@@ -19,7 +19,7 @@ function openWithSession(path: string, sessionExample: string) {
 }
 
 describe("ShopLayout", () => {
-  it("shows Demo Shop, the navigation, the customer's name, and Sign out", async () => {
+  it("shows Demo Shop, the navigation, and the account menu of the customer", async () => {
     openWithSession("/shop", "customer");
 
     const bar = await screen.findByRole("banner");
@@ -30,8 +30,7 @@ describe("ShopLayout", () => {
         .getAllByRole("link")
         .map((link) => link.textContent),
     ).toEqual(["Products", "My orders", "Support"]);
-    expect(within(bar).getByText("Lan Tran")).toBeVisible();
-    expect(within(bar).getByRole("button", { name: "Sign out" })).toBeVisible();
+    expect(within(bar).getByRole("button", { name: "Lan Tran · Customer" })).toBeVisible();
     expect(screen.getByRole("main")).toBeInTheDocument();
   });
 
@@ -46,13 +45,12 @@ describe("ShopLayout", () => {
 });
 
 describe("ConsoleLayout", () => {
-  it("shows the console app shell with the account, its role, and Sign out, and no ticket feature", async () => {
+  it("shows the console app shell with the account menu, and no ticket feature", async () => {
     openWithSession("/console", "manager");
 
     const bar = await screen.findByRole("banner");
     expect(bar).toHaveTextContent("SupportIQConsole");
-    expect(within(bar).getByText("Hoa Pham")).toBeVisible();
-    expect(within(bar).getByText("· Manager")).toBeVisible();
+    expect(within(bar).getByRole("button", { name: "Hoa Pham · Manager" })).toBeVisible();
     expect(
       screen.getByRole("heading", { level: 1, name: "The ticket inbox is not available yet" }),
     ).toBeVisible();
@@ -60,7 +58,7 @@ describe("ConsoleLayout", () => {
 });
 
 describe("AdminLayout", () => {
-  it("shows SupportIQ Admin with Accounts, the admin's name and role, and Sign out", async () => {
+  it("shows SupportIQ Admin with Accounts and the account menu of the admin", async () => {
     openWithSession("/admin", "admin");
 
     const bar = await screen.findByRole("banner");
@@ -69,8 +67,7 @@ describe("AdminLayout", () => {
       "href",
       "/admin/accounts",
     );
-    expect(within(bar).getByText("Quang Vo")).toBeVisible();
-    expect(within(bar).getByText("· Admin")).toBeVisible();
+    expect(within(bar).getByRole("button", { name: "Quang Vo · Admin" })).toBeVisible();
   });
 
   it("shows only the brand to a session of another role", async () => {

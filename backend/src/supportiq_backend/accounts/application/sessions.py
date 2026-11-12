@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 
+from supportiq_backend.accounts.application.throttle import SignInThrottle
 from supportiq_backend.accounts.domain.errors import InvalidCredentialsError, SessionRequiredError
 from supportiq_backend.accounts.domain.identity import PasswordHash, SessionToken
 from supportiq_backend.accounts.domain.ports import (
@@ -27,7 +28,6 @@ from supportiq_backend.accounts.domain.sign_in import (
     SignInAccount,
     ThrottlePolicy,
     hash_login_name,
-    is_throttled,
     normalize_login_name,
 )
 from supportiq_backend.platform import (
@@ -119,6 +119,7 @@ class SignIn:
         self._transactions = transactions
         self._ports = ports
         self._rules = rules
+        self._throttle = SignInThrottle(ports.clock, rules.throttle)
 
     async def execute(self, credentials: Credentials) -> SignedIn:
         """Sign in.
@@ -140,8 +141,9 @@ class SignIn:
         login_name = normalize_login_name(credentials.login_name)
         name_hash = hash_login_name(login_name)
         async with self._transactions.begin() as transaction:
-            failure_count = await self._load_recent_failure_count(transaction.stores, name_hash)
-            if not is_throttled(failure_count, self._rules.throttle):
+            failures = transaction.stores.failures
+            failure_count = await self._throttle.load_recent_failure_count(failures, name_hash)
+            if not self._throttle.is_at_limit(failure_count):
                 account = await transaction.stores.accounts.load_for_sign_in(login_name)
                 verified = await self._verify(account, credentials)
                 if verified is not None:
@@ -149,14 +151,8 @@ class SignIn:
                 await self._save_failure(transaction, name_hash)
                 raise InvalidCredentialsError
         self._ports.events.record(EventName.SIGN_IN_THROTTLED)
-        await self._ports.clock.sleep(self._rules.throttle.delay_ms)
+        await self._throttle.wait()
         raise InvalidCredentialsError
-
-    async def _load_recent_failure_count(
-        self, stores: SignInStores, name_hash: LoginNameHash
-    ) -> int:
-        since = self._ports.clock.now() - self._rules.throttle.failure_window
-        return await stores.failures.count_since(name_hash, since)
 
     async def _verify(
         self, account: SignInAccount | None, credentials: Credentials
@@ -197,10 +193,7 @@ class SignIn:
     async def _save_failure(
         self, transaction: Transaction[SignInStores], name_hash: LoginNameHash
     ) -> None:
-        now = self._ports.clock.now()
-        await transaction.stores.failures.save_failure(
-            name_hash, failed_at=now, expired_since=now - self._rules.throttle.failure_window
-        )
+        await self._throttle.save_failure(transaction.stores.failures, name_hash)
         await transaction.commit()
         self._ports.events.record(EventName.SIGN_IN_FAILED)
 

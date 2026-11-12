@@ -5,7 +5,7 @@ from builtins import str
 from enum import StrEnum
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, RootModel, SecretStr
+from pydantic import MISSING, BaseModel, ConfigDict, Field, RootModel, SecretStr
 
 
 class MessageText(RootModel[str]):
@@ -43,6 +43,7 @@ class Type(StrEnum):
     urn_supportiq_problem_forbidden = "urn:supportiq:problem:forbidden"
     urn_supportiq_problem_not_found = "urn:supportiq:problem:not-found"
     urn_supportiq_problem_idempotency_key_reused = "urn:supportiq:problem:idempotency-key-reused"
+    urn_supportiq_problem_login_name_taken = "urn:supportiq:problem:login-name-taken"
     urn_supportiq_problem_not_ready = "urn:supportiq:problem:not-ready"
     urn_supportiq_problem_internal_error = "urn:supportiq:problem:internal-error"
 
@@ -51,7 +52,7 @@ class ProblemDetails(BaseModel):
     type: Annotated[
         Type,
         Field(
-            description="The problem type, from the registry in the contracts v1 design (`urn:supportiq:problem:` and a kebab-case name). Each value has one meaning: `invalid-request`: the request is malformed or breaks a documented rule; `unauthenticated`: there is no valid session, or the credentials were not accepted; `forbidden`: the caller's role may not perform the operation, or the `Origin` check failed; `not-found`: the resource does not exist, or the caller may not know about it; `idempotency-key-reused`: the `Idempotency-Key` was used before with a different body or different path parameters; `not-ready`: the provider cannot serve the request now, for example because its database is unavailable or a timeout fired; `internal-error`: an unexpected failure in the provider. Consumers map an unknown value to a generic technical failure (CON-22). Data class: Internal."
+            description="The problem type, from the registry in the contracts v1 design (`urn:supportiq:problem:` and a kebab-case name). Each value has one meaning: `invalid-request`: the request is malformed or breaks a documented rule; `unauthenticated`: there is no valid session, or the credentials were not accepted; `forbidden`: the caller's role may not perform the operation, or the `Origin` check failed; `not-found`: the resource does not exist, or the caller may not know about it; `idempotency-key-reused`: the `Idempotency-Key` was used before with a different body or different path parameters; `login-name-taken`: the login name that the request composes is already an account's login name; `not-ready`: the provider cannot serve the request now, for example because its database is unavailable or a timeout fired; `internal-error`: an unexpected failure in the provider. Consumers map an unknown value to a generic technical failure (CON-22). Data class: Internal."
         ),
     ]
     title: Annotated[
@@ -115,6 +116,8 @@ class AccountChangeRule(StrEnum):
     role_unchanged = "role_unchanged"
     status_unchanged = "status_unchanged"
     last_active_manager = "last_active_manager"
+    admin_password_unresettable = "admin_password_unresettable"
+    current_password_incorrect = "current_password_incorrect"
 
 
 class Cursor(RootModel[str]):
@@ -144,6 +147,17 @@ class InternalAccountRole(StrEnum):
 class AssignableAccountRole(StrEnum):
     staff = "staff"
     manager = "manager"
+
+
+class Password(RootModel[SecretStr]):
+    root: Annotated[
+        SecretStr,
+        Field(
+            description="A password that an account owner or an admin sets, from 1 to 128 characters counted in Unicode code points: the limits of `CreateSessionRequest.password`, so every password that can be set can sign in. No other rule applies (ADR-0015). `backend` hashes it exactly as received with Argon2id, and never stores, logs, or returns it. Data class: Secret.",
+            max_length=128,
+            min_length=1,
+        ),
+    ]
 
 
 class CreateSessionRequest(BaseModel):
@@ -179,7 +193,8 @@ class SessionView(BaseModel):
     display_name: Annotated[
         str,
         Field(
-            description="The name shown for the account: the customer's name, or the staff identity. Data class: Confidential.",
+            description="The name shown for the account: the customer's name, or the staff identity. From 1 to 100 characters. Data class: Confidential.",
+            max_length=100,
             min_length=1,
         ),
     ]
@@ -228,10 +243,19 @@ class AdminAccountView(BaseModel):
             min_length=1,
         ),
     ]
+    login_name: Annotated[
+        str,
+        Field(
+            description="The login name that the account signs in with, from 1 to 64 characters, such as `staff-4`. It names a role and a number, never a person, and a role change does not rename it (ADR-0015). Data class: Internal.",
+            max_length=64,
+            min_length=1,
+        ),
+    ]
     display_name: Annotated[
         str,
         Field(
-            description="The name shown for the account, a staff identity. Data class: Confidential.",
+            description="The name shown for the account, a staff identity, from 1 to 100 characters. Data class: Confidential.",
+            max_length=100,
             min_length=1,
         ),
     ]
@@ -255,11 +279,11 @@ class AdminAccountPage(BaseModel):
         ),
     ]
     next_cursor: Annotated[
-        Cursor | None,
+        Cursor | MISSING,
         Field(
             description="The cursor of the next page, present when at least one more item follows. Absent on the last page. Data class: Internal."
         ),
-    ] = None
+    ] = MISSING
 
 
 class ChangeAccountRoleRequest(BaseModel):
@@ -286,13 +310,84 @@ class ChangeAccountStatusRequest(BaseModel):
     ]
 
 
+class CreateAdminAccountRequest(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    role: Annotated[
+        AssignableAccountRole,
+        Field(
+            description="The role of the new account, which is also the first part of its login name. Data class: Internal."
+        ),
+    ]
+    login_number: Annotated[
+        int | MISSING,
+        Field(
+            description="The number of the new login name `<role>-<number>`, from 1 to 9 999. Absent means the next free number: one more than the largest number of any login name with the prefix `<role>-`, or 1 when there is none. A number whose login name an account already has returns `409 login-name-taken`. Data class: Internal.",
+            ge=1,
+            le=9999,
+        ),
+    ] = MISSING
+    display_name: Annotated[
+        str,
+        Field(
+            description="The name shown for the new account, a staff identity, from 1 to 100 characters counted in Unicode code points. It does not start or end with whitespace and holds no control character (Unicode category Cc: U+0000 to U+001F and U+007F to U+009F). `backend` never trims or repairs it: a value outside these limits returns `422` (SEC-21). Display names need not be unique; the login name tells accounts apart. Data class: Confidential.",
+            max_length=100,
+            min_length=1,
+            pattern="^[^\\s\\x00-\\x1F\\x7F-\\x9F](?:[^\\x00-\\x1F\\x7F-\\x9F]*[^\\s\\x00-\\x1F\\x7F-\\x9F])?$",
+        ),
+    ]
+    password: Annotated[
+        Password,
+        Field(
+            description="The password of the new account, which the admin hands to its owner outside the system. Data class: Secret."
+        ),
+    ]
+
+
+class ResetAccountPasswordRequest(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    password: Annotated[
+        Password,
+        Field(
+            description="The password that replaces the account's password, which the admin hands to its owner outside the system. Data class: Secret."
+        ),
+    ]
+    is_signed_out_everywhere: Annotated[
+        bool,
+        Field(
+            description="`true` deletes every session of the account, and `false` keeps them. Data class: Internal."
+        ),
+    ]
+
+
+class ChangeOwnPasswordRequest(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    current_password: Annotated[
+        Password, Field(description="The account's password before the change. Data class: Secret.")
+    ]
+    new_password: Annotated[
+        Password, Field(description="The password that replaces it. Data class: Secret.")
+    ]
+    is_signed_out_elsewhere: Annotated[
+        bool,
+        Field(
+            description="`true` deletes every other session of the account, and `false` keeps them. The current session always stays. Data class: Internal."
+        ),
+    ]
+
+
 class AccountChangeProblemDetails(ProblemDetails):
     violated_rule: Annotated[
-        AccountChangeRule | None,
+        AccountChangeRule | MISSING,
         Field(
-            description="Why the request was refused. Present exactly when a well-formed request is refused under the admin limits 3 to 5 of ADR-0012 or because the value is unchanged. Absent when the request fails validation against this contract, for example with a malformed body or without an `Idempotency-Key` (CON-08). Data class: Internal."
+            description="Why the request was refused. Present exactly when a well-formed request is refused for one of the reasons of `AccountChangeRule`. Absent when the request fails validation against this contract, for example with a malformed body or without an `Idempotency-Key` (CON-08). Data class: Internal."
         ),
-    ] = None
+    ] = MISSING
 
 
 class ShopProductView(BaseModel):
@@ -333,11 +428,11 @@ class ShopProductPage(BaseModel):
         ),
     ]
     next_cursor: Annotated[
-        Cursor | None,
+        Cursor | MISSING,
         Field(
             description="The cursor of the next page, present when at least one more item follows. Absent on the last page. Data class: Internal."
         ),
-    ] = None
+    ] = MISSING
 
 
 class ShopShipmentView(BaseModel):
@@ -345,17 +440,17 @@ class ShopShipmentView(BaseModel):
         ShipmentStatus, Field(description="The status of the shipment. Data class: Confidential.")
     ]
     estimated_delivery_at: Annotated[
-        str | None,
+        str | MISSING,
         Field(
             description="When the carrier expects to deliver the parcel. Absent when the commerce data holds no estimate. Data class: Confidential."
         ),
-    ] = None
+    ] = MISSING
     delivered_at: Annotated[
-        str | None,
+        str | MISSING,
         Field(
             description="When the carrier delivered the parcel. Present exactly when `shipment_status` is `delivered`. Data class: Confidential."
         ),
-    ] = None
+    ] = MISSING
 
 
 class ShopRefundView(BaseModel):
@@ -440,11 +535,11 @@ class ShopOrderView(BaseModel):
         ),
     ]
     refund: Annotated[
-        ShopRefundView | None,
+        ShopRefundView | MISSING,
         Field(
             description="The refund of the order. Absent when no refund was requested for the order. Data class: Confidential."
         ),
-    ] = None
+    ] = MISSING
 
 
 class ShopOrderPage(BaseModel):
@@ -456,11 +551,11 @@ class ShopOrderPage(BaseModel):
         ),
     ]
     next_cursor: Annotated[
-        Cursor | None,
+        Cursor | MISSING,
         Field(
             description="The cursor of the next page, present when at least one more item follows. Absent on the last page. Data class: Internal."
         ),
-    ] = None
+    ] = MISSING
 
 
 class ShopTicketView(BaseModel):
@@ -489,11 +584,11 @@ class ShopTicketView(BaseModel):
         ShopTicketStatus, Field(description="Whether the reply was sent. Data class: Internal.")
     ]
     reply: Annotated[
-        ShopReplyView | None,
+        ShopReplyView | MISSING,
         Field(
             description="The reply that staff sent. Present exactly when `customer_status` is `replied`, and absent while it is `received`. Data class: Confidential."
         ),
-    ] = None
+    ] = MISSING
 
 
 class ShopTicketPage(BaseModel):
@@ -505,8 +600,8 @@ class ShopTicketPage(BaseModel):
         ),
     ]
     next_cursor: Annotated[
-        Cursor | None,
+        Cursor | MISSING,
         Field(
             description="The cursor of the next page, present when at least one more item follows. Absent on the last page. Data class: Internal."
         ),
-    ] = None
+    ] = MISSING

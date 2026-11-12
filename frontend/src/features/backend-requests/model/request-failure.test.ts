@@ -19,6 +19,7 @@ describe("toProblemType", () => {
     ["urn:supportiq:problem:forbidden", "forbidden"],
     ["urn:supportiq:problem:not-found", "not_found"],
     ["urn:supportiq:problem:idempotency-key-reused", "idempotency_key_reused"],
+    ["urn:supportiq:problem:login-name-taken", "login_name_taken"],
     ["urn:supportiq:problem:not-ready", "not_ready"],
     ["urn:supportiq:problem:internal-error", "internal_error"],
   ])("maps %s to %s", (urn, problemType) => {
@@ -112,6 +113,7 @@ describe("isRefusedByBackend", () => {
     [{ kind: "problem", status: 401, problemType: "unauthenticated" }, false],
     [{ kind: "problem", status: 403, problemType: "forbidden" }, false],
     [{ kind: "problem", status: 409, problemType: "idempotency_key_reused" }, false],
+    [{ kind: "problem", status: 409, problemType: "login_name_taken" }, true],
     [{ kind: "problem", status: 500, problemType: "internal_error" }, false],
     [{ kind: "problem", status: 503, problemType: "not_ready" }, false],
     [{ kind: "ingress", status: 429 }, false],

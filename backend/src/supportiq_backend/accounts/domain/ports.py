@@ -1,9 +1,13 @@
-"""The ports of sign-in and sessions (ADR-0009, statement 9; ARCH-25, ARCH-26)."""
+"""The ports of accounts: sign-in, sessions, and internal accounts (ARCH-25, ARCH-26).
+
+They follow ADR-0009, statement 9, and ADR-0015. The ports of new passwords are in
+`password_ports`.
+"""
 
 from datetime import datetime
 from typing import Protocol
 
-from supportiq_backend.accounts.domain.admin import InternalAccount
+from supportiq_backend.accounts.domain.admin import InternalAccount, NewInternalAccount
 from supportiq_backend.accounts.domain.identity import (
     AccountId,
     LoginName,
@@ -106,6 +110,35 @@ class InternalAccountStore(Protocol):
         ...
 
 
+class NewAccountStore(Protocol):
+    """Insert new internal accounts, and tell which login names exist (ADR-0015)."""
+
+    async def load_login_names_with_prefix(self, prefix: str) -> tuple[LoginName, ...]:
+        """Load the login names that start with a prefix.
+
+        Login names are unique across every account, so the names of every account count,
+        whatever its role or status.
+
+        Args:
+            prefix: The start of the names, such as `staff-`.
+
+        Returns:
+            The login names, in no particular order.
+        """
+        ...
+
+    async def save_new(self, account: NewInternalAccount) -> None:
+        """Insert a new account with the hash of its password.
+
+        Args:
+            account: The account.
+
+        Raises:
+            LoginNameTakenError: An account already has its login name.
+        """
+        ...
+
+
 class AccountChangeLock(Protocol):
     """Serialize every account change across replicas (backend foundation design)."""
 
@@ -126,6 +159,15 @@ class SessionRevoker(Protocol):
 
         Args:
             account_id: The account.
+        """
+        ...
+
+    async def delete_other_sessions_of(self, account_id: AccountId, kept: SessionIdHash) -> None:
+        """Delete every session of an account except one.
+
+        Args:
+            account_id: The account.
+            kept: The session that stays, the one of the request.
         """
         ...
 

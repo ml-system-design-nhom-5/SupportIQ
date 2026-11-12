@@ -4,7 +4,10 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import assert_never
 
-from supportiq_backend.accounts.application.authorization import Authorizer
+from supportiq_backend.accounts.application.authorization import (
+    Authorizer,
+    require_active_admin,
+)
 from supportiq_backend.accounts.domain.admin import (
     AccountChange,
     AccountNotFoundError,
@@ -15,11 +18,9 @@ from supportiq_backend.accounts.domain.admin import (
     apply_account_change,
     validate_account_change,
 )
-from supportiq_backend.accounts.domain.errors import SessionRequiredError
 from supportiq_backend.accounts.domain.identity import (
     AccountId,
     AdminPrincipal,
-    InternalRole,
     Principal,
 )
 from supportiq_backend.accounts.domain.ports import (
@@ -168,7 +169,7 @@ class ChangeAccount:
         async with self._transactions.begin() as transaction:
             stores = transaction.stores
             await stores.lock.acquire()
-            await _require_active_admin(stores.accounts, admin)
+            await require_active_admin(stores.accounts, admin)
             claim = await self._ports.guard.claim(stores.idempotency, request)
             if isinstance(claim, RepeatedRequest):
                 return claim.response
@@ -272,14 +273,6 @@ class ListAdminAccounts:
         items = accounts[:limit]
         has_more = len(accounts) > limit
         return AccountPage(items, items[-1].account_id if has_more else None)
-
-
-async def _require_active_admin(accounts: InternalAccountStore, admin: AdminPrincipal) -> None:
-    # A change that committed while this request waited for the lock may have deactivated the
-    # caller, whose session it deleted, so an admin deactivated by another cannot still act.
-    caller = await accounts.load_internal(admin.account_id)
-    if caller is None or not caller.is_active or caller.role is not InternalRole.ADMIN:
-        raise SessionRequiredError
 
 
 def _operation_of(change: AccountChange) -> OperationId:

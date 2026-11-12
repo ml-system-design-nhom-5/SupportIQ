@@ -17,6 +17,7 @@ describe("categorizeFailure", () => {
     ["not-found", 404, "not_found"],
     ["invalid-request", 422, "invalid_request"],
     ["idempotency-key-reused", 409, "conflict"],
+    ["login-name-taken", 409, "conflict"],
     ["not-ready", 503, "unavailable"],
     ["internal-error", 500, "unexpected"],
   ])("puts the %s problem in %s", (example, status, category) => {

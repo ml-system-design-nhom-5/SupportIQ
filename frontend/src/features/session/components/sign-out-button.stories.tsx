@@ -9,15 +9,13 @@ import { withFakeBackend } from "@/test/story-backend";
 const meta = {
   title: "Session/SignOutButton",
   component: SignOutButton,
-  args: { placement: "app-bar" },
 } satisfies Meta<typeof SignOutButton>;
 
 export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-export const InAppBar: Story = {};
-export const InStateMessage: Story = { args: { placement: "state" } };
+export const InStateMessage: Story = {};
 
 export const Failed: Story = {
   decorators: [

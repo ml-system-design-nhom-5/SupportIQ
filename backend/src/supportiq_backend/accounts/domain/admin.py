@@ -1,12 +1,14 @@
-"""The admin limits on internal accounts, as pure rules (ADR-0012, contract `AccountChangeRule`).
+"""The limits on changes of internal accounts, as pure rules (ADR-0012, ADR-0015).
 
-Every change goes through one validation, which checks the limits in the order of the
-contract, so the first value of the list is the one reported when several apply. At least one
-active admin always stays: the caller is an active admin and cannot change their own account.
+The values of `AccountChangeRule` are those of the contract. Every change goes through one
+validation, which checks the limits in the order of the contract, so the first value of the
+list is the one reported when several apply. At least one active admin always stays: the
+caller is an active admin and cannot change their own account.
 """
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
+from datetime import datetime
 from enum import StrEnum
 from types import MappingProxyType
 from typing import assert_never
@@ -17,7 +19,11 @@ from supportiq_backend.accounts.domain.identity import (
     AssignableRole,
     DisplayName,
     InternalRole,
+    LoginName,
+    Password,
+    PasswordHash,
 )
+from supportiq_backend.accounts.domain.login_names import LoginNumber
 from supportiq_backend.platform import InvalidRequestError, ResourceNotFoundError
 
 # The role that is a change's target, for the comparison with an internal role.
@@ -30,13 +36,15 @@ _INTERNAL_ROLE_OF: Mapping[AssignableRole, InternalRole] = MappingProxyType(
 
 
 class AccountChangeRule(StrEnum):
-    """Why a well-formed admin change was refused, in the order of the contract."""
+    """Why a well-formed account change was refused, in the order of the contract."""
 
     OWN_ACCOUNT = "own_account"
     ADMIN_ROLE_UNCHANGEABLE = "admin_role_unchangeable"
     ROLE_UNCHANGED = "role_unchanged"
     STATUS_UNCHANGED = "status_unchanged"
     LAST_ACTIVE_MANAGER = "last_active_manager"
+    ADMIN_PASSWORD_UNRESETTABLE = "admin_password_unresettable"  # noqa: S105  # a rule name
+    CURRENT_PASSWORD_INCORRECT = "current_password_incorrect"  # noqa: S105  # a rule name
 
 
 _DETAIL_OF_RULE: Mapping[AccountChangeRule, str] = MappingProxyType(
@@ -48,6 +56,10 @@ _DETAIL_OF_RULE: Mapping[AccountChangeRule, str] = MappingProxyType(
         AccountChangeRule.ROLE_UNCHANGED: "The account already has this role.",
         AccountChangeRule.STATUS_UNCHANGED: "The account already has this status.",
         AccountChangeRule.LAST_ACTIVE_MANAGER: "The change would leave no active manager.",
+        AccountChangeRule.ADMIN_PASSWORD_UNRESETTABLE: (
+            "The password of an admin account cannot be reset."
+        ),
+        AccountChangeRule.CURRENT_PASSWORD_INCORRECT: "The current password is not correct.",
     }
 )
 
@@ -83,12 +95,14 @@ class InternalAccount:
 
     Attributes:
         account_id: The account.
+        login_name: The name it signs in with, a role and a number. Internal.
         display_name: The name shown for it. Confidential.
         role: Its role.
         is_active: Whether it can sign in.
     """
 
     account_id: AccountId
+    login_name: LoginName
     display_name: DisplayName = field(repr=False)
     role: InternalRole
     is_active: bool
@@ -121,6 +135,38 @@ class StatusChange:
 
 
 type AccountChange = RoleChange | StatusChange
+
+
+@dataclass(frozen=True, slots=True)
+class AccountCreation:
+    """A `staff` or `manager` account that an admin creates (`createAdminAccount`, ADR-0015).
+
+    Attributes:
+        role: Its role, which also starts its login name.
+        login_number: The number of its login name; absent for the next free number.
+        display_name: The name shown for it. Confidential.
+        password: Its first password, which the admin hands over outside the system.
+    """
+
+    role: AssignableRole
+    login_number: LoginNumber | None
+    display_name: DisplayName = field(repr=False)
+    password: Password
+
+
+@dataclass(frozen=True, slots=True)
+class NewInternalAccount:
+    """An account to insert, with the hash of its first password.
+
+    Attributes:
+        account: The account, active from the start.
+        password_hash: The Argon2id hash of its password. Confidential.
+        created_at: When it was created.
+    """
+
+    account: InternalAccount
+    password_hash: PasswordHash = field(repr=False)
+    created_at: datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,6 +211,28 @@ def validate_account_change(
     removes_manager = removes_active_manager(target, apply_account_change(change, target))
     if removes_manager and active_manager_count <= 1:
         raise AccountChangeRefusedError(AccountChangeRule.LAST_ACTIVE_MANAGER)
+
+
+def build_created_account(
+    account_id: AccountId, login_name: LoginName, creation: AccountCreation
+) -> InternalAccount:
+    """Build the account that a creation adds: active, with the role that it asks for.
+
+    Args:
+        account_id: The identifier of the new account.
+        login_name: Its composed login name.
+        creation: What the admin asked for.
+
+    Returns:
+        The new account.
+    """
+    return InternalAccount(
+        account_id=account_id,
+        login_name=login_name,
+        display_name=creation.display_name,
+        role=_INTERNAL_ROLE_OF[creation.role],
+        is_active=True,
+    )
 
 
 def apply_account_change(change: AccountChange, target: InternalAccount) -> InternalAccount:

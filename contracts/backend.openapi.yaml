@@ -1,20 +1,25 @@
 openapi: 3.1.0
 info:
   title: SupportIQ backend API
-  version: 1.0.1
+  version: 1.1.0
   description: |
     The contract between `frontend` and `backend` for sign-in, the read-only shop, and the
     management of internal accounts. Version 1.0.1 holds the operations of contract PR 2,
     taken from the [contracts v1 design](../docs/design/contracts-v1.md) (revision 2) and the
-    [backend foundation design](../docs/design/backend-foundation.md). The console operations
-    and `getAdminVersions` come in a later version.
+    [backend foundation design](../docs/design/backend-foundation.md). Version 1.1.0 adds the
+    own password change, account creation, and password resets of the
+    [account management design](../docs/design/account-management.md) (ADR-0015). The console
+    operations and `getAdminVersions` come in a later version.
 
     ## Responsibility
 
     - `backend` is the only enforcement point for authentication, roles, and object-level
       access (SEC-16, SEC-17, SEC-20). `frontend` hides an action only as a convenience.
     - No operation creates, changes, or deletes a product, an order, a shipment, or a refund
-      (ADR-0013). The only writes are sessions, shop tickets, and changes to internal accounts.
+      (ADR-0013). The only writes are sessions, shop tickets, internal accounts, changes to
+      internal accounts, and passwords.
+    - `backend` stores only the Argon2id hash of a password. It never generates a password, and
+      no response has a field that can carry one (ADR-0015).
     - No `/v1/shop/` schema has a field that can carry AI output. No `/v1/admin/` schema has a
       field that can carry a ticket, a message, an order, or a report, and no admin operation
       reaches a customer account (SEC-41).
@@ -29,8 +34,9 @@ info:
     in `x-supportiq-roles`, which repeats the permission table of the contracts v1 design. A
     signed-in role that is not listed gets `403 forbidden`.
 
-    The state-changing operations (`createSession`, `deleteCurrentSession`, `createShopTicket`,
-    `changeAccountRole`, and `changeAccountStatus`) check the `Origin` header against the
+    The state-changing operations (`createSession`, `deleteCurrentSession`, `changeOwnPassword`,
+    `createShopTicket`, `createAdminAccount`, `changeAccountRole`, `changeAccountStatus`, and
+    `resetAccountPassword`) check the `Origin` header against the
     allowed origins before anything else, authentication included. The browser sets that
     header, so it is not a parameter. A missing or unknown origin returns `403 forbidden`
     (ADR-0009, statement 7).
@@ -51,8 +57,9 @@ info:
 
     - `traceparent` is optional on every request. `backend` starts a new trace when it is absent
       or invalid, and returns the trace ID in every error body.
-    - `Idempotency-Key` is required on `createShopTicket`, `changeAccountRole`, and
-      `changeAccountStatus`, the writes that a client may retry (ERR-15, CON-13).
+    - `Idempotency-Key` is required on `changeOwnPassword`, `createShopTicket`,
+      `createAdminAccount`, `changeAccountRole`, `changeAccountStatus`, and
+      `resetAccountPassword`, the writes that a client may retry (ERR-15, CON-13).
       `createSession` and `deleteCurrentSession` take none and are never retried automatically
       (TS-29): before sign-in there is no account to scope a key to, a repeated sign-in only
       creates one more session, and a repeated sign-out gets `401`, which `frontend` treats as
@@ -71,7 +78,8 @@ info:
     - **Provider bounds:** `backend` bounds every database call with the timeout settings of the
       backend foundation design (`database_connect_timeout_ms`, `database_statement_timeout_ms`,
       `database_lock_timeout_ms`, `database_pool_timeout_ms`) and answers `503 not-ready` when
-      one fires. A throttled `createSession` also waits `sign_in_failure_delay_ms`.
+      one fires. A throttled `createSession` or `changeOwnPassword` also waits
+      `sign_in_failure_delay_ms`.
     - **Retries:** reads, and writes with an `Idempotency-Key`, may be retried after `503` as
       ERR-12 and TS-29 allow.
 
@@ -79,22 +87,26 @@ info:
 
     Version 1.0.0 is the first version and has no earlier consumer. Compatible and breaking
     changes follow CON-19 and CON-20. Consumers ignore unknown response fields (CON-21) and
-    map unknown enum values to a safe default (CON-22).
+    map unknown enum values to a safe default (CON-22). Every change of version 1.1.0 is
+    compatible: new operations, a new response field, a narrower response length, and new enum
+    values in responses.
 servers:
   - url: /
     description: >-
       The base URL of `backend`. Every path of this contract is relative to it.
 tags:
   - name: sessions
-    description: Sign-in, the current session, and sign-out (ADR-0009).
+    description: >-
+      Sign-in, the current session, the own password change, and sign-out (ADR-0009,
+      ADR-0015).
   - name: shop
     description: >-
       The read-only catalog, the customer's own orders, and the customer's own tickets
       (ADR-0013). Callable by `customer` only.
   - name: admin
     description: >-
-      Internal accounts: listing, role changes, and status changes (ADR-0012). Callable by
-      `admin` only.
+      Internal accounts: listing, creation, role changes, status changes, and password resets
+      (ADR-0012, ADR-0015). Callable by `admin` only.
   - name: health
     description: Liveness and readiness of `backend` (ERR-18). No session is required.
 paths:
@@ -216,6 +228,66 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/ForbiddenOrigin'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/sessions/current/password-changes:
+    post:
+      operationId: changeOwnPassword
+      tags:
+        - sessions
+      summary: Change the password of the signed-in account
+      description: >-
+        Replaces the password of the caller's own account (ADR-0015). Roles: `customer`,
+        `staff`, `manager`, and `admin`. A wrong `current_password` counts as a sign-in failure
+        of the account's login name. While that name has `sign_in_failure_limit` or more failures
+        within `sign_in_failure_window_ms`, every attempt waits `sign_in_failure_delay_ms` and is
+        refused without a password check, even with the right password (ADR-0009, statement 8).
+        Both return `422` with `current_password_incorrect`, never `401`, so the session stays.
+        On success, in one transaction, `backend` stores only the Argon2id hash of
+        `new_password`, deletes every other session of the account when
+        `is_signed_out_elsewhere` is true, deletes the sign-in failures of the login name, and
+        writes the audit log entry `account.password_changed`. The current session always stays.
+        The `Idempotency-Key` is compared without the password fields (ERR-15): a retry with the
+        same key and the same `is_signed_out_elsewhere` returns the original `201`, whatever the
+        passwords.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - customer
+        - staff
+        - manager
+        - admin
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeOwnPasswordRequest'
+      responses:
+        '201':
+          description: >-
+            The password was changed, or this is the original result of a retry. The body
+            describes the caller's account, as `getCurrentSession` does.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionView'
+              examples:
+                changed:
+                  $ref: ./examples/changeOwnPassword/changed.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenOrigin'
+        '409':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '422':
+          $ref: '#/components/responses/InvalidPasswordChange'
         '500':
           $ref: '#/components/responses/InternalError'
         '503':
@@ -565,6 +637,61 @@ paths:
           $ref: '#/components/responses/InternalError'
         '503':
           $ref: '#/components/responses/NotReady'
+    post:
+      operationId: createAdminAccount
+      tags:
+        - admin
+      summary: Create a staff or manager account
+      description: >-
+        Creates an active `staff` or `manager` account with the password that the admin sets
+        (ADR-0015). Role: `admin`. The login name is `<role>-<number>`. With `login_number`,
+        `backend` uses that number and returns `409 login-name-taken` when an account already
+        has the login name. Without it, `backend` takes one more than the largest number of any
+        login name with the prefix `<role>-`, whatever the current role or status of that
+        account, or 1 when there is none. A role change never renames an account. In the same
+        transaction, `backend` stores only the Argon2id hash of `password` and writes the audit
+        log entry `account.created`. Changes to accounts are serialized, and the caller is
+        reloaded after the wait, so a caller who is no longer an active admin gets `401`. A
+        `role` other than `staff` or `manager` returns `422`. The `Idempotency-Key` is compared
+        without `password` (ERR-15): a retry with the same key and the same other fields returns
+        the original `201`, whatever the password.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - admin
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAdminAccountRequest'
+      responses:
+        '201':
+          description: >-
+            The account was created, or this is the original result of a retry. The body is
+            the new account with its login name.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAccountView'
+              examples:
+                created:
+                  $ref: ./examples/createAdminAccount/created.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRoleOrOrigin'
+        '409':
+          $ref: '#/components/responses/IdempotencyKeyReusedOrLoginNameTaken'
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
   /v1/admin/accounts/{account_id}/role-changes:
     post:
       operationId: changeAccountRole
@@ -679,6 +806,66 @@ paths:
           $ref: '#/components/responses/InternalError'
         '503':
           $ref: '#/components/responses/NotReady'
+  /v1/admin/accounts/{account_id}/password-resets:
+    post:
+      operationId: resetAccountPassword
+      tags:
+        - admin
+      summary: Reset the password of a staff or manager account
+      description: >-
+        Replaces the password of a `staff` or `manager` account with the password that the admin
+        sets (ADR-0015). Role: `admin`. A deactivated account can be reset, and it still cannot
+        sign in until an admin reactivates it. In one transaction, `backend` stores only the
+        Argon2id hash of `password`, deletes every session of the account when
+        `is_signed_out_everywhere` is true, deletes the sign-in failures of the account's login
+        name, and writes the audit log entry `account.password_reset`. Changes to accounts are
+        serialized, and the caller is reloaded after the wait, so a caller who is no longer an
+        active admin gets `401`. A customer account or an unknown `account_id` returns `404`, as
+        if it did not exist. The request returns `422` when the target is the caller, who
+        changes their own password with `changeOwnPassword`, or an `admin` account. The
+        `Idempotency-Key` is compared without `password` (ERR-15): a retry with the same key,
+        the same `account_id`, and the same `is_signed_out_everywhere` returns the original
+        `201`, whatever the password.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - admin
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/AccountId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetAccountPasswordRequest'
+      responses:
+        '201':
+          description: >-
+            The password was reset, or this is the original result of a retry. The body is the
+            account after the reset.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAccountView'
+              examples:
+                reset:
+                  $ref: ./examples/resetAccountPassword/reset.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRoleOrOrigin'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '422':
+          $ref: '#/components/responses/InvalidPasswordReset'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
   /health/live:
     get:
       operationId: checkLiveness
@@ -763,8 +950,11 @@ components:
         with hyphens. A retry of the same action reuses it (TS-29). The same key with the same
         body and path parameters returns the original result without repeating the effect, and
         the same key with a different body or different path parameters returns
-        `409 idempotency-key-reused` (ERR-15). A key belongs to the signed-in account and the
-        operation, and `backend` remembers it for at least 24 hours.
+        `409 idempotency-key-reused` (ERR-15). Password fields are not compared, because no
+        password is ever stored: on `changeOwnPassword`, `createAdminAccount`, and
+        `resetAccountPassword`, the same key with the same other fields and a different password
+        returns the original result. A key belongs to the signed-in account and the operation,
+        and `backend` remembers it for at least 24 hours.
         Only a success is remembered: after an error response, the same key runs as a new
         request. A request that arrives while the first one with its key is still running waits
         for it, and gets `503 not-ready` if the wait exceeds the lock timeout of `backend`. A
@@ -844,8 +1034,9 @@ components:
       description: >-
         `unauthenticated`: no valid session. The `supportiq_session` cookie is missing or
         unknown, the session expired or was idle too long, or the session was deleted, for
-        example by a sign-out or by a role or status change of its account (ADR-0012, admin limit
-        6). `frontend` goes to sign-in.
+        example by a sign-out, by a role or status change of its account (ADR-0012, admin limit
+        6), or by a password change or reset of its account (ADR-0015). `frontend` goes to
+        sign-in.
       content:
         application/problem+json:
           schema:
@@ -927,6 +1118,21 @@ components:
           examples:
             idempotency-key-reused:
               $ref: ./examples/problems/idempotency-key-reused.json
+    IdempotencyKeyReusedOrLoginNameTaken:
+      description: >-
+        `idempotency-key-reused`: the `Idempotency-Key` was used before by the same account on
+        the same operation with different fields other than the password (ERR-15). Or
+        `login-name-taken`: the login name composed from `role` and `login_number` is already
+        an account's login name (ADR-0015). Nothing changed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            idempotency-key-reused:
+              $ref: ./examples/problems/idempotency-key-reused.json
+            login-name-taken:
+              $ref: ./examples/problems/login-name-taken.json
     InvalidRequest:
       description: >-
         `invalid-request`: the request breaks the contract. The body is not valid JSON, misses a
@@ -998,6 +1204,40 @@ components:
               $ref: ./examples/problems/status-unchanged.json
             last-active-manager:
               $ref: ./examples/problems/last-active-manager.json
+    InvalidPasswordChange:
+      description: >-
+        `invalid-request`: the request fails validation against this contract, as for
+        `InvalidRequest`, or `current_password` was not accepted: it is wrong, or the login
+        name of the account is at the sign-in failure limit, which gets this response after
+        `sign_in_failure_delay_ms` (ADR-0009, statement 8). `violated_rule` is
+        `current_password_incorrect` for a refusal, and is absent when the request fails
+        validation. Nothing changed, and the session stays.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/AccountChangeProblemDetails'
+          examples:
+            invalid-request:
+              $ref: ./examples/problems/invalid-request.json
+            current-password-incorrect:
+              $ref: ./examples/problems/current-password-incorrect.json
+    InvalidPasswordReset:
+      description: >-
+        `invalid-request`: the request fails validation against this contract, as for
+        `InvalidRequest`, or a well-formed request is refused under ADR-0015: the target is the
+        caller's own account, or the target is an `admin` account. `violated_rule` names the
+        reason of a refusal, and is absent when the request fails validation. Nothing changed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/AccountChangeProblemDetails'
+          examples:
+            invalid-request:
+              $ref: ./examples/problems/invalid-request.json
+            own-account:
+              $ref: ./examples/problems/own-account.json
+            admin-password-unresettable:
+              $ref: ./examples/problems/admin-password-unresettable.json
     NotReady:
       description: >-
         `not-ready`: `backend` cannot serve the request now. The database is unavailable, or a
@@ -1039,10 +1279,10 @@ components:
       $ref: ./schemas/RefundStatus.yaml
     AccountChangeRule:
       description: >-
-        Why a well-formed admin change was refused: the admin limits 3 to 5 of ADR-0012, or a value
-        that is already the account's value. When several reasons apply, the value is the first
-        of this list.
-        `own_account`: the target is the caller's own account (admin limit 4).
+        Why a well-formed account change was refused: the admin limits 3 to 5 of ADR-0012, a
+        value that is already the account's value, or a limit of ADR-0015. When several reasons
+        apply, the value is the first of this list.
+        `own_account`: the target is the caller's own account (admin limit 4, ADR-0015).
         `admin_role_unchangeable`: the target of a role change is an `admin` account (admin limit
         3); only `changeAccountRole` returns it.
         `role_unchanged`: `role` is already the account's role; only `changeAccountRole` returns
@@ -1050,6 +1290,11 @@ components:
         `status_unchanged`: `is_active` is already the account's status; only
         `changeAccountStatus` returns it.
         `last_active_manager`: the change would leave no active `manager` (admin limit 5).
+        `admin_password_unresettable`: the target of a password reset is an `admin` account
+        (ADR-0015); only `resetAccountPassword` returns it.
+        `current_password_incorrect`: `current_password` is wrong, or the login name of the
+        account is at the sign-in failure limit (ADR-0009, statement 8); only
+        `changeOwnPassword` returns it.
         Consumers map an unknown value to a generic refusal (CON-22). Data class: Internal.
       type: string
       enum:
@@ -1058,11 +1303,13 @@ components:
         - role_unchanged
         - status_unchanged
         - last_active_manager
+        - admin_password_unresettable
+        - current_password_incorrect
     AccountChangeProblemDetails:
       description: >-
-        The body of a refused admin change: a `ProblemDetails` with the extension member
-        `violated_rule`, used by `changeAccountRole` and `changeAccountStatus` only. Data class:
-        Internal.
+        The body of a refused account change: a `ProblemDetails` with the extension member
+        `violated_rule`, used by `changeAccountRole`, `changeAccountStatus`,
+        `resetAccountPassword`, and `changeOwnPassword` only. Data class: Internal.
       type: object
       allOf:
         - $ref: '#/components/schemas/ProblemDetails'
@@ -1071,9 +1318,9 @@ components:
           $ref: '#/components/schemas/AccountChangeRule'
           description: >-
             Why the request was refused. Present exactly when a well-formed request is refused
-            under the admin limits 3 to 5 of ADR-0012 or because the value is unchanged. Absent
-            when the request fails validation against this contract, for example with a malformed
-            body or without an `Idempotency-Key` (CON-08). Data class: Internal.
+            for one of the reasons of `AccountChangeRule`. Absent when the request fails
+            validation against this contract, for example with a malformed body or without an
+            `Idempotency-Key` (CON-08). Data class: Internal.
     Cursor:
       description: >-
         An opaque position in a list, from 1 to 512 characters (CON-14, CON-15). Data class:
@@ -1113,6 +1360,17 @@ components:
       enum:
         - staff
         - manager
+    Password:
+      description: >-
+        A password that an account owner or an admin sets, from 1 to 128 characters counted in
+        Unicode code points: the limits of `CreateSessionRequest.password`, so every password
+        that can be set can sign in. No other rule applies (ADR-0015). `backend` hashes it
+        exactly as received with Argon2id, and never stores, logs, or returns it. Data class:
+        Secret.
+      type: string
+      format: password
+      minLength: 1
+      maxLength: 128
     CreateSessionRequest:
       description: >-
         The credentials of a seeded account (ADR-0009). Data class: Secret.
@@ -1154,10 +1412,11 @@ components:
           minLength: 1
         display_name:
           description: >-
-            The name shown for the account: the customer's name, or the staff identity. Data
-            class: Confidential.
+            The name shown for the account: the customer's name, or the staff identity. From 1
+            to 100 characters. Data class: Confidential.
           type: string
           minLength: 1
+          maxLength: 100
         role:
           $ref: '#/components/schemas/AccountRole'
           description: >-
@@ -1475,11 +1734,12 @@ components:
             the last page. Data class: Internal.
     AdminAccountView:
       description: >-
-        An internal account as the admin area shows it. It has no email, password hash, or
-        session data (ADR-0012, admin limit 9). Data class: Confidential.
+        An internal account as the admin area shows it. It has no email, password, password
+        hash, or session data (ADR-0012, ADR-0015). Data class: Confidential.
       type: object
       required:
         - account_id
+        - login_name
         - display_name
         - role
         - is_active
@@ -1491,11 +1751,21 @@ components:
             never shows it. Data class: Internal.
           type: string
           minLength: 1
-        display_name:
+        login_name:
           description: >-
-            The name shown for the account, a staff identity. Data class: Confidential.
+            The login name that the account signs in with, from 1 to 64 characters, such as
+            `staff-4`. It names a role and a number, never a person, and a role change does not
+            rename it (ADR-0015). Data class: Internal.
           type: string
           minLength: 1
+          maxLength: 64
+        display_name:
+          description: >-
+            The name shown for the account, a staff identity, from 1 to 100 characters. Data
+            class: Confidential.
+          type: string
+          minLength: 1
+          maxLength: 100
         role:
           $ref: '#/components/schemas/InternalAccountRole'
           description: >-
@@ -1549,4 +1819,90 @@ components:
           description: >-
             `true` reactivates the account and `false` deactivates it. The account's current
             status is refused with `status_unchanged`. Data class: Internal.
+          type: boolean
+    CreateAdminAccountRequest:
+      description: >-
+        A new `staff` or `manager` account with the password that the admin sets (ADR-0015).
+        Data class: Secret.
+      type: object
+      additionalProperties: false
+      required:
+        - role
+        - display_name
+        - password
+      properties:
+        role:
+          $ref: '#/components/schemas/AssignableAccountRole'
+          description: >-
+            The role of the new account, which is also the first part of its login name. Data
+            class: Internal.
+        login_number:
+          description: >-
+            The number of the new login name `<role>-<number>`, from 1 to 9 999. Absent means
+            the next free number: one more than the largest number of any login name with the
+            prefix `<role>-`, or 1 when there is none. A number whose login name an account
+            already has returns `409 login-name-taken`. Data class: Internal.
+          type: integer
+          minimum: 1
+          maximum: 9999
+        display_name:
+          description: >-
+            The name shown for the new account, a staff identity, from 1 to 100 characters
+            counted in Unicode code points. It does not start or end with whitespace and holds no
+            control character (Unicode category Cc: U+0000 to U+001F and U+007F to U+009F).
+            `backend` never trims or repairs it: a value outside these limits returns `422`
+            (SEC-21). Display names need not be unique; the login name tells accounts apart.
+            Data class: Confidential.
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: '^[^\s\x00-\x1F\x7F-\x9F](?:[^\x00-\x1F\x7F-\x9F]*[^\s\x00-\x1F\x7F-\x9F])?$'
+        password:
+          $ref: '#/components/schemas/Password'
+          description: >-
+            The password of the new account, which the admin hands to its owner outside the
+            system. Data class: Secret.
+    ResetAccountPasswordRequest:
+      description: >-
+        The new password of a `staff` or `manager` account, which the admin sets, and whether
+        the account's sessions end (ADR-0015). Data class: Secret.
+      type: object
+      additionalProperties: false
+      required:
+        - password
+        - is_signed_out_everywhere
+      properties:
+        password:
+          $ref: '#/components/schemas/Password'
+          description: >-
+            The password that replaces the account's password, which the admin hands to its
+            owner outside the system. Data class: Secret.
+        is_signed_out_everywhere:
+          description: >-
+            `true` deletes every session of the account, and `false` keeps them. Data class:
+            Internal.
+          type: boolean
+    ChangeOwnPasswordRequest:
+      description: >-
+        The current and the new password of the caller's own account, and whether its other
+        sessions end (ADR-0015). Data class: Secret.
+      type: object
+      additionalProperties: false
+      required:
+        - current_password
+        - new_password
+        - is_signed_out_elsewhere
+      properties:
+        current_password:
+          $ref: '#/components/schemas/Password'
+          description: >-
+            The account's password before the change. Data class: Secret.
+        new_password:
+          $ref: '#/components/schemas/Password'
+          description: >-
+            The password that replaces it. Data class: Secret.
+        is_signed_out_elsewhere:
+          description: >-
+            `true` deletes every other session of the account, and `false` keeps them. The
+            current session always stays. Data class: Internal.
           type: boolean

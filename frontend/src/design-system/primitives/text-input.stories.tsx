@@ -24,4 +24,6 @@ export const Empty: Story = {};
 export const Filled: Story = { args: { defaultValue: "staff-1" } };
 export const Invalid: Story = { args: { defaultValue: "staff-1", "aria-invalid": true } };
 export const Disabled: Story = { args: { defaultValue: "staff-1", disabled: true } };
-export const Password: Story = { args: { type: "password", defaultValue: "not-a-password" } };
+export const WithLeadingText: Story = {
+  args: { leadingText: "staff-", placeholder: "next free number", inputMode: "numeric" },
+};

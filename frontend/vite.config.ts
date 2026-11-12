@@ -81,6 +81,8 @@ const sharedConfig: ViteUserConfig = {
         optimizeDeps: {
           include: [
             "@radix-ui/react-alert-dialog",
+            "@radix-ui/react-dialog",
+            "@radix-ui/react-dropdown-menu",
             "@radix-ui/react-label",
             "@radix-ui/react-tooltip",
             "@tanstack/react-query",

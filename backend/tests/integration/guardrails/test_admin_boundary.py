@@ -12,6 +12,7 @@ pytestmark = pytest.mark.anyio
 CUSTOMER_NAME = "Customer Of The Shop"
 KEY = "00000000-0000-4000-8000-000000000001"
 OTHER_KEY = "00000000-0000-4000-8000-000000000002"
+RESET_PASSWORD = "reset-test-password"
 
 
 @pytest.fixture
@@ -66,4 +67,33 @@ async def test_changes_of_a_customer_account_return_404_and_change_nothing(
             account_id=customer_account,
         )
         is True
+    )
+
+
+async def test_password_reset_of_a_customer_account_returns_404_and_changes_nothing(
+    backend: RunningBackend, builder: DatabaseBuilder, admin_headers: dict[str, str]
+) -> None:
+    customer_account, _ = await builder.customer_account()
+    token = await builder.session(customer_account, "customer")
+    password_hash = await builder.scalar(
+        "SELECT password_hash FROM accounts WHERE account_id = :account_id",
+        account_id=customer_account,
+    )
+
+    reset = await backend.client.post(
+        f"/v1/admin/accounts/{customer_account}/password-resets",
+        json={"password": RESET_PASSWORD, "is_signed_out_everywhere": True},
+        headers={**admin_headers, "Idempotency-Key": KEY},
+    )
+    session = await backend.client.get("/v1/sessions/current", headers=session_headers(token))
+
+    assert reset.status_code == HTTPStatus.NOT_FOUND
+    assert session.status_code == HTTPStatus.OK
+    assert await builder.scalar("SELECT count(*) FROM audit_log_entries") == 0
+    assert (
+        await builder.scalar(
+            "SELECT password_hash FROM accounts WHERE account_id = :account_id",
+            account_id=customer_account,
+        )
+        == password_hash
     )

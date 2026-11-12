@@ -152,6 +152,7 @@ class _ProblemHandler:
                 | ErrorCode.FORBIDDEN
                 | ErrorCode.NOT_FOUND
                 | ErrorCode.IDEMPOTENCY_KEY_REUSED
+                | ErrorCode.LOGIN_NAME_TAKEN
             ):
                 return
             case _:

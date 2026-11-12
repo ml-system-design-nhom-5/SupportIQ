@@ -31,4 +31,16 @@ describe("StatusBanner", () => {
 
     expect(screen.getByRole("status")).toHaveTextContent("Message sent.");
   });
+
+  it("takes the focus from a script with a focus target ID, but is not in the tab order", () => {
+    renderUi(
+      <StatusBanner tone="success" lead="Your password was changed." focusTargetId="done" />,
+    );
+
+    const banner = screen.getByRole("status");
+    document.getElementById("done")?.focus();
+
+    expect(banner).toHaveFocus();
+    expect(banner).toHaveAttribute("tabindex", "-1");
+  });
 });

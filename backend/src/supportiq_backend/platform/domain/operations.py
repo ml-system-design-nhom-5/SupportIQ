@@ -7,7 +7,8 @@ class OperationId(StrEnum):
     """The operations that a role check, a cursor, or an idempotency record names.
 
     `createSession`, `getCurrentSession`, and `deleteCurrentSession` are open to every role and
-    take no `Idempotency-Key`, so no code names them.
+    take no `Idempotency-Key`, so no code names them. `changeOwnPassword` is open to every role
+    too, but its `Idempotency-Key` belongs to the operation.
     """
 
     LIST_SHOP_PRODUCTS = "listShopProducts"
@@ -20,3 +21,6 @@ class OperationId(StrEnum):
     LIST_ADMIN_ACCOUNTS = "listAdminAccounts"
     CHANGE_ACCOUNT_ROLE = "changeAccountRole"
     CHANGE_ACCOUNT_STATUS = "changeAccountStatus"
+    CHANGE_OWN_PASSWORD = "changeOwnPassword"  # noqa: S105  # an operation ID
+    CREATE_ADMIN_ACCOUNT = "createAdminAccount"
+    RESET_ACCOUNT_PASSWORD = "resetAccountPassword"  # noqa: S105  # an operation ID

@@ -48,6 +48,8 @@ ALLOWED_ATTRIBUTES = frozenset(
         "new_role",
         "old_is_active",
         "new_is_active",
+        "is_signed_out_elsewhere",
+        "is_signed_out_everywhere",
         "operation_id",
         "http_method",
         "http_route",

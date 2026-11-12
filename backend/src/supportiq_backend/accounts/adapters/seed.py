@@ -1,7 +1,8 @@
 """The accounts section of the seed file, and its insert as the owner (ADR-0009, ADR-0012).
 
-Accounts exist only through the seed: `supportiq_app` cannot insert one. Passwords never come
-from the file; each role has a secret setting, hashed here with a new salt per account.
+Admin and customer accounts exist only through the seed: `supportiq_app` inserts only `staff`
+and `manager` accounts (ADR-0015). Passwords never come from the file; each role has a secret
+setting, hashed here with a new salt per account.
 """
 
 from collections.abc import Mapping, Sequence

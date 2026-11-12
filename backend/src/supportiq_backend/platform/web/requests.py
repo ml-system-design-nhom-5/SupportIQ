@@ -4,6 +4,10 @@ Bodies are parsed in strict mode, so a value of the wrong JSON type is rejected 
 coerced (SEC-21: invalid input is rejected, never repaired), and unknown fields are rejected
 by the generated models (CON-07). A validation error names only the location, never the
 value that was sent.
+
+A number with a zero fraction, such as `7.0` or `1e3`, is read as the integer it is. JSON
+Schema counts it as an integer, so this counts integers as the contract does and repairs no
+value; strict mode alone would refuse it for an integer field.
 """
 
 from collections.abc import Awaitable, Callable, Iterable, Mapping
@@ -11,6 +15,7 @@ from typing import cast
 
 from fastapi import Request
 from pydantic import BaseModel, ValidationError
+from pydantic_core import from_json, to_json
 
 from supportiq_backend.platform import RequestContractError
 
@@ -59,7 +64,28 @@ async def parse_json_body[ModelT: BaseModel](request: Request, model: type[Model
     """
     body = await request.body()
     try:
-        return model.model_validate_json(body, strict=True)
+        return model.model_validate_json(_with_integral_numbers_as_integers(body), strict=True)
     except ValidationError as error:
         locations = locations_of(error.errors(include_input=False), prefix=_BODY_LOCATION)
         raise RequestContractError(locations) from error
+
+
+def _with_integral_numbers_as_integers(body: bytes) -> bytes:
+    # Malformed JSON stays as it was sent, so the model reports it as `json_invalid`.
+    try:
+        value: object = from_json(body, allow_inf_nan=False)
+    except ValueError:
+        return body
+    return to_json(_integral_numbers_as_integers(value))
+
+
+def _integral_numbers_as_integers(value: object) -> object:
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, dict):
+        members = cast("dict[str, object]", value)
+        return {name: _integral_numbers_as_integers(member) for name, member in members.items()}
+    if isinstance(value, list):
+        items = cast("list[object]", value)
+        return [_integral_numbers_as_integers(item) for item in items]
+    return value

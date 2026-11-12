@@ -1,4 +1,4 @@
-"""The first migration: it upgrades, downgrades completely, and upgrades again (PY-40).
+"""The migrations: they upgrade, downgrade completely, and upgrade again (PY-40).
 
 The downgrade runs on a database of its own, so no other test sees a schema without tables.
 """
@@ -35,6 +35,7 @@ from tests.integration.database import (
     drop_database,
     recreate_database,
 )
+from tests.integration.schema.statements import CHECK_VIOLATION, sqlstate_of_refusal
 
 pytestmark = pytest.mark.anyio
 
@@ -53,6 +54,19 @@ SCHEMA_OBJECTS = text(
     # The grant of the migration itself; PUBLIC keeps its own default USAGE on `public`.
     " EXISTS (SELECT FROM pg_namespace, aclexplode(nspacl) AS acl"
     " WHERE nspname = 'public' AND acl.grantee = 'supportiq_app'::regrole)"
+)
+HEAD_REVISION = "0002"
+FOUNDATION_REVISION = "0001"
+# The three trigger functions of `r0001`, and the one of `r0002`.
+FOUNDATION_TRIGGER_FUNCTION_COUNT = 3
+TRIGGER_FUNCTION_COUNT = 4
+NEW_EVENT_TYPE_COUNT = 3
+TRACE_ID = "4bf92f3577b34da6a3ce929d0e0e4736"
+INSERT_ENTRIES_OF_THE_NEW_EVENT_TYPES = (
+    "INSERT INTO audit_log_entries (entry_id, occurred_at, event_type, trace_id, data) VALUES"
+    " (gen_random_uuid(), now(), 'account.created', :trace_id, '{}'),"
+    " (gen_random_uuid(), now(), 'account.password_changed', :trace_id, '{}'),"
+    " (gen_random_uuid(), now(), 'account.password_reset', :trace_id, '{}')"
 )
 
 
@@ -106,7 +120,7 @@ def test_alembic_without_the_connection_of_backend_migrate_is_refused() -> None:
 async def test_upgrade_reaches_the_head_revision(migration_engine: AsyncEngine) -> None:
     revision = await upgrade_database(migration_engine)
 
-    assert revision == head_revision() == "0001"
+    assert revision == head_revision() == HEAD_REVISION
 
 
 async def test_downgrade_removes_every_object_of_the_upgrade(
@@ -132,8 +146,31 @@ async def test_upgrade_after_a_downgrade_restores_the_schema(
     async with migration_engine.connect() as connection:
         objects = (await connection.execute(SCHEMA_OBJECTS)).one()
 
-    assert revision == "0001"
-    assert tuple(objects) == (len(BACKEND_TABLE_NAMES), 3, 1, True)
+    assert revision == HEAD_REVISION
+    assert tuple(objects) == (len(BACKEND_TABLE_NAMES), TRIGGER_FUNCTION_COUNT, 1, True)
+
+
+async def test_r0002_downgrade_keeps_entries_of_the_new_event_types_and_refuses_new_ones(
+    migration_engine: AsyncEngine,
+) -> None:
+    await upgrade_database(migration_engine)
+    async with migration_engine.begin() as connection:
+        await connection.execute(
+            text(INSERT_ENTRIES_OF_THE_NEW_EVENT_TYPES), {"trace_id": TRACE_ID}
+        )
+
+    revision = await downgrade_database(migration_engine, revision=FOUNDATION_REVISION)
+    refused = await sqlstate_of_refusal(
+        migration_engine, INSERT_ENTRIES_OF_THE_NEW_EVENT_TYPES, trace_id=TRACE_ID
+    )
+    async with migration_engine.connect() as connection:
+        kept = await connection.scalar(text("SELECT count(*) FROM audit_log_entries"))
+        objects = (await connection.execute(SCHEMA_OBJECTS)).one()
+
+    assert revision == FOUNDATION_REVISION
+    assert refused == CHECK_VIOLATION
+    assert kept == NEW_EVENT_TYPE_COUNT
+    assert tuple(objects) == (len(BACKEND_TABLE_NAMES), FOUNDATION_TRIGGER_FUNCTION_COUNT, 1, True)
 
 
 async def test_migrated_tables_are_exactly_the_tables_that_reset_truncates(

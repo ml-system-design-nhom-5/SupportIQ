@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  countMessageCharacters,
-  MESSAGE_MAX_LENGTH,
-} from "@/features/shop-support/model/message-text";
+import { MESSAGE_MAX_LENGTH } from "@/features/shop-support/model/message-text";
 import {
   buildTicketAnchorId,
   readAnchorIdOfHash,
@@ -88,19 +85,7 @@ describe("buildTicketAnchorId", () => {
   });
 });
 
-describe("countMessageCharacters (MessageText)", () => {
-  it.each([
-    ["", 0],
-    ["Hello", 5],
-    ["Tiền hoàn", 9],
-    ["👍🏽", 2],
-    ["😊", 1],
-    ["   ", 3],
-    ["a\nb", 3],
-  ])("counts %j as %i code points, as JSON Schema counts length", (text, count) => {
-    expect(countMessageCharacters(text)).toBe(count);
-  });
-
+describe("MESSAGE_MAX_LENGTH (MessageText)", () => {
   it("uses the maxLength of the contract", () => {
     expect(MESSAGE_MAX_LENGTH).toBe(2000);
   });

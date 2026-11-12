@@ -1,18 +1,23 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { LayoutGrid, LifeBuoy, LogOut, Package, ShoppingBag, Users } from "lucide-react";
-import { expect } from "storybook/test";
+import { LayoutGrid, LifeBuoy, Package, ShoppingBag, Users } from "lucide-react";
+import { expect, fn } from "storybook/test";
 
-import { AccountLabel } from "@/design-system/components/account-label";
+import { AccountMenu, type AccountMenuProps } from "@/design-system/components/account-menu";
 import { AppBar } from "@/design-system/components/app-bar";
-import { Button } from "@/design-system/primitives/button";
 import { NavItem } from "@/design-system/primitives/nav-item";
 import { expectNoSidewaysOverflow } from "@/test/story-checks";
 
-const signOut = (
-  <Button variant="ghost" leadingIcon={LogOut}>
-    Sign out
-  </Button>
-);
+/**
+ * Render the account menu of a story.
+ *
+ * @param account - The variant, the display name, and the role label.
+ * @returns The closed menu.
+ */
+function renderAccountMenu(
+  account: Pick<AccountMenuProps, "variant" | "displayName" | "roleLabel">,
+) {
+  return <AccountMenu {...account} isSigningOut={false} onChangePassword={fn()} onSignOut={fn()} />;
+}
 
 const meta = {
   title: "Design system/Components/AppBar",
@@ -30,12 +35,11 @@ export const ConsoleWithLongUnbrokenDisplayName: Story = {
     variant: "console",
     brandName: "SupportIQ",
     areaName: "Console",
-    account: (
-      <>
-        <AccountLabel displayName={"N".repeat(200)} roleLabel="Staff" />
-        {signOut}
-      </>
-    ),
+    account: renderAccountMenu({
+      variant: "console",
+      displayName: "N".repeat(200),
+      roleLabel: "Staff",
+    }),
   },
   play: async ({ canvas, canvasElement }) => {
     const bar = canvas.getByRole("banner");
@@ -47,12 +51,11 @@ export const ConsoleWithLongUnbrokenDisplayName: Story = {
 export const LongUnbrokenDisplayName: Story = {
   args: {
     brandIcon: ShoppingBag,
-    account: (
-      <>
-        <AccountLabel displayName={"N".repeat(200)} />
-        {signOut}
-      </>
-    ),
+    account: renderAccountMenu({
+      variant: "shop",
+      displayName: "N".repeat(200),
+      roleLabel: "Customer",
+    }),
   },
   play: ({ canvasElement }) => expectNoSidewaysOverflow(canvasElement),
 };
@@ -72,12 +75,11 @@ export const Shop: Story = {
         </NavItem>
       </>
     ),
-    account: (
-      <>
-        <AccountLabel displayName="Linh Tran" />
-        {signOut}
-      </>
-    ),
+    account: renderAccountMenu({
+      variant: "shop",
+      displayName: "Linh Tran",
+      roleLabel: "Customer",
+    }),
   },
 };
 export const ShopWithoutNavigation: Story = { args: { brandIcon: ShoppingBag } };
@@ -86,12 +88,11 @@ export const Console: Story = {
     variant: "console",
     brandName: "SupportIQ",
     areaName: "Console",
-    account: (
-      <>
-        <AccountLabel displayName="Mai Nguyen" roleLabel="Staff" />
-        {signOut}
-      </>
-    ),
+    account: renderAccountMenu({
+      variant: "console",
+      displayName: "Mai Nguyen",
+      roleLabel: "Staff",
+    }),
   },
 };
 export const Admin: Story = {
@@ -104,11 +105,6 @@ export const Admin: Story = {
         Accounts
       </NavItem>
     ),
-    account: (
-      <>
-        <AccountLabel displayName="An Tran" roleLabel="Admin" />
-        {signOut}
-      </>
-    ),
+    account: renderAccountMenu({ variant: "console", displayName: "An Tran", roleLabel: "Admin" }),
   },
 };

@@ -1,6 +1,6 @@
 # Testing rules
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-08
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-11
 
 Tests are executable specifications. They catch hidden bugs early, protect the guardrails, and keep technical debt from accumulating unseen. A behavior without a test does not exist.
 
@@ -138,6 +138,7 @@ describe("DraftEditor", () => {
 - Actions that require authority (FR-06) are rejected for roles without it.
 - No reply is accepted while a part of the current suggestion is `pending`, and no intent override is accepted before an intent is known, so a `requires_authority` result is always known before a send.
 - Confidential data never appears in logs (a test captures log output and checks for it).
+- No password sent to `backend` appears in an idempotency record, a response body, a log line, a span, or an audit log entry. The test sends a known password through every operation that takes one ([ADR-0015](../decisions/0015-account-creation-and-password-changes.md), [ERR-15](errors-and-reliability.md#idempotency)).
 - Seeded personal values of the ticket never appear in any request that `backend` sends to `ai-service`, nor in any LLM payload captured by a fake LLM adapter (FR-09, NFR-06).
 - When pseudonymization fails, `backend` makes no call to `ai-service` ([SEC-36](security-and-privacy.md#pseudonymization)).
 - No reply or reply proposal body that contains a placeholder is accepted ([SEC-38](security-and-privacy.md#pseudonymization)).

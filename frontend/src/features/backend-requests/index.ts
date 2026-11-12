@@ -4,11 +4,14 @@
  * decides retries (ERR-12, TS-29), provides idempotency keys (ERR-15), joins list pages (CON-14),
  * and holds the exhaustiveness check of TS-12.
  */
+export type { FormIdempotencyKey } from "@/features/backend-requests/api/idempotent-writes";
 export {
   buildIdempotentWriteKey,
+  forgetWrites,
   IdempotencyKeyFactoryContext,
   idempotentWriteMutationKey,
   useCreateIdempotencyKey,
+  useFormIdempotencyKey,
   useWriteAttemptSender,
 } from "@/features/backend-requests/api/idempotent-writes";
 export { requestData, requestNoContent } from "@/features/backend-requests/api/request-backend";
@@ -19,7 +22,11 @@ export { FailureState } from "@/features/backend-requests/components/failure-sta
 export { assertNever } from "@/features/backend-requests/model/assert-never";
 export { collectPageItems } from "@/features/backend-requests/model/collect-pages";
 export type { MoneyContract } from "@/features/backend-requests/model/contract-values";
-export { requireMembers, toMoney } from "@/features/backend-requests/model/contract-values";
+export {
+  countContractCharacters,
+  requireMembers,
+  toMoney,
+} from "@/features/backend-requests/model/contract-values";
 export type {
   FailureCategory,
   FailureDescription,

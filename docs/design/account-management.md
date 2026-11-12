@@ -3,7 +3,7 @@
 - **Status:** Approved
 - **Owner:** backend engineer
 - **Reviewers:** frontend engineer, contracts gatekeeper, project lead
-- **Last reviewed:** 2026-11-11
+- **Last reviewed:** 2026-11-12
 - **Related:** [Requirements](../product/requirements.md) (FR-08), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0008](../decisions/0008-ui-design-system.md), [backend foundation design](backend-foundation.md), [contracts v1 design](contracts-v1.md), [admin UI design](admin-ui.md), [shop UI design](shop-ui.md), [console UI design](console-ui.md), [security rules](../rules/security-and-privacy.md#authentication-and-authorization), [ERR-15](../rules/errors-and-reliability.md#idempotency), [UI-45](../rules/ui.md#admin)
 
 ## Summary
@@ -117,8 +117,12 @@ sequenceDiagram
             BE-->>FE: 422 invalid-request
         else Signed in
             BE->>BE: Hash the new password with Argon2id
-            BE->>DB: Begin, lock the caller's own account row, claim the key
-            alt Key used before with the same sign-out choice
+            BE->>DB: Begin, lock and load the caller's own account row, claim the key
+            alt Account gone, or no longer active
+                BE->>DB: Roll back
+                BE-->>FE: 401 unauthenticated
+                FE-->>Person: Sign-in
+            else Key used before with the same sign-out choice
                 BE-->>FE: The original 201
             else Key used before with another sign-out choice
                 BE-->>FE: 409 idempotency-key-reused
@@ -149,6 +153,7 @@ sequenceDiagram
 4. At the failure limit, the request waits `sign_in_failure_delay_ms` after its transaction ended, so it holds no connection and no lock, and then returns `current_password_incorrect` without a check, even with the right password.
 5. `is_signed_out_elsewhere` true deletes every other session of the account. The current session always stays.
 6. A success also deletes the sign-in failures of the login name, as a successful sign-in does.
+7. The account is checked under its row lock, before the key is claimed. A deactivation that committed while the request waited for the lock deleted the session of the request, so the change returns `401` and changes nothing, as an admin change does after it reloads its caller.
 
 #### Creating an account
 
@@ -288,7 +293,7 @@ Every password field, the sign-in field included, is the design-system component
 | Fields | "Current password", "New password", and "Confirm new password". `frontend` alone checks that the two new entries match |
 | Sessions | Checkbox "Sign out of my other sessions", checked; hint "This browser stays signed in." |
 | Buttons | Change password; Cancel, back to the previous page, or to the start of the role's area when there is none |
-| After success | "Your password was changed.", and "Your other sessions were signed out." when chosen; the button "Go back" opens the page that Cancel would open |
+| After success | "Your password was changed.", and "Your other sessions were signed out." when chosen. The focus moves to this message ([UI-30](../rules/ui.md#accessibility)); the button "Go back" opens the page that Cancel would open |
 
 ![Change password](assets/account-management/change-password.png)
 
@@ -397,6 +402,7 @@ Every change is compatible ([CON-19](../rules/contracts.md#evolution)): new oper
 - `display_name` is Confidential, as staff identity ([SEC-01](../rules/security-and-privacy.md#data-classification)). In the request it has 1 to 100 characters, does not start or end with whitespace, and contains no control character (Unicode category Cc). A violation returns `422` and is never trimmed or repaired ([SEC-21](../rules/security-and-privacy.md#input-and-output-handling)). Display names need not be unique; the login name tells accounts apart.
 - `201` follows the existing writes, which create a change resource. Every body has `additionalProperties: false`, and every boolean is required, so the client states the choice that the screen showed ([CON-07, CON-08](../rules/contracts.md#openapi-style)).
 - The three operations check `Origin` and require `Idempotency-Key`.
+- `backend` reads the bodies as JSON Schema does: an absent `login_number` stays absent, and `null` is refused with `422`, because the contract never uses null ([CON-08](../rules/contracts.md#openapi-style)); a number with a zero fraction, such as `1701.0` or `1e3`, is an integer.
 
 | Schema or response | Change |
 |---|---|
@@ -491,6 +497,7 @@ Phase 3 also adds UI-46 to the UI review checklist and to the description of `ui
 | Two admins create accounts without a number at the same time | The advisory lock serializes them; they get two numbers | Integration test with two concurrent transactions |
 | A number is already in use | `409 login-name-taken`; nothing changes | Use-case test; integration test against the unique constraint |
 | A reset and an own change of one account run at the same time | They queue on the account's row and cannot deadlock ([Locks](#locks)); one audit log entry each, and the last one decides the password | Integration test with two concurrent transactions, in both orders |
+| An admin deactivates an account while its own change waits for the account's row | The change finds the account inactive under the lock, rolls back, and returns `401`; nothing changes, and no key is claimed | Use-case test, for an account that is gone and one that is deactivated |
 | An own change runs while an admin changes another account | Neither waits: the own change locks only its own row, and its hash runs before its transaction | Integration test with two concurrent transactions |
 | The same key arrives with other non-password fields | `409 idempotency-key-reused` | Handler test |
 | The same key arrives with another password | The original result; no second change. This documents the ERR-15 exception | Handler test |
@@ -526,17 +533,18 @@ The tests follow the Validation of [ADR-0015](../decisions/0015-account-creation
 - **Integration, `backend` (PostgreSQL 17):**
   - migration `r0002` up and down, the audit check that accepts the three new event types included, and a downgrade after such entries exist;
   - privileges and the trigger: `supportiq_app` inserts `staff` and `manager` accounts, cannot insert an `admin` or a `customer` account, and updates only the granted columns;
-  - every row of [Errors and guardrails](#errors-and-guardrails) that names an integration test.
+  - every row of [Errors and guardrails](#errors-and-guardrails) that names an integration test;
+  - the flows that need real sessions, because the repository cannot yet run `frontend` against a real `backend`: an account that an admin created signs in with the password of the creation; after a reset at the failure limit, the owner signs in with the new password at once; an own change or a reset that ends sessions makes them get `401`, and one that keeps them leaves them working.
 - **Permission tests:** every role can change its own password; only `admin` can create accounts and reset passwords; the table of every operation against every role ([SEC-16](../rules/security-and-privacy.md#authentication-and-authorization)).
 - **Contract:** Schemathesis over all 18 operations, one test per documented status, and the new examples ([CON-27](../rules/contracts.md#contract-tests)).
 - **Guardrail (TEST-26, from phase 2):** no password in any record, response, log line, span, or audit log entry; no admin operation reaches a customer account.
 - **Unit, `frontend`:** the generator; the length in code points, not UTF-16 units; the key rule (same fields reuse it, any edit creates a new one); the mapping of every `violated_rule`, an unknown one included, and of `409 login-name-taken`; and a test that the password limits and the login number range equal the contract.
 - **Storybook with axe ([UI-32](../rules/ui.md#accessibility)):** `PasswordInput` hidden, shown, and with an error; `AccountMenu` closed and open for each role; `/change-password` with every state of its table; both dialogs with every state of their tables, the copy failure included.
-- **End-to-end (Playwright):**
-  - an admin creates a `staff` account with the suggested password; that account signs in with it, changes it from the account menu, and an older session of it gets `401`;
-  - an admin resets that account with and without ending sessions, and the old session gets `401` or keeps working;
-  - a customer changes the password from the account menu at 360 px wide;
-  - the account menu and the show and hide toggle with the keyboard only.
+- **End-to-end (Playwright on the Prism mock):**
+  - an admin creates a `staff` account with the suggested password: the banner shows the login name, and the request sends that password with an `Idempotency-Key`;
+  - an admin resets the password of a `staff` account, and a reset after a lost connection says that the password may have been reset;
+  - a customer changes the password from the account menu at 360 px wide, and a wrong current password shows its message at the field, which is cleared and focused;
+  - the account menu, the show and hide toggle, and the focus after a successful change, with the keyboard only.
 - No model metric changes.
 
 ## Observability
@@ -584,8 +592,8 @@ No entry holds a password, a password hash, a login name, or a display name.
 The three phases are built on one branch, `build/account-passwords`, which is merged once into `chore/fe-be-supportiq-ecom`; CI runs on every push of the branch. On 2026-11-11 the project lead accepted ADR-0015, approved this design and the revisions of the admin, shop, and console UI designs, and decided that this approval replaces the two approvals and the contracts gatekeeper of a PR review ([WF-15](../rules/workflow.md#reviews), [SEC-35](../rules/security-and-privacy.md#security-review)).
 
 1. Phase 1, documents only: this design; the revisions of the admin, shop, and console UI designs with their mockups; the changes to ERR-15, SEC-41, and SEC-42; the glossary; the contracts v1 design; and the edits of ADR-0015.
-2. Phase 2, `backend`: `backend` contract 1.1.0, migration `r0002`, the use cases and tests, the regenerated `backend` models and `frontend` client, and the new TEST-26 bullet with its test ([Rule changes](#rule-changes)). Until phase 3, `frontend` maps the new problem type to a technical failure ([CON-22](../rules/contracts.md#evolution)).
-3. Phase 3, `frontend`: the design-system components with their stories, the account menu, `/change-password`, the admin dialogs, the password suggestion, the two dependencies, and the changes to UI-38, UI-45, and UI-46 ([Rule changes](#rule-changes)).
+2. Phase 2, `backend`: `backend` contract 1.1.0, migration `r0002`, the use cases and tests, the regenerated `backend` models and `frontend` client, and the new TEST-26 bullet with its test ([Rule changes](#rule-changes)). Done on 2026-11-12, in one change with phase 3, so no version of `frontend` meets the new problem type before it handles it.
+3. Phase 3, `frontend`: the design-system components with their stories, the account menu, `/change-password`, the admin dialogs, the password suggestion, the two dependencies, and the changes to UI-38, UI-45, and UI-46 ([Rule changes](#rule-changes)). Done on 2026-11-12.
 4. Rollback after the merge: stop `backend`, downgrade the database to `r0001` with the merged code ([Migration](#migration-r0002)), revert the merge commit, and deploy. The downgrade comes first, because the reverted code no longer contains `r0002`.
 
 ### Mockup sources

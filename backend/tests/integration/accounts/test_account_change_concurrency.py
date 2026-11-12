@@ -3,14 +3,13 @@
 import asyncio
 from http import HTTPStatus
 
-import httpx
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from supportiq_backend.accounts import AccountId, LoginName, NewSession, Role, SessionIdHash
 from supportiq_backend.accounts.adapters.internal_accounts import ACCOUNT_CHANGES_LOCK_KEY
-from supportiq_backend.composition_root.accounts_wiring import build_sign_in_stores
+from supportiq_backend.composition_root.accounts_stores import build_sign_in_stores
 from supportiq_backend.platform.adapters.database import (
     SqlAlchemyTransactionRunner,
     create_session_factory,
@@ -21,6 +20,7 @@ from tests.integration.accounts.admin_requests import (
     change_status,
     sign_in_as_new_admin,
 )
+from tests.integration.accounts.lock_waits import ROW_LOCK_WAITS, wait_until_waiting
 from tests.integration.application import (
     RunningBackend,
     build_settings,
@@ -31,27 +31,6 @@ from tests.integration.database import WorkerDatabase
 from tests.unit.platform.fakes import FakeClock, RecordingEventRecorder
 
 pytestmark = pytest.mark.anyio
-
-WAITS_FOR_A_ROW_LOCK = """
-    SELECT count(*)
-    FROM pg_locks AS waiting
-    JOIN pg_stat_activity AS activity USING (pid)
-    WHERE NOT waiting.granted
-      AND waiting.locktype = 'transactionid'
-      AND activity.datname = current_database()
-"""
-
-
-async def wait_until_it_waits_for_a_row_lock(
-    builder: DatabaseBuilder, request: asyncio.Task[httpx.Response]
-) -> None:
-    # Each read is its own transaction, so it sees the current locks. The round trip to
-    # PostgreSQL gives the request its turn, so this loop needs no sleep (TEST-14), and the lock
-    # timeout of the application ends the request if it never gets past the row lock.
-    while not request.done():
-        if await builder.scalar(WAITS_FOR_A_ROW_LOCK) != 0:
-            return
-    pytest.fail("The request ended without waiting for the row lock of the sign-in.")
 
 
 async def test_two_admins_demoting_the_last_two_managers_leave_one(
@@ -119,7 +98,7 @@ async def test_deactivation_during_a_sign_in_leaves_no_session(
         deactivation = asyncio.create_task(
             change_status(backend.client, admin_token, target, is_active=False)
         )
-        await wait_until_it_waits_for_a_row_lock(builder, deactivation)
+        await wait_until_waiting(builder, ROW_LOCK_WAITS, 1, deactivation)
         await sign_in.commit()
 
     response = await deactivation

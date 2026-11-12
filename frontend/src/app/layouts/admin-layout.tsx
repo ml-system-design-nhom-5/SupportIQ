@@ -1,6 +1,6 @@
 /**
  * The admin app shell (admin UI design, Layout): the console app shell with "SupportIQ Admin", the
- * navigation, the admin's display name, and Sign out. The Versions screen is not built yet,
+ * navigation, and the account menu with Change password and Sign out. The Versions screen is not built yet,
  * because `getAdminVersions` is not in the contract (admin UI design, Rollout). A session of
  * another role sees only the brand: every admin operation answers it with `403`.
  */
@@ -8,9 +8,9 @@ import { Users } from "lucide-react";
 import { Outlet } from "react-router";
 
 import { PRODUCT_NAME } from "@/app/area-names";
-import { AccountLabel, AppBar, NavItem, PageColumn } from "@/design-system";
+import { AppBar, NavItem, PageColumn } from "@/design-system";
 import { ACCOUNTS_PATH } from "@/features/admin-accounts";
-import { getRoleLabel, RequireSession, SignOutButton } from "@/features/session";
+import { RequireSession, SessionAccountMenu } from "@/features/session";
 
 /**
  * Render the admin shell around the current admin screen.
@@ -32,15 +32,7 @@ export function AdminLayout() {
                   Accounts
                 </NavItem>
               }
-              account={
-                <>
-                  <AccountLabel
-                    displayName={session.displayName}
-                    roleLabel={getRoleLabel(session.role)}
-                  />
-                  <SignOutButton placement="app-bar" />
-                </>
-              }
+              account={<SessionAccountMenu session={session} variant="console" />}
             />
           ) : (
             <AppBar variant="console" brandName={PRODUCT_NAME} areaName="Admin" />

@@ -16,6 +16,7 @@ from supportiq_backend.accounts import (
     DisplayName,
     InternalAccount,
     InternalRole,
+    LoginName,
     RoleChange,
     StatusChange,
     apply_account_change,
@@ -27,6 +28,7 @@ ADMIN_ID = AccountId("admin-under-test")
 TARGET_ID = AccountId("target-under-test")
 ADMIN = AdminPrincipal(ADMIN_ID)
 NAME = DisplayName("Mai Nguyen")
+LOGIN_NAME = LoginName("staff-1")
 INITIAL_ADMIN_COUNT = 2
 
 
@@ -36,7 +38,7 @@ def build_target(
     is_active: bool = True,
     account_id: AccountId = TARGET_ID,
 ) -> InternalAccount:
-    return InternalAccount(account_id, NAME, role, is_active)
+    return InternalAccount(account_id, LOGIN_NAME, NAME, role, is_active)
 
 
 def rule_of_refusal(

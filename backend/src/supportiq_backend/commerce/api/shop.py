@@ -5,6 +5,7 @@ from http import HTTPStatus
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response
+from pydantic import MISSING
 
 from supportiq_backend.accounts import AuthenticatedSession, OperationId
 from supportiq_backend.commerce.application import (
@@ -121,8 +122,8 @@ def to_shipment_view(shipment: Shipment) -> ShopShipmentView:
     delivered = shipment.delivered_at
     return ShopShipmentView(
         shipment_status=ContractShipmentStatus(shipment.status.value),
-        estimated_delivery_at=None if estimate is None else format_timestamp(estimate),
-        delivered_at=None if delivered is None else format_timestamp(delivered),
+        estimated_delivery_at=MISSING if estimate is None else format_timestamp(estimate),
+        delivered_at=MISSING if delivered is None else format_timestamp(delivered),
     )
 
 
@@ -166,7 +167,7 @@ def to_order_view(order: Order) -> ShopOrderView:
             for line in order.lines
         ],
         shipment=to_shipment_view(order.shipment),
-        refund=None if order.refund is None else to_refund_view(order.refund),
+        refund=MISSING if order.refund is None else to_refund_view(order.refund),
     )
 
 
@@ -180,7 +181,7 @@ def to_product_page(page: ProductPage) -> ShopProductPage:
         The contract model; `next_cursor` is absent on the last page.
     """
     position = page.next_position
-    next_cursor = None
+    next_cursor: ContractCursor | MISSING = MISSING
     if position is not None:
         next_cursor = ContractCursor(
             encode_cursor(
@@ -202,7 +203,7 @@ def to_order_page(page: OrderPage) -> ShopOrderPage:
     Returns:
         The contract model; the cursor holds a position and no value of an order.
     """
-    next_cursor = None
+    next_cursor: ContractCursor | MISSING = MISSING
     if page.next_position is not None:
         next_cursor = ContractCursor(
             encode_cursor(LIST_ORDERS_OPERATION, {CURSOR_POSITION_FIELD: page.next_position})

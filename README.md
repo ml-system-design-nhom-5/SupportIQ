@@ -76,7 +76,7 @@ sequenceDiagram
 - Repository checks run with pre-commit locally and with GitHub Actions in CI ([docs/guides/repository-checks.md](docs/guides/repository-checks.md)).
 - `backend` is scaffolded: [backend/README.md](backend/README.md) gives setup, commands, and demo accounts.
 - `frontend` is scaffolded and runs against the Prism mock: sign-in, the shop, and the Accounts screen of the admin area ([frontend/README.md](frontend/README.md)). `ai-service` is not scaffolded yet.
-- [ADR-0015](docs/decisions/0015-account-creation-and-password-changes.md), accepted on 2026-11-11 by the project lead, adds account creation, password changes, and password resets. The project lead also approved the [account management design](docs/design/account-management.md) and the admin, shop, and console UI designs with their revisions. `backend` contract 1.1.0 and the implementation come next.
+- [ADR-0015](docs/decisions/0015-account-creation-and-password-changes.md), accepted on 2026-11-11 by the project lead, adds account creation, password changes, and password resets. The project lead also approved the [account management design](docs/design/account-management.md) and the admin, shop, and console UI designs with their revisions. `backend` contract 1.1.0 ([CHANGELOG](contracts/CHANGELOG.md)) and its implementation in `backend` and `frontend` are done on the branch `build/account-passwords`, which is merged once into `chore/fe-be-supportiq-ecom`.
 
 ## Target repository layout
 

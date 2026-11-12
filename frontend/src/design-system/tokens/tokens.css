@@ -97,11 +97,14 @@
   --default-transition-timing-function: var(--ease-standard);
   --animate-*: initial;
 
-  /* Content widths of the designs: sign-in card, dialogs, the shop column (shop UI design,
-     Layout), and the admin column (admin UI design, Layout). */
+  /* Content widths of the designs: sign-in card, dialogs, form dialogs and the account menu
+     (account management design, mockups), the shop column (shop UI design, Layout), and the admin
+     column (admin UI design, Layout). */
   --container-*: initial;
   --container-sign-in: 22.5rem;
   --container-dialog: 30rem;
+  --container-form-dialog: 32.5rem;
+  --container-menu: 15rem;
   --container-shop: 60rem;
   --container-admin: 65rem;
 

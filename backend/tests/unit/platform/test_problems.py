@@ -48,6 +48,7 @@ def test_every_error_code_has_a_problem_description() -> None:
         (ErrorCode.FORBIDDEN, HTTPStatus.FORBIDDEN),
         (ErrorCode.NOT_FOUND, HTTPStatus.NOT_FOUND),
         (ErrorCode.IDEMPOTENCY_KEY_REUSED, HTTPStatus.CONFLICT),
+        (ErrorCode.LOGIN_NAME_TAKEN, HTTPStatus.CONFLICT),
         (ErrorCode.NOT_READY, HTTPStatus.SERVICE_UNAVAILABLE),
         (ErrorCode.INTERNAL_ERROR, HTTPStatus.INTERNAL_SERVER_ERROR),
     ],

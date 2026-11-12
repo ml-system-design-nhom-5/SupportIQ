@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from tests.integration.builders import DatabaseBuilder
 from tests.integration.database import WorkerDatabase, create_raw_app_engine
 from tests.integration.schema.statements import (
+    CHECK_VIOLATION,
     INSUFFICIENT_PRIVILEGE,
     run_statement,
     sqlstate_of_refusal,
@@ -61,6 +62,17 @@ WRITES_OF_COMMERCE_DATA = (
     "DELETE FROM refunds",
     "TRUNCATE refunds",
 )
+NEW_LOGIN_NAME = "new-account"
+INSERT_ACCOUNT = (
+    "INSERT INTO accounts (account_id, login_name, display_name, role, is_active,"
+    " password_hash, created_at) VALUES (gen_random_uuid(), :login_name, 'Name', :role, true,"
+    " 'hash', now())"
+)
+INSERT_ACCOUNT_WITH_A_CUSTOMER = (
+    "INSERT INTO accounts (account_id, login_name, display_name, role, is_active, customer_id,"
+    " password_hash, created_at) VALUES (gen_random_uuid(), :login_name, 'Name', :role, true,"
+    " gen_random_uuid(), 'hash', now())"
+)
 
 
 @pytest.fixture
@@ -89,11 +101,9 @@ async def test_app_cannot_write_commerce_data(app_engine_raw: AsyncEngine, state
 @pytest.mark.parametrize(
     "statement",
     [
-        "INSERT INTO accounts DEFAULT VALUES",
         "DELETE FROM accounts",
         "UPDATE accounts SET display_name = 'Mallory'",
         "UPDATE accounts SET login_name = 'admin-9'",
-        "UPDATE accounts SET password_hash = 'x'",
         "UPDATE accounts SET customer_id = NULL",
         "UPDATE accounts SET created_at = now()",
         "UPDATE customer_messages SET body = 'edited'",
@@ -123,7 +133,8 @@ async def test_app_cannot_run_a_statement_outside_its_privileges(
 @pytest.mark.parametrize(
     "statement",
     [
-        "UPDATE accounts SET role = role, is_active = is_active WHERE false",
+        "UPDATE accounts SET role = role, is_active = is_active, password_hash = password_hash"
+        " WHERE false",
         "UPDATE tickets SET status = status, is_authority_required = is_authority_required,"
         " handling_started_at = handling_started_at, closed_at = closed_at WHERE false",
         "UPDATE sessions SET last_seen_at = last_seen_at WHERE false",
@@ -141,6 +152,31 @@ async def test_app_can_run_the_statements_of_its_privileges(
     outcome = await sqlstate_of_refusal(app_engine_raw, statement)
 
     assert outcome == "accepted"
+
+
+@pytest.mark.parametrize(
+    ("statement", "role", "outcome"),
+    [
+        pytest.param(INSERT_ACCOUNT, "staff", "accepted", id="staff"),
+        pytest.param(INSERT_ACCOUNT, "manager", "accepted", id="manager"),
+        pytest.param(INSERT_ACCOUNT, "admin", INSUFFICIENT_PRIVILEGE, id="admin-by-the-trigger"),
+        pytest.param(INSERT_ACCOUNT, "customer", CHECK_VIOLATION, id="customer-without-customer"),
+        pytest.param(
+            INSERT_ACCOUNT_WITH_A_CUSTOMER,
+            "customer",
+            INSUFFICIENT_PRIVILEGE,
+            id="customer-with-customer",
+        ),
+    ],
+)
+async def test_app_inserts_staff_and_manager_accounts_and_never_an_admin_or_a_customer(
+    app_engine_raw: AsyncEngine, statement: str, role: str, outcome: str
+) -> None:
+    result = await sqlstate_of_refusal(
+        app_engine_raw, statement, login_name=NEW_LOGIN_NAME, role=role
+    )
+
+    assert result == outcome
 
 
 async def test_app_can_insert_a_ticket_its_message_and_an_audit_entry(

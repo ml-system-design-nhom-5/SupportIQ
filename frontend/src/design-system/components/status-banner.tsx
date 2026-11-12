@@ -7,6 +7,8 @@ import { CircleCheck, Info, type LucideIcon, TriangleAlert } from "lucide-react"
 import type { ReactNode } from "react";
 
 import { TraceId } from "@/design-system/components/trace-id";
+import { cn } from "@/design-system/primitives/class-names";
+import { FOCUS_RING_CLASSES } from "@/design-system/primitives/focus-ring";
 import { Icon } from "@/design-system/primitives/icon";
 
 const bannerVariants = cva("flex items-start gap-3 rounded-md border px-4 py-3 text-text", {
@@ -52,17 +54,34 @@ export type StatusBannerProps = {
   readonly traceId?: string;
   /** An action, such as "Reload list". */
   readonly action?: ReactNode;
+  /**
+   * The element ID that a script moves the focus to, such as a success that replaces a form. The
+   * banner can then hold the focus, but Tab never reaches it (UI-30).
+   */
+  readonly focusTargetId?: string;
 };
 
 /**
  * Render a banner. A `danger` banner is an alert; the others are status messages.
  *
- * @param props - The tone, the lead, the text, the trace ID, and the action.
+ * @param props - The tone, the lead, the text, the trace ID, the action, and the focus target ID.
  * @returns The banner.
  */
-export function StatusBanner({ tone, lead, children, traceId, action }: StatusBannerProps) {
+export function StatusBanner({
+  tone,
+  lead,
+  children,
+  traceId,
+  action,
+  focusTargetId,
+}: StatusBannerProps) {
   return (
-    <div role={tone === "danger" ? "alert" : "status"} className={bannerVariants({ tone })}>
+    <div
+      id={focusTargetId}
+      tabIndex={focusTargetId === undefined ? undefined : -1}
+      role={tone === "danger" ? "alert" : "status"}
+      className={cn(bannerVariants({ tone }), FOCUS_RING_CLASSES)}
+    >
       <Icon icon={iconByTone[tone]} tone={tone} />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <p className="wrap-break-word">

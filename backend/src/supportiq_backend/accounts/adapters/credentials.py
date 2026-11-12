@@ -13,7 +13,10 @@ _SESSION_TOKEN_BYTES = 32
 
 
 class Argon2Passwords:
-    """Implement the `PasswordVerifier` port with the default Argon2id profile of argon2-cffi.
+    """Implement the `PasswordVerifier` and `PasswordHasher` ports with argon2-cffi.
+
+    Every hash uses the default Argon2id profile of the library, the seed's as well as those
+    of account creations, password changes, and resets (ADR-0015).
 
     Hashing takes tens of milliseconds of CPU, so it runs in a worker thread (PY-31).
     """
@@ -35,7 +38,7 @@ class Argon2Passwords:
         return await asyncio.to_thread(self._matches, password_hash, password)
 
     async def hash_password(self, password: Password) -> PasswordHash:
-        """Hash a password with a new random salt, for the seed.
+        """Hash a password exactly as typed, with a new random salt.
 
         Args:
             password: The password.

@@ -1,6 +1,6 @@
 # Frontend
 
-This folder holds the SupportIQ web app: sign-in, the demo shop for customers at `/shop`, the Accounts screen of the admin area at `/admin`, and the console shell at `/console`. It is a React single-page app that talks to `backend` only through the [backend contract](../contracts/README.md) with a generated client, and it runs against the Prism mock until `backend` is ready. What each screen does is defined in the [shop UI design](../docs/design/shop-ui.md), the [admin UI design](../docs/design/admin-ui.md), and the [console UI design](../docs/design/console-ui.md); the rules are in [typescript.md](../docs/rules/typescript.md) and [ui.md](../docs/rules/ui.md). The ticket features of the console and the Versions page of the admin area are not built yet.
+This folder holds the SupportIQ web app: sign-in, the own password change at `/change-password`, the demo shop for customers at `/shop`, the Accounts screen of the admin area at `/admin`, and the console shell at `/console`. It is a React single-page app that talks to `backend` only through the [backend contract](../contracts/README.md) with a generated client, and it runs against the Prism mock until `backend` is ready. What each screen does is defined in the [shop UI design](../docs/design/shop-ui.md), the [admin UI design](../docs/design/admin-ui.md), the [console UI design](../docs/design/console-ui.md), and the [account management design](../docs/design/account-management.md); the rules are in [typescript.md](../docs/rules/typescript.md) and [ui.md](../docs/rules/ui.md). The ticket features of the console and the Versions page of the admin area are not built yet.
 
 ## Set up
 
@@ -106,14 +106,15 @@ Every setting has a safe default. [`.env.example`](.env.example) lists them.
 |---|---|---|
 | `/sign-in` | Sign in, with an optional `returnTo` | Everyone |
 | `/` | Opens the area of the signed-in role, or sign-in | Everyone |
+| `/change-password` | Change password, opened from the account menu | Every signed-in role |
 | `/shop` | Products | `customer` |
 | `/shop/products/{product_id}` | Product | `customer` |
 | `/shop/orders` | My orders | `customer` |
 | `/shop/orders/{order_id}` | Order, with its tickets and the message box | `customer` |
 | `/shop/support` | Support | `customer` |
-| `/console` | The app shell with Sign out | Every signed-in role: no `/v1/console/` operation exists yet, so nothing answers `403` |
+| `/console` | The app shell with the account menu | Every signed-in role: no `/v1/console/` operation exists yet, so nothing answers `403` |
 | `/admin` | Opens Accounts | `admin` |
-| `/admin/accounts` | Accounts | `admin` |
+| `/admin/accounts` | Accounts, with the dialogs Create account and Reset password | `admin` |
 
 `backend` decides every permission. The app shows the permission-denied state when `backend` answers `403`.
 
@@ -128,6 +129,8 @@ Every setting has a safe default. [`.env.example`](.env.example) lists them.
 | `@fontsource-variable/inter` | 5.3.0 | OFL-1.1 | The bundled Inter font of the type scale, so no request leaves for a font host |
 | `@fontsource-variable/jetbrains-mono` | 5.3.0 | OFL-1.1 | The bundled JetBrains Mono font for IDs, for the same reason |
 | `@radix-ui/react-alert-dialog` | 1.2.1 | MIT | The accessible confirmation dialog |
+| `@radix-ui/react-dialog` | 1.3.1 | MIT | The accessible form dialog of Create account and Reset password. AlertDialog has the `alertdialog` role, meant for confirmations, not for forms |
+| `@radix-ui/react-dropdown-menu` | 2.2.1 | MIT | The account menu: an accessible menu button with keyboard navigation and focus return (UI-31) |
 | `@radix-ui/react-label` | 2.1.17 | MIT | The accessible form label |
 | `@radix-ui/react-tooltip` | 1.4.1 | MIT | The accessible tooltip |
 | `@tanstack/react-query` | 5.105.3 | MIT | Server state: cache, paging, retries, and invalidation |
@@ -176,13 +179,13 @@ Every setting has a safe default. [`.env.example`](.env.example) lists them.
 | `vite` | 8.3.5 | MIT | Dev server and build |
 | `vitest` | 5.1.0 | MIT | Test runner |
 
-The project lead approved OFL-1.1 and MPL-2.0 on 2026-11-07 ([WF-30](../docs/rules/workflow.md#dependencies)). `pnpm licenses list` shows the licenses of transitive packages, and the pull request that adds a dependency lists any license outside MIT, BSD, Apache-2.0, and ISC.
+The project lead approved OFL-1.1 and MPL-2.0 on 2026-11-07, and the two Radix packages of the account management design on 2026-11-11 ([WF-30](../docs/rules/workflow.md#dependencies)). `pnpm licenses list` shows the licenses of transitive packages, and the pull request that adds a dependency lists any license outside MIT, BSD, Apache-2.0, and ISC.
 
 ## Known limits
 
 - Playwright stays on 1.61.1 so that the browser tests of `frontend` run on macOS 13. Which development platforms these tests support is not recorded yet. Tracked in [#6](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/6).
 - `pnpm audit` reports two moderate advisories in `glob` and `minimatch`, through the docgen of `@storybook/react-vite`. They are development tools, and CI fails only on high or critical advisories ([WF-31](../docs/rules/workflow.md#dependencies)).
 - The build is one bundle, so Vite warns that a chunk is larger than 500 kB. Tracked in [#5](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/5).
-- The keyboard focus falls to the page in five cases. Show more on the last page removes its button: Shift+Tab reaches the last new item, and Tab goes to the top of the page. The reload after an unknown outcome can replace the button that holds the focus. The reload after a change to an account that is gone (`404`) removes its row, the focused button included. Reload list in the refused banner removes the banner with its button. In these two cases, Tab then moves on to the buttons of the list in Chromium. The permission-denied screen replaces the whole screen, buttons included. Tracked in [#7](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/7).
+- The keyboard focus falls to the page in five cases. Show more on the last page removes its button: Shift+Tab reaches the last new item, and Tab goes to the top of the page. The reload after an unknown outcome can replace the button that holds the focus. The reload after a change or a password reset of an account that is gone (`404`) removes its row, the focused button included. Reload list in a refused banner removes the banner with its button. In these two cases, Tab then moves on to the buttons of the list in Chromium. The permission-denied screen replaces the whole screen, buttons included. Tracked in [#7](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/7).
 - A link from Support to a ticket that is not on the first page of its order opens the order page at the top. An order would need more than 20 tickets for this to happen.
 - There is no Dockerfile yet ([ARCH-10](../docs/rules/architecture.md#component-boundaries)). The container image depends on the topology of [ADR-0011](../docs/decisions/0011-deployment-and-runtime-topology.md), which is still Proposed. The project lead accepted this as debt on 2026-11-07, and it ends when ADR-0011 or the hosting ADR is accepted ([WF-23](../docs/rules/workflow.md#technical-debt)). Tracked in [#4](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/4).

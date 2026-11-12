@@ -1,7 +1,7 @@
 /**
  * The app shell bar of every area (shop UI design, Layout; admin UI design, Layout): the brand,
- * the navigation, the signed-in account, and Sign out. At phone width the shop navigation moves
- * to a second row.
+ * the navigation, and the account menu (account management design, Account menu). At phone width
+ * the shop navigation moves to a second row.
  */
 import { cva } from "class-variance-authority";
 import type { LucideIcon } from "lucide-react";
@@ -35,7 +35,7 @@ export type AppBarProps = {
   readonly brandIcon?: LucideIcon;
   /** The navigation entries; absent when the account may not use the area. */
   readonly navigation?: ReactNode;
-  /** The signed-in account and Sign out. */
+  /** The account menu, and a message when sign-out failed. */
   readonly account?: ReactNode;
 };
 
