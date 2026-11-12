@@ -1,7 +1,7 @@
 {
   "benchmark_id": "supportiq-app-retrieval-gold-v2",
   "benchmark_version": "2.1.0",
-  "evaluated_at": "2026-11-12T12:01:43.904068+00:00",
+  "evaluated_at": "2026-11-12T12:09:45.857952+00:00",
   "gold_pre_run_sha256": "a33e6394d6d76384ac33771d014816ae7e2d1a3c379b3c1ec3a7f3605940bee7",
   "kb_source_sha256": "f8dcfbbdbb9cb2cd7a09d2ec12e0149083fdd4fa04931df6261fc4d1e6425fec",
   "kb_release_sha256": "cf450a72758e3d68ac7453802b5bc6c042ef2eddb9a6c4fa76483d4009c42804",

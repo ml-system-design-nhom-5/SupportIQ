@@ -1,7 +1,7 @@
 # SupportIQ App-Specific Retrieval Acceptance Evidence (v2)
 
-- **Evaluated At:** 2026-11-12T12:01:43.946788+00:00
-- **Git Commit:** `f3564734edc5da81da06ca73501389b6298db595`
+- **Evaluated At:** 2026-11-12T12:09:45.892715+00:00
+- **Git Commit:** `b652adb34f3d7aae488aa4c0c07d21e8165af9df`
 - **Active Release:** `current-policies-v1` (`apps/ai_service/kb-release.json`, SHA-256: `cf450a72758e3d68ac7453802b5bc6c042ef2eddb9a6c4fa76483d4009c42804`)
 - **Knowledge Base Source:** `data/knowledge/approved_kb.v2.json` (14 active `POL-*` documents, SHA-256: `f8dcfbbdbb9cb2cd7a09d2ec12e0149083fdd4fa04931df6261fc4d1e6425fec`)
 - **Gold Benchmark:** `data/benchmarks/app_retrieval_gold_v2.json` (v2.1, 46 cases, pre-run SHA-256: `a33e6394d6d76384ac33771d014816ae7e2d1a3c379b3c1ec3a7f3605940bee7`)
@@ -47,3 +47,24 @@
 | `return_product` | 4 | 1.0000 | 1.0000 |
 | `shipping_costs` | 2 | 1.0000 | 1.0000 |
 | `track_order` | 2 | 1.0000 | 1.0000 |
+
+## Architectural Reconciliation & Governance
+
+1. **Runtime vs. Offline Pipeline Ownership:**
+   - **Runtime Retrieval Ownership:** Fully owned and implemented under `apps/core_backend/retrieval/` (`adapter.py`, `encoder.py`, `importer.py`, `index.py`). The production service (`apps/ai_service/main.py`) directly instantiates and queries `RetrievalAdapter`.
+   - **Offline Pipeline Status:** The placeholder directories `pipeline/retrieval/` and `pipeline/monitoring/` have been deleted per explicit user request. Reusable benchmark generation and acceptance evaluation scripts are maintained under `scripts/generate_app_retrieval_gold.py` and `scripts/run_app_retrieval_benchmark.py`.
+   - **Index Persistence Justification:** The historical 2026-11-04 plan referenced an offline `pipeline/retrieval/build_index.py`. However, for SupportIQ's active 14-document policy corpus, `PolicyEncoder` loads `BAAI/bge-small-en-v1.5` and compiles the in-memory normalized NumPy dot-product index in ~3 seconds on startup. Persisting a static index to disk would create synchronization and drift hazards between `approved_kb.v2.json`, `kb-release.json`, and disk artifacts without latency advantages. The dynamic in-memory index is therefore the intended, drift-free production design.
+
+2. **Documented Verification Commands:**
+   - Run acceptance retrieval benchmark:
+     ```sh
+     & "$env:VIRTUAL_ENV/Scripts/python.exe" scripts/run_app_retrieval_benchmark.py
+     ```
+   - Run dedicated retrieval and grounding unit tests:
+     ```sh
+     & "$env:VIRTUAL_ENV/Scripts/python.exe" -m pytest tests/unit/test_retrieval_grounding_b2.py
+     ```
+   - Re-generate / verify gold benchmark:
+     ```sh
+     & "$env:VIRTUAL_ENV/Scripts/python.exe" scripts/generate_app_retrieval_gold.py
+     ```
