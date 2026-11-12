@@ -504,7 +504,7 @@ def verify_declared_manifest_files(
     """Validate declared files in source manifest:
     - Verifies physical existence on disk
     - Verifies SHA-256 against actual computed hash
-    - Confirms raw records, cases, or model files are declared
+    - Confirms raw execution records are declared (a summary/model file alone is insufficient)
     Returns (verified, reasons).
     """
     reasons: List[str] = []
@@ -515,7 +515,7 @@ def verify_declared_manifest_files(
     if not files:
         return False, ["Manifest 'files' dictionary is empty"]
 
-    has_raw_or_model = False
+    has_raw_records = False
     for fname, fmeta in files.items():
         if not isinstance(fmeta, dict):
             continue
@@ -545,12 +545,12 @@ def verify_declared_manifest_files(
             reasons.append(f"Declared file '{fname}' checksum mismatch: expected {declared_sha}, got {actual_sha}")
             continue
 
-        if fname in ("raw_records", "records", "cases", "model", "model_weights", "kb", "cases.jsonl", "source_summary.json"):
-            has_raw_or_model = True
+        if fname in ("raw_records", "records", "results.jsonl", "raw_cases.jsonl", "component_results.jsonl"):
+            has_raw_records = True
 
     if reasons:
         return False, reasons
-    if not has_raw_or_model:
+    if not has_raw_records:
         return False, ["Manifest does not declare raw records, cases, or model weights files"]
 
     return True, []
@@ -954,6 +954,9 @@ def run_regression_evaluation(
 
 
 if __name__ == "__main__":
+    # Keep redirected CLI output consistent with UTF-8 test/report readers on Windows.
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description="SupportIQ Automated Evaluation and Regression Loop")
     parser.add_argument("--baseline", type=Path, default=None, help="Path to previous baseline summary JSON")
     parser.add_argument("--current", type=Path, default=None, help="Path to current summary JSON")

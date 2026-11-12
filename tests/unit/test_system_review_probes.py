@@ -285,7 +285,7 @@ class TestSystemReviewProbes:
             "routing": {"must_escalate_total": 5, "guardrail_passed": True},
             "retrieval": {"safety_violations": 0, "recall_at_3": 0.95, "recall_at_3_raw": 0.95, "answerable_count": 10},
             "human_assessment": {"status": "pass", "supported_claims_ratio": 0.95, "supported_claims_ratio_raw": 0.95},
-            "ml": {"macro_f1": 0.90},
+            "ml": {"macro_f1": 0.90, "model_type": "distilbert", "status": "verified"},
             "latency": {"warm_p95_seconds": 2.5},
             "oversight": {"total_scenarios": 3, "passed_scenarios": 3, "status": "pass"},
         }

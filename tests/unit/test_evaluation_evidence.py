@@ -644,3 +644,25 @@ class TestHardenTask3AcceptanceContracts:
         res = evaluate_system_gates(metrics, cfg, evidence_kind="live")
         assert res["all_mandatory_passed"] is False
         assert "Model provenance missing or unverified" in res["summary_reason"]
+
+
+def test_summary_snapshot_alone_is_not_raw_execution_evidence(tmp_path):
+    from scripts.evaluate_regression import verify_declared_manifest_files
+    summary = tmp_path / "source_summary.json"
+    summary.write_text('{"accuracy": 1.0}', encoding="utf-8")
+    verified, reasons = verify_declared_manifest_files({"files": {
+        "source_summary.json": {"path": summary.name, "sha256": compute_sha256(summary)},
+    }}, base_dir=tmp_path)
+    assert verified is False
+    assert reasons
+
+
+def test_omitted_model_provenance_cannot_certify_component_metrics():
+    metrics = {
+        "routing": {"guardrail_passed": True, "must_escalate_total": 5, "must_escalate_correct": 5},
+        "retrieval": {"safety_violations": 0, "recall_at_3": 0.95, "answerable_count": 10},
+    }
+    config = SystemConfig(mandatory_gates=["routing_guardrails", "retrieval_safety"])
+    result = evaluate_system_gates(metrics, config, evidence_kind="live")
+    assert result["numeric_targets_passed"] is True
+    assert result["all_mandatory_passed"] is False

@@ -528,7 +528,7 @@ def evaluate_system_gates(
     elif evidence_kind != "live":
         all_mandatory_passed = False
         summary_reason = "Experimental live runs cannot certify acceptance with an unapproved suite."
-    elif "ml" in metrics and (not ml_obj or not ml_type or ml_stat not in ("verified", "approved") or ml_f1 is None):
+    elif not ml_obj or not ml_type or ml_stat not in ("verified", "approved") or ml_f1 is None:
         all_mandatory_passed = False
         summary_reason = "Model provenance missing or unverified; live acceptance rejected."
     elif ml_type in ("heuristic_demo", "unavailable", "synthetic") or ml_stat == "unverified":
