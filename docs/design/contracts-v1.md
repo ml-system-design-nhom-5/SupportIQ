@@ -373,7 +373,8 @@ Both contracts are new at version `1.0.0`. No consumer exists yet, so there is n
 
 #### Common elements
 
-- **Headers:** `traceparent` on every request ([ADR-0004](../decisions/0004-api-conventions.md), decision 6). `Idempotency-Key` on every write except `createSession` and `deleteCurrentSession`.
+- **Headers:** `traceparent` on every request ([ADR-0004](../decisions/0004-api-conventions.md), decision 6). `Idempotency-Key` on every write except `createSession` and `deleteCurrentSession`. The `ai-service` contract takes no `Idempotency-Key`, because its operations have no side effects ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md#ai-service-replicas)).
+- **Service token:** `backend` sends `Authorization: Bearer <service token>` on every call to `ai-service` except the health checks. The token is Secret and lives only in the secret settings of both components ([SEC-10](../rules/security-and-privacy.md#secrets)). A missing or wrong token returns `401 unauthenticated`. The project lead decided this on 2026-11-12, because `ai-service` may run on a public host ([ADR-0016, Open questions](../decisions/0016-hosting-on-free-tiers.md#open-questions)).
 - **Status codes:** as in [CON-11](../rules/contracts.md#api-conventions), including `202` for `createSuggestion` and `204` for operations without a response body.
 - **Responses from the ingress:** `ingress` can answer `413` (body over its size limit) or `429` (rate limit) before `backend` sees the request, and `502` or `504` when `backend` is unreachable or a write in flight fails ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)). These bodies are not Problem Details. After `502` or `504` the outcome of a write is unknown, and a retry with the same `Idempotency-Key` cannot repeat its effect ([ERR-15](../rules/errors-and-reliability.md#idempotency)). `frontend` treats all four as technical failures: a plain-language message, editor text kept, and automatic retries only as [TS-29](../rules/typescript.md#api-access) and [ERR-12](../rules/errors-and-reliability.md#retries) allow, so never for `sendReply` and never after `413`.
 - **Errors:** Problem Details with a `trace_id` extension member. Problem types:
@@ -381,7 +382,7 @@ Both contracts are new at version `1.0.0`. No consumer exists yet, so there is n
 | Type (`urn:supportiq:problem:` + name) | Status | Meaning |
 |---|---|---|
 | `invalid-request` | `400`, `422` | Malformed body, or a body that breaks a documented rule |
-| `unauthenticated` | `401` | No valid session |
+| `unauthenticated` | `401` | No valid session, or no valid service token on a call to `ai-service` |
 | `forbidden` | `403` | The role may not perform the operation, or the `Origin` check failed |
 | `authority-required` | `403` | Staff tried to send a reply on a ticket where authority is required |
 | `not-found` | `404` | The resource does not exist, or the caller may not know about it |
@@ -398,13 +399,15 @@ Both contracts are new at version `1.0.0`. No consumer exists yet, so there is n
   - `Timestamp`: an RFC 3339 time in UTC ([CON-17](../rules/contracts.md#api-conventions)).
   - `OrderStatus`, `ShipmentStatus`, `RefundStatus`: the status enums of `OrderContext`, also used by the shop view models.
   - `IntentLabel`: the 46 labels.
-  - `ConfidenceBand`: `high`, `medium`, `low`.
+  - `ConfidenceBand`: `high`, `medium`, `low`, computed by `ai-service`, so no consumer applies a threshold.
   - `AiReasonCode`.
   - `DocumentValidity`: `valid`, `expired`, `conflicting`.
-  - `Citation` (both variants, never with a `value`), `RankedDocument`, `DraftSegment`, `Warning`.
+  - `Citation`, a union of `KbDocumentCitation` and `OrderContextCitation`, never with a `value`; `RankedDocument`, `DraftSegment`, `Warning`.
   - `OrderContext` and `OrderContextField`, the closed enum of its field names.
-  - `AssetVersions`: `release_id` and the version of each asset.
-  - `Placeholder`: the placeholder syntax of [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#placeholder-syntax). Both contracts use it to describe AI text and the rule that a reply body contains no placeholder.
+  - `AssetVersions`: `release_id` and the version of each asset, each an `AssetVersion`.
+  - `KbDocumentId` and `KbDocumentVersionTag`: the two strings that identify a KB document version, in citations, ranked documents, and path parameters.
+  - `AiItemId`: the identifier of a segment, a citation, or a warning within one `ai-service` result.
+  - `Placeholder`: text that contains at least one placeholder of [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#placeholder-syntax). A contract applies it with `not` to require text without placeholders, as on a reply body.
   - `Money`: `amount_minor`, `currency`.
   - `ProblemDetails`.
 - All other `backend` schemas are its own view models, so `frontend` does not depend on the `ai-service` contract.
@@ -426,7 +429,7 @@ Both contracts are new at version `1.0.0`. No consumer exists yet, so there is n
 | `missing_information` | The request needs information that is in neither the message nor the order context | ESC-04 |
 | `source_review_overdue` | A cited document version is past its review deadline under the KB freshness rules | ESC-04 (`STALE`), as a warning |
 | `grounding_failed` | The draft made claims its sources do not support | ESC-05: the LLM output is unusable |
-| `llm_unavailable` | LLM timeout, error, rate limit, refused egress, or open circuit breaker | ESC-05 |
+| `llm_unavailable` | LLM timeout, error, or rate limit, a call refused because its host is not on the egress allow-list, or an open circuit breaker | ESC-05 |
 | `llm_invalid_output` | The LLM output failed schema validation, or it contained a placeholder that was not in the prompt | ESC-05 |
 | `budget_exceeded` | The latency budget ran out before drafting | ESC-05 |
 | `ai_service_unavailable` | Set only by `backend`: `ai-service` unreachable, timed out, returned `4xx` or `5xx`, returned an invalid response, or the job ran out of attempts | ESC-05 |
@@ -440,7 +443,8 @@ Which codes lead to a draft, an abstention, or an escalation recommendation is d
 - `out_of_scope_intent` never produces a detailed draft;
 - `human_agent_requested` produces `escalation_recommended` without `requires_authority`;
 - `requires_authority` never prevents retrieval, and any draft that carries it contains supporting information only;
-- `source_review_overdue` is only a warning and never causes an abstention. It is raised only for document versions whose source provides `last_reviewed_at` ([KB data contract](#kb-data-contract-contractskb-contractmd)).
+- `source_review_overdue` is only a warning and never causes an abstention. It is raised only for document versions whose source provides `last_reviewed_at` ([KB data contract](#kb-data-contract-contractskb-contractmd));
+- every failure of the drafting step inside `ai-service` (`llm_unavailable`, `llm_invalid_output`, `grounding_failed`, `budget_exceeded`) ends with the draft status `llm_unavailable`, and the reason code says which. The project lead decided this on 2026-11-12; the AI and ML code on `org/main` already does it.
 
 The reason code `requires_authority` is the only source of the authority flag; no separate boolean is sent.
 
@@ -456,7 +460,9 @@ Staff use the `StaffReasonCode` values from [ADR-0006](../decisions/0006-staff-f
 | `createDraft` | `POST /v1/drafts` | Run the whole pipeline |
 | `getKbDocumentVersion` | `GET /v1/kb-documents/{document_id}/versions/{version}` | Full text of one document version, for the citation view |
 | `getAssetVersions` | `GET /v1/asset-versions` | The `release_id` and the versions of the loaded model, KB, document-to-intent mapping, prompts, routing configuration, and retrieval index ([DATA-56](../rules/data-and-ml.md#models-and-artifacts)) |
-| — | `GET /health/live`, `GET /health/ready` | Liveness and readiness ([ERR-18](../rules/errors-and-reliability.md#startup-and-health)) |
+| `checkLiveness`, `checkReadiness` | `GET /health/live`, `GET /health/ready` | Liveness and readiness ([ERR-18](../rules/errors-and-reliability.md#startup-and-health)). Readiness depends on the release manifest, not on the LLM provider |
+
+Every operation except the health checks requires the service token ([Common elements](#common-elements)). `backend` is the only caller.
 
 `SuggestionRequest`, the body of both `createAnalysis` and `createDraft`:
 
@@ -464,7 +470,7 @@ Staff use the `StaffReasonCode` values from [ADR-0006](../decisions/0006-staff-f
 |---|---|---|---|---|
 | `message` | `PseudonymizedText` | Yes | Confidential | The customer's message after pseudonymization ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md)) |
 | `order_context` | `OrderContext` | No | Confidential | Allow-listed order fields; absent when the ticket has no order (imported tickets) |
-| `as_of` | timestamp | Yes | Internal | Point in time for document validity: the ticket's `created_at` |
+| `as_of` | timestamp | Yes | Internal | Point in time for document validity: the ticket's `created_at`. It keeps its glossary name, the one exception to the `_at` suffix of [CON-18](../rules/contracts.md#naming) |
 | `kb_version` | string | No | Internal | KB version to use; absent means the loaded version. An unknown version returns `422` |
 | `intent_override` | `IntentLabel` | No | Internal | Intent chosen or confirmed by staff |
 
@@ -489,21 +495,21 @@ Staff use the `StaffReasonCode` values from [ADR-0006](../decisions/0006-staff-f
 
 | Field | Meaning |
 |---|---|
-| `intent` | Predicted intent: `label`, calibrated `probability`, `confidence_band`, `source` (`model` or `staff`) |
-| `alternatives` | Up to four next most likely intents with probabilities. The console shows the top three candidates (FR-01) |
-| `is_in_scope` | Whether the intent is one of the 12 in-scope intents |
-| `documents` | Ranked `RankedDocument` items: ID, version, title, policy key, effective period, `validity`, rank, snippet |
+| `intent` | A union discriminated by `source`. `model`: the predicted `label`, its calibrated `probability`, and `confidence_band`. `staff`: the `label` that staff chose, without a probability or a band, because no model estimated it. The project lead chose this on 2026-11-12 instead of a probability of 1 |
+| `alternatives` | Up to four next most likely intents with probabilities. The console shows the top three candidates (FR-01). Empty when `intent.source` is `staff`, because the staff choice replaces the distribution |
+| `is_in_scope` | Whether the intent is one of the 12 in-scope intents. The routing carries `out_of_scope_intent` exactly when it is false |
+| `documents` | Ranked `RankedDocument` items: ID, version, title, policy key, effective period (`effective_start_at`, and `effective_end_at` unless open-ended), `validity`, rank, snippet |
 | `routing` | `recommendation` (`draft`, `abstain`, `escalate`) and `reason_codes` |
-| `warnings` | `Warning` items |
+| `warnings` | `Warning` items. The warnings of a draft are those of its embedded analysis |
 | `versions` | `AssetVersions`, including `release_id` |
-| `step_latency_ms` | Latency of each step and the total |
+| `step_latencies` | `total_ms`, `analysis_ms`, and `llm_ms` when the LLM was called. A name ending in `_ms` is an integer duration ([CON-18](../rules/contracts.md#naming)), so the object is not called `step_latency_ms` |
 
 `DraftOutcome`, the `200` body of `createDraft`, is a union discriminated by `status`, so a draft exists only when it is ready ([CODE-29](../rules/code.md#types-and-data)):
 
 | `status` | Extra fields |
 |---|---|
 | `draft_ready` | `draft`: `segments` (each with `segment_id`, `paragraph_index`, `text`, `citation_ids`) and `citations` |
-| `abstained`, `escalation_recommended`, `llm_unavailable` | No `draft` |
+| `abstained`, `escalation_recommended`, `llm_unavailable` | No `draft`. `llm_unavailable` covers every failure of the drafting step ([Reason codes](#reason-codes)) |
 
 `paragraph_index` is required: an integer that starts at 0 and never decreases from one segment to the next. Segments with the same index form one paragraph.
 
@@ -516,7 +522,42 @@ Staff use the `StaffReasonCode` values from [ADR-0006](../decisions/0006-staff-f
 
 An `order_context` citation carries the field name and never its value, so no personal value leaves `ai-service`.
 
-Every variant also carries `reason_codes`, the embedded `analysis`, an optional `staff_note`, `versions`, `step_latency_ms`, `mask_count_by_type` (the number of masks applied, by type; Internal), and `llm_usage` (input tokens, output tokens, cost in micro-USD) when the LLM was called.
+Every variant also carries:
+
+- `reason_codes`: every code of the embedded analysis's routing, so `requires_authority` is there exactly when the analysis carries it, plus the codes of the drafting step. The drafting step never adds `requires_authority`;
+- the embedded `analysis`, an optional `staff_note`, `versions`, and `step_latencies`;
+- `mask_count_by_type`: the number of `[EMAIL]`, `[PHONE]`, and `[CARD]` masks applied before the LLM call, as `email`, `phone`, and `card` ([SEC-06](../rules/security-and-privacy.md#data-sent-to-llm-providers); Internal);
+- `llm_usage` (`input_token_count`, `output_token_count`, `cost_micro_usd`) when the LLM answered at least once, also when its output was then rejected.
+
+Joined as `backend` joins them, the segments of a draft have at most 2 000 characters, the `MessageText` limit of a reply, so a draft can be sent unedited. Restoring pseudonyms can make the text longer; the `backend` workflow handles that case.
+
+`KbDocumentVersion`, the `200` body of `getKbDocumentVersion`: document ID, version, title, body, policy key, `effective_start_at`, `effective_end_at` (absent when open-ended), owner, source, and `last_reviewed_at` when the source provides it. The policy key, the owner, and the source are required, as [DATA-12](../rules/data-and-ml.md#validation-at-every-boundary) and [DATA-16](../rules/data-and-ml.md#knowledge-base) require them of every document version. Only the versions of the loaded KB are served; any other version returns `404`.
+
+#### Work for the join with the AI and ML code
+
+The AI and ML code on `org/main` (commit `5e0cda5`, read on 2026-11-12) already serves the paths of this contract in `apps/ai_service`. The project lead decided on 2026-11-12 that the contract follows the rules wherever that code differs, and that the code is not changed before the join. At the join, `ai-service` wraps that code and closes these differences:
+
+- **Protocol:**
+  - every error body is Problem Details with `trace_id`, instead of the `{"detail": …}` body of FastAPI. An unexpected error returns `500 internal-error`, and `503 not-ready` is returned only while the release manifest is not loaded; the code returns `503` for any `ValueError`, `RuntimeError`, or `KeyError` of the pipeline;
+  - every invalid request returns `422 invalid-request`, including a `kb_version` other than the loaded one; the code rejects `kb_version` as an unknown field;
+  - the service token is checked on every operation except the health checks;
+  - `traceparent` is read and propagated ([LOG-05](../rules/logging-and-observability.md#correlation));
+  - the health checks answer `204` without a body;
+  - `GET /v1/asset-versions` returns `AssetVersions` itself, without the `versions` wrapper and its second `release_id`;
+  - responses carry no field outside the contract: `score_kind`, `score`, `failure_code`, and the `confidence_band` of alternatives are removed ([CON-21](../rules/contracts.md#evolution)), and no field is `null` ([CON-08](../rules/contracts.md#openapi-style));
+  - timestamps are RFC 3339 in UTC with `Z`. An `as_of` without a time zone is rejected, not completed;
+  - `intent_override` and every `order_context` field are validated against their schemas; the code checks only the field names of `order_context`.
+- **Egress:** the egress allow-list is a versioned configuration file ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#egress-control), item 2); the code holds its one host in the source.
+- **Release manifest:** `ai-service` loads one release manifest with a `release_id` and a checksum for each asset ([DATA-56](../rules/data-and-ml.md#models-and-artifacts)), instead of computing hashes at startup, and is not ready until every asset is verified. The regex classifier that `SUPPORTIQ_DEV_FALLBACK_MODEL` turns on, which reports the pinned model version with fixed scores, never serves requests.
+- **Intent:** probabilities are calibrated (FR-01); the code sends the uncalibrated softmax scores. A staff-chosen intent has no probability and no alternatives; the code sends a probability of 1 and the model's alternatives. `out_of_scope_intent` is set only for a label outside the 12 in-scope intents; an entropy rule in the code also sets it for in-scope labels. The `ai-service` pipeline design sets the high-band threshold of `ConfidenceBand`; the code holds 0.9 in the source.
+- **Retrieval:** `validity` reflects `as_of`, so `expired`, `conflicting`, and `only_expired_documents` can occur; the code drops versions that are not in effect and marks every other version `valid`. A retrieval failure is a technical failure, never `no_valid_document`. Each ranked document carries its `policy_key`.
+- **KB:** `data/knowledge/approved_kb.v2.json` holds 17 documents. Only 3 have a `policy_key`, none of them among the 14 that `apps/ai_service/kb-release.json` releases, and no document has an `owner` or a `source`, which DATA-12 and DATA-16 require. The team fills in this metadata before the KB is loaded, without writing any policy content, and the project lead approves it. Until then the documents are quarantined ([DATA-13](../rules/data-and-ml.md#validation-at-every-boundary)). `getKbDocumentVersion` returns these fields with the effective period.
+- **Warnings:** each warning is a `Warning` with a `warning_id` and a reason code; the code sends free text.
+- **Drafting:**
+  - the second masking layer runs before the LLM call and reports `mask_count_by_type` ([SEC-06](../rules/security-and-privacy.md#data-sent-to-llm-providers)); the code always sends `{}`;
+  - the grounding check compares each order citation with the value of its field ([ADR-0014](../decisions/0014-citations-to-order-context.md), statement 4); the code checks only that the field is present;
+  - `llm_usage` reports `cost_micro_usd`, and it is present whenever the LLM answered, also for rejected output;
+  - `step_latencies` replaces `step_latency_ms`, with `total_ms`, `analysis_ms`, and `llm_ms`.
 
 #### `backend` contract (`backend.openapi.yaml`)
 
@@ -711,7 +752,7 @@ This design fixes the structure; the contract is completed when the approved KB 
 
 | Element | Content |
 |---|---|
-| Document version | Document ID, version, title, body, policy key, `effective_from`, `effective_to` (absent means open-ended), source, owner, checksum, and `last_reviewed_at` when the source provides it ([DATA-16](../rules/data-and-ml.md#knowledge-base)) |
+| Document version | Document ID, version, title, body, policy key, `effective_start_at`, `effective_end_at` (absent means open-ended), source, owner, checksum, and `last_reviewed_at` when the source provides it ([DATA-16](../rules/data-and-ml.md#knowledge-base)) |
 | KB version manifest | `kb_version`, the document versions it contains with checksums, creation date, source reference |
 | Document-to-intent mapping | Separate file: `mapping_version`, `kb_version`, and for each document ID its list of `IntentLabel` values ([ADR-0005](../decisions/0005-intent-independent-retrieval.md)) |
 | Freshness | For each policy area: the maximum time between reviews, the owner who reviews, and the interim action when a review is overdue. Overdue documents stay usable, and each draft citing them carries the warning `source_review_overdue`. The warning needs `last_reviewed_at` from the source. Documents without it get no freshness warning and are listed in the ingestion report; the value is never invented ([DATA-13](../rules/data-and-ml.md#validation-at-every-boundary)) |
@@ -727,6 +768,7 @@ Values missing from the source files are never invented. A document without a re
 | `ai-service` times out, is unreachable, or returns `5xx` on the analysis call | Analysis `unavailable` with `ai_service_unavailable`; ticket stays `open` for manual handling | Use-case test with a fake client that times out; consumer contract test |
 | Same failure on the draft call | Draft `unavailable`; the analysis is still shown when ready | Use-case test; consumer contract test |
 | `ai-service` returns a documented `4xx` | Part `unavailable` with `ai_service_unavailable`; logged at `error` as a defect | Use-case test with a fake client returning `422` |
+| A call to `ai-service` without the service token, or with a wrong one | `401 unauthenticated`; nothing is computed, and `backend` handles it as any other `4xx` | `ai-service` provider contract test; Prism mock check (`pnpm run check:mock`) |
 | `ai-service` returns an unknown status or reason code | Treated as unavailable or as an unspecified reason ([CON-22](../rules/contracts.md#evolution)) | Consumer test with a mock returning unknown values |
 | LLM fails inside `ai-service`, or a call to a host that is not on the egress allow-list is refused | Draft `llm_unavailable`; analysis present | Provider contract test with the LLM adapter faked to fail |
 | Pseudonymization fails, or its output exceeds 4 000 characters | No call to `ai-service`; both parts `unavailable` with `pseudonymization_failed`; ticket stays `open` | Use-case test with a failing fake pseudonymizer that asserts no call was made |
@@ -822,7 +864,7 @@ Values missing from the source files are never invented. A document without a re
 | Flow | Data and class |
 |---|---|
 | `frontend` → `backend` | Credentials (Secret), only to `createSession`. Messages and replies (Confidential) |
-| `backend` → `ai-service` | Pseudonymized message and allow-listed order context (Confidential, without identifiers); `as_of`, KB version, intent override (Internal). Detected names, emails, phone numbers, addresses, order IDs, tracking codes, and transaction IDs are replaced; a value that every detector misses can remain ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#detection)). No account IDs and no `other_orders` |
+| `backend` → `ai-service` | Pseudonymized message and allow-listed order context (Confidential, without identifiers); `as_of`, KB version, intent override (Internal). Detected names, emails, phone numbers, addresses, order IDs, tracking codes, and transaction IDs are replaced; a value that every detector misses can remain ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#detection)). No account IDs and no `other_orders`. The service token (Secret) authenticates `backend` on every call except the health checks, and never appears in logs or error bodies |
 | `ai-service` → LLM provider | The pseudonymized message after masking, KB snippets, and the order fields a prompt needs, only to hosts on the egress allow-list ([SEC-04 to SEC-06](../rules/security-and-privacy.md#data-sent-to-llm-providers), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md)) |
 | `backend` → `/shop` | Catalog products (Public); the caller's own orders and tickets, and sent replies only (Confidential) |
 | `backend` → `/console` | Customer display name, message, order details, the customer's other orders without addresses, and suggestions with pseudonyms restored (Confidential), to staff and managers only. Reports (Internal), to managers only |
@@ -839,7 +881,7 @@ Every schema property states its data class ([SEC-03](../rules/security-and-priv
 4. Done on 2026-11-05: the project lead approved the `frontend` ↔ `backend` part of revision 2 for contract PR 2 and its implementation, exactly these operations: `createSession`, `getCurrentSession`, `deleteCurrentSession`, `listShopProducts`, `getShopProduct`, `listShopOrders`, `getShopOrder`, `createShopTicket`, `listShopTickets`, `getShopTicket`, `listAdminAccounts`, `changeAccountRole`, `changeAccountStatus`, and the health checks. The rest of revision 2 stays in review with the AI and ML members: the console operations, `getAdminVersions`, and the `ai-service` contract.
 5. Decided on 2026-11-05: contract PR 2 lands before contract PR 1. It adds only the shared schemas that the `backend` contract needs now ([Common elements](#common-elements)).
 6. Contract PR 2: `backend.openapi.yaml` 1.0.0 with the operations of step 4, its examples, `CHANGELOG.md`, the shared schemas of step 5, and the contract tooling with its commands in `contracts/README.md`.
-7. Contract PR 1: `ai-service.openapi.yaml` 1.0.0, its examples, and the remaining shared schemas. Later `backend` contract changes add the console operations and `getAdminVersions`.
+7. Done on 2026-11-12: contract PR 1, `ai-service.openapi.yaml` 1.0.0 with an example for every outcome, its Prism mock, and the remaining shared schemas, with the project lead's decisions of that day ([`ai-service` contract](#ai-service-contract-ai-serviceopenapiyaml)). Later `backend` contract changes add the console operations and `getAdminVersions`.
 8. Contract PR 3: `kb-contract.md` structure, completed when the KB files arrive.
 9. Implementation starts in parallel against mocks. These follow-up design docs come first:
    - the `ai-service` pipeline: routing per the escalation rules, the list of sensitive intents, step budgets, retrieval limits (N, k, and snippet length), the maximum output tokens, an LLM spending limit, the grounding check including order citations, placeholder instructions and the output check, and the `as_of` confirmation. Whether the LLM is a third authority signal was decided on 2026-11-12: it is not ([Authority rule](#authority-rule-fr-06));

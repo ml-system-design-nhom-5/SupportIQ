@@ -82,8 +82,9 @@ Each component README lists its own commands. These are the commands agents run 
 | Command | Run in | What it does |
 |---|---|---|
 | `pnpm run check` | `contracts/` | Lints the contracts, validates every example file, and type-checks the custom lint rules |
-| `pnpm run check:mock` | `contracts/` | Checks the sign-in flow and the example files through the Prism mock |
+| `pnpm run check:mock` | `contracts/` | Checks the sign-in flow, the `ai-service` service token, and the example files through the Prism mock of each contract |
 | `pnpm run mock` | `contracts/` | Serves the `backend` contract as a mock at `http://127.0.0.1:4010` |
+| `pnpm run mock:ai-service` | `contracts/` | Serves the `ai-service` contract as a mock at `http://127.0.0.1:4012` |
 | `pnpm run bundle` | `contracts/` | Writes each contract as one file to `contracts/dist/` |
 | `pnpm run check` | `frontend/` | Format, lint, types, boundaries, and the generated client |
 | `pnpm test` | `frontend/` | Unit tests with coverage, stories, and UI flow tests |

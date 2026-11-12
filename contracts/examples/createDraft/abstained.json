@@ -1,0 +1,81 @@
+{
+  "summary": "No draft: the intent is uncertain",
+  "description": "The routing recommended abstain with low_confidence (ESC-01). The LLM was not called.",
+  "value": {
+    "status": "abstained",
+    "reason_codes": [
+      "low_confidence"
+    ],
+    "analysis": {
+      "intent": {
+        "source": "model",
+        "label": "cancel_order",
+        "probability": 0.41,
+        "confidence_band": "low"
+      },
+      "alternatives": [
+        {
+          "label": "change_order",
+          "probability": 0.33
+        },
+        {
+          "label": "track_order",
+          "probability": 0.12
+        }
+      ],
+      "is_in_scope": true,
+      "documents": [
+        {
+          "document_id": "SAMPLE-RETURN-001",
+          "version": "2.0",
+          "title": "Sample return document",
+          "policy_key": "sample_return_window",
+          "effective_start_at": "2026-01-01T00:00:00Z",
+          "effective_end_at": "2027-01-01T00:00:00Z",
+          "validity": "valid",
+          "rank": 1,
+          "snippet": "This is another sample text. It is not KB content and not a policy."
+        }
+      ],
+      "routing": {
+        "recommendation": "abstain",
+        "reason_codes": [
+          "low_confidence"
+        ]
+      },
+      "warnings": [],
+      "versions": {
+        "release_id": "release-2026-11-12-sample",
+        "model_version": "intent-model-sample-1",
+        "kb_version": "kb-sample-1",
+        "mapping_version": "mapping-sample-1",
+        "prompt_version": "prompts-sample-1",
+        "routing_version": "routing-sample-1",
+        "index_version": "index-sample-1"
+      },
+      "step_latencies": {
+        "total_ms": 179,
+        "analysis_ms": 179
+      }
+    },
+    "staff_note": "The intent is uncertain. Confirm the intent or choose another to get a draft.",
+    "versions": {
+      "release_id": "release-2026-11-12-sample",
+      "model_version": "intent-model-sample-1",
+      "kb_version": "kb-sample-1",
+      "mapping_version": "mapping-sample-1",
+      "prompt_version": "prompts-sample-1",
+      "routing_version": "routing-sample-1",
+      "index_version": "index-sample-1"
+    },
+    "step_latencies": {
+      "total_ms": 181,
+      "analysis_ms": 179
+    },
+    "mask_count_by_type": {
+      "email": 0,
+      "phone": 0,
+      "card": 0
+    }
+  }
+}

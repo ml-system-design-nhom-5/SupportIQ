@@ -1,0 +1,56 @@
+{
+  "summary": "The intent is uncertain",
+  "description": "The top probability is below the routing threshold (ESC-01). Staff confirm or choose an intent.",
+  "value": {
+    "intent": {
+      "source": "model",
+      "label": "cancel_order",
+      "probability": 0.41,
+      "confidence_band": "low"
+    },
+    "alternatives": [
+      {
+        "label": "change_order",
+        "probability": 0.33
+      },
+      {
+        "label": "track_order",
+        "probability": 0.12
+      }
+    ],
+    "is_in_scope": true,
+    "documents": [
+      {
+        "document_id": "SAMPLE-RETURN-001",
+        "version": "2.0",
+        "title": "Sample return document",
+        "policy_key": "sample_return_window",
+        "effective_start_at": "2026-01-01T00:00:00Z",
+        "effective_end_at": "2027-01-01T00:00:00Z",
+        "validity": "valid",
+        "rank": 1,
+        "snippet": "This is another sample text. It is not KB content and not a policy."
+      }
+    ],
+    "routing": {
+      "recommendation": "abstain",
+      "reason_codes": [
+        "low_confidence"
+      ]
+    },
+    "warnings": [],
+    "versions": {
+      "release_id": "release-2026-11-12-sample",
+      "model_version": "intent-model-sample-1",
+      "kb_version": "kb-sample-1",
+      "mapping_version": "mapping-sample-1",
+      "prompt_version": "prompts-sample-1",
+      "routing_version": "routing-sample-1",
+      "index_version": "index-sample-1"
+    },
+    "step_latencies": {
+      "total_ms": 179,
+      "analysis_ms": 179
+    }
+  }
+}
