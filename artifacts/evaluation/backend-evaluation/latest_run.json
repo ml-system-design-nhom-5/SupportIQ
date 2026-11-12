@@ -1,0 +1,8 @@
+{
+  "latest_run_id": "accept-20261112-120255-910c15",
+  "run_dir": "artifacts\\evaluation\\backend-evaluation\\runs\\accept-20261112-120255-910c15",
+  "timestamp": "2026-11-12T12:02:55.578304+00:00",
+  "runner_checks_passed": true,
+  "mode": "mock",
+  "raw_records_sha256": "3B9DF14A13770C009D46EAC85286D0B6E0DCA73B2D650939DFDD4B57A1B7EE3D"
+}

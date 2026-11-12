@@ -9,7 +9,7 @@ Usage:
     python scripts/run_application_acceptance.py --all
 
     # Run with verified pricing configuration:
-    python scripts/run_application_acceptance.py --mode mock --pricing-file config/verified_pricing.json
+    python scripts/run_application_acceptance.py --mode mock --pricing-file artifacts/evaluation/pricing/gemini-3.1-flash-lite-20261112.json
 """
 
 from __future__ import annotations
@@ -46,12 +46,12 @@ def parse_args():
     parser.add_argument(
         "--output-dir",
         default="artifacts/evaluation/backend-evaluation",
-        help="Output directory for reports and manifests (unique to backend-evaluation)",
+        help="Base output directory for reports and manifests (each run writes into unique runs/<run_id>/)",
     )
     parser.add_argument(
         "--secrets",
         default=None,
-        help="Path to .local/application.json containing database credentials",
+        help="Path to application secrets JSON file containing database credentials",
     )
     parser.add_argument(
         "--pricing-file",
@@ -69,6 +69,18 @@ def parse_args():
         type=float,
         default=25.0,
         help="Timeout in seconds for waiting on ticket suggestion completion",
+    )
+    parser.add_argument(
+        "--analysis-timeout-ms",
+        type=int,
+        default=3000,
+        help="AI service analysis timeout in ms (runtime default 3000ms)",
+    )
+    parser.add_argument(
+        "--draft-timeout-ms",
+        type=int,
+        default=11000,
+        help="AI service draft timeout in ms (runtime default 11000ms)",
     )
     parser.add_argument(
         "--run-ml-audit",
@@ -102,8 +114,10 @@ def main():
     if args.run_ml_audit or args.all:
         print("=== Running ML & Baseline OOF Provenance Audit ===")
         ml_res = run_ml_audit(REPO_ROOT, out_dir)
-        print(f"ML Audit completed. DistilBERT OOF Macro-F1: {ml_res['distilbert_audit']['oof_macro_f1']:.4f}")
-        print(f"Baseline Linear SVM OOF Macro-F1: {ml_res['baseline_audit']['candidates'][0]['oof_macro_f1']:.4f}")
+        print(f"ML Audit completed.")
+        print(f"- DistilBERT 10-fold Mean Macro-F1: {ml_res['distilbert_audit']['macro_f1_mean']:.6f}")
+        print(f"- Baseline Linear SVM 10-fold Mean Macro-F1: {ml_res['baseline_audit']['candidates'][0]['macro_f1_mean']:.6f}")
+        print(f"- 10-Fold Alignment Verified: {ml_res['alignment_audit']['aligned']} ({ml_res['alignment_audit']['total_samples']} samples)")
 
     # 2. Run Application E2E Acceptance Runner
     print(f"\n=== Running Application End-to-End Acceptance Runner (mode={args.mode}) ===")
@@ -112,22 +126,34 @@ def main():
         mode=args.mode,
         num_warm_requests=args.num_warm,
         poll_timeout_seconds=args.poll_timeout,
+        analysis_timeout_ms=args.analysis_timeout_ms,
+        draft_timeout_ms=args.draft_timeout_ms,
         verified_pricing=verified_pricing,
     )
     runner = ApplicationAcceptanceRunner(config)
     summary = runner.run(output_dir=out_dir)
 
-    passed = summary["acceptance_summary"]["overall_passed"]
+    passed = summary["acceptance_summary"]["runner_checks_passed"]
     p95 = summary["performance"]["p95_seconds"]
     oversight = summary["acceptance_summary"]["human_oversight_enforced"]
     cost_status = summary["tokens_and_cost"]["cost_status"]
+    run_id = summary["meta"]["run_id"]
 
-    print(f"\nAcceptance Result: {'PASSED' if passed else 'FAILED'}")
-    print(f"- End-to-End p95 Latency: {p95:.3f}s (target <= 12.0s: {'MET' if summary['performance']['target_p95_met'] else 'MISSED'})")
+    is_mock = (args.mode == "mock")
+    suffix = " (MOCK CHECKS ONLY)" if is_mock else ""
+
+    print(f"\nAcceptance Result{suffix}: {'PASSED' if passed else 'FAILED'}")
+    print(f"- Run ID: {run_id}")
+    p95_str = f"{p95:.3f}s" if p95 is not None else "None"
+    print(f"- End-to-End p95 Latency: {p95_str} (target <= 12.0s: {'MET' if summary['performance']['target_p95_met'] else 'MISSED'})")
     print(f"- 100% Human Oversight (No Auto-Send): {'VERIFIED' if oversight else 'FAILED'}")
     print(f"- Token Usage: {summary['tokens_and_cost']['total_tokens']} total tokens")
-    print(f"- Cost Status: {cost_status} (Cost USD: {summary['tokens_and_cost']['cost_usd']})")
-    print(f"- Report written to: {out_dir / 'acceptance_e2e_report.md'}")
+    print(f"- Cost Status: {cost_status}")
+    if summary["tokens_and_cost"]["cost_usd"] is not None:
+        print(f"- Cost USD: ${summary['tokens_and_cost']['cost_usd']:.6f}")
+    elif summary["tokens_and_cost"].get("lower_bound_cost_usd") is not None:
+        print(f"- Lower Bound Cost USD: ${summary['tokens_and_cost']['lower_bound_cost_usd']:.6f}")
+    print(f"- Report run written to: {out_dir / 'runs' / run_id / 'acceptance_e2e_report.md'}")
 
     return 0 if passed else 1
 

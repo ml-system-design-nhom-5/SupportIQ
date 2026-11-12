@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -21,6 +22,11 @@ import pandas as pd
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, f1_score
 
 from pipeline.preparation.utils import STANDARD_INTENTS
+
+
+class EvaluationError(RuntimeError):
+    """Raised when evaluation provenance, checksums, or integrity constraints fail."""
+    pass
 
 
 def compute_sha256(path: Path | str) -> str:
@@ -48,8 +54,23 @@ def compute_lf_sha256(path: Path | str) -> str:
     return hashlib.sha256(normalized).hexdigest().upper()
 
 
-def audit_baseline_oof(repo_root: Path) -> Dict[str, Any]:
-    """Audit stored baseline OOF predictions against training manifest."""
+def get_git_commit_hash() -> str:
+    """Safely obtain current git commit hash."""
+    try:
+        res = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            check=True,
+        )
+        return res.stdout.strip()
+    except Exception:
+        return "unknown_or_detached"
+
+
+def audit_baseline_oof(repo_root: Path, fail_closed: bool = True) -> Dict[str, Any]:
+    """Audit stored baseline OOF predictions against training manifest. Fails closed if mismatched."""
     baseline_dir = repo_root / "artifacts" / "training" / "03-11-2026-01"
     oof_path = baseline_dir / "oof_predictions.csv"
     manifest_path = baseline_dir / "manifest.json"
@@ -69,39 +90,55 @@ def audit_baseline_oof(repo_root: Path) -> Dict[str, Any]:
     # Match raw, CRLF or LF hash against manifest
     manifest_match = expected_sha in (raw_sha, crlf_sha, lf_sha)
 
+    if not manifest_match and fail_closed:
+        raise EvaluationError(
+            f"Baseline OOF checksum mismatch against manifest: expected {expected_sha}, "
+            f"got raw={raw_sha}, crlf={crlf_sha}, lf={lf_sha}. Provenance audit failed closed."
+        )
+
     df = pd.read_csv(oof_path)
     models = sorted(df["model_id"].unique())
     n_folds = int(df["fold"].nunique())
-    all_labels = sorted(df["y_true"].unique())
+    all_labels = sorted(list(STANDARD_INTENTS))
+    actual_labels = sorted(df["y_true"].unique())
 
     candidates_summary = []
     for model_id in models:
         m_df = df[df["model_id"] == model_id]
         cand_id = m_df["candidate_id"].iloc[0] if "candidate_id" in m_df else model_id
+
+        # Compute fixed 46-label fold Macro-F1 across exactly 10 folds
         fold_f1s = []
         for f in range(n_folds):
             f_sub = m_df[m_df["fold"] == f]
-            f_f1 = f1_score(f_sub["y_true"], f_sub["y_pred"], average="macro", zero_division=0)
+            f_f1 = f1_score(f_sub["y_true"], f_sub["y_pred"], labels=all_labels, average="macro", zero_division=0)
             fold_f1s.append(float(f_f1))
 
-        oof_f1 = float(f1_score(m_df["y_true"], m_df["y_pred"], average="macro", zero_division=0))
+        macro_f1_mean = float(np.mean(fold_f1s))
+        macro_f1_std = float(np.std(fold_f1s, ddof=0))
+        oof_f1 = float(f1_score(m_df["y_true"], m_df["y_pred"], labels=all_labels, average="macro", zero_division=0))
         oof_acc = float(accuracy_score(m_df["y_true"], m_df["y_pred"]))
+
+        # Gated on mean fold metric, not pooled OOF
+        meets_target = bool(macro_f1_mean >= 0.85)
 
         candidates_summary.append({
             "model_id": model_id,
             "candidate_id": cand_id,
             "rows": len(m_df),
             "n_folds": n_folds,
-            "n_labels": len(all_labels),
-            "macro_f1_mean": float(np.mean(fold_f1s)),
-            "macro_f1_std": float(np.std(fold_f1s, ddof=0)),
+            "n_labels": len(actual_labels),
+            "macro_f1_mean": macro_f1_mean,
+            "macro_f1_std": macro_f1_std,
             "oof_macro_f1": oof_f1,
             "oof_accuracy": oof_acc,
-            "meets_target_085": bool(oof_f1 >= 0.85),
+            "meets_target_085": meets_target,
         })
 
+    status = "audited_verified" if manifest_match else "audit_failed"
+
     return {
-        "status": "audited_verified",
+        "status": status,
         "manifest_path": str(manifest_path.relative_to(repo_root)),
         "oof_path": str(oof_path.relative_to(repo_root)),
         "sha256_raw": raw_sha,
@@ -112,17 +149,16 @@ def audit_baseline_oof(repo_root: Path) -> Dict[str, Any]:
         "total_rows": len(df),
         "n_models": len(models),
         "n_folds": n_folds,
-        "n_labels": len(all_labels),
-        "all_46_labels_present": set(all_labels) == set(STANDARD_INTENTS),
+        "n_labels": len(actual_labels),
+        "all_46_labels_present": set(actual_labels) == set(STANDARD_INTENTS),
         "candidates": candidates_summary,
     }
 
 
 def audit_distilbert_oof(repo_root: Path, output_dir: Path) -> Dict[str, Any]:
-    """Audit stored DistilBERT OOF predictions, recomputing fold metrics and per-class reports."""
+    """Audit stored DistilBERT OOF predictions, recomputing fixed 46-label fold metrics and per-class reports."""
     dist_dir = repo_root / "artifacts" / "training" / "distilbert_cv"
     oof_path = dist_dir / "oof_predictions.csv"
-    fold_metrics_path = dist_dir / "fold_metrics.csv"
 
     if not oof_path.exists():
         raise FileNotFoundError(f"DistilBERT OOF predictions not found at {oof_path}")
@@ -133,16 +169,19 @@ def audit_distilbert_oof(repo_root: Path, output_dir: Path) -> Dict[str, Any]:
 
     df = pd.read_csv(oof_path)
     n_folds = int(df["fold"].nunique())
-    all_labels = sorted(STANDARD_INTENTS)
+    all_labels = sorted(list(STANDARD_INTENTS))
     actual_labels = sorted(df["y_true"].unique())
 
+    # Compute fixed 46-label fold Macro-F1
     fold_f1s = []
     for f in range(n_folds):
         f_sub = df[df["fold"] == f]
-        f_f1 = f1_score(f_sub["y_true"], f_sub["y_pred"], average="macro", zero_division=0)
+        f_f1 = f1_score(f_sub["y_true"], f_sub["y_pred"], labels=all_labels, average="macro", zero_division=0)
         fold_f1s.append(float(f_f1))
 
-    oof_f1 = float(f1_score(df["y_true"], df["y_pred"], average="macro", zero_division=0))
+    macro_f1_mean = float(np.mean(fold_f1s))
+    macro_f1_std = float(np.std(fold_f1s, ddof=0))
+    oof_f1 = float(f1_score(df["y_true"], df["y_pred"], labels=all_labels, average="macro", zero_division=0))
     oof_acc = float(accuracy_score(df["y_true"], df["y_pred"]))
 
     # Generate 46-label per-class metrics
@@ -197,18 +236,77 @@ def audit_distilbert_oof(repo_root: Path, output_dir: Path) -> Dict[str, Any]:
         "n_folds": n_folds,
         "n_labels": len(actual_labels),
         "all_46_labels_present": set(actual_labels) == set(STANDARD_INTENTS),
-        "macro_f1_mean": float(np.mean(fold_f1s)),
-        "macro_f1_std": float(np.std(fold_f1s, ddof=0)),
+        "macro_f1_mean": macro_f1_mean,
+        "macro_f1_std": macro_f1_std,
         "oof_macro_f1": oof_f1,
         "oof_accuracy": oof_acc,
         "core_12_intents_macro_f1": core_macro_f1,
-        "meets_target_085": bool(oof_f1 >= 0.85),
+        "meets_target_085": bool(macro_f1_mean >= 0.85),
         "artifacts_generated": {
             "per_class_metrics_csv": str(per_class_csv_path.name),
             "per_class_metrics_sha256": compute_sha256(per_class_csv_path),
             "confusion_matrix_csv": str(cm_csv_path.name),
             "confusion_matrix_sha256": compute_sha256(cm_csv_path),
         },
+    }
+
+
+def validate_oof_alignment(repo_root: Path) -> Dict[str, Any]:
+    """Validate exactly 10 folds with 46 labels per model, and exact sample_id/fold/y_true alignment baseline vs DistilBERT."""
+    baseline_oof = repo_root / "artifacts" / "training" / "03-11-2026-01" / "oof_predictions.csv"
+    distil_oof = repo_root / "artifacts" / "training" / "distilbert_cv" / "oof_predictions.csv"
+
+    if not baseline_oof.exists() or not distil_oof.exists():
+        raise FileNotFoundError("Baseline or DistilBERT OOF predictions CSV missing for alignment check")
+
+    b_df = pd.read_csv(baseline_oof)
+    d_df = pd.read_csv(distil_oof)
+
+    errors = []
+    # 1. DistilBERT properties
+    if d_df["fold"].nunique() != 10 or set(d_df["fold"].unique()) != set(range(10)):
+        errors.append("DistilBERT does not contain exactly 10 folds (0-9)")
+    if d_df["sample_id"].nunique() != len(d_df):
+        errors.append("DistilBERT contains duplicate sample_ids")
+    if set(d_df["y_true"].unique()) != set(STANDARD_INTENTS):
+        errors.append("DistilBERT y_true does not cover all 46 standard intents")
+
+    d_sorted = d_df.sort_values("sample_id").reset_index(drop=True)
+    models = sorted(b_df["model_id"].unique())
+
+    # 2. Check each baseline model
+    for m in models:
+        m_df = b_df[b_df["model_id"] == m]
+        if m_df["fold"].nunique() != 10 or set(m_df["fold"].unique()) != set(range(10)):
+            errors.append(f"Model {m} does not contain exactly 10 folds (0-9)")
+        if m_df["sample_id"].nunique() != len(m_df):
+            errors.append(f"Model {m} contains duplicate sample_ids")
+        if len(m_df) != len(d_df):
+            errors.append(f"Model {m} row count {len(m_df)} != DistilBERT {len(d_df)}")
+        if set(m_df["y_true"].unique()) != set(STANDARD_INTENTS):
+            errors.append(f"Model {m} y_true does not cover all 46 standard intents")
+
+        m_sorted = m_df.sort_values("sample_id").reset_index(drop=True)
+        if not (m_sorted["sample_id"] == d_sorted["sample_id"]).all():
+            errors.append(f"Model {m} sample_id alignment mismatch with DistilBERT")
+        if not (m_sorted["fold"] == d_sorted["fold"]).all():
+            errors.append(f"Model {m} fold assignment mismatch with DistilBERT")
+        if not (m_sorted["y_true"] == d_sorted["y_true"]).all():
+            errors.append(f"Model {m} y_true ground-truth mismatch with DistilBERT")
+
+    is_aligned = (len(errors) == 0)
+    if not is_aligned:
+        raise EvaluationError(f"OOF alignment validation failed: {'; '.join(errors)}")
+
+    return {
+        "status": "alignment_verified",
+        "aligned": True,
+        "total_samples": len(d_sorted),
+        "n_models": len(models) + 1,
+        "models_verified": models + ["distilbert"],
+        "n_folds": 10,
+        "n_labels": 46,
+        "errors": [],
     }
 
 
@@ -226,7 +324,6 @@ def audit_ml_robustness(repo_root: Path) -> Dict[str, Any]:
     noise_cases = [json.loads(line) for line in noise_path.read_text(encoding="utf-8").splitlines() if line.strip()]
     oos_cases = [json.loads(line) for line in oos_path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
-    # Load evaluated results from autoeval report if available, or compute from IntentModel
     eval_report_path = repo_root / "artifacts" / "evaluation" / "autoeval" / "20261106-012053-local" / "report.json"
     if eval_report_path.exists():
         report_data = json.loads(eval_report_path.read_text(encoding="utf-8"))
@@ -236,7 +333,6 @@ def audit_ml_robustness(repo_root: Path) -> Dict[str, Any]:
         noise_metrics = {}
         oos_metrics = {}
 
-    # Extract slice results
     clean_meta = noise_metrics.get("clean", {})
     casual_meta = noise_metrics.get("casual", {})
     typo_meta = noise_metrics.get("typo", {})
@@ -245,10 +341,7 @@ def audit_ml_robustness(repo_root: Path) -> Dict[str, Any]:
     clean_acc = clean_meta.get("accuracy", 0.7738)
     clean_correct = round(clean_n * clean_acc)  # 65 correct clean queries
 
-    # Exact paired conditional accuracy denominators supported by actual predictions:
-    # Denominator must strictly be the number of cases where clean source query was correct
     casual_paired_denom = clean_correct
-    # From actual evaluations, casual preserves 59/65 correct pairs
     casual_paired_num = round(casual_meta.get("accuracy", 0.7024) * 84)  # 59
     casual_paired_cond_acc = casual_paired_num / casual_paired_denom if casual_paired_denom > 0 else None
 
@@ -310,6 +403,7 @@ def render_markdown_report(audit: Dict[str, Any]) -> str:
     baseline = audit["baseline_audit"]
     dist = audit["distilbert_audit"]
     rob = audit["robustness_audit"]
+    align = audit.get("alignment_audit", {})
 
     lines = [
         "# SupportIQ Backend Evaluation — ML Provenance & Robustness Audit",
@@ -318,6 +412,7 @@ def render_markdown_report(audit: Dict[str, Any]) -> str:
         f"- **Timestamp:** `{meta['timestamp']}`",
         f"- **Repository HEAD:** `{meta.get('git_commit', 'unknown')}`",
         f"- **Audit Scope:** Task B3 (pipeline/evaluation/)",
+        f"- **10-Fold Alignment Check:** **{'VERIFIED' if align.get('aligned') else 'FAILED'}** ({align.get('total_samples', 0)} samples across 4 models)",
         "",
         "> [!IMPORTANT]",
         "> **Provenance Transparency:**",
@@ -325,9 +420,9 @@ def render_markdown_report(audit: Dict[str, Any]) -> str:
         "> 2. DistilBERT OOF metrics are recomputed from stored OOF predictions. Checkpoint manifests for individual folds are unverified in repository; this audit does NOT claim cached OOF as a fresh training run.",
         "> 3. Robustness slice metrics report exact denominators supported by verified predictions.",
         "",
-        "## 1. 10-Fold Cross-Validation Summary (46 Labels, 37,911 Samples)",
+        "## 1. 10-Fold Cross-Validation Summary (Fixed 46 Labels, 37,911 Samples)",
         "",
-        "| Model | Candidate / Params | Mean Fold Macro-F1 | Std (ddof=0) | Overall OOF Macro-F1 | OOF Accuracy | Gate (>= 0.85) |",
+        "| Model | Candidate / Params | Mean Fold Macro-F1 | Std (ddof=0) | Overall OOF Macro-F1 | OOF Accuracy | Gate (Mean Fold >= 0.85) |",
         "|---|---|---:|---:|---:|---:|:---:|",
     ]
 
@@ -361,7 +456,7 @@ def render_markdown_report(audit: Dict[str, Any]) -> str:
         "",
         "| Slice | Total Cases | Accuracy | Macro-F1 | F1 Drop vs Clean | Paired Denominator | Paired Conditional Accuracy |",
         "|---|---:|---:|---:|---:|---:|---:|",
-    ] )
+    ])
 
     ns = rob["noise_suite"]["slices"]
     for sname, sdata in ns.items():
@@ -403,46 +498,50 @@ def render_markdown_report(audit: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def run_ml_audit(repo_root: Path, output_dir: Path) -> Dict[str, Any]:
-    """Execute complete ML provenance and robustness audit and persist outputs."""
-    output_dir.mkdir(parents=True, exist_ok=True)
+def run_ml_audit(repo_root: Path, base_output_dir: Path) -> Dict[str, Any]:
+    """Execute complete ML provenance and robustness audit and persist outputs into a unique run directory."""
+    audit_run_id = f"ml-audit-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
+    run_dir = base_output_dir / "runs" / audit_run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
 
     baseline_audit = audit_baseline_oof(repo_root)
-    distilbert_audit = audit_distilbert_oof(repo_root, output_dir)
+    distilbert_audit = audit_distilbert_oof(repo_root, run_dir)
+    alignment_audit = validate_oof_alignment(repo_root)
     robustness_audit = audit_ml_robustness(repo_root)
 
-    audit_run_id = f"ml-audit-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
     audit_data = {
         "meta": {
             "audit_run_id": audit_run_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
+            "git_commit": get_git_commit_hash(),
             "repo_root": str(repo_root.resolve()),
         },
         "baseline_audit": baseline_audit,
         "distilbert_audit": distilbert_audit,
+        "alignment_audit": alignment_audit,
         "robustness_audit": robustness_audit,
     }
 
     # Save JSON report
-    json_path = output_dir / "ml_provenance_audit.json"
+    json_path = run_dir / "ml_provenance_audit.json"
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(audit_data, f, indent=2, ensure_ascii=False)
 
     # Save Markdown report
     md_content = render_markdown_report(audit_data)
-    md_path = output_dir / "ml_provenance_audit.md"
+    md_path = run_dir / "ml_provenance_audit.md"
     md_path.write_text(md_content, encoding="utf-8")
 
     # Save Manifest
     manifest_files = {}
-    for p in output_dir.iterdir():
+    for p in run_dir.iterdir():
         if p.is_file() and p.name != "manifest.json":
             manifest_files[p.name] = {
                 "path": p.name,
                 "sha256": compute_sha256(p),
             }
 
-    manifest_path = output_dir / "manifest.json"
+    manifest_path = run_dir / "manifest.json"
     manifest_data = {
         "audit_run_id": audit_run_id,
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -452,5 +551,18 @@ def run_ml_audit(repo_root: Path, output_dir: Path) -> Dict[str, Any]:
     }
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest_data, f, indent=2, ensure_ascii=False)
+
+    # Update latest_audit pointer without overwriting old artifacts
+    latest_pointer = base_output_dir / "latest_audit.json"
+    latest_data = {
+        "latest_audit_id": audit_run_id,
+        "run_dir": str(run_dir),
+        "timestamp": audit_data["meta"]["timestamp"],
+        "distilbert_mean_macro_f1": distilbert_audit["macro_f1_mean"],
+        "baseline_svm_mean_macro_f1": baseline_audit["candidates"][0]["macro_f1_mean"],
+        "alignment_verified": alignment_audit["aligned"],
+    }
+    with open(latest_pointer, "w", encoding="utf-8") as f:
+        json.dump(latest_data, f, indent=2, ensure_ascii=False)
 
     return audit_data
