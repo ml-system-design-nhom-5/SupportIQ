@@ -193,6 +193,8 @@ export type { ButtonLinkProps } from "@/design-system/primitives/button-link";
 export { ButtonLink } from "@/design-system/primitives/button-link";
 export type { CheckboxProps } from "@/design-system/primitives/checkbox";
 export { Checkbox } from "@/design-system/primitives/checkbox";
+export type { ClusterProps } from "@/design-system/primitives/cluster";
+export { Cluster } from "@/design-system/primitives/cluster";
 export type {
   ConfirmDialogProps,
   ConfirmDialogText,

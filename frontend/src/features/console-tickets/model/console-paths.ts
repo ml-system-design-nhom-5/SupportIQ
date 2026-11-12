@@ -10,11 +10,14 @@ import { rootPathByArea } from "@/features/session";
 /** The search parameter that holds the queue status. */
 export const QUEUE_STATUS_PARAMETER = "status";
 
-/** The route of the ticket workspace, relative to the console root. */
-export const TICKET_ROUTE = "tickets/:ticketId";
+/** The path segment of the ticket workspaces under the console root. */
+const TICKETS_SEGMENT = "tickets";
 
 /** The route parameter of the ticket ID. */
 export const TICKET_ID_PARAMETER = "ticketId";
+
+/** The route of the ticket workspace, relative to the console root. */
+export const TICKET_ROUTE = `${TICKETS_SEGMENT}/:${TICKET_ID_PARAMETER}`;
 
 /**
  * Build the search of a queue.
@@ -36,5 +39,5 @@ export function buildQueueSearch(status: QueueStatus): string {
  * @returns For example `/console/tickets/TCK-1042`.
  */
 export function buildTicketPath(ticketId: string, status: QueueStatus): string {
-  return `${rootPathByArea.console}/tickets/${encodeURIComponent(ticketId)}${buildQueueSearch(status)}`;
+  return `${rootPathByArea.console}/${TICKETS_SEGMENT}/${encodeURIComponent(ticketId)}${buildQueueSearch(status)}`;
 }

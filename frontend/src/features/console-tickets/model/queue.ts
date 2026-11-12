@@ -5,9 +5,11 @@
  * offers the statuses of the role (UI-40).
  */
 import { presentationByConsoleTicketStatus } from "@/design-system";
+import {
+  type KnownTicketStatus,
+  knownTicketStatuses,
+} from "@/features/console-tickets/model/ticket-status";
 import type { AccountRole } from "@/features/session";
-
-const everyQueueStatus = ["open", "awaiting_approval", "escalated", "closed"] as const;
 
 const staffQueueStatuses: readonly QueueStatus[] = ["open"];
 
@@ -19,7 +21,7 @@ const emptyQueueTextByStatus: Readonly<Record<QueueStatus, string>> = {
 };
 
 /** The status of the tickets of a queue (`ConsoleTicketStatus` of the contract). */
-export type QueueStatus = (typeof everyQueueStatus)[number];
+export type QueueStatus = KnownTicketStatus;
 
 /**
  * List the queues that a role may open.
@@ -28,7 +30,7 @@ export type QueueStatus = (typeof everyQueueStatus)[number];
  * @returns Every status for a manager; Open for staff and any other role.
  */
 export function getQueueStatuses(role: AccountRole): readonly QueueStatus[] {
-  return role === "manager" ? everyQueueStatus : staffQueueStatuses;
+  return role === "manager" ? knownTicketStatuses : staffQueueStatuses;
 }
 
 /**

@@ -7,29 +7,20 @@
 import { PenLine, Sparkles } from "lucide-react";
 
 import {
-  type AiReasonCodeName,
+  Cluster,
   Panel,
   PanelHeader,
   PanelSection,
   presentationByAiReasonCode,
   presentationByAiStatus,
-  Stack,
   StatusBadge,
   Text,
 } from "@/design-system";
-
-/** What the AI decided instead of a draft. */
-type NoDraftOutcome =
-  | { readonly kind: "choose_intent" }
-  | {
-      readonly kind: "no_draft";
-      readonly status: "abstained" | "escalation_recommended";
-      readonly reasonCodes: readonly AiReasonCodeName[];
-    };
+import type { NoDraftReplyState } from "@/features/console-tickets/model/workspace-state";
 
 /** Props of {@link NoDraftPanel}. */
 type NoDraftPanelProps = {
-  readonly outcome: NoDraftOutcome;
+  readonly outcome: NoDraftReplyState;
 };
 
 /**
@@ -64,11 +55,11 @@ export function NoDraftPanel({ outcome }: NoDraftPanelProps) {
             ? "The AI recommends an escalation. You decide whether a manager is needed."
             : "The AI made no draft for this ticket."}
         </Text>
-        <Stack direction="row" gap="2" shouldWrap>
+        <Cluster>
           {outcome.reasonCodes.map((reasonCode) => (
             <StatusBadge key={reasonCode} presentation={presentationByAiReasonCode[reasonCode]} />
           ))}
-        </Stack>
+        </Cluster>
       </PanelSection>
     </Panel>
   );

@@ -96,16 +96,37 @@ export const Closed: Story = { decorators: withWorkspace(workspaceExample("close
 export const Error: Story = {
   decorators: withWorkspace(exampleAnswer(500, "problems", "internal-error")),
 };
-export const NotFound: Story = {
-  decorators: withWorkspace(exampleAnswer(404, "problems", "not-found")),
-};
 export const PermissionDenied: Story = {
   decorators: withWorkspace(exampleAnswer(403, "problems", "forbidden-role")),
+};
+export const PermissionDeniedForAMissingTicket: Story = {
+  decorators: withWorkspace(exampleAnswer(404, "problems", "not-found")),
 };
 export const ViewNotRecorded: Story = {
   decorators: withWorkspace(workspaceExample("draft-ready"), {
     view: [exampleAnswer(503, "problems", "not-ready")],
   }),
+};
+export const ViewMayHaveBeenRecorded: Story = {
+  decorators: withWorkspace(workspaceExample("draft-ready"), { view: [{ kind: "network_error" }] }),
+};
+export const UpdateFailed: Story = {
+  decorators: [
+    withFakeBackend((backend) => {
+      answerConsole(backend, {
+        workspace: [
+          workspaceWithSuggestion("draft-ready", { draft: { draft_status: "pending" } }),
+          { kind: "network_error" },
+        ],
+      });
+    }),
+  ],
+  play: async ({ canvasElement }) => {
+    // The partial ticket polls; its next load fails, and the ticket stays on screen.
+    await expect(
+      await within(canvasElement).findByRole("alert", undefined, { timeout: 5_000 }),
+    ).toHaveTextContent("This ticket could not be updated.");
+  },
 };
 export const KbDocumentOpen: Story = {
   decorators: withWorkspace(workspaceExample("draft-ready")),

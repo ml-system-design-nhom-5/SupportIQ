@@ -23,6 +23,12 @@ export type ReplyAreaState =
       readonly reasonCodes: readonly AiReasonCodeName[];
     };
 
+/** The reply area when the AI made no draft: the choice of an intent, or the reason codes. */
+export type NoDraftReplyState = Extract<
+  ReplyAreaState,
+  { readonly kind: "choose_intent" | "no_draft" }
+>;
+
 /** The AI sidebar. */
 export type SidebarState =
   | { readonly kind: "manual_mode" }

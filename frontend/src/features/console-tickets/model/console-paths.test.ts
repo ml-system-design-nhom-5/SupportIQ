@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { buildQueueSearch, buildTicketPath } from "@/features/console-tickets/model/console-paths";
+import {
+  buildQueueSearch,
+  buildTicketPath,
+  TICKET_ROUTE,
+} from "@/features/console-tickets/model/console-paths";
 
 describe("buildQueueSearch", () => {
   it.each([
@@ -21,5 +25,11 @@ describe("buildTicketPath", () => {
 
   it("encodes a ticket ID that is not safe in a path (CON-15)", () => {
     expect(buildTicketPath("TCK/1 2", "open")).toBe("/console/tickets/TCK%2F1%202");
+  });
+});
+
+describe("TICKET_ROUTE", () => {
+  it("matches the paths that buildTicketPath builds, under the console root", () => {
+    expect(TICKET_ROUTE).toBe("tickets/:ticketId");
   });
 });

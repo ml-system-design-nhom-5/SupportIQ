@@ -133,6 +133,35 @@ function getKbCitationKey(citation: Citation | undefined): string | undefined {
     : undefined;
 }
 
+/** A cited or retrieved passage of a document version. */
+export type SourcePassage = {
+  readonly documentId: string;
+  readonly version: string;
+  readonly snippet: string;
+};
+
+/**
+ * Describe the document version that staff open in the side sheet, from a source of the Sources
+ * panel or from a KB marker of the draft. The passage is highlighted in the full text.
+ *
+ * @param passage - The retrieved passage of a source, or the cited passage of a marker.
+ * @param source - The source of the version in the Sources panel; undefined when the analysis did
+ *   not return the version.
+ * @returns The selection, titled with the document ID when the source is unknown.
+ */
+export function toSourceSelection(
+  passage: SourcePassage,
+  source: Source | undefined,
+): SourceSelection {
+  return {
+    documentId: passage.documentId,
+    version: passage.version,
+    title: source?.title ?? passage.documentId,
+    highlight: passage.snippet,
+    ...(source === undefined ? {} : { source }),
+  };
+}
+
 /** A source that staff opened in the side sheet. */
 export type SourceSelection = {
   readonly documentId: string;

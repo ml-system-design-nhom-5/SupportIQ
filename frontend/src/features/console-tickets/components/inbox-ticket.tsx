@@ -2,10 +2,14 @@
  * One ticket of the inbox, from its view model (console UI design, Inbox).
  */
 import {
+  authorityRequiredPresentation,
+  Cluster,
   ConfidenceMeter,
   InboxItem,
   presentationByAiStatus,
   presentationByConsoleTicketStatus,
+  Stack,
+  StatusBadge,
   type StatusPresentation,
   Text,
 } from "@/design-system";
@@ -35,20 +39,25 @@ export function InboxTicket({ ticket, queueStatus }: InboxTicketProps) {
       createdAt={ticket.createdAt}
       customerName={ticket.customerName}
       excerpt={ticket.excerpt}
-      intentLine={
-        intent.kind === "predicted" ? (
+      {...(ticket.openedAt === undefined ? {} : { openedAt: ticket.openedAt })}
+    >
+      <Stack direction="row" gap="2" align="center">
+        {intent.kind === "predicted" ? (
           <>
             {intent.name}
             <ConfidenceMeter band={intent.band} probability={intent.probability} />
           </>
         ) : (
           <Text tone="muted">{intent.text}</Text>
-        )
-      }
-      status={getBadgePresentation(ticket.badge)}
-      isAuthorityRequired={ticket.isAuthorityRequired}
-      {...(ticket.openedAt === undefined ? {} : { openedAt: ticket.openedAt })}
-    />
+        )}
+      </Stack>
+      <Cluster>
+        <StatusBadge presentation={getBadgePresentation(ticket.badge)} />
+        {ticket.isAuthorityRequired ? (
+          <StatusBadge presentation={authorityRequiredPresentation} />
+        ) : null}
+      </Cluster>
+    </InboxItem>
   );
 }
 

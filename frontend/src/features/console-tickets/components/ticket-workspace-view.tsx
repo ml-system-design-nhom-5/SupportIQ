@@ -14,13 +14,14 @@ import { CustomerMessagePanel } from "@/features/console-tickets/components/cust
 import { IntentSection } from "@/features/console-tickets/components/intent-section";
 import { KbDocumentSheet } from "@/features/console-tickets/components/kb-document-sheet";
 import { ReplyArea } from "@/features/console-tickets/components/reply-area";
+import type { OrderPopoverState } from "@/features/console-tickets/components/ticket-order-chip";
 import { WorkspaceBanners } from "@/features/console-tickets/components/workspace-banners";
 import { WorkspaceHeader } from "@/features/console-tickets/components/workspace-header";
-import type { Source, SourceSelection } from "@/features/console-tickets/model/sources";
+import { type SourceSelection, toSourceSelection } from "@/features/console-tickets/model/sources";
 import type { TicketWorkspace } from "@/features/console-tickets/model/workspace";
 import { buildWorkspaceRegions } from "@/features/console-tickets/model/workspace-regions";
 
-/** The ID of the ticket heading, which takes the focus when a closed sheet's opener is gone. */
+/** The ID of the ticket heading, which takes the focus when the opener of a sheet or popover is gone. */
 const WORKSPACE_HEADING_ID = "ticket-workspace-heading";
 
 /** A source open in the side sheet, and the element that opened it. */
@@ -49,13 +50,17 @@ export function TicketWorkspaceView({
   viewFailure,
   refreshFailure,
 }: TicketWorkspaceViewProps) {
-  const [isOrderOpen, setIsOrderOpen] = useState(false);
+  const [orderPopover, setOrderPopover] = useState<OrderPopoverState>({ isOpen: false });
   const [openedSource, setOpenedSource] = useState<OpenedSource | undefined>(undefined);
   const regions = buildWorkspaceRegions(workspace);
   const hasBanners =
     workspace.isAuthorityRequired || viewFailure !== undefined || refreshFailure !== undefined;
   const openSource = (selection: SourceSelection, opener: HTMLElement) => {
     setOpenedSource({ selection, opener });
+  };
+  // The chip opens the popover with the focus returning to it; a closing keeps where it returns.
+  const changeOrderOpen = (isOpen: boolean) => {
+    setOrderPopover((current) => (isOpen ? { isOpen } : { ...current, isOpen }));
   };
   return (
     <>
@@ -65,8 +70,8 @@ export function TicketWorkspaceView({
           <WorkspaceHeader
             headingId={WORKSPACE_HEADING_ID}
             workspace={workspace}
-            isOrderOpen={isOrderOpen}
-            onOrderOpenChange={setIsOrderOpen}
+            orderPopover={orderPopover}
+            onOrderOpenChange={changeOrderOpen}
           />
         }
         banners={
@@ -95,8 +100,11 @@ export function TicketWorkspaceView({
                 sourceByKey: new Map(regions.sources.map((source) => [source.key, source])),
                 orderId: workspace.order?.orderId,
                 onOpenSource: openSource,
-                onOpenOrder: () => {
-                  setIsOrderOpen(true);
+                onOpenOrder: (opener) => {
+                  setOrderPopover({
+                    isOpen: true,
+                    returnFocus: { opener, fallbackId: WORKSPACE_HEADING_ID },
+                  });
                 },
               }}
             />
@@ -107,7 +115,7 @@ export function TicketWorkspaceView({
             state={regions.sidebar}
             sources={regions.sources}
             onOpenSource={(source, opener) => {
-              openSource(toSourceSelection(source), opener);
+              openSource(toSourceSelection(source, source), opener);
             }}
           />
         }
@@ -123,20 +131,4 @@ export function TicketWorkspaceView({
       )}
     </>
   );
-}
-
-/**
- * Describe a source of the Sources panel that staff open: the retrieved passage is highlighted.
- *
- * @param source - The source.
- * @returns The selection.
- */
-function toSourceSelection(source: Source): SourceSelection {
-  return {
-    documentId: source.documentId,
-    version: source.version,
-    title: source.title,
-    highlight: source.snippet,
-    source,
-  };
 }

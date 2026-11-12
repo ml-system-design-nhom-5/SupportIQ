@@ -24,7 +24,6 @@ const meta = {
         orderId="ORD-20931"
         summary="Delivered · Refund under review"
         otherOrderCount={0}
-        popoverLabel="Order ORD-20931"
         isOpen={false}
         onOpenChange={fn()}
       >

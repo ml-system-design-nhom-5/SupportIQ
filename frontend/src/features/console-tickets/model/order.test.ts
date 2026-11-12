@@ -81,9 +81,27 @@ describe("toOrder", () => {
 
 describe("summarizeOrder", () => {
   it.each([
-    ["the ticket's order", toTicketOrder(readTicketOrder()), "Delivered · Refund under review"],
-    ["an order without a refund", toOrder(readOtherOrder()), "Shipped · No refund"],
-  ])("summarizes %s", (_case, order, summary) => {
+    [
+      "names the refund of the ticket's order, and its shipment once, with the order status",
+      toTicketOrder(readTicketOrder()),
+      "Delivered · Refund under review",
+    ],
+    [
+      "adds a shipment status that differs from the order status",
+      toOrder(readOtherOrder()),
+      "Shipped · In transit",
+    ],
+    [
+      "adds a delayed shipment",
+      toOrder({ ...readOtherOrder(), shipment_status: "delayed" }),
+      "Shipped · Delayed",
+    ],
+    [
+      "names only the order status of an order without a shipment or a refund",
+      toOrder(withoutMembers(readOtherOrder(), ["shipment_status"])),
+      "Shipped",
+    ],
+  ])("%s", (_case, order, summary) => {
     expect(summarizeOrder(order)).toBe(summary);
   });
 });

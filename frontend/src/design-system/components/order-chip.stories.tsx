@@ -23,7 +23,6 @@ const meta = {
     orderId: "ORD-20931",
     summary: "Delivered · Refund under review",
     otherOrderCount: 0,
-    popoverLabel: "Order ORD-20931",
     isOpen: false,
     onOpenChange: fn(),
     children: <OrderRecord orderId="ORD-20931" facts={ticketOrderFacts} />,
@@ -44,7 +43,7 @@ export const OneOrderOpen: Story = {
   },
 };
 export const SeveralOrdersOpen: Story = {
-  args: { otherOrderCount: 2, popoverLabel: "Orders of this customer", isOpen: true },
+  args: { otherOrderCount: 2, isOpen: true },
   render: (args) => <SeveralOrders {...args} />,
   play: async () => {
     const popover = await screen.findByRole("dialog", { name: "Orders of this customer" });
@@ -69,9 +68,21 @@ function SeveralOrders(props: Parameters<typeof OrderChip>[0]) {
     <OrderChip {...props}>
       <CustomerOrders
         orders={[
-          { orderId: "ORD-20931", summary: "Delivered · Refund under review", isTicketOrder: true },
-          { orderId: "ORD-20874", summary: "Shipped · No refund", isTicketOrder: false },
-          { orderId: "ORD-20655", summary: "Delivered · No refund", isTicketOrder: false },
+          {
+            orderId: "ORD-20931",
+            summary: "Delivered · Refund under review",
+            isTicketOrder: true,
+          },
+          {
+            orderId: "ORD-20874",
+            summary: "Shipped · In transit",
+            isTicketOrder: false,
+          },
+          {
+            orderId: "ORD-20655",
+            summary: "Delivered",
+            isTicketOrder: false,
+          },
         ]}
         selectedOrderId={selectedOrderId}
         onSelect={setSelectedOrderId}

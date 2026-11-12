@@ -8,7 +8,6 @@ import { IntentChoice } from "@/design-system/components/intent-choice";
 import { IntentStrip } from "@/design-system/components/intent-strip";
 import { KbDocumentText } from "@/design-system/components/kb-document-text";
 import { StaffNote } from "@/design-system/components/staff-note";
-import { presentationByAiStatus } from "@/design-system/components/status-presentations";
 import { Tag } from "@/design-system/components/tag";
 import { WarningList } from "@/design-system/components/warning-list";
 import { renderUi } from "@/test/render-app";
@@ -34,7 +33,7 @@ describe("Tag", () => {
 });
 
 describe("InboxItem", () => {
-  it("links to the ticket and shows its facts, the badges, and who opened it", () => {
+  it("links to the ticket and shows its facts, its details, and who opened it", () => {
     renderUi(
       <ul>
         <InboxItem
@@ -43,22 +42,21 @@ describe("InboxItem", () => {
           createdAt="2026-11-05T08:42:00Z"
           customerName="Linh Tran"
           excerpt="Where is my refund?"
-          intentLine="Refund status"
-          status={presentationByAiStatus.draft_ready}
-          isAuthorityRequired
           openedAt="2026-11-05T08:56:00Z"
-        />
+        >
+          Refund status
+        </InboxItem>
       </ul>,
     );
 
     const link = screen.getByRole("link");
     expect(link).toHaveAttribute("href", "/console/tickets/TCK-1042");
     expect(link).toHaveTextContent(
-      "TCK-104218 minutes agoLinh TranWhere is my refund?Refund statusDraft readyAuthority requiredOpened 4 minutes ago",
+      "TCK-104218 minutes agoLinh TranWhere is my refund?Refund statusOpened 4 minutes ago",
     );
   });
 
-  it("leaves out the authority flag and the opening line when they do not apply", () => {
+  it("leaves out the opening line until a person opened the ticket", () => {
     renderUi(
       <ul>
         <InboxItem
@@ -67,14 +65,12 @@ describe("InboxItem", () => {
           createdAt="2026-11-05T08:42:00Z"
           customerName="An Vo"
           excerpt="Hello"
-          intentLine="No analysis"
-          status={presentationByAiStatus.unavailable}
-          isAuthorityRequired={false}
-        />
+        >
+          No analysis
+        </InboxItem>
       </ul>,
     );
 
-    expect(screen.queryByText("Authority required")).not.toBeInTheDocument();
     expect(screen.queryByText(/Opened/)).not.toBeInTheDocument();
   });
 });

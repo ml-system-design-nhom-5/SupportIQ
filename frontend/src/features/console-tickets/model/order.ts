@@ -114,14 +114,28 @@ export function toOrder(order: ConsoleOtherOrderContract): Order {
 }
 
 /**
- * Summarize an order on the chip and in the order list: its status and its refund status, which
- * stay visible without a click (console UI design, placement rule 8).
+ * Summarize an order on the chip and in the order list, so its statuses stay visible without a
+ * click (console UI design, Order chip and placement rule 8). The summary is short enough for the
+ * one-line ticket header at 1280 px: the order status, then the shipment status only when its label
+ * differs from the order status, then the refund status only when a refund was requested
+ * (order-multiple.png, state-ai-unavailable.png).
  *
  * @param order - An order.
- * @returns For example "Delivered · Refund under review".
+ * @returns For example "Delivered · Refund under review", "Shipped · Delayed", or "Placed".
  */
 export function summarizeOrder(order: Order): string {
-  return `${presentationByOrderStatus[order.status].label} · ${getRefundLabel(order)}`;
+  const orderLabel = presentationByOrderStatus[order.status].label;
+  const shipmentLabel =
+    order.shipmentStatus === undefined
+      ? orderLabel
+      : presentationByShipmentStatus[order.shipmentStatus].label;
+  return [
+    orderLabel,
+    ...(shipmentLabel === orderLabel ? [] : [shipmentLabel]),
+    ...(order.refundStatus === undefined
+      ? []
+      : [presentationByRefundStatus[order.refundStatus].label]),
+  ].join(" · ");
 }
 
 /**

@@ -24,7 +24,6 @@ function ChipWithState({ otherOrderCount }: { readonly otherOrderCount: number }
       orderId="ORD-20931"
       summary="Delivered · Refund under review"
       otherOrderCount={otherOrderCount}
-      popoverLabel="Order ORD-20931"
       isOpen={isOpen}
       onOpenChange={setIsOpen}
     >
@@ -33,12 +32,51 @@ function ChipWithState({ otherOrderCount }: { readonly otherOrderCount: number }
   );
 }
 
+/**
+ * Render the order chip with a button that opens it, as an order citation marker does.
+ *
+ * @returns The chip and the button.
+ */
+function ChipOpenedFromAnotherControl() {
+  const [popover, setPopover] = useState<{ isOpen: boolean; opener?: HTMLElement }>({
+    isOpen: false,
+  });
+  return (
+    <>
+      <button
+        type="button"
+        onClick={(event) => {
+          setPopover({ isOpen: true, opener: event.currentTarget });
+        }}
+      >
+        Open the order
+      </button>
+      <OrderChip
+        orderId="ORD-20931"
+        summary="Delivered · Refund under review"
+        otherOrderCount={0}
+        isOpen={popover.isOpen}
+        onOpenChange={(isOpen) => {
+          setPopover((current) => ({ ...current, isOpen }));
+        }}
+        {...(popover.opener === undefined
+          ? {}
+          : { returnFocus: { opener: popover.opener, fallbackId: "heading" } })}
+      >
+        <OrderRecord orderId="ORD-20931" facts={[{ term: "Order", value: "Delivered" }]} />
+      </OrderChip>
+    </>
+  );
+}
+
 describe("OrderChip", () => {
   it("shows the order and its statuses, and opens the order from order records", async () => {
     const { user } = renderUi(<ChipWithState otherOrderCount={0} />);
 
     await user.click(
-      screen.getByRole("button", { name: /ORD-20931 Delivered · Refund under review/ }),
+      screen.getByRole("button", {
+        name: /ORD-20931 Delivered · Refund under review/,
+      }),
     );
 
     const popover = await screen.findByRole("dialog", { name: "Order ORD-20931" });
@@ -68,6 +106,19 @@ describe("OrderChip", () => {
     });
     expect(chip).toHaveFocus();
   });
+
+  it("returns the focus to the control that opened it (UI-30)", async () => {
+    const { user } = renderUi(<ChipOpenedFromAnotherControl />);
+    const opener = screen.getByRole("button", { name: "Open the order" });
+    await user.click(opener);
+    await screen.findByRole("dialog", { name: "Order ORD-20931" });
+
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(opener).toHaveFocus();
+    });
+  });
 });
 
 describe("CustomerOrders", () => {
@@ -76,8 +127,16 @@ describe("CustomerOrders", () => {
     const { user } = renderUi(
       <CustomerOrders
         orders={[
-          { orderId: "ORD-1", summary: "Delivered · No refund", isTicketOrder: true },
-          { orderId: "ORD-2", summary: "Shipped · No refund", isTicketOrder: false },
+          {
+            orderId: "ORD-1",
+            summary: "Delivered",
+            isTicketOrder: true,
+          },
+          {
+            orderId: "ORD-2",
+            summary: "Shipped · In transit",
+            isTicketOrder: false,
+          },
         ]}
         selectedOrderId="ORD-1"
         onSelect={handleSelect}

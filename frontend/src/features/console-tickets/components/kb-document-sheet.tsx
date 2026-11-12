@@ -6,6 +6,7 @@
 import { FileSearch, FileText } from "lucide-react";
 
 import {
+  Cluster,
   DescriptionList,
   type DialogReturnFocus,
   Identifier,
@@ -47,12 +48,12 @@ export function KbDocumentSheet({ selection, returnFocus, onClose }: KbDocumentS
       returnFocus={returnFocus}
       onClose={onClose}
     >
-      <Stack direction="row" gap="2" align="center" shouldWrap>
+      <Cluster>
         <Identifier size="xs">{`${selection.documentId} · ${selection.version}`}</Identifier>
         {selection.source === undefined ? null : (
           <StatusBadge presentation={presentationByDocumentValidity[selection.source.validity]} />
         )}
-      </Stack>
+      </Cluster>
       {document === undefined ? (
         <DocumentState
           failure={failure}

@@ -98,19 +98,14 @@ describe("The workspace of a ready draft", () => {
   });
 
   it("shows a staff note for staff only, marked as AI text (UI-21)", async () => {
-    const main = await openWorkspace(
-      workspaceWithSuggestion("draft-ready", {
-        draft: {
-          ...readSuggestionPart("draft-ready", "draft"),
-          staff_note: "The customer has not given a return tracking number.",
-        },
-      }),
-    );
+    const main = await openWorkspace(workspaceExample("abstained-low-confidence"));
 
     const note = getPanel(main, "For staff only");
     expect(note).toHaveTextContent("AI note");
-    expect(note).toHaveTextContent("The customer has not given a return tracking number.");
-    expect(getPanel(main, "AI draft")).not.toHaveTextContent("return tracking number");
+    expect(note).toHaveTextContent(
+      "The intent is uncertain. Confirm the intent or choose another to get a draft.",
+    );
+    expect(getPanel(main, "AI draft")).not.toHaveTextContent("The intent is uncertain");
   });
 });
 

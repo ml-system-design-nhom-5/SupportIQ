@@ -1,6 +1,6 @@
 /**
- * Read a console queue page by page (`listConsoleTickets`, CON-14). The queue loads again every
- * {@link INBOX_POLLING_INTERVAL_MS} while the inbox is open (console UI design, Inbox).
+ * Read a console queue page by page (`listConsoleTickets`, CON-14). Once it loaded, the queue loads
+ * again at the inbox polling interval while the inbox is open (console UI design, Inbox).
  */
 import {
   type InfiniteData,
@@ -11,7 +11,7 @@ import {
 import { type BackendClient, useBackendClient } from "@/api/client";
 import { requestData } from "@/features/backend-requests";
 import { consoleQueryKeys } from "@/features/console-tickets/api/console-query-keys";
-import { INBOX_POLLING_INTERVAL_MS } from "@/features/console-tickets/model/polling";
+import { getInboxPollingIntervalMs } from "@/features/console-tickets/model/polling";
 import type { QueueStatus } from "@/features/console-tickets/model/queue";
 import {
   type TicketSummaryPage,
@@ -45,7 +45,7 @@ export function useTicketQueue(status: QueueStatus): TicketQueueQuery {
     queryFn: ({ pageParam, signal }: { pageParam: string | undefined; signal: AbortSignal }) =>
       fetchQueuePage({ client, status, cursor: pageParam, signal }),
     getNextPageParam: (lastPage) => lastPage.nextCursor,
-    refetchInterval: INBOX_POLLING_INTERVAL_MS,
+    refetchInterval: (query) => getInboxPollingIntervalMs(query.state.data !== undefined),
   });
 }
 

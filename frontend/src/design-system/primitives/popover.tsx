@@ -2,11 +2,17 @@
  * A panel that opens from a button and holds content with its own controls, on Radix Popover
  * (UI-31; console UI design, Order chip). Radix moves the focus into the panel, closes it on Escape
  * or a click outside, and returns the focus to the button. The caller controls whether it is open,
- * so another control, such as an order citation marker, can open it as well.
+ * so another control, such as an order citation marker, can open it as well; the focus then returns
+ * to that control (UI-30).
  */
 import * as PopoverPrimitive from "@radix-ui/react-popover";
 import { cva } from "class-variance-authority";
 import type { ReactElement, ReactNode } from "react";
+
+import {
+  type DialogReturnFocus,
+  returnFocusAfterDialog,
+} from "@/design-system/primitives/dialog-return-focus";
 
 const contentVariants = cva(
   "z-20 flex flex-col overflow-hidden rounded-lg border border-border bg-surface-raised text-sm text-text shadow-md",
@@ -25,13 +31,16 @@ export type PopoverProps = {
   readonly isOpen: boolean;
   readonly onOpenChange: (isOpen: boolean) => void;
   readonly width?: PopoverWidth;
+  /** Where the focus goes when another control opened the popover; the button otherwise. */
+  readonly returnFocus?: DialogReturnFocus;
   readonly children: ReactNode;
 };
 
 /**
  * Render the button and, while open, the popover.
  *
- * @param props - The button, the name, the open state and its handler, the width, and the content.
+ * @param props - The button, the name, the open state and its handler, the width, where the focus
+ *   returns, and the content.
  * @returns The button; the popover opens in a portal.
  */
 export function Popover({
@@ -40,6 +49,7 @@ export function Popover({
   isOpen,
   onOpenChange,
   width = "narrow",
+  returnFocus,
   children,
 }: PopoverProps) {
   return (
@@ -51,6 +61,13 @@ export function Popover({
           align="start"
           sideOffset={4}
           className={contentVariants({ width })}
+          {...(returnFocus === undefined
+            ? {}
+            : {
+                onCloseAutoFocus: (event: Event) => {
+                  returnFocusAfterDialog(event, returnFocus);
+                },
+              })}
         >
           {children}
         </PopoverPrimitive.Content>

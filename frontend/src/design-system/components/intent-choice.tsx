@@ -3,13 +3,14 @@
  * design, state-choose-intent.png): the top three candidates with their confidence, and no draft
  * until staff choose. The list is AI output, so it carries the `ai` marker (UI-13).
  */
-import { Sparkles, TriangleAlert } from "lucide-react";
+import { Sparkles } from "lucide-react";
 
+import { presentationByAiReasonCode } from "@/design-system/components/ai-presentations";
 import {
   type ConfidenceBandName,
   ConfidenceMeter,
 } from "@/design-system/components/confidence-meter";
-import { Tag } from "@/design-system/components/tag";
+import { StatusBadge } from "@/design-system/components/status-badge";
 import { formatPercent } from "@/design-system/format/number";
 import { Panel } from "@/design-system/primitives/panel";
 import { PanelHeader } from "@/design-system/primitives/panel-header";
@@ -41,11 +42,7 @@ export function IntentChoice({ candidates }: IntentChoiceProps) {
         icon={Sparkles}
         level={2}
         title="Choose an intent"
-        trailing={
-          <Tag tone="warning" icon={TriangleAlert}>
-            Low confidence
-          </Tag>
-        }
+        trailing={<StatusBadge presentation={presentationByAiReasonCode.low_confidence} />}
       />
       <ul className="flex flex-col px-4 py-2 text-sm">
         {candidates.map((candidate) => (

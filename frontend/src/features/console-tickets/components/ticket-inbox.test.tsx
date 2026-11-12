@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { INBOX_POLLING_INTERVAL_MS } from "@/features/console-tickets/model/polling";
 import { listConsoleTicketsRoute } from "@/test/backend-routes";
 import { openConsole } from "@/test/console-screen";
 import { exampleAnswer } from "@/test/fake-backend";
@@ -140,5 +141,73 @@ describe("The inbox", () => {
     ).toBeVisible();
     expect(screen.queryByRole("complementary", { name: "Inbox" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeVisible();
+  });
+});
+
+describe("The inbox while it is open", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("loads the queue again on its own, so new tickets appear without a click", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    openConsole("/console", {
+      queue: [
+        exampleAnswer(200, "listConsoleTickets", "empty"),
+        exampleAnswer(200, "listConsoleTickets", "open-queue"),
+      ],
+    });
+    expect(await within(await findInbox()).findByText("No open tickets")).toBeVisible();
+
+    await vi.advanceTimersByTimeAsync(INBOX_POLLING_INTERVAL_MS);
+
+    const list = await screen.findByRole("list", { name: "Open tickets" });
+    expect(within(list).getAllByRole("link")).toHaveLength(2);
+  });
+
+  it("keeps the tickets on screen when a reload fails, and says so", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    openConsole("/console", {
+      queue: [
+        exampleAnswer(200, "listConsoleTickets", "open-queue"),
+        exampleAnswer(500, "problems", "internal-error"),
+      ],
+    });
+    const inbox = await findInbox();
+    await within(inbox).findByRole("list", { name: "Open tickets" });
+
+    await vi.advanceTimersByTimeAsync(INBOX_POLLING_INTERVAL_MS);
+
+    expect(await within(inbox).findByRole("alert")).toHaveTextContent(
+      "The inbox could not be updated.",
+    );
+    expect(within(inbox).getAllByRole("link")).toHaveLength(2);
+  });
+
+  it("stops asking for a queue that could not load until staff try again", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { backend } = openConsole("/console", {
+      queue: [exampleAnswer(500, "problems", "internal-error")],
+    });
+    expect(
+      await screen.findByRole("heading", { name: "The inbox could not be loaded" }),
+    ).toBeVisible();
+
+    await vi.advanceTimersByTimeAsync(INBOX_POLLING_INTERVAL_MS * 2);
+
+    expect(backend.requestsTo(listConsoleTicketsRoute)).toHaveLength(1);
+  });
+
+  it("stops asking for the queue after a 403", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { backend } = openConsole("/console", {
+      session: "customer",
+      queue: [exampleAnswer(403, "problems", "forbidden-role")],
+    });
+    await screen.findByRole("heading", { level: 1, name: "The console is for support accounts" });
+
+    await vi.advanceTimersByTimeAsync(INBOX_POLLING_INTERVAL_MS * 2);
+
+    expect(backend.requestsTo(listConsoleTicketsRoute)).toHaveLength(1);
   });
 });

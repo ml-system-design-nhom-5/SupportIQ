@@ -1,16 +1,13 @@
 /**
  * A citation marker with its hint (UI-20; console UI design, Draft editing and citations):
  * hovering or focusing the marker shows the hint, and activating the marker opens the source.
- * Built on Radix Tooltip (UI-31); the hint holds text only, so the focus never moves into it.
+ * Built on {@link TooltipHint} (UI-31); the hint holds text only, so the focus never moves into it.
  */
-import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import { ChevronRight } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
 import { Icon } from "@/design-system/primitives/icon";
-
-/** The hover delay: the base motion duration of UI-09. */
-const HOVER_DELAY_MS = 200;
+import { TooltipHint } from "@/design-system/primitives/tooltip";
 
 /** Props of {@link CitationHint}. */
 export type CitationHintProps = {
@@ -44,34 +41,29 @@ export function CitationHint({
 }: CitationHintProps) {
   const [isOpen, setIsOpen] = useState(false);
   return (
-    <TooltipPrimitive.Provider delayDuration={HOVER_DELAY_MS}>
-      <TooltipPrimitive.Root open={isOpen} onOpenChange={setIsOpen}>
-        <TooltipPrimitive.Trigger asChild>
-          <button
-            type="button"
-            aria-label={label}
-            className={markerClassName}
-            onClick={(event) => {
-              setIsOpen(false);
-              onActivate(event.currentTarget);
-            }}
-          >
-            {marker}
-          </button>
-        </TooltipPrimitive.Trigger>
-        <TooltipPrimitive.Portal>
-          <TooltipPrimitive.Content
-            sideOffset={4}
-            className="z-30 flex w-hint flex-col overflow-hidden rounded-md border border-border bg-surface-raised text-sm text-text shadow-md"
-          >
-            {children}
-            <p className="flex items-center gap-1 px-3 pb-3 text-xs text-text-muted">
-              <Icon icon={ChevronRight} />
-              {activationHint}
-            </p>
-          </TooltipPrimitive.Content>
-        </TooltipPrimitive.Portal>
-      </TooltipPrimitive.Root>
-    </TooltipPrimitive.Provider>
+    <TooltipHint
+      variant="card"
+      isOpen={isOpen}
+      onOpenChange={setIsOpen}
+      trigger={
+        <button
+          type="button"
+          aria-label={label}
+          className={markerClassName}
+          onClick={(event) => {
+            setIsOpen(false);
+            onActivate(event.currentTarget);
+          }}
+        >
+          {marker}
+        </button>
+      }
+    >
+      {children}
+      <p className="flex items-center gap-1 px-3 pb-3 text-xs text-text-muted">
+        <Icon icon={ChevronRight} />
+        {activationHint}
+      </p>
+    </TooltipHint>
   );
 }

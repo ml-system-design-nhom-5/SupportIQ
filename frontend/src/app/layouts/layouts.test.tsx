@@ -57,13 +57,13 @@ describe("ConsoleLayout", () => {
     expect(screen.getByRole("main")).toBeInTheDocument();
   });
 
-  it("shows only the brand and the account menu to a session of another role", async () => {
+  it("shows only the brand to a session of another role", async () => {
     openWithSession("/console", "customer");
 
     const bar = await screen.findByRole("banner");
     expect(bar).toHaveTextContent("SupportIQConsole");
     expect(within(bar).queryByRole("navigation")).not.toBeInTheDocument();
-    expect(within(bar).getByRole("button", { name: "Lan Tran · Customer" })).toBeVisible();
+    expect(within(bar).queryByRole("button")).not.toBeInTheDocument();
   });
 });
 

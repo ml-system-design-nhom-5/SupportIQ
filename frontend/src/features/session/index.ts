@@ -23,5 +23,5 @@ export type { PasswordLength } from "@/features/session/model/password";
 export { classifyPasswordLength, PASSWORD_TOO_LONG_TEXT } from "@/features/session/model/password";
 export { CHANGE_PASSWORD_PATH } from "@/features/session/model/password-change";
 export type { AccountRole, AppArea, Session } from "@/features/session/model/session";
-export { rootPathByArea } from "@/features/session/model/session";
+export { getRoleArea, rootPathByArea } from "@/features/session/model/session";
 export { SIGN_IN_PATH } from "@/features/session/model/sign-in-paths";

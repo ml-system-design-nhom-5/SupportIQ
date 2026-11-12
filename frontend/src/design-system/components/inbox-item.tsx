@@ -1,7 +1,8 @@
 /**
  * One ticket of the inbox (console UI design, Inbox): a link that opens the ticket with one click.
- * It shows the ticket ID, the time received, the customer, the message excerpt, the intent line,
- * a status badge, the authority flag, and who opened it. The open ticket is marked with
+ * It shows the ticket ID, the time received, the customer, the message excerpt, its details, and
+ * who opened it. The details are the intent line, a row, and the status badge with the authority
+ * flag, a cluster. The open ticket is marked with
  * `aria-current="page"` and a bar in the `primary` role, so color is not the only signal (UI-11).
  * Text is rendered as text (SEC-22).
  */
@@ -10,11 +11,6 @@ import type { ReactNode } from "react";
 import { NavLink } from "react-router";
 
 import { RelativeTimeText } from "@/design-system/components/relative-time-text";
-import { StatusBadge } from "@/design-system/components/status-badge";
-import {
-  authorityRequiredPresentation,
-  type StatusPresentation,
-} from "@/design-system/components/status-presentations";
 import { cn } from "@/design-system/primitives/class-names";
 import { FOCUS_RING_CLASSES } from "@/design-system/primitives/focus-ring";
 import { Icon } from "@/design-system/primitives/icon";
@@ -28,18 +24,19 @@ export type InboxItemProps = {
   readonly createdAt: string;
   readonly customerName: string;
   readonly excerpt: string;
-  /** The predicted intent with its confidence, or a line that says why there is none. */
-  readonly intentLine: ReactNode;
-  readonly status: StatusPresentation;
-  readonly isAuthorityRequired: boolean;
   /** When a person first opened the ticket; absent until then. */
   readonly openedAt?: string;
+  /**
+   * The details under the excerpt: the predicted intent with its confidence, or a line that says
+   * why there is none, then the badges.
+   */
+  readonly children: ReactNode;
 };
 
 /**
  * Render the ticket as an item of the inbox.
  *
- * @param props - The path and the facts of the ticket.
+ * @param props - The path, the facts of the ticket, and its details.
  * @returns The list item with its link.
  */
 export function InboxItem({
@@ -48,10 +45,8 @@ export function InboxItem({
   createdAt,
   customerName,
   excerpt,
-  intentLine,
-  status,
-  isAuthorityRequired,
   openedAt,
+  children,
 }: InboxItemProps) {
   return (
     <li className="flex flex-col">
@@ -76,13 +71,7 @@ export function InboxItem({
         </span>
         <span className="font-semibold text-text">{customerName}</span>
         <span className="truncate text-text-muted">{excerpt}</span>
-        <span className="flex items-center gap-2 text-text">{intentLine}</span>
-        <span className="flex flex-wrap gap-2">
-          <StatusBadge presentation={status} />
-          {isAuthorityRequired ? (
-            <StatusBadge presentation={authorityRequiredPresentation} />
-          ) : null}
-        </span>
+        {children}
         {openedAt === undefined ? null : (
           <span className="flex items-center gap-1 text-xs text-text-muted">
             <Icon icon={User} />

@@ -57,8 +57,19 @@ describe("Opening a ticket", () => {
 
     expect(await screen.findByRole("heading", { level: 1, name: "Ticket TCK-1042" })).toBeVisible();
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "The opening of this ticket was not recorded.",
+      "The opening of this ticket was not recorded. You can keep working on this ticket.",
     );
+  });
+
+  it("says that a view without an answer may have been recorded, and offers no retry (ERR-07)", async () => {
+    openConsole(TICKET_PATH, { view: [{ kind: "network_error" }] });
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Ticket TCK-1042" })).toBeVisible();
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent(
+      "The opening of this ticket may have been recorded. We could not confirm it. You can keep working on this ticket.",
+    );
+    expect(alert).not.toHaveTextContent(/try again/i);
   });
 
   it("records the view again when another ticket opens", async () => {
@@ -73,6 +84,25 @@ describe("Opening a ticket", () => {
         "/v1/console/tickets/TCK-1038/views",
       ]);
     });
+  });
+
+  it("sends a new Idempotency-Key each time the same ticket opens again", async () => {
+    const { backend, router } = openConsole(TICKET_PATH);
+    await screen.findByRole("heading", { level: 1, name: "Ticket TCK-1042" });
+    await router.navigate("/console");
+    await screen.findByRole("heading", { level: 1, name: "Select a ticket" });
+
+    await router.navigate(TICKET_PATH);
+
+    await waitFor(() => {
+      expect(backend.requestsTo(recordTicketViewRoute)).toHaveLength(2);
+    });
+    const [firstKey, secondKey] = backend
+      .requestsTo(recordTicketViewRoute)
+      .map((request) => request.headers.get("Idempotency-Key"));
+    expect(firstKey).toMatch(idempotencyKeyPattern);
+    expect(secondKey).toMatch(idempotencyKeyPattern);
+    expect(secondKey).not.toBe(firstKey);
   });
 });
 
@@ -95,12 +125,17 @@ describe("A ticket that could not load", () => {
   });
 
   it.each([
-    [404, "not-found", "This ticket was not found"],
-    [403, "forbidden-role", "You cannot open this ticket"],
-  ])("shows a %i as its own state, with the trace ID", async (status, problem, title) => {
+    [404, "not-found"],
+    [403, "forbidden-role"],
+  ])("shows a %i as the permission-denied state, with the trace ID", async (status, problem) => {
     openConsole(TICKET_PATH, { workspace: [exampleAnswer(status, "problems", problem)] });
 
-    expect(await screen.findByRole("heading", { level: 1, name: title })).toBeVisible();
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "You cannot open this page" }),
+    ).toBeVisible();
+    expect(
+      screen.getByText("Your role does not allow it. Ask a manager if you need it."),
+    ).toBeVisible();
     expect(screen.getByText(/Details: trace/)).toBeVisible();
     expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
   });

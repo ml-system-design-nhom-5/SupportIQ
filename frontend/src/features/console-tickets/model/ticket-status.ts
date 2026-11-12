@@ -9,12 +9,10 @@ import type {
   HandlingModeName,
 } from "@/design-system";
 
-const ticketStatuses: ReadonlySet<string> = new Set([
-  "open",
-  "awaiting_approval",
-  "escalated",
-  "closed",
-]);
+/** The ticket statuses of the contract (`ConsoleTicketStatus`), in the order of the inbox. */
+export const knownTicketStatuses = ["open", "awaiting_approval", "escalated", "closed"] as const;
+
+const ticketStatuses: ReadonlySet<string> = new Set(knownTicketStatuses);
 
 const aiStatusByDraftStatus: ReadonlyMap<string, AiStatusName> = new Map([
   ["pending", "pending"],
@@ -26,6 +24,9 @@ const aiStatusByDraftStatus: ReadonlyMap<string, AiStatusName> = new Map([
 ]);
 
 const confidenceBands: ReadonlySet<string> = new Set(["high", "medium", "low"]);
+
+/** A ticket status of the contract. */
+export type KnownTicketStatus = (typeof knownTicketStatuses)[number];
 
 /**
  * Map a ticket status.
@@ -71,9 +72,9 @@ export function toConfidenceBand(value: string): ConfidenceBandName {
  * Tell whether a value is a ticket status of the contract.
  *
  * @param value - A `ConsoleTicketStatus` from `backend`.
- * @returns True for `open`, `awaiting_approval`, `escalated`, and `closed`.
+ * @returns True for a status of {@link knownTicketStatuses}.
  */
-function isTicketStatus(value: string): value is Exclude<ConsoleTicketStatusName, "unknown"> {
+function isTicketStatus(value: string): value is KnownTicketStatus {
   return ticketStatuses.has(value);
 }
 

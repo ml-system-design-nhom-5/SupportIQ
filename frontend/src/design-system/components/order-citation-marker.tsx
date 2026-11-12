@@ -27,8 +27,8 @@ export type OrderCitationMarkerProps = {
   /** The ID of the ticket's order; absent when the ticket has none. */
   readonly orderId?: string;
   readonly facts: readonly CitedOrderFact[];
-  /** Opens the order details. */
-  readonly onActivate: () => void;
+  /** Opens the order details; receives the marker, which the focus returns to. */
+  readonly onActivate: (marker: HTMLElement) => void;
 };
 
 /**
@@ -44,9 +44,7 @@ export function OrderCitationMarker({ orderId, facts, onActivate }: OrderCitatio
       markerClassName={cn(MARKER_CLASSES, FOCUS_RING_CLASSES)}
       marker={<Icon icon={Package} size="xs" />}
       activationHint="Activate the marker to open the order details"
-      onActivate={() => {
-        onActivate();
-      }}
+      onActivate={onActivate}
     >
       <OrderRecordHeader title="Order" {...(orderId === undefined ? {} : { orderId })} />
       <div className="p-3">

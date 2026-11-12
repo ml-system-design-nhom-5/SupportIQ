@@ -8,6 +8,8 @@ import {
   describeEffectiveDates,
   describeEffectivePeriod,
   numberCitedDocuments,
+  type Source,
+  toSourceSelection,
 } from "@/features/console-tickets/model/sources";
 
 /** A ranked document that a test overrides only where it matters (TEST-05). */
@@ -97,5 +99,51 @@ describe("describeEffectiveDates", () => {
     ["2026-12-01T00:00:00Z", "1 Sept 2026 to 1 Dec 2026"],
   ])("describes the dates until %s", (end, text) => {
     expect(describeEffectiveDates("2026-09-01T00:00:00Z", end)).toBe(text);
+  });
+});
+
+describe("toSourceSelection", () => {
+  const source: Source = {
+    key: "SAMPLE-REFUND-001 1.0",
+    number: 1,
+    documentId: "SAMPLE-REFUND-001",
+    version: "1.0",
+    title: "Sample refund document",
+    validity: "valid",
+    period: "Since 1 Jan 2026",
+    snippet: "Retrieved passage.",
+  };
+
+  it("highlights the retrieved passage of a source of the Sources panel", () => {
+    expect(toSourceSelection(source, source)).toEqual({
+      documentId: "SAMPLE-REFUND-001",
+      version: "1.0",
+      title: "Sample refund document",
+      highlight: "Retrieved passage.",
+      source,
+    });
+  });
+
+  it("highlights the cited passage of a marker, with the title of its source", () => {
+    const marker = { documentId: "SAMPLE-REFUND-001", version: "1.0", snippet: "Cited passage." };
+
+    expect(toSourceSelection(marker, source)).toEqual({
+      documentId: "SAMPLE-REFUND-001",
+      version: "1.0",
+      title: "Sample refund document",
+      highlight: "Cited passage.",
+      source,
+    });
+  });
+
+  it("titles a version that the analysis did not return with its document ID", () => {
+    const marker = { documentId: "SAMPLE-OTHER-002", version: "2.0", snippet: "Cited passage." };
+
+    expect(toSourceSelection(marker, undefined)).toEqual({
+      documentId: "SAMPLE-OTHER-002",
+      version: "2.0",
+      title: "SAMPLE-OTHER-002",
+      highlight: "Cited passage.",
+    });
   });
 });

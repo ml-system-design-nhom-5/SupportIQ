@@ -1,9 +1,10 @@
 /**
- * The workspace when the ticket could not load (UI-25; console UI design, state-error.png and
- * state-permission-denied.png): "permission denied" for `403`, "not found" for `404`, otherwise the
- * error state with Try again. Each says what to do next and offers the copyable trace ID.
+ * The workspace when the ticket could not load (UI-25; console UI design, States): one
+ * permission-denied state for `403` and `404` (state-permission-denied.png), otherwise the error
+ * state with Try again (state-error.png). Each says what to do next and offers the copyable trace
+ * ID.
  */
-import { Lock, SearchX } from "lucide-react";
+import { Lock } from "lucide-react";
 
 import { CenteredContent, StateMessage } from "@/design-system";
 import { describeFailure, FailureState, type RequestFailure } from "@/features/backend-requests";
@@ -27,25 +28,15 @@ export function WorkspaceLoadFailure({ failure, isRetrying, onRetry }: Workspace
   return (
     <CenteredContent>
       <title>Ticket · Console · SupportIQ</title>
-      {category === "permission_denied" ? (
+      {category === "permission_denied" || category === "not_found" ? (
         <StateMessage
           icon={Lock}
           headingLevel={1}
-          title="You cannot open this ticket"
+          title="You cannot open this page"
           description="Your role does not allow it. Ask a manager if you need it."
           {...traceIdProps}
         />
-      ) : null}
-      {category === "not_found" ? (
-        <StateMessage
-          icon={SearchX}
-          headingLevel={1}
-          title="This ticket was not found"
-          description="Choose a ticket in the inbox."
-          {...traceIdProps}
-        />
-      ) : null}
-      {category === "permission_denied" || category === "not_found" ? null : (
+      ) : (
         <FailureState
           title="This ticket could not be loaded"
           failure={failure}

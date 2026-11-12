@@ -34,6 +34,16 @@ function getCitationMarker(main: HTMLElement): HTMLElement {
   });
 }
 
+/**
+ * Find the order citation marker of the draft.
+ *
+ * @param main - The `main` landmark.
+ * @returns The marker.
+ */
+function getOrderMarker(main: HTMLElement): HTMLElement {
+  return within(main).getByRole("button", { name: "Order facts, from order records, not AI" });
+}
+
 describe("The KB document version (UI-20)", () => {
   it("opens from a citation marker, with the cited passage highlighted", async () => {
     const { user, main, backend } = await openWorkspace();
@@ -130,7 +140,7 @@ describe("The order chip (console UI design, Order chip)", () => {
     await user.click(within(popover).getByRole("button", { name: /ORD-20990/ }));
 
     expect(popover).toHaveTextContent("Not the order of this ticket. The AI did not use it.");
-    expect(popover).toHaveTextContent("Items Desk lamp × 1".replace(" ", ""));
+    expect(popover).toHaveTextContent("ItemsDesk lamp × 1");
     expect(popover).not.toHaveTextContent("Ship to");
   });
 
@@ -146,10 +156,41 @@ describe("The order chip (console UI design, Order chip)", () => {
   it("opens from the order citation marker of the draft", async () => {
     const { user, main } = await openWorkspace();
 
-    await user.click(
-      within(main).getByRole("button", { name: "Order facts, from order records, not AI" }),
-    );
+    await user.click(getOrderMarker(main));
 
     expect(await screen.findByRole("dialog", { name: "Orders of this customer" })).toBeVisible();
+  });
+
+  it("selects the ticket's order again when the marker opens it after another order was chosen", async () => {
+    const { user, main } = await openWorkspace();
+    await user.click(within(main).getByRole("button", { name: /^ORD-20931 Delivered/ }));
+    const popover = await screen.findByRole("dialog", { name: "Orders of this customer" });
+    await user.click(within(popover).getByRole("button", { name: /ORD-20990/ }));
+    await user.keyboard("{Escape}");
+
+    await user.click(getOrderMarker(main));
+
+    const reopened = await screen.findByRole("dialog", { name: "Orders of this customer" });
+    expect(within(reopened).getByRole("button", { name: /ORD-20931 This ticket/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(within(reopened).getByRole("button", { name: /ORD-20990/ })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(reopened).toHaveTextContent("Ship to12 Sample Street, Sample City");
+  });
+
+  it("returns the focus to the order marker that opened it (UI-30)", async () => {
+    const { user, main } = await openWorkspace();
+    await user.click(getOrderMarker(main));
+    await screen.findByRole("dialog", { name: "Orders of this customer" });
+
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(getOrderMarker(main)).toHaveFocus();
+    });
   });
 });

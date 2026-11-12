@@ -7,6 +7,7 @@ import { Sparkles } from "lucide-react";
 
 import {
   type AiReasonCodeName,
+  Cluster,
   Panel,
   PanelHeader,
   PanelSection,
@@ -14,7 +15,6 @@ import {
   presentationByAiStatus,
   presentationByRecommendation,
   type RecommendationName,
-  Stack,
   StatusBadge,
   Tag,
   Text,
@@ -48,7 +48,7 @@ export function RecommendationPanel({
         trailing={<Tag tone="ai">AI suggestion</Tag>}
       />
       <PanelSection>
-        <Stack direction="row" gap="2" align="center" shouldWrap>
+        <Cluster>
           <StatusBadge presentation={presentationByRecommendation[recommendation]} />
           {reasonCodes.length === 0 ? (
             <Text tone="muted">No escalation reason</Text>
@@ -57,12 +57,12 @@ export function RecommendationPanel({
               <StatusBadge key={reasonCode} presentation={presentationByAiReasonCode[reasonCode]} />
             ))
           )}
-        </Stack>
+        </Cluster>
         {draftFailure === undefined ? null : (
-          <Stack direction="row" gap="2" align="center" shouldWrap>
+          <Cluster>
             <StatusBadge presentation={presentationByAiStatus.unavailable} />
             <StatusBadge presentation={presentationByAiReasonCode[draftFailure]} />
-          </Stack>
+          </Cluster>
         )}
       </PanelSection>
     </Panel>

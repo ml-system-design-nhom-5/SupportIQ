@@ -1,7 +1,7 @@
 /**
  * How often the console asks `backend` again (console UI design, Inbox and Flow). `frontend` polls
- * because v1 has no push updates (contracts v1 design, Non-goals). Both values are proposals: the
- * polling interval is an open question of the console UI design.
+ * because v1 has no push updates (contracts v1 design, Non-goals). The lead approved both values
+ * on 2026-11-12, which answers the polling question of the console UI design.
  */
 import type { TicketWorkspace } from "@/features/console-tickets/model/workspace";
 import { hasPendingPart } from "@/features/console-tickets/model/workspace-state";
@@ -20,11 +20,23 @@ export const INBOX_POLLING_INTERVAL_MS = 15_000;
 export const WORKSPACE_POLLING_INTERVAL_MS = 2_000;
 
 /**
+ * Choose how soon the inbox loads its queue again.
+ *
+ * @param hasQueue - True once a page of the queue loaded.
+ * @returns {@link INBOX_POLLING_INTERVAL_MS} once the queue loaded; false before, so a queue that
+ *   failed to load, such as with `403`, is not asked for again until staff try again.
+ */
+export function getInboxPollingIntervalMs(hasQueue: boolean): number | false {
+  return hasQueue ? INBOX_POLLING_INTERVAL_MS : false;
+}
+
+/**
  * Choose how soon the workspace loads the ticket again.
  *
  * @param workspace - The loaded ticket, or undefined before the first load.
  * @returns {@link WORKSPACE_POLLING_INTERVAL_MS} while a part of the suggestion is `pending`;
- *   false otherwise, so the workspace stops polling.
+ *   false otherwise, so the workspace stops polling. A ticket that failed to load is not asked for
+ *   again until staff try again.
  */
 export function getWorkspacePollingIntervalMs(
   workspace: TicketWorkspace | undefined,

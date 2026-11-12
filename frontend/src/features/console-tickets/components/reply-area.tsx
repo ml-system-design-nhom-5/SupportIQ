@@ -3,6 +3,7 @@
  * action bar come with the reply actions.
  */
 import { assertNever } from "@/features/backend-requests";
+import { CitedDraft, type MarkerContext } from "@/features/console-tickets/components/cited-draft";
 import { DraftPanel } from "@/features/console-tickets/components/draft-panel";
 import { ManualHandlingPanel } from "@/features/console-tickets/components/manual-handling-panel";
 import { NoDraftPanel } from "@/features/console-tickets/components/no-draft-panel";
@@ -10,22 +11,16 @@ import { PendingDraftPanel } from "@/features/console-tickets/components/pending
 import { SentReplyPanel } from "@/features/console-tickets/components/sent-reply-panel";
 import { describeAiUnavailable } from "@/features/console-tickets/model/manual-handling";
 import type { SuggestionWarning } from "@/features/console-tickets/model/reason-codes";
-import type { Source, SourceSelection } from "@/features/console-tickets/model/sources";
 import type { ReplyAreaState } from "@/features/console-tickets/model/workspace-state";
 
 /** Props of {@link ReplyArea}. */
 type ReplyAreaProps = {
   readonly state: ReplyAreaState;
-  /** What a draft needs: its warnings, its time, its sources, and its marker handlers. */
-  readonly draftContext: {
+  /** What a draft needs: its warnings, its time, its citation numbers, and its markers. */
+  readonly draftContext: MarkerContext & {
     readonly warnings: readonly SuggestionWarning[];
     readonly generatedAt: string;
     readonly numberByKey: ReadonlyMap<string, number>;
-    readonly sourceByKey: ReadonlyMap<string, Source>;
-    /** The ID of the ticket's order; undefined when the ticket has none. */
-    readonly orderId: string | undefined;
-    readonly onOpenSource: (selection: SourceSelection, opener: HTMLElement) => void;
-    readonly onOpenOrder: () => void;
   };
 };
 
@@ -50,8 +45,14 @@ export function ReplyArea({ state, draftContext }: ReplyAreaProps) {
       );
     case "pending":
       return <PendingDraftPanel />;
-    case "draft":
-      return <DraftPanel draft={state.draft} {...draftContext} />;
+    case "draft": {
+      const { warnings, generatedAt, ...citedDraftContext } = draftContext;
+      return (
+        <DraftPanel warnings={warnings} generatedAt={generatedAt}>
+          <CitedDraft draft={state.draft} {...citedDraftContext} />
+        </DraftPanel>
+      );
+    }
     case "choose_intent":
     case "no_draft":
       return <NoDraftPanel outcome={state} />;

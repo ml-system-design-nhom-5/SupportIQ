@@ -43,13 +43,13 @@ export function TicketHeader({
   receivedAt,
 }: TicketHeaderProps) {
   return (
-    <div className="flex items-center gap-3 border-b border-border bg-surface px-6 py-3">
+    <div className="flex items-center gap-3 border-b border-border bg-surface px-4 py-3">
       <h1
         id={headingId}
         tabIndex={-1}
         className="flex shrink-0 items-center gap-2 text-base font-semibold whitespace-nowrap text-text outline-none"
       >
-        Ticket <span className="font-mono">{ticketId}</span>
+        Ticket <span className="font-mono text-xs">{ticketId}</span>
       </h1>
       <StatusBadge presentation={status} />
       <StatusBadge presentation={handlingMode} />
