@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 import logging
+import re
 
 from apps.core_backend.retrieval.importer import (
     PolicyVersion,
@@ -126,6 +127,9 @@ class RetrievalAdapter:
         if self.encoder is None:
             return {"status": "encoder_unavailable", "evidence": [], "error": self.encoder_error}
 
+        if intent == "human_agent":
+            return {"status": "human_agent_escalation", "evidence": [], "has_conflict": False}
+
         if not self.index or self.index.is_empty():
             return {"status": "empty_kb", "evidence": []}
 
@@ -157,8 +161,12 @@ class RetrievalAdapter:
         # ADR-0005: Additive intent-aware reranking
         LAMBDA_INTENT = 0.15
         reranked_docs = []
+        is_unauthorized_query = bool(re.search(r"\b(chargeback|unauthorized\s+(?:transaction|payment|charge)|fraud)\b", query, re.I))
         for doc in res.documents:
             pv = pv_by_key.get((doc["doc_id"], doc.get("version")))
+            # When the customer reports unauthorized charge or chargeback, duplicate charge resolution (POL-PAY-004) is inapplicable
+            if is_unauthorized_query and pv and "duplicate_charge_resolution" in pv.metadata.answer_capabilities:
+                continue
             base_score = float(doc.get("score") or 0.0)
             boost = LAMBDA_INTENT if (intent and pv and (not pv.metadata.supported_intents or intent in pv.metadata.supported_intents)) else 0.0
             doc["score"] = round(base_score + boost, 4)

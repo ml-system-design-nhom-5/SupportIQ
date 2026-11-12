@@ -44,9 +44,18 @@ class Engine:
                         codes.append("low_confidence")
                     if "out_of_scope_intent" not in codes:
                         codes.append("out_of_scope_intent")
-        sensitive = label in self.policy["sensitive_action_intents"] or not override and any(item["intent"] in self.policy["sensitive_action_intents"] and item["probability"] >= self.policy.get("default_margin_threshold", .1) for item in candidates)
-        if sensitive or re.search(r"\b(fraud|lawsuit|legal action|chargeback|unauthorized transaction|policy exception)\b", request["message"], re.I):
-            codes.append("requires_authority")
+        sensitive = (
+            label in self.policy.get("sensitive_action_intents", [])
+            or prediction.get("intent") in self.policy.get("sensitive_action_intents", [])
+            or any(
+                item.get("intent") in self.policy.get("sensitive_action_intents", [])
+                and item.get("probability", 0) >= self.policy.get("default_margin_threshold", 0.1)
+                for item in candidates
+            )
+        )
+        if sensitive or re.search(r"\b(fraud|lawsuit|legal action|chargeback|unauthorized\s+(?:transaction|payment|charge)|policy exception)\b", request["message"], re.I):
+            if "requires_authority" not in codes:
+                codes.append("requires_authority")
         retrieved = self.retriever.retrieve(request["message"], label, role="agent", current_time=datetime.fromisoformat(request["as_of"].replace("Z", "+00:00")))
         evidence = retrieved.get("evidence", [])
         warnings = []
@@ -93,6 +102,18 @@ class Engine:
         allowed_placeholders = {match.group() for match in PLACEHOLDER.finditer(request["message"])}
         if any(match.group() not in allowed_placeholders for match in PLACEHOLDER.finditer(text)):
             return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"llm_invalid_output"})}
+
+        # Grounding Guardrail 1: Cosmetics / restricted categories must not overgeneralize.
+        # POL-RET-003 excludes cosmetics and chemicals only when protective packaging/seal is unsealed or opened.
+        if re.search(r"\b(cosmetics?|chemicals?)\b", text, re.I) and re.search(r"\b(cannot|can't|not eligible|non-returnable|not support returns?|no returns?|do not accept returns?)\b", text, re.I):
+            if not re.search(r"\b(unsealed|opened|open package|broken seal)\b", text, re.I):
+                return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
+
+        # Grounding Guardrail 2: Chargeback / unauthorized payment must NOT receive generic duplicate-charge advice.
+        if re.search(r"\b(chargeback|unauthorized\s+(?:transaction|payment|charge)|fraud)\b", request["message"], re.I):
+            if re.search(r"\b(duplicate charge|double deduction|charged twice|duplicate deduction)\b", text, re.I) or any(s.get("document_id") == "POL-PAY-004" for s in generated.get("input_snapshot", {}).get("sources", [])):
+                return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
+
         sources = {source["source_id"]: source for source in generated["input_snapshot"]["sources"]}
         citations, segments = {}, []
         for paragraph_index, paragraph in enumerate(re.split(r"\n\s*\n", text.strip())):
