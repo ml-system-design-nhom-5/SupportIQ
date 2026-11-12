@@ -551,7 +551,7 @@ def verify_declared_manifest_files(
     if reasons:
         return False, reasons
     if not has_raw_records:
-        return False, ["Manifest does not declare raw records, cases, or model weights files"]
+        return False, ["Manifest does not declare raw execution record files"]
 
     return True, []
 

@@ -24,7 +24,10 @@ def test_draft_suite_requires_explicit_experimental_opt_in(tmp_path):
 
 
 def test_experimental_live_evidence_cannot_certify_acceptance():
-    metrics = {'routing': {'must_escalate_total': 1, 'guardrail_passed': True}}
+    metrics = {
+        'routing': {'must_escalate_total': 1, 'guardrail_passed': True},
+        'ml': {'macro_f1': .95, 'model_type': 'distilbert', 'status': 'verified'},
+    }
     config = SystemConfig(mandatory_gates=['routing_guardrails'])
     assert evaluate_system_gates(metrics, config, 'live')['all_mandatory_passed']
     result = evaluate_system_gates(metrics, config, 'live_experimental')

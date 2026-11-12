@@ -666,3 +666,9 @@ def test_omitted_model_provenance_cannot_certify_component_metrics():
     result = evaluate_system_gates(metrics, config, evidence_kind="live")
     assert result["numeric_targets_passed"] is True
     assert result["all_mandatory_passed"] is False
+
+
+def test_empty_acceptance_gate_configuration_cannot_certify():
+    metrics = {"ml": {"macro_f1": .95, "model_type": "distilbert", "status": "verified"}}
+    result = evaluate_system_gates(metrics, SystemConfig(mandatory_gates=[]), evidence_kind="live")
+    assert result["all_mandatory_passed"] is False
