@@ -1,6 +1,6 @@
 # Design: Contracts v1
 
-- **Status:** In review
+- **Status:** Approved
 - **Owner:** contracts gatekeeper
 - **Reviewers:** ML engineer, RAG engineer, backend engineer, frontend engineer
 - **Last reviewed:** 2026-11-12
@@ -880,7 +880,7 @@ Every schema property states its data class ([SEC-03](../rules/security-and-priv
 
 1. Done on 2026-10-24: revision 1 was approved and ADR-0009 accepted.
 2. Done on 2026-10-24: UI-16, UI-17, and UI-19 were updated for the reply proposal flow.
-3. Revision 2, dated 2026-10-28 and updated 2026-11-05, was reviewed together with ADR-0010, ADR-0011, and ADR-0014. ADR-0012 and ADR-0013 were accepted on 2026-11-05, and ADR-0010, ADR-0011, and ADR-0014 on 2026-11-12. The `ai-service` part of revision 2 is still in review (step 10).
+3. Revision 2, dated 2026-10-28 and updated 2026-11-05, was reviewed together with ADR-0010, ADR-0011, and ADR-0014. ADR-0012 and ADR-0013 were accepted on 2026-11-05, and ADR-0010, ADR-0011, and ADR-0014 on 2026-11-12. The project lead approved its `ai-service` part on 2026-11-12 (step 11).
 4. Done on 2026-11-05: the project lead approved the `frontend` ↔ `backend` part of revision 2 for contract PR 2 and its implementation, exactly these operations: `createSession`, `getCurrentSession`, `deleteCurrentSession`, `listShopProducts`, `getShopProduct`, `listShopOrders`, `getShopOrder`, `createShopTicket`, `listShopTickets`, `getShopTicket`, `listAdminAccounts`, `changeAccountRole`, `changeAccountStatus`, and the health checks. The rest of revision 2 stays in review with the AI and ML members: the console operations, `getAdminVersions`, and the `ai-service` contract.
 5. Decided on 2026-11-05: contract PR 2 lands before contract PR 1. It adds only the shared schemas that the `backend` contract needs now ([Common elements](#common-elements)).
 6. Contract PR 2: `backend.openapi.yaml` 1.0.0 with the operations of step 4, its examples, `CHANGELOG.md`, the shared schemas of step 5, and the contract tooling with its commands in `contracts/README.md`.
@@ -892,7 +892,8 @@ Every schema property states its data class ([SEC-03](../rules/security-and-priv
    - the `backend` ticket workflow: job queue schema and settings, pseudonymization detectors and the named-entity library, how a storage error while writing the pseudonym map is retried (it is not a `pseudonymization_failed`), report queries, and a decision-record export that keeps original values out ([SEC-37](../rules/security-and-privacy.md#pseudonymization));
    - the screens of `/console`, `/shop`, and `/admin`: the [console UI](console-ui.md), [shop UI](shop-ui.md), and [admin UI](admin-ui.md) designs;
    - the evaluation protocol ([DATA-20](../rules/data-and-ml.md#splits-and-evaluation-protocol)).
-10. Done on 2026-11-12: the project lead approved the remaining `frontend` ↔ `backend` part of revision 2, the console operations and `getAdminVersions`, with the decisions of 2026-11-11 on reports and dev mode applied above. The `ai-service` contract stays in review. On the same day the project lead decided that the LLM never sets `requires_authority`: only the intent model and the sensitive-term list do, and the LLM only writes the draft ([Authority rule](#authority-rule-fr-06)). The KB data contract stays open until the KB files arrive (step 8).
+10. Done on 2026-11-12: the project lead approved the remaining `frontend` ↔ `backend` part of revision 2, the console operations and `getAdminVersions`, with the decisions of 2026-11-11 on reports and dev mode applied above. The `ai-service` contract followed in step 11. On the same day the project lead decided that the LLM never sets `requires_authority`: only the intent model and the sensitive-term list do, and the LLM only writes the draft ([Authority rule](#authority-rule-fr-06)). The KB data contract stays open until the KB files arrive (step 8).
+11. Done on 2026-11-12: the project lead approved the `ai-service` part of revision 2 with `ai-service` contract 1.0.0, the update of that day for `backend` contract 1.2.0 with its review fixes, and the [backend ticket workflow design](backend-ticket-workflow.md). Revision 2 is approved in full; the KB data contract still waits for the KB files (step 8). The service token, pseudonymization, and the LLM inputs need the two approvals of [SEC-35](../rules/security-and-privacy.md#security-review); the project lead's approval stands for them.
 
 Nothing is deployed yet, so no migration or rollback is needed.
 

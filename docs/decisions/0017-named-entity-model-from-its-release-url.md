@@ -1,6 +1,6 @@
 # ADR-0017: The named-entity model from its release URL
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-12
 - **Deciders:** Project lead
 - **Related:** [Requirements](../product/requirements.md) (FR-09, NFR-06), [ADR-0003](0003-tech-stack.md), [ADR-0010](0010-pseudonymization-and-egress-control.md#detection), [ADR-0016](0016-hosting-on-free-tiers.md), [backend ticket workflow design](../design/backend-ticket-workflow.md#choice-1-the-named-entity-library), [security rules](../rules/security-and-privacy.md#dependencies) (SEC-30, SEC-31), [workflow rules](../rules/workflow.md#dependencies) (WF-27 to WF-31)

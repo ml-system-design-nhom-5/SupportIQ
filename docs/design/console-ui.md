@@ -1,10 +1,10 @@
 # Design: Console UI
 
-- **Status:** In review
+- **Status:** Approved
 - **Owner:** frontend engineer
 - **Reviewers:** backend engineer, ML engineer, RAG engineer, contracts gatekeeper
 - **Last reviewed:** 2026-11-12
-- **Related:** [Requirements](../product/requirements.md) (FR-01, FR-04 to FR-07, FR-10, NFR-11, ESC-01 to ESC-05), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0014](../decisions/0014-citations-to-order-context.md), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md), [contracts v1 design](contracts-v1.md) (revision 2, in review), [account management design](account-management.md), [UI rules](../rules/ui.md)
+- **Related:** [Requirements](../product/requirements.md) (FR-01, FR-04 to FR-07, FR-10, NFR-11, ESC-01 to ESC-05), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0014](../decisions/0014-citations-to-order-context.md), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md), [contracts v1 design](contracts-v1.md) (revision 2), [account management design](account-management.md), [UI rules](../rules/ui.md)
 
 ## Summary
 
@@ -12,11 +12,11 @@ This design fixes the screens, the one workspace layout ([UI-15](../rules/ui.md#
 
 The team chose the inbox layout on 2026-11-01. It has an inbox on the left, the message, intent, and reply in the middle, and the other AI output on the right. Every screen, state, and dialog below is drawn in that layout.
 
-This design follows ADR-0012, ADR-0010, and ADR-0014, the last two accepted on 2026-11-12, and contracts v1 revision 2, whose `ai-service` part is still in review. If that part changes, this document changes with it.
+This design follows ADR-0012, ADR-0010, and ADR-0014, the last two accepted on 2026-11-12, and contracts v1 revision 2, which the project lead approved in full on 2026-11-12. If the contracts change, this document changes with them.
 
 **Revision of 2026-11-11, for [ADR-0015](../decisions/0015-account-creation-and-password-changes.md):** the app bar shows the account menu instead of the display name and Sign out, and the sign-in password field gets the show and hide toggle of the proposed UI-46 ([account management design](account-management.md#rule-changes)). The shared page `/change-password` joins the screens. All three are defined in the [account management design](account-management.md#screens-and-dialogs). The earlier app bar is kept under [Alternatives considered](#alternatives-considered).
 
-**Revision of 2026-11-12, for `backend` contract 1.2.0** ([backend ticket workflow design](backend-ticket-workflow.md)): the Closed queue lists the newest tickets first, by `closed_at`, which `TicketSummary` now carries; the developer details read the latencies from `step_latencies`; the warning `source_review_overdue` refers to a document version that the analysis retrieved, not to one that the draft cites; and the contract settled the excerpt length and the queue order, so only the polling interval stays open. The earlier order and the earlier meaning of the warning are kept under [Alternatives considered](#alternatives-considered).
+**Revision of 2026-11-12, for `backend` contract 1.2.0** ([backend ticket workflow design](backend-ticket-workflow.md)): the Closed queue lists the newest tickets first, by `closed_at`, which `TicketSummary` now carries; the developer details read the latencies from `step_latencies`; the warning `source_review_overdue` refers to a document version that the analysis retrieved, not to one that the draft cites; and the contract settled the excerpt length and the queue order, so only the polling interval stays open. The earlier order and the earlier meaning of the warning are kept under [Alternatives considered](#alternatives-considered). The project lead approved this revision on 2026-11-12.
 
 ## Goals and non-goals
 
@@ -418,4 +418,3 @@ The page loads Inter and JetBrains Mono from Google Fonts.
 - Keyboard movement through the inbox (arrow keys, or J and K). [UI-17](../rules/ui.md#console-interaction) forbids single-key shortcuts only for irreversible actions, so this is allowed.
 - The polling interval of the inbox and the workspace. `backend` contract 1.2.0 settled the excerpt length (at most 160 characters) and the queue order, without a sort parameter.
 - The text of the manual-process instructions ([UI-26](../rules/ui.md#states)). The team provides it. The mockups show a stand-in line.
-- This design was approved on 2026-11-05 while ADR-0010, ADR-0014, and contracts v1 revision 2 were still in review. ADR-0010 and ADR-0014 were accepted on 2026-11-12; the revision of ADR-0010 on that day changed only its egress control, which this design does not use. If the `ai-service` part of contracts v1 changes, this design is revised.

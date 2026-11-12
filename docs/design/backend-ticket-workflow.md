@@ -1,6 +1,6 @@
 # Design: Backend ticket workflow
 
-- **Status:** Draft
+- **Status:** Approved
 - **Owner:** backend engineer
 - **Reviewers:** project lead, frontend engineer, ML engineer
 - **Last reviewed:** 2026-11-12
@@ -8,7 +8,7 @@
 
 ## Summary
 
-This design describes how `backend` runs the ticket workflow behind `/console`. It covers suggestions and their job queue, pseudonymization before every call to `ai-service`, the client that calls `ai-service`, replies, reply proposals, escalations, the authority rule, manual handling, staff decisions, the audit log, reports, and two one-off commands: the ticket import and the decision-record export. It is the third follow-up design of [contracts v1, Rollout, step 9](contracts-v1.md#rollout), and it fixes what that design left to `backend`. The internals of `ai-service` (routing, the list of sensitive intents, retrieval limits) wait for the join with the AI and ML code. Three choices were the project lead's: the named-entity library, the split of handling modes for the product-value study, and the initial values of the job queue. On 2026-11-12 the project lead chose the recommended option of each, and [ADR-0017](../decisions/0017-named-entity-model-from-its-release-url.md) (Proposed) covers the install of the named-entity model.
+This design describes how `backend` runs the ticket workflow behind `/console`. It covers suggestions and their job queue, pseudonymization before every call to `ai-service`, the client that calls `ai-service`, replies, reply proposals, escalations, the authority rule, manual handling, staff decisions, the audit log, reports, and two one-off commands: the ticket import and the decision-record export. It is the third follow-up design of [contracts v1, Rollout, step 9](contracts-v1.md#rollout), and it fixes what that design left to `backend`. The internals of `ai-service` (routing, the list of sensitive intents, retrieval limits) wait for the join with the AI and ML code. Three choices were the project lead's: the named-entity library, the split of handling modes for the product-value study, and the initial values of the job queue. On 2026-11-12 the project lead chose the recommended option of each, and [ADR-0017](../decisions/0017-named-entity-model-from-its-release-url.md), accepted the same day, covers the install of the named-entity model.
 
 ## Goals and non-goals
 
@@ -405,8 +405,8 @@ The NFR-08 load test and the pseudonymization trial run before the demo. No mode
 
 ## Rollout
 
-1. This design, Draft, together with `backend` contract 1.2.0 and `ai-service` contract 1.0.0, on the branch `build/ticket-workflow`. The project lead approves the design and the `ai-service` part of the contracts v1 design together.
-2. [ADR-0017](../decisions/0017-named-entity-model-from-its-release-url.md), Proposed, for the install of the named-entity model from its release URL, reviewed together with this design and accepted before the implementation adds the dependency.
+1. Done on 2026-11-12: the project lead approved this design together with `backend` contract 1.2.0, `ai-service` contract 1.0.0, and the `ai-service` part of the contracts v1 design, on the branch `build/ticket-workflow`. That approval is also the security review of SEC-35.
+2. Done on 2026-11-12: the project lead accepted [ADR-0017](../decisions/0017-named-entity-model-from-its-release-url.md), the install of the named-entity model from its release URL, together with this design.
 3. The `backend` implementation on the same branch: migration `r0003`, the feature modules, the commands, the provider tests, and the consumer tests against the `ai-service` mock. The provider contract tests of `backend` run over every operation of the contract, so they fail on this branch from the contract change until this step lands; the branch is merged into `chore` only after it (CON-01, step 5).
 4. The `frontend` console screens, against the Prism mock of `backend` contract 1.2.0.
 5. Roll back by reverting the merge commit after downgrading the database to `r0002` with the merged code, as for `r0002` ([account management design, Rollout](account-management.md#rollout)).
