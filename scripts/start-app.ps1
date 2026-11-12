@@ -11,17 +11,47 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $repoRoot
 $env:PYTHONUTF8 = '1'
+
+# Locate Python environment (prefer local .venv, then SUPPORTIQ_PYTHON, then root repo venv in worktree)
 $pythonPath = Join-Path $repoRoot '.venv/Scripts/python.exe'
+if (-not (Test-Path -LiteralPath $pythonPath)) {
+    if ($env:SUPPORTIQ_PYTHON -and (Test-Path -LiteralPath $env:SUPPORTIQ_PYTHON)) {
+        $pythonPath = $env:SUPPORTIQ_PYTHON
+    } else {
+        $commonGitDir = & git rev-parse --git-common-dir 2>$null
+        if ($commonGitDir) {
+            $rootRepoCandidate = Join-Path (Split-Path $commonGitDir -Parent) '.venv/Scripts/python.exe'
+            if (Test-Path -LiteralPath $rootRepoCandidate) {
+                $pythonPath = $rootRepoCandidate
+            }
+        }
+    }
+}
 if (-not (Test-Path -LiteralPath $pythonPath)) {
     $installedPython = (Get-Command python -ErrorAction SilentlyContinue).Source
     if (-not $installedPython) { $installedPython = 'C:/Users/PC/AppData/Local/Programs/Python/Python314/python.exe' }
     & $installedPython -m venv .venv
     if ($LASTEXITCODE -ne 0) { throw 'Could not create the Python environment.' }
+    $pythonPath = Join-Path $repoRoot '.venv/Scripts/python.exe'
 }
+
 if (-not $SkipInstall) {
     & $pythonPath -X utf8 -m pip install --disable-pip-version-check -r apps/backend/requirements.txt
     if ($LASTEXITCODE -ne 0) { throw 'Backend dependency installation failed.' }
 }
+
+# Run runtime preflight and export discovery/driver variables
+if (-not $env:PSYCOPG_IMPL) {
+    $env:PSYCOPG_IMPL = 'python'
+}
+& $pythonPath -X utf8 scripts/native_runtime.py preflight
+if ($LASTEXITCODE -ne 0) { throw 'Runtime preflight verification failed.' }
+
+$discoveredPgBin = & $pythonPath -X utf8 -c "from scripts.native_runtime import discover_pg_bin; print(discover_pg_bin())"
+if ($discoveredPgBin -and (Test-Path -LiteralPath $discoveredPgBin)) {
+    $env:PATH = "$discoveredPgBin;$env:PATH"
+}
+
 & $pythonPath -X utf8 scripts/native_runtime.py prepare
 if ($LASTEXITCODE -ne 0) { throw 'Native PostgreSQL setup failed.' }
 & $pythonPath -X utf8 -m apps.backend.manage initialize

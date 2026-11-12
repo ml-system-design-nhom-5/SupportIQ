@@ -1,115 +1,119 @@
 # SupportIQ — Current System Limitations & Operational Boundaries
 
-> **Document Version:** 1.0.0  
+> **Document Version:** 1.1.0  
 > **Target Audience:** Engineering Team, System Architects, Quality Assurance, and Academic Evaluators  
 > **Scope:** Runtime constraints, architectural boundaries, edge cases, and post-deployment roadmap items  
-> **Last Updated:** 2026-11-06  
+> **Last Updated:** 2026-11-12  
 
 ---
 
 ## 1. Executive Summary
 
-SupportIQ has successfully achieved production-grade readiness across its core functional flows: 100% human-in-the-loop oversight, deterministic 16-code escalation routing, high-accuracy semantic RAG retrieval (Recall@3 = 97.06%), zero hallucination on verified benchmarks, and complete observability with Prometheus metrics and structured PII-redacted logging.
+SupportIQ is a prototype AI copilot designed to assist e-commerce customer support staff. The system operates strictly under human-in-the-loop oversight: customer service representatives review, edit, approve, reject, or escalate every proposed response. The system never executes automatic replies and never performs automated financial or order modifications.
 
-However, an honest, rigorous engineering evaluation requires explicit documentation of system boundaries, operating constraints, and areas where software behavior intentionally adheres to design trade-offs. This document catalogs all known limitations across architecture, machine learning, retrieval, privacy, infrastructure, and empirical validation.
+This document catalogs current operational boundaries, runtime constraints, and known limitations across architecture, machine learning, retrieval, privacy, infrastructure, and empirical validation. Historical measurements (such as test runs on specific sample sets) represent observed local observations rather than universal production-grade guarantees.
 
 ---
 
-## 2. Storage Engine & Immutability Invariants (PostgreSQL vs. SQLite)
+## 2. Storage Engine & Immutability Invariants (PostgreSQL Application vs. Demo/Eval SQLite)
 
-### 2.1 The Architectural Commitment
-In the master architecture specification (`docs/ARCHITECTURE.md`), the audit log (`ticket_audit`) and sticky authority invariants are defined to be enforced at the **relational database engine level** using PostgreSQL database triggers (`BEFORE UPDATE OR DELETE ON ticket_audit` raising exceptions, and `BEFORE UPDATE ON tickets` enforcing sticky manager authority).
+### 2.1 Native PostgreSQL Application Runtime
+The primary native application (`apps/backend`) uses **PostgreSQL** with dedicated database roles (`supportiq_owner` and `supportiq_app`), explicit schema migrations, and relational schema constraints.
 
-### 2.2 Current Implementation Boundary
-In local development, automated testing, and standalone demonstration modes, SupportIQ operates over **SQLite** via SQLAlchemy to maintain a zero-infrastructure, self-contained footprint (runnable within 5 GB RAM on consumer hardware without Docker or cloud services).
+* **Audit Log Immutability & Sticky Authority:** Enforced through database-level constraints and transactional application service rules (`apps/backend/tickets/service.py`). Audit log entries and customer messages reject `UPDATE` and `DELETE` operations, and tickets with `is_authority_required = True` remain locked to manager-only replies even across intent corrections.
+* **Driver & Environment Boundaries:** On Windows systems governed by Windows Application Control policies (WDAC / AppLocker), binary C extensions (`psycopg_binary` `.pyd`) may be blocked. The application configures `PSYCOPG_IMPL=python` and uses ctypes with an allowed native PostgreSQL `libpq.dll` installation.
+* **Test Fixture Role Scope:** The test harness fixture in `tests/application/test_application.py` utilizes the database owner connection to dynamically create and drop ephemeral isolated schemas (`test_<uuid>`). Consequently, while application-level checks, transactions, and relational schema constraints are exercised, this harness does not constitute proof of restricted runtime-role (`supportiq_app`) DDL/DML permissions or Alembic production trigger invariants. Those must be evaluated separately under production role contexts.
 
-* **Application-Level Enforcement:** Immutability and sticky authority are strictly enforced at the application/ORM service layer (`apps/backend/tickets/service.py` and `apps/backend/audit/service.py`). The application forbids raw updates or deletes on audit records and prevents demoting an escalated ticket without managerial credentials.
-* **Limitation:** In SQLite mode, if an external actor with operating system file privileges executes raw SQL against the `.db` file using the `sqlite3` CLI, SQLite does not run the PostgreSQL PL/pgSQL trigger routines. Production enterprise deployment requires switching the database connection string to PostgreSQL where migration scripts install the native database triggers.
+### 2.2 Legacy Demo & Evaluation SQLite Footprint
+* **Scope Separation:** Standalone demonstrations (`apps/demo`) and offline evaluation pipelines operate over local SQLite databases to maintain an isolated, zero-infrastructure footprint runnable without background services.
+* **Limitation:** SQLite runs in those tools are intended solely for offline benchmark execution and isolated evaluation passes; they do not serve as proof of multi-role database integrity for the primary application.
 
 ---
 
 ## 3. Machine Learning Model Artifacts & Fallback Mechanics
 
 ### 3.1 Pinned Checkpoint Distribution
-The fine-tuned intent classification model (`supportiq_distilbert`, fine-tuned on the 46-intent Bitext Retail E-commerce taxonomy) has its trained weights packaged in PyTorch `model.safetensors` (~260 MB).
+The intent classification model (`supportiq_distilbert`, fine-tuned on the 46-intent Bitext Retail E-commerce taxonomy) has its trained weights packaged in PyTorch `model.safetensors` (~260 MB).
 
-* **Limitation:** Due to Git repository size best practices, large binary weight files are gitignored and not stored directly in the Git commit history.
-* **Local Fallback Mode:** When the repository is cloned into a fresh environment without running the model download pipeline, the system activates `SUPPORTIQ_DEV_FALLBACK_MODEL=true`. This mode uses regex and semantic keyword heuristics to simulate intent predictions across common support queries (returns, cancellations, tracking, billing).
-* **Operational Impact:** Fallback mode enables the entire RAG pipeline, BGE vector retrieval, Gemini LLM drafting, and frontend UI to function seamlessly without requiring a 260 MB download or a GPU. However, for full 46-intent fine-grained classification accuracy on complex paraphrased text, the verified weights artifact must be retrieved from release storage and placed into `artifacts/models/trained/distilbert-supportiq/`.
+* **Limitation:** Large binary weight files are gitignored and not stored directly in the Git commit history.
+* **Local Fallback Mode:** When the repository is cloned into a fresh environment without running the model download pipeline, the system may activate `SUPPORTIQ_DEV_FALLBACK_MODEL=true`. This mode uses regex and semantic keyword heuristics to simulate intent predictions across common support queries.
+* **Operational Impact:** Fallback mode enables offline UI and API development without requiring GPU resources or 260 MB weights. However, heuristic fallback outputs MUST NOT be attributed to verified model checksums or calibrated confidence scores. Full 46-intent evaluation requires loading the verified weights artifact from release storage into `artifacts/models/trained/distilbert-supportiq/`.
 
 ### 3.2 Expected Calibration Error (ECE) Borderline Performance
-* **Target:** Expected Calibration Error $\text{ECE} \le 0.1000$ (10%).
-* **Measured Result:** On the 156-case acceptance benchmark, the model achieves $\text{ECE} = 0.1063$ (10.6%), representing a minor delta of $+0.0063$ against the strictest gate.
-* **Root Cause & Impact:** While Temperature Scaling ($T=1.25$) successfully smoothed raw overconfident logits, DistilBERT exhibits slight overconfidence on high-frequency majority classes (e.g., standard returns). The Brier score remains exceptionally low (0.0169), and the False Acceptance Rate on out-of-domain queries is 0.00%, meaning this calibration variance does not induce practical routing failures.
-* **Roadmap Mitigation:** Implementing non-parametric Isotonic Regression or vector scaling on an expanded hold-out validation set.
+* **Historical Observation:** On historical benchmark runs (e.g., recorded on 2026-11-05), DistilBERT achieved $\text{ECE} \approx 0.1063$, against an evaluation target of $\text{ECE} \le 0.1000$.
+* **Root Cause & Impact:** While Temperature Scaling ($T=1.25$) smoothed raw overconfident logits, DistilBERT exhibited slight overconfidence on high-frequency majority classes (e.g., standard returns).
+* **Roadmap Mitigation:** Investigating non-parametric Isotonic Regression or vector scaling on an expanded hold-out validation set.
 
 ---
 
 ## 4. Knowledge Base & Domain Scope Boundaries
 
-### 4.1 12 Post-Purchase Support Intents vs. Pre-Sales Catalog
-SupportIQ is purpose-built as an **after-sales customer support copilot**. Its approved knowledge base (`data/knowledge/approved_kb.v2.json`) contains canonical policy documents covering 12 core e-commerce customer support intents:
+### 4.1 12 In-Scope Product Support Intents vs. Full Bitext Taxonomy
+SupportIQ is designed as an **after-sales customer support copilot**. While the underlying intent model is evaluated across all 46 Bitext taxonomy intents, the product application implements 12 core customer support intents:
 
-1. `refund_order` (Refund rules, payment methods, processing timeframes)
-2. `cancel_order` (Cancellation windows, pre-shipping cancellation)
-3. `return_order` (30-day return policy, item condition, restocking fees)
-4. `shipping_tracking` (Courier tracking, transit times, delayed shipments)
-5. `change_shipping_address` (Address modification restrictions)
-6. `change_order` (Item exchange, size/color modifications)
-7. `payment_issue` (Failed transactions, chargebacks, gateway errors)
-8. `damaged_defective_item` (DOA policies, warranty claims, photo evidence)
-9. `warranty_inquiry` (Manufacturer warranty, extended protection coverage)
-10. `promotions_discounts` (Coupon application, promotional exclusions)
-11. `account_security` (Password resets, unauthorized access protocols)
-12. `contact_customer_service` (Operating hours, human agent escalation)
+1. `track_order` (Order tracking, shipment status, delivery tracking links)
+2. `cancel_order` (Order cancellation before dispatch, cancellation window checks)
+3. `delivery_time` (Estimated delivery timeframe inquiries)
+4. `delivery_issue` (Delayed shipment, carrier issues, transit exceptions)
+5. `shipping_costs` (Shipping fee inquiries, free shipping thresholds)
+6. `return_policy` (Return eligibility, return timeframe, item conditions)
+7. `return_product` (Initiating a product return, return label instructions)
+8. `refund_policy` (Refund eligibility criteria, refund methods)
+9. `request_refund` (Submitting refund request; requires manager authority)
+10. `refund_status` (Inquiries on pending refund progress)
+11. `payment_issue` (Failed transactions, double charges, payment gateway issues)
+12. `human_agent` (Customer explicitly requests a human agent)
 
-* **Scope Limitation:** Pre-sales shopping queries (e.g., *"Do you have the blue jacket in size XL in stock?"*, *"Which running shoes are best for flat feet?"*, or general product comparisons) fall **outside the post-purchase policy domain**.
-* **System Behavior:** When queried on pre-sales or product catalog matters, SupportIQ does not hallucinate inventory numbers. Instead, it correctly triggers `unsupported_intent` or `high_entropy_ood`, abstaining from automated policy drafting and escalating the ticket to human staff. This behavior is intentional by design to uphold zero-hallucination guarantees.
+* **Behavior on `human_agent`:** When classified as `human_agent`, the system does NOT generate an automated draft; it recommends staff escalation for manual handling.
+* **Behavior on Remaining 34 Bitext Intents:** Queries mapping to the other 34 Bitext intents (or out-of-scope pre-sales shopping queries such as product recommendations or stock availability) trigger fallback or abstention (`unsupported_intent`, `out_of_scope_intent`), leaving the ticket open for manual handling without generating ungrounded policy claims.
 
 ---
 
 ## 5. Privacy & PII Redaction Boundaries
 
-### 5.1 Regex & Luhn Heuristics vs. Unstructured Slang
-SupportIQ implements strict pre-egress PII sanitization via `TokenVault` and regular expression filters before payloads reach external LLM APIs (NFR-06 / FR-10):
+### 5.1 Pre-Egress Sanitization & Order Context Allowlist
+SupportIQ enforces pre-egress sanitization before any text or context reaches external LLMs or third-party APIs:
 * Credit card numbers are validated and masked using the Luhn algorithm checksum.
-* Vietnamese and international phone number formats are tokenized.
-* Email addresses, order numbers (`ORD-\d+`), and tracking codes (`TRK-\d+`) are substituted with deterministic tokens (e.g., `[PHONE_TOKEN_1]`).
+* Phone numbers and email addresses are pseudonymized.
+* Order IDs (`ORD-\w+`), tracking IDs (`TRK-\w+`), and transaction IDs (`TXN-\w+`) are replaced with deterministic placeholders (`[ORDER_ID_1]`).
+* Customer-authored placeholders like `[NAME_1]` are preserved as literal text.
+* Order context passed to the AI gateway is strictly allowlisted to non-identifying operational summary fields (`order_status`, `order_total`, `shipping_cost`, `shipment_status`, `refund_status`, `refund_amount`); customer names, shipping addresses, phone numbers, and full credit card details are excluded from AI context.
 
-* **Limitation:** In scenarios where a customer writes their address or personal details using obscure vernacular, colloquial street slang, or deliberate obfuscation (e.g., *"send to the blue gate behind Mrs. Ba's bakery next to the highway bridge"*), regex-based pattern matching cannot guarantee 100% extraction.
-* **Roadmap Mitigation:** Integrating a compact, locally hosted token-classification Named Entity Recognition (NER) model (such as PhoBERT-NER or RoBERTa-NER) within the preprocessing pipeline to supplement regex-based masking.
+### 5.2 Unstructured Slang & Vernacular Recall Limitation
+* **Limitation:** When a customer writes personal or address information using obscure colloquial vernacular, street slang, or non-standard directions (e.g. directions without standard street, ward, or city keywords), pattern-matching heuristics and spaCy NER may not capture every entity.
+* **Mitigation:** Sensitive customer data remains masked by known database values where available; human review remains mandatory before dispatching any reply.
 
 ---
 
 ## 6. External LLM Provider & Infrastructure Quota
 
-### 6.1 Google AI Studio API Rate Limits
-SupportIQ uses the Google Gemini API (`gemini-2.5-flash` / `gemini-1.5-flash`) for structured response drafting.
-* **Limitation:** Operating on the developer tier of Google AI Studio entails specific rate limitations (typically 15 Requests Per Minute [RPM], 1,000,000 Tokens Per Minute [TPM], or 1,500 Requests Per Day [RPD]).
-* **Failure Handling:** Under sudden traffic surges exceeding developer quotas, Google Gemini returns HTTP 429 (`Resource Exhausted`). SupportIQ handles this via exponential backoff (up to 2 retries within a 10-second deadline). If the quota remains exhausted, the system transitions gracefully into `llm_unavailable` fallback mode, notifying the agent and leaving the ticket open for manual agent response. High-concurrency commercial deployments require enterprise Google Cloud Vertex AI provisioning with provisioned throughput.
+### 6.1 Provider Rate Limits & Failure Handling
+SupportIQ optionally integrates with Google Gemini API for draft generation when enabled:
+* **Rate Limits:** Developer-tier API keys are subject to requests-per-minute and daily quota ceilings.
+* **Transient Recovery vs. Retry Policy:** The system provides bounded timeout recovery for transient connection errors during draft generation. If the quota or budget is exhausted, the ticket transitions to `llm_unavailable`, allowing the support agent to type a manual reply. The UI only permits retrying suggestions that experienced transient failures; ready drafts do not offer an automatic regenerate action.
 
 ---
 
-## 7. Empirical Human User Study (NFR-10 Validation)
+## 7. Empirical Human User Study & Evaluation Boundaries (NFR-11)
 
 ### 7.1 Objective Requirement
-Non-Functional Requirement NFR-10 states:
-> *"Reduce average ticket handling time by $\ge 20\%$ compared to manual response workflows across at least 30 real-world customer support requests."*
+Non-Functional Requirement NFR-11 specifies:
+> *"Handling time is at least 20% shorter than the manual process, measured on at least 30 requests."*
 
-### 7.2 Current Validation Status
-* **Software Instrumentation:** Complete. The system records `handling_time_ms` (from initial ticket viewing to final approval/dispatch), staff interaction events (`approved`, `edited`, `rejected`, `escalated`), and draft acceptance rates in the persistent audit database. Observability endpoints (`/v1/admin/observability/metrics`) aggregate these metrics.
-* **Empirical Limitation:** A true longitudinal user study requires human CS agents operating in parallel control and treatment cohorts across live e-commerce shifts. Because running this study requires real human agents and organizational scheduling, the $\ge 20\%$ reduction remains a mathematically sound system expectation rather than an empirically signed-off field trial. Field testing is scheduled as part of the post-deployment rollout phase.
+### 7.2 Current Evaluation Scope & Boundaries
+* **Distinction between Simulation and Human Study:** Benchmark evaluations and timed comparisons may be conducted via synthetic agent simulation or automated source-based AI grading. However, automated simulations and AI grading MUST NOT be represented as real human graders or live customer support staff trials.
+* **Empirical Status:** A controlled paired-user study with counterbalanced order across actual human customer service staff has not yet been executed in production. SupportIQ does NOT make any claim of measured human productivity improvement. Any projected handling time savings represent engineering design targets rather than empirically signed-off human trial results.
 
 ---
 
 ## 8. Summary Matrix of Limitations & Mitigations
 
-| Dimension | Limitation Description | Current Handling / Impact | Recommended Future Phase |
+| Dimension | Limitation Description | Current Handling / Impact | Future Direction |
 |---|---|---|---|
-| **Database** | SQLite lacks native PL/pgSQL triggers for immutable audit logs | Enforced in application service layer; safe for single-node deployment | Migrate to PostgreSQL with `protect_audit()` engine trigger for enterprise scale |
-| **Model Weights** | 260 MB PyTorch binary excluded from Git tracking | `SUPPORTIQ_DEV_FALLBACK_MODEL=true` heuristic fallback active out-of-the-box | Download verified artifact from release storage for production neural classification |
-| **Calibration** | $\text{ECE} = 0.1063$ slightly above $0.1000$ target | Low Brier score ($0.0169$); zero OOD leakages; safe routing | Apply Isotonic Regression or Platt scaling on expanded holdout split |
-| **Domain Scope** | KB v2 covers 12 post-purchase intents; excludes pre-sales product catalog | System intentionally abstains on shopping queries; prevents inventory hallucination | Ingest product inventory catalog with real-time stock API integration |
-| **PII Scrubbing** | Regex/Luhn filters do not capture heavily colloquial slang addresses | Standard PII (cards, phones, emails, IDs) 100% tokenized; zero raw PII in logs | Deploy local lightweight NER model (e.g. RoBERTa-NER) for unstructured text |
-| **LLM Quota** | Developer tier rate limits on Google AI Studio API | Exponential backoff (2 retries); graceful degradation to manual staff typing | Upgrade to Google Cloud Vertex AI provisioned throughput |
-| **User Study** | NFR-10 20% handling time reduction pending live human staff trial | Complete telemetry in place (`handling_time_ms`); audit logs active | Execute 4-week paired agent cohort study in production pilot |
+| **Database** | Dual engine modes: PostgreSQL for application, SQLite for offline demo/eval | PostgreSQL enforces real roles, constraints, and migrations; SQLite is isolated to offline tooling | Maintain clear boundary between application PostgreSQL and evaluation runners |
+| **Model Weights** | Binary weights (260 MB) excluded from git tracking | Verified model loaded when artifact present; heuristic fallback clearly segregated and cannot simulate trained provenance | Automated asset download script with sha256 checksum verification |
+| **Calibration** | Historical ECE slightly above target ($\approx 0.106$) on single benchmark | Temperature scaling active; raw softmax scores preserved and displayed as uncalibrated | Explore isotonic regression on expanded holdout split |
+| **Domain Scope** | 12 customer support intents supported in application; 34 intents abstain | Automated drafts restricted to 11 support intents; `human_agent` escalates; others manual | Expand knowledge base documents with verified policies |
+| **PII Protection** | Colloquial slang addresses without standard markers may evade regex | Known account fields masked; strict order context allowlist; human review mandatory | Evaluate localized token-classification NER |
+| **LLM Quota** | Provider quota limits on external API calls | Bounded retries for transient errors; graceful degradation to manual staff reply | Provisioned quota or local small-LLM inference |
+| **User Study** | 20% handling time reduction target pending human trial | Timing telemetry and audit instrumentation active | Conduct paired human-in-the-loop trial with counterbalancing |

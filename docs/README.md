@@ -1,6 +1,6 @@
 # Documentation handbook
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-10-28
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-12
 
 This handbook tells you where each document lives and how to write it. It applies to every contributor, human or AI agent. A change is not done until its documentation is correct.
 
