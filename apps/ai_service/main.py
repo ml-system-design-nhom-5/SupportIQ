@@ -73,7 +73,7 @@ def create_app():
         import torch
         from apps.ml_inference.app import ModelContainer
         from apps.core_backend.retrieval.adapter import RetrievalAdapter
-        from apps.core_backend.llm.gemini import GeminiDraftClient
+        from apps.core_backend.llm.gemini import GeminiDraftClient, PROMPT_VERSION
 
         torch.set_num_threads(2)
         model = ModelContainer()
@@ -89,12 +89,14 @@ def create_app():
         policy_path = root / "apps/core_backend/config/policies/intent_policy.v2.json"
         kb_hash = hashlib.sha256(kb.read_bytes() + release_path.read_bytes()).hexdigest()
         policy_hash = hashlib.sha256(policy_path.read_bytes()).hexdigest()
-        versions = {"release_id": "local-" + hashlib.sha256(((model.model_checksum or "unavailable") + kb_hash + policy_hash + "grounded-v2").encode()).hexdigest()[:16],
+        engine_hash = hashlib.sha256(Path(__file__).with_name('engine.py').read_bytes()).hexdigest()
+        versions = {"release_id": "local-" + hashlib.sha256(((model.model_checksum or "unavailable") + kb_hash + policy_hash + engine_hash + PROMPT_VERSION).encode()).hexdigest()[:16],
                     "model_version": model.verified_model_version or getattr(model, "model_version", None) or "Unknown",
                     "model_mode": getattr(model, "model_mode", "unavailable"),
                     "verified": getattr(model, "verified", False),
                     "kb_version": "sha256:" + kb_hash, "mapping_version": "embedded:" + kb_hash,
-                    "prompt_version": "grounded-v2", "routing_version": "sha256:" + policy_hash, "index_version": "bge-small-en-v1.5:" + kb_hash}
+                    "prompt_version": PROMPT_VERSION, "engine_version": "sha256:" + engine_hash,
+                    "routing_version": "sha256:" + policy_hash, "index_version": "bge-small-en-v1.5:" + kb_hash}
         resources.update(engine=Engine(model,retriever,BudgetedDraftClient(llm),versions,json.loads(policy_path.read_text())), model=model, retriever=retriever, versions=versions)
         yield
         client.close()
