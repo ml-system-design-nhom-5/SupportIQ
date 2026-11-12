@@ -1,6 +1,6 @@
 # ADR-0018: Hosting of `ai-service` on Modal
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-12
 - **Deciders:** Project lead
 - **Related:** [Requirements](../product/requirements.md) (NFR-07, NFR-08, NFR-10, CST-03), [ADR-0003](0003-tech-stack.md), [ADR-0010](0010-pseudonymization-and-egress-control.md), [ADR-0011](0011-deployment-and-runtime-topology.md), [ADR-0016](0016-hosting-on-free-tiers.md), [ADR-0017](0017-repository-layout-and-ai-ml-migration.md), [contracts v1 design](../design/contracts-v1.md), [`ai-service` contract](../../contracts/ai-service.openapi.yaml), [data and ML rules](../rules/data-and-ml.md), [security rules](../rules/security-and-privacy.md)

@@ -1,6 +1,6 @@
 # ADR-0017: Repository layout and migration of the AI and ML code
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-12
 - **Deciders:** Project lead
 - **Related:** [Requirements](../product/requirements.md) (FR-03 to FR-07, FR-09, NFR-01, NFR-05, CST-02, CST-03), [ADR-0001](0001-system-architecture.md), [ADR-0003](0003-tech-stack.md), [ADR-0005](0005-intent-independent-retrieval.md), [ADR-0010](0010-pseudonymization-and-egress-control.md), [ADR-0011](0011-deployment-and-runtime-topology.md), [ADR-0013](0013-shop-demo-with-read-only-catalog.md), [ADR-0016](0016-hosting-on-free-tiers.md), [ADR-0018](0018-hosting-of-ai-service-on-modal.md), [contracts v1 design](../design/contracts-v1.md), [`ai-service` contract](../../contracts/ai-service.openapi.yaml), [architecture rules](../rules/architecture.md), [data and ML rules](../rules/data-and-ml.md), [workflow rules](../rules/workflow.md), [testing rules](../rules/testing.md), [security rules](../rules/security-and-privacy.md)
