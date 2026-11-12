@@ -56,7 +56,7 @@ class MockRetriever:
 
 
 class MockLLM:
-    def __init__(self, body="Your package is in transit and will arrive soon. [S1]", sources=None, is_clarification=False, error=None):
+    def __init__(self, body="Standard delivery takes 3 to 5 business days. [S1]", sources=None, is_clarification=False, error=None):
         self.body = body
         self.sources = sources or [
             {"source_id": "S1", "source_type": "policy", "document_id": "policy-shipping-v1", "version": "1", "excerpt": "Delivery takes 3 to 5 business days."}
@@ -140,7 +140,7 @@ def test_short_paragraph_with_return_window_requires_citation():
 
 def test_harmless_greeting_without_citation_allowed_when_grounded():
     """Short polite greetings (e.g. 'Hello [NAME_1],') without factual claims are allowed."""
-    llm = MockLLM(body="Hello [NAME_1],\n\nYour order is on the way. [S1]")
+    llm = MockLLM(body="Hello [NAME_1],\n\nStandard delivery takes 3 to 5 business days. [S1]")
     engine = make_engine(llm=llm)
 
     req = make_request(message="Hello [NAME_1], where is my order?")
@@ -150,6 +150,44 @@ def test_harmless_greeting_without_citation_allowed_when_grounded():
     assert res["draft"]["segments"][0]["text"] == "Hello [NAME_1],"
     assert res["draft"]["segments"][0]["citation_ids"] == []
     assert res["draft"]["segments"][1]["citation_ids"] == ["S1"]
+
+
+def test_short_clarification_without_citation_allowed():
+    """Short clarification question asking for missing details alongside cited policy is allowed."""
+    llm = MockLLM(
+        body="Could you provide your order ID?\n\nStandard delivery takes 3 to 5 business days. [S1]",
+        is_clarification=True,
+    )
+    engine = make_engine(llm=llm)
+
+    res = engine.draft(make_request())
+    assert res["status"] == "draft_ready"
+    assert "missing_information" in res["reason_codes"]
+    assert "clarification" in res["staff_note"].lower()
+    assert len(res["draft"]["segments"]) == 2
+    assert res["draft"]["segments"][0]["citation_ids"] == []
+    assert res["draft"]["segments"][1]["citation_ids"] == ["S1"]
+
+
+def test_missing_prediction_provenance_metadata_defaults_to_unknown_and_false():
+    """When the underlying model prediction omits model_mode and verified,
+    the gateway must default to 'unknown' and False, never inventing trusted provenance."""
+    class BareModel:
+        def predict(self, text):
+            return {
+                "intent": "track_order",
+                "confidence": 0.95,
+                "margin": 0.85,
+                "score_kind": "uncalibrated_softmax",
+                "model_version": "v1.0.0",
+                "top_k": [{"intent": "track_order", "probability": 0.95}],
+                # model_mode and verified are intentionally omitted
+            }
+
+    engine = make_engine(model=BareModel())
+    analysis = engine.analyse(make_request())
+    assert analysis["intent"]["model_mode"] == "unknown"
+    assert analysis["intent"]["verified"] is False
 
 
 def test_unsupported_citation_identifier_fails_grounding():
@@ -164,9 +202,8 @@ def test_unsupported_citation_identifier_fails_grounding():
 
 def test_missing_order_context_field_citation_fails_grounding():
     """Citing an order source when the required field is absent from order_context fails grounding."""
-    # S2 is an order source, but order_context does not provide order_status or refund_status
     sources = [
-        {"source_id": "S1", "source_type": "policy", "document_id": "policy-shipping-v1", "version": "1", "excerpt": "Delivery terms."},
+        {"source_id": "S1", "source_type": "policy", "document_id": "policy-shipping-v1", "version": "1", "excerpt": "Delivery takes 3 to 5 business days."},
         {"source_id": "S2", "source_type": "order", "document_id": "order-1", "version": "1", "excerpt": "Order details."},
     ]
     llm = MockLLM(body="Status is confirmed. [S2]", sources=sources)

@@ -6,6 +6,9 @@ import re
 import time
 
 PLACEHOLDER = re.compile(r"\[(NAME|EMAIL|PHONE|CARD|ADDRESS|ORDER_ID|TRACKING_ID|TRANSACTION_ID|LITERAL)(_[1-9][0-9]{0,2})?\]")
+# Structural heuristic for detecting uncited financial, duration, or policy commitments in short segments.
+# NOTE: This regex is a heuristic safety gate only; it does not establish semantic entailment or comprehensive
+# factual detection. Human review remains mandatory for all outgoing replies.
 FACTUAL_COMMITMENT = re.compile(r"(\$\s*\d+|\b\d+\s*(days?|business days?|hours?|weeks?|months?)\b|\b(refund|refunded|refunds|return window|fee|fees|warranty)\b)", re.I)
 
 
@@ -60,7 +63,7 @@ class Engine:
                               "effective_from": str(original.metadata.valid_from) if original else None,
                               "effective_to": str(original.metadata.valid_to) if original and original.metadata.valid_to else None})
         recommendation = "escalate" if "human_agent_requested" in codes else "abstain" if set(codes) & {"low_confidence", "out_of_scope_intent", "no_valid_document", "conflicting_sources"} else "draft"
-        analysis = {"intent": {"label": label, "probability": probability, "confidence_band": "low" if (low or "low_confidence" in codes) else "high" if probability >= .9 else "medium", "source": "staff" if override else "model", "score_kind": "staff_choice" if override else prediction.get("score_kind", "unknown"), "model_mode": "override" if override else prediction.get("model_mode", "trained"), "verified": False if override else prediction.get("verified", True)},
+        analysis = {"intent": {"label": label, "probability": probability, "confidence_band": "low" if (low or "low_confidence" in codes) else "high" if probability >= .9 else "medium", "source": "staff" if override else "model", "score_kind": "staff_choice" if override else prediction.get("score_kind", "unknown"), "model_mode": "override" if override else prediction.get("model_mode", "unknown"), "verified": False if override else bool(prediction.get("verified", False))},
                     "alternatives": [{"label": item["intent"], "probability": item["probability"], "confidence_band": "low"} for item in candidates if item["intent"] != label][:4],
                     "is_in_scope": label in self.policy["supported_12_intents"], "documents": documents,
                     "routing": {"recommendation": recommendation, "reason_codes": codes}, "warnings": warnings, "versions": self.versions,

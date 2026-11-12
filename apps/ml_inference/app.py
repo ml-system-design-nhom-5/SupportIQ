@@ -57,11 +57,16 @@ class PredictResponse(BaseModel):
     model_version: str
     model_checksum: Optional[str] = None
     tokenizer_checksum: Optional[str] = None
-    model_mode: Optional[str] = "trained"
-    verified: Optional[bool] = True
+    model_mode: Optional[str] = None
+    verified: Optional[bool] = False
 
 class ModelContainer:
     def __init__(self):
+        self._reset_state()
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    def _reset_state(self):
+        """Reset all runtime state so reload/failures never retain stale provenance."""
         self.model = None
         self.tokenizer = None
         self.id2label: Dict[int, str] = {}
@@ -69,16 +74,39 @@ class ModelContainer:
         self.verified_model_version: Optional[str] = None
         self.model_checksum: Optional[str] = None
         self.tokenizer_checksum: Optional[str] = None
-        self.model_mode: str = "unavailable"
-        self.verified: bool = False
+        self._model_mode: Optional[str] = "unavailable"
+        self._verified: Optional[bool] = False
         self._is_dev_fallback: bool = False
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    @property
+    def model_mode(self) -> str:
+        if self._model_mode is not None:
+            return self._model_mode
+        if self._is_dev_fallback:
+            return "heuristic_demo"
+        if self.verified_model_version:
+            return "trained"
+        return "unavailable"
+
+    @model_mode.setter
+    def model_mode(self, val: Optional[str]):
+        self._model_mode = val
+
+    @property
+    def verified(self) -> bool:
+        if self._verified is not None:
+            return self._verified
+        return bool(self.verified_model_version and not self._is_dev_fallback)
+
+    @verified.setter
+    def verified(self, val: Optional[bool]):
+        self._verified = val
 
     def _init_dev_fallback(self):
         logger.info("Initializing explicit development intent model fallback")
         self._is_dev_fallback = True
-        self.model_mode = "heuristic_demo"
-        self.verified = False
+        self._model_mode = "heuristic_demo"
+        self._verified = False
         self.model_version = "demo-heuristic-v1"
         self.verified_model_version = None
         self.model_checksum = None
@@ -88,6 +116,7 @@ class ModelContainer:
         self.tokenizer = object()
 
     def load(self, model_dir: Path = MODEL_DIR):
+        self._reset_state()
         import os
         dev_fallback_enabled = os.environ.get("SUPPORTIQ_DEV_FALLBACK_MODEL", "false").lower() in ("1", "true")
 
@@ -95,14 +124,7 @@ class ModelContainer:
             if dev_fallback_enabled:
                 self._init_dev_fallback()
                 return
-            self.model = None
-            self.tokenizer = None
-            self.model_mode = "unavailable"
-            self.verified = False
-            self.verified_model_version = None
-            self.model_version = None
-            self.model_checksum = None
-            self.tokenizer_checksum = None
+            self._reset_state()
             logger.warning(f"Model directory {model_dir} not found")
             return
 
@@ -114,14 +136,7 @@ class ModelContainer:
             if dev_fallback_enabled:
                 self._init_dev_fallback()
                 return
-            self.model = None
-            self.tokenizer = None
-            self.model_mode = "unavailable"
-            self.verified = False
-            self.verified_model_version = None
-            self.model_version = None
-            self.model_checksum = None
-            self.tokenizer_checksum = None
+            self._reset_state()
             logger.warning(f"Required artifact files missing in {model_dir}")
             return
 
@@ -137,14 +152,7 @@ class ModelContainer:
             or tokenizer_checksum != EXPECTED_MANIFEST["tokenizer_sha256"]
         ):
             logger.error("Artifact checksum mismatch with pinned release manifest")
-            self.model = None
-            self.tokenizer = None
-            self.model_mode = "unavailable"
-            self.verified = False
-            self.model_checksum = None
-            self.tokenizer_checksum = None
-            self.verified_model_version = None
-            self.model_version = None
+            self._reset_state()
             return
 
         self.model_checksum = model_checksum
@@ -158,10 +166,7 @@ class ModelContainer:
 
             if not self.validate_label_bijection():
                 logger.error("Label mapping validation failed: not a valid bijection of 46 standard labels")
-                self.model = None
-                self.tokenizer = None
-                self.model_mode = "unavailable"
-                self.verified = False
+                self._reset_state()
                 return
 
             self.tokenizer = AutoTokenizer.from_pretrained(str(model_dir))
@@ -171,15 +176,12 @@ class ModelContainer:
 
             self.verified_model_version = EXPECTED_MANIFEST["model_version"]
             self.model_version = EXPECTED_MANIFEST["model_version"]
-            self.model_mode = "trained"
-            self.verified = True
+            self._model_mode = "trained"
+            self._verified = True
             self._is_dev_fallback = False
         except Exception as e:
             logger.error(f"Failed to load model: {e}")
-            self.model = None
-            self.tokenizer = None
-            self.model_mode = "unavailable"
-            self.verified = False
+            self._reset_state()
 
     def validate_label_bijection(self) -> bool:
         """Verify id2label is a strict bijection covering integers 0..45 to 46 standard labels."""
@@ -206,7 +208,6 @@ class ModelContainer:
             self.model is not None
             and self.tokenizer is not None
             and self.verified_model_version is not None
-            and self.verified
             and self.validate_label_bijection()
         )
 
@@ -217,6 +218,7 @@ class ModelContainer:
             and self.verified
             and self.model_mode == "trained"
             and self.verified_model_version is not None
+            and not self._is_dev_fallback
         )
 
     CALIBRATION_TEMPERATURE: float = 1.25

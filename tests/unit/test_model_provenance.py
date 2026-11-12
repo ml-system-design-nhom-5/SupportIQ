@@ -10,8 +10,9 @@ from apps.ml_inference.app import (
     ModelContainer,
     EXPECTED_MANIFEST,
     EXPECTED_46_LABELS,
+    PredictResponse,
+    PredictionItem,
     app,
-    container,
 )
 
 
@@ -21,12 +22,10 @@ def clean_env(monkeypatch):
     monkeypatch.delenv("SUPPORTIQ_DEV_FALLBACK_MODEL", raising=False)
 
 
-def test_missing_model_directory_fails_closed(clean_env):
+def test_missing_model_directory_fails_closed(clean_env, tmp_path):
     """If the model directory does not exist, container must fail closed without fallback."""
     mc = ModelContainer()
-    nonexistent = Path(tempfile.gettempdir()) / "nonexistent_model_dir_12345"
-    if nonexistent.exists():
-        nonexistent.rmdir()
+    nonexistent = tmp_path / "nonexistent_model_dir"
 
     mc.load(nonexistent)
 
@@ -153,21 +152,22 @@ def test_trained_model_provenance_success():
 
 
 def test_api_ready_and_predict_provenance(monkeypatch):
-    """FastAPI endpoints must expose additive provenance metadata."""
+    """FastAPI endpoints must expose additive provenance metadata without mutating global container."""
+    isolated = ModelContainer()
+    isolated.model = MagicMock()
+    isolated.tokenizer = MagicMock()
+    isolated.id2label = {i: label for i, label in enumerate(sorted(EXPECTED_46_LABELS))}
+    isolated.verified_model_version = "v1.0.0"
+    isolated.model_version = "v1.0.0"
+    isolated.model_checksum = EXPECTED_MANIFEST["weights_sha256"]
+    isolated.tokenizer_checksum = EXPECTED_MANIFEST["tokenizer_sha256"]
+    isolated.model_mode = "trained"
+    isolated.verified = True
+    isolated._is_dev_fallback = False
+
+    monkeypatch.setattr("apps.ml_inference.app.container", isolated)
+
     client = TestClient(app)
-
-    # In mock trained mode:
-    container.model = MagicMock()
-    container.tokenizer = MagicMock()
-    container.id2label = {i: label for i, label in enumerate(sorted(EXPECTED_46_LABELS))}
-    container.verified_model_version = "v1.0.0"
-    container.model_version = "v1.0.0"
-    container.model_checksum = EXPECTED_MANIFEST["weights_sha256"]
-    container.tokenizer_checksum = EXPECTED_MANIFEST["tokenizer_sha256"]
-    container.model_mode = "trained"
-    container.verified = True
-    container._is_dev_fallback = False
-
     res = client.get("/ready")
     assert res.status_code == 200
     data = res.json()
@@ -183,3 +183,70 @@ def test_api_ready_and_predict_provenance(monkeypatch):
         "expected_model_version": "v9.9.9"
     })
     assert res.status_code == 400
+
+
+def test_reload_from_demo_fallback_to_failed_load_resets_state(monkeypatch, tmp_path):
+    """A failed reload attempt after a successful demo fallback must completely reset state."""
+    monkeypatch.setenv("SUPPORTIQ_DEV_FALLBACK_MODEL", "true")
+    mc = ModelContainer()
+    mc.load(tmp_path / "any_path")
+    assert mc._is_dev_fallback is True
+    assert mc.model_mode == "heuristic_demo"
+
+    # Now disable fallback and attempt reload of a non-existent directory
+    monkeypatch.delenv("SUPPORTIQ_DEV_FALLBACK_MODEL", raising=False)
+    mc.load(tmp_path / "nonexistent_dir_reload")
+
+    assert mc._is_dev_fallback is False
+    assert mc.model_mode == "unavailable"
+    assert mc.verified is False
+    assert mc.model_version is None
+    assert mc.verified_model_version is None
+    assert mc.is_ready() is False
+    assert mc.model is None
+    assert mc.tokenizer is None
+    assert mc.id2label == {}
+
+
+def test_reload_from_trained_to_malformed_config_resets_state(tmp_path):
+    """Malformed config on reload must reset previously valid trained state."""
+    mc = ModelContainer()
+    mc.model = MagicMock()
+    mc.tokenizer = MagicMock()
+    mc.id2label = {i: label for i, label in enumerate(sorted(EXPECTED_46_LABELS))}
+    mc.verified_model_version = EXPECTED_MANIFEST["model_version"]
+    mc.model_version = EXPECTED_MANIFEST["model_version"]
+    mc.model_checksum = EXPECTED_MANIFEST["weights_sha256"]
+    mc.tokenizer_checksum = EXPECTED_MANIFEST["tokenizer_sha256"]
+    mc.model_mode = "trained"
+    mc.verified = True
+    assert mc.is_ready() is True
+
+    # Prepare directory with valid weights & tokenizer but malformed config
+    (tmp_path / "model.safetensors").write_bytes(b"dummy")
+    (tmp_path / "tokenizer.json").write_bytes(b"dummy")
+    (tmp_path / "config.json").write_text("{invalid json", encoding="utf-8")
+
+    mc.load(tmp_path)
+    assert mc.is_ready() is False
+    assert mc.is_trained_ready() is False
+    assert mc.model_mode == "unavailable"
+    assert mc.verified is False
+    assert mc.model is None
+    assert mc.tokenizer is None
+    assert mc.id2label == {}
+    assert mc.verified_model_version is None
+    assert mc.model_version is None
+
+
+def test_predict_response_does_not_invent_trained_or_verified_defaults():
+    """PredictResponse schema defaults must not assume trained or verified status if omitted."""
+    resp = PredictResponse(
+        intent="track_order",
+        confidence=0.9,
+        margin=0.8,
+        top_k=[PredictionItem(intent="track_order", probability=0.9)],
+        model_version="v1.0.0",
+    )
+    assert resp.model_mode != "trained"
+    assert resp.verified is False
