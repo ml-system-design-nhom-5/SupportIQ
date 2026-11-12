@@ -66,6 +66,12 @@ Use `artifacts/evaluation/final-routing-20261112-v3/ROBUSTNESS_REPORT.md` as the
 
 The 11 unanswerable cases reaching draft recommendation require additional coordinator-owned downstream evaluation; they are not implicitly covered by Worker C's separately frozen suite. The synthetic encoder-failure case was not injected in this component run and receives no fault-handling success credit. Mandatory escalation action correctness remains unresolved even where abstention prevents drafting.
 
+### Integration checkpoint: Worker C
+
+Worker C commits `34d4784`, `cb3154f`, `85ba113`, `f632e12`, and `b52dc9f` were reviewed and integrated through main commit `95190af`. Coordinator verification at root: 23 suite and collector tests passed in 30.10 seconds, including real encoder readiness contract checks, failure without live mock fallback, both declared LF/CRLF provenance pairs, and rejection of mixed pairs. Frozen suite hashes remain unchanged. Historical mock artifacts are dry-run evidence only; initial reports were superseded by collector corrections.
+
+The coordinator-owned supplement is frozen at `data/benchmarks/final_acceptance_supplement/manifest.json` (11 unchanged original cases, SHA-256 `5659c7070064aa36b328a7e4087ab939c43d210863591e2dff3642431832dc0a`). Neither that supplement nor the final 24-case suite has been executed against the final integrated release. Worker B accounting corrections, gateway reload, live collection, semantic claim grading, and paired agent trials remain outstanding.
+
 - [ ] Approve independent local gold before scored runs and synchronize workers on reviewed commits. Review changes and tests before cherry-picking; resolve overlap preserving B1 safety and persisted metadata.
 - [ ] Run the current-model routing suite and bounded live application evaluation after final reload. AI-grade all factual claims against captured sources; separate supported, unsupported, unverifiable and business-inappropriate advice. Target >=90% supported; mandatory escalation scenarios all correct, no auto-sends/transactions.
 - [ ] Execute paired agent trials on >=12 same-case tasks, record real wall times, order, outputs and approve/edit/reject decisions; report denominators and simulation limits.
