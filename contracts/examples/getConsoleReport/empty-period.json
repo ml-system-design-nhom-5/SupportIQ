@@ -19,7 +19,9 @@
     "draft_decisions": {
       "approve_count": 0,
       "edit_count": 0,
-      "reject_count": 0
+      "reject_count": 0,
+      "edit_by_reason": [],
+      "reject_by_reason": []
     },
     "escalations": {
       "escalation_count": 0,

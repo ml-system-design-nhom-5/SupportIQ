@@ -715,6 +715,12 @@ paths:
                   $ref: ./examples/getConsoleTicket/closed.json
                 read-only-for-staff:
                   $ref: ./examples/getConsoleTicket/read-only-for-staff.json
+                llm-unavailable:
+                  $ref: ./examples/getConsoleTicket/llm-unavailable.json
+                pseudonymization-failed:
+                  $ref: ./examples/getConsoleTicket/pseudonymization-failed.json
+                intent-corrected:
+                  $ref: ./examples/getConsoleTicket/intent-corrected.json
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
@@ -734,13 +740,16 @@ paths:
       description: >-
         Records that the caller opened the ticket. Roles: `staff` and `manager`, on a ticket in
         any state. The first view of the ticket starts the handling clock (`handling_started_at`,
-        NFR-11). On the first view, when the current suggestion used another KB version than the
-        one `ai-service` has loaded, `backend` starts a suggestion with the trigger
-        `kb_version_changed`. On every view of an `open` ticket in `assisted` mode whose current
-        suggestion has a part `unavailable` with `ai_service_unavailable`, or a draft
-        `llm_unavailable`, and no part `pending`, `backend` starts a suggestion with the trigger
-        `retry`. A retry with the same `Idempotency-Key` returns `204` again and starts nothing
-        more.
+        NFR-11). On the first view of an `open` ticket in `assisted` mode, when the current
+        suggestion used another KB version than the one `ai-service` has loaded, `backend` starts
+        a suggestion with the trigger `kb_version_changed`. When `ai-service` does not answer
+        within `ai_service_read_timeout_ms`, the view is still recorded and no
+        `kb_version_changed` suggestion is started. On every view of an `open` ticket in
+        `assisted` mode whose current suggestion has a part `unavailable` with
+        `ai_service_unavailable`, or a draft `llm_unavailable`, and no part `pending`, `backend`
+        starts a suggestion with the trigger `retry`. A started suggestion repeats the input of
+        the current one, including an intent that staff chose. A retry with the same
+        `Idempotency-Key` returns `204` again and starts nothing more.
       security:
         - sessionCookie: []
       x-supportiq-roles:
@@ -781,10 +790,14 @@ paths:
         of the current suggestion is `ready`, or the current suggestion already carries an
         override. When no intent is known, it returns `409 suggestion-pending` while a part is
         `pending`, and `422` otherwise. Without `intent_override`, the request is a retry, valid
-        only when `allowed_actions` contains `retry_suggestion`; otherwise it returns `422`. The
-        new suggestion supersedes the previous one, and the authority flag stays as it is
-        (contracts v1 design, authority rule). A retry with the same `Idempotency-Key` and body
-        returns the original `202` and starts no second suggestion.
+        only when `allowed_actions` contains `retry_suggestion`; otherwise it returns `422`. A
+        retry repeats the input of the failed suggestion, including the intent that staff chose,
+        so a failure after an intent correction keeps that intent. On a ticket that is not
+        `open`, or whose handling mode is `manual`, the request returns
+        `409 invalid-ticket-state`. The new suggestion supersedes the previous one, and the
+        authority flag stays as it is (contracts v1 design, authority rule). A retry with the
+        same `Idempotency-Key` and body returns the original `202` and starts no second
+        suggestion.
       security:
         - sessionCookie: []
       x-supportiq-roles:
@@ -994,7 +1007,7 @@ paths:
         '409':
           $ref: '#/components/responses/EscalationConflict'
         '422':
-          $ref: '#/components/responses/InvalidRequest'
+          $ref: '#/components/responses/InvalidEscalation'
         '500':
           $ref: '#/components/responses/InternalError'
         '503':
@@ -1026,7 +1039,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ConsoleKbDocumentVersionView'
+                $ref: '#/components/schemas/KbDocumentVersion'
               examples:
                 document-version:
                   $ref: ./examples/getConsoleKbDocumentVersion/document-version.json
@@ -1955,8 +1968,24 @@ components:
               $ref: ./examples/problems/reply-basis-invalid.json
             warnings-not-acknowledged:
               $ref: ./examples/problems/warnings-not-acknowledged.json
+            note-required:
+              $ref: ./examples/problems/note-required.json
             placeholder-in-body:
               $ref: ./examples/problems/placeholder-in-body.json
+    InvalidEscalation:
+      description: >-
+        `invalid-request`: the request fails validation against this contract, as for
+        `InvalidRequest`, or `staff_reason_codes` contains `other` and `note` is absent, so the
+        reason would not be recorded (ADR-0006). Nothing changed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            invalid-request:
+              $ref: ./examples/problems/invalid-request.json
+            note-required:
+              $ref: ./examples/problems/note-required.json
     InvalidConsoleListRequest:
       description: >-
         `invalid-request`: `status` is missing or unknown, `limit` is not an integer from 1 to
@@ -2039,6 +2068,10 @@ components:
       $ref: ./schemas/Warning.yaml
     Placeholder:
       $ref: ./schemas/Placeholder.yaml
+    StepLatencies:
+      $ref: ./schemas/StepLatencies.yaml
+    KbDocumentVersion:
+      $ref: ./schemas/KbDocumentVersion.yaml
     AccountChangeRule:
       description: >-
         Why a well-formed account change was refused: the admin limits 3 to 5 of ADR-0012, a
@@ -2741,9 +2774,11 @@ components:
         Why `backend` started the suggestion (contracts v1 design, suggestion lifecycle).
         `ticket_created`: the ticket was created in `assisted` mode.
         `intent_override`: staff or a manager confirmed the predicted intent or chose another.
-        `kb_version_changed`: on the first view, the previous suggestion used another KB version
-        than the one `ai-service` serves.
+        `kb_version_changed`: on the first view of an `open` ticket in `assisted` mode, the
+        previous suggestion used another KB version than the one `ai-service` serves.
         `retry`: staff opened the ticket after an AI failure, or asked for a retry.
+        A `kb_version_changed` or `retry` suggestion repeats the input of the suggestion it
+        replaces, including an intent that staff chose.
         Consumers show an unknown value as an unspecified trigger (CON-22). Data class:
         Internal.
       type: string
@@ -2837,6 +2872,11 @@ components:
           description: >-
             When a person first opened the ticket. Absent until then, so the queue shows which
             tickets nobody opened yet. Data class: Internal.
+        closed_at:
+          $ref: '#/components/schemas/Timestamp'
+          description: >-
+            When the reply was sent, the order of the `closed` queue. Present exactly when
+            `status` is `closed`. Data class: Internal.
         customer:
           $ref: '#/components/schemas/ConsoleCustomerView'
           description: >-
@@ -3143,8 +3183,9 @@ components:
         intent_override:
           $ref: '#/components/schemas/IntentLabel'
           description: >-
-            The intent that staff confirmed or chose. Present exactly when `trigger` is
-            `intent_override`. Data class: Internal.
+            The intent that staff confirmed or chose. Present when `trigger` is
+            `intent_override`, and on a `kb_version_changed` or `retry` suggestion that repeats a
+            suggestion with an intent that staff chose. Data class: Internal.
         created_at:
           $ref: '#/components/schemas/Timestamp'
           description: >-
@@ -3258,7 +3299,7 @@ components:
             The release and asset versions that produced the analysis (ARCH-39). Data class:
             Internal.
         step_latencies:
-          $ref: '#/components/schemas/ConsoleStepLatencies'
+          $ref: '#/components/schemas/StepLatencies'
           description: >-
             The time that `ai-service` spent on the analysis. Data class: Internal.
     UnavailableAnalysisPart:
@@ -3401,35 +3442,6 @@ components:
         - draft
         - abstain
         - escalate
-    ConsoleStepLatencies:
-      description: >-
-        The time that `ai-service` spent on one call, in milliseconds, for the developer details
-        (UI-35). Data class: Internal.
-      type: object
-      required:
-        - total_ms
-        - analysis_ms
-      properties:
-        total_ms:
-          description: >-
-            The whole call inside `ai-service`, in milliseconds. Data class: Internal.
-          type: integer
-          minimum: 0
-          maximum: 60000
-        analysis_ms:
-          description: >-
-            Classification, retrieval, the validity filter, reranking, and routing, in
-            milliseconds. Data class: Internal.
-          type: integer
-          minimum: 0
-          maximum: 60000
-        llm_ms:
-          description: >-
-            The LLM step, in milliseconds. Absent when the call made no LLM request. Data class:
-            Internal.
-          type: integer
-          minimum: 0
-          maximum: 60000
     DraftStatus:
       description: >-
         The status of the draft part of a suggestion (contracts v1 design, suggestion
@@ -3474,7 +3486,8 @@ components:
     PendingDraftPart:
       description: >-
         A draft that `ai-service` has not returned yet. While it is pending, nobody can send a
-        reply on the ticket (`409 suggestion-pending`). Data class: Internal.
+        reply on the ticket: `409 suggestion-pending`, or `403 authority-required` for `staff`
+        on a ticket that already requires authority. Data class: Internal.
       type: object
       required:
         - draft_status
@@ -3552,7 +3565,7 @@ components:
             The release and asset versions that produced the draft (ARCH-39). Data class:
             Internal.
         step_latencies:
-          $ref: '#/components/schemas/ConsoleStepLatencies'
+          $ref: '#/components/schemas/StepLatencies'
           description: >-
             The time that `ai-service` spent on the draft call. Data class: Internal.
     NoDraftPart:
@@ -3595,7 +3608,7 @@ components:
           description: >-
             The release and asset versions that produced the outcome. Data class: Internal.
         step_latencies:
-          $ref: '#/components/schemas/ConsoleStepLatencies'
+          $ref: '#/components/schemas/StepLatencies'
           description: >-
             The time that `ai-service` spent on the draft call. Data class: Internal.
     UnavailableDraftPart:
@@ -3703,12 +3716,11 @@ components:
         - $ref: '#/components/schemas/Money'
     ReplyBasis:
       description: >-
-        What a reply or a proposal is based on (contracts v1 design, reply bases).
+        What a reply is based on (contracts v1 design, reply bases).
         `ai_draft`: the draft of the current suggestion, as is or edited.
         `rejected_ai_draft`: staff rejected the draft and wrote their own reply.
         `no_ai_draft`: there was no ready draft, or the ticket is in `manual` mode.
-        `reply_proposal`: a manager sent the proposal of the ticket, as is or edited; only on a
-        reply.
+        `reply_proposal`: a manager sent the proposal of the ticket, as is or edited.
         Consumers show an unknown value as an unspecified basis (CON-22). Data class: Internal.
       type: string
       enum:
@@ -3716,6 +3728,19 @@ components:
         - rejected_ai_draft
         - no_ai_draft
         - reply_proposal
+    ReplyProposalBasis:
+      description: >-
+        What a reply proposal is based on: the values of `ReplyBasis` except `reply_proposal`,
+        because a proposal is never based on another proposal.
+        `ai_draft`: the draft of the current suggestion, as is or edited.
+        `rejected_ai_draft`: staff rejected the draft and wrote their own reply.
+        `no_ai_draft`: there was no ready draft, or the ticket is in `manual` mode.
+        Consumers show an unknown value as an unspecified basis (CON-22). Data class: Internal.
+      type: string
+      enum:
+        - ai_draft
+        - rejected_ai_draft
+        - no_ai_draft
     ReplyBody:
       description: >-
         The text that a customer receives, from 1 to 2 000 characters (`MessageText`), with no
@@ -3750,10 +3775,9 @@ components:
           type: string
           minLength: 1
         basis:
-          $ref: '#/components/schemas/ReplyBasis'
+          $ref: '#/components/schemas/ReplyProposalBasis'
           description: >-
-            What the proposal is based on: `ai_draft`, `rejected_ai_draft`, or `no_ai_draft`.
-            Data class: Internal.
+            What the proposal is based on. Data class: Internal.
         body:
           $ref: '#/components/schemas/ReplyBody'
           description: >-
@@ -3880,8 +3904,9 @@ components:
         intent_override:
           $ref: '#/components/schemas/IntentLabel'
           description: >-
-            The intent that staff confirm or choose (ESC-01). Absent means a retry with the same
-            inputs. Data class: Internal.
+            The intent that staff confirm or choose (ESC-01). Absent means a retry, which
+            repeats the input of the failed suggestion, including the intent that staff chose
+            for it when there was one. Data class: Internal.
     SendReplyRequest:
       description: >-
         The reply to send, discriminated by `basis`, so each basis carries exactly the fields it
@@ -4087,77 +4112,6 @@ components:
             `409 suggestion-superseded`. Absent means none. Data class: Internal.
           type: string
           minLength: 1
-    ConsoleKbDocumentVersionView:
-      description: >-
-        One immutable version of a KB document, as `ai-service` serves it, for the citation view
-        (UI-20). KB text is untrusted data and is shown as plain text (SEC-22, SEC-24). Data
-        class: Public, except the identifiers (Internal).
-      type: object
-      required:
-        - document_id
-        - version
-        - title
-        - body
-        - policy_key
-        - effective_start_at
-        - owner
-        - source
-      properties:
-        document_id:
-          $ref: '#/components/schemas/KbDocumentId'
-          description: >-
-            The KB document. Data class: Internal.
-        version:
-          $ref: '#/components/schemas/KbDocumentVersionTag'
-          description: >-
-            The version of the document. Data class: Internal.
-        title:
-          description: >-
-            The title of the version, from 1 to 200 characters. Data class: Public.
-          type: string
-          minLength: 1
-          maxLength: 200
-        body:
-          description: >-
-            The full text of the version, from 1 to 20 000 characters. Data class: Public.
-          type: string
-          minLength: 1
-          maxLength: 20000
-        policy_key:
-          description: >-
-            The topic of the policy that the version states, from 1 to 100 characters. Data
-            class: Public.
-          type: string
-          minLength: 1
-          maxLength: 100
-        effective_start_at:
-          $ref: '#/components/schemas/Timestamp'
-          description: >-
-            When the version came into effect. Data class: Public.
-        effective_end_at:
-          $ref: '#/components/schemas/Timestamp'
-          description: >-
-            When the version stopped being in effect. Absent when it is open-ended. Data class:
-            Public.
-        owner:
-          description: >-
-            Who owns and reviews the policy: a role or a team, never a person's name. From 1 to
-            100 characters. Data class: Public.
-          type: string
-          minLength: 1
-          maxLength: 100
-        source:
-          description: >-
-            Where the text of the version comes from, as the KB source names it. From 1 to 200
-            characters. Data class: Public.
-          type: string
-          minLength: 1
-          maxLength: 200
-        last_reviewed_at:
-          $ref: '#/components/schemas/Timestamp'
-          description: >-
-            When the owner last reviewed the version. Absent when the source does not provide
-            it. Data class: Public.
     CompletedDraftStatus:
       description: >-
         The status of a draft part that left `pending`, without `cancelled`, as `DraftStatus`
@@ -4206,6 +4160,24 @@ components:
             class: Internal.
           type: integer
           minimum: 0
+    StaffReasonReplyCount:
+      description: >-
+        The replies of one draft decision that carry one staff reason code. Data class:
+        Internal.
+      type: object
+      required:
+        - staff_reason_code
+        - reply_count
+      properties:
+        staff_reason_code:
+          $ref: '#/components/schemas/StaffReasonCode'
+          description: >-
+            The reason code. Data class: Internal.
+        reply_count:
+          description: >-
+            The replies with this code. Data class: Internal.
+          type: integer
+          minimum: 1
     ConsoleReport:
       description: >-
         The figures of FR-10 and NFR-11 for one period, computed by `backend` from its own
@@ -4259,29 +4231,54 @@ components:
                 Tickets whose `closed_at` falls in the period. Data class: Internal.
         draft_decisions:
           description: >-
-            The staff decisions about a ready draft recorded in the period: approved as is,
-            edited, or rejected (FR-10, ADR-0006). Data class: Internal.
+            The staff decisions about a ready draft, recorded when the reply is sent: approved
+            as is, edited, or rejected, with the edits and rejections by staff reason code
+            (FR-10, ADR-0006). Data class: Internal.
           type: object
           required:
             - approve_count
             - edit_count
             - reject_count
+            - edit_by_reason
+            - reject_by_reason
           properties:
             approve_count:
               description: >-
-                Replies or proposals that used the draft unchanged. Data class: Internal.
+                Replies sent in the period whose basis, or whose proposal's basis, was
+                `ai_draft`, with a body equal to the draft's `text`. Data class: Internal.
               type: integer
               minimum: 0
             edit_count:
               description: >-
-                Replies or proposals that used the draft with changes. Data class: Internal.
+                Replies sent in the period whose basis, or whose proposal's basis, was
+                `ai_draft`, with a body that differs from the draft's `text`. Data class:
+                Internal.
               type: integer
               minimum: 0
             reject_count:
               description: >-
-                Replies or proposals that rejected the draft. Data class: Internal.
+                Replies sent in the period whose basis, or whose proposal's basis, was
+                `rejected_ai_draft`. Data class: Internal.
               type: integer
               minimum: 0
+            edit_by_reason:
+              description: >-
+                The edits of `edit_count` by staff reason code: one item per code that occurs,
+                in the order of `StaffReasonCode`. An edit with two codes counts under each, and
+                an edit without a code under none. Data class: Internal.
+              type: array
+              maxItems: 8
+              items:
+                $ref: '#/components/schemas/StaffReasonReplyCount'
+            reject_by_reason:
+              description: >-
+                The rejections of `reject_count` by staff reason code: one item per code that
+                occurs, in the order of `StaffReasonCode`. Every rejection has at least one
+                code, and a rejection with two codes counts under each. Data class: Internal.
+              type: array
+              maxItems: 8
+              items:
+                $ref: '#/components/schemas/StaffReasonReplyCount'
             approve_share:
               description: >-
                 `approve_count` divided by the sum of the three counts. Absent when the sum is 0.

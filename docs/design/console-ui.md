@@ -1,6 +1,6 @@
 # Design: Console UI
 
-- **Status:** Approved
+- **Status:** In review
 - **Owner:** frontend engineer
 - **Reviewers:** backend engineer, ML engineer, RAG engineer, contracts gatekeeper
 - **Last reviewed:** 2026-11-12
@@ -15,6 +15,8 @@ The team chose the inbox layout on 2026-11-01. It has an inbox on the left, the 
 This design follows ADR-0012, ADR-0010, and ADR-0014, the last two accepted on 2026-11-12, and contracts v1 revision 2, whose `ai-service` part is still in review. If that part changes, this document changes with it.
 
 **Revision of 2026-11-11, for [ADR-0015](../decisions/0015-account-creation-and-password-changes.md):** the app bar shows the account menu instead of the display name and Sign out, and the sign-in password field gets the show and hide toggle of the proposed UI-46 ([account management design](account-management.md#rule-changes)). The shared page `/change-password` joins the screens. All three are defined in the [account management design](account-management.md#screens-and-dialogs). The earlier app bar is kept under [Alternatives considered](#alternatives-considered).
+
+**Revision of 2026-11-12, for `backend` contract 1.2.0** ([backend ticket workflow design](backend-ticket-workflow.md)): the Closed queue lists the newest tickets first, by `closed_at`, which `TicketSummary` now carries; the developer details read the latencies from `step_latencies`; the warning `source_review_overdue` refers to a document version that the analysis retrieved, not to one that the draft cites; and the contract settled the excerpt length and the queue order, so only the polling interval stays open. The earlier order and the earlier meaning of the warning are kept under [Alternatives considered](#alternatives-considered).
 
 ## Goals and non-goals
 
@@ -72,7 +74,7 @@ Above the columns, the app bar holds the brand "SupportIQ Console", the navigati
 
 | Column | Width at 1280 px | Content |
 |---|---|---|
-| Left: inbox | 272 px | The tickets of the selected status, oldest first |
+| Left: inbox | 272 px | The tickets of the selected status: waiting tickets oldest first, closed tickets newest first |
 | Middle | About 620 px | The customer message, the intent strip, and the reply area |
 | Right: AI sidebar | 340 px | The recommendation with its reason codes, the staff note, the sources, and the developer details |
 
@@ -95,7 +97,7 @@ The ticket header spans the middle and right columns and holds the order chip.
 | AI recommendation | The recommendation and its reason codes | `suggestion` → analysis `routing` | UI-13 |
 | For staff only | The staff note, marked as AI text | `suggestion.staff_note` | UI-13, UI-21 |
 | Sources | Ranked KB document versions with citation number, ID, version, validity, and effective period | analysis `documents`, draft `citations` | UI-20 |
-| Developer details | Trace ID, release ID and asset versions, latency per step, raw statuses and reason codes. Collapsed; shown only when the setting is on | `suggestion.trace_id`, `versions`, `step_latency_ms` | UI-35 |
+| Developer details | Trace ID, release ID and asset versions, latency per step, raw statuses and reason codes. Collapsed; shown only when the setting is on | `suggestion.trace_id`, `versions`, `step_latencies` | UI-35 |
 
 Placement rules:
 
@@ -112,7 +114,7 @@ Placement rules:
 ### Inbox
 
 - A dropdown selects the status. Staff have only Open; `backend` returns `403` to staff for other statuses ([contracts v1](contracts-v1.md#roles-and-permissions)). Managers also have Awaiting approval, Escalated, and Closed.
-- Tickets are sorted oldest first, so no ticket waits behind newer ones.
+- Open, Awaiting approval, and Escalated tickets are sorted oldest first, so no ticket waits behind newer ones. Closed tickets are sorted newest first by `closed_at`, so the latest replies come first.
 - Each item shows the ticket ID, time received, customer, message excerpt, predicted intent with confidence, AI status, and the authority flag.
 - When `handling_started_at` is set, the item says who is likely working on it, for example "Opened 4 min ago". v1 has no ticket assignment, so two staff can still work on one ticket. The later send gets `409 invalid-ticket-state` after a reply, or `403 forbidden` after an escalation or a proposal.
 - One click opens a ticket. The inbox polls while it is open.
@@ -328,7 +330,8 @@ The status `cancelled` has no presentation, because a superseded suggestion is n
 - Every region maps to `TicketWorkspace`, and the inbox uses `TicketSummary`, both in the [`backend` contract section of contracts v1](contracts-v1.md#backend-contract-backendopenapiyaml) revision 2.
 - The items this design needs are in that revision: `other_orders`, `handling_started_at` in `TicketSummary`, `retry_suggestion` in `allowed_actions`, `createSuggestion` without `intent_override`, `intent_override` in `SuggestionView`, and `CitationView`.
 - The editor and the approve or edit decision both use the draft's canonical `text` from the same section, so a draft sent unchanged is always recorded as `approve`.
-- Drafts that cite a document version past its review deadline carry the warning `source_review_overdue` ([reason codes](contracts-v1.md#reason-codes)). Staff acknowledge it like any other warning.
+- A suggestion whose analysis retrieved a document version past its review deadline carries the warning `source_review_overdue` ([reason codes](contracts-v1.md#reason-codes)), whether or not the draft cites that version. Staff acknowledge it like any other warning.
+- `backend` contract 1.2.0 adds `closed_at` to `TicketSummary`, the order of the Closed queue.
 - Writes send an `Idempotency-Key` created once per staff action. Sending a reply is never retried automatically ([TS-29](../rules/typescript.md#api-access)).
 
 ### Errors and guardrails
@@ -364,6 +367,8 @@ The status `cancelled` has no presentation, because a superseded suggestion is n
 - **Green confidence for `high`:** rejected, because color would suggest that the prediction is correct.
 - **A separate Approve button:** rejected, because `backend` derives approve or edit from the sent body (ADR-0006).
 - **Locking the intent until the draft is ready, or a confirmation checkbox on manual replies:** rejected ([contracts v1](contracts-v1.md#alternatives-considered)).
+- **Closed tickets oldest first, like the other queues:** the inbox order until 2026-11-12. Replaced by newest first by `closed_at`, the order of `backend` contract 1.2.0, because no closed ticket waits for anyone.
+- **`source_review_overdue` only for document versions that the draft cites:** the meaning until 2026-11-12. Replaced by the versions that the analysis retrieved, because warnings belong to the analysis: the warnings of a draft are those of its embedded analysis, which exists before any citation ([`ai-service` contract](../../contracts/ai-service.openapi.yaml)).
 - **The display name, the role, and Sign out directly in the app bar:** the app bar of the mockups until 2026-11-11. Replaced by the account menu, so that every role finds Change password in the same place ([ADR-0015](../decisions/0015-account-creation-and-password-changes.md)).
 
 ## Testing and evaluation
@@ -411,6 +416,6 @@ The page loads Inter and JetBrains Mono from Google Fonts.
 
 - With the inbox on screen, whether staff can collapse it to give the reply area more width, for example so a manager sees the proposal next to the AI draft (UI-19). The collapsed state would stay the same for every ticket, as UI-15 requires.
 - Keyboard movement through the inbox (arrow keys, or J and K). [UI-17](../rules/ui.md#console-interaction) forbids single-key shortcuts only for irreversible actions, so this is allowed.
-- The excerpt length and sort parameter of `TicketSummary` (open for the contract change that adds the console operations), and the polling interval of the inbox and the workspace.
+- The polling interval of the inbox and the workspace. `backend` contract 1.2.0 settled the excerpt length (at most 160 characters) and the queue order, without a sort parameter.
 - The text of the manual-process instructions ([UI-26](../rules/ui.md#states)). The team provides it. The mockups show a stand-in line.
 - This design was approved on 2026-11-05 while ADR-0010, ADR-0014, and contracts v1 revision 2 were still in review. ADR-0010 and ADR-0014 were accepted on 2026-11-12; the revision of ADR-0010 on that day changed only its egress control, which this design does not use. If the `ai-service` part of contracts v1 changes, this design is revised.

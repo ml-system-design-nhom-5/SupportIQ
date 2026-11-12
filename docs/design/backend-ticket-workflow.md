@@ -4,11 +4,11 @@
 - **Owner:** backend engineer
 - **Reviewers:** project lead, frontend engineer, ML engineer
 - **Last reviewed:** 2026-11-12
-- **Related:** [Requirements](../product/requirements.md) (FR-04 to FR-10, NFR-06 to NFR-11, ESC-01 to ESC-05), [ADR-0005](../decisions/0005-intent-independent-retrieval.md), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md), [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0014](../decisions/0014-citations-to-order-context.md), [ADR-0016](../decisions/0016-hosting-on-free-tiers.md), [contracts v1 design](contracts-v1.md), [backend foundation design](backend-foundation.md), [console UI design](console-ui.md), `backend` contract 1.2.0 and `ai-service` contract 1.0.0 ([CHANGELOG](../../contracts/CHANGELOG.md))
+- **Related:** [Requirements](../product/requirements.md) (FR-04 to FR-10, NFR-06 to NFR-11, ESC-01 to ESC-05), [ADR-0005](../decisions/0005-intent-independent-retrieval.md), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md), [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0014](../decisions/0014-citations-to-order-context.md), [ADR-0016](../decisions/0016-hosting-on-free-tiers.md), [ADR-0017](../decisions/0017-named-entity-model-from-its-release-url.md), [contracts v1 design](contracts-v1.md), [backend foundation design](backend-foundation.md), [console UI design](console-ui.md), `backend` contract 1.2.0 and `ai-service` contract 1.0.0 ([CHANGELOG](../../contracts/CHANGELOG.md))
 
 ## Summary
 
-This design describes how `backend` runs the ticket workflow behind `/console`. It covers suggestions and their job queue, pseudonymization before every call to `ai-service`, the client that calls `ai-service`, replies, reply proposals, escalations, the authority rule, manual handling, staff decisions, the audit log, reports, and two one-off commands: the ticket import and the decision-record export. It is the third follow-up design of [contracts v1, Rollout, step 9](contracts-v1.md#rollout), and it fixes what that design left to `backend`. The internals of `ai-service` (routing, the list of sensitive intents, retrieval limits) wait for the join with the AI and ML code. Three choices are the project lead's: the named-entity library, the split of handling modes for the product-value study, and the initial values of the job queue. Each has a recommendation.
+This design describes how `backend` runs the ticket workflow behind `/console`. It covers suggestions and their job queue, pseudonymization before every call to `ai-service`, the client that calls `ai-service`, replies, reply proposals, escalations, the authority rule, manual handling, staff decisions, the audit log, reports, and two one-off commands: the ticket import and the decision-record export. It is the third follow-up design of [contracts v1, Rollout, step 9](contracts-v1.md#rollout), and it fixes what that design left to `backend`. The internals of `ai-service` (routing, the list of sensitive intents, retrieval limits) wait for the join with the AI and ML code. Three choices were the project lead's: the named-entity library, the split of handling modes for the product-value study, and the initial values of the job queue. On 2026-11-12 the project lead chose the recommended option of each, and [ADR-0017](../decisions/0017-named-entity-model-from-its-release-url.md) (Proposed) covers the install of the named-entity model.
 
 ## Goals and non-goals
 
@@ -106,8 +106,12 @@ Each use case checks in this order and stops at the first failure. The order is 
 1. The `Origin` header (`403 forbidden`), then the session (`401`), then the role (`403 forbidden`), as for every state-changing operation of the contract.
 2. The ticket exists (`404 not-found`).
 3. The `Idempotency-Key`: a repeat of an earlier success returns that result unchanged ([ERR-15](../rules/errors-and-reliability.md#idempotency)).
-4. The ticket state allows the action for this role (`409 invalid-ticket-state` for a `closed` ticket or an action that the state does not allow; `403 forbidden` for staff on a ticket that is not `open`).
-5. For `sendReply` by `staff`: the ticket does not require authority (`403 authority-required`).
+4. The ticket state allows the action:
+   - `sendReply` returns `409 invalid-ticket-state` on a `closed` ticket, and `403 forbidden` when `staff` send on an `awaiting_approval` or `escalated` ticket. This is the only `403 forbidden` of this step;
+   - `createReplyProposal` and `createEscalation` return `409 invalid-ticket-state` on a ticket that is not `open`;
+   - `createSuggestion` returns `409 invalid-ticket-state` on a ticket that is not `open`, and on a ticket in `manual` handling mode, which never gets a suggestion ([Manual handling](#manual-handling));
+   - `recordTicketView` is allowed in every state, so this step never refuses it.
+5. For `sendReply` by `staff`: the ticket does not require authority (`403 authority-required`). This step comes before step 6, so staff get `403 authority-required` even while a part is `pending`: the flag is never cleared, and a pending part can only add it.
 6. No part of the current suggestion is `pending` (`409 suggestion-pending`), for `sendReply`, `createReplyProposal`, and an intent correction when no intent is known.
 7. A `suggestion_id` in the body names the current suggestion (`409 suggestion-superseded`).
 8. The body rules: the basis is valid, every warning is acknowledged, the reason codes and the note are present when required, and the body contains no placeholder (`422 invalid-request`).
@@ -143,7 +147,7 @@ sequenceDiagram
         else A storage error while inserting the map
             CL->>CL: Roll back; the job stays running and is claimed again when its lease expires
         else Pseudonymized text ready
-            par Analysis, unless the trigger is intent_override
+            par Analysis, unless the suggestion carries an intent override
                 CL->>AI: POST /v1/analyses
             and Draft
                 CL->>AI: POST /v1/drafts
@@ -164,7 +168,7 @@ sequenceDiagram
 2. **Claim.** Each replica runs one claim loop with `suggestion_workers_per_replica` slots. While a slot is free, the loop claims one job in one statement: the oldest job by `created_at` that is `queued`, or `running` with an expired lease, with `FOR UPDATE SKIP LOCKED`, setting `running`, `attempt_number + 1`, and `lease_expires_at = now + suggestion_job_lease_ms`. When nothing is claimable, it sleeps `suggestion_queue_poll_ms`. This is the single-statement claim of [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md#suggestion-job-queue), item 2, with one query per poll instead of one per idle worker.
 3. **Before calling.** A job whose lease expired with no attempts left is finalized without a call (ADR-0011, item 6). A job whose suggestion is no longer current ends at once.
 4. **Pseudonymization** runs as the first step of every job ([Pseudonymization](#pseudonymization)). The map is inserted in its own short transaction, before any call. No transaction stays open while `backend` waits for `ai-service`.
-5. **Calls.** A `ticket_created`, `kb_version_changed`, or `retry` suggestion calls both endpoints in parallel. An `intent_override` suggestion calls only `/v1/drafts`, whose response carries the analysis computed with the chosen intent ([contracts v1, Intent confirmation and correction](contracts-v1.md#intent-confirmation-and-correction)). When the analysis call fails and the draft call succeeds, the analysis comes from the draft response.
+5. **Calls.** A suggestion without an intent override calls both endpoints in parallel. A suggestion with one calls only `/v1/drafts`, whose response carries the analysis computed with the chosen intent ([contracts v1, Intent confirmation and correction](contracts-v1.md#intent-confirmation-and-correction)). A `retry` suggestion repeats the input of the failed suggestion, its intent override included, so a failure after an intent correction keeps the intent that staff chose (decided by the project lead on 2026-11-12). A `kb_version_changed` suggestion follows the same rule, so no new suggestion drops an intent that staff chose. When the analysis call fails and the draft call succeeds, the analysis comes from the draft response.
 6. **Storing.** Each result is stored in its own transaction, which first checks that the job's `attempt_number` is still the claimed one and that the suggestion is still current; otherwise the result is discarded ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md#suggestion-job-queue), item 4). The same transaction writes the `suggestion.part_completed` audit entry and, when needed, sets the authority flag.
 7. **Cancellation.** When a suggestion is superseded, the claim loop cancels its running calls. A call that cannot be stopped finishes, and item 6 discards its result.
 8. **Crash or restart.** A job held by a stopped replica stays `running` until its lease expires, then any loop claims it again. Nothing re-queues jobs at startup.
@@ -192,7 +196,7 @@ The detectors, their order, and the overlap rule are those of [ADR-0010](../deci
 | Presidio Analyzer 2.2.366 | MIT license; Python 3.11 to 3.14 ([Presidio on PyPI](https://pypi.org/project/presidio-analyzer/)). It loads a spaCy model by default | The same model problem as spaCy, plus recognizers that repeat the patterns `backend` already owns |
 | GLiNER 0.2.30 | Apache-2.0; Python 3.10 or later; Python 3.14 support is not stated ([GLiNER on PyPI](https://pypi.org/project/gliner/)). Its example loads a model from the Hugging Face Hub | Weights from outside PyPI as well, and a model runtime whose memory must fit beside `backend` in 512 MB |
 
-**Recommendation:** spaCy 3.8.18 with `en_core_web_sm`, pinned by version and hash in `uv.lock`, under a short ADR for the model's install URL (SEC-31). The trial that ADR-0010 requires decides adoption: a fixed `synthetic-dev-only` set of English messages with Vietnamese and English names and addresses, at least five positive and five negative cases per type, measuring recall and over-detection per type, the resident memory of `backend` with the model loaded, and the p95 latency of pseudonymizing one message on the free instance. With the recommended queue values, the queue wait, the claim, and pseudonymization must fit in the 1 000 ms that the draft timeout of 11 000 ms leaves inside the 12 s target ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md#suggestion-job-queue), item 8). If the trial fails, the lead chooses between another candidate and a lower draft timeout.
+**Recommendation, chosen by the project lead on 2026-11-12:** spaCy 3.8.18 with `en_core_web_sm`, pinned by version and hash, under [ADR-0017](../decisions/0017-named-entity-model-from-its-release-url.md) for the model's install URL (SEC-31). The trial that ADR-0010 requires decides adoption: a fixed `synthetic-dev-only` set of English messages with Vietnamese and English names and addresses, at least five positive and five negative cases per type, measuring recall and over-detection per type, the resident memory of `backend` with the model loaded, and the p95 latency of pseudonymizing one message on the free instance. With the recommended queue values, the queue wait, the claim, and pseudonymization must fit in the 1 000 ms that the draft timeout of 11 000 ms leaves inside the 12 s target ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md#suggestion-job-queue), item 8). If the trial fails, the lead chooses between another candidate and a lower draft timeout.
 
 ### The `ai-service` client
 
@@ -205,10 +209,10 @@ The detectors, their order, and the overlap rule are those of [ADR-0010](../deci
 
 ### Views and the triggers of new suggestions
 
-`recordTicketView` is the only place where a view creates a suggestion. On the first view it reads the KB version from `ai-service` before any transaction, so no transaction waits for `ai-service`; it then records the view and creates any suggestion in one transaction:
+`recordTicketView` is the only place where a view creates a suggestion. It is allowed in every ticket state. On the first view of an `open` ticket in `assisted` mode, it reads the KB version from `ai-service` before any transaction, so no transaction waits for `ai-service`; it then records the view and creates any suggestion in one transaction:
 
-1. The first view sets `handling_started_at`, which starts the handling clock.
-2. On the first view, when the current suggestion used a KB version other than the one `ai-service` reports in `getAssetVersions`, a `kb_version_changed` suggestion is created. When `ai-service` cannot answer within `ai_service_read_timeout_ms`, the view succeeds without it.
+1. The first view sets `handling_started_at`, which starts the handling clock, in every state and mode.
+2. On the first view of an `open` ticket in `assisted` mode, when the current suggestion used a KB version other than the one `ai-service` reports in `getAssetVersions`, a `kb_version_changed` suggestion is created. When `ai-service` does not answer within `ai_service_read_timeout_ms`, the view is still recorded and no `kb_version_changed` suggestion is created.
 3. On any view of an `open` ticket in `assisted` mode whose current suggestion has a part `unavailable` with `ai_service_unavailable` or a draft `llm_unavailable`, and no `pending` part, a `retry` suggestion is created. A pending retry blocks another one.
 
 ### Replies, reply proposals, and escalations
@@ -234,7 +238,7 @@ sequenceDiagram
 1. **Reply.** `sendReply` inserts the reply and sets the ticket `closed` with `closed_at`. It is the only code that writes a reply, and only these console use cases call it, so no reply exists without a staff or manager action (FR-04). The customer sees it through `getShopTicket`.
 2. **Reply proposal.** `createReplyProposal` inserts the proposal and sets the ticket `awaiting_approval`. A manager sends it with the basis `reply_proposal`, as proposed or edited.
 3. **Escalation.** `createEscalation` inserts the escalation, sets the ticket `escalated`, and records the decision `escalate`.
-4. **Staff decision** ([contracts v1, Recorded decision](contracts-v1.md#backend-contract-backendopenapiyaml)). A reply or a proposal with the basis `ai_draft` records `approve` when the sent body equals the draft's canonical `text`, and `edit` otherwise; `rejected_ai_draft` records `reject`; `no_ai_draft` records none. Both texts are compared after line endings become `\n` and outer whitespace is trimmed. `change_ratio` is `1 - SequenceMatcher(None, draft, body).ratio()` from the standard library's `difflib`, rounded to three decimals: 0 for an unchanged draft, up to 1 for a rewrite. For a reply from a proposal, the decision is recorded when the manager sends, with both accounts and `is_proposal_changed`. `final_intent` is the intent of the current suggestion: the staff-chosen one after an override, otherwise the predicted one.
+4. **Staff decision** ([contracts v1, Recorded decision](contracts-v1.md#backend-contract-backendopenapiyaml)). The decision is recorded when the reply is sent. A reply whose basis, or whose proposal's basis, is `ai_draft` records `approve` when the sent body equals the draft's canonical `text`, and `edit` otherwise; `rejected_ai_draft` records `reject`; `no_ai_draft` records none. Both texts are compared after line endings become `\n` and outer whitespace is trimmed. `change_ratio` is `1 - SequenceMatcher(None, draft, body).ratio()` from the standard library's `difflib`, rounded to three decimals: 0 for an unchanged draft, up to 1 for a rewrite. For a reply from a proposal, the decision is recorded when the manager sends it, with both accounts and `is_proposal_changed`. `final_intent` is the intent of the current suggestion: the staff-chosen one after an override, otherwise the predicted one.
 5. **Audit.** Each action writes its entries in its own transaction: `reply.sent`, `reply_proposal.submitted`, `ticket.escalated`, `decision.recorded`, and `intent.overridden` for an override ([contracts v1, Audit log](contracts-v1.md#audit-log)). Entries hold identifiers, statuses, reason codes, versions, and numbers only.
 
 ### Manual handling
@@ -250,13 +254,15 @@ sequenceDiagram
 | Figure | Query |
 |---|---|
 | Tickets created and closed | Count of `tickets` by `handling_mode`, with `created_at` in the period, and with `closed_at` in the period |
-| Draft decisions | Count of `staff_decisions` with `decided_at` in the period and `decision_type` `approve`, `edit`, or `reject`; each share is its count divided by the sum of the three, and absent when the sum is 0 |
+| Draft decisions | Count of `staff_decisions` with `decided_at` in the period and `decision_type` `approve`, `edit`, or `reject`: one decision per reply sent from a ready draft, directly or through a proposal. Each share is its count divided by the sum of the three, and absent when the sum is 0. `edit_by_reason` and `reject_by_reason` count the same `edit` and `reject` decisions per staff reason code; a decision with two codes counts once under each |
 | Escalations by reason | Count of `escalations` with `escalated_at` in the period, in total and per staff reason code; an escalation with two codes counts once in the total and once under each code |
 | AI outcomes | Count of draft parts completed in the period by status, without `cancelled`, and by AI reason code |
 | End-to-end latency | p50 and p95 of `completed_at` of the draft part of each ticket's first suggestion, minus the ticket's `created_at`, for drafts completed in the period |
 | AI error rate | Suggestions completed in the period with a part `unavailable` or a draft `llm_unavailable`, divided by all suggestions completed in the period without a `cancelled` part; absent when there are none |
 | LLM cost | Sum of `llm_cost_micro_usd` of the draft parts completed in the period, and its average per draft part that called the LLM |
 | Handling time | p50 of `closed_at - handling_started_at` by `handling_mode`, for tickets closed in the period that have `handling_started_at` |
+
+The breakdown of edits and rejections by intent, which [ADR-0006, Validation](../decisions/0006-staff-feedback-and-reason-codes.md#validation) asks for, is not a figure of the report: it comes from `backend export-decisions` ([The decision-record export](#the-decision-record-export)) and the Staff outcomes dashboard of Grafana ([LOG-27](../rules/logging-and-observability.md#dashboards)), as the project lead decided on 2026-11-12.
 
 ### The decision-record export
 
@@ -278,7 +284,7 @@ NFR-11 compares handling time with and without AI "on the same requests by the s
 | Random split per request | Each request is imported once, with a mode drawn at random | Simpler, but every request is handled in one mode only, so it does not measure "the same requests" |
 | Mode by period | All tickets of one session are `manual`, all of the next are `assisted` | Simplest, but the order effect is not controlled |
 
-**Recommendation:** the paired import. Because tickets are not assigned to staff ([contracts v1, Non-goals](contracts-v1.md#non-goals)), the protocol runs one staff member at a time on a batch, and the import file decides which batch is visible by importing it just before that session. How authority-related requests are treated in both modes stays a question for the study protocol ([contracts v1, Open questions](contracts-v1.md#open-questions)).
+**Recommendation, chosen by the project lead on 2026-11-12:** the paired import. Because tickets are not assigned to staff ([contracts v1, Non-goals](contracts-v1.md#non-goals)), the protocol runs one staff member at a time on a batch, and the import file decides which batch is visible by importing it just before that session. How authority-related requests are treated in both modes stays a question for the study protocol ([contracts v1, Open questions](contracts-v1.md#open-questions)).
 
 ### Settings
 
@@ -291,10 +297,10 @@ New settings of `backend`, validated at startup ([ARCH-34](../rules/architecture
 | `ai_service_draft_timeout_ms` | 11 000 | [contracts v1, Timeouts](contracts-v1.md#suggestion-lifecycle) |
 | `ai_service_read_timeout_ms` | 3 000 | The same bound as the analysis call, for the two reads |
 | `backend_build_version` | None; required. Set by the build, for example to the commit SHA | `getAdminVersions` ([ADR-0012](../decisions/0012-roles-v1.md), the versions in use) |
-| `suggestion_workers_per_replica` | Choice 3 | ADR-0011, item 7 |
-| `suggestion_job_lease_ms` | Choice 3; startup fails unless it is longer than `ai_service_draft_timeout_ms` | ADR-0011, item 3 |
-| `suggestion_job_max_attempts` | Choice 3 | ADR-0011, item 7 |
-| `suggestion_queue_poll_ms` | Choice 3 | ADR-0011, item 7 |
+| `suggestion_workers_per_replica` | 5 (Choice 3) | ADR-0011, item 7 |
+| `suggestion_job_lease_ms` | 15 000 (Choice 3); startup fails unless it is longer than `ai_service_draft_timeout_ms` | ADR-0011, item 3 |
+| `suggestion_job_max_attempts` | 3 (Choice 3) | ADR-0011, item 7 |
+| `suggestion_queue_poll_ms` | 500 (Choice 3) | ADR-0011, item 7 |
 
 #### Choice 3: the initial values of the queue
 
@@ -305,17 +311,20 @@ New settings of `backend`, validated at startup ([ARCH-34](../rules/architecture
 | `suggestion_job_max_attempts` | 3 | Only a crash, a restart, or a storage error uses an attempt, because an `ai-service` failure ends the part instead of retrying the job. Three attempts cover two restarts in a row, such as a deploy right after a Render restart | 3, as a literal |
 | `suggestion_queue_poll_ms` | 500 | The wake-up after a commit makes the normal wait close to zero; the poll covers jobs from another replica and expired leases. 500 ms adds two claim queries per second per idle replica | 500 |
 
-**Recommendation:** the values above, re-measured with the NFR-08 load test and the pseudonymization trial before the demo. If the measured queue wait, claim, and pseudonymization do not fit in 1 000 ms at p95, the draft timeout is lowered (ADR-0011, item 8).
+**Recommendation, chosen by the project lead on 2026-11-12:** the values above, re-measured with the NFR-08 load test and the pseudonymization trial before the demo. If the measured queue wait, claim, and pseudonymization do not fit in 1 000 ms at p95, the draft timeout is lowered (ADR-0011, item 8).
 
 ### Data and contracts
 
 - **`backend` contract 1.2.0** adds the console operations of the [contracts v1 design](contracts-v1.md#backend-contract-backendopenapiyaml) and `getAdminVersions`. Every change is compatible (CON-19): new operations, new schemas, and four new problem types in responses (`authority-required`, `invalid-ticket-state`, `suggestion-pending`, `suggestion-superseded`). The contract fixes what the contracts v1 design left to it:
-  - the console's KB document read is `getConsoleKbDocumentVersion`, so that its example folder differs from that of `getKbDocumentVersion` in the `ai-service` contract;
-  - `listConsoleTickets` takes a required `status`, orders `open`, `awaiting_approval`, and `escalated` tickets oldest first and `closed` tickets newest first by `closed_at`, and has no sort parameter;
+  - the console's KB document read is `getConsoleKbDocumentVersion`, so that its example folder differs from that of `getKbDocumentVersion` in the `ai-service` contract. It returns the shared schema `KbDocumentVersion`, exactly as `ai-service` serves it;
+  - `listConsoleTickets` takes a required `status`, orders `open`, `awaiting_approval`, and `escalated` tickets oldest first and `closed` tickets newest first by `closed_at`, and has no sort parameter. `TicketSummary` carries `closed_at`, present exactly when `status` is `closed`;
   - the message excerpt of a ticket summary holds at most the first 160 characters of the message;
-  - latencies are integer `_ms` fields inside objects, because CON-18 makes every `_ms` name an integer: the report's `end_to_end_latency` holds `p50_ms` and `p95_ms`, its `handling_time` holds `p50_ms` per mode, and a suggestion part carries `step_latencies` with `total_ms`, `analysis_ms`, and `llm_ms`, as the `ai-service` contract does;
+  - latencies are integer `_ms` fields inside objects, because CON-18 makes every `_ms` name an integer: the report's `end_to_end_latency` holds `p50_ms` and `p95_ms`, its `handling_time` holds `p50_ms` per mode, and a suggestion part carries `step_latencies`, the shared schema `StepLatencies` with `total_ms`, `analysis_ms`, and `llm_ms`, which the `ai-service` contract uses too;
   - the draft and the analysis of a suggestion are unions discriminated by `draft_status` and `analysis_status`, so a draft exists only when it is ready ([CODE-29](../rules/code.md#types-and-data));
-  - a reply body is a `MessageText` that does not match `Placeholder`, so the mock and `backend` both refuse a placeholder (SEC-38).
+  - a reply body is a `MessageText` that does not match `Placeholder`, so the mock and `backend` both refuse a placeholder (SEC-38);
+  - a reply proposal's basis is `ReplyProposalBasis`, the values of `ReplyBasis` without `reply_proposal`;
+  - the report's draft decisions carry `edit_by_reason` and `reject_by_reason`, the edits and rejections by staff reason code ([Reports](#reports));
+  - `createEscalation` answers `422` with the example `note-required` when `staff_reason_codes` contains `other` and the note is absent.
 - **`ai-service` contract 1.0.0** is written in a separate change. `backend` consumes it through generated models; `backend` contract schemas never expose it directly ([contracts v1, Common elements](contracts-v1.md#common-elements)).
 - **Migration `r0003`** adds the tables above, with a working downgrade (PY-40). `r0001` and `r0002` are not edited.
 
@@ -326,7 +335,7 @@ The guardrails of the requirements hold: no reply without a staff action (FR-04)
 | Failure | Behavior | Test |
 |---|---|---|
 | Any code path writes a reply outside `sendReply` | Impossible: only `sendReply` inserts into `replies`, and a contract test lists every write | Contract test of the writes ([TEST-26](../rules/testing.md#guardrail-tests)) |
-| Staff send a reply on a ticket that requires authority | `403 authority-required`; nothing stored | Guardrail test |
+| Staff send a reply on a ticket that requires authority | `403 authority-required`, also while a part is `pending`; nothing stored | Guardrail test |
 | The flag is set by a result that arrives while staff edit | The next send by staff gets `403 authority-required` | Use-case test with a draft outcome that carries `requires_authority` |
 | A detector raises an error, or the text is over 4 000 characters | Both parts `unavailable` with `pseudonymization_failed`; no call to `ai-service` | Use-case test with a failing fake detector that asserts no call |
 | The named-entity model cannot load | `backend` does not start ([ERR-17](../rules/errors-and-reliability.md#startup-and-health)) | Startup test with a missing model |
@@ -337,6 +346,10 @@ The guardrails of the requirements hold: no reply without a staff action (FR-04)
 | `ai-service` answers outside the contract, or with an unknown status or reason code | The part `unavailable`; logged at `error` | Consumer test with a mock that returns unknown values |
 | A replica crashes while it holds a job | The job is claimed again after its lease; results are stored once | Integration test with two loops and a stopped one |
 | A late result for a superseded suggestion, or under an older attempt | Discarded | Use-case test |
+| A retry after a failed intent correction | The `retry` suggestion keeps the intent that staff chose and calls only `/v1/drafts` | Use-case test |
+| `createSuggestion` on a ticket in `manual` mode | `409 invalid-ticket-state`; no suggestion, no job | Handler test |
+| `ai-service` does not answer the KB version read of a first view | The view is recorded; no `kb_version_changed` suggestion | Use-case test with a fake client that times out |
+| Staff escalate with `other` and no note | `422 invalid-request`; nothing stored | Handler test |
 | Two requests act on one ticket at the same time | The row lock serializes them; the second sees the new state | Integration test with two concurrent requests |
 | A repeated request with the same `Idempotency-Key` | The original result, without a second effect | Idempotency test per operation |
 | A reply or proposal body contains a placeholder | `422 invalid-request` ([SEC-38](../rules/security-and-privacy.md#pseudonymization)) | Handler test |
@@ -393,7 +406,7 @@ The NFR-08 load test and the pseudonymization trial run before the demo. No mode
 ## Rollout
 
 1. This design, Draft, together with `backend` contract 1.2.0 and `ai-service` contract 1.0.0, on the branch `build/ticket-workflow`. The project lead approves the design and the `ai-service` part of the contracts v1 design together.
-2. The ADR for the install URL of the named-entity model, if Choice 1 keeps spaCy, before the implementation adds the dependency.
+2. [ADR-0017](../decisions/0017-named-entity-model-from-its-release-url.md), Proposed, for the install of the named-entity model from its release URL, reviewed together with this design and accepted before the implementation adds the dependency.
 3. The `backend` implementation on the same branch: migration `r0003`, the feature modules, the commands, the provider tests, and the consumer tests against the `ai-service` mock. The provider contract tests of `backend` run over every operation of the contract, so they fail on this branch from the contract change until this step lands; the branch is merged into `chore` only after it (CON-01, step 5).
 4. The `frontend` console screens, against the Prism mock of `backend` contract 1.2.0.
 5. Roll back by reverting the merge commit after downgrading the database to `r0002` with the merged code, as for `r0002` ([account management design, Rollout](account-management.md#rollout)).

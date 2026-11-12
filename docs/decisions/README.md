@@ -24,6 +24,7 @@ An architecture decision record (ADR) captures one significant decision: its con
 | [0014](0014-citations-to-order-context.md) | Citations to the order context | Accepted | 2026-11-12 |
 | [0015](0015-account-creation-and-password-changes.md) | Account creation, password changes, and password resets | Accepted | 2026-11-11 |
 | [0016](0016-hosting-on-free-tiers.md) | Hosting of the demo on free tiers | Accepted | 2026-11-12 |
+| [0017](0017-named-entity-model-from-its-release-url.md) | The named-entity model from its release URL | Proposed | 2026-11-12 |
 
 Notes on the index:
 

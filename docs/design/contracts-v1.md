@@ -32,7 +32,7 @@ The team agreed the product behavior:
 - the update of 2026-11-05: one pending rule for every role, responses from the ingress, shared `Citation` and `OrderContext` schemas, the shop's `order_id` filter on `listShopTickets`, the ticket status `replied`, the newest-first order of shop lists, the `account_id` of `getCurrentSession`, the data classes of commerce IDs, no `Idempotency-Key` on sign-out, and names that follow CON-18 (`start_at`, `end_at`, `handling_time_ms`, `mask_count_by_type`);
 - the update of 2026-11-08, as `backend.openapi.yaml` 1.0.1 states: the problem type `idempotency-key-reused` also covers the same key with different path parameters; the ingress answers `502` or `504` also when a write in flight fails, and a retry with the same key then cannot repeat its effect; a product appears at most once in an order;
 - the update of 2026-11-11, for `backend` contract 1.1.0 ([ADR-0015](../decisions/0015-account-creation-and-password-changes.md)): the own password change, admin account creation and password reset, the problem type `login-name-taken`, and three audit log events. The [account management design](account-management.md) holds their details;
-- the update of 2026-11-12, for `backend` contract 1.2.0: the console's KB document read is named `getConsoleKbDocumentVersion`, the queue order and the message excerpt of `TicketSummary` are fixed, and latencies are integer `_ms` fields inside objects, as CON-18 requires. The [backend ticket workflow design](backend-ticket-workflow.md) holds the details.
+- the update of 2026-11-12, for `backend` contract 1.2.0: the console's KB document read is named `getConsoleKbDocumentVersion`, the queue order and the message excerpt of `TicketSummary` are fixed, and latencies are integer `_ms` fields inside objects, as CON-18 requires. After the review of the same day, staff get `403 authority-required` before `409 suggestion-pending`, a retry keeps the intent that staff chose, `source_review_overdue` refers to retrieved document versions, `StepLatencies` and `KbDocumentVersion` are shared schemas, and the report breaks down edits and rejections by staff reason code. The [backend ticket workflow design](backend-ticket-workflow.md) holds the details.
 
 Revision 2 needs a new approval.
 
@@ -122,7 +122,7 @@ The roles are `customer`, `staff`, `manager`, and `admin` ([ADR-0012](../decisio
   - a term of the sensitive-term list, for legal claims and suspected fraud.
 - The LLM never sets `requires_authority`; it only writes the draft. The project lead decided this on 2026-11-12.
 - The property is never cleared in v1. Correcting the intent or re-running the suggestion cannot remove it. A sensitive intent chosen by staff sets it in the same way, because the override replaces the intent distribution. A choice that staff replace before its draft outcome arrives sets nothing, because staff withdrew it.
-- While any part of the current suggestion is `pending`, staff cannot send a reply (`409 suggestion-pending`). This closes the gap where the flag is not yet known.
+- While any part of the current suggestion is `pending`, staff cannot send a reply (`409 suggestion-pending`). This closes the gap where the flag is not yet known. On a ticket that already requires authority, staff get `403 authority-required` instead, also while a part is `pending`, because the flag is never cleared.
 - Staff can correct the intent only when an intent is known: the analysis of the current suggestion is `ready`, or the current suggestion already carries an `intent_override`. Every signal of the model's analysis is therefore stored before any correction. A correction is allowed while a draft is generating: it cancels the draft call and starts a new draft ([Suggestion lifecycle](#suggestion-lifecycle)).
 - Staff can always route a ticket to a manager themselves, with a reply proposal or an escalation.
 - Tickets that the AI never flags (manual mode, AI unavailable, or a missed classification) rely on staff judgment ([ASM-04](../product/requirements.md#6-assumptions-and-constraints)). The guarantee is: every ticket the AI flags is sent by a manager. The manual-handling panel reminds staff to route refund decisions and disputes to a manager and offers Submit for approval, and a retry ([Suggestion lifecycle](#suggestion-lifecycle)) limits this case to the time the AI is down.
@@ -163,7 +163,7 @@ A suggestion is everything the AI produced for a ticket in one run, as recorded 
 |---|---|
 | `ticket_created` | A ticket is created in `assisted` mode |
 | `intent_override` | Staff or a manager confirms the predicted intent or chooses another |
-| `kb_version_changed` | On the first staff view, the current suggestion used a KB version different from the one `ai-service` has loaded |
+| `kb_version_changed` | On the first staff view of an `open` ticket in `assisted` mode, the current suggestion used a KB version different from the one `ai-service` has loaded |
 | `retry` | The ticket is `open`, the current suggestion has a part `unavailable` with `ai_service_unavailable`, or a draft `llm_unavailable`, and staff open the ticket or ask for a retry |
 
 Every suggestion of a ticket uses `as_of` = the ticket's `created_at`, the time the customer asked. The `ai-service` pipeline design confirms this choice.
@@ -239,7 +239,7 @@ sequenceDiagram
     end
     Staff->>FE: Open the ticket in /console
     FE->>BE: POST /v1/console/tickets/{ticket_id}/views
-    opt Current suggestion used a different KB version
+    opt First view of an open, assisted ticket whose suggestion used a different KB version
         BE->>BE: Create suggestion (kb_version_changed) and queue its job
     end
     loop While a suggestion part is pending
@@ -355,7 +355,7 @@ sequenceDiagram
     end
     alt Failure can be retried
         BE->>BE: Create suggestion (retry) and queue its job
-        BE->>AI: POST /v1/analyses and POST /v1/drafts
+        BE->>AI: POST /v1/analyses and POST /v1/drafts, or only POST /v1/drafts with the staff-chosen intent
         alt Valid 200 responses in time
             AI-->>BE: Analysis and draft outcome
         else Timeout, 4xx, 5xx, or invalid response
@@ -366,7 +366,7 @@ sequenceDiagram
     end
 ```
 
-A retry runs both endpoints, as for a new ticket, and reuses the stored pseudonym map. A pending retry blocks another one, so opening the ticket again creates no duplicate.
+A retry repeats the input of the failed suggestion, its `intent_override` included, so a failure after an intent correction keeps the intent that staff chose. The project lead decided this on 2026-11-12. Without an override, a retry runs both endpoints, as for a new ticket; with one, it runs only `/v1/drafts`, as an intent correction does. It reuses the stored pseudonym map. A pending retry blocks another one, so opening the ticket again creates no duplicate.
 
 ### Data and contracts
 
@@ -411,6 +411,8 @@ Both contracts are new at version `1.0.0`. No consumer exists yet, so there is n
   - `Placeholder`: text that contains at least one placeholder of [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#placeholder-syntax). A contract applies it with `not` to require text without placeholders, as on a reply body.
   - `Money`: `amount_minor`, `currency`.
   - `ProblemDetails`.
+  - `StepLatencies`: `total_ms`, `analysis_ms`, and `llm_ms` when the LLM was called.
+  - `KbDocumentVersion`: one full KB document version, the body of `getKbDocumentVersion` and of `getConsoleKbDocumentVersion`.
 - All other `backend` schemas are its own view models, so `frontend` does not depend on the `ai-service` contract.
 
 #### Reason codes
@@ -428,7 +430,7 @@ Both contracts are new at version `1.0.0`. No consumer exists yet, so there is n
 | `only_expired_documents` | Relevant documents exist, but none is in effect at `as_of` | ESC-04 |
 | `conflicting_sources` | Two valid versions with the same policy key disagree | ESC-04 |
 | `missing_information` | The request needs information that is in neither the message nor the order context | ESC-04 |
-| `source_review_overdue` | A cited document version is past its review deadline under the KB freshness rules | ESC-04 (`STALE`), as a warning |
+| `source_review_overdue` | A document version that the analysis retrieved is past its review deadline under the KB freshness rules | ESC-04 (`STALE`), as a warning |
 | `grounding_failed` | The draft made claims its sources do not support | ESC-05: the LLM output is unusable |
 | `llm_unavailable` | LLM timeout, error, or rate limit, a call refused because its host is not on the egress allow-list, or an open circuit breaker | ESC-05 |
 | `llm_invalid_output` | The LLM output failed schema validation, or it contained a placeholder that was not in the prompt | ESC-05 |
@@ -602,7 +604,7 @@ Three audience namespaces keep the guardrails structural:
 
 `listShopTickets` takes an optional `order_id` query parameter. It must name one of the caller's orders; otherwise it returns `404 not-found`. The shop's order page uses it ([shop UI design](shop-ui.md)). `listShopOrders` and `listShopTickets` return items newest first, by `placed_at` and `created_at`.
 
-`createSuggestion` takes an optional `intent_override`. With it, the request corrects or confirms the intent, also while a draft is generating. When no intent is known ([Authority rule](#authority-rule-fr-06)), it returns `409 suggestion-pending` while a part is `pending`, and `422 invalid-request` otherwise. Without it, the request is a retry, valid only when `retry_suggestion` is allowed; otherwise it returns `422 invalid-request`.
+`createSuggestion` takes an optional `intent_override`. With it, the request corrects or confirms the intent, also while a draft is generating. When no intent is known ([Authority rule](#authority-rule-fr-06)), it returns `409 suggestion-pending` while a part is `pending`, and `422 invalid-request` otherwise. Without it, the request is a retry, valid only when `retry_suggestion` is allowed; otherwise it returns `422 invalid-request`. A retry repeats the input of the failed suggestion, its `intent_override` included. On a ticket that is not `open`, or in `manual` mode, the request returns `409 invalid-ticket-state`.
 
 Shop view models:
 
@@ -618,7 +620,7 @@ Shop view models:
 - the draft status of the current suggestion, absent in `manual` mode;
 - the predicted intent with its confidence band and probability, absent when there is no analysis.
 
-`backend` contract 1.2.0 fixes the rest: `listConsoleTickets` takes a required `status`, lists `open`, `awaiting_approval`, and `escalated` tickets oldest first by `created_at` and `closed` tickets newest first by `closed_at`, and has no sort parameter; the excerpt holds at most the first 160 characters of the message.
+`backend` contract 1.2.0 fixes the rest: `listConsoleTickets` takes a required `status`, lists `open`, `awaiting_approval`, and `escalated` tickets oldest first by `created_at` and `closed` tickets newest first by `closed_at`, and has no sort parameter; `TicketSummary` carries `closed_at`, present exactly when the ticket is `closed`; the excerpt holds at most the first 160 characters of the message.
 
 `TicketWorkspace`, the body of `getConsoleTicket`:
 
@@ -659,7 +661,7 @@ The reply editor starts from `text`, and decision derivation compares the sent b
 - `body` MUST NOT contain any text that matches the `Placeholder` syntax ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#restoring-and-sending)).
 - A body whose basis is not valid for the ticket, or that contains a placeholder, returns `422 invalid-request`. A `suggestion_id` that is not current returns `409 suggestion-superseded`.
 
-`createEscalation` takes `staff_reason_codes` (at least one, as [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md) requires), `note` (required with `other`), and optional `suggestion_id`.
+`createEscalation` takes `staff_reason_codes` (at least one, as [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md) requires), `note` (required with `other`; otherwise `422 invalid-request`), and optional `suggestion_id`.
 
 **Recorded decision** ([ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md)). When a reply is sent, `backend` records one decision about the AI draft. It compares the draft's canonical `text` (pseudonyms restored) with the body actually sent. Both are compared after line endings are normalized to `\n` and leading and trailing whitespace is trimmed:
 
@@ -680,7 +682,7 @@ An escalation records `escalate`. For a reply proposal, the record keeps both th
 |---|---|
 | `period` | `start_at` and `end_at` |
 | `ticket_counts` | Tickets created and tickets closed in the period, by handling mode |
-| `draft_decisions` | Counts and shares of `approve`, `edit`, and `reject` among replies sent in the period from a `draft_ready` draft |
+| `draft_decisions` | Counts and shares of `approve`, `edit`, and `reject` among replies sent in the period whose basis, or whose proposal's basis, was `ai_draft` or `rejected_ai_draft`, with the edits and the rejections by staff reason code |
 | `escalations` | Escalations in the period, by staff reason code |
 | `ai_outcomes` | Suggestions completed in the period, by draft status and by AI reason code, without `cancelled` drafts |
 | `end_to_end_latency` | `p50_ms` and `p95_ms`, from ticket creation until the draft part of the ticket's first suggestion left `pending` ([NFR-08](../product/requirements.md#5-quality-requirements)) |
@@ -688,7 +690,7 @@ An escalation records `escalate`. For a reply proposal, the record keeps both th
 | `llm_cost_micro_usd` | Total, and average per suggestion that called the LLM |
 | `handling_time` | `p50_ms` by handling mode (NFR-11) |
 
-Only managers see the report ([ADR-0012](../decisions/0012-roles-v1.md)). The console shows each figure with a label in business language, its unit, and its target where the requirements give one ([UI-44](../rules/ui.md#console-interaction)). The report holds no intent figures, such as the override rate or decisions by intent, and no latency per suggestion part: those are developer metrics on the Staff outcomes and AI pipeline dashboards of Grafana ([LOG-27](../rules/logging-and-observability.md#dashboards)).
+Only managers see the report ([ADR-0012](../decisions/0012-roles-v1.md)). The console shows each figure with a label in business language, its unit, and its target where the requirements give one ([UI-44](../rules/ui.md#console-interaction)). The report holds no intent figures, such as the override rate or decisions by intent, and no latency per suggestion part: those are developer metrics on the Staff outcomes and AI pipeline dashboards of Grafana ([LOG-27](../rules/logging-and-observability.md#dashboards)). The breakdown of edits and rejections by intent that [ADR-0006, Validation](../decisions/0006-staff-feedback-and-reason-codes.md#validation) asks for comes from the decision-record export `backend export-decisions` ([backend ticket workflow design](backend-ticket-workflow.md#the-decision-record-export)) and the Staff outcomes dashboard, as the project lead decided on 2026-11-12.
 
 Infrastructure cost (NFR-10) is the price of the hosting plans ([ADR-0016](../decisions/0016-hosting-on-free-tiers.md#deviations-from-the-requirements)), not a figure of this report.
 
@@ -756,7 +758,7 @@ This design fixes the structure; the contract is completed when the approved KB 
 | Document version | Document ID, version, title, body, policy key, `effective_start_at`, `effective_end_at` (absent means open-ended), source, owner, checksum, and `last_reviewed_at` when the source provides it ([DATA-16](../rules/data-and-ml.md#knowledge-base)) |
 | KB version manifest | `kb_version`, the document versions it contains with checksums, creation date, source reference |
 | Document-to-intent mapping | Separate file: `mapping_version`, `kb_version`, and for each document ID its list of `IntentLabel` values ([ADR-0005](../decisions/0005-intent-independent-retrieval.md)) |
-| Freshness | For each policy area: the maximum time between reviews, the owner who reviews, and the interim action when a review is overdue. Overdue documents stay usable, and each draft citing them carries the warning `source_review_overdue`. The warning needs `last_reviewed_at` from the source. Documents without it get no freshness warning and are listed in the ingestion report; the value is never invented ([DATA-13](../rules/data-and-ml.md#validation-at-every-boundary)) |
+| Freshness | For each policy area: the maximum time between reviews, the owner who reviews, and the interim action when a review is overdue. Overdue documents stay usable, and each suggestion whose analysis retrieves them carries the warning `source_review_overdue`. The warning needs `last_reviewed_at` from the source. Documents without it get no freshness warning and are listed in the ingestion report; the value is never invented ([DATA-13](../rules/data-and-ml.md#validation-at-every-boundary)) |
 | Violations | Who checks each rule (the ingestion script for structure, the policy owner for content), and who acts on a failure (the RAG engineer quarantines, the policy owner corrects) |
 | Ingestion | Source files stay unchanged under `data/raw/kb/<kb_version>/`. A script maps them to the canonical form and validates them ([DATA-12](../rules/data-and-ml.md#validation-at-every-boundary)) |
 
@@ -781,14 +783,14 @@ Values missing from the source files are never invented. A document without a re
 | Stored AI text contains a pseudonym missing from the map | Shown as written and highlighted; logged at `error` as a defect | Use-case test |
 | A reply or proposal body contains a placeholder | `422 invalid-request` | Handler test |
 | Staff send a reply on a ticket where authority is required | `403 authority-required` | Guardrail test (TEST-26) |
-| Staff correct the intent on a flagged ticket, then try to send | The flag stays set: `409 suggestion-pending` while pending, `403 authority-required` after | Guardrail test (TEST-26) |
+| Staff correct the intent on a flagged ticket, then try to send | The flag stays set: `403 authority-required`, also while the new suggestion is pending | Guardrail test (TEST-26) |
 | Staff correct the intent when no intent is known and a part is `pending` | `409 suggestion-pending`; no new suggestion | Guardrail test (TEST-26) |
 | Staff correct the intent when no intent is known and nothing is `pending` | `422 invalid-request`; staff use a retry when one is allowed, otherwise manual handling | Handler test |
 | Staff correct the intent while a draft is generating | The draft call is cancelled, a new suggestion starts, and the flag stays set | Use-case test |
 | A call is still running when its suggestion is superseded | Pending parts `cancelled`; a late result is discarded | Use-case test |
 | A retry while `ai-service` is still failing | The new suggestion ends `unavailable`; manual handling continues | Use-case test |
 | A retry with nothing to retry, or after `pseudonymization_failed` | `422 invalid-request` | Handler test |
-| Staff send while a suggestion part is pending | `409 suggestion-pending` | Handler test |
+| Staff send on a ticket that does not require authority while a suggestion part is pending | `409 suggestion-pending` | Handler test |
 | Reply from an AI draft without acknowledging every warning | `422 invalid-request` | Handler test |
 | Reply with `no_ai_draft` while a current draft is `draft_ready` | `422 invalid-request` | Handler test |
 | Reply or proposal refers to a superseded suggestion | `409 suggestion-superseded` | Handler test |
@@ -810,7 +812,7 @@ Values missing from the source files are never invented. A document without a re
 | A result arrives for a superseded suggestion or under an expired lease | Discarded | Use-case test |
 | A job runs out of attempts | Pending parts `unavailable` with `ai_service_unavailable` | Use-case test |
 | `UPDATE` or `DELETE` on the audit log | Rejected by the database | Integration test against PostgreSQL |
-| KB version changed before the first staff view | A new suggestion with `kb_version_changed` is created | Use-case test |
+| KB version changed before the first staff view of an `open` ticket in `assisted` mode | A new suggestion with `kb_version_changed` is created; none when `ai-service` does not answer in time, and the view is still recorded | Use-case test |
 | Invalid input: message too long, unknown field, malformed body | `400` or `422 invalid-request` ([CON-07](../rules/contracts.md#openapi-style)) | Handler tests; Schemathesis |
 
 ### Alternatives considered
