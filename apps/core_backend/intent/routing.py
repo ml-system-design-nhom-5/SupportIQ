@@ -279,13 +279,17 @@ def decide_route(
         )
 
     # Gate 8: All passed -> retrieve_draft
+    is_sensitive = (
+        final_intent in policy.sensitive_action_intents
+        or predicted in policy.sensitive_action_intents
+    )
     return RouteDecision(
         action="retrieve_draft",
         predicted_intent=predicted,
         final_intent=final_intent,
         requested_team=team,
-        target_queue="manager" if final_intent in policy.sensitive_action_intents else "standard",
-        reason_codes=[],
+        target_queue="manager" if is_sensitive else "standard",
+        reason_codes=["requires_authority"] if is_sensitive else [],
         required_slots=required_slots,
         missing_slots=[],
         must_human_approve=True,

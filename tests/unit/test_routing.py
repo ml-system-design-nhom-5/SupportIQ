@@ -180,3 +180,40 @@ def test_invalid_or_failed_model_output_and_margin():
     dec_inf_margin = decide_route(pred_inf_margin, ctx, policy)
     assert dec_inf_margin.action == "manual_fallback"
     assert "invalid_model_output" in dec_inf_margin.reason_codes
+
+
+def test_sticky_manager_authority_retained_on_override():
+    """Overriding sensitive predicted intent (request_refund) to non-sensitive (track_order) retains manager queue & authority."""
+    policy = load_policy_v2()
+    pred = IntentPrediction(intent="request_refund", confidence=0.95, margin=0.5, model_version="v2.0.0")
+    ctx = RoutingContext(
+        verified_scope="ticket:read intent:override",
+        ticket_customer_id="cust_123",
+        intent_override="track_order",
+        override_provenance={"actor_id": "supervisor_1", "reason": "corrected intent"},
+        extracted_slots={"order_id": "ORD-999"},
+    )
+    decision = decide_route(pred, ctx, policy)
+    assert decision.action == "retrieve_draft"
+    assert decision.final_intent == "track_order"
+    assert decision.target_queue == "manager"
+    assert "requires_authority" in decision.reason_codes
+
+
+def test_sensitive_override_activates_manager_authority():
+    """Overriding non-sensitive predicted intent (track_order) to sensitive (cancel_order) activates manager queue & authority."""
+    policy = load_policy_v2()
+    pred = IntentPrediction(intent="track_order", confidence=0.95, margin=0.5, model_version="v2.0.0")
+    ctx = RoutingContext(
+        verified_scope="ticket:read intent:override",
+        ticket_customer_id="cust_123",
+        intent_override="cancel_order",
+        override_provenance={"actor_id": "supervisor_1", "reason": "customer wants cancellation"},
+        extracted_slots={"order_id": "ORD-999"},
+    )
+    decision = decide_route(pred, ctx, policy)
+    assert decision.action == "retrieve_draft"
+    assert decision.final_intent == "cancel_order"
+    assert decision.target_queue == "manager"
+    assert "requires_authority" in decision.reason_codes
+

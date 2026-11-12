@@ -11,6 +11,21 @@ PLACEHOLDER = re.compile(r"\[(NAME|EMAIL|PHONE|CARD|ADDRESS|ORDER_ID|TRACKING_ID
 # factual detection. Human review remains mandatory for all outgoing replies.
 FACTUAL_COMMITMENT = re.compile(r"(\$\s*\d+|\b\d+\s*(days?|business days?|hours?|weeks?|months?)\b|\b(refund|refunded|refunds|return window|fee|fees|warranty)\b)", re.I)
 
+# Regulatory, dispute, financial, and policy exception keywords requiring manager authority
+SENSITIVE_AUTHORITY_PATTERN = re.compile(
+    r"\b("
+    r"fraud(?:ulent)?|defraud(?:ed)?"
+    r"|lawsuit|legal\s+(?:action|dispute|claim)|attorney|lawyer|court"
+    r"|chargeback|dispute[ds]?"
+    r"|unauthorized(?:\s+(?:transaction|payment|charge|debit|deduction|activity|use|withdrawal))?"
+    r"|not\s+authorized"
+    r"|(?:policy|refund|return|order|warranty)\s+exception"
+    r"|(?:make|request|grant|demand|ask\s+for|need|want|seek)\s+(?:an?\s+)?exception"
+    r"|exception\s+(?:request|to|clause)"
+    r")\b",
+    re.I,
+)
+
 
 class Engine:
     def __init__(self, model, retriever, llm, versions, policy):
@@ -55,8 +70,19 @@ class Engine:
             codes.append("low_confidence")
         if label not in self.policy["supported_12_intents"]:
             codes.append("out_of_scope_intent")
-        if label == "human_agent":
-            codes.append("human_agent_requested")
+        if label == "human_agent" or re.search(r"\b(human\s+agent|real\s+person|live\s+agent|human\s+operator|talk\s+to\s+a\s+human)\b", request["message"], re.I):
+            if "human_agent_requested" not in codes:
+                codes.append("human_agent_requested")
+
+        # Escalated intents outside product scope explicitly requested in customer message
+        if re.search(r"\b(close\s+(?:my\s+)?account|delete\s+(?:my\s+)?account)\b", request["message"], re.I):
+            if "out_of_scope_intent" not in codes:
+                codes.append("out_of_scope_intent")
+
+        if re.search(r"\b(?:schedule|book|arrange)\s+(?:a\s+)?(?:postal|courier|carrier|home)?\s*pickup\b|\bpostal\s+pickup\b", request["message"], re.I):
+            if "out_of_scope_intent" not in codes:
+                codes.append("out_of_scope_intent")
+
         candidates = [item.model_dump() if hasattr(item, "model_dump") else item for item in prediction.get("top_k", [])]
         if not override and candidates:
             probs = [item.get("probability", 0) for item in candidates]
@@ -78,8 +104,9 @@ class Engine:
                 and item.get("probability", 0) >= self.policy.get("default_margin_threshold", 0.1)
                 for item in candidates
             )
+            or bool(SENSITIVE_AUTHORITY_PATTERN.search(request["message"]))
         )
-        if sensitive or re.search(r"\b(fraud|lawsuit|legal action|chargeback|unauthorized\s+(?:transaction|payment|charge)|policy exception)\b", request["message"], re.I):
+        if sensitive:
             if "requires_authority" not in codes:
                 codes.append("requires_authority")
         retrieved = self.retriever.retrieve(request["message"], label, role="agent", current_time=datetime.fromisoformat(request["as_of"].replace("Z", "+00:00")))
@@ -88,8 +115,11 @@ class Engine:
         if retrieved.get("has_conflict"):
             codes.append("conflicting_sources")
             warnings.append("Retrieved knowledge base sources contain conflicting policy terms. Staff review required.")
-        if not evidence:
-            codes.append("no_valid_document")
+        has_scores = any(item.get("score") is not None for item in evidence)
+        max_evidence_score = max((item.get("score") or 0.0) for item in evidence if item.get("score") is not None) if has_scores else 1.0
+        if not evidence or (has_scores and max_evidence_score < 0.60) or "below_relevance_threshold" in retrieved.get("reason_codes", []):
+            if "no_valid_document" not in codes:
+                codes.append("no_valid_document")
         documents = []
         for index, item in enumerate(evidence, 1):
             original = next((document for document in self.retriever.eligible_versions if document.doc_id == item["document_id"] and str(document.version) == str(item["version"])), None)
