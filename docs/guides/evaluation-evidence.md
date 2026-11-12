@@ -48,10 +48,19 @@ Khi kết xuất báo cáo hệ thống (`report.md`), trạng thái chứng nh�
 - `certified_live_acceptance`: Mọi gate bắt buộc đạt với bằng chứng `live` thực tế từ model và benchmark được phê duyệt.
 - `simulated_mock_rejected`: Chạy bằng mock/simulated data; không được dùng làm bằng chứng production.
 - `unverified_heuristic_rejected`: Chạy bằng fallback heuristic hoặc model chưa được hash/verify.
-- `mixed_evidence_rejected`: Pha trộn bằng chứng giả lập hoặc heuristic vào lượt chạy live.
+- `unverified_model_rejected`: Bằng chứng khai báo live nhưng thiếu hẳn provenance mô hình (metrics.ml rỗng `{}` hoặc thiếu model_type/unverified status).
+- `mixed_evidence_rejected`: Pha trộn bằng chứng giả lập hoặc heuristic vào lượt chạy live, hoặc các chỉ số có evidence_kind không đồng nhất.
 - `cached_report_no_new_execution`: Tổng hợp từ file benchmark có sẵn; không có suy luận mới.
 - `pending_human_acceptance`: Các thành phần tự động đạt nhưng thiếu chấm claims thủ công từ con người.
 - `failed_acceptance_criteria`: Một hoặc nhiều tiêu chí chất lượng bắt buộc không đạt ngưỡng.
+
+### 2.3. Tách biệt Numeric Targets Passed và Live Acceptance Certified
+
+Để đảm bảo không bao giờ cấp chứng nhận nghiệm thu sai sự thật:
+- **`numeric_targets_passed`**: Phản ánh thuần túy việc các giá trị số đo được có thỏa mãn các ngưỡng kiến trúc hay không và không phát hiện tụt lùi (regression).
+- **`all_mandatory_passed`** (Live Mandatory Acceptance Certified): **LUÔN BẰNG FALSE** đối với các lượt chạy `cached`, `simulated`, `unverified`, hoặc khi phát hiện `mixed_evidence`. Chỉ duy nhất lượt chạy `new_execution` thực tế với `evidence_kind: "live"`, mô hình `trained`, raw records đã được kiểm tra hash SHA-256 khớp với đĩa cứng mới được cấp `all_mandatory_passed = True`.
+- **Xác thực Raw Records vật lý**: Mọi tệp khai báo trong `manifest.files` (raw_records, cases, model weights) đều được kiểm tra sự tồn tại trên ổ đĩa và so sánh mã băm SHA-256 thực tế. Nếu tệp không tồn tại hoặc sai lệch hash, hệ thống lập tức từ chối nghiệm thu live.
+- **Tính tương thích ngặt nghèo (Strict Comparability)**: So sánh hồi quy giữa 2 lượt chạy đòi hỏi cả hai phải có đầy đủ không rỗng: `kb_hash`, `split_hash`, `model_hash`, `prompt_hash`, và mã băm cấu hình chính quy (canonical configuration hash). Bất kỳ trường nào thiếu hoặc sai khác đều dẫn đến `comparable: false`.
 
 ---
 
@@ -139,7 +148,9 @@ Mỗi lần chạy tạo một file `manifest.json` tuân thủ schema `Evaluati
       "operator": "<="
     }
   },
-  "all_mandatory_passed": true
+  "numeric_targets_passed": true,
+  "all_mandatory_passed": false,
+  "summary_reason": "Numeric targets passed, but cached runs cannot certify live acceptance."
 }
 ```
 

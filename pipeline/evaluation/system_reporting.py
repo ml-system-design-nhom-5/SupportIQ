@@ -28,28 +28,41 @@ def write_system_report(
     latency = metrics.get("latency") or {}
     gate_dict = gates.get("gates") or {}
     evidence_kind = gates.get("evidence_kind", "simulated")
-    model_mode = gates.get("model_mode") or ml.get("model_type")
+    model_mode = gates.get("model_mode") or ml.get("model_type") or "unverified"
     execution_mode = gates.get("execution_mode", "new_execution")
     all_passed = gates.get("all_mandatory_passed", False)
     summary_reason = gates.get("summary_reason", "")
     ai_assessment = metrics.get("ai_assessment") or {}
     human_assessment = metrics.get("human_assessment") or {}
+    is_mixed = bool(gates.get("is_mixed") or evidence_kind == "mixed")
+
+    # Model provenance verification
+    has_valid_ml = bool(
+        ml
+        and ml.get("model_type")
+        and ml.get("status") in ("verified", "approved")
+        and ml.get("macro_f1") is not None
+    )
 
     # Truthful certification status
     if evidence_kind == "cached" or execution_mode == "cached_only":
         cert_status = "cached_report_no_new_execution"
-    elif evidence_kind == "mixed":
+    elif is_mixed:
         cert_status = "mixed_evidence_rejected"
-    elif model_mode in ("heuristic_demo", "unavailable", "synthetic") or ml.get("status") == "unverified":
-        cert_status = "unverified_heuristic_rejected"
     elif evidence_kind == "simulated":
         cert_status = "simulated_mock_rejected"
-    elif all_passed and evidence_kind == "live":
+    elif model_mode in ("heuristic_demo", "unavailable", "synthetic") or (ml and ml.get("model_type") in ("heuristic_demo", "unavailable", "synthetic")):
+        cert_status = "unverified_heuristic_rejected"
+    elif evidence_kind == "live" and not has_valid_ml:
+        cert_status = "unverified_model_rejected"
+    elif all_passed and evidence_kind == "live" and has_valid_ml:
         cert_status = "certified_live_acceptance"
     elif gate_dict.get("grounded_claims", {}).get("status") in ("insufficient_evidence", "not_evaluated"):
         cert_status = "pending_human_acceptance"
     else:
         cert_status = "failed_acceptance_criteria"
+
+    certified_passed = bool(all_passed and cert_status == "certified_live_acceptance")
 
     # 1. Generate report.md
     report_lines = [
@@ -59,8 +72,8 @@ def write_system_report(
         f"- **Certification Status:** `{cert_status}`",
         f"- **Evidence Kind:** `{evidence_kind}`",
         f"- **Execution Mode:** `{execution_mode}`",
-        f"- **Model Mode:** `{model_mode or 'trained'}`",
-        f"- **Mandatory Acceptance Gates Passed:** `{all_passed}`",
+        f"- **Model Mode:** `{model_mode}`",
+        f"- **Mandatory Acceptance Gates Passed:** `{certified_passed}`",
         f"- **Summary Reason:** {summary_reason}",
         "",
     ]

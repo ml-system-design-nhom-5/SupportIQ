@@ -502,8 +502,19 @@ def evaluate_system_gates(
             }
 
     # Profile, Model Mode & Evidence verification
-    ml_type = metrics.get("ml", {}).get("model_type")
-    ml_stat = metrics.get("ml", {}).get("status")
+    ml_obj = metrics.get("ml")
+    ml_type = ml_obj.get("model_type") if isinstance(ml_obj, dict) else None
+    ml_stat = ml_obj.get("status") if isinstance(ml_obj, dict) else None
+    ml_f1 = ml_obj.get("macro_f1") if isinstance(ml_obj, dict) else None
+    is_mixed = bool(metrics.get("is_mixed") or evidence_kind == "mixed")
+
+    numeric_targets_passed = True
+    failed_gates = []
+    for g_name in mandatory:
+        g_info = gates.get(g_name, {"status": "not_evaluated"})
+        if g_info.get("status") != "pass":
+            numeric_targets_passed = False
+            failed_gates.append(f"{g_name} ({g_info.get('status')})")
 
     if evidence_kind == "simulated":
         all_mandatory_passed = False
@@ -511,21 +522,20 @@ def evaluate_system_gates(
     elif evidence_kind == "cached":
         all_mandatory_passed = False
         summary_reason = "Cached runs cannot satisfy new live execution acceptance criteria."
+    elif is_mixed:
+        all_mandatory_passed = False
+        summary_reason = "Mixed evidence detected; live acceptance rejected."
     elif evidence_kind != "live":
         all_mandatory_passed = False
         summary_reason = "Experimental live runs cannot certify acceptance with an unapproved suite."
+    elif "ml" in metrics and (not ml_obj or not ml_type or ml_stat not in ("verified", "approved") or ml_f1 is None):
+        all_mandatory_passed = False
+        summary_reason = "Model provenance missing or unverified; live acceptance rejected."
     elif ml_type in ("heuristic_demo", "unavailable", "synthetic") or ml_stat == "unverified":
         all_mandatory_passed = False
         summary_reason = f"Unverified heuristic model ({ml_type}) cannot certify live acceptance."
     else:
-        all_mandatory_passed = True
-        failed_gates = []
-        for g_name in mandatory:
-            g_info = gates.get(g_name, {"status": "not_evaluated"})
-            if g_info["status"] != "pass":
-                all_mandatory_passed = False
-                failed_gates.append(f"{g_name} ({g_info['status']})")
-        
+        all_mandatory_passed = numeric_targets_passed
         if all_mandatory_passed:
             summary_reason = "All mandatory acceptance gates passed with certified live evidence."
         else:
@@ -534,6 +544,7 @@ def evaluate_system_gates(
     return {
         "evidence_kind": evidence_kind,
         "gates": gates,
+        "numeric_targets_passed": numeric_targets_passed,
         "all_mandatory_passed": all_mandatory_passed,
         "summary_reason": summary_reason,
     }

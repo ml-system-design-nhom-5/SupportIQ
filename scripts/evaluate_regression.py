@@ -168,7 +168,16 @@ def load_run_data(path: Optional[Path] = None) -> Optional[Dict[str, Any]]:
         if "summary" in raw_data:
             out_payload["summary"] = raw_data["summary"]
             out_payload["manifest"] = raw_data.get("manifest") or manifest_data
-            out_payload["hashes"] = raw_data.get("hashes", {})
+            out_payload["hashes"] = dict(raw_data.get("hashes", {}))
+        elif "schema_version" in raw_data and "metrics" in raw_data:
+            # raw_data is itself an EvaluationManifest
+            out_payload["manifest"] = raw_data
+            out_payload["summary"] = raw_data.get("summary") or {}
+            out_payload["hashes"] = dict(raw_data.get("hashes", {}))
+            out_payload["evidence_kind"] = raw_data.get("evidence_kind")
+            out_payload["model_mode"] = raw_data.get("model_mode")
+            out_payload["config"] = raw_data.get("config", {})
+            out_payload["metrics"] = raw_data.get("metrics", {})
         else:
             out_payload["summary"] = raw_data
             out_payload["manifest"] = manifest_data
@@ -177,14 +186,29 @@ def load_run_data(path: Optional[Path] = None) -> Optional[Dict[str, Any]]:
                 "kb_hash": meta.get("kb_sha256") or meta.get("kb_hash"),
                 "split_hash": meta.get("suite_sha256") or meta.get("split_hash"),
                 "model_hash": meta.get("weights_sha256") or meta.get("model_hash"),
+                "prompt_hash": meta.get("prompt_sha256") or meta.get("prompt_hash"),
+                "config_hash": meta.get("config_sha256") or meta.get("config_hash"),
             }
-        
+
         if manifest_data and isinstance(manifest_data, dict):
             out_payload["hashes"].update(manifest_data.get("hashes", {}))
+            if "prompt_hash" in manifest_data and "prompt_hash" not in out_payload["hashes"]:
+                out_payload["hashes"]["prompt_hash"] = manifest_data["prompt_hash"]
+            if "config_hash" in manifest_data and "config_hash" not in out_payload["hashes"]:
+                out_payload["hashes"]["config_hash"] = manifest_data["config_hash"]
+            if "config" in manifest_data and "config" not in out_payload:
+                out_payload["config"] = manifest_data["config"]
+            if "files" in manifest_data and "files" not in out_payload:
+                out_payload["files"] = manifest_data["files"]
             if "evidence_kind" not in out_payload:
                 out_payload["evidence_kind"] = manifest_data.get("evidence_kind")
             if "model_mode" not in out_payload:
                 out_payload["model_mode"] = manifest_data.get("model_mode")
+            if "metrics" in manifest_data and "metrics" not in out_payload:
+                out_payload["metrics"] = manifest_data["metrics"]
+
+        if "config" in raw_data and "config" not in out_payload:
+            out_payload["config"] = raw_data["config"]
 
     return out_payload
 
@@ -197,6 +221,7 @@ def extract_metrics(
     """Extract metrics with strict provenance and evidence traceability.
     Missing, NaN, inf, bool, or out-of-range metrics are NOT defaulted to 0.0;
     they are assigned value=None and status='NOT_EVALUATED'.
+    Preserves original per-metric evidence_kind and model_mode from manifest if present.
     """
     m: Dict[str, Dict[str, Any]] = {}
 
@@ -205,6 +230,28 @@ def extract_metrics(
     if manifest and "evidence_kind" in manifest:
         default_kind = manifest["evidence_kind"]
     default_model_mode = manifest.get("model_mode") if manifest else None
+    src_metrics = manifest.get("metrics", {}) if (manifest and isinstance(manifest, dict)) else {}
+
+    def _get_metric_meta(name: str, fallback_ref: str, val: Optional[float]) -> Dict[str, Any]:
+        m_info = src_metrics.get(name, {})
+        if hasattr(m_info, "model_dump"):
+            m_info = m_info.model_dump()
+        elif not isinstance(m_info, dict):
+            m_info = {}
+
+        k = m_info.get("evidence_kind") or default_kind
+        m_mode = m_info.get("model_mode") or default_model_mode
+        ev_ref = m_info.get("evidence_ref") or (fallback_ref if val is not None else None)
+        ev_type = m_info.get("evaluator_type")
+        st_type = m_info.get("study_type")
+
+        return {
+            "evidence_kind": k,
+            "model_mode": m_mode,
+            "evidence_ref": ev_ref,
+            "evaluator_type": ev_type,
+            "study_type": st_type,
+        }
 
     # 1. Intent metrics
     intent = summary.get("intent_classification", {})
@@ -226,15 +273,17 @@ def extract_metrics(
 
         val = validate_metric_value(raw_val)
         stat = "EVALUATED" if val is not None else "NOT_EVALUATED"
-        e_ref = ref if val is not None else None
+        meta = _get_metric_meta(m_name, ref, val)
 
         m[m_name] = {
             "metric": m_name,
             "value": val,
             "status": stat,
-            "evidence_ref": e_ref,
-            "evidence_kind": default_kind,
-            "model_mode": default_model_mode,
+            "evidence_ref": meta["evidence_ref"],
+            "evidence_kind": meta["evidence_kind"],
+            "model_mode": meta["model_mode"],
+            "evaluator_type": meta["evaluator_type"],
+            "study_type": meta["study_type"],
         }
 
     # 2. RAG Retrieval metrics
@@ -251,15 +300,17 @@ def extract_metrics(
         raw_val = rag.get(k)
         val = validate_metric_value(raw_val)
         stat = "EVALUATED" if val is not None else "NOT_EVALUATED"
-        e_ref = ref if val is not None else None
+        meta = _get_metric_meta(m_name, ref, val)
 
         m[m_name] = {
             "metric": m_name,
             "value": val,
             "status": stat,
-            "evidence_ref": e_ref,
-            "evidence_kind": default_kind,
-            "model_mode": default_model_mode,
+            "evidence_ref": meta["evidence_ref"],
+            "evidence_kind": meta["evidence_kind"],
+            "model_mode": meta["model_mode"],
+            "evaluator_type": meta["evaluator_type"],
+            "study_type": meta["study_type"],
         }
 
     # 3. Grounding metrics
@@ -274,15 +325,17 @@ def extract_metrics(
         raw_val = grounding.get(k)
         val = validate_metric_value(raw_val)
         stat = "EVALUATED" if val is not None else "NOT_EVALUATED"
-        e_ref = ref if val is not None else None
+        meta = _get_metric_meta(m_name, ref, val)
 
         m[m_name] = {
             "metric": m_name,
             "value": val,
             "status": stat,
-            "evidence_ref": e_ref,
-            "evidence_kind": default_kind,
-            "model_mode": default_model_mode,
+            "evidence_ref": meta["evidence_ref"],
+            "evidence_kind": meta["evidence_kind"],
+            "model_mode": meta["model_mode"],
+            "evaluator_type": meta["evaluator_type"],
+            "study_type": meta["study_type"],
         }
 
     return m
@@ -444,6 +497,65 @@ def compare_runs(
     }
 
 
+def verify_declared_manifest_files(
+    manifest_data: Dict[str, Any],
+    base_dir: Optional[Path] = None,
+) -> Tuple[bool, List[str]]:
+    """Validate declared files in source manifest:
+    - Verifies physical existence on disk
+    - Verifies SHA-256 against actual computed hash
+    - Confirms raw records, cases, or model files are declared
+    Returns (verified, reasons).
+    """
+    reasons: List[str] = []
+    files = manifest_data.get("files")
+    if files is None or not isinstance(files, dict):
+        return False, ["Manifest does not declare a valid 'files' dictionary"]
+
+    if not files:
+        return False, ["Manifest 'files' dictionary is empty"]
+
+    has_raw_or_model = False
+    for fname, fmeta in files.items():
+        if not isinstance(fmeta, dict):
+            continue
+        rel_or_abs = fmeta.get("path")
+        declared_sha = fmeta.get("sha256")
+        if not rel_or_abs or not declared_sha:
+            reasons.append(f"File '{fname}' missing path or sha256 checksum in manifest")
+            continue
+
+        p = Path(rel_or_abs)
+        if not p.is_absolute():
+            if base_dir and (base_dir / p).exists():
+                p = (base_dir / p).resolve()
+            elif (REPO_ROOT / p).exists():
+                p = (REPO_ROOT / p).resolve()
+            elif base_dir:
+                p = (base_dir / p).resolve()
+            else:
+                p = (REPO_ROOT / p).resolve()
+
+        if not p.exists():
+            reasons.append(f"Declared file '{fname}' ({rel_or_abs}) not found on disk at {p}")
+            continue
+
+        actual_sha = compute_sha256(p)
+        if actual_sha.upper() != declared_sha.upper():
+            reasons.append(f"Declared file '{fname}' checksum mismatch: expected {declared_sha}, got {actual_sha}")
+            continue
+
+        if fname in ("raw_records", "records", "cases", "model", "model_weights", "kb", "cases.jsonl", "source_summary.json"):
+            has_raw_or_model = True
+
+    if reasons:
+        return False, reasons
+    if not has_raw_or_model:
+        return False, ["Manifest does not declare raw records, cases, or model weights files"]
+
+    return True, []
+
+
 def run_regression_evaluation(
     current_path: Optional[Path] = None,
     baseline_path: Optional[Path] = None,
@@ -545,8 +657,13 @@ def run_regression_evaluation(
             "evaluator_type": evaluator_type or "none",
             "study_type": study_type or "none",
             "hashes": source_hashes,
+            "files": source_manifest.get("files", {}),
+            "config": source_manifest.get("config") or cfg_data,
+            "metrics": source_manifest.get("metrics", {}),
         },
         "hashes": source_hashes,
+        "config": source_manifest.get("config") or cfg_data,
+        "files": source_manifest.get("files", {}),
         "evidence_kind": evidence_kind,
         "model_mode": model_mode,
     }
@@ -568,15 +685,17 @@ def run_regression_evaluation(
     # Manifest construction
     metric_prov_map = {}
     for r in eval_results:
+        m_kind = r.get("evidence_kind") or evidence_kind
+        m_mode = r.get("model_mode") or model_mode
         metric_prov_map[r["metric"]] = MetricProvenance(
             metric=r["metric"],
             value=r["current"],
             status=r["status"],
             evidence_ref=r["evidence_ref"],
-            evidence_kind=evidence_kind,
-            model_mode=model_mode,
-            evaluator_type=evaluator_type or "none",
-            study_type=study_type or "none",
+            evidence_kind=m_kind,
+            model_mode=m_mode,
+            evaluator_type=r.get("evaluator_type") or evaluator_type or "none",
+            study_type=r.get("study_type") or study_type or "none",
             target=r["target"],
             operator=r["operator"],
             previous=r["previous"],
@@ -586,16 +705,22 @@ def run_regression_evaluation(
             recommendation=r["recommendation"],
         )
 
+    # Check declared raw records/files in source_manifest
+    raw_records_verified = False
+    raw_verify_reasons: List[str] = []
+    if source_manifest and isinstance(source_manifest, dict):
+        base_dir_for_files = current_path.parent if (current_path and current_path.is_file()) else (current_path if (current_path and current_path.is_dir()) else REPO_ROOT)
+        raw_records_verified, raw_verify_reasons = verify_declared_manifest_files(source_manifest, base_dir=base_dir_for_files)
+
     # Check mixed evidence
     manifest_check_data = {
-        "evidence_kind": evidence_kind,
-        "model_mode": model_mode,
+        "evidence_kind": source_manifest.get("evidence_kind") or evidence_kind,
+        "model_mode": source_manifest.get("model_mode") or model_mode,
         "profile": source_manifest.get("profile"),
         "metrics": metric_prov_map,
     }
     is_mixed, mixed_reasons = check_mixed_evidence(manifest_check_data)
     if is_mixed:
-        has_target_failure = True
         print(f"\n[ERROR] Mixed evidence detected: {', '.join(mixed_reasons)}")
 
     # Enforce --require-live validation
@@ -607,6 +732,8 @@ def run_regression_evaluation(
             live_gate_errors.append(f"--require-live requires evidence_kind='live', got '{evidence_kind}'.")
         if model_mode != "trained":
             live_gate_errors.append(f"--require-live requires verified trained model_mode, got '{model_mode}'.")
+        if not raw_records_verified:
+            live_gate_errors.append(f"--require-live requires verified raw records and file checksums: {'; '.join(raw_verify_reasons) if raw_verify_reasons else 'No source manifest files declared'}")
         if is_mixed:
             live_gate_errors.append(f"Mixed evidence rejected: {', '.join(mixed_reasons)}")
         if is_synthetic:
@@ -617,16 +744,47 @@ def run_regression_evaluation(
             live_gate_errors.append("Regressions detected under live assertion.")
 
         if live_gate_errors:
-            has_target_failure = True
             for err in live_gate_errors:
                 print(f"[REQUIRE-LIVE FAILURE] {err}")
 
-    all_mandatory_passed = (
-        not has_target_failure
-        and not regressions
+    numeric_targets_passed = (not comparison["has_target_failure"]) and (not regressions)
+
+    # Truthful live mandatory certification:
+    # Requires new execution, live evidence, verified trained model, raw record validation, and no mixed/synthetic data.
+    all_mandatory_passed = bool(
+        numeric_targets_passed
+        and execution_mode == "new_execution"
+        and evidence_kind == "live"
+        and model_mode == "trained"
+        and not is_synthetic
         and not is_mixed
+        and raw_records_verified
         and len(live_gate_errors) == 0
     )
+
+    if all_mandatory_passed:
+        summary_reason = "All mandatory acceptance gates passed with certified live evidence."
+    elif not numeric_targets_passed:
+        summary_reason = "Mandatory numeric targets not satisfied or regressions detected."
+    elif execution_mode == "cached_only" or evidence_kind == "cached":
+        summary_reason = "Numeric targets passed, but cached runs cannot certify live acceptance."
+    elif evidence_kind == "simulated":
+        summary_reason = "Numeric targets passed, but simulated mock runs cannot certify live acceptance."
+    elif is_mixed:
+        summary_reason = f"Numeric targets passed, but mixed evidence rejected: {'; '.join(mixed_reasons)}."
+    elif not raw_records_verified:
+        summary_reason = f"Numeric targets passed, but raw records/files unverified: {'; '.join(raw_verify_reasons)}."
+    else:
+        summary_reason = f"Live acceptance requirements not satisfied (mode: {model_mode}, kind: {evidence_kind})."
+
+    output_files = {
+        source_snapshot_name: {
+            "path": source_snapshot_name,
+            "sha256": source_snapshot_sha256,
+        }
+    }
+    if source_manifest and isinstance(source_manifest.get("files"), dict):
+        output_files.update(source_manifest["files"])
 
     manifest = EvaluationManifest(
         run_id=run_id,
@@ -642,14 +800,10 @@ def run_regression_evaluation(
         counts={"total_evaluated_metrics": len(eval_results)},
         environment=env_data,
         metrics=metric_prov_map,
-        files={
-            source_snapshot_name: {
-                "path": source_snapshot_name,
-                "sha256": source_snapshot_sha256,
-            }
-        },
+        files=output_files,
+        numeric_targets_passed=numeric_targets_passed,
         all_mandatory_passed=all_mandatory_passed,
-        summary_reason="All mandatory acceptance gates passed." if all_mandatory_passed else "Mandatory targets, comparability, or live requirements not satisfied.",
+        summary_reason=summary_reason,
     )
 
     # 3. Output files into fresh run directory
@@ -670,10 +824,14 @@ def run_regression_evaluation(
         "audit_reasons": audit_reasons,
         "mixed_evidence_detected": is_mixed,
         "mixed_reasons": mixed_reasons,
+        "raw_records_verified": raw_records_verified,
+        "raw_verify_reasons": raw_verify_reasons,
         "live_gate_errors": live_gate_errors,
         "evaluation": eval_results,
         "regressions_detected": regressions,
+        "numeric_targets_passed": numeric_targets_passed,
         "all_mandatory_passed": all_mandatory_passed,
+        "summary_reason": summary_reason,
     }
 
     with open(eval_json_path, "w", encoding="utf-8") as f:
@@ -694,7 +852,8 @@ def run_regression_evaluation(
         f"> **Evaluator Type:** `{evaluator_type or 'none'}`  ",
         f"> **Study Type:** `{study_type or 'none'}`  ",
         f"> **Regression Status:** `{'REGRESSION DETECTED' if regressions else 'NO REGRESSION (STABLE)'}`  ",
-        f"> **Mandatory Gates Passed:** `{all_mandatory_passed}`  ",
+        f"> **Numeric Targets Passed:** `{numeric_targets_passed}`  ",
+        f"> **Live Mandatory Acceptance Certified:** `{all_mandatory_passed}`  ",
         "",
     ]
 
@@ -766,7 +925,14 @@ def run_regression_evaluation(
                 "",
             ])
 
-    audit_status_str = "FAIL (Synthetic detected)" if is_synthetic else ("UNVERIFIED (No signed model manifest)" if model_mode == "unverified" else "PASS (Verified)")
+    if is_synthetic:
+        audit_status_str = "FAIL (Synthetic detected)"
+    elif not raw_records_verified:
+        audit_status_str = f"UNVERIFIED ({'; '.join(raw_verify_reasons) if raw_verify_reasons else 'No verified raw record files'})"
+    elif model_mode != "trained":
+        audit_status_str = f"UNVERIFIED (Model mode: {model_mode})"
+    else:
+        audit_status_str = "PASS (Verified live provenance & records)"
     md_lines.extend([
         "---",
         "",
@@ -783,7 +949,8 @@ def run_regression_evaluation(
         f.write("\n".join(md_lines))
 
     print(f"\nSaved evaluation artifacts to fresh directory:\n  {run_dir}")
-    return run_dir, all_mandatory_passed
+    cli_success = all_mandatory_passed if require_live else numeric_targets_passed
+    return run_dir, cli_success
 
 
 if __name__ == "__main__":

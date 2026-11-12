@@ -23,6 +23,7 @@ from scripts.evaluate_regression import (
     compare_runs,
     run_regression_evaluation,
     validate_metric_value,
+    compute_sha256,
     REPO_ROOT,
 )
 
@@ -412,3 +413,234 @@ class TestCLIIntegrationAndExitCodes:
             text=True,
         )
         assert res.returncode != 0
+
+
+class TestHardenTask3AcceptanceContracts:
+    """Rigorous tests closing all second-review blockers:
+    1. Cached runs never certify live acceptance (all_mandatory_passed=False).
+    2. Source manifest with a mixed metric remains rejected.
+    3. Raw declared file missing or hash mismatch rejects live certification.
+    4. Direct system reporter with missing or unverified ML provenance rejects certification.
+    5. Strict comparability requires identical prompt_hash and canonical config hash.
+    6. System contracts comparability rejects evidence_kind mismatch even without manifest dict.
+    7. evaluate_system_gates rejects missing or unverified ML provenance on live runs.
+    """
+
+    def test_cached_all_good_numbers_cannot_certify_live_acceptance(self, tmp_path):
+        """Even with 100% passing numeric targets, cached execution must keep all_mandatory_passed=False."""
+        summary_file = tmp_path / "all_good_summary.json"
+        summary_file.write_text(json.dumps({
+            "metadata": {"suite_sha256": "S1", "kb_sha256": "K1", "weights_sha256": "M1"},
+            "intent_classification": {
+                "accuracy": 0.95, "macro_f1": 0.94, "ece": 0.03, "brier_score": 0.04,
+                "ood_detection_rate": 0.98, "far": 0.005, "frr": 0.005,
+            },
+            "retrieval": {
+                "recall_at_1": 0.85, "recall_at_3": 0.92, "recall_at_5": 0.96,
+                "precision_at_3": 0.40, "mrr": 0.89, "ndcg_at_3": 0.91,
+            },
+            "grounding": {
+                "claim_grounding_rate": 0.97, "citation_correctness": 1.0,
+                "hallucination_rate": 0.005, "appropriate_abstention_rate": 0.99,
+            },
+        }), encoding="utf-8")
+
+        run_dir, success = run_regression_evaluation(
+            current_path=summary_file,
+            output_root=tmp_path / "out_cached",
+            cached_only=True,
+            skip_benchmark=True,
+            require_live=False,
+        )
+
+        with open(run_dir / "manifest.json", "r", encoding="utf-8") as f:
+            manifest_data = json.load(f)
+
+        assert manifest_data["numeric_targets_passed"] is True
+        assert manifest_data["all_mandatory_passed"] is False
+        assert "cached" in manifest_data["summary_reason"].lower()
+
+        report_text = (run_dir / "REGRESSION_REPORT.md").read_text(encoding="utf-8")
+        assert "> **Numeric Targets Passed:** `True`" in report_text
+        assert "> **Live Mandatory Acceptance Certified:** `False`" in report_text
+        assert "Cached Report" in report_text
+
+    def test_source_manifest_mixed_metric_remains_rejected(self, tmp_path):
+        """When source manifest contains a simulated/heuristic metric, evidence laundering is prevented."""
+        run_input_dir = tmp_path / "run_input"
+        run_input_dir.mkdir()
+
+        summary = {
+            "metadata": {"suite_sha256": "S1", "kb_sha256": "K1", "weights_sha256": "M1"},
+            "intent_classification": {"accuracy": 0.92, "macro_f1": 0.90},
+            "retrieval": {"recall_at_3": 0.88},
+            "grounding": {"claim_grounding_rate": 0.92, "hallucination_rate": 0.01},
+        }
+        (run_input_dir / "source_summary.json").write_text(json.dumps(summary), encoding="utf-8")
+
+        manifest = {
+            "evidence_kind": "live",
+            "model_mode": "trained",
+            "metrics": {
+                "rag_recall_at_3": {
+                    "metric": "rag_recall_at_3",
+                    "value": 0.88,
+                    "evidence_kind": "simulated",  # Incompatible metric kind!
+                    "model_mode": "heuristic_demo",
+                }
+            },
+        }
+        (run_input_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+        run_dir, success = run_regression_evaluation(
+            current_path=run_input_dir,
+            output_root=tmp_path / "out_mixed",
+            cached_only=True,
+            skip_benchmark=True,
+        )
+
+        with open(run_dir / "evaluation_result.json", "r", encoding="utf-8") as f:
+            eval_data = json.load(f)
+
+        assert eval_data["mixed_evidence_detected"] is True
+        assert any("rag_recall_at_3" in r for r in eval_data["mixed_reasons"])
+        assert eval_data["all_mandatory_passed"] is False
+
+    def test_raw_file_hash_mismatch_and_missing_file_rejected(self, tmp_path):
+        """verify_declared_manifest_files rejects missing files or SHA-256 mismatches."""
+        from scripts.evaluate_regression import verify_declared_manifest_files
+
+        cases_file = tmp_path / "cases.jsonl"
+        cases_file.write_text('{"case_id": "c1"}\n', encoding="utf-8")
+        actual_hash = compute_sha256(cases_file)
+
+        # 1. Valid file and checksum
+        valid_manifest = {
+            "files": {
+                "raw_records": {"path": str(cases_file), "sha256": actual_hash}
+            }
+        }
+        ok, reasons = verify_declared_manifest_files(valid_manifest, base_dir=tmp_path)
+        assert ok is True
+        assert len(reasons) == 0
+
+        # 2. Checksum mismatch
+        bad_manifest = {
+            "files": {
+                "raw_records": {"path": str(cases_file), "sha256": "0000000000000000000000000000000000000000000000000000000000000000"}
+            }
+        }
+        ok, reasons = verify_declared_manifest_files(bad_manifest, base_dir=tmp_path)
+        assert ok is False
+        assert any("checksum mismatch" in r for r in reasons)
+
+        # 3. Missing file
+        missing_manifest = {
+            "files": {
+                "raw_records": {"path": str(tmp_path / "ghost_file.jsonl"), "sha256": actual_hash}
+            }
+        }
+        ok, reasons = verify_declared_manifest_files(missing_manifest, base_dir=tmp_path)
+        assert ok is False
+        assert any("not found" in r for r in reasons)
+
+    def test_direct_system_reporter_missing_ml_provenance_rejected(self, tmp_path):
+        """write_system_report writes unverified_model_rejected when ML provenance is missing or empty."""
+        run_dir = tmp_path / "sys_rep_empty_ml"
+        run_dir.mkdir()
+
+        metrics = {
+            "summary": {"total_cases": 10, "completed_ok": 10},
+            "routing": {"must_escalate_correct": 5, "must_escalate_total": 5, "guardrail_passed": True},
+            "retrieval": {"recall_at_3": 0.95, "safety_violations": 0},
+            "ml": {},  # Empty ML provenance!
+        }
+        gates = {
+            "evidence_kind": "live",
+            "all_mandatory_passed": True,  # Gate attempted to pass
+            "summary_reason": "Numeric targets passed.",
+            "gates": {
+                "routing_guardrails": {"status": "pass"},
+                "retrieval_safety": {"status": "pass"},
+            },
+        }
+
+        write_system_report(run_dir=run_dir, metrics=metrics, gates=gates)
+        report_text = (run_dir / "report.md").read_text(encoding="utf-8")
+        assert "- **Certification Status:** `unverified_model_rejected`" in report_text
+        assert "- **Mandatory Acceptance Gates Passed:** `False`" in report_text
+
+    def test_comparability_rejects_missing_or_mismatched_prompt_and_config(self):
+        """check_regression_comparability enforces identical prompt and canonical config hash."""
+        # Baseline run with full hashes
+        base_run = {
+            "hashes": {
+                "kb_hash": "KB_01",
+                "split_hash": "SPLIT_01",
+                "model_hash": "MODEL_01",
+                "prompt_hash": "PROMPT_01",
+                "config_hash": "CONFIG_01",
+            },
+            "evidence_kind": "live",
+        }
+
+        # 1. Missing prompt_hash
+        run_no_prompt = {
+            "hashes": {
+                "kb_hash": "KB_01",
+                "split_hash": "SPLIT_01",
+                "model_hash": "MODEL_01",
+                "config_hash": "CONFIG_01",
+            },
+            "evidence_kind": "live",
+        }
+        comp, reasons = check_regression_comparability(run_no_prompt, base_run)
+        assert comp is False
+        assert any("prompt_hash" in r for r in reasons)
+
+        # 2. Config identity mismatch
+        run_cfg_mismatch = {
+            "hashes": {
+                "kb_hash": "KB_01",
+                "split_hash": "SPLIT_01",
+                "model_hash": "MODEL_01",
+                "prompt_hash": "PROMPT_01",
+                "config_hash": "CONFIG_DIFFERENT",
+            },
+            "evidence_kind": "live",
+        }
+        comp, reasons = check_regression_comparability(run_cfg_mismatch, base_run)
+        assert comp is False
+        assert any("config identity mismatch" in r for r in reasons)
+
+    def test_extract_kind_precedence_when_manifest_absent(self):
+        """Top-level evidence_kind is extracted correctly even when manifest dict is absent."""
+        run_a = {
+            "evidence_kind": "live",
+            "hashes": {
+                "kb_hash": "KB_01", "split_hash": "SPLIT_01", "model_hash": "MODEL_01",
+                "prompt_hash": "PROMPT_01", "config_hash": "CFG_01",
+            },
+        }
+        run_b = {
+            "evidence_kind": "simulated",
+            "hashes": {
+                "kb_hash": "KB_01", "split_hash": "SPLIT_01", "model_hash": "MODEL_01",
+                "prompt_hash": "PROMPT_01", "config_hash": "CFG_01",
+            },
+        }
+        comp, reasons = check_regression_comparability(run_a, run_b)
+        assert comp is False
+        assert any("evidence_kind mismatch: 'live' vs 'simulated'" in r for r in reasons)
+
+    def test_evaluate_system_gates_rejects_missing_ml_provenance(self):
+        """evaluate_system_gates rejects empty ML provenance on live runs."""
+        metrics = {
+            "routing": {"guardrail_passed": True, "must_escalate_total": 5, "must_escalate_correct": 5},
+            "retrieval": {"safety_violations": 0, "recall_at_3": 0.85, "answerable_count": 10},
+            "ml": {},  # Empty ML dict
+        }
+        cfg = SystemConfig(mandatory_gates=["routing_guardrails", "retrieval_safety"])
+        res = evaluate_system_gates(metrics, cfg, evidence_kind="live")
+        assert res["all_mandatory_passed"] is False
+        assert "Model provenance missing or unverified" in res["summary_reason"]
