@@ -90,7 +90,10 @@ def create_app():
         kb_hash = hashlib.sha256(kb.read_bytes() + release_path.read_bytes()).hexdigest()
         policy_hash = hashlib.sha256(policy_path.read_bytes()).hexdigest()
         versions = {"release_id": "local-" + hashlib.sha256(((model.model_checksum or "unavailable") + kb_hash + policy_hash + "grounded-v2").encode()).hexdigest()[:16],
-                    "model_version": model.verified_model_version or "Unknown", "kb_version": "sha256:" + kb_hash, "mapping_version": "embedded:" + kb_hash,
+                    "model_version": model.verified_model_version or getattr(model, "model_version", None) or "Unknown",
+                    "model_mode": getattr(model, "model_mode", "unavailable"),
+                    "verified": getattr(model, "verified", False),
+                    "kb_version": "sha256:" + kb_hash, "mapping_version": "embedded:" + kb_hash,
                     "prompt_version": "grounded-v2", "routing_version": "sha256:" + policy_hash, "index_version": "bge-small-en-v1.5:" + kb_hash}
         resources.update(engine=Engine(model,retriever,BudgetedDraftClient(llm),versions,json.loads(policy_path.read_text())), model=model, retriever=retriever, versions=versions)
         yield
@@ -110,7 +113,14 @@ def create_app():
     @app.get("/health/ready")
     def ready():
         engine()
-        return {"status": "ready", "llm_enabled": settings.supportiq_enable_llm, "llm_configured": bool(settings.gemini_api_key.get_secret_value()), "retrieval_ready": resources["retriever"].index is not None}
+        return {
+            "status": "ready",
+            "llm_enabled": settings.supportiq_enable_llm,
+            "llm_configured": bool(settings.gemini_api_key.get_secret_value()),
+            "retrieval_ready": resources["retriever"].index is not None,
+            "model_mode": resources["versions"].get("model_mode", "unavailable"),
+            "model_verified": resources["versions"].get("verified", False),
+        }
 
     @app.post("/v1/analyses")
     def analyse(request: SuggestionRequest):

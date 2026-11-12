@@ -57,19 +57,52 @@ class PredictResponse(BaseModel):
     model_version: str
     model_checksum: Optional[str] = None
     tokenizer_checksum: Optional[str] = None
+    model_mode: Optional[str] = "trained"
+    verified: Optional[bool] = True
 
 class ModelContainer:
     def __init__(self):
         self.model = None
         self.tokenizer = None
         self.id2label: Dict[int, str] = {}
+        self.model_version: Optional[str] = None
         self.verified_model_version: Optional[str] = None
         self.model_checksum: Optional[str] = None
         self.tokenizer_checksum: Optional[str] = None
+        self.model_mode: str = "unavailable"
+        self.verified: bool = False
+        self._is_dev_fallback: bool = False
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    def _init_dev_fallback(self):
+        logger.info("Initializing explicit development intent model fallback")
+        self._is_dev_fallback = True
+        self.model_mode = "heuristic_demo"
+        self.verified = False
+        self.model_version = "demo-heuristic-v1"
+        self.verified_model_version = None
+        self.model_checksum = None
+        self.tokenizer_checksum = None
+        self.id2label = {i: label for i, label in enumerate(sorted(list(EXPECTED_46_LABELS)))}
+        self.model = object()
+        self.tokenizer = object()
+
     def load(self, model_dir: Path = MODEL_DIR):
+        import os
+        dev_fallback_enabled = os.environ.get("SUPPORTIQ_DEV_FALLBACK_MODEL", "false").lower() in ("1", "true")
+
         if not model_dir.exists():
+            if dev_fallback_enabled:
+                self._init_dev_fallback()
+                return
+            self.model = None
+            self.tokenizer = None
+            self.model_mode = "unavailable"
+            self.verified = False
+            self.verified_model_version = None
+            self.model_version = None
+            self.model_checksum = None
+            self.tokenizer_checksum = None
             logger.warning(f"Model directory {model_dir} not found")
             return
 
@@ -78,33 +111,44 @@ class ModelContainer:
         config_file = model_dir / "config.json"
 
         if not model_file.exists() or not tokenizer_file.exists() or not config_file.exists():
-            import os
-            if os.environ.get("SUPPORTIQ_DEV_FALLBACK_MODEL", "true").lower() in ("1", "true"):
-                logger.info("Initializing development intent model fallback")
-                self.verified_model_version = EXPECTED_MANIFEST["model_version"]
-                self.model_checksum = EXPECTED_MANIFEST["weights_sha256"]
-                self.tokenizer_checksum = EXPECTED_MANIFEST["tokenizer_sha256"]
-                self.id2label = {i: label for i, label in enumerate(sorted(list(EXPECTED_46_LABELS)))}
-                self._is_dev_fallback = True
-                self.model = object()
-                self.tokenizer = object()
+            if dev_fallback_enabled:
+                self._init_dev_fallback()
                 return
+            self.model = None
+            self.tokenizer = None
+            self.model_mode = "unavailable"
+            self.verified = False
+            self.verified_model_version = None
+            self.model_version = None
+            self.model_checksum = None
+            self.tokenizer_checksum = None
             logger.warning(f"Required artifact files missing in {model_dir}")
             return
 
         with open(model_file, "rb") as f:
-            self.model_checksum = hashlib.sha256(f.read()).hexdigest().lower()
+            model_checksum = hashlib.sha256(f.read()).hexdigest().lower()
 
         with open(tokenizer_file, "rb") as f:
-            self.tokenizer_checksum = hashlib.sha256(f.read()).hexdigest().lower()
+            tokenizer_checksum = hashlib.sha256(f.read()).hexdigest().lower()
 
         # Check against manifest
         if (
-            self.model_checksum != EXPECTED_MANIFEST["weights_sha256"]
-            or self.tokenizer_checksum != EXPECTED_MANIFEST["tokenizer_sha256"]
+            model_checksum != EXPECTED_MANIFEST["weights_sha256"]
+            or tokenizer_checksum != EXPECTED_MANIFEST["tokenizer_sha256"]
         ):
             logger.error("Artifact checksum mismatch with pinned release manifest")
+            self.model = None
+            self.tokenizer = None
+            self.model_mode = "unavailable"
+            self.verified = False
+            self.model_checksum = None
+            self.tokenizer_checksum = None
+            self.verified_model_version = None
+            self.model_version = None
             return
+
+        self.model_checksum = model_checksum
+        self.tokenizer_checksum = tokenizer_checksum
 
         try:
             with open(config_file, "r", encoding="utf-8") as f:
@@ -114,6 +158,10 @@ class ModelContainer:
 
             if not self.validate_label_bijection():
                 logger.error("Label mapping validation failed: not a valid bijection of 46 standard labels")
+                self.model = None
+                self.tokenizer = None
+                self.model_mode = "unavailable"
+                self.verified = False
                 return
 
             self.tokenizer = AutoTokenizer.from_pretrained(str(model_dir))
@@ -122,8 +170,16 @@ class ModelContainer:
             self.model.to(self.device)
 
             self.verified_model_version = EXPECTED_MANIFEST["model_version"]
+            self.model_version = EXPECTED_MANIFEST["model_version"]
+            self.model_mode = "trained"
+            self.verified = True
+            self._is_dev_fallback = False
         except Exception as e:
             logger.error(f"Failed to load model: {e}")
+            self.model = None
+            self.tokenizer = None
+            self.model_mode = "unavailable"
+            self.verified = False
 
     def validate_label_bijection(self) -> bool:
         """Verify id2label is a strict bijection covering integers 0..45 to 46 standard labels."""
@@ -139,11 +195,28 @@ class ModelContainer:
         return True
 
     def is_ready(self) -> bool:
+        if self._is_dev_fallback:
+            return (
+                self.model is not None
+                and self.tokenizer is not None
+                and self.model_version is not None
+                and self.validate_label_bijection()
+            )
         return (
             self.model is not None
             and self.tokenizer is not None
             and self.verified_model_version is not None
+            and self.verified
             and self.validate_label_bijection()
+        )
+
+    def is_trained_ready(self) -> bool:
+        """Explicit check for trained model readiness - fallback can NEVER certify this."""
+        return (
+            self.is_ready()
+            and self.verified
+            and self.model_mode == "trained"
+            and self.verified_model_version is not None
         )
 
     CALIBRATION_TEMPERATURE: float = 1.25
@@ -199,10 +272,12 @@ class ModelContainer:
                 "confidence": top1_prob,
                 "margin": margin,
                 "top_k": top_k,
-                "score_kind": "calibrated_probability" if calibrated else "uncalibrated_softmax",
-                "model_version": self.verified_model_version,
-                "model_checksum": self.model_checksum,
-                "tokenizer_checksum": self.tokenizer_checksum,
+                "score_kind": "heuristic_score",
+                "model_version": self.model_version or "demo-heuristic-v1",
+                "model_checksum": None,
+                "tokenizer_checksum": None,
+                "model_mode": "heuristic_demo",
+                "verified": False,
             }
 
         inputs = self.tokenizer(
@@ -247,9 +322,11 @@ class ModelContainer:
             "margin": margin,
             "top_k": top_k,
             "score_kind": score_kind,
-            "model_version": self.verified_model_version,
+            "model_version": self.verified_model_version or self.model_version,
             "model_checksum": self.model_checksum,
             "tokenizer_checksum": self.tokenizer_checksum,
+            "model_mode": self.model_mode,
+            "verified": self.verified,
         }
 
 container = ModelContainer()
@@ -274,8 +351,11 @@ def ready():
         raise HTTPException(status_code=503, detail="Model container not ready")
     return {
         "ready": True,
-        "model_version": container.verified_model_version,
-        "labels_count": len(container.id2label)
+        "model_version": container.model_version or container.verified_model_version,
+        "labels_count": len(container.id2label),
+        "model_mode": container.model_mode,
+        "verified": container.verified,
+        "trained_ready": container.is_trained_ready(),
     }
 
 @app.post("/predict", response_model=PredictResponse)
@@ -283,10 +363,11 @@ def predict_endpoint(req: PredictRequest):
     if not container.is_ready():
         raise HTTPException(status_code=503, detail="Model container not ready")
 
-    if req.expected_model_version and req.expected_model_version != container.verified_model_version:
+    active_version = container.model_version or container.verified_model_version
+    if req.expected_model_version and req.expected_model_version != active_version:
         raise HTTPException(
             status_code=400,
-            detail=f"Version mismatch: expected {req.expected_model_version}, got {container.verified_model_version}"
+            detail=f"Version mismatch: expected {req.expected_model_version}, got {active_version}"
         )
 
     try:
