@@ -1,0 +1,16 @@
+{
+  "summary": "Staff proposed the draft of a ticket that requires authority",
+  "description": "The ticket is now awaiting_approval. The draft was used unchanged.",
+  "value": {
+    "proposal_id": "3e5a7c9b-1d2f-4a6c-8e0b-5d7f9a1c3e52",
+    "basis": "ai_draft",
+    "body": "Hello Lan Tran, thank you for your patience.\n\nYour refund request for order ORD-20931 is under review. This sample sentence stands for a policy statement from the cited document.",
+    "suggestion_id": "8d3a1e5c-7b9f-4a2d-8e6c-0f2b4d6a8c41",
+    "staff_reason_codes": [],
+    "proposed_by": {
+      "account_id": "9a7d3e21-6c4b-4f8e-b1a2-3c5d7e9f0a12",
+      "display_name": "Mai Nguyen"
+    },
+    "created_at": "2026-11-06T09:12:40Z"
+  }
+}

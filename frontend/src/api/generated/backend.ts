@@ -192,6 +192,186 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/console/tickets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the tickets in one status
+         * @description Returns one page of the tickets in one `status`, for the console queues. Roles: `staff`, who may list `open` tickets only and get `403` for another status, and `manager`, who may list every status. `open`, `awaiting_approval`, and `escalated` tickets are ordered by `created_at`, oldest first, so the ticket that waited longest comes first; `closed` tickets are ordered by `closed_at`, newest first. Tickets with the same time are ordered by `ticket_id`, ascending by Unicode code point. All staff share one queue: no ticket is assigned to a person (contracts v1 design, non-goals).
+         */
+        get: operations["listConsoleTickets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/console/tickets/{ticket_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the workspace of a ticket
+         * @description Returns the ticket workspace: the ticket, the customer's message, the order and the customer's other orders, the current suggestion with pseudonyms restored, the proposal, the escalation, the reply, and the actions that the caller may take now. Roles: `staff` and `manager`, on a ticket in any state; staff get an empty `allowed_actions` on a ticket that is not `open`. This read changes nothing; the console polls it while a suggestion part is `pending`, and calls `recordTicketView` once when a person opens the ticket.
+         */
+        get: operations["getConsoleTicket"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/console/tickets/{ticket_id}/views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record that a person opened a ticket
+         * @description Records that the caller opened the ticket. Roles: `staff` and `manager`, on a ticket in any state. The first view of the ticket starts the handling clock (`handling_started_at`, NFR-11). On the first view, when the current suggestion used another KB version than the one `ai-service` has loaded, `backend` starts a suggestion with the trigger `kb_version_changed`. On every view of an `open` ticket in `assisted` mode whose current suggestion has a part `unavailable` with `ai_service_unavailable`, or a draft `llm_unavailable`, and no part `pending`, `backend` starts a suggestion with the trigger `retry`. A retry with the same `Idempotency-Key` returns `204` again and starts nothing more.
+         */
+        post: operations["recordTicketView"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/console/tickets/{ticket_id}/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Correct the intent or retry the AI
+         * @description Starts a new suggestion for an `open` ticket in `assisted` mode and answers at once with it, `pending`; the console then polls `getConsoleTicket`. Roles: `staff` and `manager`. With `intent_override`, the request confirms or corrects the intent (ESC-01), also while a draft is generating, which cancels that draft; it needs a known intent: the analysis of the current suggestion is `ready`, or the current suggestion already carries an override. When no intent is known, it returns `409 suggestion-pending` while a part is `pending`, and `422` otherwise. Without `intent_override`, the request is a retry, valid only when `allowed_actions` contains `retry_suggestion`; otherwise it returns `422`. The new suggestion supersedes the previous one, and the authority flag stays as it is (contracts v1 design, authority rule). A retry with the same `Idempotency-Key` and body returns the original `202` and starts no second suggestion.
+         */
+        post: operations["createSuggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/console/tickets/{ticket_id}/reply-proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit a reply for a manager to send
+         * @description Stores a reply that staff prepared and moves the ticket from `open` to `awaiting_approval`, where a manager sends it as proposed or edited (FR-06). Role: `staff`. Nothing reaches the customer. The checks run in this order and the first failure answers: the `Origin` header, the session, and the role; the ticket exists; the `Idempotency-Key`; the ticket is `open` (`409 invalid-ticket-state`); no part of the current suggestion is `pending` (`409 suggestion-pending`); a `suggestion_id` names the current suggestion (`409 suggestion-superseded`); then the body rules of the basis (`422`). A retry with the same `Idempotency-Key` and body returns the original `201`.
+         */
+        post: operations["createReplyProposal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/console/tickets/{ticket_id}/replies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send the reply to the customer
+         * @description Sends the reply that staff or a manager wrote or approved, and closes the ticket. This is the only operation that sends anything to a customer, and it always needs this staff action (FR-04). Roles: `staff`, on an `open` ticket that does not require authority, and `manager`, on every ticket that is not `closed`. On an `awaiting_approval` ticket the basis is `reply_proposal`. The checks run in this order and the first failure answers: the `Origin` header, the session, and the role; the ticket exists; the `Idempotency-Key`; the ticket is not `closed` (`409 invalid-ticket-state`); `staff` act only on an `open` ticket (`403 forbidden`); `staff` never send on a ticket that requires authority (`403 authority-required`, FR-06); no part of the current suggestion is `pending` (`409 suggestion-pending`); a `suggestion_id` names the current suggestion (`409 suggestion-superseded`); then the body rules of the basis (`422`). A body that contains a placeholder is refused, so no placeholder reaches a customer (SEC-38). The reply is sent at most once: a retry with the same `Idempotency-Key` and body returns the original `201` (ERR-16). `frontend` never retries this operation automatically (TS-29).
+         */
+        post: operations["sendReply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/console/tickets/{ticket_id}/escalations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move a ticket to a manager
+         * @description Escalates an `open` ticket to the manager queue with at least one staff reason code (ADR-0006), and records the staff decision `escalate`. Role: `staff`. The AI only recommends an escalation; this staff action decides it. Staff may escalate while a suggestion part is `pending`. The checks run in this order and the first failure answers: the `Origin` header, the session, and the role; the ticket exists; the `Idempotency-Key`; the ticket is `open` (`409 invalid-ticket-state`); a `suggestion_id` names the current suggestion (`409 suggestion-superseded`); then the body rules (`422`). A retry with the same `Idempotency-Key` and body returns the original `201`.
+         */
+        post: operations["createEscalation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/console/kb-documents/{document_id}/versions/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the full text of a KB document version
+         * @description Returns one KB document version in full, for the citation view of the console (UI-20). Roles: `staff` and `manager`. `backend` reads it from `ai-service` (`getKbDocumentVersion` of the `ai-service` contract) with `ai_service_read_timeout_ms`, and answers `404` when `ai-service` does not know the version, and `503 not-ready` when `ai-service` does not answer in time.
+         */
+        get: operations["getConsoleKbDocumentVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/console/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the report for a period
+         * @description Returns the figures of FR-10 for the period from `start_at`, included, to `end_at`, excluded. Role: `manager` (ADR-0012). `backend` computes them on request from its own records: tickets, suggestions, staff decisions, and escalations; never from telemetry (LOG-33). The report holds aggregates only, no text and no identifier of a ticket. The console shows each figure with a label in business language, its unit, and its target where the requirements give one, and computes no figure itself (UI-14, UI-44).
+         */
+        get: operations["getConsoleReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/accounts": {
         parameters: {
             query?: never;
@@ -276,6 +456,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the versions in use
+         * @description Returns the build version of `backend` and the release and asset versions that `ai-service` serves (DATA-56), for the admin area. Role: `admin`. `backend` reads them from `ai-service` (`getAssetVersions` of the `ai-service` contract) with `ai_service_read_timeout_ms`. When `ai-service` does not answer in time or answers with an error, the response is still `200`, with `ai_service_status` `unavailable` and without `ai_service_versions`. The response holds versions only: no ticket, message, order, or report (SEC-41).
+         */
+        get: operations["getAdminVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health/live": {
         parameters: {
             query?: never;
@@ -337,10 +537,10 @@ export interface components {
         /** @description The body of every error response, as RFC 9457 defines Problem Details, with the `trace_id` extension member (CON-12, LOG-04). It never contains a stack trace, an internal name, or Confidential data. Data class: Internal. */
         ProblemDetails: {
             /**
-             * @description The problem type, from the registry in the contracts v1 design (`urn:supportiq:problem:` and a kebab-case name). Each value has one meaning: `invalid-request`: the request is malformed or breaks a documented rule; `unauthenticated`: there is no valid session, or the credentials were not accepted; `forbidden`: the caller's role may not perform the operation, or the `Origin` check failed; `not-found`: the resource does not exist, or the caller may not know about it; `idempotency-key-reused`: the `Idempotency-Key` was used before with a different body or different path parameters; `login-name-taken`: the login name that the request composes is already an account's login name; `not-ready`: the provider cannot serve the request now, for example because its database is unavailable or a timeout fired; `internal-error`: an unexpected failure in the provider. Consumers map an unknown value to a generic technical failure (CON-22). Data class: Internal.
+             * @description The problem type, from the registry in the contracts v1 design (`urn:supportiq:problem:` and a kebab-case name). Each value has one meaning: `invalid-request`: the request is malformed or breaks a documented rule; `unauthenticated`: there is no valid session, or the credentials were not accepted; `forbidden`: the caller's role may not perform the operation, or the `Origin` check failed; `not-found`: the resource does not exist, or the caller may not know about it; `idempotency-key-reused`: the `Idempotency-Key` was used before with a different body or different path parameters; `login-name-taken`: the login name that the request composes is already an account's login name; `not-ready`: the provider cannot serve the request now, for example because its database is unavailable or a timeout fired; `internal-error`: an unexpected failure in the provider; `authority-required`: staff tried to send the reply of a ticket that requires authority, which only a manager may send (FR-06); `invalid-ticket-state`: the operation is not allowed in the ticket's current state; `suggestion-pending`: a part of the ticket's current suggestion is still pending; `suggestion-superseded`: the request names a suggestion that is no longer the ticket's current suggestion. Consumers map an unknown value to a generic technical failure (CON-22). Data class: Internal.
              * @enum {string}
              */
-            type: "urn:supportiq:problem:invalid-request" | "urn:supportiq:problem:unauthenticated" | "urn:supportiq:problem:forbidden" | "urn:supportiq:problem:not-found" | "urn:supportiq:problem:idempotency-key-reused" | "urn:supportiq:problem:login-name-taken" | "urn:supportiq:problem:not-ready" | "urn:supportiq:problem:internal-error";
+            type: "urn:supportiq:problem:invalid-request" | "urn:supportiq:problem:unauthenticated" | "urn:supportiq:problem:forbidden" | "urn:supportiq:problem:not-found" | "urn:supportiq:problem:idempotency-key-reused" | "urn:supportiq:problem:login-name-taken" | "urn:supportiq:problem:not-ready" | "urn:supportiq:problem:internal-error" | "urn:supportiq:problem:authority-required" | "urn:supportiq:problem:invalid-ticket-state" | "urn:supportiq:problem:suggestion-pending" | "urn:supportiq:problem:suggestion-superseded";
             /** @description A short English summary of the problem type. It is the same for every occurrence of a type. Consumers never parse it. Data class: Internal. */
             title: string;
             /** @description The HTTP status code of the response, repeated in the body as RFC 9457 defines. Data class: Internal. */
@@ -351,20 +551,116 @@ export interface components {
             trace_id: string;
         };
         /**
-         * @description The status of a simulated order (`synthetic-dev-only` commerce data). `placed`: the order was placed and nobody has started preparing it. `processing`: the order is being prepared and has not left the warehouse. `shipped`: the order was handed to the carrier. `delivered`: the order reached the customer. `cancelled`: the order was cancelled and nothing more is shipped. Consumers map an unknown value to a neutral presentation (CON-22). Data class: that of the property holding this value.
+         * @description The status of a simulated order. `placed`: the order was placed and nobody has started preparing it. `processing`: the order is being prepared and has not left the warehouse. `shipped`: the order was handed to the carrier. `delivered`: the order reached the customer. `cancelled`: the order was cancelled and nothing more is shipped. Consumers map an unknown value to a neutral presentation (CON-22). Data class: that of the property holding this value.
          * @enum {string}
          */
         OrderStatus: "placed" | "processing" | "shipped" | "delivered" | "cancelled";
         /**
-         * @description The status of the shipment of a simulated order (`synthetic-dev-only` commerce data). `not_shipped`: the parcel has not been handed to the carrier. `in_transit`: the carrier has the parcel and it is on its way. `delivered`: the carrier delivered the parcel. `delayed`: the carrier reported a delay and the parcel has not arrived. `lost`: the carrier reported the parcel lost. Consumers map an unknown value to a neutral presentation (CON-22). Data class: that of the property holding this value.
+         * @description The status of the shipment of a simulated order. `not_shipped`: the parcel has not been handed to the carrier. `in_transit`: the carrier has the parcel and it is on its way. `delivered`: the carrier delivered the parcel. `delayed`: the carrier reported a delay and the parcel has not arrived. `lost`: the carrier reported the parcel lost. Consumers map an unknown value to a neutral presentation (CON-22). Data class: that of the property holding this value.
          * @enum {string}
          */
         ShipmentStatus: "not_shipped" | "in_transit" | "delivered" | "delayed" | "lost";
         /**
-         * @description The status of the refund of a simulated order (`synthetic-dev-only` commerce data). `requested`: the customer asked for a refund and nobody has reviewed it. `under_review`: the request is being reviewed. `approved`: the refund was approved and is not paid yet. `rejected`: the refund was refused. `paid`: the refund amount was paid to the customer. Consumers map an unknown value to a neutral presentation (CON-22). Data class: that of the property holding this value.
+         * @description The status of the refund of a simulated order. `requested`: the customer asked for a refund and nobody has reviewed it. `under_review`: the request is being reviewed. `approved`: the refund was approved and is not paid yet. `rejected`: the refund was refused. `paid`: the refund amount was paid to the customer. Consumers map an unknown value to a neutral presentation (CON-22). Data class: that of the property holding this value.
          * @enum {string}
          */
         RefundStatus: "requested" | "under_review" | "approved" | "rejected" | "paid";
+        /**
+         * @description One of the 46 Bitext intent labels: what the customer wants. The 12 in-scope intents are `track_order`, `cancel_order`, `delivery_time`, `delivery_issue`, `shipping_costs`, `return_policy`, `return_product`, `refund_policy`, `request_refund`, `refund_status`, `payment_issue`, and `human_agent` (requirements §3.2); every other label is out of scope (ESC-02). Consumers map an unknown value to an unspecified intent (CON-22). Data class: Internal.
+         * @enum {string}
+         */
+        IntentLabel: "add_product" | "availability" | "availability_in_store" | "availability_online" | "cancel_order" | "change_account" | "change_order" | "close_account" | "customer_service" | "damaged_delivery" | "delivery_issue" | "delivery_time" | "exchange_product" | "exchange_product_in_store" | "human_agent" | "missing_item" | "open_account" | "order_history" | "pay" | "payment_issue" | "payment_methods" | "product_information" | "product_issue" | "recover_password" | "refund_policy" | "refund_status" | "remove_product" | "request_invoice" | "request_refund" | "request_right_to_rectification" | "return_policy" | "return_product" | "return_product_in_store" | "return_product_online" | "sales_period" | "shipping_costs" | "store_location" | "store_opening_hours" | "submit_feedback" | "submit_product_feedback" | "submit_product_idea" | "technical_issue" | "track_delivery" | "track_order" | "use_app" | "wrong_item";
+        /**
+         * @description A coarse reading of the calibrated probability of the model's top intent, computed by `ai-service` from the routing configuration so that no consumer applies a threshold itself. `low`: the routing carries `low_confidence`, because the top probability is below τ or the gap between the top two probabilities is below δ (ESC-01). `medium`: the probability passed τ and δ and is below the high-band threshold of the routing configuration. `high`: the probability passed τ and δ and reaches the high-band threshold. The `ai-service` pipeline design sets the high-band threshold. A staff-chosen intent has no band. Consumers map an unknown value to `low` (CON-22). Data class: Internal.
+         * @enum {string}
+         */
+        ConfidenceBand: "high" | "medium" | "low";
+        /**
+         * @description Why the AI recommends what it recommends, as the contracts v1 design defines (reason codes), with the escalation rule each code refines. `low_confidence`: the top intent probability is below τ, or the gap between the top two probabilities is below δ (ESC-01). `signal_disagreement`: the predicted intent and the top documents point to different topics; a warning that lowers the confidence (ADR-0005, statement 4). `out_of_scope_intent`: the intent is outside the 12 in-scope intents (ESC-02). `human_agent_requested`: the intent is `human_agent` (ESC-03). It never sets the authority flag. `requires_authority`: a refund decision, a transaction dispute, a policy exception, a legal claim, or suspected fraud (FR-06, ESC-03). It comes only from the intent distribution and the sensitive-term list of the routing configuration, never from the LLM (SEC-26). `no_valid_document`: no document version in effect at `as_of` supports the request (ESC-04). `only_expired_documents`: relevant document versions exist, but none is in effect at `as_of` (ESC-04). `conflicting_sources`: two versions in effect with the same policy key disagree (ESC-04). `missing_information`: the request needs information that is in neither the message nor the order context (ESC-04). `source_review_overdue`: a document version is past its review deadline under the KB freshness rules; a warning only, never a reason to abstain (ESC-04). `grounding_failed`: the draft made claims that its sources do not support (ESC-05). `llm_unavailable`: the LLM timed out, failed, or was rate-limited, a call to a host that is not on the egress allow-list was refused, or the circuit breaker of the LLM calls is open (ESC-05). `llm_invalid_output`: the LLM output failed schema validation, or it contained a placeholder that was not in the prompt (ESC-05). `budget_exceeded`: the latency budget ran out before drafting (ESC-05). `ai_service_unavailable`: set only by `backend`; `ai-service` was unreachable, timed out, returned `4xx` or `5xx`, returned an invalid response, or the job ran out of attempts (ESC-05). `pseudonymization_failed`: set only by `backend`; pseudonymization failed or produced text longer than `PseudonymizedText` allows, and `ai-service` was not called (ESC-05). `ai-service` never returns the last two codes. Consumers show an unknown value as an unspecified reason (CON-22). Data class: Internal.
+         * @enum {string}
+         */
+        AiReasonCode: "low_confidence" | "signal_disagreement" | "out_of_scope_intent" | "human_agent_requested" | "requires_authority" | "no_valid_document" | "only_expired_documents" | "conflicting_sources" | "missing_information" | "source_review_overdue" | "grounding_failed" | "llm_unavailable" | "llm_invalid_output" | "budget_exceeded" | "ai_service_unavailable" | "pseudonymization_failed";
+        /** @description The identifier of one item of an `ai-service` result: a draft segment, a citation, or a warning. It is unique among the items of its kind within one result, and means nothing outside it. Opaque (CON-15). From 1 to 64 characters: ASCII letters, digits, `.`, `_`, and `-`, starting with a letter or a digit. Data class: Internal. */
+        AiItemId: string;
+        /** @description The identifier of a KB document, the same for all its versions, for example `POL-REFUND-002`. Opaque (CON-15): consumers compare it as a string and never parse it. From 1 to 64 characters: ASCII letters, digits, `.`, `_`, and `-`, starting with a letter or a digit. Data class: Internal. */
+        KbDocumentId: string;
+        /** @description The version of a KB document, for example `2.0`. Together with `KbDocumentId` it identifies one immutable KB document version. Opaque (CON-15): consumers compare it as a string and never parse or order it. From 1 to 64 characters: ASCII letters, digits, `.`, `_`, and `-`, starting with a letter or a digit. Data class: Internal. */
+        KbDocumentVersionTag: string;
+        /** @description The release that `ai-service` serves and the version of each asset it names (DATA-56). One release manifest is loaded at startup and serves every request until the next start, so every suggestion can be reproduced from these values. Data class: Internal. */
+        AssetVersions: {
+            /** @description The unique, immutable identifier of the release manifest that produced the result. Opaque (CON-15). From 1 to 64 characters: ASCII letters, digits, `.`, `_`, and `-`, starting with a letter or a digit. Data class: Internal. */
+            release_id: string;
+            /** @description The version of the intent classification model artifact. Data class: Internal. */
+            model_version: components["schemas"]["AssetVersion"];
+            /** @description The version of the KB: the immutable set of KB document versions that retrieval searches (DATA-17). Data class: Internal. */
+            kb_version: components["schemas"]["AssetVersion"];
+            /** @description The version of the document-to-intent mapping used for reranking (ADR-0005, statement 6; DATA-18). Data class: Internal. */
+            mapping_version: components["schemas"]["AssetVersion"];
+            /** @description The version of the set of prompts that drafting uses. Data class: Internal. */
+            prompt_version: components["schemas"]["AssetVersion"];
+            /** @description The version of the routing configuration: τ, δ, the rerank weight λ, the sensitive intents, and the sensitive-term list (DATA-58). Data class: Internal. */
+            routing_version: components["schemas"]["AssetVersion"];
+            /** @description The version of the retrieval index built from the KB version. Data class: Internal. */
+            index_version: components["schemas"]["AssetVersion"];
+        };
+        /** @description A citation of one KB document version. It supports a policy, an eligibility, or a conclusion that a draft segment states, even when the claim is about the customer's order (ADR-0014, statement 2). Data class: Internal. */
+        KbDocumentCitation: {
+            /**
+             * @description The kind of source: always `kb_document` in this variant. Data class: Internal. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            source_type: "kb_document";
+            /** @description The identifier of the citation, unique among the citations of the draft. Segments refer to it in `citation_ids`. Data class: Internal. */
+            citation_id: components["schemas"]["AiItemId"];
+            /** @description The cited KB document. Data class: Internal. */
+            document_id: components["schemas"]["KbDocumentId"];
+            /** @description The cited version of the document. It is a version that the KB of the result contains. Data class: Internal. */
+            version: components["schemas"]["KbDocumentVersionTag"];
+            /** @description The passage of the cited version that supports the segment, from 1 to 2 000 characters. KB text is untrusted data and is shown as plain text (SEC-22, SEC-24). Data class: Public. */
+            snippet: string;
+        };
+        /** @description A citation of one field of the order context that `backend` sent with the request. It supports only a fact held in that field, and is never evidence for a policy, an eligibility, a conclusion, or routing (ADR-0014, statements 2 and 3). It names the field and never carries its value, so no personal value leaves `ai-service` (ADR-0014, statement 5). Data class: Internal. */
+        OrderContextCitation: {
+            /**
+             * @description The kind of source: always `order_context` in this variant. Data class: Internal.
+             * @enum {string}
+             */
+            source_type: "order_context";
+            /** @description The identifier of the citation, unique among the citations of the draft. Segments refer to it in `citation_ids`. Data class: Internal. */
+            citation_id: components["schemas"]["AiItemId"];
+            /** @description The cited field. It is present in the `order_context` of the request, and every segment that cites it agrees with its value; otherwise there is no draft and the reason code is `grounding_failed` (ADR-0014, statement 4). Data class: Internal. */
+            field: components["schemas"]["OrderContextField"];
+        };
+        /** @description A KB document version that retrieval found for the request, after the validity filter at `as_of` and the intent-aware reranking (ADR-0005, statements 1 to 3). Data class: Internal. */
+        RankedDocument: {
+            /** @description The KB document. Data class: Internal. */
+            document_id: components["schemas"]["KbDocumentId"];
+            /** @description The version of the document. Data class: Internal. */
+            version: components["schemas"]["KbDocumentVersionTag"];
+            /** @description The title of the document version, from 1 to 200 characters. Data class: Public. */
+            title: string;
+            /** @description The topic of the policy that the version states, used to detect conflicts: two versions in effect with the same policy key and different content conflict (DATA-16, DATA-19). Every document version has one (DATA-12). From 1 to 100 characters. Data class: Public. */
+            policy_key: string;
+            /** @description When the version came into effect. Data class: Public. */
+            effective_start_at: components["schemas"]["Timestamp"];
+            /** @description When the version stopped being in effect, later than `effective_start_at`. Absent when the version is open-ended (DATA-16). Data class: Public. */
+            effective_end_at?: components["schemas"]["Timestamp"];
+            /** @description Whether the version may support a reply at `as_of`. Data class: Internal. */
+            validity: components["schemas"]["DocumentValidity"];
+            /** @description The position of the version after reranking: 1 is the most relevant. The documents of a result are ordered by rank, which counts from 1 without gaps. Data class: Internal. */
+            rank: number;
+            /** @description The passage of the version that matched the request, from 1 to 2 000 characters. KB text is untrusted data and is shown as plain text (SEC-22, SEC-24). Data class: Public. */
+            snippet: string;
+        };
+        /** @description A condition that allows a draft but needs staff attention, such as `signal_disagreement` or `source_review_overdue`. Staff acknowledge every warning before they send a reply based on the draft. Data class: Internal. */
+        Warning: {
+            /** @description The identifier of the warning, unique among the warnings of the result. Staff acknowledge the warning by this identifier. Data class: Internal. */
+            warning_id: components["schemas"]["AiItemId"];
+            /** @description The condition that needs attention. Data class: Internal. */
+            reason_code: components["schemas"]["AiReasonCode"];
+        };
+        /** @description Text that contains at least one placeholder: a pseudonym such as `[ORDER_ID_1]`, written by `backend`, or a mask such as `[EMAIL]`, written by `ai-service` (ADR-0010, placeholder syntax). The pattern is the regular expression of ADR-0010 and, as in every JSON Schema pattern, matches anywhere in the string. A contract applies it with `not` to require text without any placeholder, as on the body of a reply, because no placeholder may reach a customer (SEC-38). Data class: that of the property holding this value. */
+        Placeholder: string;
         /**
          * @description Why a well-formed account change was refused: the admin limits 3 to 5 of ADR-0012, a value that is already the account's value, or a limit of ADR-0015. When several reasons apply, the value is the first of this list. `own_account`: the target is the caller's own account (admin limit 4, ADR-0015). `admin_role_unchangeable`: the target of a role change is an `admin` account (admin limit 3); only `changeAccountRole` returns it. `role_unchanged`: `role` is already the account's role; only `changeAccountRole` returns it. `status_unchanged`: `is_active` is already the account's status; only `changeAccountStatus` returns it. `last_active_manager`: the change would leave no active `manager` (admin limit 5). `admin_password_unresettable`: the target of a password reset is an `admin` account (ADR-0015); only `resetAccountPassword` returns it. `current_password_incorrect`: `current_password` is wrong, or the login name of the account is at the sign-in failure limit (ADR-0009, statement 8); only `changeOwnPassword` returns it. Consumers map an unknown value to a generic refusal (CON-22). Data class: Internal.
          * @enum {string}
@@ -587,6 +883,665 @@ export interface components {
             /** @description `true` deletes every other session of the account, and `false` keeps them. The current session always stays. Data class: Internal. */
             is_signed_out_elsewhere: boolean;
         };
+        /**
+         * @description The lifecycle state of a ticket (contracts v1 design, ticket lifecycle). `open`: waiting for staff. `awaiting_approval`: staff submitted a reply proposal, and a manager sends the reply. `escalated`: staff escalated the ticket, and a manager handles it. `closed`: a reply was sent to the customer. Consumers show an unknown value as a state with no action (CON-22). Data class: Internal.
+         * @enum {string}
+         */
+        ConsoleTicketStatus: "open" | "awaiting_approval" | "escalated" | "closed";
+        /**
+         * @description Whether the ticket is handled with AI suggestions (`assisted`) or without them (`manual`), for the product-value study (NFR-11). A `manual` ticket gets no suggestion, and its only reply basis is `no_ai_draft`. Shop tickets take the default mode from the settings of `backend`; imported tickets take it from the import file. Consumers treat an unknown value as `manual` (CON-22). Data class: Internal.
+         * @enum {string}
+         */
+        HandlingMode: "assisted" | "manual";
+        /**
+         * @description Why staff edited, rejected, or escalated a draft (ADR-0006). Several may apply. `wrong_intent`: the predicted intent was wrong. `wrong_source`: the KB has the right document, but retrieval missed it or chose another. `unsupported_claim`: the draft states something that its sources do not say. `kb_gap`: the KB is missing, outdated, or wrong. `missing_case_info`: order or customer information was missing. `tone_or_clarity`: the content was right, but the wording needed work. `case_exception`: staff deliberately made an exception for this case. `other`: anything else; a `note` is then required. Consumers show an unknown value as an unspecified reason (CON-22). Data class: Internal.
+         * @enum {string}
+         */
+        StaffReasonCode: "wrong_intent" | "wrong_source" | "unsupported_claim" | "kb_gap" | "missing_case_info" | "tone_or_clarity" | "case_exception" | "other";
+        /**
+         * @description An action that the caller may take on the ticket now, computed by `backend` with the same rules that the operations check, so the console offers no action that would be refused. `send_reply`: `sendReply`. `submit_reply_proposal`: `createReplyProposal`. `escalate`: `createEscalation`. `correct_intent`: `createSuggestion` with `intent_override`; offered only when an intent is known. `retry_suggestion`: `createSuggestion` without `intent_override`, after an AI failure that a retry can fix. Consumers ignore an unknown value (CON-22). Data class: Internal.
+         * @enum {string}
+         */
+        TicketAction: "send_reply" | "submit_reply_proposal" | "escalate" | "correct_intent" | "retry_suggestion";
+        /**
+         * @description Why `backend` started the suggestion (contracts v1 design, suggestion lifecycle). `ticket_created`: the ticket was created in `assisted` mode. `intent_override`: staff or a manager confirmed the predicted intent or chose another. `kb_version_changed`: on the first view, the previous suggestion used another KB version than the one `ai-service` serves. `retry`: staff opened the ticket after an AI failure, or asked for a retry. Consumers show an unknown value as an unspecified trigger (CON-22). Data class: Internal.
+         * @enum {string}
+         */
+        SuggestionTrigger: "ticket_created" | "intent_override" | "kb_version_changed" | "retry";
+        /** @description The staff member or manager who did something on a ticket. Data class: Confidential. */
+        StaffMemberView: {
+            /** @description The identifier of the account (CON-15). Data class: Internal. */
+            account_id: string;
+            /** @description The name shown for the account, from 1 to 100 characters. Data class: Confidential (staff identity). */
+            display_name: string;
+        };
+        /** @description The intent that the classification model predicted for the ticket's current suggestion. Data class: Internal. */
+        TicketSummaryIntent: {
+            /** @description The predicted intent. Data class: Internal. */
+            label: components["schemas"]["IntentLabel"];
+            /** @description The calibrated probability of the predicted intent, from 0 to 1 (FR-01). Data class: Internal. */
+            probability: number;
+            /** @description The band of the probability. Data class: Internal. */
+            confidence_band: components["schemas"]["ConfidenceBand"];
+        };
+        /** @description One ticket of a console queue. Data class: Confidential. */
+        TicketSummary: {
+            /** @description The identifier of the ticket (CON-15). Data class: Internal. */
+            ticket_id: string;
+            /** @description When the customer sent the message. Data class: Internal. */
+            created_at: components["schemas"]["Timestamp"];
+            /** @description The state of the ticket. Data class: Internal. */
+            status: components["schemas"]["ConsoleTicketStatus"];
+            /** @description Whether the ticket is handled with AI suggestions. Data class: Internal. */
+            handling_mode: components["schemas"]["HandlingMode"];
+            /** @description Whether only a manager may send the reply (FR-06). It never goes back to false. Data class: Internal. */
+            is_authority_required: boolean;
+            /** @description When a person first opened the ticket. Absent until then, so the queue shows which tickets nobody opened yet. Data class: Internal. */
+            handling_started_at?: components["schemas"]["Timestamp"];
+            /** @description The customer who wrote the message. Data class: Confidential. */
+            customer: components["schemas"]["ConsoleCustomerView"];
+            /** @description The start of the customer's message as written: its first 160 characters, counted in Unicode code points, or the whole message when it is shorter. Data class: Confidential. */
+            message_excerpt: string;
+            /** @description The status of the draft of the current suggestion. Absent in `manual` mode. Data class: Internal. */
+            draft_status?: components["schemas"]["DraftStatus"];
+            /** @description The intent that the model predicted in the current suggestion. Absent while the analysis is not `ready`, when it failed, and when staff chose the intent. Data class: Internal. */
+            predicted_intent?: components["schemas"]["TicketSummaryIntent"];
+        };
+        /** @description One page of a console queue (CON-14). Data class: Confidential. */
+        TicketSummaryPage: {
+            /** @description The tickets of the page, in the order of the operation, at most `limit`. Data class: Confidential. */
+            items: components["schemas"]["TicketSummary"][];
+            /** @description The `cursor` of the next page. Absent on the last page. Data class: Internal. */
+            next_cursor?: components["schemas"]["Cursor"];
+        };
+        /** @description The customer of a ticket, as the console shows them: the display name only. No email, phone, or address. Data class: Confidential. */
+        ConsoleCustomerView: {
+            /** @description The customer's name, from 1 to 100 characters. Data class: Confidential. */
+            display_name: string;
+        };
+        /** @description The customer's message, exactly as written. Data class: Confidential. */
+        ConsoleMessageView: {
+            /** @description The text of the message, raw, with no pseudonym. Data class: Confidential. */
+            body: components["schemas"]["MessageText"];
+            /** @description When the customer sent it. Data class: Internal. */
+            created_at: components["schemas"]["Timestamp"];
+        };
+        /** @description The order of the ticket, with its shipping address, for staff (contracts v1 design, ticket workspace). Data class: Confidential. */
+        ConsoleOrderView: {
+            /** @description The identifier of the order (CON-15). Data class: Confidential. */
+            order_id: string;
+            /** @description The status of the order. Data class: Confidential. */
+            order_status: components["schemas"]["OrderStatus"];
+            /** @description When the customer placed the order. Data class: Confidential. */
+            placed_at: components["schemas"]["Timestamp"];
+            /** @description The total paid, shipping included. Data class: Confidential. */
+            order_total: components["schemas"]["Money"];
+            /** @description The shipping cost, in the currency of `order_total`. Data class: Confidential. */
+            shipping_cost: components["schemas"]["Money"];
+            /** @description The lines of the order, at least one; a product appears at most once. Data class: Confidential. */
+            lines: components["schemas"]["ShopOrderLine"][];
+            /** @description The shipment of the order. Absent when the order has none. Data class: Confidential. */
+            shipment?: components["schemas"]["ShopShipmentView"];
+            /** @description The refund of the order. Absent when no refund was requested. Data class: Confidential. */
+            refund?: components["schemas"]["ShopRefundView"];
+            /** @description The shipping address of the simulated order, as one text of 1 to 300 characters. Data class: Confidential. */
+            shipping_address: string;
+        };
+        /** @description Another order of the same customer, read-only context for staff. It has no shipping address, and `backend` never sends it to `ai-service`. Data class: Confidential. */
+        ConsoleOtherOrderView: {
+            /** @description The identifier of the order (CON-15). Data class: Confidential. */
+            order_id: string;
+            /** @description The status of the order. Data class: Confidential. */
+            order_status: components["schemas"]["OrderStatus"];
+            /** @description The status of its shipment. Absent when the order has none. Data class: Confidential. */
+            shipment_status?: components["schemas"]["ShipmentStatus"];
+            /** @description The status of its refund. Absent when no refund was requested. Data class: Confidential. */
+            refund_status?: components["schemas"]["RefundStatus"];
+            /** @description When the customer placed the order. Data class: Confidential. */
+            placed_at: components["schemas"]["Timestamp"];
+            /** @description The total paid, shipping included. Data class: Confidential. */
+            order_total: components["schemas"]["Money"];
+            /** @description The lines of the order, at least one. Data class: Confidential. */
+            lines: components["schemas"]["ShopOrderLine"][];
+        };
+        /** @description Everything that staff and managers need to handle one ticket (contracts v1 design, ticket workspace). AI text in it has pseudonyms restored; it is a suggestion and never reaches a customer without a staff action (FR-04). Data class: Confidential. */
+        TicketWorkspace: {
+            /** @description The identifier of the ticket (CON-15). Data class: Internal. */
+            ticket_id: string;
+            /** @description The state of the ticket. Data class: Internal. */
+            status: components["schemas"]["ConsoleTicketStatus"];
+            /** @description Whether the ticket is handled with AI suggestions. Data class: Internal. */
+            handling_mode: components["schemas"]["HandlingMode"];
+            /** @description Whether only a manager may send the reply (FR-06). It becomes true once any suggestion of the ticket carries `requires_authority`, and never goes back to false. Data class: Internal. */
+            is_authority_required: boolean;
+            /** @description When the ticket was created. Data class: Internal. */
+            created_at: components["schemas"]["Timestamp"];
+            /** @description When a person first opened the ticket, which starts the handling clock (NFR-11). Absent until then. Data class: Internal. */
+            handling_started_at?: components["schemas"]["Timestamp"];
+            /** @description When the reply was sent. Present exactly when `status` is `closed`. Data class: Internal. */
+            closed_at?: components["schemas"]["Timestamp"];
+            /** @description The customer who wrote the message. Data class: Confidential. */
+            customer: components["schemas"]["ConsoleCustomerView"];
+            /** @description The customer's message. Data class: Confidential. */
+            message: components["schemas"]["ConsoleMessageView"];
+            /** @description The order that the ticket is about. Absent for an imported ticket without an order. Data class: Confidential. */
+            order?: components["schemas"]["ConsoleOrderView"];
+            /** @description The customer's other orders, newest first by `placed_at`, at most 20. Absent when there are none. Data class: Confidential. */
+            other_orders?: components["schemas"]["ConsoleOtherOrderView"][];
+            /** @description The current suggestion. Absent in `manual` mode. Data class: Confidential. */
+            suggestion?: components["schemas"]["SuggestionView"];
+            /** @description The reply proposal. Present exactly when staff submitted one, so from `awaiting_approval` on. Data class: Confidential. */
+            proposal?: components["schemas"]["ReplyProposalView"];
+            /** @description The escalation. Present exactly when staff escalated the ticket. Data class: Confidential. */
+            escalation?: components["schemas"]["EscalationView"];
+            /** @description The reply sent to the customer. Present exactly when `status` is `closed`. Data class: Confidential. */
+            reply?: components["schemas"]["ConsoleReplyView"];
+            /** @description The actions that the caller may take now, without repeats. Empty for `staff` on a ticket that is not `open`, and for everyone on a `closed` ticket. Data class: Internal. */
+            allowed_actions: components["schemas"]["TicketAction"][];
+        };
+        /** @description One run of the AI for a ticket, as `backend` recorded it, with the pseudonyms of its AI text restored to their original values; a mask, or a pseudonym that the map does not hold, stays as written (ADR-0010). Data class: Confidential. */
+        SuggestionView: {
+            /** @description The identifier of the suggestion (CON-15). Data class: Internal. */
+            suggestion_id: string;
+            /** @description Why `backend` started it. Data class: Internal. */
+            trigger: components["schemas"]["SuggestionTrigger"];
+            /** @description The intent that staff confirmed or chose. Present exactly when `trigger` is `intent_override`. Data class: Internal. */
+            intent_override?: components["schemas"]["IntentLabel"];
+            /** @description When `backend` started it. Data class: Internal. */
+            created_at: components["schemas"]["Timestamp"];
+            /** @description The W3C trace ID of the job that ran it, as 32 lowercase hexadecimal characters, for the developer details (UI-35). Data class: Internal. */
+            trace_id: string;
+            /** @description The analysis part, with its status. Data class: Internal. */
+            analysis: components["schemas"]["AnalysisPart"];
+            /** @description The draft part, with its status. Data class: Confidential. */
+            draft: components["schemas"]["DraftPart"];
+        };
+        /** @description The analysis part of a suggestion, discriminated by `analysis_status`. Consumers handle an unknown status as `unavailable`, so the ticket is handled manually (CON-22). Data class: Internal. */
+        AnalysisPart: components["schemas"]["PendingAnalysisPart"] | components["schemas"]["ReadyAnalysisPart"] | components["schemas"]["UnavailableAnalysisPart"];
+        /** @description An analysis that `ai-service` has not returned yet. The console polls the ticket. Data class: Internal. */
+        PendingAnalysisPart: {
+            /**
+             * @description Always `pending` in this variant. Data class: Internal. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            analysis_status: "pending";
+        };
+        /** @description The analysis that `ai-service` returned: intent, documents, routing, and warnings (ADR-0005). Data class: Internal. */
+        ReadyAnalysisPart: {
+            /**
+             * @description Always `ready` in this variant. Data class: Internal. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            analysis_status: "ready";
+            /** @description The intent that the rest of the pipeline used. Data class: Internal. */
+            intent: components["schemas"]["ConsoleIntent"];
+            /** @description The next most likely intents of the model, most likely first, at most four. The console shows `intent` and the first two (FR-01). Empty when staff chose the intent. Data class: Internal. */
+            alternatives: components["schemas"]["ConsoleIntentAlternative"][];
+            /** @description Whether the intent is one of the 12 in-scope intents (requirements §3.2). Data class: Internal. */
+            is_in_scope: boolean;
+            /** @description The KB document versions that retrieval found, ordered by `rank`, at most ten. Data class: Internal. */
+            documents: components["schemas"]["RankedDocument"][];
+            /** @description The routing recommendation and its reason codes. Data class: Internal. */
+            routing: components["schemas"]["ConsoleRouting"];
+            /** @description The conditions that need staff attention, at most ten. A reply based on the draft acknowledges every one of them. Data class: Internal. */
+            warnings: components["schemas"]["Warning"][];
+            /** @description The release and asset versions that produced the analysis (ARCH-39). Data class: Internal. */
+            versions: components["schemas"]["AssetVersions"];
+            /** @description The time that `ai-service` spent on the analysis. Data class: Internal. */
+            step_latencies: components["schemas"]["ConsoleStepLatencies"];
+        };
+        /** @description An analysis that `backend` could not get. Staff handle the ticket manually or retry. Data class: Internal. */
+        UnavailableAnalysisPart: {
+            /**
+             * @description Always `unavailable` in this variant. Data class: Internal. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            analysis_status: "unavailable";
+            /** @description Why: `ai_service_unavailable` or `pseudonymization_failed`, exactly one. Data class: Internal. */
+            reason_codes: components["schemas"]["AiReasonCode"][];
+        };
+        /** @description The intent of an analysis, discriminated by `source`: the model's prediction (`model`) or the intent that staff chose (`staff`). Consumers handle an unknown `source` as no known intent (CON-22). Data class: Internal. */
+        ConsoleIntent: components["schemas"]["ConsoleModelIntent"] | components["schemas"]["ConsoleStaffIntent"];
+        /** @description The top intent of the classification model. Data class: Internal. */
+        ConsoleModelIntent: {
+            /**
+             * @description Always `model` in this variant. Data class: Internal. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            source: "model";
+            /** @description The predicted intent. Data class: Internal. */
+            label: components["schemas"]["IntentLabel"];
+            /** @description The calibrated probability of the predicted intent, from 0 to 1 (FR-01). Data class: Internal. */
+            probability: number;
+            /** @description The band of the probability. Data class: Internal. */
+            confidence_band: components["schemas"]["ConfidenceBand"];
+        };
+        /** @description An intent that staff confirmed or chose. It has no probability and no band. Data class: Internal. */
+        ConsoleStaffIntent: {
+            /**
+             * @description Always `staff` in this variant. Data class: Internal. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            source: "staff";
+            /** @description The intent that staff chose. Data class: Internal. */
+            label: components["schemas"]["IntentLabel"];
+        };
+        /** @description A further candidate intent of the model. Data class: Internal. */
+        ConsoleIntentAlternative: {
+            /** @description The candidate intent. Data class: Internal. */
+            label: components["schemas"]["IntentLabel"];
+            /** @description Its calibrated probability, from 0 to 1. Data class: Internal. */
+            probability: number;
+        };
+        /** @description What the AI recommends for the ticket and why. Staff and managers decide. Data class: Internal. */
+        ConsoleRouting: {
+            /** @description The recommended next step. Data class: Internal. */
+            recommendation: components["schemas"]["RoutingRecommendation"];
+            /** @description The reason codes of the recommendation, without repeats. Data class: Internal. */
+            reason_codes: components["schemas"]["AiReasonCode"][];
+        };
+        /**
+         * @description The routing recommendation (ADR-0005). `draft`: the evidence allows a draft. `abstain`: no draft, because of low confidence, an out-of-scope intent, or missing or unusable evidence (ESC-01, ESC-02, ESC-04). `escalate`: no draft; the AI recommends that staff move the ticket to a manager (ESC-03). Consumers map an unknown value to `abstain` (CON-22). Data class: Internal.
+         * @enum {string}
+         */
+        RoutingRecommendation: "draft" | "abstain" | "escalate";
+        /** @description The time that `ai-service` spent on one call, in milliseconds, for the developer details (UI-35). Data class: Internal. */
+        ConsoleStepLatencies: {
+            /** @description The whole call inside `ai-service`, in milliseconds. Data class: Internal. */
+            total_ms: number;
+            /** @description Classification, retrieval, the validity filter, reranking, and routing, in milliseconds. Data class: Internal. */
+            analysis_ms: number;
+            /** @description The LLM step, in milliseconds. Absent when the call made no LLM request. Data class: Internal. */
+            llm_ms?: number;
+        };
+        /**
+         * @description The status of the draft part of a suggestion (contracts v1 design, suggestion lifecycle). `pending`: `ai-service` has not answered yet. `draft_ready`: a grounded draft is ready for staff review. `abstained`: no draft, as the routing recommended (ESC-01, ESC-02, ESC-04). `escalation_recommended`: no draft; the AI recommends an escalation (ESC-03). `llm_unavailable`: the routing allowed a draft, but drafting failed inside `ai-service` (ESC-05); staff may retry. `unavailable`: `backend` could not get a draft (`ai_service_unavailable`) or did not ask for one (`pseudonymization_failed`). Consumers map an unknown value to `unavailable`, so the ticket is handled manually (CON-22). Data class: Internal.
+         * @enum {string}
+         */
+        DraftStatus: "pending" | "draft_ready" | "abstained" | "escalation_recommended" | "llm_unavailable" | "unavailable";
+        /** @description The draft part of a suggestion, discriminated by `draft_status`, so a draft exists only when it is ready (CODE-29). Consumers handle an unknown status as `unavailable` (CON-22). Data class: Confidential. */
+        DraftPart: components["schemas"]["PendingDraftPart"] | components["schemas"]["ReadyDraftPart"] | components["schemas"]["NoDraftPart"] | components["schemas"]["UnavailableDraftPart"];
+        /** @description A draft that `ai-service` has not returned yet. While it is pending, nobody can send a reply on the ticket (`409 suggestion-pending`). Data class: Internal. */
+        PendingDraftPart: {
+            /**
+             * @description Always `pending` in this variant. Data class: Internal. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            draft_status: "pending";
+        };
+        /** @description A grounded draft for staff to review, with pseudonyms restored. Data class: Confidential. */
+        ReadyDraftPart: {
+            /**
+             * @description Always `draft_ready` in this variant. Data class: Internal. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            draft_status: "draft_ready";
+            /** @description The segments of the draft in reading order, at least one and at most 50. Data class: Confidential. */
+            segments: components["schemas"]["ConsoleDraftSegment"][];
+            /** @description The sources that the segments cite, at most 20. Data class: Confidential, because an order citation carries the value of the order field. */
+            citations: components["schemas"]["CitationView"][];
+            /** @description The canonical plain text of the draft, built by `backend` from the restored segments: segments with the same `paragraph_index` joined by one space, and paragraphs joined by one blank line (`\n\n`). The reply editor starts from it, and the staff decision compares the sent body with it. Restoring pseudonyms can make it longer than the 2 000 characters of the AI text; a reply body still has at most 2 000. Data class: Confidential. */
+            text: string;
+            /** @description The reason codes of the draft outcome, without repeats. Data class: Internal. */
+            reason_codes: components["schemas"]["AiReasonCode"][];
+            /** @description AI-written text for staff only, with pseudonyms restored. It is never sent to a customer. Absent when the AI added none. Data class: Confidential. */
+            staff_note?: string;
+            /** @description The release and asset versions that produced the draft (ARCH-39). Data class: Internal. */
+            versions: components["schemas"]["AssetVersions"];
+            /** @description The time that `ai-service` spent on the draft call. Data class: Internal. */
+            step_latencies: components["schemas"]["ConsoleStepLatencies"];
+        };
+        /** @description A draft outcome without a draft: `abstained`, `escalation_recommended`, or `llm_unavailable`. Data class: Confidential. */
+        NoDraftPart: {
+            /**
+             * @description The outcome: `abstained`, `escalation_recommended`, or `llm_unavailable`. Data class: Internal. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            draft_status: "abstained" | "escalation_recommended" | "llm_unavailable";
+            /** @description Why there is no draft, without repeats, at least one. Data class: Internal. */
+            reason_codes: components["schemas"]["AiReasonCode"][];
+            /** @description AI-written text for staff only, such as what information is missing, with pseudonyms restored. Absent when the AI added none. Data class: Confidential. */
+            staff_note?: string;
+            /** @description The release and asset versions that produced the outcome. Data class: Internal. */
+            versions: components["schemas"]["AssetVersions"];
+            /** @description The time that `ai-service` spent on the draft call. Data class: Internal. */
+            step_latencies: components["schemas"]["ConsoleStepLatencies"];
+        };
+        /** @description A draft that `backend` could not get, or did not ask for. Staff handle the ticket manually, or retry when `allowed_actions` offers it. Data class: Internal. */
+        UnavailableDraftPart: {
+            /**
+             * @description Always `unavailable` in this variant. Data class: Internal. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            draft_status: "unavailable";
+            /** @description Why: `ai_service_unavailable` or `pseudonymization_failed`, exactly one. Data class: Internal. */
+            reason_codes: components["schemas"]["AiReasonCode"][];
+        };
+        /** @description One part of a draft, with pseudonyms restored. Data class: Confidential. */
+        ConsoleDraftSegment: {
+            /** @description The identifier of the segment, unique among the segments of the draft. Data class: Internal. */
+            segment_id: components["schemas"]["AiItemId"];
+            /** @description The paragraph of the segment: 0 in the first segment, never decreasing. Segments with the same index form one paragraph. Data class: Internal. */
+            paragraph_index: number;
+            /** @description The text of the segment with pseudonyms restored, shown as plain text (SEC-22). A mask, or a pseudonym that the map does not hold, stays as written, and the console highlights it (UI-43). Data class: Confidential. */
+            text: string;
+            /** @description The citations that support the segment, each the `citation_id` of a citation in the same draft, without repeats. Data class: Internal. */
+            citation_ids: components["schemas"]["AiItemId"][];
+        };
+        /** @description A citation of a draft, discriminated by `source_type` (ADR-0014): a KB document version as `ai-service` returned it, or a field of the order context with the value that `backend` sent for it. Consumers ignore a citation with an unknown `source_type` (CON-22). Data class: Confidential. */
+        CitationView: components["schemas"]["KbDocumentCitation"] | components["schemas"]["ConsoleOrderContextCitation"];
+        /** @description A citation of one order field, with the value that the suggestion's request held for it, so staff see what the draft was written from (ADR-0014). Data class: Confidential. */
+        ConsoleOrderContextCitation: components["schemas"]["OrderContextCitation"] & {
+            /** @description The value of the field in the `order_context` of the suggestion's request, typed as that field is in `OrderContext`. Data class: Confidential. */
+            value: components["schemas"]["OrderFactValue"];
+        } & {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            source_type: "order_context";
+        };
+        /** @description The value of one order field: a status, a time, or an amount, as the field's type in `OrderContext` is. Data class: Confidential. */
+        OrderFactValue: components["schemas"]["OrderStatus"] | components["schemas"]["ShipmentStatus"] | components["schemas"]["RefundStatus"] | components["schemas"]["Timestamp"] | components["schemas"]["Money"];
+        /**
+         * @description What a reply or a proposal is based on (contracts v1 design, reply bases). `ai_draft`: the draft of the current suggestion, as is or edited. `rejected_ai_draft`: staff rejected the draft and wrote their own reply. `no_ai_draft`: there was no ready draft, or the ticket is in `manual` mode. `reply_proposal`: a manager sent the proposal of the ticket, as is or edited; only on a reply. Consumers show an unknown value as an unspecified basis (CON-22). Data class: Internal.
+         * @enum {string}
+         */
+        ReplyBasis: "ai_draft" | "rejected_ai_draft" | "no_ai_draft" | "reply_proposal";
+        /** @description The text that a customer receives, from 1 to 2 000 characters (`MessageText`), with no placeholder: text that matches `Placeholder` is refused with `422`, so no placeholder reaches a customer (SEC-38). Data class: Confidential. */
+        ReplyBody: components["schemas"]["MessageText"];
+        /** @description A note that staff write for their own records, from 1 to 1 000 characters. It is never sent to a customer. Data class: Confidential. */
+        StaffNoteText: string;
+        /** @description A reply that staff prepared for a manager to send. Data class: Confidential. */
+        ReplyProposalView: {
+            /** @description The identifier of the proposal (CON-15). Data class: Internal. */
+            proposal_id: string;
+            /** @description What the proposal is based on: `ai_draft`, `rejected_ai_draft`, or `no_ai_draft`. Data class: Internal. */
+            basis: components["schemas"]["ReplyBasis"];
+            /** @description The proposed reply. Data class: Confidential. */
+            body: components["schemas"]["ReplyBody"];
+            /** @description The suggestion whose draft the proposal is based on. Absent for `no_ai_draft` without a suggestion. Data class: Internal. */
+            suggestion_id?: string;
+            /** @description The staff reason codes, without repeats; empty when none were given. Data class: Internal. */
+            staff_reason_codes: components["schemas"]["StaffReasonCode"][];
+            /** @description The staff note. Absent when staff wrote none. Data class: Confidential. */
+            note?: components["schemas"]["StaffNoteText"];
+            /** @description The staff member who submitted it. Data class: Confidential. */
+            proposed_by: components["schemas"]["StaffMemberView"];
+            /** @description When it was submitted. Data class: Internal. */
+            created_at: components["schemas"]["Timestamp"];
+        };
+        /** @description The escalation of a ticket to the manager queue. Data class: Confidential. */
+        EscalationView: {
+            /** @description The identifier of the escalation (CON-15). Data class: Internal. */
+            escalation_id: string;
+            /** @description Why staff escalated, without repeats, at least one (ADR-0006). Data class: Internal. */
+            staff_reason_codes: components["schemas"]["StaffReasonCode"][];
+            /** @description The staff note. Present when staff wrote one, always with `other`. Data class: Confidential. */
+            note?: components["schemas"]["StaffNoteText"];
+            /** @description The suggestion that staff saw. Absent when staff gave none. Data class: Internal. */
+            suggestion_id?: string;
+            /** @description The staff member who escalated. Data class: Confidential. */
+            escalated_by: components["schemas"]["StaffMemberView"];
+            /** @description When the ticket was escalated. Data class: Internal. */
+            escalated_at: components["schemas"]["Timestamp"];
+        };
+        /** @description The reply sent to the customer. Data class: Confidential. */
+        ConsoleReplyView: {
+            /** @description The identifier of the reply (CON-15). Data class: Internal. */
+            reply_id: string;
+            /** @description What the reply is based on. Data class: Internal. */
+            basis: components["schemas"]["ReplyBasis"];
+            /** @description The text that the customer received. Data class: Confidential. */
+            body: components["schemas"]["ReplyBody"];
+            /** @description The suggestion whose draft the reply is based on. Absent when there is none. Data class: Internal. */
+            suggestion_id?: string;
+            /** @description The proposal that the manager sent. Present exactly when `basis` is `reply_proposal`. Data class: Internal. */
+            proposal_id?: string;
+            /** @description The staff member or manager who sent it. Data class: Confidential. */
+            sent_by: components["schemas"]["StaffMemberView"];
+            /** @description When it was sent. Data class: Internal. */
+            sent_at: components["schemas"]["Timestamp"];
+        };
+        /** @description An intent correction, or a retry when `intent_override` is absent. Data class: Internal. */
+        CreateSuggestionRequest: {
+            /** @description The intent that staff confirm or choose (ESC-01). Absent means a retry with the same inputs. Data class: Internal. */
+            intent_override?: components["schemas"]["IntentLabel"];
+        };
+        /** @description The reply to send, discriminated by `basis`, so each basis carries exactly the fields it needs (contracts v1 design, reply bases). Data class: Confidential. */
+        SendReplyRequest: components["schemas"]["AiDraftReplyRequest"] | components["schemas"]["RejectedAiDraftReplyRequest"] | components["schemas"]["NoAiDraftReplyRequest"] | components["schemas"]["ReplyProposalReplyRequest"];
+        /** @description The reply that staff propose, discriminated by `basis`. A proposal has no `reply_proposal` basis. Data class: Confidential. */
+        CreateReplyProposalRequest: components["schemas"]["AiDraftReplyRequest"] | components["schemas"]["RejectedAiDraftReplyRequest"] | components["schemas"]["NoAiDraftReplyRequest"];
+        /** @description A reply based on the current draft, as is or edited. Valid when the suggestion is current and its draft is `draft_ready`. Data class: Confidential. */
+        AiDraftReplyRequest: {
+            /**
+             * @description Always `ai_draft` in this variant. Data class: Internal. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            basis: "ai_draft";
+            /** @description The reply text: the draft's `text`, as is or edited. Data class: Confidential. */
+            body: components["schemas"]["ReplyBody"];
+            /** @description The current suggestion, whose draft the reply uses. Another suggestion returns `409 suggestion-superseded`. Data class: Internal. */
+            suggestion_id: string;
+            /** @description The `warning_id` of every warning of that suggestion, without repeats; empty when it has none. A missing or unknown ID returns `422`. Data class: Internal. */
+            acknowledged_warning_ids: components["schemas"]["AiItemId"][];
+            /** @description Why staff edited the draft, optional (ADR-0006). Absent means none. Data class: Internal. */
+            staff_reason_codes?: components["schemas"]["StaffReasonCode"][];
+            /** @description A staff note, required when `staff_reason_codes` contains `other`. Absent means none. Data class: Confidential. */
+            note?: components["schemas"]["StaffNoteText"];
+        };
+        /** @description A reply that staff wrote after rejecting the current draft. Valid when the suggestion is current and its draft is `draft_ready`. Data class: Confidential. */
+        RejectedAiDraftReplyRequest: {
+            /**
+             * @description Always `rejected_ai_draft` in this variant. Data class: Internal. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            basis: "rejected_ai_draft";
+            /** @description The reply text that staff wrote. Data class: Confidential. */
+            body: components["schemas"]["ReplyBody"];
+            /** @description The current suggestion, whose draft staff rejected. Data class: Internal. */
+            suggestion_id: string;
+            /** @description Why staff rejected the draft, without repeats, at least one (ADR-0006). Data class: Internal. */
+            staff_reason_codes: components["schemas"]["StaffReasonCode"][];
+            /** @description A staff note, required when `staff_reason_codes` contains `other`. Absent means none. Data class: Confidential. */
+            note?: components["schemas"]["StaffNoteText"];
+        };
+        /** @description A reply written without a draft. Valid when no current draft is `draft_ready`, or the ticket is in `manual` mode. Data class: Confidential. */
+        NoAiDraftReplyRequest: {
+            /**
+             * @description Always `no_ai_draft` in this variant. Data class: Internal. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            basis: "no_ai_draft";
+            /** @description The reply text that staff wrote. Data class: Confidential. */
+            body: components["schemas"]["ReplyBody"];
+            /** @description The current suggestion that staff saw, such as one that abstained. Absent in `manual` mode or when staff saw none. Data class: Internal. */
+            suggestion_id?: string;
+        };
+        /** @description A manager sends the proposal of an `awaiting_approval` ticket, as proposed or edited. Data class: Confidential. */
+        ReplyProposalReplyRequest: {
+            /**
+             * @description Always `reply_proposal` in this variant. Data class: Internal. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            basis: "reply_proposal";
+            /** @description The reply text: the proposal's body, as is or edited by the manager. Data class: Confidential. */
+            body: components["schemas"]["ReplyBody"];
+            /** @description The proposal of the ticket. Another proposal returns `422`. Data class: Internal. */
+            proposal_id: string;
+        };
+        /** @description Why staff move the ticket to a manager (ADR-0006). Data class: Confidential. */
+        CreateEscalationRequest: {
+            /** @description The reasons, without repeats, at least one. Data class: Internal. */
+            staff_reason_codes: components["schemas"]["StaffReasonCode"][];
+            /** @description A staff note, required when `staff_reason_codes` contains `other`; otherwise `422`. Absent means none. Data class: Confidential. */
+            note?: components["schemas"]["StaffNoteText"];
+            /** @description The current suggestion that staff saw. Another suggestion returns `409 suggestion-superseded`. Absent means none. Data class: Internal. */
+            suggestion_id?: string;
+        };
+        /** @description One immutable version of a KB document, as `ai-service` serves it, for the citation view (UI-20). KB text is untrusted data and is shown as plain text (SEC-22, SEC-24). Data class: Public, except the identifiers (Internal). */
+        ConsoleKbDocumentVersionView: {
+            /** @description The KB document. Data class: Internal. */
+            document_id: components["schemas"]["KbDocumentId"];
+            /** @description The version of the document. Data class: Internal. */
+            version: components["schemas"]["KbDocumentVersionTag"];
+            /** @description The title of the version, from 1 to 200 characters. Data class: Public. */
+            title: string;
+            /** @description The full text of the version, from 1 to 20 000 characters. Data class: Public. */
+            body: string;
+            /** @description The topic of the policy that the version states, from 1 to 100 characters. Data class: Public. */
+            policy_key: string;
+            /** @description When the version came into effect. Data class: Public. */
+            effective_start_at: components["schemas"]["Timestamp"];
+            /** @description When the version stopped being in effect. Absent when it is open-ended. Data class: Public. */
+            effective_end_at?: components["schemas"]["Timestamp"];
+            /** @description Who owns and reviews the policy: a role or a team, never a person's name. From 1 to 100 characters. Data class: Public. */
+            owner: string;
+            /** @description Where the text of the version comes from, as the KB source names it. From 1 to 200 characters. Data class: Public. */
+            source: string;
+            /** @description When the owner last reviewed the version. Absent when the source does not provide it. Data class: Public. */
+            last_reviewed_at?: components["schemas"]["Timestamp"];
+        };
+        /**
+         * @description The status of a draft part that left `pending`, without `cancelled`, as `DraftStatus` defines it. Data class: Internal.
+         * @enum {string}
+         */
+        CompletedDraftStatus: "draft_ready" | "abstained" | "escalation_recommended" | "llm_unavailable" | "unavailable";
+        /** @description A number of tickets for each handling mode. Data class: Internal. */
+        ModeCounts: {
+            /** @description The tickets in `assisted` mode. Data class: Internal. */
+            assisted_count: number;
+            /** @description The tickets in `manual` mode. Data class: Internal. */
+            manual_count: number;
+        };
+        /** @description The handling time of the tickets of one mode closed in the period: from the first view to the reply (NFR-11). Data class: Internal. */
+        ModeHandlingTime: {
+            /** @description The closed tickets of the mode that have a first view. Data class: Internal. */
+            ticket_count: number;
+            /** @description The median handling time, in milliseconds. Absent when `ticket_count` is 0. Data class: Internal. */
+            p50_ms?: number;
+        };
+        /** @description The figures of FR-10 and NFR-11 for one period, computed by `backend` from its own records. Every figure counts records whose time falls in [`start_at`, `end_at`). Shares are numbers from 0 to 1, and a share or a percentile is absent when nothing was counted. Data class: Internal. */
+        ConsoleReport: {
+            /** @description The period of the report, as requested. Data class: Internal. */
+            period: {
+                /** @description The start of the period, included. Data class: Internal. */
+                start_at: components["schemas"]["Timestamp"];
+                /** @description The end of the period, excluded. Data class: Internal. */
+                end_at: components["schemas"]["Timestamp"];
+            };
+            /** @description Tickets created and tickets closed in the period, by handling mode. Data class: Internal. */
+            ticket_counts: {
+                /** @description Tickets whose `created_at` falls in the period. Data class: Internal. */
+                created: components["schemas"]["ModeCounts"];
+                /** @description Tickets whose `closed_at` falls in the period. Data class: Internal. */
+                closed: components["schemas"]["ModeCounts"];
+            };
+            /** @description The staff decisions about a ready draft recorded in the period: approved as is, edited, or rejected (FR-10, ADR-0006). Data class: Internal. */
+            draft_decisions: {
+                /** @description Replies or proposals that used the draft unchanged. Data class: Internal. */
+                approve_count: number;
+                /** @description Replies or proposals that used the draft with changes. Data class: Internal. */
+                edit_count: number;
+                /** @description Replies or proposals that rejected the draft. Data class: Internal. */
+                reject_count: number;
+                /** @description `approve_count` divided by the sum of the three counts. Absent when the sum is 0. Data class: Internal. */
+                approve_share?: number;
+                /** @description `edit_count` divided by the sum of the three counts. Absent when the sum is 0. Data class: Internal. */
+                edit_share?: number;
+                /** @description `reject_count` divided by the sum of the three counts. Absent when the sum is 0. Data class: Internal. */
+                reject_share?: number;
+            };
+            /** @description The escalations of the period, by staff reason code (FR-10). Data class: Internal. */
+            escalations: {
+                /** @description The escalations whose time falls in the period. Data class: Internal. */
+                escalation_count: number;
+                /** @description One item per staff reason code that occurs, in the order of `StaffReasonCode`. An escalation with two codes counts under each. Data class: Internal. */
+                by_reason: {
+                    /** @description The reason code. Data class: Internal. */
+                    staff_reason_code: components["schemas"]["StaffReasonCode"];
+                    /** @description The escalations of the period with this code. Data class: Internal. */
+                    escalation_count: number;
+                }[];
+            };
+            /** @description The draft parts completed in the period, by status and by AI reason code, without `cancelled` parts. Data class: Internal. */
+            ai_outcomes: {
+                /** @description One item per status that occurs, in the order of `CompletedDraftStatus`. Data class: Internal. */
+                by_draft_status: {
+                    /** @description The status. Data class: Internal. */
+                    draft_status: components["schemas"]["CompletedDraftStatus"];
+                    /** @description The suggestions whose draft part ended with this status. Data class: Internal. */
+                    suggestion_count: number;
+                }[];
+                /** @description One item per AI reason code that occurs in those draft parts, in the order of `AiReasonCode`. Data class: Internal. */
+                by_reason_code: {
+                    /** @description The reason code. Data class: Internal. */
+                    reason_code: components["schemas"]["AiReasonCode"];
+                    /** @description The suggestions whose draft part carries this code. Data class: Internal. */
+                    suggestion_count: number;
+                }[];
+            };
+            /** @description From ticket creation until the draft part of the ticket's first suggestion left `pending`, for those drafts completed in the period (NFR-08: p95 at most 12 s). Data class: Internal. */
+            end_to_end_latency: {
+                /** @description The tickets measured. Data class: Internal. */
+                ticket_count: number;
+                /** @description The median, in milliseconds. Absent when `ticket_count` is 0. Data class: Internal. */
+                p50_ms?: number;
+                /** @description The 95th percentile, in milliseconds. Absent when `ticket_count` is 0. Data class: Internal. */
+                p95_ms?: number;
+            };
+            /** @description The share of suggestions completed in the period that had a part `unavailable` or a draft `llm_unavailable` (FR-10). Suggestions with a `cancelled` part are not counted. Data class: Internal. */
+            ai_error_rate: {
+                /** @description The suggestions counted. Data class: Internal. */
+                suggestion_count: number;
+                /** @description Those with a part `unavailable` or a draft `llm_unavailable`. Data class: Internal. */
+                failed_count: number;
+                /** @description `failed_count` divided by `suggestion_count`. Absent when `suggestion_count` is 0. Data class: Internal. */
+                share?: number;
+            };
+            /** @description The LLM cost of the draft parts completed in the period, in millionths of a US dollar (FR-10, NFR-10). Infrastructure cost is not part of the report. Data class: Internal. */
+            llm_cost_micro_usd: {
+                /** @description The sum of the cost of every draft call, in micro-USD. Data class: Internal. */
+                total: number;
+                /** @description The draft parts whose call used the LLM. Data class: Internal. */
+                llm_call_count: number;
+                /** @description `total` divided by `llm_call_count`, rounded to the nearest micro-USD. Absent when `llm_call_count` is 0. Data class: Internal. */
+                average?: number;
+            };
+            /** @description The median handling time by handling mode (NFR-11). Data class: Internal. */
+            handling_time: {
+                /** @description Tickets in `assisted` mode. Data class: Internal. */
+                assisted: components["schemas"]["ModeHandlingTime"];
+                /** @description Tickets in `manual` mode. Data class: Internal. */
+                manual: components["schemas"]["ModeHandlingTime"];
+            };
+        };
+        /**
+         * @description Whether `backend` could read the versions of `ai-service`. `available`: `ai-service` answered in time. `unavailable`: it did not answer in time, or answered with an error. Consumers treat an unknown value as `unavailable` (CON-22). Data class: Internal.
+         * @enum {string}
+         */
+        AiServiceStatus: "available" | "unavailable";
+        /** @description The versions in use, for the admin area (ADR-0012). It holds versions only. Data class: Internal. */
+        AdminVersionsView: {
+            /** @description The build version of `backend`, the setting `backend_build_version`, such as a commit SHA. From 1 to 64 characters. Data class: Internal. */
+            backend_version: string;
+            /** @description Whether `ai_service_versions` could be read. Data class: Internal. */
+            ai_service_status: components["schemas"]["AiServiceStatus"];
+            /** @description The release and asset versions that `ai-service` serves. Present exactly when `ai_service_status` is `available`. Data class: Internal. */
+            ai_service_versions?: components["schemas"]["AssetVersions"];
+        };
+        /**
+         * @description Whether a KB document version may support a reply at `as_of`. A version is in effect when `effective_start_at` is at or before `as_of` and `as_of` is before `effective_end_at`, or the version has no `effective_end_at`. `valid`: the version is in effect, and no other version in effect with the same policy key disagrees with it. `expired`: the version's effective period ended at or before `as_of`. A version whose effective period starts after `as_of` is never returned. `conflicting`: the version is in effect, but another version in effect with the same policy key disagrees with it (DATA-19, `conflicting_sources`). Consumers map an unknown value to `expired`, so the version is never presented as usable (CON-22). Data class: Internal.
+         * @enum {string}
+         */
+        DocumentValidity: "valid" | "expired" | "conflicting";
+        /** @description The version of one asset that `ai-service` loads through its release manifest, for example `2.1.0` (DATA-56). Opaque: consumers compare it as a string and never parse or order it. From 1 to 128 characters: ASCII letters, digits, `.`, `_`, `:`, `+`, and `-`, starting with a letter or a digit. Data class: Internal. */
+        AssetVersion: string;
+        /**
+         * @description The name of one field of `OrderContext`: the closed list of order facts that a draft may cite (ADR-0014, statement 1). It names a field and never carries its value. Consumers ignore a citation with an unknown value (CON-22). Data class: Internal.
+         * @enum {string}
+         */
+        OrderContextField: "order_status" | "placed_at" | "order_total" | "shipping_cost" | "shipment_status" | "estimated_delivery_at" | "delivered_at" | "refund_status" | "refund_amount" | "refund_requested_at";
     };
     responses: {
         /** @description `unauthenticated`: no valid session. The `supportiq_session` cookie is missing or unknown, the session expired or was idle too long, or the session was deleted, for example by a sign-out, by a role or status change of its account (ADR-0012, admin limit 6), or by a password change or reset of its account (ADR-0015). `frontend` goes to sign-in. */
@@ -733,6 +1688,87 @@ export interface components {
                 "application/problem+json": components["schemas"]["ProblemDetails"];
             };
         };
+        /** @description `forbidden`: the `Origin` header is missing or not allowed (ADR-0009, statement 7), or the caller's role may not call this operation on this ticket, such as `staff` on a ticket that is not `open`. Or `authority-required`: `staff` tried to send the reply of an `open` ticket that requires authority (FR-06); only a manager may send it, and staff submit a reply proposal instead. The `Origin` check runs first. Nothing changed. */
+        ForbiddenRoleOriginOrAuthority: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ProblemDetails"];
+            };
+        };
+        /** @description `idempotency-key-reused`: the `Idempotency-Key` was used before by the same account on the same operation with a different body or different path parameters (ERR-15). Or `invalid-ticket-state`: the ticket is not `open`, or its handling mode is `manual`. Or `suggestion-pending`: an intent correction arrived while no intent is known and a part of the current suggestion is still `pending`. Nothing changed. */
+        SuggestionConflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ProblemDetails"];
+            };
+        };
+        /** @description `idempotency-key-reused`: the `Idempotency-Key` was used before by the same account on the same operation with a different body or different path parameters (ERR-15). Or `invalid-ticket-state`: the ticket's state does not allow the operation, for example a `closed` ticket. Or `suggestion-pending`: a part of the current suggestion is still `pending`, so the authority flag may not be known yet. Or `suggestion-superseded`: the `suggestion_id` of the body is not the ticket's current suggestion. Nothing changed. */
+        ReplyConflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ProblemDetails"];
+            };
+        };
+        /** @description `idempotency-key-reused`: the `Idempotency-Key` was used before by the same account on the same operation with a different body or different path parameters (ERR-15). Or `invalid-ticket-state`: the ticket is not `open`. Or `suggestion-superseded`: the `suggestion_id` of the body is not the ticket's current suggestion. Nothing changed. */
+        EscalationConflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ProblemDetails"];
+            };
+        };
+        /** @description `invalid-request`: the request fails validation against this contract, as for `InvalidRequest`; or it is a retry while `allowed_actions` has no `retry_suggestion`, for example after `pseudonymization_failed`, which a retry cannot fix; or it corrects the intent while no intent is known and no part is `pending`. Nothing changed. */
+        InvalidSuggestionRequest: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ProblemDetails"];
+            };
+        };
+        /** @description `invalid-request`: the request fails validation against this contract, as for `InvalidRequest`, or it breaks a rule of its basis: the basis is not valid for the ticket (for example `no_ai_draft` while the current draft is `draft_ready`, or `reply_proposal` with another proposal), a warning of the suggestion is not acknowledged, a required reason code or note is missing, or the body contains a placeholder (SEC-38). Nothing changed. */
+        InvalidReply: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ProblemDetails"];
+            };
+        };
+        /** @description `invalid-request`: `status` is missing or unknown, `limit` is not an integer from 1 to 100, or `cursor` is empty, malformed, or returned by another operation or for another `status` (CON-14). */
+        InvalidConsoleListRequest: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ProblemDetails"];
+            };
+        };
+        /** @description `invalid-request`: `start_at` or `end_at` is missing or not a `Timestamp`, or `start_at` is not earlier than `end_at`. */
+        InvalidReportPeriod: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ProblemDetails"];
+            };
+        };
+        /** @description `not-ready`: `backend` cannot serve the request now, as for `NotReady`, or `ai-service` did not answer within `ai_service_read_timeout_ms` or answered with `5xx` (ERR-09). A client may retry the read, as ERR-12 and TS-29 allow. */
+        NotReadyOrAiServiceNotReady: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ProblemDetails"];
+            };
+        };
     };
     parameters: {
         /** @description The W3C Trace Context header (ADR-0004, decision 6; LOG-05). Absent means that `backend` starts a new trace, which is the normal case because `frontend` exports no telemetry in v1 (LOG-04). `backend` also ignores a value that is not a valid `traceparent` and starts a new trace, as the W3C specification requires, so this header never causes `422`. Data class: Internal. */
@@ -751,6 +1787,18 @@ export interface components {
         TicketId: string;
         /** @description The identifier of an internal account, as `listAdminAccounts` returns it (CON-15). Data class: Internal. */
         AccountId: string;
+        /** @description The identifier of a ticket, as `listConsoleTickets` returns it (CON-15). Data class: Internal. */
+        ConsoleTicketId: string;
+        /** @description The status of the tickets to list. `staff` may ask for `open` only. A missing or unknown value returns `422`. Data class: Internal. */
+        ConsoleTicketStatusFilter: components["schemas"]["ConsoleTicketStatus"];
+        /** @description The KB document, as a citation or a ranked document of a suggestion names it (CON-15). Data class: Internal. */
+        KbDocumentIdPath: components["schemas"]["KbDocumentId"];
+        /** @description The version of the KB document, as a citation or a ranked document of a suggestion names it (CON-15). Data class: Internal. */
+        KbDocumentVersionPath: components["schemas"]["KbDocumentVersionTag"];
+        /** @description The start of the report period, included. It must be earlier than `end_at`; otherwise, or when it is missing or not a `Timestamp`, the response is `422`. Data class: Internal. */
+        ReportStartAt: components["schemas"]["Timestamp"];
+        /** @description The end of the report period, excluded: a record at exactly `end_at` belongs to the next period. Data class: Internal. */
+        ReportEndAt: components["schemas"]["Timestamp"];
     };
     requestBodies: never;
     headers: {
@@ -1114,6 +2162,327 @@ export interface operations {
             503: components["responses"]["NotReady"];
         };
     };
+    listConsoleTickets: {
+        parameters: {
+            query: {
+                /** @description The status of the tickets to list. `staff` may ask for `open` only. A missing or unknown value returns `422`. Data class: Internal. */
+                status: components["parameters"]["ConsoleTicketStatusFilter"];
+                /** @description The maximum number of items on the page, from 1 to 100 (CON-14). Absent means 20. Another value returns `422`. Data class: Internal. */
+                limit?: components["parameters"]["Limit"];
+                /** @description The position after which the page starts: the `next_cursor` of the previous page. Absent means the first page. The cursor is opaque, and consumers never parse or build it (CON-15). It belongs to the operation that returned it, and it never contains a Confidential value. Send it with the same filter parameters as the first page; `limit` may change from page to page. With another `order_id` on `listShopTickets`, the page holds the tickets of that order that come after the cursor's position in the sort order. Following `next_cursor` from the first page returns each item at most once and skips no item that existed when the first page was read. A malformed cursor, or a cursor returned by another operation, returns `422`. Data class: Internal. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: {
+                /** @description The W3C Trace Context header (ADR-0004, decision 6; LOG-05). Absent means that `backend` starts a new trace, which is the normal case because `frontend` exports no telemetry in v1 (LOG-04). `backend` also ignores a value that is not a valid `traceparent` and starts a new trace, as the W3C specification requires, so this header never causes `422`. Data class: Internal. */
+                traceparent?: components["parameters"]["Traceparent"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of the tickets in the status. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketSummaryPage"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["ForbiddenRole"];
+            422: components["responses"]["InvalidConsoleListRequest"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["NotReady"];
+        };
+    };
+    getConsoleTicket: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The W3C Trace Context header (ADR-0004, decision 6; LOG-05). Absent means that `backend` starts a new trace, which is the normal case because `frontend` exports no telemetry in v1 (LOG-04). `backend` also ignores a value that is not a valid `traceparent` and starts a new trace, as the W3C specification requires, so this header never causes `422`. Data class: Internal. */
+                traceparent?: components["parameters"]["Traceparent"];
+            };
+            path: {
+                /** @description The identifier of a ticket, as `listConsoleTickets` returns it (CON-15). Data class: Internal. */
+                ticket_id: components["parameters"]["ConsoleTicketId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The ticket workspace. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketWorkspace"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["ForbiddenRole"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["NotReady"];
+        };
+    };
+    recordTicketView: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The W3C Trace Context header (ADR-0004, decision 6; LOG-05). Absent means that `backend` starts a new trace, which is the normal case because `frontend` exports no telemetry in v1 (LOG-04). `backend` also ignores a value that is not a valid `traceparent` and starts a new trace, as the W3C specification requires, so this header never causes `422`. Data class: Internal. */
+                traceparent?: components["parameters"]["Traceparent"];
+                /** @description A key that the client creates once per user action, as a UUID in lowercase hexadecimal with hyphens. A retry of the same action reuses it (TS-29). The same key with the same body and path parameters returns the original result without repeating the effect, and the same key with a different body or different path parameters returns `409 idempotency-key-reused` (ERR-15). Password fields are not compared, because no password is ever stored: on `changeOwnPassword`, `createAdminAccount`, and `resetAccountPassword`, the same key with the same other fields and a different password returns the original result. A key belongs to the signed-in account and the operation, and `backend` remembers it for at least 24 hours. Only a success is remembered: after an error response, the same key runs as a new request. A request that arrives while the first one with its key is still running waits for it, and gets `503 not-ready` if the wait exceeds the lock timeout of `backend`. A missing or malformed key returns `422`. Data class: Internal. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description The identifier of a ticket, as `listConsoleTickets` returns it (CON-15). Data class: Internal. */
+                ticket_id: components["parameters"]["ConsoleTicketId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The view was recorded, or this is the original result of a retry. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["ForbiddenRoleOrOrigin"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["IdempotencyKeyReused"];
+            422: components["responses"]["InvalidRequest"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["NotReady"];
+        };
+    };
+    createSuggestion: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The W3C Trace Context header (ADR-0004, decision 6; LOG-05). Absent means that `backend` starts a new trace, which is the normal case because `frontend` exports no telemetry in v1 (LOG-04). `backend` also ignores a value that is not a valid `traceparent` and starts a new trace, as the W3C specification requires, so this header never causes `422`. Data class: Internal. */
+                traceparent?: components["parameters"]["Traceparent"];
+                /** @description A key that the client creates once per user action, as a UUID in lowercase hexadecimal with hyphens. A retry of the same action reuses it (TS-29). The same key with the same body and path parameters returns the original result without repeating the effect, and the same key with a different body or different path parameters returns `409 idempotency-key-reused` (ERR-15). Password fields are not compared, because no password is ever stored: on `changeOwnPassword`, `createAdminAccount`, and `resetAccountPassword`, the same key with the same other fields and a different password returns the original result. A key belongs to the signed-in account and the operation, and `backend` remembers it for at least 24 hours. Only a success is remembered: after an error response, the same key runs as a new request. A request that arrives while the first one with its key is still running waits for it, and gets `503 not-ready` if the wait exceeds the lock timeout of `backend`. A missing or malformed key returns `422`. Data class: Internal. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description The identifier of a ticket, as `listConsoleTickets` returns it (CON-15). Data class: Internal. */
+                ticket_id: components["parameters"]["ConsoleTicketId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSuggestionRequest"];
+            };
+        };
+        responses: {
+            /** @description The new suggestion, `pending`, or the original result of a retry. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuggestionView"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["ForbiddenRoleOrOrigin"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["SuggestionConflict"];
+            422: components["responses"]["InvalidSuggestionRequest"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["NotReady"];
+        };
+    };
+    createReplyProposal: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The W3C Trace Context header (ADR-0004, decision 6; LOG-05). Absent means that `backend` starts a new trace, which is the normal case because `frontend` exports no telemetry in v1 (LOG-04). `backend` also ignores a value that is not a valid `traceparent` and starts a new trace, as the W3C specification requires, so this header never causes `422`. Data class: Internal. */
+                traceparent?: components["parameters"]["Traceparent"];
+                /** @description A key that the client creates once per user action, as a UUID in lowercase hexadecimal with hyphens. A retry of the same action reuses it (TS-29). The same key with the same body and path parameters returns the original result without repeating the effect, and the same key with a different body or different path parameters returns `409 idempotency-key-reused` (ERR-15). Password fields are not compared, because no password is ever stored: on `changeOwnPassword`, `createAdminAccount`, and `resetAccountPassword`, the same key with the same other fields and a different password returns the original result. A key belongs to the signed-in account and the operation, and `backend` remembers it for at least 24 hours. Only a success is remembered: after an error response, the same key runs as a new request. A request that arrives while the first one with its key is still running waits for it, and gets `503 not-ready` if the wait exceeds the lock timeout of `backend`. A missing or malformed key returns `422`. Data class: Internal. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description The identifier of a ticket, as `listConsoleTickets` returns it (CON-15). Data class: Internal. */
+                ticket_id: components["parameters"]["ConsoleTicketId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateReplyProposalRequest"];
+            };
+        };
+        responses: {
+            /** @description The proposal was stored, or this is the original result of a retry. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplyProposalView"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["ForbiddenRoleOrOrigin"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["ReplyConflict"];
+            422: components["responses"]["InvalidReply"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["NotReady"];
+        };
+    };
+    sendReply: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The W3C Trace Context header (ADR-0004, decision 6; LOG-05). Absent means that `backend` starts a new trace, which is the normal case because `frontend` exports no telemetry in v1 (LOG-04). `backend` also ignores a value that is not a valid `traceparent` and starts a new trace, as the W3C specification requires, so this header never causes `422`. Data class: Internal. */
+                traceparent?: components["parameters"]["Traceparent"];
+                /** @description A key that the client creates once per user action, as a UUID in lowercase hexadecimal with hyphens. A retry of the same action reuses it (TS-29). The same key with the same body and path parameters returns the original result without repeating the effect, and the same key with a different body or different path parameters returns `409 idempotency-key-reused` (ERR-15). Password fields are not compared, because no password is ever stored: on `changeOwnPassword`, `createAdminAccount`, and `resetAccountPassword`, the same key with the same other fields and a different password returns the original result. A key belongs to the signed-in account and the operation, and `backend` remembers it for at least 24 hours. Only a success is remembered: after an error response, the same key runs as a new request. A request that arrives while the first one with its key is still running waits for it, and gets `503 not-ready` if the wait exceeds the lock timeout of `backend`. A missing or malformed key returns `422`. Data class: Internal. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description The identifier of a ticket, as `listConsoleTickets` returns it (CON-15). Data class: Internal. */
+                ticket_id: components["parameters"]["ConsoleTicketId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendReplyRequest"];
+            };
+        };
+        responses: {
+            /** @description The reply was sent, or this is the original result of a retry. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsoleReplyView"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["ForbiddenRoleOriginOrAuthority"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["ReplyConflict"];
+            422: components["responses"]["InvalidReply"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["NotReady"];
+        };
+    };
+    createEscalation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The W3C Trace Context header (ADR-0004, decision 6; LOG-05). Absent means that `backend` starts a new trace, which is the normal case because `frontend` exports no telemetry in v1 (LOG-04). `backend` also ignores a value that is not a valid `traceparent` and starts a new trace, as the W3C specification requires, so this header never causes `422`. Data class: Internal. */
+                traceparent?: components["parameters"]["Traceparent"];
+                /** @description A key that the client creates once per user action, as a UUID in lowercase hexadecimal with hyphens. A retry of the same action reuses it (TS-29). The same key with the same body and path parameters returns the original result without repeating the effect, and the same key with a different body or different path parameters returns `409 idempotency-key-reused` (ERR-15). Password fields are not compared, because no password is ever stored: on `changeOwnPassword`, `createAdminAccount`, and `resetAccountPassword`, the same key with the same other fields and a different password returns the original result. A key belongs to the signed-in account and the operation, and `backend` remembers it for at least 24 hours. Only a success is remembered: after an error response, the same key runs as a new request. A request that arrives while the first one with its key is still running waits for it, and gets `503 not-ready` if the wait exceeds the lock timeout of `backend`. A missing or malformed key returns `422`. Data class: Internal. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description The identifier of a ticket, as `listConsoleTickets` returns it (CON-15). Data class: Internal. */
+                ticket_id: components["parameters"]["ConsoleTicketId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateEscalationRequest"];
+            };
+        };
+        responses: {
+            /** @description The ticket was escalated, or this is the original result of a retry. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EscalationView"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["ForbiddenRoleOrOrigin"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["EscalationConflict"];
+            422: components["responses"]["InvalidRequest"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["NotReady"];
+        };
+    };
+    getConsoleKbDocumentVersion: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The W3C Trace Context header (ADR-0004, decision 6; LOG-05). Absent means that `backend` starts a new trace, which is the normal case because `frontend` exports no telemetry in v1 (LOG-04). `backend` also ignores a value that is not a valid `traceparent` and starts a new trace, as the W3C specification requires, so this header never causes `422`. Data class: Internal. */
+                traceparent?: components["parameters"]["Traceparent"];
+            };
+            path: {
+                /** @description The KB document, as a citation or a ranked document of a suggestion names it (CON-15). Data class: Internal. */
+                document_id: components["parameters"]["KbDocumentIdPath"];
+                /** @description The version of the KB document, as a citation or a ranked document of a suggestion names it (CON-15). Data class: Internal. */
+                version: components["parameters"]["KbDocumentVersionPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The KB document version. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsoleKbDocumentVersionView"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["ForbiddenRole"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["NotReadyOrAiServiceNotReady"];
+        };
+    };
+    getConsoleReport: {
+        parameters: {
+            query: {
+                /** @description The start of the report period, included. It must be earlier than `end_at`; otherwise, or when it is missing or not a `Timestamp`, the response is `422`. Data class: Internal. */
+                start_at: components["parameters"]["ReportStartAt"];
+                /** @description The end of the report period, excluded: a record at exactly `end_at` belongs to the next period. Data class: Internal. */
+                end_at: components["parameters"]["ReportEndAt"];
+            };
+            header?: {
+                /** @description The W3C Trace Context header (ADR-0004, decision 6; LOG-05). Absent means that `backend` starts a new trace, which is the normal case because `frontend` exports no telemetry in v1 (LOG-04). `backend` also ignores a value that is not a valid `traceparent` and starts a new trace, as the W3C specification requires, so this header never causes `422`. Data class: Internal. */
+                traceparent?: components["parameters"]["Traceparent"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report for the period. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsoleReport"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["ForbiddenRole"];
+            422: components["responses"]["InvalidReportPeriod"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["NotReady"];
+        };
+    };
     listAdminAccounts: {
         parameters: {
             query?: {
@@ -1295,6 +2664,33 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["IdempotencyKeyReused"];
             422: components["responses"]["InvalidPasswordReset"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["NotReady"];
+        };
+    };
+    getAdminVersions: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The W3C Trace Context header (ADR-0004, decision 6; LOG-05). Absent means that `backend` starts a new trace, which is the normal case because `frontend` exports no telemetry in v1 (LOG-04). `backend` also ignores a value that is not a valid `traceparent` and starts a new trace, as the W3C specification requires, so this header never causes `422`. Data class: Internal. */
+                traceparent?: components["parameters"]["Traceparent"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The versions in use. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminVersionsView"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["ForbiddenRole"];
             500: components["responses"]["InternalError"];
             503: components["responses"]["NotReady"];
         };

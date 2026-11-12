@@ -4,6 +4,29 @@ All notable changes to the contracts in this folder. The format follows [Keep a 
 
 ## `backend.openapi.yaml`
 
+### [1.2.0] - 2026-11-12
+
+Adds the review console of staff and managers and the versions page of the admin area, the operations that the project lead approved on 2026-11-12 from the [contracts v1 design](../docs/design/contracts-v1.md#rollout), as the [backend ticket workflow design](../docs/design/backend-ticket-workflow.md) implements them. Every change is compatible (CON-19): new operations, new schemas, and new problem types in responses. Consumers regenerate their code and map the new problem types to a safe default (CON-22). The provider tests of `backend` run over every operation, so they pass again only with the implementation of these operations (CON-01, step 5).
+
+#### Added
+
+- `listConsoleTickets` (`GET /v1/console/tickets`), for `staff` (`open` only) and `manager`: one queue per `status`, waiting tickets oldest first and closed tickets newest first, with a message excerpt of at most 160 characters.
+- `getConsoleTicket` (`GET /v1/console/tickets/{ticket_id}`): the ticket workspace with the order, the customer's other orders, the current suggestion with pseudonyms restored, the proposal, the escalation, the reply, and `allowed_actions`.
+- `recordTicketView` (`POST /v1/console/tickets/{ticket_id}/views`): starts the handling clock, and starts a `kb_version_changed` or `retry` suggestion when the rules of the contracts v1 design call for one.
+- `createSuggestion` (`POST /v1/console/tickets/{ticket_id}/suggestions`): an intent correction (ESC-01) or a retry, answered with `202` and a pending suggestion.
+- `createReplyProposal`, `sendReply`, and `createEscalation`, with request bodies discriminated by `basis`. `sendReply` is the only operation that sends anything to a customer, and staff get `403 authority-required` on a ticket that requires authority (FR-04, FR-06).
+- `getConsoleKbDocumentVersion` (`GET /v1/console/kb-documents/{document_id}/versions/{version}`): the full KB document version, read from `ai-service`. The contracts v1 design named it `getKbDocumentVersion`; the new name keeps its example folder apart from that of the `ai-service` contract.
+- `getConsoleReport` (`GET /v1/console/reports`), for `manager`: the figures of FR-10 and the handling time of NFR-11 for a period.
+- `getAdminVersions` (`GET /v1/admin/versions`), for `admin`: the build version of `backend` and the versions that `ai-service` serves, with `ai_service_status`.
+- The problem types `authority-required` (`403`), `invalid-ticket-state`, `suggestion-pending`, and `suggestion-superseded` (`409`), after the existing values of `ProblemDetails.type`.
+- References to the shared schemas `IntentLabel`, `ConfidenceBand`, `AiReasonCode`, `AiItemId`, `KbDocumentId`, `KbDocumentVersionTag`, `AssetVersions`, `KbDocumentCitation`, `OrderContextCitation`, `RankedDocument`, `Warning`, and `Placeholder`.
+- An example file for every outcome of the new operations, and twelve shared problem examples.
+
+#### Changed
+
+- `info.description`: the console writes join the `Origin` check and the `Idempotency-Key` list, and the timeouts name the three operations that read from `ai-service`.
+- The descriptions of `OrderStatus`, `ShipmentStatus`, and `RefundStatus` say "simulated" instead of naming the `synthetic-dev-only` label, which evaluation reports never use.
+
 ### [1.1.0] - 2026-11-11
 
 Adds the own password change, account creation, and password resets that [ADR-0015](../docs/decisions/0015-account-creation-and-password-changes.md) decides, as the [account management design](../docs/design/account-management.md) specifies them. Every change is compatible (CON-19): new operations, a new response field, a narrower response length, and new enum values in responses. Consumers regenerate their code; an older consumer ignores `login_name` (CON-21) and maps the new problem type and the new `violated_rule` values to a safe default (CON-22).

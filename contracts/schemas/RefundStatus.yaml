@@ -1,6 +1,5 @@
 description: >-
-  The status of the refund of a simulated order (`synthetic-dev-only` commerce
-  data).
+  The status of the refund of a simulated order.
   `requested`: the customer asked for a refund and nobody has reviewed it.
   `under_review`: the request is being reviewed.
   `approved`: the refund was approved and is not paid yet.

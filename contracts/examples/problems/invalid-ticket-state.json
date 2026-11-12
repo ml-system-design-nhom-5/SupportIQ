@@ -1,0 +1,10 @@
+{
+  "summary": "The ticket's state does not allow the operation",
+  "value": {
+    "type": "urn:supportiq:problem:invalid-ticket-state",
+    "title": "Invalid ticket state",
+    "status": 409,
+    "detail": "The ticket is closed, so this operation is not allowed.",
+    "trace_id": "a6a3ce929d0e0e4736bf92f3577b34d1"
+  }
+}

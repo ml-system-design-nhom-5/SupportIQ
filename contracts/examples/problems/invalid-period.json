@@ -1,0 +1,10 @@
+{
+  "summary": "start_at is not earlier than end_at",
+  "value": {
+    "type": "urn:supportiq:problem:invalid-request",
+    "title": "Invalid request",
+    "status": 422,
+    "detail": "The parameter start_at must be earlier than end_at.",
+    "trace_id": "d0e0e4736bf92f3577b34da6a3ce9290"
+  }
+}

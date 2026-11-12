@@ -1,0 +1,10 @@
+{
+  "summary": "The body contains a placeholder",
+  "value": {
+    "type": "urn:supportiq:problem:invalid-request",
+    "title": "Invalid request",
+    "status": 422,
+    "detail": "The body contains a placeholder. Replace it with the text that the customer should read.",
+    "trace_id": "3ce929d0e0e4736bf92f3577b34da6a8"
+  }
+}

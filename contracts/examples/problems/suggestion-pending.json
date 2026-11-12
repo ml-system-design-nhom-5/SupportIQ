@@ -1,0 +1,10 @@
+{
+  "summary": "A part of the current suggestion is still pending",
+  "value": {
+    "type": "urn:supportiq:problem:suggestion-pending",
+    "title": "Suggestion pending",
+    "status": 409,
+    "detail": "A part of the current suggestion is still pending. Try again when it is no longer pending.",
+    "trace_id": "e929d0e0e4736bf92f3577b34da6a3c2"
+  }
+}

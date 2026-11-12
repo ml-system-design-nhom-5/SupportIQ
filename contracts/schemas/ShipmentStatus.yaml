@@ -1,6 +1,5 @@
 description: >-
-  The status of the shipment of a simulated order (`synthetic-dev-only`
-  commerce data).
+  The status of the shipment of a simulated order.
   `not_shipped`: the parcel has not been handed to the carrier.
   `in_transit`: the carrier has the parcel and it is on its way.
   `delivered`: the carrier delivered the parcel.

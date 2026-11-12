@@ -1,0 +1,16 @@
+{
+  "summary": "A manager sent the reply proposal",
+  "description": "The decision record keeps both the staff member who proposed and the manager who sent.",
+  "value": {
+    "reply_id": "8c0e2b4d-6f8a-4c0e-8b4d-6f8a0c2e4b32",
+    "basis": "reply_proposal",
+    "body": "Hello Lan Tran, thank you for your patience.\n\nYour refund request for order ORD-20931 is under review. This sample sentence stands for a policy statement from the cited document.",
+    "suggestion_id": "8d3a1e5c-7b9f-4a2d-8e6c-0f2b4d6a8c41",
+    "proposal_id": "3e5a7c9b-1d2f-4a6c-8e0b-5d7f9a1c3e52",
+    "sent_by": {
+      "account_id": "c3e5a7b9-1d2f-4a6c-8e0b-2d4f6a8c0e14",
+      "display_name": "Hoa Pham"
+    },
+    "sent_at": "2026-11-06T09:30:00Z"
+  }
+}

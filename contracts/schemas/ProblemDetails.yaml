@@ -28,7 +28,15 @@ properties:
       account's login name;
       `not-ready`: the provider cannot serve the request now, for example
       because its database is unavailable or a timeout fired;
-      `internal-error`: an unexpected failure in the provider.
+      `internal-error`: an unexpected failure in the provider;
+      `authority-required`: staff tried to send the reply of a ticket that
+      requires authority, which only a manager may send (FR-06);
+      `invalid-ticket-state`: the operation is not allowed in the ticket's
+      current state;
+      `suggestion-pending`: a part of the ticket's current suggestion is still
+      pending;
+      `suggestion-superseded`: the request names a suggestion that is no longer
+      the ticket's current suggestion.
       Consumers map an unknown value to a generic technical failure (CON-22).
       Data class: Internal.
     type: string
@@ -41,6 +49,10 @@ properties:
       - urn:supportiq:problem:login-name-taken
       - urn:supportiq:problem:not-ready
       - urn:supportiq:problem:internal-error
+      - urn:supportiq:problem:authority-required
+      - urn:supportiq:problem:invalid-ticket-state
+      - urn:supportiq:problem:suggestion-pending
+      - urn:supportiq:problem:suggestion-superseded
   title:
     description: >-
       A short English summary of the problem type. It is the same for every

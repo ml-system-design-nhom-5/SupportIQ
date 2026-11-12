@@ -31,7 +31,8 @@ The team agreed the product behavior:
 - the update of 2026-11-04: citations to the order context ([ADR-0014](../decisions/0014-citations-to-order-context.md)), and intent changes accepted only after an intent is known;
 - the update of 2026-11-05: one pending rule for every role, responses from the ingress, shared `Citation` and `OrderContext` schemas, the shop's `order_id` filter on `listShopTickets`, the ticket status `replied`, the newest-first order of shop lists, the `account_id` of `getCurrentSession`, the data classes of commerce IDs, no `Idempotency-Key` on sign-out, and names that follow CON-18 (`start_at`, `end_at`, `handling_time_ms`, `mask_count_by_type`);
 - the update of 2026-11-08, as `backend.openapi.yaml` 1.0.1 states: the problem type `idempotency-key-reused` also covers the same key with different path parameters; the ingress answers `502` or `504` also when a write in flight fails, and a retry with the same key then cannot repeat its effect; a product appears at most once in an order;
-- the update of 2026-11-11, for `backend` contract 1.1.0 ([ADR-0015](../decisions/0015-account-creation-and-password-changes.md)): the own password change, admin account creation and password reset, the problem type `login-name-taken`, and three audit log events. The [account management design](account-management.md) holds their details.
+- the update of 2026-11-11, for `backend` contract 1.1.0 ([ADR-0015](../decisions/0015-account-creation-and-password-changes.md)): the own password change, admin account creation and password reset, the problem type `login-name-taken`, and three audit log events. The [account management design](account-management.md) holds their details;
+- the update of 2026-11-12, for `backend` contract 1.2.0: the console's KB document read is named `getConsoleKbDocumentVersion`, the queue order and the message excerpt of `TicketSummary` are fixed, and latencies are integer `_ms` fields inside objects, as CON-18 requires. The [backend ticket workflow design](backend-ticket-workflow.md) holds the details.
 
 Revision 2 needs a new approval.
 
@@ -546,7 +547,7 @@ Three audience namespaces keep the guardrails structural:
 | `createReplyProposal` | `POST /v1/console/tickets/{ticket_id}/reply-proposals` | staff | `201` proposal; ticket `awaiting_approval` |
 | `sendReply` | `POST /v1/console/tickets/{ticket_id}/replies` | staff, manager | `201` reply; ticket `closed` |
 | `createEscalation` | `POST /v1/console/tickets/{ticket_id}/escalations` | staff | `201` escalation; ticket `escalated` |
-| `getKbDocumentVersion` | `GET /v1/console/kb-documents/{document_id}/versions/{version}` | staff, manager | Full document version, proxied from `ai-service` |
+| `getConsoleKbDocumentVersion` | `GET /v1/console/kb-documents/{document_id}/versions/{version}` | staff, manager | Full document version, proxied from `ai-service` |
 | `getConsoleReport` | `GET /v1/console/reports` | manager | Report for a period ([Reports](#reports-fr-10)) |
 | `listAdminAccounts` | `GET /v1/admin/accounts` | admin | Accounts, paginated |
 | `changeAccountRole` | `POST /v1/admin/accounts/{account_id}/role-changes` | admin | `201` role change |
@@ -576,7 +577,7 @@ Shop view models:
 - the draft status of the current suggestion, absent in `manual` mode;
 - the predicted intent with its confidence band and probability, absent when there is no analysis.
 
-The excerpt length and the sort parameter are set in the contract change that adds the console operations.
+`backend` contract 1.2.0 fixes the rest: `listConsoleTickets` takes a required `status`, lists `open`, `awaiting_approval`, and `escalated` tickets oldest first by `created_at` and `closed` tickets newest first by `closed_at`, and has no sort parameter; the excerpt holds at most the first 160 characters of the message.
 
 `TicketWorkspace`, the body of `getConsoleTicket`:
 
@@ -595,7 +596,7 @@ The excerpt length and the sort parameter are set in the contract change that ad
 | `reply` | The sent reply, who sent it, and when, when closed |
 | `allowed_actions` | Subset of `send_reply`, `submit_reply_proposal`, `escalate`, `correct_intent`, `retry_suggestion`, computed by `backend` for the caller. `correct_intent` appears only when an intent is known. Empty when staff read a ticket that is not `open` |
 
-`SuggestionView`: suggestion ID, trigger, `intent_override` when staff chose an intent, `created_at`, `analysis_status` with the analysis when ready, `draft_status` with the draft when `draft_ready` (a union discriminated by `draft_status`), draft `reason_codes`, `warnings`, `staff_note`, `versions` (including `release_id`), `step_latency_ms`, and `trace_id`. Pseudonyms in draft segments and the staff note are restored to their original values. Masks and pseudonyms missing from the map stay as written. Citations use the view model `CitationView`, which references the shared variants: a `kb_document` citation as it is, and an `order_context` citation extended with `value`, typed as that field is in `OrderContext`. `backend` takes it from the stored request of that suggestion, so staff see what the draft was written from.
+`SuggestionView`: suggestion ID, trigger, `intent_override` when staff chose an intent, `created_at`, `analysis_status` with the analysis when ready, `draft_status` with the draft when `draft_ready` (a union discriminated by `draft_status`), draft `reason_codes`, `warnings`, `staff_note`, `versions` (including `release_id`), `step_latencies` (integer `_ms` fields), and `trace_id`. Pseudonyms in draft segments and the staff note are restored to their original values. Masks and pseudonyms missing from the map stay as written. Citations use the view model `CitationView`, which references the shared variants: a `kb_document` citation as it is, and an `order_context` citation extended with `value`, typed as that field is in `OrderContext`. `backend` takes it from the stored request of that suggestion, so staff see what the draft was written from.
 
 The draft in `SuggestionView` also carries `text`: the canonical plain-text body, built by `backend` from the restored segments with one rule:
 
@@ -641,10 +642,10 @@ An escalation records `escalate`. For a reply proposal, the record keeps both th
 | `draft_decisions` | Counts and shares of `approve`, `edit`, and `reject` among replies sent in the period from a `draft_ready` draft |
 | `escalations` | Escalations in the period, by staff reason code |
 | `ai_outcomes` | Suggestions completed in the period, by draft status and by AI reason code, without `cancelled` drafts |
-| `end_to_end_latency_ms` | p50 and p95, from ticket creation until the draft part of the ticket's first suggestion left `pending` ([NFR-08](../product/requirements.md#5-quality-requirements)) |
+| `end_to_end_latency` | `p50_ms` and `p95_ms`, from ticket creation until the draft part of the ticket's first suggestion left `pending` ([NFR-08](../product/requirements.md#5-quality-requirements)) |
 | `ai_error_rate` | Share of suggestions with a part `unavailable` or a draft `llm_unavailable` |
 | `llm_cost_micro_usd` | Total, and average per suggestion that called the LLM |
-| `handling_time_ms` | p50 by handling mode (NFR-11) |
+| `handling_time` | `p50_ms` by handling mode (NFR-11) |
 
 Only managers see the report ([ADR-0012](../decisions/0012-roles-v1.md)). The console shows each figure with a label in business language, its unit, and its target where the requirements give one ([UI-44](../rules/ui.md#console-interaction)). The report holds no intent figures, such as the override rate or decisions by intent, and no latency per suggestion part: those are developer metrics on the Staff outcomes and AI pipeline dashboards of Grafana ([LOG-27](../rules/logging-and-observability.md#dashboards)).
 
