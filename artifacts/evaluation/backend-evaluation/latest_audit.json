@@ -1,7 +1,7 @@
 {
-  "latest_audit_id": "ml-audit-20261112-120249",
-  "run_dir": "artifacts\\evaluation\\backend-evaluation\\runs\\ml-audit-20261112-120249",
-  "timestamp": "2026-11-12T12:02:51.068189+00:00",
+  "latest_audit_id": "ml-audit-20261112-121753",
+  "run_dir": "artifacts\\evaluation\\backend-evaluation\\runs\\ml-audit-20261112-121753",
+  "timestamp": "2026-11-12T12:17:54.700393+00:00",
   "distilbert_mean_macro_f1": 0.9952684306823985,
   "baseline_svm_mean_macro_f1": 0.9902582601407695,
   "alignment_verified": true

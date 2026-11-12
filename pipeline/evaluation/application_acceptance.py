@@ -61,6 +61,22 @@ def get_git_commit_hash() -> str:
         return "unknown_or_detached"
 
 
+def is_valid_token_count(val: Any) -> bool:
+    """Check if token count is a valid non-negative integer (not boolean or fractional)."""
+    return isinstance(val, int) and not isinstance(val, bool) and val >= 0
+
+
+def is_valid_latency(lat: Any) -> bool:
+    """Check if latency is a valid non-negative finite number (not boolean, NaN, Inf, or negative)."""
+    return (
+        lat is not None
+        and isinstance(lat, (int, float))
+        and not isinstance(lat, bool)
+        and math.isfinite(lat)
+        and lat >= 0
+    )
+
+
 class MockAIHandler(http.server.BaseHTTPRequestHandler):
     """Mock AI gateway server for deterministic offline acceptance testing."""
 
@@ -149,8 +165,23 @@ class MockAIHandler(http.server.BaseHTTPRequestHandler):
                     ],
                 },
                 "step_latency_ms": {"analysis_ms": 42, "draft_ms": 180, "llm_ms": 150},
-                "llm_usage": {"input_tokens": 128, "output_tokens": 42, "thinking_tokens": 0, "total_tokens": 170},
-                "versions": {"release_id": "rel-v2", "model_version": "v1.0.0", "llm_model": "mock-eval-llm"},
+                "llm_usage": {
+                    "input_tokens": 128,
+                    "output_tokens": 42,
+                    "thought_tokens": 0,
+                    "total_tokens": 170,
+                },
+                "llm_metadata": {
+                    "provider": "mock",
+                    "model": "mock-eval-llm",
+                    "model_version": "v1.0.0",
+                    "prompt_version": "v2.0",
+                },
+                "versions": {
+                    "release_id": "rel-v2",
+                    "model_version": "v1.0.0",
+                    "llm_model": "mock-eval-llm",
+                },
             }
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -199,8 +230,10 @@ class TicketCaseResult:
     analysis_status: str
     draft_status: str
     customer_reply_is_none: bool  # Safety invariant check
+    observation_succeeded: bool = True  # Verified expected 200 JSON shape
     step_latency_ms: Dict[str, Any] = field(default_factory=dict)
     tokens: Dict[str, Any] = field(default_factory=dict)
+    llm_metadata: Dict[str, Any] = field(default_factory=dict)
     llm_model: Optional[str] = None
     versions: Dict[str, Any] = field(default_factory=dict)
     error_code: Optional[str] = None
@@ -217,8 +250,10 @@ class TicketCaseResult:
             "analysis_status": self.analysis_status,
             "draft_status": self.draft_status,
             "reply_is_none": self.customer_reply_is_none,
+            "observation_succeeded": self.observation_succeeded,
             "step_latency_ms": self.step_latency_ms,
             "tokens": self.tokens,
+            "llm_metadata": self.llm_metadata,
             "llm_model": self.llm_model,
             "versions": self.versions,
             "error_code": self.error_code,
@@ -237,6 +272,32 @@ class ApplicationAcceptanceConfig:
     analysis_timeout_ms: int = 3_000   # Declared runtime-comparable timeout default
     draft_timeout_ms: int = 11_000     # Declared runtime-comparable timeout default
     verified_pricing: Optional[Dict[str, Any]] = None
+
+    def validate(self) -> None:
+        """Validate config parameters before database connection or service invocation."""
+        if self.mode not in ("mock", "live"):
+            raise ValueError(f"Invalid mode '{self.mode}'; must be 'mock' or 'live'")
+        if isinstance(self.num_warm_requests, bool) or not isinstance(self.num_warm_requests, int) or self.num_warm_requests < 0:
+            raise ValueError(f"num_warm_requests must be a non-negative integer, got {self.num_warm_requests}")
+        if (
+            isinstance(self.poll_timeout_seconds, bool)
+            or not isinstance(self.poll_timeout_seconds, (int, float))
+            or not math.isfinite(self.poll_timeout_seconds)
+            or self.poll_timeout_seconds <= 0
+        ):
+            raise ValueError(f"poll_timeout_seconds must be a positive finite number, got {self.poll_timeout_seconds}")
+        if (
+            isinstance(self.analysis_timeout_ms, bool)
+            or not isinstance(self.analysis_timeout_ms, int)
+            or self.analysis_timeout_ms <= 0
+        ):
+            raise ValueError(f"analysis_timeout_ms must be a positive integer, got {self.analysis_timeout_ms}")
+        if (
+            isinstance(self.draft_timeout_ms, bool)
+            or not isinstance(self.draft_timeout_ms, int)
+            or self.draft_timeout_ms <= 0
+        ):
+            raise ValueError(f"draft_timeout_ms must be a positive integer, got {self.draft_timeout_ms}")
 
 
 def resolve_database_url(secrets_path: Optional[str] = None) -> Tuple[str, Dict[str, str]]:
@@ -305,6 +366,9 @@ class ApplicationAcceptanceRunner:
         self.config = config
 
     def run(self, output_dir: Optional[Path] = None) -> Dict[str, Any]:
+        # Validate configuration upfront before creating engines or spawning servers
+        self.config.validate()
+
         configure_runtime_environment()
         owner_url, default_passwords = resolve_database_url(self.config.secrets_path)
 
@@ -393,6 +457,7 @@ class ApplicationAcceptanceRunner:
                             analysis_status="error",
                             draft_status="error",
                             customer_reply_is_none=True,
+                            observation_succeeded=False,
                             error_code=f"HTTP_{ticket_resp.status_code}",
                             is_terminal=True,
                             is_success=False,
@@ -417,19 +482,44 @@ class ApplicationAcceptanceRunner:
 
                     wall_ms = round((time.perf_counter() - t0) * 1000, 2)
 
-                    # Check 100% human oversight invariant: unreviewed draft never reaches customer
-                    cust_view = customer.get(f"/v1/shop/tickets/{t_id}").json()
-                    customer_reply = cust_view.get("reply")
-                    reply_is_none = customer_reply is None
+                    # Strict human oversight invariant: verify customer GET returns HTTP 200 AND valid JSON shape
+                    cust_resp = customer.get(f"/v1/shop/tickets/{t_id}")
+                    if cust_resp.status_code != 200:
+                        reply_is_none = False
+                        observation_succeeded = False
+                        error_code = f"CUSTOMER_VIEW_HTTP_{cust_resp.status_code}"
+                    else:
+                        try:
+                            cust_view = cust_resp.json()
+                            if not isinstance(cust_view, dict) or "reply" not in cust_view or "ticket_id" not in cust_view:
+                                reply_is_none = False
+                                observation_succeeded = False
+                                error_code = "CUSTOMER_VIEW_MALFORMED_SHAPE"
+                            else:
+                                customer_reply = cust_view.get("reply")
+                                reply_is_none = (customer_reply is None)
+                                observation_succeeded = True
+                                error_code = None
+                        except Exception:
+                            reply_is_none = False
+                            observation_succeeded = False
+                            error_code = "CUSTOMER_VIEW_JSON_PARSE_ERROR"
 
                     a_stat = suggestion_data.get("analysis_status", "timeout" if not reached_terminal else "unknown")
                     d_stat = suggestion_data.get("draft_status", "timeout" if not reached_terminal else "unknown")
                     step_lat = suggestion_data.get("step_latency_ms", {})
                     tokens = suggestion_data.get("llm_usage", {}) or {}
+                    llm_meta = suggestion_data.get("llm_metadata", {}) or {}
                     versions = suggestion_data.get("versions", {}) or {}
-                    observed_model = versions.get("llm_model")
+                    observed_model = llm_meta.get("model") or versions.get("llm_model")
 
-                    success = reached_terminal and d_stat in ("draft_ready", "abstained", "escalation_recommended") and reply_is_none
+                    auto_send_safe = (observation_succeeded and reply_is_none)
+                    success = (
+                        reached_terminal
+                        and d_stat in ("draft_ready", "abstained", "escalation_recommended")
+                        and auto_send_safe
+                        and is_valid_latency(wall_ms)
+                    )
 
                     results.append(TicketCaseResult(
                         case_index=idx,
@@ -440,11 +530,13 @@ class ApplicationAcceptanceRunner:
                         analysis_status=a_stat,
                         draft_status=d_stat,
                         customer_reply_is_none=reply_is_none,
+                        observation_succeeded=observation_succeeded,
                         step_latency_ms=step_lat,
                         tokens=tokens,
+                        llm_metadata=llm_meta,
                         llm_model=observed_model,
                         versions=versions,
-                        error_code=suggestion_data.get("failure_code") or (None if reached_terminal else "timeout"),
+                        error_code=error_code or suggestion_data.get("failure_code") or (None if reached_terminal else "timeout"),
                         is_terminal=reached_terminal,
                         is_success=success,
                     ))
@@ -489,6 +581,7 @@ class ApplicationAcceptanceRunner:
                     "timestamp": iso_timestamp,
                     "git_commit": git_commit,
                     "mode": self.config.mode,
+                    "boundary_kind": "in_process_asgi_testclient",
                     "status": "rejected_empty_results",
                     "rejection_reason": "No valid measurements or ticket cases were executed.",
                     "evidence_kind": "mock_runner_simulation" if is_mock else "bounded_live",
@@ -508,6 +601,7 @@ class ApplicationAcceptanceRunner:
                     "failed_jobs": 0,
                     "auto_send_violations": 0,
                     "human_oversight_enforced": False,
+                    "latency_coverage_complete": False,
                 },
                 "performance": {
                     "p50_seconds": None,
@@ -531,13 +625,13 @@ class ApplicationAcceptanceRunner:
                     },
                 },
                 "tokens_and_cost": {
-                    "total_prompt_tokens": 0,
-                    "total_candidate_tokens": 0,
-                    "total_thinking_tokens": 0,
-                    "total_completion_tokens": 0,
+                    "total_prompt_tokens": None,
+                    "total_candidate_tokens": None,
+                    "total_thinking_tokens": None,
+                    "total_completion_tokens": None,
                     "thinking_tracked": False,
                     "all_requests_tracked_thinking": False,
-                    "total_tokens": 0,
+                    "total_tokens": None,
                     "cost_status": "unavailable",
                     "cost_usd": None,
                     "lower_bound_cost_usd": None,
@@ -549,97 +643,126 @@ class ApplicationAcceptanceRunner:
                 self._persist_run_artifacts(summary_data, [], output_dir, run_id)
             return summary_data
 
-        valid_latencies = [
-            r.wall_latency_ms / 1000.0
-            for r in results
-            if r.wall_latency_ms is not None and isinstance(r.wall_latency_ms, (int, float)) and math.isfinite(r.wall_latency_ms)
-        ]
-        latencies_sorted = sorted(valid_latencies)
+        # Strict latency validation: ALL cases must have valid non-negative finite numeric latency
+        all_latencies_valid = all(is_valid_latency(r.wall_latency_ms) for r in results)
+        valid_latencies = [r.wall_latency_ms / 1000.0 for r in results if is_valid_latency(r.wall_latency_ms)]
 
-        cold_lats = [
-            r.wall_latency_ms / 1000.0
-            for r in results
-            if r.condition == "cold" and r.wall_latency_ms is not None and math.isfinite(r.wall_latency_ms)
-        ]
-        warm_lats = [
-            r.wall_latency_ms / 1000.0
-            for r in results
-            if r.condition == "warm" and r.wall_latency_ms is not None and math.isfinite(r.wall_latency_ms)
-        ]
+        cold_lats = [r.wall_latency_ms / 1000.0 for r in results if r.condition == "cold" and is_valid_latency(r.wall_latency_ms)]
+        warm_lats = [r.wall_latency_ms / 1000.0 for r in results if r.condition == "warm" and is_valid_latency(r.wall_latency_ms)]
 
-        if latencies_sorted:
+        if all_latencies_valid and valid_latencies:
+            latencies_sorted = sorted(valid_latencies)
             p50 = (latencies_sorted[(len(latencies_sorted) - 1) // 2] + latencies_sorted[len(latencies_sorted) // 2]) / 2.0
             p95_idx = max(0, math.ceil(0.95 * len(latencies_sorted)) - 1)
             p95 = latencies_sorted[p95_idx]
             min_sec = latencies_sorted[0]
             max_sec = latencies_sorted[-1]
+            p50_cold = cold_lats[0] if cold_lats else None
+            p95_warm = sorted(warm_lats)[max(0, math.ceil(0.95 * len(warm_lats)) - 1)] if warm_lats else None
+            p50_warm = (sorted(warm_lats)[len(warm_lats) // 2]) if warm_lats else None
+            p95_target_met = bool(p95 <= 12.0)
         else:
+            # Latency coverage failed: missing, negative, NaN, or boolean latency on any case
             p50 = None
             p95 = None
             min_sec = None
             max_sec = None
-
-        p50_cold = cold_lats[0] if cold_lats else None
-        p95_warm = sorted(warm_lats)[max(0, math.ceil(0.95 * len(warm_lats)) - 1)] if warm_lats else None
-        p50_warm = (sorted(warm_lats)[len(warm_lats) // 2]) if warm_lats else None
+            p50_cold = None
+            p95_warm = None
+            p50_warm = None
+            p95_target_met = False
 
         technical_errors = sum(1 for r in results if r.analysis_status == "error" or r.draft_status == "error")
         timeouts = sum(1 for r in results if not r.is_terminal or r.analysis_status == "timeout")
         failed_jobs = sum(1 for r in results if r.draft_status in ("failed", "unavailable"))
-        auto_send_violations = sum(1 for r in results if not r.customer_reply_is_none)
+        auto_send_violations = sum(1 for r in results if not r.customer_reply_is_none or not r.observation_succeeded)
 
-        # Per-request token inspection supporting output_tokens alias and tracking thinking coverage
-        total_prompt_tokens = 0
-        total_candidate_tokens = 0
-        total_thinking_tokens = 0
-        draft_requests_count = 0
-        drafts_with_complete_thinking = 0
+        # Per-billable attempt token and metadata validation
+        # Identify billable attempts (any request where drafting was invoked or tokens were returned)
+        billable_attempts: List[Dict[str, Any]] = []
         observed_models: set[str] = set()
+        observed_providers: set[str] = set()
+        token_coverage_valid = True
 
         for r in results:
             tok = r.tokens or {}
-            # Prompt / Input tokens
-            p_tok = tok.get("prompt_tokens") if tok.get("prompt_tokens") is not None else tok.get("input_tokens", 0)
-            if isinstance(p_tok, (int, float)) and not isinstance(p_tok, bool) and math.isfinite(p_tok):
-                total_prompt_tokens += int(p_tok)
-
-            # Candidate / Output tokens (supporting output_tokens alias alongside candidate_tokens and completion_tokens)
-            c_tok = None
-            for alias in ("candidate_tokens", "output_tokens", "completion_tokens"):
-                if tok.get(alias) is not None:
-                    c_tok = tok[alias]
-                    break
-            if c_tok is not None and isinstance(c_tok, (int, float)) and not isinstance(c_tok, bool) and math.isfinite(c_tok):
-                total_candidate_tokens += int(c_tok)
-
-            # Thinking tokens
-            t_tok = tok.get("thinking_tokens")
-            has_valid_thinking = (
-                t_tok is not None
-                and not isinstance(t_tok, bool)
-                and isinstance(t_tok, (int, float))
-                and math.isfinite(t_tok)
-                and t_tok >= 0
+            is_billable = (
+                r.draft_status in ("draft_ready", "clarification", "failed", "unavailable")
+                or bool(tok)
             )
-            if has_valid_thinking:
-                total_thinking_tokens += int(t_tok)
 
-            # Record model if observed
-            if r.llm_model:
-                observed_models.add(str(r.llm_model))
-            elif r.versions.get("llm_model"):
-                observed_models.add(str(r.versions["llm_model"]))
+            # Record model and provider metadata if present
+            meta = r.llm_metadata or {}
+            m_val = meta.get("model") or r.versions.get("llm_model") or r.llm_model
+            p_val = meta.get("provider") or r.versions.get("provider")
+            t_val = meta.get("tier") or r.versions.get("tier")
 
-            # Assess if this request invoked drafting
-            if r.draft_status in ("draft_ready", "failed", "unavailable") or (tok and (p_tok or c_tok)):
-                draft_requests_count += 1
-                if has_valid_thinking:
-                    drafts_with_complete_thinking += 1
+            if is_billable:
+                if m_val:
+                    observed_models.add(str(m_val))
+                if p_val:
+                    observed_providers.add(str(p_val))
 
-        total_completion_tokens = total_candidate_tokens + total_thinking_tokens
-        total_tokens = total_prompt_tokens + total_completion_tokens
-        has_thinking_tracked = (total_thinking_tokens > 0 or drafts_with_complete_thinking > 0)
-        all_drafts_have_thinking = (draft_requests_count > 0 and drafts_with_complete_thinking == draft_requests_count)
+                # Extract input tokens (input_tokens or prompt_tokens)
+                in_tok = tok.get("input_tokens") if tok.get("input_tokens") is not None else tok.get("prompt_tokens")
+                # Extract candidate tokens (output_tokens, candidate_tokens, or completion_tokens)
+                out_tok = tok.get("output_tokens")
+                if out_tok is None:
+                    out_tok = tok.get("candidate_tokens")
+                if out_tok is None:
+                    out_tok = tok.get("completion_tokens")
+
+                # Extract thought tokens (thought_tokens or thinking_tokens)
+                th_tok = tok.get("thought_tokens")
+                if th_tok is None:
+                    th_tok = tok.get("thinking_tokens")
+
+                has_valid_in = is_valid_token_count(in_tok)
+                has_valid_out = is_valid_token_count(out_tok)
+                has_valid_thought = is_valid_token_count(th_tok)
+
+                if not has_valid_in or not has_valid_out:
+                    token_coverage_valid = False
+
+                billable_attempts.append({
+                    "case_index": r.case_index,
+                    "input_tokens": in_tok if has_valid_in else None,
+                    "output_tokens": out_tok if has_valid_out else None,
+                    "thought_tokens": th_tok if has_valid_thought else None,
+                    "has_valid_in": has_valid_in,
+                    "has_valid_out": has_valid_out,
+                    "has_valid_thought": has_valid_thought,
+                    "model": m_val,
+                    "provider": p_val,
+                    "tier": t_val,
+                })
+
+        # Token aggregation
+        if token_coverage_valid and billable_attempts:
+            total_prompt_tokens = sum(b["input_tokens"] for b in billable_attempts)
+            total_candidate_tokens = sum(b["output_tokens"] for b in billable_attempts)
+            all_attempts_have_thought = all(b["has_valid_thought"] for b in billable_attempts)
+            total_thinking_tokens = sum(b["thought_tokens"] for b in billable_attempts if b["has_valid_thought"])
+            total_completion_tokens = total_candidate_tokens + total_thinking_tokens
+            total_tokens = total_prompt_tokens + total_completion_tokens if all_attempts_have_thought else (total_prompt_tokens + total_candidate_tokens)
+            has_thinking_tracked = any(b["has_valid_thought"] for b in billable_attempts)
+        elif not billable_attempts:
+            total_prompt_tokens = 0
+            total_candidate_tokens = 0
+            total_thinking_tokens = 0
+            total_completion_tokens = 0
+            total_tokens = 0
+            has_thinking_tracked = False
+            all_attempts_have_thought = False
+        else:
+            # Token coverage invalid: missing or non-integer tokens on a billable attempt
+            total_prompt_tokens = None
+            total_candidate_tokens = None
+            total_thinking_tokens = None
+            total_completion_tokens = None
+            total_tokens = None
+            has_thinking_tracked = False
+            all_attempts_have_thought = False
 
         # Pricing evaluation and strict provenance checks
         pricing = self.config.verified_pricing
@@ -655,6 +778,11 @@ class ApplicationAcceptanceRunner:
                 cost_usd = None
                 lower_bound_cost_usd = None
                 cost_note = f"Invalid pricing rates provided: {rate_err}. Cost is strictly unavailable."
+            elif not token_coverage_valid:
+                cost_status = "incomplete_token_coverage"
+                cost_usd = None
+                lower_bound_cost_usd = None
+                cost_note = "Billable attempts have missing or non-integer input/output tokens. Cost cannot be calculated."
             else:
                 in_rate = float(pricing["input_cost_per_million"])
                 out_rate = float(pricing["output_cost_per_million"])
@@ -664,64 +792,82 @@ class ApplicationAcceptanceRunner:
                 if is_mock:
                     # Mock token fixtures must NEVER be labeled with real-cost labels
                     cost_status = "mock_simulation_cost_estimate"
-                    calc_out = total_candidate_tokens + total_thinking_tokens
-                    cost_usd = (total_prompt_tokens * in_rate + calc_out * out_rate) / 1_000_000.0
-                    lower_bound_cost_usd = (total_prompt_tokens * in_rate + total_candidate_tokens * out_rate) / 1_000_000.0
+                    calc_out = (total_candidate_tokens or 0) + (total_thinking_tokens or 0)
+                    cost_usd = ((total_prompt_tokens or 0) * in_rate + calc_out * out_rate) / 1_000_000.0
+                    lower_bound_cost_usd = ((total_prompt_tokens or 0) * in_rate + (total_candidate_tokens or 0) * out_rate) / 1_000_000.0
                     cost_note = (
                         "MOCK TRANSPORT FIXTURE ONLY: Tokens and cost reflect mock simulated responses, "
                         "NOT live LLM provider usage or real invoiced charges."
                     )
                 else:
-                    # Live run evaluation
-                    # Check model alignment: source URL alone cannot assert request model!
-                    model_mismatch = False
-                    if observed_models and expected_model:
-                        if not any(expected_model.lower() in obs.lower() or obs.lower() in expected_model.lower() for obs in observed_models):
-                            model_mismatch = True
-
-                    if model_mismatch:
-                        cost_status = "model_mismatch_unverified"
+                    # Live run evaluation with fail-closed model, provider, and tier verification
+                    if not billable_attempts:
+                        cost_status = "zero_billable_calls"
+                        cost_usd = 0.0
+                        lower_bound_cost_usd = 0.0
+                        cost_note = "Zero billable LLM calls were executed in this run."
+                    elif any(not b["model"] for b in billable_attempts):
+                        cost_status = "unknown_model_unverified"
                         cost_usd = None
                         lower_bound_cost_usd = None
-                        cost_note = (
-                            f"Pricing configuration model '{expected_model}' does not match actual observed "
-                            f"request model(s) {list(observed_models)}. Cost is unavailable."
-                        )
-                    elif has_provenance:
-                        # Compute lower bound regardless of thinking
-                        lower_bound_cost_usd = (total_prompt_tokens * in_rate + total_candidate_tokens * out_rate) / 1_000_000.0
-
-                        if all_drafts_have_thinking:
-                            cost_status = "verified_list_price_estimate"
-                            output_tokens_for_cost = total_candidate_tokens + total_thinking_tokens
-                            cost_usd = (total_prompt_tokens * in_rate + output_tokens_for_cost * out_rate) / 1_000_000.0
-                            cost_note = (
-                                f"List-price estimate for {expected_model} ({pricing.get('tier', 'standard_paid')}) "
-                                f"based on primary source {pricing.get('source_url')} verified on {pricing.get('verified_on')}. "
-                                "Calculated with verified 100% per-request thinking token coverage. Not an invoiced charge."
-                            )
-                        else:
-                            # Absent or partial thinking tokens: cost_usd must be None!
-                            cost_status = "partial_lower_bound_missing_thinking"
-                            cost_usd = None
-                            cost_note = (
-                                f"Thinking tokens were missing or untracked on one or more draft requests "
-                                f"({drafts_with_complete_thinking}/{draft_requests_count} complete). "
-                                "Complete cost_usd is strictly unavailable (None); lower_bound_cost_usd "
-                                "reflects lower bound excluding thinking tokens."
-                            )
+                        cost_note = "One or more billable attempts lack model metadata. Cost is unverified."
+                    elif len(observed_models) > 1:
+                        cost_status = "mixed_models_unverified"
+                        cost_usd = None
+                        lower_bound_cost_usd = None
+                        cost_note = f"Multiple distinct models observed across billable calls: {sorted(list(observed_models))}. Uniform pricing cannot be verified."
                     else:
-                        cost_status = "arithmetic_fixture_unverified"
-                        cost_usd = (total_prompt_tokens * in_rate + total_completion_tokens * out_rate) / 1_000_000.0
-                        lower_bound_cost_usd = (total_prompt_tokens * in_rate + total_candidate_tokens * out_rate) / 1_000_000.0
-                        cost_note = "Arithmetic unit test fixture only; rates lack primary source URL or verified_on provenance."
+                        single_model = list(observed_models)[0]
+                        # Exact canonical match required
+                        if single_model.strip().lower() != (expected_model or "").strip().lower():
+                            cost_status = "model_mismatch_unverified"
+                            cost_usd = None
+                            lower_bound_cost_usd = None
+                            cost_note = f"Observed model '{single_model}' does not exactly match verified pricing model '{expected_model}'. Cost is unverified."
+                        else:
+                            # Verify provider if present in pricing
+                            expected_provider = pricing.get("provider")
+                            provider_mismatch = False
+                            if expected_provider:
+                                if any(not b["provider"] or b["provider"].strip().lower() != expected_provider.strip().lower() for b in billable_attempts):
+                                    provider_mismatch = True
 
-        p95_target_met = bool(p95 is not None and p95 <= 12.0)
+                            if provider_mismatch:
+                                cost_status = "provider_mismatch_unverified"
+                                cost_usd = None
+                                lower_bound_cost_usd = None
+                                cost_note = f"Observed provider does not match verified pricing provider '{expected_provider}'."
+                            elif has_provenance:
+                                lower_bound_cost_usd = (total_prompt_tokens * in_rate + total_candidate_tokens * out_rate) / 1_000_000.0
+                                if all_attempts_have_thought:
+                                    cost_status = "verified_list_price_estimate"
+                                    cost_usd = (total_prompt_tokens * in_rate + total_completion_tokens * out_rate) / 1_000_000.0
+                                    lower_bound_cost_usd = cost_usd
+                                    cost_note = (
+                                        f"List-price estimate for {expected_model} ({pricing.get('tier', 'standard_paid')}) "
+                                        f"based on primary source {pricing.get('source_url')} verified on {pricing.get('verified_on')}. "
+                                        "Calculated with verified 100% per-request thought token coverage. Not an invoiced charge."
+                                    )
+                                else:
+                                    cost_status = "partial_lower_bound_missing_thinking"
+                                    cost_usd = None
+                                    cost_note = (
+                                        "One or more billable attempts lacked thought_tokens/thinking_tokens. "
+                                        "Complete cost_usd is strictly null (None); lower_bound_cost_usd "
+                                        "reflects lower bound excluding thinking tokens."
+                                    )
+                            else:
+                                cost_status = "arithmetic_fixture_unverified"
+                                cost_usd = (total_prompt_tokens * in_rate + total_completion_tokens * out_rate) / 1_000_000.0
+                                lower_bound_cost_usd = (total_prompt_tokens * in_rate + total_candidate_tokens * out_rate) / 1_000_000.0
+                                cost_note = "Arithmetic unit test fixture only; rates lack primary source URL or verified_on provenance."
+
         oversight_target_met = bool(len(results) > 0 and auto_send_violations == 0)
 
-        # Runner-level checks passed
+        # Runner-level checks passed: strictly requires valid latency coverage across all cases
         runner_checks_passed = (
             len(results) > 0
+            and all_latencies_valid
             and all(r.is_success for r in results)
             and p95_target_met
             and oversight_target_met
@@ -739,6 +885,7 @@ class ApplicationAcceptanceRunner:
                 "timestamp": iso_timestamp,
                 "git_commit": git_commit,
                 "mode": self.config.mode,
+                "boundary_kind": "in_process_asgi_testclient",
                 "evidence_kind": "mock_runner_simulation" if is_mock else "bounded_live",
                 "scope": "end_to_end_application_acceptance",
                 "boundary": "POST /v1/shop/tickets -> PostgreSQL job -> GET /v1/console/tickets/{id} terminal state",
@@ -768,6 +915,7 @@ class ApplicationAcceptanceRunner:
                 "failed_jobs": failed_jobs,
                 "auto_send_violations": auto_send_violations,
                 "human_oversight_enforced": oversight_target_met,
+                "latency_coverage_complete": all_latencies_valid,
             },
             "performance": {
                 "p50_seconds": p50,
@@ -796,7 +944,7 @@ class ApplicationAcceptanceRunner:
                 "total_thinking_tokens": total_thinking_tokens,
                 "total_completion_tokens": total_completion_tokens,
                 "thinking_tracked": has_thinking_tracked,
-                "all_requests_tracked_thinking": all_drafts_have_thinking,
+                "all_requests_tracked_thinking": all_attempts_have_thought,
                 "total_tokens": total_tokens,
                 "cost_status": cost_status,
                 "cost_usd": cost_usd,
@@ -819,14 +967,37 @@ class ApplicationAcceptanceRunner:
         base_output_dir: Path,
         run_id: str,
     ) -> None:
-        """Persist reports in a unique run directory to preserve exploratory artifacts."""
+        """Persist reports in a unique run directory with full provenance hashes."""
         run_dir = base_output_dir / "runs" / run_id
         run_dir.mkdir(parents=True, exist_ok=True)
 
         raw_cases = [r.as_dict() for r in results]
         raw_json_bytes = json.dumps(raw_cases, indent=2, ensure_ascii=False).encode("utf-8")
         raw_records_sha256 = hashlib.sha256(raw_json_bytes).hexdigest().upper()
-        summary_data["meta"]["raw_records_sha256"] = raw_records_sha256
+
+        # Compute safe provenance hashes of dependencies and configurations
+        repo_root = Path(__file__).resolve().parents[2]
+        kb_path = repo_root / "data" / "knowledge" / "policies.json"
+        kb_hash = compute_sha256(kb_path) if kb_path.exists() else None
+
+        policy_path = repo_root / "apps" / "core_backend" / "config" / "policies" / "intent_policy.v2.json"
+        policy_hash = compute_sha256(policy_path) if policy_path.exists() else None
+
+        train_manifest = repo_root / "artifacts" / "training" / "03-11-2026-01" / "manifest.json"
+        model_hash = compute_sha256(train_manifest) if train_manifest.exists() else None
+
+        safe_config_json = json.dumps(summary_data["meta"]["runner_config"], sort_keys=True).encode("utf-8")
+        config_hash = hashlib.sha256(safe_config_json).hexdigest().upper()
+
+        summary_data["meta"].update({
+            "raw_records_sha256": raw_records_sha256,
+            "provenance_hashes": {
+                "kb_policies_sha256": kb_hash,
+                "routing_policy_sha256": policy_hash,
+                "model_manifest_sha256": model_hash,
+                "runner_config_sha256": config_hash,
+            },
+        })
 
         raw_file = run_dir / "raw_records.json"
         raw_file.write_bytes(raw_json_bytes)
@@ -847,6 +1018,7 @@ class ApplicationAcceptanceRunner:
             "timestamp": summary_data["meta"]["timestamp"],
             "runner_checks_passed": summary_data["acceptance_summary"]["runner_checks_passed"],
             "mode": summary_data["meta"]["mode"],
+            "boundary_kind": "in_process_asgi_testclient",
             "raw_records_sha256": raw_records_sha256,
         }
         with open(latest_pointer, "w", encoding="utf-8") as f:
@@ -874,6 +1046,7 @@ class ApplicationAcceptanceRunner:
             f"- **Timestamp:** `{meta['timestamp']}`",
             f"- **Git HEAD:** `{meta.get('git_commit', 'unknown')}`",
             f"- **Mode:** `{meta['mode']}`",
+            f"- **Boundary Kind:** `{meta.get('boundary_kind', 'in_process_asgi_testclient')}`",
             f"- **Runner Checks Status:** **{status_label}**",
             f"- **Global Production Accepted:** `{s['global_production_accepted']}` *(Cannot be certified by runner alone)*",
             "",
@@ -889,16 +1062,17 @@ class ApplicationAcceptanceRunner:
         lines.extend([
             "> [!IMPORTANT]",
             "> **Application Acceptance Invariants:**",
-            "> 1. **100% Human Oversight:** Unreviewed AI drafts never reach the customer (`customer_reply is None`).",
-            "> 2. **Performance Target:** End-to-end p95 latency must be <= 12.0s under declared test conditions.",
-            "> 3. **Truthful Pricing:** Cost in USD is reported only when verified primary pricing is provided; missing pricing remains `unavailable`, never 0.0.",
+            "> 1. **100% Human Oversight:** Unreviewed AI drafts never reach the customer (`customer_reply is None` on verified HTTP 200 response).",
+            "> 2. **Performance Target:** End-to-end p95 latency must be <= 12.0s under declared test conditions with complete latency measurement coverage.",
+            "> 3. **Truthful Pricing:** Cost in USD is reported only when verified primary pricing is provided and model matches exactly; missing pricing remains `unavailable`, never 0.0.",
             "",
             "## 1. Acceptance Gates & Quality Checks",
             "",
             "| Gate | Observed Value | Requirement | Status |",
             "|---|---|---|:---:|",
-            f"| **Human Oversight (No Auto-Send)** | {s['auto_send_violations']} violations | 0 violations (`customer_reply is None`) | **{'PASS' if s['human_oversight_enforced'] else 'FAIL'}** |",
+            f"| **Human Oversight (No Auto-Send)** | {s['auto_send_violations']} violations | 0 violations (`customer_reply is None` on verified HTTP 200) | **{'PASS' if s['human_oversight_enforced'] else 'FAIL'}** |",
             f"| **p95 Latency** | `{p95_str}` | <= 12.000s | **{'PASS' if p['target_p95_met'] else 'FAIL'}** |",
+            f"| **Latency Measurement Coverage** | {'100% Complete' if s.get('latency_coverage_complete') else 'Incomplete/Invalid'} | All cases must report valid finite latency | **{'PASS' if s.get('latency_coverage_complete') else 'FAIL'}** |",
             f"| **Technical Errors** | `{s['technical_errors']}` | 0 errors | **{'PASS' if s['technical_errors'] == 0 else 'FAIL'}** |",
             f"| **Timeouts** | `{s['timeouts']}` | 0 timeouts | **{'PASS' if s['timeouts'] == 0 else 'FAIL'}** |",
             f"| **Failed Background Jobs** | `{s['failed_jobs']}` | 0 failures | **{'PASS' if s['failed_jobs'] == 0 else 'FAIL'}** |",
@@ -931,8 +1105,8 @@ class ApplicationAcceptanceRunner:
             "## 3. Token Usage and Pricing Coverage",
             "",
             f"- **Prompt / Input Tokens:** `{tc['total_prompt_tokens']}`",
-            f"- **Candidate / Output Tokens:** `{tc.get('total_candidate_tokens', 0)}`",
-            f"- **Thinking Tokens:** `{tc.get('total_thinking_tokens', 0)}` ({'complete coverage' if tc.get('all_requests_tracked_thinking') else ('partial/untracked' if tc.get('thinking_tracked') else 'omitted/untracked')})",
+            f"- **Candidate / Output Tokens:** `{tc.get('total_candidate_tokens')}`",
+            f"- **Thought Tokens:** `{tc.get('total_thinking_tokens')}` ({'complete coverage' if tc.get('all_requests_tracked_thinking') else ('partial/untracked' if tc.get('thinking_tracked') else 'omitted/untracked')})",
             f"- **Total Completion Tokens:** `{tc['total_completion_tokens']}`",
             f"- **Total Tokens:** `{tc['total_tokens']}`",
             f"- **Cost Status:** `{tc['cost_status']}`",
@@ -948,10 +1122,11 @@ class ApplicationAcceptanceRunner:
 
         for c in summary["cases"]:
             wall_str = str(c["wall_latency_ms"]) if c["wall_latency_ms"] is not None else "None"
+            auto_safe_str = "YES" if (c["reply_is_none"] and c.get("observation_succeeded", True)) else "**NO**"
             lines.append(
                 f"| {c['case_index']} | `{c['condition']}` | `{c['ticket_id'] or 'None'}` | "
                 f"{c['message'][:30]}... | {wall_str} | `{c['draft_status']}` | "
-                f"{'YES' if c['reply_is_none'] else '**NO**'} | {'**PASS**' if c['is_success'] else '**FAIL**'} |"
+                f"{auto_safe_str} | {'**PASS**' if c['is_success'] else '**FAIL**'} |"
             )
 
         lines.extend([

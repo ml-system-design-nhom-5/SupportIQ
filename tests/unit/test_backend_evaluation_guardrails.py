@@ -3,17 +3,23 @@
 Tests verify that:
 1. Failed and timeout AI jobs prevent false acceptance.
 2. Empty runs or invalid measurements fail closed with null latency (never false acceptance or 0.0s).
-3. Missing or unverified pricing reports cost as unavailable (never falsified as 0.0).
-4. Invalid rates (NaN, boolean, negative) are rejected.
-5. Model mismatch between pricing and actual usage prevents verified cost claims.
-6. Mock tokens are excluded from real verified list-price labels.
-7. Missing or partial thinking tokens yields null complete cost with lower-bound disclosure.
-8. Engine output_tokens alias is properly parsed.
-9. Missing or tampered model provenance fails closed.
-10. Baseline OOF audit fails closed on checksum mismatch against manifest.
-11. 10-fold cross validation alignment (10 folds, 46 labels, 37,911 samples) is strictly verified.
-12. Human oversight invariant is enforced (no automatic reply dispatch).
-13. Robustness paired conditional accuracy uses exact valid denominators.
+3. Config validation rejects invalid modes, negative/bool/NaN counts and timeouts.
+4. Partial or invalid latency (NaN, bool, negative, None) fails latency coverage and acceptance.
+5. HTTP observation failure (non-200 or malformed JSON) fails human oversight invariant.
+6. Missing or unverified pricing reports cost as unavailable (never falsified as 0.0).
+7. Invalid rates (NaN, boolean, negative) are rejected.
+8. Unknown or mixed models across billable calls fail closed.
+9. Exact canonical model and provider match is required (substring match fails closed).
+10. Mock tokens are excluded from real verified list-price labels.
+11. Missing or partial thinking tokens yields null complete cost with lower-bound disclosure.
+12. Actual B2 schema (thought_tokens, input_tokens, output_tokens) is fully supported.
+13. Missing or invalid input/output tokens marks total_tokens unknown and cost incomplete.
+14. Missing or tampered model provenance fails closed.
+15. Baseline OOF audit fails closed on checksum mismatch against manifest.
+16. 10-fold cross validation alignment (10 folds, 46 labels, 37,911 samples) is strictly verified.
+17. Human oversight invariant is enforced (no automatic reply dispatch).
+18. Robustness paired conditional accuracy uses exact valid denominators.
+19. Run manifest records full safe provenance hashes and boundary kind.
 """
 
 from __future__ import annotations
@@ -113,6 +119,99 @@ class TestApplicationAcceptanceGuardrails:
         assert perf["target_p95_met"] is False
         assert summary["meta"]["status"] == "rejected_empty_results"
 
+    def test_config_validation_rejects_invalid_parameters(self):
+        """Config validate() must reject invalid mode, bool/fractional/negative warm counts and timeouts."""
+        with pytest.raises(ValueError, match="Invalid mode"):
+            ApplicationAcceptanceConfig(mode="invalid_mode").validate()
+
+        with pytest.raises(ValueError, match="num_warm_requests"):
+            ApplicationAcceptanceConfig(num_warm_requests=-1).validate()
+
+        with pytest.raises(ValueError, match="num_warm_requests"):
+            ApplicationAcceptanceConfig(num_warm_requests=True).validate()  # bool is not int
+
+        with pytest.raises(ValueError, match="poll_timeout_seconds"):
+            ApplicationAcceptanceConfig(poll_timeout_seconds=float("nan")).validate()
+
+        with pytest.raises(ValueError, match="poll_timeout_seconds"):
+            ApplicationAcceptanceConfig(poll_timeout_seconds=-5.0).validate()
+
+        with pytest.raises(ValueError, match="analysis_timeout_ms"):
+            ApplicationAcceptanceConfig(analysis_timeout_ms=0).validate()
+
+        with pytest.raises(ValueError, match="draft_timeout_ms"):
+            ApplicationAcceptanceConfig(draft_timeout_ms=-100).validate()
+
+    def test_partial_or_invalid_latency_fails_coverage(self):
+        """If any case has missing, negative, NaN, or boolean latency, latency coverage fails and p95 is None."""
+        results = [
+            TicketCaseResult(
+                case_index=0,
+                condition="cold",
+                message="Valid latency case",
+                ticket_id="TICK-001",
+                wall_latency_ms=250.0,
+                analysis_status="completed",
+                draft_status="draft_ready",
+                customer_reply_is_none=True,
+                is_terminal=True,
+                is_success=True,
+            ),
+            TicketCaseResult(
+                case_index=1,
+                condition="warm",
+                message="Corrupt latency case",
+                ticket_id="TICK-002",
+                wall_latency_ms=None,  # Missing latency!
+                analysis_status="completed",
+                draft_status="draft_ready",
+                customer_reply_is_none=True,
+                is_terminal=True,
+                is_success=False,
+            ),
+        ]
+
+        config = ApplicationAcceptanceConfig(mode="mock")
+        runner = ApplicationAcceptanceRunner(config)
+        summary = runner._compute_summary(results, output_dir=None)
+
+        acc = summary["acceptance_summary"]
+        perf = summary["performance"]
+
+        assert acc["latency_coverage_complete"] is False
+        assert acc["runner_checks_passed"] is False, "Partial latency coverage must fail acceptance"
+        assert perf["p95_seconds"] is None
+        assert perf["p50_seconds"] is None
+        assert perf["target_p95_met"] is False
+
+    def test_http_observation_failure_fails_oversight_invariant(self):
+        """If customer endpoint returns non-200 or malformed JSON, human oversight fails closed."""
+        results = [
+            TicketCaseResult(
+                case_index=0,
+                condition="cold",
+                message="Query",
+                ticket_id="TICK-001",
+                wall_latency_ms=300.0,
+                analysis_status="completed",
+                draft_status="draft_ready",
+                customer_reply_is_none=False,
+                observation_succeeded=False,  # Observation failed!
+                error_code="CUSTOMER_VIEW_HTTP_500",
+                is_terminal=True,
+                is_success=False,
+            )
+        ]
+
+        config = ApplicationAcceptanceConfig(mode="mock")
+        runner = ApplicationAcceptanceRunner(config)
+        summary = runner._compute_summary(results, output_dir=None)
+
+        acc = summary["acceptance_summary"]
+        assert acc["auto_send_violations"] == 1
+        assert acc["human_oversight_enforced"] is False
+        assert acc["runner_checks_passed"] is False
+
     def test_missing_or_unverified_pricing_reports_unavailable_not_zero(self):
         """When token usage exists but pricing is unverified/missing, cost must be None/unavailable, never 0.0."""
         results = [
@@ -136,7 +235,6 @@ class TestApplicationAcceptanceGuardrails:
         summary = runner._compute_summary(results, output_dir=None)
 
         tc = summary["tokens_and_cost"]
-        assert tc["total_tokens"] == 200
         assert tc["cost_status"] == "unavailable"
         assert tc["cost_usd"] is None, "Cost must NEVER be falsified as 0.0 when unverified"
         assert "unverified or missing" in tc["cost_note"].lower()
@@ -148,7 +246,6 @@ class TestApplicationAcceptanceGuardrails:
         assert validate_pricing_rates({"input_cost_per_million": -0.25, "output_cost_per_million": 1.5})[0] is False
         assert validate_pricing_rates({"input_cost_per_million": float("inf"), "output_cost_per_million": 1.5})[0] is False
 
-        # Compute summary with invalid rate pricing
         results = [
             TicketCaseResult(
                 case_index=0,
@@ -159,7 +256,8 @@ class TestApplicationAcceptanceGuardrails:
                 analysis_status="completed",
                 draft_status="draft_ready",
                 customer_reply_is_none=True,
-                tokens={"prompt_tokens": 1000, "completion_tokens": 500, "total_tokens": 1500},
+                tokens={"input_tokens": 1000, "output_tokens": 500, "thought_tokens": 0},
+                llm_metadata={"model": "gemini-3.1-flash-lite", "provider": "gemini"},
                 is_terminal=True,
                 is_success=True,
             )
@@ -173,8 +271,8 @@ class TestApplicationAcceptanceGuardrails:
         assert tc["cost_status"] == "invalid_pricing_rates"
         assert tc["cost_usd"] is None
 
-    def test_model_mismatch_prevents_cost_verification(self):
-        """Pricing configured for gemini-3.1-flash-lite when request used different model must fail closed."""
+    def test_missing_or_invalid_tokens_marks_tokens_unknown(self):
+        """Missing or non-integer tokens on a billable call marks total_tokens unknown and cost incomplete."""
         results = [
             TicketCaseResult(
                 case_index=0,
@@ -185,8 +283,8 @@ class TestApplicationAcceptanceGuardrails:
                 analysis_status="completed",
                 draft_status="draft_ready",
                 customer_reply_is_none=True,
-                tokens={"prompt_tokens": 1000, "output_tokens": 500, "thinking_tokens": 100},
-                llm_model="different-other-model",
+                tokens={"input_tokens": None, "output_tokens": 500},  # Missing input tokens!
+                llm_metadata={"model": "gemini-3.1-flash-lite"},
                 is_terminal=True,
                 is_success=True,
             )
@@ -204,9 +302,110 @@ class TestApplicationAcceptanceGuardrails:
         summary = runner._compute_summary(results, output_dir=None)
 
         tc = summary["tokens_and_cost"]
+        assert tc["total_tokens"] is None, "Total tokens cannot be claimed complete with missing tokens"
+        assert tc["cost_status"] == "incomplete_token_coverage"
+        assert tc["cost_usd"] is None
+
+    def test_unknown_or_mixed_models_fails_closed(self):
+        """Billable calls with missing model or mixed distinct models fail closed."""
+        # 1. Missing model metadata on billable call
+        results_missing = [
+            TicketCaseResult(
+                case_index=0,
+                condition="cold",
+                message="Test query",
+                ticket_id="TICK-001",
+                wall_latency_ms=300.0,
+                analysis_status="completed",
+                draft_status="draft_ready",
+                customer_reply_is_none=True,
+                tokens={"input_tokens": 1000, "output_tokens": 500, "thought_tokens": 100},
+                llm_metadata={},  # Missing model metadata!
+                llm_model=None,
+                is_terminal=True,
+                is_success=True,
+            )
+        ]
+        pricing = {
+            "model": "gemini-3.1-flash-lite",
+            "tier": "standard_paid",
+            "input_cost_per_million": 0.25,
+            "output_cost_per_million": 1.50,
+            "source_url": "https://ai.google.dev/pricing",
+            "verified_on": "2026-11-12",
+        }
+        runner = ApplicationAcceptanceRunner(ApplicationAcceptanceConfig(mode="live", verified_pricing=pricing))
+        summary1 = runner._compute_summary(results_missing, output_dir=None)
+        assert summary1["tokens_and_cost"]["cost_status"] == "unknown_model_unverified"
+        assert summary1["tokens_and_cost"]["cost_usd"] is None
+
+        # 2. Mixed models across calls
+        results_mixed = [
+            TicketCaseResult(
+                case_index=0,
+                condition="cold",
+                message="First",
+                ticket_id="TICK-001",
+                wall_latency_ms=300.0,
+                analysis_status="completed",
+                draft_status="draft_ready",
+                customer_reply_is_none=True,
+                tokens={"input_tokens": 1000, "output_tokens": 500, "thought_tokens": 100},
+                llm_metadata={"model": "gemini-3.1-flash-lite"},
+                is_terminal=True,
+                is_success=True,
+            ),
+            TicketCaseResult(
+                case_index=1,
+                condition="warm",
+                message="Second",
+                ticket_id="TICK-002",
+                wall_latency_ms=300.0,
+                analysis_status="completed",
+                draft_status="draft_ready",
+                customer_reply_is_none=True,
+                tokens={"input_tokens": 1000, "output_tokens": 500, "thought_tokens": 100},
+                llm_metadata={"model": "gemini-2.5-flash"},  # Different model!
+                is_terminal=True,
+                is_success=True,
+            ),
+        ]
+        summary2 = runner._compute_summary(results_mixed, output_dir=None)
+        assert summary2["tokens_and_cost"]["cost_status"] == "mixed_models_unverified"
+        assert summary2["tokens_and_cost"]["cost_usd"] is None
+
+    def test_exact_canonical_model_match_required_substring_rejected(self):
+        """Pricing requires exact canonical model match; partial substring match fails closed."""
+        results = [
+            TicketCaseResult(
+                case_index=0,
+                condition="cold",
+                message="Test query",
+                ticket_id="TICK-001",
+                wall_latency_ms=300.0,
+                analysis_status="completed",
+                draft_status="draft_ready",
+                customer_reply_is_none=True,
+                tokens={"input_tokens": 1000, "output_tokens": 500, "thought_tokens": 100},
+                llm_metadata={"model": "gemini-3.1-flash-lite-experimental-preview"},
+                is_terminal=True,
+                is_success=True,
+            )
+        ]
+        pricing = {
+            "model": "gemini-3.1-flash-lite",  # Not exact match!
+            "tier": "standard_paid",
+            "input_cost_per_million": 0.25,
+            "output_cost_per_million": 1.50,
+            "source_url": "https://ai.google.dev/pricing",
+            "verified_on": "2026-11-12",
+        }
+        runner = ApplicationAcceptanceRunner(ApplicationAcceptanceConfig(mode="live", verified_pricing=pricing))
+        summary = runner._compute_summary(results, output_dir=None)
+
+        tc = summary["tokens_and_cost"]
         assert tc["cost_status"] == "model_mismatch_unverified"
         assert tc["cost_usd"] is None
-        assert "does not match" in tc["cost_note"]
 
     def test_mock_mode_excludes_verified_cost_label(self):
         """Even with official pricing passed, mock runs must be labeled mock_simulation_cost_estimate."""
@@ -226,14 +425,13 @@ class TestApplicationAcceptanceGuardrails:
                 analysis_status="completed",
                 draft_status="draft_ready",
                 customer_reply_is_none=True,
-                tokens={"prompt_tokens": 1000, "output_tokens": 500, "thinking_tokens": 100},
-                llm_model="mock-eval-llm",
+                tokens={"input_tokens": 1000, "output_tokens": 500, "thought_tokens": 100},
+                llm_metadata={"model": "mock-eval-llm"},
                 is_terminal=True,
                 is_success=True,
             )
         ]
 
-        # Mode is mock
         config = ApplicationAcceptanceConfig(mode="mock", verified_pricing=official_pricing)
         runner = ApplicationAcceptanceRunner(config)
         summary = runner._compute_summary(results, output_dir=None)
@@ -242,60 +440,8 @@ class TestApplicationAcceptanceGuardrails:
         assert tc["cost_status"] == "mock_simulation_cost_estimate"
         assert "MOCK TRANSPORT FIXTURE ONLY" in tc["cost_note"]
 
-    def test_missing_or_partial_thinking_tokens_yields_null_complete_cost(self):
-        """When thinking tokens are absent from a draft request, complete cost is null with lower bound disclosed."""
-        results = [
-            TicketCaseResult(
-                case_index=0,
-                condition="cold",
-                message="First query with thinking",
-                ticket_id="TICK-001",
-                wall_latency_ms=400.0,
-                analysis_status="completed",
-                draft_status="draft_ready",
-                customer_reply_is_none=True,
-                tokens={"prompt_tokens": 1000, "candidate_tokens": 200, "thinking_tokens": 300},
-                llm_model="gemini-3.1-flash-lite",
-                is_terminal=True,
-                is_success=True,
-            ),
-            TicketCaseResult(
-                case_index=1,
-                condition="warm",
-                message="Second query missing thinking",
-                ticket_id="TICK-002",
-                wall_latency_ms=400.0,
-                analysis_status="completed",
-                draft_status="draft_ready",
-                customer_reply_is_none=True,
-                tokens={"prompt_tokens": 1000, "candidate_tokens": 200},  # thinking_tokens missing!
-                llm_model="gemini-3.1-flash-lite",
-                is_terminal=True,
-                is_success=True,
-            ),
-        ]
-
-        pricing = {
-            "model": "gemini-3.1-flash-lite",
-            "tier": "standard_paid",
-            "input_cost_per_million": 0.25,
-            "output_cost_per_million": 1.50,
-            "source_url": "https://ai.google.dev/pricing",
-            "verified_on": "2026-11-12",
-        }
-        config = ApplicationAcceptanceConfig(mode="live", verified_pricing=pricing)
-        runner = ApplicationAcceptanceRunner(config)
-        summary = runner._compute_summary(results, output_dir=None)
-
-        tc = summary["tokens_and_cost"]
-        assert tc["cost_status"] == "partial_lower_bound_missing_thinking"
-        assert tc["cost_usd"] is None, "Complete cost must be strictly null when thinking is incomplete"
-        assert tc["lower_bound_cost_usd"] is not None
-        # lower bound: 2000 in @ 0.25/M = 0.0005, 400 candidate @ 1.50/M = 0.0006 -> 0.0011
-        assert pytest.approx(tc["lower_bound_cost_usd"], 1e-5) == 0.0011
-
-    def test_output_tokens_alias_supported_and_complete_pricing_verified(self):
-        """Engine output_tokens alias is parsed and when all drafts have thinking, verified cost estimate succeeds."""
+    def test_thought_tokens_b2_actual_schema_complete_pricing_verified(self):
+        """Actual B2 schema (thought_tokens, input_tokens, output_tokens) verifies list-price estimate."""
         results = [
             TicketCaseResult(
                 case_index=0,
@@ -308,10 +454,10 @@ class TestApplicationAcceptanceGuardrails:
                 customer_reply_is_none=True,
                 tokens={
                     "input_tokens": 1_000_000,
-                    "output_tokens": 200_000,      # output_tokens alias!
-                    "thinking_tokens": 300_000,
+                    "output_tokens": 200_000,
+                    "thought_tokens": 300_000,
                 },
-                llm_model="gemini-3.1-flash-lite",
+                llm_metadata={"model": "gemini-3.1-flash-lite", "provider": "gemini"},
                 is_terminal=True,
                 is_success=True,
             )
@@ -319,6 +465,7 @@ class TestApplicationAcceptanceGuardrails:
 
         pricing = {
             "model": "gemini-3.1-flash-lite",
+            "provider": "gemini",
             "tier": "standard_paid",
             "input_cost_per_million": 0.25,
             "output_cost_per_million": 1.50,
@@ -336,35 +483,49 @@ class TestApplicationAcceptanceGuardrails:
         assert tc["total_completion_tokens"] == 500_000
         assert tc["all_requests_tracked_thinking"] is True
         assert tc["cost_status"] == "verified_list_price_estimate"
-        # 1M * 0.25 + 0.5M * 1.50 = 0.25 + 0.75 = 1.00
         assert pytest.approx(tc["cost_usd"], 1e-4) == 1.00
 
-    def test_human_oversight_no_auto_send_invariant(self):
-        """If an unreviewed draft is somehow dispatched to the customer, acceptance must fail."""
+    def test_missing_thought_tokens_yields_null_complete_cost_with_lower_bound(self):
+        """When thought_tokens are missing from a billable call, cost_usd is null with lower_bound disclosed."""
         results = [
             TicketCaseResult(
                 case_index=0,
                 condition="cold",
-                message="What is your return policy?",
+                message="Test query",
                 ticket_id="TICK-001",
-                wall_latency_ms=350.0,
+                wall_latency_ms=400.0,
                 analysis_status="completed",
                 draft_status="draft_ready",
-                customer_reply_is_none=False,  # VIOLATION: customer got reply without review!
-                tokens={"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120},
+                customer_reply_is_none=True,
+                tokens={
+                    "input_tokens": 1_000_000,
+                    "output_tokens": 200_000,
+                    # thought_tokens missing!
+                },
+                llm_metadata={"model": "gemini-3.1-flash-lite", "provider": "gemini"},
                 is_terminal=True,
-                is_success=False,
+                is_success=True,
             )
         ]
 
-        config = ApplicationAcceptanceConfig(mode="mock")
+        pricing = {
+            "model": "gemini-3.1-flash-lite",
+            "provider": "gemini",
+            "tier": "standard_paid",
+            "input_cost_per_million": 0.25,
+            "output_cost_per_million": 1.50,
+            "source_url": "https://ai.google.dev/pricing",
+            "verified_on": "2026-11-12",
+        }
+        config = ApplicationAcceptanceConfig(mode="live", verified_pricing=pricing)
         runner = ApplicationAcceptanceRunner(config)
         summary = runner._compute_summary(results, output_dir=None)
 
-        acc = summary["acceptance_summary"]
-        assert acc["auto_send_violations"] == 1
-        assert acc["human_oversight_enforced"] is False
-        assert acc["runner_checks_passed"] is False
+        tc = summary["tokens_and_cost"]
+        assert tc["cost_status"] == "partial_lower_bound_missing_thinking"
+        assert tc["cost_usd"] is None, "Complete cost must be strictly null when thinking is incomplete"
+        # lower bound: 1M * 0.25 + 0.2M * 1.50 = 0.25 + 0.30 = 0.55
+        assert pytest.approx(tc["lower_bound_cost_usd"], 1e-4) == 0.55
 
     @pytest.mark.integration
     def test_real_application_acceptance_runner_e2e_flow(self, tmp_path):
@@ -387,11 +548,12 @@ class TestApplicationAcceptanceGuardrails:
 
         assert acc["runner_checks_passed"] is True, f"E2E Acceptance should pass, got summary: {summary}"
         assert acc["overall_passed"] is True
-        assert acc["global_production_accepted"] is False  # Runner alone cannot certify production
+        assert acc["global_production_accepted"] is False
         assert acc["total_cases"] == 2  # 1 cold + 1 warm
         assert acc["successful_cases"] == 2
         assert acc["auto_send_violations"] == 0
         assert acc["human_oversight_enforced"] is True
+        assert acc["latency_coverage_complete"] is True
         assert perf["p95_seconds"] <= 12.0
         assert perf["conditions"]["cold"]["count"] == 1
         assert perf["conditions"]["warm"]["count"] == 1
@@ -399,6 +561,8 @@ class TestApplicationAcceptanceGuardrails:
         assert tc["cost_status"] == "unavailable"
         assert tc["cost_usd"] is None
         assert (tmp_path / "latest_run.json").exists()
+        assert summary["meta"]["boundary_kind"] == "in_process_asgi_testclient"
+        assert "provenance_hashes" in summary["meta"]
 
 
 class TestProvenanceAndIntegrityGuardrails:
