@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 
 const root = resolve(process.cwd(),'../..')
 const credentials = JSON.parse(readFileSync(resolve(root,'.local/application.json'),'utf8')) as {passwords: Record<string,string>}
-const output = resolve(root,'.impeccable/review')
+const output = process.env.PLAYWRIGHT_OUTPUT_DIR ? resolve(root, process.env.PLAYWRIGHT_OUTPUT_DIR) : resolve(root,'.impeccable/review')
 mkdirSync(output,{recursive:true})
 
 async function signIn(page: Page, role: string) {
