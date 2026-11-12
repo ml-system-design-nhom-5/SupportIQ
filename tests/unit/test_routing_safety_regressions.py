@@ -70,6 +70,13 @@ class MockRetriever:
                 content="Orders in processing can be canceled.",
                 metadata=SimpleNamespace(valid_from="2026-01-01T00:00:00Z", valid_to=None),
             ),
+            SimpleNamespace(
+                doc_id="POL-RET-002",
+                version="1.0",
+                title="Return and Exchange Request Process and Steps on Tiki App",
+                content="Shipping couriers will pick up the item directly from the customer's address for free within 1-2 business days.",
+                metadata=SimpleNamespace(valid_from="2026-01-01T00:00:00Z", valid_to=None),
+            ),
         ]
 
     def retrieve(self, message, intent, role="agent", current_time=None):
@@ -194,7 +201,7 @@ def test_override_to_sensitive_intent_activates_requires_authority():
 # ---------------------------------------------------------------------------
 
 def test_unsupported_return_pickup_action_does_not_draft():
-    """Scheduling a postal/courier pickup for online return parcel (return_product_online) must not produce draft."""
+    """Scheduling a postal pickup for online return parcel (return_product_online) must not produce draft."""
     engine = make_engine()
     res = engine.analyse({
         "message": "How do I schedule a postal pickup for an online return parcel?",
@@ -203,6 +210,58 @@ def test_unsupported_return_pickup_action_does_not_draft():
     assert res["routing"]["recommendation"] != "draft", (
         f"Unsupported online pickup action was incorrectly recommended for draft: {res['routing']}"
     )
+    assert "out_of_scope_intent" in res["routing"]["reason_codes"]
+
+
+def test_positive_supported_return_courier_pickup_drafts_successfully():
+    """Valid in-app courier pickup (POL-RET-002) is supported and must recommend draft without out_of_scope_intent."""
+    courier_evidence = [
+        {
+            "document_id": "POL-RET-002",
+            "version": "1.0",
+            "title": "Return and Exchange Request Process and Steps on Tiki App",
+            "excerpt": "Shipping couriers will pick up the item directly from the customer's address for free within 1-2 business days.",
+            "score": 0.88,
+        }
+    ]
+    engine = make_engine(
+        predictor=MockPredictor(intent="return_policy", confidence=0.85),
+        retriever=MockRetriever(evidence=courier_evidence),
+    )
+    res = engine.analyse({
+        "message": "How does free courier pickup work when I request a return on Tiki?",
+        "as_of": "2026-11-12T00:00:00Z",
+    })
+    assert res["routing"]["recommendation"] == "draft", (
+        f"Supported courier return pickup was incorrectly blocked: {res['routing']}"
+    )
+    assert "out_of_scope_intent" not in res["routing"]["reason_codes"]
+    assert any(d["document_id"] == "POL-RET-002" for d in res["documents"])
+
+
+def test_positive_supported_home_pickup_drafts_successfully():
+    """Customer asking about courier home address pickup under POL-RET-002 must draft without refusal."""
+    courier_evidence = [
+        {
+            "document_id": "POL-RET-002",
+            "version": "1.0",
+            "title": "Return and Exchange Request Process and Steps on Tiki App",
+            "excerpt": "Shipping couriers will pick up the item directly from the customer's address for free within 1-2 business days.",
+            "score": 0.85,
+        }
+    ]
+    engine = make_engine(
+        predictor=MockPredictor(intent="return_policy", confidence=0.82),
+        retriever=MockRetriever(evidence=courier_evidence),
+    )
+    res = engine.analyse({
+        "message": "Can a shipping courier pick up my return item from my home address?",
+        "as_of": "2026-11-12T00:00:00Z",
+    })
+    assert res["routing"]["recommendation"] == "draft", (
+        f"Supported home courier return pickup was incorrectly blocked: {res['routing']}"
+    )
+    assert "out_of_scope_intent" not in res["routing"]["reason_codes"]
 
 
 def test_out_of_domain_tax_return_abstains_safely():

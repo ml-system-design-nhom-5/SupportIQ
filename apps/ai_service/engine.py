@@ -79,7 +79,14 @@ class Engine:
             if "out_of_scope_intent" not in codes:
                 codes.append("out_of_scope_intent")
 
-        if re.search(r"\b(?:schedule|book|arrange)\s+(?:a\s+)?(?:postal|courier|carrier|home)?\s*pickup\b|\bpostal\s+pickup\b", request["message"], re.I):
+        # External postal pickup scheduling is an escalated intent (return_product_online) outside product scope.
+        # Note: In-app Tiki courier pickup (POL-RET-002) is fully supported and must NOT be blocked.
+        if re.search(r"\b(?:schedule|book|arrange)\s+(?:a\s+)?postal\s+pickup\b|\bpostal\s+pickup\b", request["message"], re.I):
+            if "out_of_scope_intent" not in codes:
+                codes.append("out_of_scope_intent")
+
+        # Out-of-domain false positives on tax returns (vs retail product return policy)
+        if re.search(r"\b(?:tax\s+return|income\s+tax|corporate\s+tax)\b", request["message"], re.I):
             if "out_of_scope_intent" not in codes:
                 codes.append("out_of_scope_intent")
 
@@ -115,9 +122,12 @@ class Engine:
         if retrieved.get("has_conflict"):
             codes.append("conflicting_sources")
             warnings.append("Retrieved knowledge base sources contain conflicting policy terms. Staff review required.")
+        # Knowledge evidence validation: rely on retriever's configured relevance threshold (0.55 default),
+        # avoiding dual hidden thresholds or artificial safe-by-refusal.
+        retrieval_threshold = getattr(self.retriever, "relevance_threshold", 0.55)
         has_scores = any(item.get("score") is not None for item in evidence)
         max_evidence_score = max((item.get("score") or 0.0) for item in evidence if item.get("score") is not None) if has_scores else 1.0
-        if not evidence or (has_scores and max_evidence_score < 0.60) or "below_relevance_threshold" in retrieved.get("reason_codes", []):
+        if not evidence or (has_scores and max_evidence_score < retrieval_threshold) or "below_relevance_threshold" in retrieved.get("reason_codes", []):
             if "no_valid_document" not in codes:
                 codes.append("no_valid_document")
         documents = []
