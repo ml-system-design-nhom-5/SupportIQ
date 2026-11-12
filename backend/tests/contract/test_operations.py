@@ -23,9 +23,12 @@ READ_METHOD = "GET"
 EVERY_WRITE_OF_THE_CONTRACT = {
     ("POST", "/v1/sessions"),
     ("DELETE", "/v1/sessions/current"),
+    ("POST", "/v1/sessions/current/password-changes"),
     ("POST", "/v1/shop/tickets"),
+    ("POST", "/v1/admin/accounts"),
     ("POST", "/v1/admin/accounts/{account_id}/role-changes"),
     ("POST", "/v1/admin/accounts/{account_id}/status-changes"),
+    ("POST", "/v1/admin/accounts/{account_id}/password-resets"),
 }
 EVERY_READ_OF_THE_CONTRACT = {
     ("GET", "/health/live"),

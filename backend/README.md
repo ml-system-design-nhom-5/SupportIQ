@@ -1,6 +1,6 @@
 # backend
 
-`backend` is the SupportIQ component that owns sign-in, the read-only shop, shop tickets, internal accounts, the simulated commerce data, and the audit log ([ADR-0001](../docs/decisions/0001-system-architecture.md)). It implements the [backend foundation design](../docs/design/backend-foundation.md) against [`contracts/backend.openapi.yaml`](../contracts/backend.openapi.yaml) 1.0.1: the 13 operations of the design and the two health checks. Everything that involves `ai-service`, including the console operations and `getAdminVersions`, comes with the ticket workflow design.
+`backend` is the SupportIQ component that owns sign-in, the read-only shop, shop tickets, internal accounts, the simulated commerce data, and the audit log ([ADR-0001](../docs/decisions/0001-system-architecture.md)). It implements the [backend foundation design](../docs/design/backend-foundation.md) and the [account management design](../docs/design/account-management.md) against [`contracts/backend.openapi.yaml`](../contracts/backend.openapi.yaml) 1.1.0: the 13 operations of the foundation design, the three operations of account management, and the two health checks. Everything that involves `ai-service`, including the console operations and `getAdminVersions`, comes with the ticket workflow design.
 
 ## Run and test
 
@@ -97,6 +97,8 @@ uv run coverage report --fail-under=90 --include="*/supportiq_backend/*/domain/*
 
 `backend seed` creates these accounts ([ADR-0009](../docs/decisions/0009-demo-accounts-and-cookie-sessions.md)). Each person chooses the passwords in their own `.env`, one per role: `SEED_PASSWORD_CUSTOMER`, `SEED_PASSWORD_STAFF`, `SEED_PASSWORD_MANAGER`, and `SEED_PASSWORD_ADMIN`. Passwords are never written in the repository.
 
+Every account can then change its own password, and an admin can create `staff` and `manager` accounts, with login names such as `staff-3`, and reset their passwords ([ADR-0015](../docs/decisions/0015-account-creation-and-password-changes.md)). Admin and customer accounts come only from the seed. `backend reset` restores the seeded accounts and passwords.
+
 | Login name | Role |
 |---|---|
 | `customer-1`, `customer-2`, `customer-3` | `customer` |
@@ -114,7 +116,7 @@ backend/
 │   ├── platform/           # Clock, errors, events, settings, database, logging, tracing, web
 │   ├── audit/              # The insert-only audit log
 │   ├── idempotency/        # Records of retryable writes and the idempotency guard
-│   ├── accounts/           # Sign-in, sessions, roles, and internal account changes
+│   ├── accounts/           # Sign-in, sessions, roles, internal accounts, and passwords
 │   ├── commerce/           # The read-only catalog, orders, shipments, and refunds
 │   ├── tickets/            # Shop tickets and customer messages
 │   ├── composition_root/   # The only place that wires everything: the command and the app
@@ -149,7 +151,7 @@ uv run datamodel-codegen
 
 ## Database
 
-- `backend serve` connects only as `supportiq_app`, which has `SELECT` on commerce data and no `UPDATE` or `DELETE` on the audit log or on customer messages ([design, Database roles and privileges](../docs/design/backend-foundation.md#database-roles-and-privileges)). The tests connect the same way, so they prove the privileges.
+- `backend serve` connects only as `supportiq_app`, which has `SELECT` on commerce data and no `UPDATE` or `DELETE` on the audit log or on customer messages ([design, Database roles and privileges](../docs/design/backend-foundation.md#database-roles-and-privileges)). It can insert `staff` and `manager` accounts and update password hashes, never delete an account, and a trigger refuses an `admin` account from every role but the owner ([migration `r0002`](../docs/design/account-management.md#migration-r0002)). The tests connect the same way, so they prove the privileges.
 - To add a migration, add one file to [`migrations/versions/`](src/supportiq_backend/migrations/versions/) that follows `r0001_foundation_schema.py`: one schema change, raw SQL, the privileges of every new table, and a working downgrade (PY-40). `tests/integration/schema/test_migration.py` runs upgrade and downgrade.
 - Every table of the backend is listed in [`migrations/tables.py`](src/supportiq_backend/migrations/tables.py), which `reset` empties.
 
@@ -168,6 +170,9 @@ Every log line is one JSON object on standard output, with the attributes of an 
 | `session.created`, `sign_in.failed`, `sign_in.throttled` | Sign-in outcomes, never with a login name |
 | `permission.denied` | A role calls an operation that it may not use |
 | `account.role_changed`, `account.status_changed` | An admin changes an internal account |
+| `account.created`, `account.password_reset` | An admin creates a `staff` or `manager` account, or resets its password, with the target account and never a login name or a display name |
+| `account.password_changed` | An account changes its own password, with whether its other sessions ended |
+| `password_change.failed`, `password_change.throttled` | A password change refused because the current password was wrong, or because the login name reached the sign-in failure limit |
 | `ticket.created` | A customer creates a ticket, with `ticket_id` |
 | `command.failed` | A one-off command fails, with the error type |
 | `database.migrated`, `database_role.applied` | A one-off database command succeeds |
@@ -186,9 +191,9 @@ Every request has a trace with its database spans, and ticket creation has the s
 | Layer | Folder | What it proves |
 |---|---|---|
 | Unit | `tests/unit/` | Domain and application logic with a fake for every port, and the property that no sequence of role and status changes leaves no active manager or admin |
-| Integration | `tests/integration/` | Privileges and triggers, idempotency and account changes under concurrency, seed and reset, and each flow over HTTP |
+| Integration | `tests/integration/` | Privileges and triggers, idempotency, account changes, creations, and password changes under concurrency, seed and reset, and each flow over HTTP |
 | Guardrails | `tests/integration/guardrails/` | The cases of [TEST-26](../docs/rules/testing.md) that apply here. `tests/contract/test_operations.py` and `tests/contract/test_permissions.py` hold the others |
-| Contract | `tests/contract/` | Schemathesis over all 15 operations, one test for each documented status, and every operation against all four roles |
+| Contract | `tests/contract/` | Schemathesis over all 18 operations, one test for each documented status, and every operation against all four roles |
 
 Tests run in random order and in parallel. Time comes from a fake clock, and Hypothesis runs derandomized, so a run repeats exactly with the `--randomly-seed=<seed>` value that pytest prints. The contract tests read `../contracts/`, so they need the whole repository.
 

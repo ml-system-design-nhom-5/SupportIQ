@@ -49,7 +49,7 @@ export function AreaPermissionDenied({ area, traceId }: AreaPermissionDeniedProp
       headingLevel={1}
       title={text.title}
       description={text.description}
-      actions={<SignOutButton placement="state" />}
+      actions={<SignOutButton />}
       {...(traceId === undefined ? {} : { traceId })}
     />
   );

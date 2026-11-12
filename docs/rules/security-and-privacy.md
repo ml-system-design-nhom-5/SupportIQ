@@ -1,6 +1,6 @@
 # Security and privacy rules
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-04
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-11
 
 Strict rules for protecting data and keys, especially when calling LLM providers (FR-08, FR-09). All data in this project is simulated, but it is handled exactly as real data would be, so the habits and the controls are right from the start.
 
@@ -83,9 +83,9 @@ The mechanism, the placeholder syntax, and the detectors are defined in [ADR-001
 
 **SEC-20.** `frontend` hides actions a role cannot perform as a convenience only. `backend` is the only enforcement point.
 
-**SEC-41.** The `admin` role is limited to managing internal accounts (`staff`, `manager`, `admin`) and viewing versions. An admin never sees a customer account: customer accounts are never listed, and a request about one returns `404`. An admin cannot call any `/v1/shop/` or `/v1/console/` operation, cannot give any account the `admin` role, cannot change their own role or status, and cannot demote or deactivate the last active manager. Admin account lists show display names, roles, and statuses only ([ADR-0012](../decisions/0012-roles-v1.md)).
+**SEC-41.** The `admin` role is limited to managing internal accounts (`staff`, `manager`, `admin`) and viewing versions. An admin never sees a customer account: customer accounts are never listed, and a request about one returns `404`. An admin cannot call any `/v1/shop/` or `/v1/console/` operation, cannot give any account the `admin` role, cannot change their own role or status, and cannot demote or deactivate the last active manager. An admin creates only `staff` and `manager` accounts and resets only their passwords, never an `admin` account's password and never their own through that operation. Admin account lists show display names, login names, roles, and statuses only ([ADR-0012](../decisions/0012-roles-v1.md), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md)).
 
-**SEC-42.** A role change or a deactivation deletes every session of the account in the same transaction, so the change applies to its next request. No permission or session is cached outside PostgreSQL ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)).
+**SEC-42.** A role change or a deactivation deletes every session of the account in the same transaction, so the change applies to its next request. A change of the own password deletes every other session of the account, and a password reset every session of it, in the same transaction, unless the person who makes the change chooses to keep them. No permission or session is cached outside PostgreSQL ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md)).
 
 ## Input and output handling
 

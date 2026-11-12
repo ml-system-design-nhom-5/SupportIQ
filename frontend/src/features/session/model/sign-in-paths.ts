@@ -41,19 +41,28 @@ export function buildSignInPath(returnTo: string | undefined): string {
  *   root. A role without an area opens the start page, which says so.
  */
 export function resolvePathAfterSignIn(role: AccountRole, returnTo: string | null): string {
-  const area = getRoleArea(role);
-  if (area === "none") {
-    return START_PATH;
-  }
-  const areaRoot = rootPathByArea[area];
-  if (returnTo === null || !URL.canParse(returnTo, NORMALIZING_ORIGIN)) {
-    return areaRoot;
+  const startPath = getAreaStartPath(role);
+  const hasArea = getRoleArea(role) !== "none";
+  if (!hasArea || returnTo === null || !URL.canParse(returnTo, NORMALIZING_ORIGIN)) {
+    return startPath;
   }
   const { origin, pathname, search, hash } = new URL(returnTo, NORMALIZING_ORIGIN);
-  if (origin === NORMALIZING_ORIGIN && isInsideArea(pathname, areaRoot)) {
+  if (origin === NORMALIZING_ORIGIN && isInsideArea(pathname, startPath)) {
     return `${pathname}${search}${hash}`;
   }
-  return areaRoot;
+  return startPath;
+}
+
+/**
+ * Choose the start of the role's area: where sign-in goes without a return path, and where
+ * `/change-password` goes back to when there is no previous page.
+ *
+ * @param role - The role of the session.
+ * @returns The root of the role's area, or the start page for a role without an area.
+ */
+export function getAreaStartPath(role: AccountRole): string {
+  const area = getRoleArea(role);
+  return area === "none" ? START_PATH : rootPathByArea[area];
 }
 
 /**

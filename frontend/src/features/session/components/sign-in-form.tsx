@@ -1,6 +1,6 @@
 /**
  * The Sign in form of the console UI design, shared by every role: a login name with a hint, a
- * password, and Sign in. No list of accounts is shown. A refused sign-in shows the same message
+ * password with the show and hide toggle (UI-46), and Sign in. No list of accounts is shown. A refused sign-in shows the same message
  * for an unknown name, a wrong password, and a deactivated account (ADR-0009, statement 8).
  */
 import { TriangleAlert } from "lucide-react";
@@ -12,6 +12,7 @@ import {
   FormField,
   Heading,
   InlineMessage,
+  PasswordInput,
   Stack,
   Text,
   TextInput,
@@ -83,10 +84,9 @@ export function SignInForm({ isPending, failure, onSubmit }: SignInFormProps) {
             />
           </FormField>
           <FormField inputId={PASSWORD_ID} label="Password">
-            <TextInput
+            <PasswordInput
               id={PASSWORD_ID}
               name="password"
-              type="password"
               autoComplete="current-password"
               required
               value={password}

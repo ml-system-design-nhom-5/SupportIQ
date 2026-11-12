@@ -1,13 +1,13 @@
 /**
- * The console app shell of the console UI design, with Sign out and no ticket features yet: the
- * console operations are not in the contract (contracts v1 design, Rollout). No operation answers
+ * The console app shell of the console UI design, with the account menu and no ticket features yet:
+ * the console operations are not in the contract (contracts v1 design, Rollout). No operation answers
  * `403` yet, so the shell opens for every signed-in role.
  */
 import { Inbox } from "lucide-react";
 
 import { PRODUCT_NAME } from "@/app/area-names";
-import { AccountLabel, AppBar, PageColumn, StateMessage } from "@/design-system";
-import { getRoleLabel, RequireSession, SignOutButton } from "@/features/session";
+import { AppBar, PageColumn, StateMessage } from "@/design-system";
+import { RequireSession, SessionAccountMenu } from "@/features/session";
 
 /**
  * Render the console shell.
@@ -24,15 +24,7 @@ export function ConsoleLayout() {
             variant="console"
             brandName={PRODUCT_NAME}
             areaName="Console"
-            account={
-              <>
-                <AccountLabel
-                  displayName={session.displayName}
-                  roleLabel={getRoleLabel(session.role)}
-                />
-                <SignOutButton placement="app-bar" />
-              </>
-            }
+            account={<SessionAccountMenu session={session} variant="console" />}
           />
           <PageColumn area="admin">
             <StateMessage

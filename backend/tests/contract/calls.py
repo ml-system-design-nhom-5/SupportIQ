@@ -13,6 +13,7 @@ from tests.unit.accounts.fakes import KNOWN_PASSWORD
 
 SESSIONS = "/v1/sessions"
 CURRENT_SESSION = "/v1/sessions/current"
+OWN_PASSWORD_CHANGES = "/v1/sessions/current/password-changes"
 PRODUCTS = "/v1/shop/products"
 ORDERS = "/v1/shop/orders"
 TICKETS = "/v1/shop/tickets"
@@ -20,6 +21,13 @@ ACCOUNTS = "/v1/admin/accounts"
 KEY = "00000000-0000-4000-8000-000000000001"
 LOGIN_NAME = "staff-contract"
 ROLES = ("customer", "staff", "manager", "admin")
+NEW_PASSWORD = "new-contract-password"
+NEW_ACCOUNT = {
+    "role": "staff",
+    "login_number": 9001,
+    "display_name": "Lan Do",
+    "password": NEW_PASSWORD,
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,6 +40,7 @@ class World:
         order_id: An order of the signed-in customer.
         ticket_id: A ticket of the signed-in customer.
         target_account_id: A `staff` account that an admin can change.
+        admin_account_id: The account of the signed-in admin.
     """
 
     tokens: Mapping[str, str]
@@ -39,6 +48,7 @@ class World:
     order_id: str
     ticket_id: str
     target_account_id: UUID
+    admin_account_id: UUID
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,6 +79,8 @@ class Call:
 async def build_world(builder: DatabaseBuilder, password_hash: PasswordHash) -> World:
     """Insert what the calls need, with one signed-in account of each role.
 
+    The signed-in `staff` account has `KNOWN_PASSWORD`, so it can change its own password.
+
     Args:
         builder: The test data builder.
         password_hash: The hash of `KNOWN_PASSWORD`.
@@ -78,7 +90,7 @@ async def build_world(builder: DatabaseBuilder, password_hash: PasswordHash) -> 
     """
     customer_account, customer_id = await builder.customer_account()
     order_id = await builder.order_of_one_product(customer_id)
-    staff = await builder.account(AccountSpec("staff"))
+    staff = await builder.account(AccountSpec("staff", password_hash=password_hash))
     manager = await builder.account(AccountSpec("manager"))
     await builder.account(AccountSpec("manager"))
     admin = await builder.account(AccountSpec("admin"))
@@ -94,6 +106,7 @@ async def build_world(builder: DatabaseBuilder, password_hash: PasswordHash) -> 
         order_id=order_id,
         ticket_id=await builder.ticket(customer_id, order_id),
         target_account_id=await builder.account(AccountSpec("staff")),
+        admin_account_id=admin,
     )
 
 
@@ -112,6 +125,17 @@ def valid_calls(world: World) -> Mapping[str, Call]:
             "POST", SESSIONS, body={"login_name": LOGIN_NAME, "password": KNOWN_PASSWORD}
         ),
         "getCurrentSession": Call("GET", CURRENT_SESSION, role="customer"),
+        "changeOwnPassword": Call(
+            "POST",
+            OWN_PASSWORD_CHANGES,
+            role="staff",
+            key=KEY,
+            body={
+                "current_password": KNOWN_PASSWORD,
+                "new_password": NEW_PASSWORD,
+                "is_signed_out_elsewhere": True,
+            },
+        ),
         "deleteCurrentSession": Call("DELETE", CURRENT_SESSION, role="customer"),
         "listShopProducts": Call("GET", PRODUCTS, role="customer"),
         "getShopProduct": Call("GET", f"{PRODUCTS}/{world.product_id}", role="customer"),
@@ -127,6 +151,7 @@ def valid_calls(world: World) -> Mapping[str, Call]:
         ),
         "getShopTicket": Call("GET", f"{TICKETS}/{world.ticket_id}", role="customer"),
         "listAdminAccounts": Call("GET", ACCOUNTS, role="admin"),
+        "createAdminAccount": Call("POST", ACCOUNTS, role="admin", key=KEY, body=NEW_ACCOUNT),
         "changeAccountRole": Call(
             "POST",
             f"{ACCOUNTS}/{target}/role-changes",
@@ -140,6 +165,13 @@ def valid_calls(world: World) -> Mapping[str, Call]:
             role="admin",
             key=KEY,
             body={"is_active": False},
+        ),
+        "resetAccountPassword": Call(
+            "POST",
+            f"{ACCOUNTS}/{target}/password-resets",
+            role="admin",
+            key=KEY,
+            body={"password": NEW_PASSWORD, "is_signed_out_everywhere": True},
         ),
         "checkLiveness": Call("GET", "/health/live"),
         "checkReadiness": Call("GET", "/health/ready"),

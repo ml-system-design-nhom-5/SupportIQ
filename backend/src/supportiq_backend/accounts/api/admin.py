@@ -1,20 +1,35 @@
-"""The admin operations: `listAdminAccounts`, `changeAccountRole`, `changeAccountStatus`."""
+"""The admin operations on internal accounts (ADR-0012, ADR-0015).
+
+They are `listAdminAccounts`, `createAdminAccount`, `changeAccountRole`, `changeAccountStatus`,
+and `resetAccountPassword`.
+"""
 
 from dataclasses import dataclass
 from http import HTTPStatus
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request, Response
+from pydantic import MISSING
 
 from supportiq_backend.accounts.api.dependencies import CurrentSession, OriginCheck
-from supportiq_backend.accounts.application import ChangeAccount, ListAdminAccounts
+from supportiq_backend.accounts.api.sessions import to_password
+from supportiq_backend.accounts.application import (
+    ChangeAccount,
+    CreateAccount,
+    ListAdminAccounts,
+    ResetAccountPassword,
+)
 from supportiq_backend.accounts.domain import (
+    AccountCreation,
     AccountId,
     AccountPage,
     AssignableRole,
     AuthenticatedSession,
+    DisplayName,
     InternalAccount,
+    LoginNumber,
     OperationId,
+    PasswordReset,
     RoleChange,
     StatusChange,
 )
@@ -23,8 +38,10 @@ from supportiq_backend.generated import (
     AdminAccountView,
     ChangeAccountRoleRequest,
     ChangeAccountStatusRequest,
+    CreateAdminAccountRequest,
     Cursor,
     InternalAccountRole,
+    ResetAccountPasswordRequest,
 )
 from supportiq_backend.idempotency import StoredResponse, parse_idempotency_key
 from supportiq_backend.platform.web import (
@@ -50,18 +67,22 @@ class AdminRoutes:
     Attributes:
         list_accounts: The list use case.
         change_account: The change use case.
+        create_account: The creation use case.
+        reset_password: The password reset use case.
         check_origin: The `Origin` check of state-changing routes.
         current_session: The session of a request.
     """
 
     list_accounts: ListAdminAccounts
     change_account: ChangeAccount
+    create_account: CreateAccount
+    reset_password: ResetAccountPassword
     check_origin: OriginCheck
     current_session: CurrentSession
 
 
 def to_admin_account_view(account: InternalAccount) -> AdminAccountView:
-    """Map an internal account to the contract: no email, hash, or session data (ADR-0012).
+    """Map an internal account to the contract: no email, password, or session data (ADR-0015).
 
     Args:
         account: The account.
@@ -71,6 +92,7 @@ def to_admin_account_view(account: InternalAccount) -> AdminAccountView:
     """
     return AdminAccountView(
         account_id=account.account_id,
+        login_name=account.login_name,
         display_name=account.display_name,
         role=InternalAccountRole(account.role.value),
         is_active=account.is_active,
@@ -89,6 +111,23 @@ def render_changed_account(account: InternalAccount) -> StoredResponse:
     return StoredResponse(HTTPStatus.CREATED.value, render_json(to_admin_account_view(account)))
 
 
+def to_account_creation(body: CreateAdminAccountRequest) -> AccountCreation:
+    """Map the body of `createAdminAccount` to the domain, without changing any value.
+
+    Args:
+        body: The parsed body.
+
+    Returns:
+        The creation; without `login_number`, the next free number applies.
+    """
+    return AccountCreation(
+        role=AssignableRole(body.role.value),
+        login_number=None if body.login_number is MISSING else LoginNumber(body.login_number),
+        display_name=DisplayName(body.display_name),
+        password=to_password(body.password),
+    )
+
+
 def to_account_page(page: AccountPage) -> AdminAccountPage:
     """Map a page of accounts to the contract.
 
@@ -98,7 +137,7 @@ def to_account_page(page: AccountPage) -> AdminAccountPage:
     Returns:
         The contract model; `next_cursor` is absent on the last page.
     """
-    next_cursor = None
+    next_cursor: Cursor | MISSING = MISSING
     if page.next_after is not None:
         next_cursor = Cursor(encode_cursor(LIST_OPERATION, {CURSOR_ACCOUNT_FIELD: page.next_after}))
     return AdminAccountPage(
@@ -137,7 +176,9 @@ def build_admin_router(routes: AdminRoutes) -> APIRouter:
     """
     router = APIRouter()
     _add_list_route(router, routes)
+    _add_create_route(router, routes)
     _add_change_routes(router, routes)
+    _add_reset_route(router, routes)
     return router
 
 
@@ -196,4 +237,50 @@ def _add_change_routes(router: APIRouter, routes: AdminRoutes) -> None:
         body = await parse_json_body(request, ChangeAccountStatusRequest)
         change = StatusChange(AccountId(account_id), body.is_active)
         stored = await use_case.execute(admin, change, key)
+        return stored_json_response(stored.status_code, stored.body)
+
+
+def _add_create_route(router: APIRouter, routes: AdminRoutes) -> None:
+    check_origin = Depends(routes.check_origin)
+    current_session = Depends(routes.current_session)
+    create_account = Depends(provide(routes.create_account))
+
+    @router.post("/v1/admin/accounts", status_code=HTTPStatus.CREATED, dependencies=[check_origin])
+    async def handle_create_admin_account(
+        request: Request,
+        session: Annotated[AuthenticatedSession, current_session],
+        use_case: Annotated[CreateAccount, create_account],
+    ) -> Response:
+        admin = use_case.require_admin(session.principal)
+        key = parse_idempotency_key(request.headers.get(IDEMPOTENCY_KEY_HEADER))
+        body = await parse_json_body(request, CreateAdminAccountRequest)
+        stored = await use_case.execute(admin, to_account_creation(body), key)
+        return stored_json_response(stored.status_code, stored.body)
+
+
+def _add_reset_route(router: APIRouter, routes: AdminRoutes) -> None:
+    check_origin = Depends(routes.check_origin)
+    current_session = Depends(routes.current_session)
+    reset_password = Depends(provide(routes.reset_password))
+
+    @router.post(
+        "/v1/admin/accounts/{account_id}/password-resets",
+        status_code=HTTPStatus.CREATED,
+        dependencies=[check_origin],
+    )
+    async def handle_reset_account_password(
+        account_id: str,
+        request: Request,
+        session: Annotated[AuthenticatedSession, current_session],
+        use_case: Annotated[ResetAccountPassword, reset_password],
+    ) -> Response:
+        admin = use_case.require_admin(session.principal)
+        key = parse_idempotency_key(request.headers.get(IDEMPOTENCY_KEY_HEADER))
+        body = await parse_json_body(request, ResetAccountPasswordRequest)
+        reset = PasswordReset(
+            target_id=AccountId(account_id),
+            password=to_password(body.password),
+            is_signed_out_everywhere=body.is_signed_out_everywhere,
+        )
+        stored = await use_case.execute(admin, reset, key)
         return stored_json_response(stored.status_code, stored.body)

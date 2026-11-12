@@ -24,6 +24,8 @@ properties:
       about it;
       `idempotency-key-reused`: the `Idempotency-Key` was used before with a
       different body or different path parameters;
+      `login-name-taken`: the login name that the request composes is already an
+      account's login name;
       `not-ready`: the provider cannot serve the request now, for example
       because its database is unavailable or a timeout fired;
       `internal-error`: an unexpected failure in the provider.
@@ -36,6 +38,7 @@ properties:
       - urn:supportiq:problem:forbidden
       - urn:supportiq:problem:not-found
       - urn:supportiq:problem:idempotency-key-reused
+      - urn:supportiq:problem:login-name-taken
       - urn:supportiq:problem:not-ready
       - urn:supportiq:problem:internal-error
   title:

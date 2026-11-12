@@ -69,6 +69,11 @@ strict-nullable = true
 disable-timestamp = true
 use-double-quotes = true
 formatters = ["builtin"]
+# An optional field of a request that the body leaves out is `MISSING`, not None, so a body
+# with `null` in it is refused (the contract never uses null, CON-08). `pydantic.MISSING`
+# needs Pydantic 2.14, the pinned version.
+use-missing-sentinel = true
+target-pydantic-version = "2.14"
 # Pydantic cannot apply the `pattern` of `Timestamp` to a datetime type, so the generator
 # would drop it with a warning. As a string, every timestamp is written by one function of
 # platform.web, which a unit test checks against the contract's pattern.

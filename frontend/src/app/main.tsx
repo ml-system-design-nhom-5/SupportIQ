@@ -24,6 +24,7 @@ const dependencies = createAppDependencies({
   fetch: (request) => fetch(request),
   random: Math.random,
   createIdempotencyKey: () => crypto.randomUUID(),
+  randomBytes: (count) => crypto.getRandomValues(new Uint8Array(count)),
   clock: systemClock,
 });
 

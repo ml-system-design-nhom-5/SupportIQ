@@ -112,6 +112,19 @@ class PostgresSessionStore:
             .execution_options(synchronize_session=False)
         )
 
+    async def delete_other_sessions_of(self, account_id: AccountId, kept: SessionIdHash) -> None:
+        """Delete every session of an account but one, in the transaction of its change (SEC-42).
+
+        Args:
+            account_id: The account.
+            kept: The session that stays, the one of the request.
+        """
+        await self._session.execute(
+            delete(SessionRow)
+            .where(SessionRow.account_id == UUID(account_id), SessionRow.session_id_hash != kept)
+            .execution_options(synchronize_session=False)
+        )
+
     async def delete_expired(self, *, now: datetime, idle_since: datetime) -> None:
         """Delete ended sessions; rows that another transaction holds are left for later.
 

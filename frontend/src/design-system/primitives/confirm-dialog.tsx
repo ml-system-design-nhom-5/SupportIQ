@@ -1,12 +1,17 @@
 /**
  * A confirmation dialog on Radix AlertDialog (UI-31). Radix moves focus into the dialog, keeps it
  * there, and closes on Escape. The dialog opens from a row of a list and has no Radix Trigger, so
- * Radix cannot return the focus; the caller says where it goes (UI-30).
+ * Radix cannot return the focus; the caller says where it goes (UI-30). A dialog that asks for input
+ * is a {@link FormDialog}.
  */
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog";
 import type { ReactNode } from "react";
 
 import { Button } from "@/design-system/primitives/button";
+import {
+  type DialogReturnFocus,
+  returnFocusAfterDialog,
+} from "@/design-system/primitives/dialog-return-focus";
 
 /** `danger` marks a confirmation whose effect is hard to undo, such as Deactivate. */
 export type ConfirmDialogTone = "default" | "danger";
@@ -22,19 +27,11 @@ export type ConfirmDialogText = {
   readonly pendingLabel: string;
 };
 
-/** Where the focus goes when the dialog closes. */
-export type ConfirmDialogReturnFocus = {
-  /** The element that opened the dialog. */
-  readonly opener: HTMLElement;
-  /** The ID of a stable element, for when the confirmed change replaced the opener. */
-  readonly fallbackId: string;
-};
-
 /** Props of {@link ConfirmDialog}. */
 export type ConfirmDialogProps = {
   readonly isOpen: boolean;
   readonly text: ConfirmDialogText;
-  readonly returnFocus: ConfirmDialogReturnFocus;
+  readonly returnFocus: DialogReturnFocus;
   readonly tone?: ConfirmDialogTone;
   /** True while the change is sent: neither button acts, so it is sent once. */
   readonly isPending: boolean;
@@ -71,10 +68,7 @@ export function ConfirmDialog({
         <AlertDialogPrimitive.Content
           className="fixed top-1/2 left-1/2 z-20 flex w-full max-w-dialog -translate-1/2 flex-col gap-3 rounded-lg bg-surface-raised p-6 shadow-lg"
           onCloseAutoFocus={(event) => {
-            event.preventDefault();
-            const { opener, fallbackId } = returnFocus;
-            const target = opener.isConnected ? opener : document.getElementById(fallbackId);
-            target?.focus();
+            returnFocusAfterDialog(event, returnFocus);
           }}
         >
           <AlertDialogPrimitive.Title className="text-lg font-semibold text-text">

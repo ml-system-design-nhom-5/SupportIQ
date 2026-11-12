@@ -17,6 +17,7 @@ pytestmark = pytest.mark.anyio
 
 OPERATIONS_WITH_ROLES = (
     "getCurrentSession",
+    "changeOwnPassword",
     "deleteCurrentSession",
     "listShopProducts",
     "getShopProduct",
@@ -26,8 +27,10 @@ OPERATIONS_WITH_ROLES = (
     "createShopTicket",
     "getShopTicket",
     "listAdminAccounts",
+    "createAdminAccount",
     "changeAccountRole",
     "changeAccountStatus",
+    "resetAccountPassword",
 )
 SHOP_OPERATIONS = tuple(name for name in OPERATIONS_WITH_ROLES if "Shop" in name)
 ADMIN_OPERATIONS = tuple(name for name in OPERATIONS_WITH_ROLES if "Account" in name)

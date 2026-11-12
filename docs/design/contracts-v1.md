@@ -3,8 +3,8 @@
 - **Status:** In review
 - **Owner:** contracts gatekeeper
 - **Reviewers:** ML engineer, RAG engineer, backend engineer, frontend engineer
-- **Last reviewed:** 2026-11-08
-- **Related:** [Requirements](../product/requirements.md) (FR-01 to FR-11, ESC-01 to ESC-05), [ADR-0001](../decisions/0001-system-architecture.md), [ADR-0004](../decisions/0004-api-conventions.md), [ADR-0005](../decisions/0005-intent-independent-retrieval.md), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md), [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md), [ADR-0014](../decisions/0014-citations-to-order-context.md), [contract rules](../rules/contracts.md)
+- **Last reviewed:** 2026-11-11
+- **Related:** [Requirements](../product/requirements.md) (FR-01 to FR-11, ESC-01 to ESC-05), [ADR-0001](../decisions/0001-system-architecture.md), [ADR-0004](../decisions/0004-api-conventions.md), [ADR-0005](../decisions/0005-intent-independent-retrieval.md), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md), [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md), [ADR-0014](../decisions/0014-citations-to-order-context.md), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md), [account management design](account-management.md), [contract rules](../rules/contracts.md)
 
 ## Summary
 
@@ -30,7 +30,8 @@ The team agreed the product behavior:
 - the update of 2026-11-01: a retry of failed suggestions, draft cancellation on an intent change, read-only staff access to tickets that are not open, and the customer's other orders in the workspace;
 - the update of 2026-11-04: citations to the order context ([ADR-0014](../decisions/0014-citations-to-order-context.md)), and intent changes accepted only after an intent is known;
 - the update of 2026-11-05: one pending rule for every role, responses from the ingress, shared `Citation` and `OrderContext` schemas, the shop's `order_id` filter on `listShopTickets`, the ticket status `replied`, the newest-first order of shop lists, the `account_id` of `getCurrentSession`, the data classes of commerce IDs, no `Idempotency-Key` on sign-out, and names that follow CON-18 (`start_at`, `end_at`, `handling_time_ms`, `mask_count_by_type`);
-- the update of 2026-11-08, as `backend.openapi.yaml` 1.0.1 states: the problem type `idempotency-key-reused` also covers the same key with different path parameters; the ingress answers `502` or `504` also when a write in flight fails, and a retry with the same key then cannot repeat its effect; a product appears at most once in an order.
+- the update of 2026-11-08, as `backend.openapi.yaml` 1.0.1 states: the problem type `idempotency-key-reused` also covers the same key with different path parameters; the ingress answers `502` or `504` also when a write in flight fails, and a retry with the same key then cannot repeat its effect; a product appears at most once in an order;
+- the update of 2026-11-11, for `backend` contract 1.1.0 ([ADR-0015](../decisions/0015-account-creation-and-password-changes.md)): the own password change, admin account creation and password reset, the problem type `login-name-taken`, and three audit log events. The [account management design](account-management.md) holds their details.
 
 Revision 2 needs a new approval.
 
@@ -53,7 +54,7 @@ Revision 2 needs a new approval.
 
 - Conversations with several messages per ticket.
 - Production-grade authentication ([ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md) records the revisit).
-- Admin features beyond accounts, roles, account status, and version display ([ADR-0012](../decisions/0012-roles-v1.md)).
+- Admin features beyond accounts, roles, account status, account creation, password resets, and version display ([ADR-0012](../decisions/0012-roles-v1.md), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md)).
 - A cart, a checkout, or any operation that creates or changes orders ([ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md)).
 - Streaming or push updates. `frontend` polls.
 - KB content. This design fixes the structure; content arrives with the approved KB files.
@@ -90,6 +91,7 @@ The roles are `customer`, `staff`, `manager`, and `admin` ([ADR-0012](../decisio
 | Operation | `customer` | `staff` | `manager` | `admin` |
 |---|---|---|---|---|
 | Sign in, sign out, read the current session | Yes | Yes | Yes | Yes |
+| Change their own password | Yes | Yes | Yes | Yes |
 | Browse the product catalog | Yes | No | No | No |
 | List and read their own orders | Yes | No | No | No |
 | Create a ticket on one of their orders; read their own tickets and sent replies | Yes | No | No | No |
@@ -102,6 +104,7 @@ The roles are `customer`, `staff`, `manager`, and `admin` ([ADR-0012](../decisio
 | Escalate an open ticket | No | Yes | No | No |
 | View reports | No | No | Yes | No |
 | List `staff`, `manager`, and `admin` accounts; change a role between `staff` and `manager`; deactivate or reactivate one of those accounts | No | No | No | Yes |
+| Create a `staff` or `manager` account; reset the password of one | No | No | No | Yes |
 | View the versions in use | No | No | No | Yes |
 
 - Object-level access ([SEC-17](../rules/security-and-privacy.md#authentication-and-authorization)): a customer reaches only their own orders and tickets. A request for another customer's resource returns `404`, so its existence is not revealed.
@@ -385,7 +388,8 @@ Both contracts are new at version `1.0.0`. No consumer exists yet, so there is n
 | `invalid-ticket-state` | `409` | The operation is not allowed in the ticket's current state |
 | `suggestion-pending` | `409` | A part of the current suggestion is still pending |
 | `suggestion-superseded` | `409` | The request refers to a suggestion that is no longer current |
-| `idempotency-key-reused` | `409` | The key was used before with a different body or different path parameters |
+| `idempotency-key-reused` | `409` | The key was used before with a different body or different path parameters. Password fields are left out of the comparison ([ERR-15](../rules/errors-and-reliability.md#idempotency)) |
+| `login-name-taken` | `409` | The login name composed from the requested number is already used |
 | `not-ready` | `503` | The component is not ready, for example assets not loaded |
 | `internal-error` | `500` | Unexpected failure |
 
@@ -527,6 +531,7 @@ Three audience namespaces keep the guardrails structural:
 | `createSession` | `POST /v1/sessions` | Anyone | `201` session view and cookie ([ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md)) |
 | `getCurrentSession` | `GET /v1/sessions/current` | Signed in | `account_id` (the same identifier that `listAdminAccounts` returns), display name, role |
 | `deleteCurrentSession` | `DELETE /v1/sessions/current` | Signed in | `204` |
+| `changeOwnPassword` | `POST /v1/sessions/current/password-changes` | Signed in | `201` session view ([account management design](account-management.md)) |
 | `listShopProducts` | `GET /v1/shop/products` | customer | Catalog products, paginated |
 | `getShopProduct` | `GET /v1/shop/products/{product_id}` | customer | One catalog product |
 | `listShopOrders` | `GET /v1/shop/orders` | customer | Own orders, paginated |
@@ -546,6 +551,8 @@ Three audience namespaces keep the guardrails structural:
 | `listAdminAccounts` | `GET /v1/admin/accounts` | admin | Accounts, paginated |
 | `changeAccountRole` | `POST /v1/admin/accounts/{account_id}/role-changes` | admin | `201` role change |
 | `changeAccountStatus` | `POST /v1/admin/accounts/{account_id}/status-changes` | admin | `201` status change |
+| `createAdminAccount` | `POST /v1/admin/accounts` | admin | `201` new `staff` or `manager` account ([account management design](account-management.md)) |
+| `resetAccountPassword` | `POST /v1/admin/accounts/{account_id}/password-resets` | admin | `201` password reset ([account management design](account-management.md)) |
 | `getAdminVersions` | `GET /v1/admin/versions` | admin | Versions in use |
 | `checkLiveness`, `checkReadiness` | `GET /health/live`, `GET /health/ready` | Anyone | Liveness and readiness |
 
@@ -646,14 +653,17 @@ Infrastructure cost (NFR-10) is reported from AWS billing, not from this report.
 
 | Operation | Body or result | Rules ([ADR-0012](../decisions/0012-roles-v1.md)) |
 |---|---|---|
-| `listAdminAccounts` | Items for `staff`, `manager`, and `admin` accounts only: `account_id`, `display_name`, `role`, `is_active` | Customer accounts are never listed. No emails, password hashes, or session data |
+| `listAdminAccounts` | Items for `staff`, `manager`, and `admin` accounts only: `account_id`, `display_name`, `login_name`, `role`, `is_active` | Customer accounts are never listed. No emails, password hashes, or session data |
 | `changeAccountRole` | Body: `role` (`staff` or `manager`) | Only on a `staff` or `manager` account, and only between those two roles. Not on the caller. Not when it would leave no active manager |
 | `changeAccountStatus` | Body: `is_active` | Only on a `staff`, `manager`, or `admin` account. Not on the caller. Not when it would leave no active manager |
+| `createAdminAccount` | Body: `role` (`staff` or `manager`), optional `login_number`, `display_name`, `password` | Only `staff` and `manager` accounts. The login name is `<role>-<number>` ([account management design](account-management.md#login-names)) |
+| `resetAccountPassword` | Body: `password`, `is_signed_out_everywhere` | Only on a `staff` or `manager` account, active or deactivated. Not on the caller |
 | `getAdminVersions` | `release_id` and asset versions from `ai-service`, the `backend` build version, and `ai_service_status` (`available` or `unavailable`) | Returns `200` with `ai_service_status: unavailable` when `ai-service` cannot be reached |
 
-- A request that breaks a rule returns `422 invalid-request`. A request about a customer account returns `404 not-found`, as if the account did not exist.
-- On 2026-11-05 the project lead decided that the `422` body of `changeAccountRole` and `changeAccountStatus` carries the extension member `violated_rule`, an enum: `own_account`, `admin_role_unchangeable`, `role_unchanged`, `status_unchanged`, or `last_active_manager`. It is present exactly when a well-formed request is refused under the admin limits 3 to 5 of [ADR-0012](../decisions/0012-roles-v1.md) or because the value is unchanged, and absent when the request fails validation against the contract ([CON-08](../rules/contracts.md#openapi-style)). When several reasons apply, it holds the first value of that list. Consumers map an unknown value to a generic refusal ([CON-22](../rules/contracts.md#evolution)). The shared `ProblemDetails` does not change.
-- A role change or a deactivation deletes all sessions of the account in the same transaction.
+- A request that breaks a rule returns `422 invalid-request`. A request about a customer account returns `404 not-found`, as if the account did not exist. `createAdminAccount` returns `409 login-name-taken` when the requested number is already used.
+- On 2026-11-05 the project lead decided that the `422` body of `changeAccountRole` and `changeAccountStatus` carries the extension member `violated_rule`, an enum: `own_account`, `admin_role_unchangeable`, `role_unchanged`, `status_unchanged`, or `last_active_manager`. It is present exactly when a well-formed request is refused under the admin limits 3 to 5 of [ADR-0012](../decisions/0012-roles-v1.md) or because the value is unchanged, and absent when the request fails validation against the contract ([CON-08](../rules/contracts.md#openapi-style)). When several reasons apply, it holds the first value of that list. Consumers map an unknown value to a generic refusal ([CON-22](../rules/contracts.md#evolution)). `violated_rule` does not change the shared `ProblemDetails`.
+- On 2026-11-11 the project lead decided that `backend` contract 1.1.0 appends `admin_password_unresettable` and `current_password_incorrect` to `violated_rule`, which the `422` body of `resetAccountPassword` and `changeOwnPassword` also carries ([account management design](account-management.md#backend-contract-110)).
+- A role change or a deactivation deletes all sessions of the account in the same transaction. A password reset deletes them too, unless the admin chooses to keep them.
 - Every successful admin change writes one audit log entry.
 
 #### Simulated commerce data (owned by `backend`)
@@ -686,6 +696,9 @@ Infrastructure cost (NFR-10) is reported from AWS billing, not from this report.
 | `ticket.escalated` | Staff reason codes, suggestion ID when given, actor |
 | `account.role_changed` | Target account, old role, new role, actor |
 | `account.status_changed` | Target account, old and new `is_active`, actor |
+| `account.created` | Target account, role, actor |
+| `account.password_changed` | Target account (the actor's own), whether other sessions ended, actor |
+| `account.password_reset` | Target account, whether every session ended, actor |
 
 - Every entry has an entry ID, `occurred_at`, the event type, the actor's account ID (absent for system events), the ticket ID when relevant, and the trace ID.
 - Entries hold identifiers, statuses, reason codes, versions, and numbers only. Texts (messages, drafts, replies, notes) stay in their own records, which are never updated after creation.

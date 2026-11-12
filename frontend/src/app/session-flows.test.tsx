@@ -1,6 +1,7 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import { chooseFromAccountMenu } from "@/test/account-menu";
 import {
   createSessionRoute,
   deleteCurrentSessionRoute,
@@ -61,9 +62,8 @@ describe("switching accounts", () => {
     backend.answer(listAdminAccountsRoute, exampleAnswer(200, "listAdminAccounts", "last-page"));
     const { user, router, dependencies } = renderApp({ path: "/shop/orders", backend });
     await screen.findByRole("list", { name: "Your orders" });
-    const bar = screen.getByRole("banner");
 
-    await user.click(within(bar).getByRole("button", { name: "Sign out" }));
+    await chooseFromAccountMenu(user, "Sign out");
 
     await screen.findByRole("button", { name: "Sign in" });
     const keysAfterSignOut = dependencies.queryClient

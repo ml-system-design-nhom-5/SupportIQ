@@ -1,6 +1,6 @@
 # Engineering rules
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-05
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-11
 
 These rules make the codebase clean, consistent, easy to understand, and easy to extend for the life of the project. They apply to all code in the repository (`frontend`, `backend`, `ai-service`, `ml`, `eval`, `contracts`, scripts, and configuration) and to every contributor, human or AI agent. Documentation rules are in the [documentation handbook](../README.md).
 
@@ -64,7 +64,7 @@ When two rules conflict, follow the higher one and open a PR that removes the co
 | [logging-and-observability.md](logging-and-observability.md) | `LOG` | Log schema, events, traces, metrics, dashboards, the single observability screen |
 | [security-and-privacy.md](security-and-privacy.md) | `SEC` | Data classification, LLM data rules, secrets, access control, prompt injection, incidents |
 | [data-and-ml.md](data-and-ml.md) | `DATA` | Datasets, KB, splits, leakage, artifacts, prompts, evaluation, feedback, drift |
-| [ui.md](ui.md) | `UI` | Design system, tokens, console interaction, states, content, accessibility, developer views |
+| [ui.md](ui.md) | `UI` | Design system, tokens, console interaction, states, content, accessibility, password fields, developer views |
 
 ## Enforcement
 

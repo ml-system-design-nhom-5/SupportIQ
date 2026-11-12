@@ -5,6 +5,7 @@ from http import HTTPStatus
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request, Response
+from pydantic import MISSING
 
 from supportiq_backend.accounts import AuthenticatedSession, OperationId
 from supportiq_backend.commerce import OrderId
@@ -110,7 +111,7 @@ def to_ticket_page(page: TicketPage) -> ShopTicketPage:
         The contract model; `next_cursor` is absent on the last page.
     """
     position = page.next_position
-    next_cursor = None
+    next_cursor: Cursor | MISSING = MISSING
     if position is not None:
         next_cursor = Cursor(
             encode_cursor(

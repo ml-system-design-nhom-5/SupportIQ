@@ -39,6 +39,7 @@ PROBLEM_DESCRIPTIONS: Mapping[ErrorCode, ProblemDescription] = MappingProxyType(
         ErrorCode.IDEMPOTENCY_KEY_REUSED: ProblemDescription(
             HTTPStatus.CONFLICT, "Idempotency key reused"
         ),
+        ErrorCode.LOGIN_NAME_TAKEN: ProblemDescription(HTTPStatus.CONFLICT, "Login name taken"),
         ErrorCode.NOT_READY: ProblemDescription(HTTPStatus.SERVICE_UNAVAILABLE, "Not ready"),
         ErrorCode.INTERNAL_ERROR: ProblemDescription(
             HTTPStatus.INTERNAL_SERVER_ERROR, "Internal error"

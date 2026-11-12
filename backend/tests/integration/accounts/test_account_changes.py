@@ -29,13 +29,16 @@ pytestmark = pytest.mark.anyio
 async def test_role_change_returns_the_account_after_the_change(
     backend: RunningBackend, builder: DatabaseBuilder, admin_token: str
 ) -> None:
-    target = await builder.account(AccountSpec("staff", display_name="Mai Nguyen"))
+    target = await builder.account(
+        AccountSpec("staff", display_name="Mai Nguyen", login_name="staff-7")
+    )
 
     response = await change_role(backend.client, admin_token, target, "manager")
 
     assert response.status_code == HTTPStatus.CREATED
     assert response.json() == {
         "account_id": str(target),
+        "login_name": "staff-7",
         "display_name": "Mai Nguyen",
         "role": "manager",
         "is_active": True,

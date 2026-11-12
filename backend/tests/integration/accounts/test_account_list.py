@@ -39,7 +39,7 @@ async def test_list_holds_only_internal_accounts_with_only_the_contract_fields(
 
     (item,) = response.json()["items"]
     assert response.status_code == HTTPStatus.OK
-    assert set(item) == {"account_id", "display_name", "role", "is_active"}
+    assert set(item) == {"account_id", "login_name", "display_name", "role", "is_active"}
     assert "next_cursor" not in response.json()
 
 

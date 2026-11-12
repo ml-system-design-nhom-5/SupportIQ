@@ -13,7 +13,13 @@ import {
   listShopTicketsRoute,
 } from "@/test/backend-routes";
 import { createFakeBackend, exampleAnswer } from "@/test/fake-backend";
-import { renderApp, TEST_BASE_URL, testNow, testSettings } from "@/test/render-app";
+import {
+  fixedRandomBytes,
+  renderApp,
+  TEST_BASE_URL,
+  testNow,
+  testSettings,
+} from "@/test/render-app";
 
 /**
  * Render a route that throws, with the route error boundary.
@@ -55,6 +61,7 @@ describe("a defect while data loads", () => {
       random: () => 0,
       clock: () => testNow,
       createIdempotencyKey: () => "00000000-0000-4000-8000-000000000000",
+      randomBytes: fixedRandomBytes,
     });
 
     render(
@@ -91,6 +98,7 @@ describe("a defect in a write", () => {
       random: () => 0,
       clock: () => testNow,
       createIdempotencyKey: () => "00000000-0000-4000-8000-000000000000",
+      randomBytes: fixedRandomBytes,
     });
     render(
       <AppProviders dependencies={dependencies}>

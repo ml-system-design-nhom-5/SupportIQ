@@ -16,6 +16,28 @@ import { createFakeBackend, type FakeBackend } from "@/test/fake-backend";
 /** The time that every test treats as now (TEST-14). */
 export const testNow = new Date("2026-11-05T09:00:00Z");
 
+/** The bytes that {@link fixedRandomBytes} repeats: the symbols t, e, s, and t. */
+const fixedBytes = [26, 14, 25, 26] as const;
+
+/**
+ * The random source of every test and story (TEST-14): the bytes 26, 14, 25, and 26, repeated, so
+ * the suggested password is always {@link FIXED_SUGGESTED_PASSWORD}.
+ *
+ * @param count - How many bytes to return.
+ * @returns The bytes 26, 14, 25, and 26, repeated until there are count of them.
+ */
+export function fixedRandomBytes(count: number): Uint8Array {
+  const repeats = Math.ceil(count / fixedBytes.length);
+  return Uint8Array.from(
+    Array.from({ length: repeats }, () => fixedBytes)
+      .flat()
+      .slice(0, count),
+  );
+}
+
+/** The suggested password that {@link fixedRandomBytes} gives. */
+export const FIXED_SUGGESTED_PASSWORD = "test-test-test";
+
 /** The origin of the app in tests. */
 export const TEST_BASE_URL = "http://localhost:3000";
 
@@ -60,6 +82,7 @@ export function createTestDependencies(
     fetch: backend.fetch,
     random: () => 0,
     clock: () => testNow,
+    randomBytes: fixedRandomBytes,
     createIdempotencyKey: () => {
       keyCount += 1;
       return `00000000-0000-4000-8000-${String(keyCount).padStart(12, "0")}`;

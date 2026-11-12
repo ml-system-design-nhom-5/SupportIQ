@@ -3,7 +3,7 @@
 Each pytest-xdist worker drops and creates its own database `supportiq_test_<worker>`, as the
 owner, and migrates it. Tests connect as `supportiq_app` with the privileges of the design,
 never as the owner, so every test also proves those privileges. Only setup and cleanup use the
-owner, because `supportiq_app` cannot insert accounts or commerce data.
+owner, because `supportiq_app` cannot insert admin accounts, customer accounts, or commerce data.
 
 The role `supportiq_app` must exist first: `backend create-app-role` creates it once per
 cluster (README.md, Set up). The URLs come from the environment variables `DATABASE_URL_OWNER`

@@ -3,8 +3,8 @@
 - **Status:** Approved
 - **Owner:** frontend engineer
 - **Reviewers:** backend engineer, ML engineer, RAG engineer, contracts gatekeeper
-- **Last reviewed:** 2026-11-05
-- **Related:** [Requirements](../product/requirements.md) (FR-01, FR-04 to FR-07, FR-10, NFR-11, ESC-01 to ESC-05), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md) (Proposed), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0014](../decisions/0014-citations-to-order-context.md) (Proposed), [contracts v1 design](contracts-v1.md) (revision 2, in review), [UI rules](../rules/ui.md)
+- **Last reviewed:** 2026-11-11
+- **Related:** [Requirements](../product/requirements.md) (FR-01, FR-04 to FR-07, FR-10, NFR-11, ESC-01 to ESC-05), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md) (Proposed), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0014](../decisions/0014-citations-to-order-context.md) (Proposed), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md), [contracts v1 design](contracts-v1.md) (revision 2, in review), [account management design](account-management.md), [UI rules](../rules/ui.md)
 
 ## Summary
 
@@ -13,6 +13,8 @@ This design fixes the screens, the one workspace layout ([UI-15](../rules/ui.md#
 The team chose the inbox layout on 2026-11-01. It has an inbox on the left, the message, intent, and reply in the middle, and the other AI output on the right. Every screen, state, and dialog below is drawn in that layout.
 
 This design follows ADR-0012 and three documents still in review: contracts v1 revision 2, ADR-0010, and ADR-0014. If they change, this document changes with them.
+
+**Revision of 2026-11-11, for [ADR-0015](../decisions/0015-account-creation-and-password-changes.md):** the app bar shows the account menu instead of the display name and Sign out, and the sign-in password field gets the show and hide toggle of the proposed UI-46 ([account management design](account-management.md#rule-changes)). The shared page `/change-password` joins the screens. All three are defined in the [account management design](account-management.md#screens-and-dialogs). The earlier app bar is kept under [Alternatives considered](#alternatives-considered).
 
 ## Goals and non-goals
 
@@ -53,7 +55,8 @@ Only `frontend` changes.
 
 | Screen | Route (proposed) | Roles | Content | Mockup |
 |---|---|---|---|---|
-| Sign in | `/sign-in` | All | A text field for the login name, with a hint such as `staff-1`, and a password field ([ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md)). No list of accounts is shown. A failed attempt shows the same message for an unknown name, a wrong password, and a deactivated account | [sign-in.png](assets/console-ui/sign-in.png) |
+| Sign in | `/sign-in` | All | A text field for the login name, with a hint such as `staff-1`, and a password field with the show and hide toggle ([ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md); [account management design](account-management.md#password-fields)). No list of accounts is shown. A failed attempt shows the same message for an unknown name, a wrong password, and a deactivated account | [sign-in.png](assets/console-ui/sign-in.png) |
+| Change password | `/change-password` | All | The shared page for a password change, opened from the account menu ([account management design](account-management.md#change-password-page)) | [change-password.png](assets/account-management/change-password.png) |
 | Console, no ticket selected | `/console` | Staff, manager | The inbox, and a prompt to select a ticket | [no-ticket-selected.png](assets/console-ui/no-ticket-selected.png) |
 | Ticket workspace | `/console/tickets/{ticket_id}` | Staff, manager | The regions below | [Layout](#layout) |
 | KB document version | Side sheet over the workspace | Staff, manager | Full text of one KB document version ([UI-20](../rules/ui.md#console-interaction)) | [kb-document.png](assets/console-ui/kb-document.png) |
@@ -64,6 +67,8 @@ Staff who open a route their role does not allow see [state-permission-denied.pn
 ### Layout
 
 All mockups are rendered at 1280 × 900 px, the minimum console width ([UI-33](../rules/ui.md#layout-and-performance)).
+
+Above the columns, the app bar holds the brand "SupportIQ Console", the navigation (Tickets, and Reports for managers), and the [account menu](account-management.md#account-menu) with the display name, the role label, Change password, and Sign out.
 
 | Column | Width at 1280 px | Content |
 |---|---|---|
@@ -359,6 +364,7 @@ The status `cancelled` has no presentation, because a superseded suggestion is n
 - **Green confidence for `high`:** rejected, because color would suggest that the prediction is correct.
 - **A separate Approve button:** rejected, because `backend` derives approve or edit from the sent body (ADR-0006).
 - **Locking the intent until the draft is ready, or a confirmation checkbox on manual replies:** rejected ([contracts v1](contracts-v1.md#alternatives-considered)).
+- **The display name, the role, and Sign out directly in the app bar:** the app bar of the mockups until 2026-11-11. Replaced by the account menu, so that every role finds Change password in the same place ([ADR-0015](../decisions/0015-account-creation-and-password-changes.md)).
 
 ## Testing and evaluation
 
@@ -389,6 +395,7 @@ The status `cancelled` has no presentation, because a superseded suggestion is n
 2. Done on 2026-11-05: the team approved this design.
 3. The contract change that adds the console operations implements `TicketSummary`, `other_orders`, `CitationView`, `intent_override` in `SuggestionView`, and the draft `text` in `backend.openapi.yaml`.
 4. Implementation: token files and primitives, then domain components with stories, then screens against Prism mocks.
+5. Done on 2026-11-11: the project lead approved the revision of 2026-11-11, in place of a PR review. The account menu, the toggle, and `/change-password` are built after `backend` contract 1.1.0 ([account management design](account-management.md#rollout)).
 
 ### Mockup sources
 

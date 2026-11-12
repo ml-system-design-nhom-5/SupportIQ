@@ -408,3 +408,40 @@ table.report .num { text-align: right; white-space: nowrap; font-weight: var(--w
 .sign-in .brand { font-size: var(--text-18); font-weight: var(--weight-semibold); }
 .sign-in .brand span { color: var(--color-text-muted); font-weight: var(--weight-regular); }
 .error-line { display: flex; align-items: center; gap: var(--space-4); color: var(--color-danger); }
+
+/* ---------- Account menu, password fields, and form controls (account management design) ---------- */
+
+.account-trigger { display: inline-flex; align-items: center; gap: var(--space-8); height: 32px; padding: 0 var(--space-8); border: 1px solid transparent; border-radius: var(--radius-md); background: transparent; color: var(--color-text-muted); font: inherit; }
+.account-trigger b { color: var(--color-text); font-weight: var(--weight-medium); }
+.account-trigger.open { border-color: var(--color-border-strong); background: var(--color-background); }
+.account-menu { position: fixed; top: 44px; right: var(--space-16); z-index: 30; width: 240px; padding: var(--space-4); background: var(--color-surface-raised); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--elevation-3); }
+.account-menu .menu-heading { display: flex; flex-direction: column; padding: var(--space-8); }
+.account-menu .menu-heading b { font-weight: var(--weight-semibold); }
+.account-menu hr { margin: var(--space-4) 0; border: none; border-top: 1px solid var(--color-border); }
+.account-menu .menu-entry { display: flex; align-items: center; gap: var(--space-8); padding: var(--space-8); border-radius: var(--radius-sm); font-weight: var(--weight-medium); }
+.account-menu .menu-entry.focused { background: var(--color-background); outline: 2px solid var(--color-focus-ring); outline-offset: -2px; }
+
+.input .toggle { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: var(--radius-sm); color: var(--color-text-muted); }
+.input-invalid { border-color: var(--color-danger); }
+.input-prefix { display: flex; align-items: stretch; }
+.input-prefix .prefix { display: flex; align-items: center; padding: 0 var(--space-8); border: 1px solid var(--color-border-strong); border-right: none; border-radius: var(--radius-md) 0 0 var(--radius-md); background: var(--color-background); font-family: var(--font-mono); font-size: var(--text-12); }
+.input-prefix .input { flex: 1; border-radius: 0 var(--radius-md) var(--radius-md) 0; }
+.placeholder-text { color: var(--color-text-muted); }
+.field-hint { font-size: var(--text-12); color: var(--color-text-muted); }
+.field-error { display: flex; align-items: center; gap: var(--space-4); font-size: var(--text-12); color: var(--color-danger); }
+
+.radio-group { display: flex; gap: var(--space-16); }
+.radio { display: inline-flex; align-items: center; gap: var(--space-8); font-weight: var(--weight-medium); }
+.radio i { width: 16px; height: 16px; border: 1px solid var(--color-border-strong); border-radius: 50%; background: var(--color-surface); display: inline-block; }
+.radio i.on { border: 5px solid var(--color-primary); }
+.checkbox i.on { display: inline-flex; align-items: center; justify-content: center; border-color: var(--color-primary); background: var(--color-primary); color: var(--color-primary-foreground); }
+.checkbox i.on .icon { width: 12px; height: 12px; }
+.input-row { display: flex; align-items: center; gap: var(--space-8); }
+.input-row .input { flex: 1; }
+
+.form-panel { width: 400px; padding: var(--space-24); gap: var(--space-16); }
+.form-panel .brand { font-size: var(--text-18); font-weight: var(--weight-semibold); }
+.form-panel h1 { margin: 0; font-size: var(--text-20); font-weight: var(--weight-semibold); }
+.form-panel p { margin: 0; }
+.form-actions { display: flex; justify-content: flex-end; gap: var(--space-8); }
+.dialog-form { width: 520px; }

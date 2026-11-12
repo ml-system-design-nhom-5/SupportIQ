@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   type Account,
   type AccountChange,
-  getAvailableChanges,
+  getAvailableActions,
   isSameChange,
   replaceAccount,
   toAccount,
@@ -23,6 +23,7 @@ const CALLER_ID = "caller";
 function buildAccount(overrides: Partial<Account> = {}): Account {
   return {
     accountId: "other",
+    loginName: "staff-1",
     displayName: "Mai Nguyen",
     role: "staff",
     isActive: true,
@@ -36,6 +37,7 @@ describe("toAccount", () => {
 
     expect(account).toEqual({
       accountId: "9a7d3e21-6c4b-4f8e-b1a2-3c5d7e9f0a12",
+      loginName: "staff-1",
       displayName: "Mai Nguyen",
       role: "manager",
       isActive: true,
@@ -68,28 +70,36 @@ describe("toInternalRole", () => {
   });
 });
 
-describe("getAvailableChanges (admin UI design, Accounts)", () => {
+describe("getAvailableActions (admin UI design, Accounts)", () => {
   it.each([
-    ["an active staff account", { role: "staff" }, ["make_manager", "deactivate"]],
-    ["an active manager", { role: "manager" }, ["make_staff", "deactivate"]],
+    [
+      "an active staff account",
+      { role: "staff" },
+      ["make_manager", "reset_password", "deactivate"],
+    ],
+    ["an active manager", { role: "manager" }, ["make_staff", "reset_password", "deactivate"]],
     [
       "a deactivated staff account",
       { role: "staff", isActive: false },
-      ["make_manager", "reactivate"],
+      ["make_manager", "reset_password", "reactivate"],
     ],
     ["an active admin", { role: "admin" }, ["deactivate"]],
     ["a deactivated admin", { role: "admin", isActive: false }, ["reactivate"]],
     ["a role this version does not know", { role: "unknown" }, ["deactivate"]],
-  ] as const)("offers the changes of %s", (_case, overrides, changes) => {
-    expect(getAvailableChanges(buildAccount(overrides), CALLER_ID)).toEqual(changes);
+  ] as const)("offers the actions of %s", (_case, overrides, actions) => {
+    expect(getAvailableActions(buildAccount(overrides), CALLER_ID)).toEqual(actions);
   });
 
   it("offers nothing on the caller's own account", () => {
-    expect(getAvailableChanges(buildAccount({ accountId: CALLER_ID }), CALLER_ID)).toEqual([]);
+    expect(getAvailableActions(buildAccount({ accountId: CALLER_ID }), CALLER_ID)).toEqual([]);
   });
 
-  it("still offers the changes while the caller is not known yet", () => {
-    expect(getAvailableChanges(buildAccount(), undefined)).toEqual(["make_manager", "deactivate"]);
+  it("still offers the actions while the caller is not known yet", () => {
+    expect(getAvailableActions(buildAccount(), undefined)).toEqual([
+      "make_manager",
+      "reset_password",
+      "deactivate",
+    ]);
   });
 });
 

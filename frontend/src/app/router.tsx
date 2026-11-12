@@ -14,7 +14,14 @@ import { OrderRoute } from "@/app/routes/order-route";
 import { ProductRoute } from "@/app/routes/product-route";
 import { ScreenErrorBoundary } from "@/app/screen-error-boundary";
 import { ACCOUNTS_ROUTE, AccountsPage } from "@/features/admin-accounts";
-import { rootPathByArea, SIGN_IN_PATH, SignInPage, StartPage } from "@/features/session";
+import {
+  CHANGE_PASSWORD_PATH,
+  ChangePasswordPage,
+  rootPathByArea,
+  SIGN_IN_PATH,
+  SignInPage,
+  StartPage,
+} from "@/features/session";
 import { PRODUCT_ROUTE, ProductsPage } from "@/features/shop-catalog";
 import { ORDER_ROUTE, ORDERS_ROUTE, OrdersPage } from "@/features/shop-orders";
 import { SUPPORT_ROUTE, SupportPage } from "@/features/shop-support";
@@ -22,6 +29,11 @@ import { SUPPORT_ROUTE, SupportPage } from "@/features/shop-support";
 /** The route tree, shared by the browser router and the memory routers of tests. */
 export const appRoutes: RouteObject[] = [
   { path: SIGN_IN_PATH, element: <SignInPage />, errorElement: <RouteErrorBoundary /> },
+  {
+    path: CHANGE_PASSWORD_PATH,
+    element: <ChangePasswordPage />,
+    errorElement: <RouteErrorBoundary />,
+  },
   { path: "/", element: <StartPage />, errorElement: <RouteErrorBoundary /> },
   {
     path: rootPathByArea.shop,

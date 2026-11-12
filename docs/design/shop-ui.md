@@ -1,10 +1,10 @@
 # Design: Shop UI
 
-- **Status:** In review
+- **Status:** Approved
 - **Owner:** frontend engineer
 - **Reviewers:** backend engineer, contracts gatekeeper
-- **Last reviewed:** 2026-11-10
-- **Related:** [Requirements](../product/requirements.md) (FR-08, FR-11), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md), [contracts v1 design](contracts-v1.md) (revision 2, in review), [console UI design](console-ui.md) (tokens), [UI rules](../rules/ui.md#shop)
+- **Last reviewed:** 2026-11-11
+- **Related:** [Requirements](../product/requirements.md) (FR-08, FR-11), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md), [contracts v1 design](contracts-v1.md) (revision 2, in review), [account management design](account-management.md), [console UI design](console-ui.md) (tokens), [UI rules](../rules/ui.md#shop)
 
 ## Summary
 
@@ -13,6 +13,8 @@ This design fixes the screens of `/shop`, where simulated customers browse a rea
 On 2026-11-05 the team chose the layout: My orders is a list, and each order page holds the order details, every ticket about that order with its reply, and a message box. A Support page lists every ticket, and each one opens on the page of its order.
 
 **Revision of 2026-11-07, decided by the project lead:** after a timeout, a lost connection, `502`, or `504`, nobody knows whether a message arrived: `backend` may finish a write after `frontend` stopped waiting (`backend` contract, Timeouts), and a write in flight can fail with `502` ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), Proposed). Version 1.0.1 of the `backend` contract states this in its text on responses from the ingress. The same holds for a `2xx` whose body cannot be read, and for a later failure with the same key, unless `backend` refuses it with `422` or `404`. The `Idempotency-Key` now stays with a message until the send succeeds or the text changes, and the banner says that the message may have arrived. The first decision is kept under [Alternatives considered](#alternatives-considered). The revision also records that a product appears at most once in an order, and where the focus goes after sending.
+
+**Revision of 2026-11-11, for [ADR-0015](../decisions/0015-account-creation-and-password-changes.md):** the account menu replaces the customer's display name and Sign out in the top bar, and adds Change password, which opens the shared page `/change-password`. Both are defined in the [account management design](account-management.md#account-menu). The earlier top bar is kept under [Alternatives considered](#alternatives-considered).
 
 ## Goals and non-goals
 
@@ -26,7 +28,7 @@ On 2026-11-05 the team chose the layout: My orders is a list, and each order pag
 
 ### Non-goals
 
-- Everything that ADR-0013 excludes: sign-up, profile editing, a cart, a checkout, payment, search, filters, reviews, and any action that changes an order.
+- Everything that ADR-0013 excludes: sign-up, profile editing, a cart, a checkout, payment, search, filters, reviews, and any action that changes an order. ADR-0015 adds the own password change to the shop's list; profile editing stays excluded ([ADR-0015](../decisions/0015-account-creation-and-password-changes.md), Relation to earlier ADRs).
 - A conversation with several messages per ticket ([contracts v1](contracts-v1.md#non-goals)).
 - Support questions that are not about an order (ADR-0013).
 - `/console` and `/admin`, which have their own designs: [console UI](console-ui.md) and [admin UI](admin-ui.md).
@@ -46,7 +48,7 @@ Only `frontend` changes. It reads and writes through the `backend` contract only
 
 ### Layout
 
-- A top bar with the shop name, "Demo Shop" (decided by the project lead on 2026-11-05), the navigation (Products, My orders, Support), the customer's display name, and Sign out. At phone width the navigation moves to a second row.
+- A top bar with the shop name, "Demo Shop" (decided by the project lead on 2026-11-05), the navigation (Products, My orders, Support), and the [account menu](account-management.md#account-menu): the customer's display name, the role label Customer, Change password, and Sign out. At phone width the navigation moves to a second row, and the menu trigger shows only the person icon.
 - One content column, at most 960 px wide, with 32 px padding on desktop and 16 px at phone width.
 - Body text is 16 px ([UI-08](../rules/ui.md#tokens)). Products and order lines show the neutral product image of the design system ([UI-38](../rules/ui.md#shop)).
 - After sign-in, `frontend` opens the area of the role that `getCurrentSession` returns: `/shop` for a customer.
@@ -56,6 +58,7 @@ Only `frontend` changes. It reads and writes through the `backend` contract only
 | Screen | Route (proposed) | Content | Mockup |
 |---|---|---|---|
 | Sign in | `/sign-in` | Shared with the console | [sign-in.png](assets/console-ui/sign-in.png) |
+| Change password | `/change-password` | Shared with every role, opened from the account menu ([account management design](account-management.md#change-password-page)) | [change-password.png](assets/account-management/change-password.png) |
 | Products | `/shop` | Catalog cards: neutral image, name, category, price. Show more products loads the next page ([CON-14](../rules/contracts.md#api-conventions)) | [products.png](assets/shop-ui/products.png) |
 | Product | `/shop/products/{product_id}` | Name, category, price, description, neutral image | [product.png](assets/shop-ui/product.png) |
 | My orders | `/shop/orders` | List, newest first, with Show more when there is a next page: order ID, `placed_at`, product names, order and shipment status, refund status when there is a refund, total | [orders.png](assets/shop-ui/orders.png) |
@@ -225,13 +228,14 @@ Each badge has an icon and a label, so color is never the only signal. The tones
 - **Option C as first drawn, with the form on its own page:** changed by the team. The form moved into the order page, and My orders became a list like Support.
 - **A chat window on every page, including Products:** not chosen. ADR-0013 attaches every message to one of the customer's orders, a ticket holds one message and one reply, and a chat window would read as the autonomous chatbot that the requirements exclude. A Contact support panel with an order picker is drawn as a proposal (Open questions).
 - **Polling for the reply while the page is open:** not chosen, because the customer does not wait on the page. On 2026-11-05 the project lead decided that the order page loads its data again when the window regains focus instead.
+- **The customer's display name and Sign out directly in the top bar:** the layout of this design until 2026-11-11. Replaced by the account menu, so that every role finds Change password in the same place ([ADR-0015](../decisions/0015-account-creation-and-password-changes.md)).
 - **A new `Idempotency-Key` for each Send message, and "Your message was not sent" after every failure:** the first decision of this design, replaced on 2026-11-07. After a timeout, a lost connection, `502`, or `504`, `backend` may still finish the write, so that banner could be false, and sending again with a new key could create a second ticket.
 
 ## Testing and evaluation
 
 - **Storybook:** a story for every block (top bar, product card, order row, order summary, ticket item, message box) in every state, with axe checks ([UI-32](../rules/ui.md#accessibility)).
 - **Component tests:** the message counter and Send message enablement, Contact support moving focus to the message box, the status presentations, the mapping of every problem type to a state, the reload on window focus, which keeps the text in the message box also when it fails, the key of a message sent again (same text, changed text, and a new message after a success), the focus after sending, and the 360 px layout.
-- **End-to-end tests (Playwright):** a customer signs in, opens an order, and sends a message; staff send the reply in the console; the customer sees Replied and the reply on the order page and in Support. The same flow runs at a 360 px viewport.
+- **End-to-end tests (Playwright):** a customer signs in, opens an order, and sends a message; staff send the reply in the console; the customer sees Replied and the reply on the order page and in Support. The same flow runs at a 360 px viewport. The account menu and the password change at 360 px are tested as the [account management design](account-management.md#testing-and-evaluation) lists.
 - No model metric changes.
 
 ## Observability
@@ -252,6 +256,7 @@ Each badge has an icon and a label, so color is never the only signal. The tones
 2. Done on 2026-11-05: the backend and frontend owners approved this design.
 3. Contract PR 2 implements `ShopTicketView` with `replied` and the `order_id` filter of `listShopTickets`.
 4. Implementation: the shop blocks join the design system with stories first ([UI-38](../rules/ui.md#shop)), then the screens, against Prism mocks.
+5. Done on 2026-11-11: the project lead approved the revision of 2026-11-11, in place of a PR review. The account menu is built after `backend` contract 1.1.0 ([account management design](account-management.md#rollout)).
 
 ### Mockup sources
 

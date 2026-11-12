@@ -1,7 +1,8 @@
 /**
  * The decorators and parameters of every story: the design tokens and fonts, the app's
- * dependencies, a router for links unless the story brings its own, and a fixed clock, so relative
- * times do not change between runs (TEST-14). Stories never reach a backend: a request that a
+ * dependencies, a router for links unless the story brings its own, a fixed clock, so relative
+ * times do not change between runs, and fixed random bytes, so suggested passwords do not either
+ * (TEST-14). Stories never reach a backend: a request that a
  * story sends fails as a lost connection.
  */
 import "@/design-system/tokens/tokens.css";
@@ -11,6 +12,7 @@ import { MemoryRouter } from "react-router";
 import { configure } from "storybook/test";
 
 import { AppProviders, createAppDependencies } from "@/app/composition-root";
+import { fixedRandomBytes } from "@/test/render-app";
 
 /** The time that every story treats as now. */
 const storyNow = new Date("2026-11-05T09:00:00Z");
@@ -40,6 +42,7 @@ const preview: Preview = {
           fetch: () => Promise.reject(new TypeError("Stories have no backend.")),
           random: () => 0,
           createIdempotencyKey: () => "00000000-0000-4000-8000-000000000000",
+          randomBytes: fixedRandomBytes,
           clock: () => storyNow,
         })}
       >

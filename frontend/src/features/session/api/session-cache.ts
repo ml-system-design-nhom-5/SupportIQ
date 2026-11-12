@@ -29,6 +29,17 @@ export function forgetAccountData(queryClient: QueryClient): void {
  */
 export function startSession(queryClient: QueryClient, session: Session): void {
   forgetAccountData(queryClient);
+  replaceCachedSession(queryClient, session);
+}
+
+/**
+ * Replace the signed-in account with the one that `backend` returned, for example after the own
+ * password change (account management design, Change password page). The account's data stays.
+ *
+ * @param queryClient - The query client of the app.
+ * @param session - The signed-in account, as `backend` returned it.
+ */
+export function replaceCachedSession(queryClient: QueryClient, session: Session): void {
   const state: SessionState = { kind: "signed_in", session };
   queryClient.setQueryData(sessionQueryKeys.current(), state);
 }

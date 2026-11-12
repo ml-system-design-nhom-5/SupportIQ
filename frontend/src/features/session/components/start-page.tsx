@@ -31,7 +31,7 @@ export function StartPage() {
               headingLevel={1}
               title="This account has no area in this version"
               description="Sign out, then sign in with a customer, support, or admin account."
-              actions={<SignOutButton placement="state" />}
+              actions={<SignOutButton />}
             />
           </PageColumn>
         );

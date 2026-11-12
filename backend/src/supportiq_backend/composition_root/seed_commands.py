@@ -18,6 +18,7 @@ from supportiq_backend.accounts import (
     LoginName,
     Password,
     PasswordHash,
+    PasswordHasher,
     Role,
 )
 from supportiq_backend.accounts.adapters.credentials import Argon2Passwords
@@ -97,6 +98,8 @@ async def hash_account_passwords(
 ) -> Mapping[LoginName, PasswordHash]:
     """Hash the password of every account, with a new salt per account.
 
+    The seed uses the same port and adapter as every write that sets a password (ADR-0015).
+
     Args:
         document: The seed file.
         passwords: The passwords by role.
@@ -104,7 +107,7 @@ async def hash_account_passwords(
     Returns:
         The hashes by login name.
     """
-    hasher = Argon2Passwords()
+    hasher: PasswordHasher = Argon2Passwords()
     return {
         LoginName(account.login_name): await hasher.hash_password(passwords[account.role])
         for account in document.accounts

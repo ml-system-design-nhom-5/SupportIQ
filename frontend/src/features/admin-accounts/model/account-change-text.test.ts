@@ -10,6 +10,7 @@ import {
 
 const mai: Account = {
   accountId: "1",
+  loginName: "staff-1",
   displayName: "Mai Nguyen",
   role: "staff",
   isActive: true,

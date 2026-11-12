@@ -34,6 +34,7 @@ SESSION_COOKIE = "supportiq_session"
 LOGIN_NAME_OF_ROLE = {"customer": "customer-1", "admin": "admin-1"}
 ROLE_OF_OPERATION = {
     "getCurrentSession": "customer",
+    "changeOwnPassword": "customer",
     "deleteCurrentSession": "customer",
     "listShopProducts": "customer",
     "getShopProduct": "customer",
@@ -43,17 +44,20 @@ ROLE_OF_OPERATION = {
     "createShopTicket": "customer",
     "getShopTicket": "customer",
     "listAdminAccounts": "admin",
+    "createAdminAccount": "admin",
     "changeAccountRole": "admin",
     "changeAccountStatus": "admin",
+    "resetAccountPassword": "admin",
 }
 # The contract: a value that is not a valid `traceparent` is ignored and never causes `422`, so
 # no value of it can make a request invalid. A unit test covers that case, and generation
 # leaves the header out, because negative testing would expect a rejection.
 TRACEPARENT_REFERENCE = {"$ref": "#/components/parameters/Traceparent"}
 # The contract: a cursor is any text of 1 to 512 characters, and one that is malformed, or from
-# another operation, returns `422`; and a change that breaks an admin limit returns `422` with
-# `violated_rule`. So on these operations a request can match the schema and still get `422`.
-# Every other operation keeps the strict default of the check.
+# another operation, returns `422`; a change or a reset that breaks an admin limit returns `422`
+# with `violated_rule`; and a wrong current password returns `422` with
+# `current_password_incorrect`. So on these operations a request can match the schema and still
+# get `422`. Every other operation keeps the strict default of the check.
 OPERATIONS_WITH_A_DOCUMENTED_422_FOR_VALID_DATA = [
     "listShopProducts",
     "listShopOrders",
@@ -61,6 +65,8 @@ OPERATIONS_WITH_A_DOCUMENTED_422_FOR_VALID_DATA = [
     "listAdminAccounts",
     "changeAccountRole",
     "changeAccountStatus",
+    "resetAccountPassword",
+    "changeOwnPassword",
 ]
 ACCEPTED_STATUSES_WITH_422 = ["2xx", "3xx", "401", "403", "404", "409", "422", "429", "5xx"]
 SUPPRESSED_HEALTH_CHECKS = [

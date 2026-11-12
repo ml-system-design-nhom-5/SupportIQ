@@ -1,8 +1,8 @@
 /**
  * The public API of the design system (ADR-0008, UI-01). Features and app/ import only from here.
  */
-export type { AccountLabelProps } from "@/design-system/components/account-label";
-export { AccountLabel } from "@/design-system/components/account-label";
+export type { AccountMenuProps, AccountMenuVariant } from "@/design-system/components/account-menu";
+export { AccountMenu } from "@/design-system/components/account-menu";
 export type { AppBarProps, AppBarVariant } from "@/design-system/components/app-bar";
 export { AppBar } from "@/design-system/components/app-bar";
 export type { BreadcrumbsProps, BreadcrumbStep } from "@/design-system/components/breadcrumbs";
@@ -12,7 +12,7 @@ export { CenteredPanel } from "@/design-system/components/centered-panel";
 export type { DateTextProps } from "@/design-system/components/date-text";
 export { DateText } from "@/design-system/components/date-text";
 export type { FormFieldProps } from "@/design-system/components/form-field";
-export { FormField } from "@/design-system/components/form-field";
+export { FormField, getFieldDescriptionId } from "@/design-system/components/form-field";
 export type {
   InlineMessageProps,
   InlineMessageTone,
@@ -101,9 +101,10 @@ export type {
 export { Button } from "@/design-system/primitives/button";
 export type { ButtonLinkProps } from "@/design-system/primitives/button-link";
 export { ButtonLink } from "@/design-system/primitives/button-link";
+export type { CheckboxProps } from "@/design-system/primitives/checkbox";
+export { Checkbox } from "@/design-system/primitives/checkbox";
 export type {
   ConfirmDialogProps,
-  ConfirmDialogReturnFocus,
   ConfirmDialogText,
   ConfirmDialogTone,
 } from "@/design-system/primitives/confirm-dialog";
@@ -114,8 +115,11 @@ export type {
   DataTableRow,
 } from "@/design-system/primitives/data-table";
 export { buildRowHeaderId, DataTable } from "@/design-system/primitives/data-table";
+export type { DialogReturnFocus } from "@/design-system/primitives/dialog-return-focus";
 export type { FieldLabelProps } from "@/design-system/primitives/field-label";
 export { FieldLabel } from "@/design-system/primitives/field-label";
+export type { FormDialogProps, FormDialogText } from "@/design-system/primitives/form-dialog";
+export { FormDialog } from "@/design-system/primitives/form-dialog";
 export type { GridProps } from "@/design-system/primitives/grid";
 export { Grid } from "@/design-system/primitives/grid";
 export type { HeadingProps, HeadingSize } from "@/design-system/primitives/heading";
@@ -137,6 +141,10 @@ export type {
   PanelSectionProps,
 } from "@/design-system/primitives/panel-section";
 export { PanelSection } from "@/design-system/primitives/panel-section";
+export type { PasswordInputProps } from "@/design-system/primitives/password-input";
+export { PasswordInput } from "@/design-system/primitives/password-input";
+export type { RadioGroupProps, RadioOption } from "@/design-system/primitives/radio-group";
+export { RadioGroup } from "@/design-system/primitives/radio-group";
 export type {
   SkeletonHeight,
   SkeletonProps,
@@ -160,5 +168,7 @@ export type { TextLinkEmphasis, TextLinkProps } from "@/design-system/primitives
 export { TextLink } from "@/design-system/primitives/text-link";
 export type { TooltipProps } from "@/design-system/primitives/tooltip";
 export { Tooltip } from "@/design-system/primitives/tooltip";
+export type { ClipboardCopy, CopyOutcome } from "@/design-system/primitives/use-copy-to-clipboard";
+export { useCopyToClipboard } from "@/design-system/primitives/use-copy-to-clipboard";
 export type { VisuallyHiddenProps } from "@/design-system/primitives/visually-hidden";
 export { VisuallyHidden } from "@/design-system/primitives/visually-hidden";

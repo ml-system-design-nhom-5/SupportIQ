@@ -4,6 +4,7 @@
  */
 import { expect, test } from "@playwright/test";
 
+import { chooseFromAccountMenu } from "./support/account-menu.ts";
 import { preferOutcome } from "./support/mock-outcomes.ts";
 import { expectNoAccessibilityViolations } from "./support/page-checks.ts";
 import { createSessionCookie, submitSignIn } from "./support/sign-in.ts";
@@ -32,7 +33,7 @@ test("a customer signs out and reaches sign-in without a return path", async ({ 
   await page.goto("/shop/orders");
   await expect(page.getByRole("heading", { level: 1, name: "My orders" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await chooseFromAccountMenu(page, "Sign out");
 
   await expect(page).toHaveURL(/\/sign-in$/);
   await expect(page.getByRole("textbox", { name: "Login name" })).toBeVisible();

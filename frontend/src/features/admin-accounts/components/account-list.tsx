@@ -7,26 +7,24 @@ import { LoadMoreButton, Skeleton, Stack, VisuallyHidden } from "@/design-system
 import type { AccountListQuery } from "@/features/admin-accounts/api/use-accounts";
 import {
   AccountsTable,
-  type ChosenAccountChange,
+  type RowActionHandlers,
 } from "@/features/admin-accounts/components/accounts-table";
 import type { Account } from "@/features/admin-accounts/model/account";
 import { collectPageItems, FailureBanner, getRequestFailure } from "@/features/backend-requests";
 import { useSignedInAccountId } from "@/features/session";
 
 /** Props of {@link AccountList}. */
-export type AccountListProps = {
+export type AccountListProps = RowActionHandlers & {
   readonly query: AccountListQuery;
-  /** Opens the confirmation of a change. */
-  readonly onChooseChange: (chosen: ChosenAccountChange) => void;
 };
 
 /**
  * Render the account list.
  *
- * @param props - The query of the list and the handler of a chosen change.
+ * @param props - The query of the list and the handlers of the row actions.
  * @returns Skeleton rows, or the table with Show more accounts.
  */
-export function AccountList({ query, onChooseChange }: AccountListProps) {
+export function AccountList({ query, ...handlers }: AccountListProps) {
   const callerAccountId = useSignedInAccountId();
 
   if (query.data === undefined) {
@@ -48,11 +46,7 @@ export function AccountList({ query, onChooseChange }: AccountListProps) {
 
   return (
     <>
-      <AccountsTable
-        accounts={accounts}
-        callerAccountId={callerAccountId}
-        onChooseChange={onChooseChange}
-      />
+      <AccountsTable accounts={accounts} callerAccountId={callerAccountId} {...handlers} />
       {loadMoreFailure === undefined ? null : (
         <FailureBanner lead="More accounts could not be loaded." failure={loadMoreFailure} />
       )}

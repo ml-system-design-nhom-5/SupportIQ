@@ -7,14 +7,10 @@ shipping addresses, passwords, and a raw cookie value.
 """
 
 import io
-import logging
-from collections.abc import Iterator
 from dataclasses import dataclass
 
 import httpx
 import pytest
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import SpanExporter
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from supportiq_backend.accounts import PasswordHash
@@ -23,10 +19,11 @@ from supportiq_backend.platform.adapters.logging_setup import (
     StandardLibraryEventRecorder,
     configure_logging,
 )
-from supportiq_backend.platform.adapters.telemetry import create_tracer_provider
+from tests.integration.accounts.password_requests import sign_in
 from tests.integration.application import ORIGIN_HEADERS, build_settings, running_client
 from tests.integration.builders import AccountSpec, DatabaseBuilder
 from tests.integration.database import WorkerDatabase
+from tests.integration.guardrails.exported_spans import spans_as_text
 from tests.unit.accounts.fakes import KNOWN_PASSWORD
 from tests.unit.platform.fakes import FakeClock
 
@@ -62,30 +59,6 @@ class Scenario:
 
 
 @pytest.fixture
-def restored_root_logger() -> Iterator[None]:
-    root = logging.getLogger()
-    handlers = tuple(root.handlers)
-    level = root.level
-    yield
-    root.handlers[:] = handlers
-    root.setLevel(level)
-
-
-@pytest.fixture
-def exported_spans(monkeypatch: pytest.MonkeyPatch) -> InMemorySpanExporter:
-    exporter = InMemorySpanExporter()
-
-    def provider_with_exporter(_configured: SpanExporter | None) -> TracerProvider:
-        return create_tracer_provider(exporter)
-
-    monkeypatch.setattr(
-        "supportiq_backend.composition_root.runtime.create_tracer_provider",
-        provider_with_exporter,
-    )
-    return exporter
-
-
-@pytest.fixture
 async def scenario(builder: DatabaseBuilder, known_password_hash: PasswordHash) -> Scenario:
     customer_id = await builder.customer(display_name=DISPLAY_NAME)
     await builder.account(
@@ -118,14 +91,6 @@ async def scenario(builder: DatabaseBuilder, known_password_hash: PasswordHash) 
         staff_account_id=str(
             await builder.account(AccountSpec("staff", display_name=STAFF_DISPLAY_NAME))
         ),
-    )
-
-
-async def sign_in(client: httpx.AsyncClient, login_name: str, password: str) -> httpx.Response:
-    return await client.post(
-        "/v1/sessions",
-        json={"login_name": login_name, "password": password},
-        headers=ORIGIN_HEADERS,
     )
 
 
@@ -165,15 +130,6 @@ async def send_every_kind_of_admin_request(
         f"/v1/admin/accounts/{staff_account_id}/role-changes",
         json={"role": "manager"},
         headers={**headers, "Idempotency-Key": KEY},
-    )
-
-
-def spans_as_text(exporter: InMemorySpanExporter) -> str:
-    return repr(
-        [
-            (span.name, dict(span.attributes or {}), [event.name for event in span.events])
-            for span in exporter.get_finished_spans()
-        ]
     )
 
 

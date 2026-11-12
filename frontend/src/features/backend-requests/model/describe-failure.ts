@@ -31,6 +31,7 @@ const categoryByProblemType: Readonly<Record<ProblemType, FailureCategory>> = {
   not_found: "not_found",
   invalid_request: "invalid_request",
   idempotency_key_reused: "conflict",
+  login_name_taken: "conflict",
   not_ready: "unavailable",
   internal_error: "unexpected",
   unknown: "unexpected",

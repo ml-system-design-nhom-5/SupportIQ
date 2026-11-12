@@ -5,10 +5,16 @@ import re
 from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
+from pydantic import MISSING
 from starlette.requests import Request
 from starlette.types import Message
 
-from supportiq_backend.generated import ChangeAccountStatusRequest, ShipmentStatus, ShopShipmentView
+from supportiq_backend.generated import (
+    ChangeAccountStatusRequest,
+    CreateAdminAccountRequest,
+    ShipmentStatus,
+    ShopShipmentView,
+)
 from supportiq_backend.platform import RequestContractError
 from supportiq_backend.platform.web import (
     NonUtcTimestampError,
@@ -24,6 +30,12 @@ pytestmark = pytest.mark.anyio
 CONTRACT_TIMESTAMP_PATTERN = re.compile(
     r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?Z$"
 )
+
+
+def creation_body(login_number: str | None = None) -> bytes:
+    """Write a `createAdminAccount` body, with the JSON text of `login_number` when given."""
+    member = "" if login_number is None else f', "login_number": {login_number}'
+    return f'{{"role": "staff", "display_name": "Lan Do", "password": "x"{member}}}'.encode()
 
 
 def build_request(body: bytes) -> Request:
@@ -46,6 +58,7 @@ async def test_parse_json_body_returns_the_contract_model() -> None:
     [
         (b'{"is_active": "false"}', "body.is_active"),
         (b'{"is_active": 0}', "body.is_active"),
+        (b'{"is_active": 1.0}', "body.is_active"),
         (b"{}", "body.is_active"),
         (b'{"is_active": true, "role": "admin"}', "body.role"),
         (b"{not json", "body"),
@@ -61,6 +74,35 @@ async def test_parse_json_body_refuses_a_body_outside_the_contract(
         await parse_json_body(request, ChangeAccountStatusRequest)
 
     assert caught.value.locations == (location,)
+
+
+async def test_parse_json_body_leaves_an_absent_optional_field_missing() -> None:
+    parsed = await parse_json_body(build_request(creation_body()), CreateAdminAccountRequest)
+
+    assert parsed.login_number is MISSING
+
+
+@pytest.mark.parametrize(("number", "expected"), [("1701.0", 1701), ("1e3", 1000)])
+async def test_parse_json_body_reads_a_number_with_a_zero_fraction_as_an_integer(
+    number: str, expected: int
+) -> None:
+    request = build_request(creation_body(number))
+
+    parsed = await parse_json_body(request, CreateAdminAccountRequest)
+
+    assert parsed.login_number == expected
+
+
+@pytest.mark.parametrize("number", ["null", "7.5", '"7"', "true"])
+async def test_parse_json_body_refuses_an_integer_field_that_is_not_an_integer(
+    number: str,
+) -> None:
+    request = build_request(creation_body(number))
+
+    with pytest.raises(RequestContractError) as caught:
+        await parse_json_body(request, CreateAdminAccountRequest)
+
+    assert caught.value.locations == ("body.login_number",)
 
 
 async def test_contract_error_detail_never_repeats_the_value_that_was_sent() -> None:

@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, within } from "storybook/test";
 
 import { StatusBanner } from "@/design-system/components/status-banner";
 import { Button } from "@/design-system/primitives/button";
@@ -18,6 +19,16 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Success: Story = {};
+export const SuccessWithTheFocus: Story = {
+  args: { lead: "Your password was changed.", children: undefined, focusTargetId: "changed" },
+  play: async ({ canvasElement }) => {
+    const banner = within(canvasElement).getByRole("status");
+
+    banner.focus();
+
+    await expect(banner).toHaveFocus();
+  },
+};
 export const Info: Story = { args: { tone: "info", lead: "Read only.", children: "No change." } };
 export const Warning: Story = {
   args: { tone: "warning", lead: "Out of date.", children: "Reload the list." },

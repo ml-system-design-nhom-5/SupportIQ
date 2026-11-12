@@ -1,7 +1,7 @@
 /**
  * The composition root of frontend (ARCH-21): it creates the `backend` client, the query client,
  * and the clock once, and provides them to the app. `main.tsx` passes the real browser
- * dependencies; tests pass a fake fetch and a fixed clock.
+ * dependencies; tests pass a fake fetch, a fixed clock, and fixed random bytes.
  */
 import {
   focusManager,
@@ -15,6 +15,7 @@ import type { ReactNode } from "react";
 import { type BackendClient, BackendClientContext, createBackendClient } from "@/api/client";
 import type { FrontendSettings } from "@/app/settings";
 import { type Clock, ClockContext } from "@/design-system";
+import { type RandomBytes, RandomBytesContext } from "@/features/admin-accounts";
 import {
   computeRetryDelayMs,
   getRequestFailure,
@@ -31,6 +32,7 @@ export type AppDependencies = {
   readonly queryClient: QueryClient;
   readonly clock: Clock;
   readonly createIdempotencyKey: () => string;
+  readonly randomBytes: RandomBytes;
 };
 
 /** What the composition root needs from its caller. */
@@ -44,6 +46,8 @@ export type AppDependencyOptions = {
   readonly clock: Clock;
   /** Creates the `Idempotency-Key` of one user action (ARCH-31). */
   readonly createIdempotencyKey: () => string;
+  /** The random source of suggested passwords: `crypto.getRandomValues` in the browser. */
+  readonly randomBytes: RandomBytes;
 };
 
 /** Props of {@link AppProviders}. */
@@ -57,7 +61,7 @@ export type AppProvidersProps = {
  *
  * @param options - The settings, the base URL, the fetch implementation, and the sources of
  *   randomness, time, and identifiers.
- * @returns The client, the query client, the clock, and the key factory.
+ * @returns The client, the query client, the clock, the key factory, and the random bytes.
  */
 export function createAppDependencies(options: AppDependencyOptions): AppDependencies {
   listenToWindowFocus();
@@ -70,6 +74,7 @@ export function createAppDependencies(options: AppDependencyOptions): AppDepende
     queryClient: createAppQueryClient(options),
     clock: options.clock,
     createIdempotencyKey: options.createIdempotencyKey,
+    randomBytes: options.randomBytes,
   };
 }
 
@@ -85,7 +90,7 @@ export function AppProviders({ dependencies, children }: AppProvidersProps) {
       <BackendClientContext value={dependencies.backendClient}>
         <ClockContext value={dependencies.clock}>
           <IdempotencyKeyFactoryContext value={dependencies.createIdempotencyKey}>
-            {children}
+            <RandomBytesContext value={dependencies.randomBytes}>{children}</RandomBytesContext>
           </IdempotencyKeyFactoryContext>
         </ClockContext>
       </BackendClientContext>

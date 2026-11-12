@@ -1,6 +1,7 @@
 """Builders of integration test data, inserted as the owner with sensible defaults (TEST-05).
 
-`supportiq_app` cannot insert accounts or commerce data, so the builders connect as the owner.
+`supportiq_app` cannot insert admin accounts, customer accounts, or commerce data, so the
+builders connect as the owner.
 IDs and times come from a counter, so a test run is deterministic (TEST-14). A test overrides
 only the fields that matter to it. Every value is synthetic (TEST-18).
 """

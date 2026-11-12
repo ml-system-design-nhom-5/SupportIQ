@@ -1,6 +1,7 @@
 import { screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import { chooseFromAccountMenu } from "@/test/account-menu";
 import { deleteCurrentSessionRoute, getCurrentSessionRoute } from "@/test/backend-routes";
 import {
   createFakeBackend,
@@ -11,8 +12,8 @@ import {
 import { renderApp, testSettings } from "@/test/render-app";
 
 /**
- * Open the console as staff, with the given answer to sign-out. Automatic retries are on, so a
- * test can show that sign-out does not use them.
+ * Open the console as staff, with the given answer to sign-out, and choose Sign out in the account
+ * menu. Automatic retries are on, so a test can show that sign-out does not use them.
  *
  * @param signOutAnswer - What `deleteCurrentSession` answers.
  * @returns The rendered app.
@@ -26,11 +27,11 @@ async function openConsoleAndSignOut(signOutAnswer: FakeAnswer) {
     backend,
     settings: { ...testSettings, requestRetryMaxCount: 2 },
   });
-  await rendered.user.click(await screen.findByRole("button", { name: "Sign out" }));
+  await chooseFromAccountMenu(rendered.user, "Sign out");
   return rendered;
 }
 
-describe("SignOutButton", () => {
+describe("Sign out in the account menu", () => {
   it("signs out without an Idempotency-Key and opens sign-in without a return path", async () => {
     const { backend, router } = await openConsoleAndSignOut(noContentAnswer);
 

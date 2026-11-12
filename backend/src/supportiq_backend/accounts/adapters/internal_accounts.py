@@ -3,6 +3,7 @@
 from uuid import UUID
 
 from sqlalchemy import and_, collate, func, or_, select, text, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from supportiq_backend.accounts.adapters.tables import AccountRow
@@ -11,6 +12,9 @@ from supportiq_backend.accounts.domain import (
     DisplayName,
     InternalAccount,
     InternalRole,
+    LoginName,
+    LoginNameTakenError,
+    NewInternalAccount,
 )
 from supportiq_backend.platform.persistence import BYTE_ORDER_COLLATION
 
@@ -109,6 +113,68 @@ class PostgresInternalAccountStore:
         return tuple(_to_internal_account(row) for row in rows)
 
 
+class PostgresNewAccountStore:
+    """Implement the `NewAccountStore` port on `accounts`.
+
+    `supportiq_app` may insert every column except `customer_id`, and a trigger refuses an
+    `admin` row from any role but the owner, so only `staff` and `manager` accounts reach the
+    table through it (migration `r0002`).
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        """Bind the store to the session of a transaction.
+
+        Args:
+            session: The session of the use case's transaction.
+        """
+        self._session = session
+
+    async def load_login_names_with_prefix(self, prefix: str) -> tuple[LoginName, ...]:
+        """Load the login names of every account that start with a prefix.
+
+        Args:
+            prefix: The start of the names, such as `staff-`.
+
+        Returns:
+            The login names.
+        """
+        names = await self._session.scalars(
+            select(AccountRow.login_name).where(
+                AccountRow.login_name.startswith(prefix, autoescape=True)
+            )
+        )
+        return tuple(LoginName(name) for name in names)
+
+    async def save_new(self, account: NewInternalAccount) -> None:
+        """Insert an account; the unique login name is the second line of defense.
+
+        A concurrent insert of the same name waits for the other transaction, as the
+        idempotency records do, so a name that it commits is found taken here.
+
+        Args:
+            account: The account.
+
+        Raises:
+            LoginNameTakenError: An account already has its login name.
+        """
+        inserted = await self._session.scalar(
+            insert(AccountRow)
+            .values(
+                account_id=UUID(account.account.account_id),
+                login_name=account.account.login_name,
+                display_name=account.account.display_name,
+                role=account.account.role.value,
+                is_active=account.account.is_active,
+                password_hash=account.password_hash,
+                created_at=account.created_at,
+            )
+            .on_conflict_do_nothing(index_elements=(AccountRow.login_name,))
+            .returning(AccountRow.account_id)
+        )
+        if inserted is None:
+            raise LoginNameTakenError
+
+
 class PostgresAccountChangeLock:
     """Implement the `AccountChangeLock` port with a transaction-level advisory lock."""
 
@@ -130,6 +196,7 @@ class PostgresAccountChangeLock:
 def _to_internal_account(row: AccountRow) -> InternalAccount:
     return InternalAccount(
         account_id=AccountId(str(row.account_id)),
+        login_name=LoginName(row.login_name),
         display_name=DisplayName(row.display_name),
         role=InternalRole(row.role),
         is_active=row.is_active,

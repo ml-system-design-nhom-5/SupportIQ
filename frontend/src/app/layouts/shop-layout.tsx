@@ -1,13 +1,13 @@
 /**
- * The shop app shell (shop UI design, Layout): the top bar with "Demo Shop", the navigation, the
- * customer's display name, and Sign out, above one content column. A session of another role sees
+ * The shop app shell (shop UI design, Layout): the top bar with "Demo Shop", the navigation, and
+ * the account menu, above one content column. At phone width the menu shows only its icon. A session of another role sees
  * only the brand: every shop operation answers it with `403`, which the screen shows.
  */
 import { LayoutGrid, LifeBuoy, Package, ShoppingBag } from "lucide-react";
 import { Outlet } from "react-router";
 
-import { AccountLabel, AppBar, NavItem, PageColumn } from "@/design-system";
-import { RequireSession, type Session, SignOutButton } from "@/features/session";
+import { AppBar, NavItem, PageColumn } from "@/design-system";
+import { RequireSession, type Session, SessionAccountMenu } from "@/features/session";
 import { PRODUCTS_PATH, SHOP_NAME } from "@/features/shop-catalog";
 import { ORDERS_PATH } from "@/features/shop-orders";
 import { SUPPORT_PATH } from "@/features/shop-support";
@@ -61,12 +61,7 @@ function renderCustomerBar(session: Session) {
           </NavItem>
         </>
       }
-      account={
-        <>
-          <AccountLabel displayName={session.displayName} />
-          <SignOutButton placement="app-bar" />
-        </>
-      }
+      account={<SessionAccountMenu session={session} variant="shop" />}
     />
   );
 }
