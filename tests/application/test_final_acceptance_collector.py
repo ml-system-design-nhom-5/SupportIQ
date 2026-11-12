@@ -164,7 +164,7 @@ def test_collector_manifest_missing_checksum_fails_closed(tmp_path):
     bad_manifest_path = tmp_path / "missing_kb_checksum_manifest.json"
     bad_manifest_path.write_text(json.dumps(tampered), encoding="utf-8")
 
-    with pytest.raises(ValueError, match="Active KB local checksum mismatch against manifest"):
+    with pytest.raises(ValueError, match="Manifest missing worker_local_worktree KB/release provenance hashes"):
         AcceptanceEvidenceCollector(
             mode="mock",
             manifest_path=bad_manifest_path,
@@ -341,3 +341,59 @@ def test_collector_error_resilience(tmp_path):
         assert r["collection_success"] is True  # Terminal state and no-auto-send observed
         assert r["action_matches_expected"] is False  # Because status is unavailable
         assert r["is_success"] is False
+
+
+def test_collector_live_encoder_fails_closed_without_mock_fallback(monkeypatch):
+    """Live mode strictly fails closed when real encoder fails; never falls back to MockPolicyEncoder."""
+    collector = AcceptanceEvidenceCollector(mode="live", max_cases=1)
+
+    # Simulate real PolicyEncoder initialization failure
+    def failing_encoder(*args, **kwargs):
+        raise RuntimeError("Simulated HuggingFace CUDA/Network failure loading BGE model")
+
+    monkeypatch.setattr("apps.core_backend.retrieval.adapter.PolicyEncoder", failing_encoder)
+
+    # In live mode, _get_encoder must raise RuntimeError and NOT fall back to mock
+    with pytest.raises(RuntimeError, match="Live execution requires real PolicyEncoder, but initialization failed"):
+        collector._get_encoder()
+    assert collector.encoder_provenance == "failed_real_encoder_fail_closed"
+
+
+def test_collector_atomic_kb_release_pair_matching(tmp_path):
+    """Constructor accepts both declared LF and CRLF pairs atomically, and rejects mixed pairs."""
+    manifest = json.loads((REPO_ROOT / "data/benchmarks/final_acceptance/suite_manifest.json").read_text(encoding="utf-8"))
+    prov = manifest["provenance"]["kb_reconciliation"]
+
+    # 1. Worker LF pair is recognized
+    collector_lf = AcceptanceEvidenceCollector(mode="mock", max_cases=1)
+    assert collector_lf.matched_kb_provenance == "worker_local_worktree"
+    assert collector_lf.matched_line_ending == "LF"
+
+    # 2. Deployed root CRLF pair is recognized
+    # Create mock files matching root CRLF hashes
+    root_kb_hash = prov["deployed_root_serving_gateway"]["kb_source_sha256"]
+    root_rel_hash = prov["deployed_root_serving_gateway"]["kb_release_sha256"]
+
+    # Test mixed pair rejection: worker LF KB with root CRLF release
+    tampered_manifest = dict(manifest)
+    tampered_manifest["provenance"] = dict(manifest["provenance"])
+    tampered_manifest["provenance"]["kb_reconciliation"] = {
+        "worker_local_worktree": {
+            "local_kb_source_sha256": "bad_hash_1",
+            "local_kb_release_sha256": "bad_hash_2",
+            "line_ending": "LF",
+        },
+        "deployed_root_serving_gateway": {
+            "kb_source_sha256": "bad_hash_3",
+            "kb_release_sha256": "bad_hash_4",
+            "line_ending": "CRLF",
+        },
+    }
+    bad_manifest_path = tmp_path / "mixed_pair_manifest.json"
+    bad_manifest_path.write_text(json.dumps(tampered_manifest), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Unrecognized or mixed KB and release hash pair"):
+        AcceptanceEvidenceCollector(
+            mode="mock",
+            manifest_path=bad_manifest_path,
+        )

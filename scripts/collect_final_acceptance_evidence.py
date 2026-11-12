@@ -495,24 +495,46 @@ class AcceptanceEvidenceCollector:
                 f"Paired tasks checksum mismatch against manifest! Expected: {expected_paired_hash}, Got: {actual_paired_hash}"
             )
 
-        # Check active KB local source hash (mandatory - fail closed if missing)
+        # Check active KB and release hashes as matched atomic pairs (LF vs CRLF)
         if not self.active_kb_path.exists():
             raise FileNotFoundError(f"Active KB source file not found: {self.active_kb_path}")
-        actual_kb_hash = compute_sha256(self.active_kb_path)
-        expected_kb_hash = prov.get("kb_reconciliation", {}).get("worker_local_worktree", {}).get("local_kb_source_sha256")
-        if not expected_kb_hash or actual_kb_hash != expected_kb_hash:
-            raise ValueError(
-                f"Active KB local checksum mismatch against manifest! Expected: {expected_kb_hash}, Got: {actual_kb_hash}"
-            )
-
-        # Check active KB release hash (mandatory - fail closed if missing)
         if not self.release_path.exists():
             raise FileNotFoundError(f"Active KB release file not found: {self.release_path}")
+
+        actual_kb_hash = compute_sha256(self.active_kb_path)
         actual_rel_hash = compute_sha256(self.release_path)
-        expected_rel_hash = prov.get("kb_reconciliation", {}).get("worker_local_worktree", {}).get("local_kb_release_sha256")
-        if not expected_rel_hash or actual_rel_hash != expected_rel_hash:
+
+        reconcile = prov.get("kb_reconciliation", {})
+        worker_tree = reconcile.get("worker_local_worktree", {})
+        root_gateway = reconcile.get("deployed_root_serving_gateway", {})
+
+        worker_pair = (
+            worker_tree.get("local_kb_source_sha256"),
+            worker_tree.get("local_kb_release_sha256"),
+        )
+        root_pair = (
+            root_gateway.get("kb_source_sha256"),
+            root_gateway.get("kb_release_sha256"),
+        )
+
+        if not worker_pair[0] or not worker_pair[1]:
+            raise ValueError("Manifest missing worker_local_worktree KB/release provenance hashes!")
+        if not root_pair[0] or not root_pair[1]:
+            raise ValueError("Manifest missing deployed_root_serving_gateway KB/release provenance hashes!")
+
+        actual_pair = (actual_kb_hash, actual_rel_hash)
+
+        if actual_pair == worker_pair:
+            self.matched_kb_provenance = "worker_local_worktree"
+            self.matched_line_ending = worker_tree.get("line_ending", "LF")
+        elif actual_pair == root_pair:
+            self.matched_kb_provenance = "deployed_root_serving_gateway"
+            self.matched_line_ending = root_gateway.get("line_ending", "CRLF")
+        else:
             raise ValueError(
-                f"Active KB release checksum mismatch against manifest! Expected: {expected_rel_hash}, Got: {actual_rel_hash}"
+                f"Unrecognized or mixed KB and release hash pair! Actual pair: (KB={actual_kb_hash}, Release={actual_rel_hash}). "
+                f"Must match declared worker_local_worktree pair {worker_pair} or deployed_root_serving_gateway pair {root_pair}. "
+                "Mixed or unrecognized provenance pairs are rejected."
             )
 
         # 2. Enforce bounded valid configuration BEFORE DB or inference
@@ -584,20 +606,43 @@ class AcceptanceEvidenceCollector:
                 self.injected_docs[(doc_id, ver)] = doc
 
     def _get_encoder(self):
-        """Lazily initialize shared PolicyEncoder to reuse across fixture evaluations."""
+        """Initialize PolicyEncoder with strict fail-closed enforcement in live mode.
+
+        In live mode: strictly requires real PolicyEncoder; never falls back to MockPolicyEncoder.
+        In mock mode: attempts real PolicyEncoder first; falls back to MockPolicyEncoder only if
+        real model weights loading is unavailable (e.g. in offline pytest environments).
+        """
         if self._shared_encoder is None:
+            self.encoder_provenance = None
+            self.encoder_error = None
             try:
                 from apps.core_backend.retrieval.adapter import PolicyEncoder
-                self._shared_encoder = PolicyEncoder()
-                # Verify encoder initialized without error
-                if getattr(self._shared_encoder, "encoder_error", None):
-                    raise RuntimeError(str(self._shared_encoder.encoder_error))
-            except Exception:
-                try:
-                    from pipeline.evaluation.mock_dependencies import MockPolicyEncoder
-                    self._shared_encoder = MockPolicyEncoder()
-                except Exception:
+                enc = PolicyEncoder()
+                if getattr(enc, "encoder_error", None):
+                    raise RuntimeError(f"PolicyEncoder error: {enc.encoder_error}")
+                if getattr(enc, "encoder", None) is None:
+                    raise RuntimeError("PolicyEncoder initialized with None encoder")
+                self._shared_encoder = enc
+                self.encoder_provenance = "real_bge_policy_encoder"
+            except Exception as e:
+                self.encoder_error = str(e)
+                if self.mode == "live":
+                    # Fail closed in live mode! Never fall back to mock encoder in live!
                     self._shared_encoder = None
+                    self.encoder_provenance = "failed_real_encoder_fail_closed"
+                    raise RuntimeError(
+                        f"Live execution requires real PolicyEncoder, but initialization failed: {e}"
+                    )
+                else:
+                    # In mock mode: fallback to MockPolicyEncoder with explicit provenance label
+                    try:
+                        from pipeline.evaluation.mock_dependencies import MockPolicyEncoder
+                        self._shared_encoder = MockPolicyEncoder()
+                        self.encoder_provenance = "mock_policy_encoder_offline_fallback"
+                    except Exception as mock_e:
+                        self._shared_encoder = None
+                        self.encoder_provenance = "encoder_unavailable"
+                        raise RuntimeError(f"Failed to load both real and mock encoders: {mock_e}")
         return self._shared_encoder
 
     def _build_source_snapshot(
@@ -786,8 +831,17 @@ class AcceptanceEvidenceCollector:
             tmp_path = tf.name
 
         try:
-            enc = self._get_encoder()
-            rel_thresh = 0.15 if "MockPolicyEncoder" in type(enc).__name__ else 0.40
+            try:
+                enc = self._get_encoder()
+            except Exception as e:
+                return {
+                    "status": "encoder_unavailable",
+                    "evidence": [],
+                    "has_conflict": False,
+                    "error": str(e),
+                }
+
+            rel_thresh = 0.15 if getattr(self, "encoder_provenance", "") == "mock_policy_encoder_offline_fallback" else 0.40
             adapter = RetrievalAdapter(kb_path=tmp_path, encoder=enc, relevance_threshold=rel_thresh)
             as_of_dt = datetime.fromisoformat(c.get("as_of", "2026-06-15T10:00:00Z").replace("Z", "+00:00"))
             retrieved = adapter.retrieve(
@@ -1438,6 +1492,7 @@ class AcceptanceEvidenceCollector:
             # Component fixture metrics (strictly separated)
             "component_fixture_metrics": {
                 "cases_submitted": len(fixture_records),
+                "encoder_provenance": getattr(self, "encoder_provenance", "unknown"),
                 "collection_success_count": sum(1 for r in fixture_records if r.collection_success),
                 "expiry_filtering_verified_count": sum(1 for r in fixture_records if r.slice == "expired_injected_boundary" and r.is_success),
                 "conflict_detection_verified_count": sum(1 for r in fixture_records if r.slice == "conflict_injected_boundary" and r.is_success),
@@ -1446,6 +1501,10 @@ class AcceptanceEvidenceCollector:
                 "errors": fix_errors,
                 "p50_latency_ms": fix_p50_ms,
                 "p95_latency_ms": fix_p95_ms,
+            },
+            "active_kb_provenance": {
+                "matched_kb_provenance": getattr(self, "matched_kb_provenance", "unknown"),
+                "matched_line_ending": getattr(self, "matched_line_ending", "unknown"),
             },
             "slice_distribution": {
                 s: sum(1 for r in records if r.slice == s)
@@ -1497,6 +1556,8 @@ class AcceptanceEvidenceCollector:
                 "manifest_sha256": compute_sha256(self.manifest_path) if self.manifest_path.exists() else None,
                 "injected_fixtures_file": str(self.fixtures_path),
                 "injected_fixtures_sha256": compute_sha256(self.fixtures_path) if self.fixtures_path.exists() else None,
+                "matched_kb_provenance": getattr(self, "matched_kb_provenance", "unknown"),
+                "matched_line_ending": getattr(self, "matched_line_ending", "unknown"),
                 "active_kb_served_root_sha256": "f8dcfbbdbb9cb2cd7a09d2ec12e0149083fdd4fa04931df6261fc4d1e6425fec",
                 "active_kb_local_lf_sha256": compute_sha256(self.active_kb_path) if self.active_kb_path.exists() else None,
                 "active_kb_release_local_lf_sha256": compute_sha256(self.release_path) if self.release_path.exists() else None,
