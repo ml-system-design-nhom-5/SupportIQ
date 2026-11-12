@@ -355,3 +355,54 @@ def test_clean_in_scope_queries_remain_draftable(intent, text):
         f"In-scope query '{text}' for intent '{intent}' was rejected: {res['routing']}"
     )
     assert res["is_in_scope"] is True
+
+
+# ---------------------------------------------------------------------------
+# Test Group 5: Contract Vocabulary Adaptation & Action Mapping
+# ---------------------------------------------------------------------------
+
+from scripts.run_offline_robustness import adapt_engine_recommendation_to_routing_action
+
+
+def test_contract_adapter_draft_maps_to_retrieve_draft():
+    """Engine recommendation 'draft' maps directly to decide_route action 'retrieve_draft'."""
+    action = adapt_engine_recommendation_to_routing_action("draft", reason_codes=[])
+    assert action == "retrieve_draft"
+    expected_actions = ["clarify", "retrieve_draft"]
+    assert action in expected_actions
+
+
+def test_contract_adapter_abstain_maps_to_manual_fallback():
+    """Engine recommendation 'abstain' maps to 'manual_fallback', not to 'escalate'."""
+    action = adapt_engine_recommendation_to_routing_action("abstain", reason_codes=["low_confidence"])
+    assert action == "manual_fallback"
+    assert action != "escalate"
+
+
+def test_contract_adapter_abstain_does_not_equate_to_escalation():
+    """When benchmark expects strictly 'escalate', an Engine 'abstain' (manual_fallback) does NOT match."""
+    action = adapt_engine_recommendation_to_routing_action("abstain", reason_codes=["out_of_scope_intent"])
+    benchmark_expected = ["escalate"]
+    assert action not in benchmark_expected, (
+        "Abstain must NOT be equated to escalation; it is a safe refusal but an action mismatch."
+    )
+
+
+def test_contract_adapter_escalate_maps_to_escalate():
+    """When Engine detects human_agent and recommends 'escalate', it matches benchmark 'escalate'."""
+    action = adapt_engine_recommendation_to_routing_action("escalate", reason_codes=["human_agent_requested"])
+    assert action == "escalate"
+    benchmark_expected = ["escalate"]
+    assert action in benchmark_expected
+
+
+def test_contract_adapter_supported_comparable_case_matching():
+    """In-scope query produces 'draft' which adapts to 'retrieve_draft' and satisfies supported ticket expectation."""
+    engine = make_engine(predictor=MockPredictor(intent="track_order", confidence=0.92))
+    res = engine.analyse({"message": "Where is my order [ORDER_ID_1]?", "as_of": "2026-11-12T00:00:00Z"})
+    raw_rec = res["routing"]["recommendation"]
+    assert raw_rec == "draft"
+    adapted = adapt_engine_recommendation_to_routing_action(raw_rec, res["routing"]["reason_codes"])
+    assert adapted == "retrieve_draft"
+    expected_for_supported = ["retrieve_draft", "clarify"]
+    assert adapted in expected_for_supported
