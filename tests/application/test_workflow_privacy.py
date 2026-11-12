@@ -60,8 +60,8 @@ def test_egress_allowlist_order_context():
     assert not (forbidden_keys & context.keys())
 
 
-def test_egress_pseudonymization_with_fake_transport():
-    """Verify that customer input sent towards AI gateway is pseudonymized before transport egress."""
+def test_pseudonymization_payload_helper():
+    """Helper coverage only; this test does not invoke backend jobs or an HTTP transport."""
     known_customer_data = {
         "NAME": ["Tran Van Bao"],
         "PHONE": ["+84912345678"],

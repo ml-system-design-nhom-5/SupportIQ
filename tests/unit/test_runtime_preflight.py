@@ -16,6 +16,13 @@ from scripts.native_runtime import (
 )
 
 
+@pytest.fixture(autouse=True)
+def isolated_runtime_environment(monkeypatch):
+    monkeypatch.setenv("PATH", os.environ.get("PATH", ""))
+    monkeypatch.delenv("PSYCOPG_IMPL", raising=False)
+    monkeypatch.setattr("scripts.native_runtime.discover_pg_bin", lambda: None)
+
+
 def test_preflight_simulated_importerror_clean_message_no_secrets(monkeypatch):
     """Preflight should report clear dependency/policy guidance without leaking credentials."""
     secret = "SUPER_SECRET_PASSWORD_98765"
@@ -45,6 +52,24 @@ def test_preflight_simulated_importerror_clean_message_no_secrets(monkeypatch):
     # Security check: MUST NOT leak credentials
     assert secret not in message
     assert "supportiq_owner:" not in message
+
+
+def test_invalid_explicit_bin_does_not_select_another_installation(tmp_path, monkeypatch):
+    monkeypatch.setenv("SUPPORTIQ_PG_BIN", str(tmp_path / "missing"))
+    monkeypatch.setattr("shutil.which", lambda _: "another-installation/initdb.exe")
+    with pytest.raises(RuntimeError, match="SUPPORTIQ_PG_BIN"):
+        discover_pg_bin()
+
+
+def test_dll_directory_handle_is_retained(tmp_path, monkeypatch):
+    from scripts import native_runtime
+    handle = MagicMock()
+    monkeypatch.setattr(os, "add_dll_directory", lambda _: handle, raising=False)
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(native_runtime, "_DLL_DIRECTORIES", {})
+    configure_runtime_environment(tmp_path)
+    assert handle in native_runtime._DLL_DIRECTORIES.values()
+    handle.close.assert_not_called()
 
 
 def test_discover_pg_bin_env_override(tmp_path, monkeypatch):

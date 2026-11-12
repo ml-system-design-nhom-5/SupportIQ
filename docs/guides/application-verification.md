@@ -14,11 +14,11 @@ Preflight and driver tests (`tests/unit/test_runtime_preflight.py`) verify that:
 3. Preflight errors report clean diagnostics and never expose database connection strings or passwords.
 
 Workflow and privacy tests (`tests/application/test_workflow_privacy.py`) verify:
-1. Pre-egress pseudonymization masks credit cards, phone numbers, emails, addresses, and customer names before payloads leave the backend.
+1. Pseudonymization helper masks the tested cards, phones, emails, addresses and known names; this helper test does not capture actual HTTP egress.
 2. Customer-authored placeholders (`[NAME_1]`) are preserved as literal text.
 3. Order context sent to AI is strictly allowlisted, omitting forbidden identifying fields.
 4. Retry actions are strictly limited to transient errors (`unavailable`, `llm_unavailable`); ready drafts do not offer regenerate actions.
-5. Authority requirements remain sticky across workflow steps.
+5. Action selection denies staff sending an authority-required ticket and permits managers; persisted sticky-authority coverage belongs to the application integration suite.
 
 Test Fixture Scope Note:
 The integration harness in `tests/application/test_application.py` connects with owner privileges to provision and tear down ephemeral schemas (`test_<uuid>`). This isolates integration state, but does not substitute for dedicated testing of runtime-role (`supportiq_app`) permissions or database-level trigger installation.

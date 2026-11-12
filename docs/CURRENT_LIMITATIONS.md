@@ -112,7 +112,7 @@ Non-Functional Requirement NFR-11 specifies:
 |---|---|---|---|
 | **Database** | Dual engine modes: PostgreSQL for application, SQLite for offline demo/eval | PostgreSQL enforces real roles, constraints, and migrations; SQLite is isolated to offline tooling | Maintain clear boundary between application PostgreSQL and evaluation runners |
 | **Model Weights** | Binary weights (260 MB) excluded from git tracking | Verified model loaded when artifact present; heuristic fallback clearly segregated and cannot simulate trained provenance | Automated asset download script with sha256 checksum verification |
-| **Calibration** | Historical ECE slightly above target ($\approx 0.106$) on single benchmark | Temperature scaling active; raw softmax scores preserved and displayed as uncalibrated | Explore isotonic regression on expanded holdout split |
+| **Calibration** | Historical ECE slightly above target ($\approx 0.106$) on single benchmark | Temperature scaling is opt-in; the default application path reports uncalibrated raw softmax | Explore isotonic regression on expanded holdout split |
 | **Domain Scope** | 12 customer support intents supported in application; 34 intents abstain | Automated drafts restricted to 11 support intents; `human_agent` escalates; others manual | Expand knowledge base documents with verified policies |
 | **PII Protection** | Colloquial slang addresses without standard markers may evade regex | Known account fields masked; strict order context allowlist; human review mandatory | Evaluate localized token-classification NER |
 | **LLM Quota** | Provider quota limits on external API calls | Bounded retries for transient errors; graceful degradation to manual staff reply | Provisioned quota or local small-LLM inference |

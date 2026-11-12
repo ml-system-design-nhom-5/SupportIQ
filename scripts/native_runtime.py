@@ -13,6 +13,8 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 LOCAL = ROOT / ".local"
+# Windows removes a DLL search directory when its handle is released.
+_DLL_DIRECTORIES = {}
 
 
 def cluster_directory():
@@ -76,6 +78,7 @@ def discover_pg_bin():
         path = Path(env_bin)
         if (path / "initdb.exe").exists() or (path / "initdb").exists():
             return path.resolve()
+        raise RuntimeError("SUPPORTIQ_PG_BIN not found or missing initdb. Correct the explicit PostgreSQL bin directory.")
 
     # 2. PATH resolution
     which_initdb = shutil.which("initdb.exe") or shutil.which("initdb") or shutil.which("pg_ctl.exe")
@@ -123,7 +126,8 @@ def configure_runtime_environment(bin_path=None):
         # On Windows Python >= 3.8, add DLL directory explicitly
         if sys.platform == "win32" and hasattr(os, "add_dll_directory"):
             try:
-                os.add_dll_directory(bin_str)
+                if bin_str not in _DLL_DIRECTORIES:
+                    _DLL_DIRECTORIES[bin_str] = os.add_dll_directory(bin_str)
             except OSError:
                 pass
     return bin_path
