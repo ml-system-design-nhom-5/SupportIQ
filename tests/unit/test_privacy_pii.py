@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 import pytest
 from apps.backend.tickets.privacy import pseudonymize, restore, luhn_checksum_valid
 
@@ -58,8 +59,26 @@ def test_literal_placeholders_preserved():
     assert restored == msg
 
 
-def test_spacy_free_form_ner_masking():
-    # Johnathan Smith is NOT in known database values
+def test_deterministic_ner_adapter_masks_free_form_person(monkeypatch):
+    """Deterministic unit coverage: simulates spaCy NER PERSON detection without external downloads."""
+    class MockEnt:
+        def __init__(self, label, text):
+            self.label_ = label
+            self.text = text
+
+    class MockDoc:
+        def __init__(self, text, ents):
+            self.text = text
+            self.ents = ents
+
+    def mock_nlp(text):
+        ents = []
+        if "Johnathan Smith" in text:
+            ents.append(MockEnt("PERSON", "Johnathan Smith"))
+        return MockDoc(text, ents)
+
+    monkeypatch.setattr("apps.backend.tickets.privacy._get_spacy_nlp", lambda: mock_nlp)
+
     known = {}
     msg = "Yesterday, Johnathan Smith told me to ask for an exchange."
     pseudonymized, mapping = pseudonymize(msg, known)
@@ -68,3 +87,48 @@ def test_spacy_free_form_ner_masking():
     restored = restore(pseudonymized, mapping)
     assert restored == msg
 
+
+def test_unavailable_ner_adapter_preserves_known_and_pattern_pii_masks(monkeypatch):
+    """When spaCy/NER model is unavailable, regex and known customer PII masks remain safe and functional.
+    Note: Full PII recall is not guaranteed for arbitrary uncataloged names when offline without NER."""
+    monkeypatch.setattr("apps.backend.tickets.privacy._get_spacy_nlp", lambda: None)
+
+    known = {"NAME": ["Jane Doe"]}
+    msg = "Customer Jane Doe (email jane@example.com, phone +84901234567, order ORD-1234) spoke with agent Bob."
+    pseudonymized, mapping = pseudonymize(msg, known)
+
+    assert "[NAME_1]" in pseudonymized
+    assert "Jane Doe" not in pseudonymized
+    assert "[EMAIL_1]" in pseudonymized
+    assert "jane@example.com" not in pseudonymized
+    assert "[PHONE_1]" in pseudonymized
+    assert "[ORDER_ID_1]" in pseudonymized
+    # Uncataloged free-form name 'Bob' is not masked when NER is unavailable, but pipeline does not fail:
+    assert "Bob" in pseudonymized
+
+    restored = restore(pseudonymized, mapping)
+    assert restored == msg
+
+
+def _spacy_model_installed() -> bool:
+    try:
+        import spacy
+        spacy.load("en_core_web_sm")
+        return True
+    except Exception:
+        return False
+
+
+@pytest.mark.skipif(
+    not _spacy_model_installed(),
+    reason="Optional spaCy library and 'en_core_web_sm' model are not installed in the environment",
+)
+def test_live_spacy_free_form_ner_masking_integration():
+    """Live integration test: verifies free-form PERSON masking only when the spaCy model is installed."""
+    known = {}
+    msg = "Yesterday, Johnathan Smith told me to ask for an exchange."
+    pseudonymized, mapping = pseudonymize(msg, known)
+    assert "[NAME_1]" in pseudonymized
+    assert "Johnathan Smith" not in pseudonymized
+    restored = restore(pseudonymized, mapping)
+    assert restored == msg
