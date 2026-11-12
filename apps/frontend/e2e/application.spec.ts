@@ -54,6 +54,7 @@ test('customer request, human reply and customer receipt', async ({page}, testIn
   await page.goto(`/console/tickets/${ticketId}`)
   await expect(page.getByRole('heading',{name:'Customer message'})).toBeVisible()
   await expect(page.getByLabel('Reply to customer')).toBeVisible()
+  await expect(page.getByRole('status', {name:'Loading inbox', exact:true})).toBeHidden()
   await capture(page,'console',testInfo.project.name)
   const reply = 'Thank you for your message. Our support team will review the delivery details and follow up with you.'
   await page.getByLabel('Reply to customer').fill('Hello [NAME_1]')

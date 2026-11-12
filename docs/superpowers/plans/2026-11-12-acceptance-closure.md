@@ -10,6 +10,17 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-12-acceptance-closure-design.md`.
 
+## Current integration status
+
+| Task | Evidence and status |
+|---|---|
+| B1 | Worker `98e6469` + reviewed followup `ff6a0fb` integrated as `0a1caae` + `42936f8`; coordinator PostgreSQL safety/boundary/retry subset: 24 passed. Worker reports broader focused suite 60 passed, 1 skipped. |
+| B2 | Work remains isolated in retrieval worker; revised local gold not yet approved. Exploratory results do not certify Recall@3. |
+| B3 | Runner/provenance work remains in worker; published model list prices verified separately at `artifacts/evaluation/pricing/gemini-3.1-flash-lite-20261112.json`. No complete final latency/cost acceptance yet. |
+| F1 | Worker baseline `04433ec` integrated as `ba43381`; coordinator finished review fixes after repeated provider503. Final 18 frontend tests, production build and 12 Edge E2E passed. Exact route/check scope and visual review in `docs/design/2026-11-12-frontend-usability-notes.md`. |
+
+Task checklists below describe the intended deliverables; this table and linked reports state actual evidence. Entire-plan completion is not implied by a component pass.
+
 ## Global constraints
 
 Synthetic data only; explicit human sends; no automatic transactions. Preserve API compatibility and fail-closed provenance. Missing evidence is not_evaluated. No false shared/instructor approval, human study, live execution or pricing claims. No reset or stop of coordinator services. Keep user PPTX files unchanged.

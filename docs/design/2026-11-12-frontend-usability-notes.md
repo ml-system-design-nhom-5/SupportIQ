@@ -103,5 +103,22 @@ All before and after screenshots have been recorded and saved in both `.impeccab
 
 ## 4. Remaining Gates
 
-- **Frontend Gates:** None. All design, usability, responsive, accessibility, and build requirements for Task F1 are satisfied.
+- **Worker baseline:** The checks above describe worker commit `04433ec`; coordinator review found followup permission/readability issues and limited the automated inspector claim to the public sign-in route.
 - **Backend / Integration Gates:** Backend workers (Tasks B1, B2, B3) are independently dispatched; global acceptance reports and release closure remain owned by coordinator.
+
+## 5. Coordinator review and integrated verification
+
+The worker followup was interrupted repeatedly by provider 503. Coordinator retained its workspace and integrated the committed baseline as `ba43381`, then completed the following fixes at the root checkout:
+
+- Send stays disabled whenever the backend omits `send_reply`, including the confirmation dialog. Role inference only decides whether a disabled control is displayed; it does not grant permission.
+- Raw model scores and alternatives display three decimal places, never a calibrated percentage. The full main score remains in the title attribute.
+- Added five component tests covering pending, denied send, authority, permitted send and raw-score presentation. First run failed for the denied-send and unreadable-score cases; the final suite passed **18 tests in 4 files**.
+- Final TypeScript/Vite build succeeded (Vite bundling 415ms, not an end-to-end application measurement).
+- Final Edge E2E passed **12 tests in 50.2s** at 1440/768/390/360. Screenshot capture now waits for inbox loading to finish. Axe assertions and horizontal-overflow checks apply to the views captured by `apps/frontend/e2e/application.spec.ts`, not every possible application state.
+- Coordinator ran Taste lint: **0 FAIL, 3 WARN**. Blue is the retained action color; JetBrains Mono is restricted to identifiers, an established product convention. Neither warning is silently suppressed.
+- Coordinator ran Taste inspect on the production-served **`/sign-in` route only**, at 1440/768/390: **0 FAIL, 0 WARN**. This is not an authenticated-console inspector result. Authenticated views were checked through E2E/axe, screenshots and source review.
+- Impeccable detector on the changed console source returned `[]`.
+
+Final root screenshots: `.impeccable/coordinator-final/console-{desktop,tablet,mobile,small-phone}.png`; sign-in inspector images and report: `.taste-skill/coordinator-final/`. Coordinator viewed the console at all four widths and sign-in at all three inspector widths.
+
+Visual critique (Operate): the customer request and reply remain primary, with sources alongside on desktop and stacked on phones. The neutral surfaces and restrained action/status colors meet the requested bright, simple direction. Final inbox captures show actual rows rather than a skeleton. On 360/390px the workspace requires vertical scrolling to reach sources; this is a deliberate stacked layout, not simultaneous desktop density. An accessibility scan does not establish all WCAG requirements or user-study effectiveness. Global acceptance still depends on backend/evaluation integration.
