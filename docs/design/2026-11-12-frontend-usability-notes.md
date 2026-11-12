@@ -110,6 +110,8 @@ All before and after screenshots have been recorded and saved in both `.impeccab
 
 The worker followup was interrupted repeatedly by provider 503. Coordinator retained its workspace and integrated the committed baseline as `ba43381`, then completed the following fixes at the root checkout:
 
+Worker later preserved its partial permission/score edits as `67cb9ad` and reported `outcome=failed` for followup `task_a67f1ad22b24`, explicitly deferring tests/screenshots/report corrections to coordinator. That attempt remains recorded as partial, not succeeded. Equivalent fixes and the additional confirmation-dialog guard were already completed at root in `8ca47dd`; the overlapping worker commit was reviewed and was not cherry-picked again.
+
 - Send stays disabled whenever the backend omits `send_reply`, including the confirmation dialog. Role inference only decides whether a disabled control is displayed; it does not grant permission.
 - Raw model scores and alternatives display three decimal places, never a calibrated percentage. The full main score remains in the title attribute.
 - Added five component tests covering pending, denied send, authority, permitted send and raw-score presentation. First run failed for the denied-send and unreadable-score cases; the final suite passed **18 tests in 4 files**.
