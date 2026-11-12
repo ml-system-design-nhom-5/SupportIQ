@@ -18,24 +18,34 @@ def write_system_report(
     r_dir = Path(run_dir).resolve()
     r_dir.mkdir(parents=True, exist_ok=True)
 
-    summary = metrics.get("summary", {})
-    routing = metrics.get("routing", {})
-    retrieval = metrics.get("retrieval", {})
-    drafting = metrics.get("drafting", {})
-    by_slice = metrics.get("by_slice", {})
-    ml = metrics.get("ml", {})
-    oversight = metrics.get("oversight", {})
-    latency = metrics.get("latency", {})
-    gate_dict = gates.get("gates", {})
+    summary = metrics.get("summary") or {}
+    routing = metrics.get("routing") or {}
+    retrieval = metrics.get("retrieval") or {}
+    drafting = metrics.get("drafting") or {}
+    by_slice = metrics.get("by_slice") or {}
+    ml = metrics.get("ml") or {}
+    oversight = metrics.get("oversight") or {}
+    latency = metrics.get("latency") or {}
+    gate_dict = gates.get("gates") or {}
     evidence_kind = gates.get("evidence_kind", "simulated")
+    model_mode = gates.get("model_mode") or ml.get("model_type")
+    execution_mode = gates.get("execution_mode", "new_execution")
     all_passed = gates.get("all_mandatory_passed", False)
     summary_reason = gates.get("summary_reason", "")
+    ai_assessment = metrics.get("ai_assessment") or {}
+    human_assessment = metrics.get("human_assessment") or {}
 
     # Truthful certification status
-    if all_passed and evidence_kind == "live":
-        cert_status = "certified_live_acceptance"
+    if evidence_kind == "cached" or execution_mode == "cached_only":
+        cert_status = "cached_report_no_new_execution"
+    elif evidence_kind == "mixed":
+        cert_status = "mixed_evidence_rejected"
+    elif model_mode in ("heuristic_demo", "unavailable", "synthetic") or ml.get("status") == "unverified":
+        cert_status = "unverified_heuristic_rejected"
     elif evidence_kind == "simulated":
         cert_status = "simulated_mock_rejected"
+    elif all_passed and evidence_kind == "live":
+        cert_status = "certified_live_acceptance"
     elif gate_dict.get("grounded_claims", {}).get("status") in ("insufficient_evidence", "not_evaluated"):
         cert_status = "pending_human_acceptance"
     else:
@@ -48,16 +58,32 @@ def write_system_report(
         f"- **Execution State:** `{state}`",
         f"- **Certification Status:** `{cert_status}`",
         f"- **Evidence Kind:** `{evidence_kind}`",
+        f"- **Execution Mode:** `{execution_mode}`",
+        f"- **Model Mode:** `{model_mode or 'trained'}`",
         f"- **Mandatory Acceptance Gates Passed:** `{all_passed}`",
         f"- **Summary Reason:** {summary_reason}",
         "",
     ]
 
-    if evidence_kind == "simulated":
+    if evidence_kind == "cached" or execution_mode == "cached_only":
+        report_lines.extend([
+            "> [!NOTE]",
+            "> **Cached Report:** This report was compiled from existing cached benchmark artifacts. "
+            "No new inference execution was performed.",
+            "",
+        ])
+    elif evidence_kind == "simulated":
         report_lines.extend([
             "> [!WARNING]",
             "> **Simulated Mock Run:** This run was executed using offline simulated mocks. "
             "Simulated evidence cannot certify live production acceptance criteria.",
+            "",
+        ])
+    elif model_mode == "heuristic_demo":
+        report_lines.extend([
+            "> [!WARNING]",
+            "> **Unverified Heuristic Model:** This run used an unverified heuristic fallback model. "
+            "Heuristic outputs cannot certify live production acceptance.",
             "",
         ])
     elif evidence_kind == "live_experimental":
@@ -129,6 +155,19 @@ def write_system_report(
         "",
     ])
 
+    if ai_assessment:
+        report_lines.extend([
+            "### AI-Graded Claims (Evaluator: AI)",
+            f"- **Evaluator Type:** `{ai_assessment.get('evaluator_type', 'ai')}`",
+            f"- **Judge Model:** `{ai_assessment.get('model', 'N/A')}`",
+            f"- **Rubric Version:** `{ai_assessment.get('rubric_version', 'N/A')}`",
+            f"- **Supported Claims Ratio:** {ai_assessment.get('supported_claims_ratio', 'N/A')}",
+            f"- **Claims Evaluated:** {ai_assessment.get('claims_evaluated', 0)}",
+            "",
+        ])
+
+    report_lines.append("")
+
     report_file = r_dir / "report.md"
     report_file.write_text("\n".join(report_lines) + "\n", encoding="utf-8")
 
@@ -150,14 +189,22 @@ def write_system_report(
     # 3. Generate requirements_matrix.csv
     req_file = r_dir / "requirements_matrix.csv"
     matrix_rows = [
-        ["ML 10-Fold CV Macro-F1", "Component (ML)", ">= 0.85", metrics.get("ml", {}).get("macro_f1", "N/A"), gate_dict.get("ml_macro_f1", {}).get("status", "not_evaluated")],
+        ["ML 10-Fold CV Macro-F1", "Component (ML)", ">= 0.85", ml.get("macro_f1", "N/A"), gate_dict.get("ml_macro_f1", {}).get("status", "not_evaluated")],
         ["Routing Escalation Guardrail", "System E2E", "100% exact", f"{routing.get('must_escalate_correct', 0)}/{routing.get('must_escalate_total', 0)}", gate_dict.get("routing_guardrails", {}).get("status", "unknown")],
         ["Semantic Retrieval Recall@3", "Component / E2E", ">= 0.80", str(retrieval.get("recall_at_3")), gate_dict.get("retrieval_recall", {}).get("status", "unknown")],
         ["Retrieval Safety", "System E2E", "0 violations", f"{retrieval.get('safety_violations', 0)} violations", gate_dict.get("retrieval_safety", {}).get("status", "unknown")],
-        ["Human Grounded Claims", "Human Assessment", ">= 0.90", str(metrics.get("human_assessment", {}).get("supported_claims_ratio", "N/A")), gate_dict.get("grounded_claims", {}).get("status", "insufficient_evidence")],
-        ["Live Warm Latency p95", "Performance", "<= 12.0s", str(metrics.get("latency", {}).get("warm_p95_seconds", "N/A")), gate_dict.get("live_latency", {}).get("status", "not_evaluated")],
+        ["Human Grounded Claims", "Human Assessment", ">= 0.90", str(human_assessment.get("supported_claims_ratio", "N/A")), gate_dict.get("grounded_claims", {}).get("status", "insufficient_evidence")],
+        ["Live Warm Latency p95", "Performance", "<= 12.0s", str(latency.get("warm_p95_seconds", "N/A")), gate_dict.get("live_latency", {}).get("status", "not_evaluated")],
         ["Human Oversight Audit", "Human Oversight", "100% exact", f"{oversight.get('passed_scenarios', 0)}/{oversight.get('total_scenarios', 0)}", gate_dict.get("oversight_compliance", {}).get("status", "not_evaluated")],
     ]
+    if ai_assessment:
+        matrix_rows.append([
+            "AI Graded Claims (Evaluator: AI)",
+            "AI Assessment",
+            ">= 0.90",
+            str(ai_assessment.get("supported_claims_ratio", "N/A")),
+            gate_dict.get("ai_grounded_claims", {}).get("status", "not_evaluated"),
+        ])
 
     with open(req_file, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)

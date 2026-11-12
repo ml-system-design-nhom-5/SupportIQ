@@ -422,13 +422,22 @@ def evaluate_system_gates(
     gates["retrieval_recall"] = recall_gate
     gates["retrieval_recall_at_3"] = recall_gate
 
-    # 4. Grounded claims (Human assessment)
+    # 4. Grounded claims (Human assessment vs. AI grading)
     target_grounded = config.thresholds.get("grounded_claims", 0.90)
     human_metric = metrics.get("human_assessment")
-    if human_metric is None or human_metric.get("status") == "insufficient_evidence":
+    ai_metric = metrics.get("ai_assessment")
+
+    evaluator_type = None
+    if human_metric and isinstance(human_metric, dict):
+        evaluator_type = human_metric.get("evaluator_type")
+    if evaluator_type == "ai" and not ai_metric:
+        ai_metric = human_metric
+
+    if human_metric is None or human_metric.get("status") == "insufficient_evidence" or evaluator_type == "ai":
+        reason = "AI grading cannot satisfy human-rated acceptance gate" if evaluator_type == "ai" else "Missing or incomplete human claim annotations"
         gates["grounded_claims"] = {
-            "status": "insufficient_evidence",
-            "reason": "Missing or incomplete human claim annotations",
+            "status": "not_evaluated" if evaluator_type == "ai" else "insufficient_evidence",
+            "reason": reason,
         }
     else:
         grounded_ratio = human_metric.get("supported_claims_ratio")
@@ -437,6 +446,15 @@ def evaluate_system_gates(
             gates["grounded_claims"] = {"status": "pass", "details": f"{grounded_ratio} >= {target_grounded}"}
         else:
             gates["grounded_claims"] = {"status": "fail", "details": f"{grounded_ratio} < {target_grounded}"}
+
+    # Distinct AI-Graded Claims Gate (Coordinator rubric-based grading / agent-run)
+    if ai_metric and isinstance(ai_metric, dict):
+        ai_ratio = ai_metric.get("supported_claims_ratio")
+        raw_ai = ai_metric.get("supported_claims_ratio_raw", ai_ratio)
+        if isinstance(raw_ai, (int, float)) and raw_ai >= target_grounded:
+            gates["ai_grounded_claims"] = {"status": "pass", "details": f"{ai_ratio} >= {target_grounded} (AI-graded)"}
+        else:
+            gates["ai_grounded_claims"] = {"status": "fail", "details": f"{ai_ratio} < {target_grounded} (AI-graded)"}
 
     # 5. ML Macro-F1
     target_f1 = config.thresholds.get("ml_macro_f1", 0.85)
@@ -483,13 +501,22 @@ def evaluate_system_gates(
                 "details": f"{failed_scenarios} oversight scenarios failed",
             }
 
-    # Profile & Evidence verification
+    # Profile, Model Mode & Evidence verification
+    ml_type = metrics.get("ml", {}).get("model_type")
+    ml_stat = metrics.get("ml", {}).get("status")
+
     if evidence_kind == "simulated":
         all_mandatory_passed = False
         summary_reason = "Simulated mock runs cannot satisfy live acceptance criteria."
+    elif evidence_kind == "cached":
+        all_mandatory_passed = False
+        summary_reason = "Cached runs cannot satisfy new live execution acceptance criteria."
     elif evidence_kind != "live":
         all_mandatory_passed = False
         summary_reason = "Experimental live runs cannot certify acceptance with an unapproved suite."
+    elif ml_type in ("heuristic_demo", "unavailable", "synthetic") or ml_stat == "unverified":
+        all_mandatory_passed = False
+        summary_reason = f"Unverified heuristic model ({ml_type}) cannot certify live acceptance."
     else:
         all_mandatory_passed = True
         failed_gates = []
