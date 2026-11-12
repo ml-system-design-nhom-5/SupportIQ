@@ -237,10 +237,7 @@ def main():
     except Exception:
         git_commit_sha = "unknown"
 
-    product_hit_count = sum(
-        1 for c, r in zip(product_eval_cases, product_retrieved)
-        if any(g in r.get("retrieved_documents", [])[:3] for g in c.get("ground_truth_doc_ids", []))
-    )
+    product_hit_count = round(product_metrics["hit_at_3"] * product_metrics["answerable_count"])
     status_recall = "PASS" if product_metrics["recall_at_3"] >= 0.80 else "FAIL"
     status_hit = "PASS" if product_metrics["hit_at_3"] >= 0.80 else "FAIL"
     status_denom = "PASS" if product_metrics["answerable_count"] == 31 else "FAIL"
