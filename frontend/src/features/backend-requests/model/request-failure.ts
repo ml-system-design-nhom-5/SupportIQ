@@ -14,7 +14,7 @@ const problemTypesOfRefusals: ReadonlySet<ProblemType> = new Set([
   "login_name_taken",
 ]);
 
-/** The statuses of a write in flight that the ingress lost (ADR-0011, Proposed). */
+/** The statuses of a write in flight that the ingress lost (ADR-0011). */
 const unknownOutcomeStatuses: ReadonlySet<number> = new Set([502, 504]);
 
 const problemTypeByUrn: ReadonlyMap<string, ProblemType> = new Map([

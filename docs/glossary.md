@@ -1,6 +1,6 @@
 # Glossary
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-11
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-12
 
 The canonical meaning of every domain term. Code, contracts, docs, and UI use these terms exactly. Add a term here in the same PR that introduces it.
 
@@ -20,17 +20,20 @@ The canonical meaning of every domain term. Code, contracts, docs, and UI use th
 | Contract | The versioned API or data agreement between components, stored in `contracts/`. | — |
 | Customer | A simulated shopper who uses `/shop`. | user (ambiguous) |
 | Design token | A named visual value (color role, spacing step, type size) that every UI element must use instead of a literal ([ADR-0008](decisions/0008-ui-design-system.md)). | — |
+| Dev mode | A display preference that adds developer details, such as the trace ID and the versions in use, to the screens of `staff`, `manager`, and `admin`. An environment setting makes it available, and each user switches it on or off for themselves. It never changes permissions, and customers never get it ([UI-35](rules/ui.md#developer-views)). | debug mode, developer screen |
 | Draft | An AI-proposed reply for the customer, made of segments with citations. Never sent automatically. | answer, response |
-| Egress proxy | The forward proxy that is the only route from `ai-service` to the internet. It allows only the LLM provider hosts on its allow-list and tunnels TLS, so it never sees request bodies or API keys ([ADR-0010](decisions/0010-pseudonymization-and-egress-control.md#egress-control)). | — |
+| Egress allow-list | The versioned list of the only hosts outside the system that `ai-service` may call: the LLM provider hosts ([ADR-0010](decisions/0010-pseudonymization-and-egress-control.md#egress-control)). How it is enforced depends on the hosting ([ADR-0016](decisions/0016-hosting-on-free-tiers.md)). | — |
 | Escalation | Moving a ticket to a manager. The AI can only recommend it; staff decide it. | — |
 | Grounding | The property that every factual or policy claim in a draft is supported by a cited source. | — |
 | Handling mode | Whether a ticket is handled `assisted` (with AI suggestions) or `manual` (without them), used for the product-value study. Defined in the [contracts v1 design](design/contracts-v1.md#ticket-lifecycle). | — |
 | Idempotency key | A client-chosen key sent with a write so that a retry does not repeat its effect. | request ID (tracing is separate) |
 | In-scope intent | One of the 12 intents the product handles ([requirements](product/requirements.md#32-in-scope-intents)). | — |
+| Ingress | The first part of the system that receives requests for `/v1/` and `/health/` from outside. It applies the request limits of [ADR-0011](decisions/0011-deployment-and-runtime-topology.md#ingress). In the demo deployment it is a Cloudflare Pages Function ([ADR-0016](decisions/0016-hosting-on-free-tiers.md)). | API gateway (there is none) |
 | Intent | One of the 46 Bitext labels for what the customer wants. | category (a different Bitext field) |
 | Intent distribution | Calibrated probabilities over all intents for one message. | — |
 | Intent override | An intent chosen by staff that replaces the model's prediction for drafting. Choosing the predicted intent itself confirms it (ESC-01). | — |
 | KB document version | One immutable version of a KB document, with an ID, a version, and an effective period (`effective_from`, `effective_to`). | — |
+| Keep-alive | The UptimeRobot monitor that sends `GET /health/ready` straight to the Render origin of `backend` every 5 minutes, so the free instance does not stop. Defined in [ADR-0016](decisions/0016-hosting-on-free-tiers.md#backend-on-render). The wake request is its fallback. | ping (ambiguous) |
 | Knowledge base (KB) | The approved, versioned set of simulated policy and FAQ documents. | policy database, knowledge store |
 | Login name | The name an account signs in with: a role and a number, such as `staff-4`, never a person's name, so it is Internal data. An admin-created account gets `<role>-<number>` from `backend` ([account management design](design/account-management.md#login-names)). | username, user ID |
 | Manager | The role of support managers (Tier 2): they handle escalated tickets and tickets where authority is required, send any reply, and view reports ([ADR-0012](decisions/0012-roles-v1.md)). | supervisor |
@@ -58,6 +61,7 @@ The canonical meaning of every domain term. Code, contracts, docs, and UI use th
 | Staff note | AI-written text for staff only, such as why escalation is recommended or what information is missing. Never sent to the customer. | — |
 | Suggestion | Everything the AI produced for a ticket in one run, as recorded by `backend`: an analysis and, when available, a draft or a staff note. A new run supersedes the previous suggestion. | — |
 | Suggestion job | The queued unit of work in `backend` that runs one suggestion, claimed by one worker at a time under a lease ([ADR-0011](decisions/0011-deployment-and-runtime-topology.md#suggestion-job-queue)). | task |
+| Wake request | One `GET /health/live` that `frontend` sends straight to the Render origin of `backend`, without a cookie, so that a stopped free instance starts. Defined in the [backend wake-up design](design/backend-wake-up.md). | ping, keep-alive (a keep-alive monitor is separate) |
 | Warning | A condition that allows a draft but needs staff attention, identified by a `warning_id` and a reason code. Staff must acknowledge every warning before sending a reply based on the draft. | — |
 | `synthetic-dev-only` | Label for development data that does not come from the approved source. Never used as policy or in evaluation reports. | — |
 | Ticket | A customer request and everything that happens to it until it is closed. | case, request (reserved for HTTP requests), conversation |

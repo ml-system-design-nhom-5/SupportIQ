@@ -1,10 +1,10 @@
 # Design: Backend foundation
 
-- **Status:** In review
+- **Status:** Approved
 - **Owner:** backend engineer
 - **Reviewers:** frontend engineer, contracts gatekeeper
-- **Last reviewed:** 2026-11-11
-- **Related:** [Requirements](../product/requirements.md) (FR-08, FR-11, NFR-09), [ADR-0001](../decisions/0001-system-architecture.md), [ADR-0003](../decisions/0003-tech-stack.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md) (Proposed), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md), [contracts v1 design](contracts-v1.md) (revision 2, in review), [shop UI](shop-ui.md), [admin UI](admin-ui.md), [architecture rules](../rules/architecture.md), [security rules](../rules/security-and-privacy.md)
+- **Last reviewed:** 2026-11-12
+- **Related:** [Requirements](../product/requirements.md) (FR-08, FR-11, NFR-09), [ADR-0001](../decisions/0001-system-architecture.md), [ADR-0003](../decisions/0003-tech-stack.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), [ADR-0016](../decisions/0016-hosting-on-free-tiers.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md), [contracts v1 design](contracts-v1.md) (revision 2, in review), [shop UI](shop-ui.md), [admin UI](admin-ui.md), [architecture rules](../rules/architecture.md), [security rules](../rules/security-and-privacy.md)
 
 ## Summary
 
@@ -35,7 +35,7 @@ The ticket workflow that involves the AI (suggestion jobs, pseudonymization, the
 - Sign-in, sessions, password hashing, throttling, and the `Origin` check: [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md).
 - Roles and the admin limits: [ADR-0012](../decisions/0012-roles-v1.md). The permission matrix: [contracts v1](contracts-v1.md#roles-and-permissions).
 - Commerce entities, the audit log events, and the ticket lifecycle: [contracts v1](contracts-v1.md#simulated-commerce-data-owned-by-backend).
-- Replicas, the one-off `backend-migrate` service, and the seed and reset commands: [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md).
+- Replicas, migrations as a one-off command, and the seed and reset commands: [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md). Where they run: [ADR-0016](../decisions/0016-hosting-on-free-tiers.md).
 - Layers, feature modules, ports, and settings: [architecture rules](../rules/architecture.md). Persistence: [PY-39 to PY-42](../rules/python.md#persistence-backend).
 
 ## Design
@@ -327,12 +327,12 @@ No scheduler exists outside the suggestion job queue ([ARCH-41](../rules/archite
 2. Done on 2026-11-05: the project lead approved the `frontend` ↔ `backend` part of contracts v1 revision 2 for contract PR 2 and its implementation: the operations listed in Goals and the health checks ([contracts v1, Rollout](contracts-v1.md#rollout)).
 3. Done on 2026-11-06: contract PR 2 wrote the operations listed in Goals and the health checks, with the points under Data and contracts.
 4. Decided by the project lead on 2026-11-05: the scaffold leaves out `deploy/` and Docker Compose until ADR-0011 or the hosting ADR is accepted. Until then, migrate, seed, and reset run as `backend` commands, against Homebrew PostgreSQL 17 locally and a PostgreSQL service container in CI, and CI only builds the `backend` Docker image.
-5. Done on 2026-11-07: scaffold `backend` (uv, ruff, pyright, pytest, import-linter, Alembic) and its CI workflow, following step 4. A SQL script, run once as the database owner, creates `supportiq_app` and its privileges, with a password from a secret setting. Migrations run as a one-off `backend` command before the `backend` instances start (step 4). The `backend-migrate` service of [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), or the pre-deploy command of a host, takes over that step once ADR-0011 or the hosting ADR is accepted. The README gets a "Demo accounts" section that lists the login names and roles and says that passwords come from each person's `.env`.
+5. Done on 2026-11-07: scaffold `backend` (uv, ruff, pyright, pytest, import-linter, Alembic) and its CI workflow, following step 4. A SQL script, run once as the database owner, creates `supportiq_app` and its privileges, with a password from a secret setting. Migrations run as a one-off `backend` command before the `backend` instances start (step 4). Once [ADR-0016](../decisions/0016-hosting-on-free-tiers.md#migrations-and-one-off-commands) is accepted, its deploy workflow takes over that step, because the free plan of the host has no pre-deploy command. The README gets a "Demo accounts" section that lists the login names and roles and says that passwords come from each person's `.env`.
 6. Done on 2026-11-07 for `backend`: implement `platform`, `audit`, and `idempotency`, then `accounts`, then `commerce` with the seed, then `tickets`. `frontend` builds the shop and admin screens against Prism mocks in parallel.
 7. The `backend` ticket workflow design follows, for the console and everything that involves `ai-service`.
 
 ## Open questions
 
 - The ID formats of the shared commerce data of groups 2 and 5. When that data is adopted, the seed formats above change to match it.
-- Hosting of the demo. The project lead proposes Supabase for PostgreSQL, Render for `backend` with UptimeRobot, and Vercel or Cloudflare Pages for `frontend`, instead of the single-host topology of ADR-0011. It needs an ADR, because it changes ADR-0011 and the session cookie of ADR-0009 requires the browser to reach `backend` on the same site as `frontend`.
-- This design was approved on 2026-11-05 while ADR-0011 and contracts v1 revision 2 were still in review. If either changes, this design is revised.
+- Hosting of the demo: decided in [ADR-0016](../decisions/0016-hosting-on-free-tiers.md), which keeps the browser on the origin of `frontend`, as the session cookie of ADR-0009 requires. Its checks of the database roles through the Supabase session pooler apply to the roles of this design.
+- This design was approved on 2026-11-05 while ADR-0011 and contracts v1 revision 2 were still in review. ADR-0011 was revised on 2026-11-12, and the statements above that name the `backend-migrate` service and the pre-deploy step were revised with it. The project lead approved this revision on 2026-11-12.

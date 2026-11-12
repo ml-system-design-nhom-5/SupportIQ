@@ -3,8 +3,8 @@
 - **Status:** In review
 - **Owner:** contracts gatekeeper
 - **Reviewers:** ML engineer, RAG engineer, backend engineer, frontend engineer
-- **Last reviewed:** 2026-11-11
-- **Related:** [Requirements](../product/requirements.md) (FR-01 to FR-11, ESC-01 to ESC-05), [ADR-0001](../decisions/0001-system-architecture.md), [ADR-0004](../decisions/0004-api-conventions.md), [ADR-0005](../decisions/0005-intent-independent-retrieval.md), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md), [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md), [ADR-0014](../decisions/0014-citations-to-order-context.md), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md), [account management design](account-management.md), [contract rules](../rules/contracts.md)
+- **Last reviewed:** 2026-11-12
+- **Related:** [Requirements](../product/requirements.md) (FR-01 to FR-11, ESC-01 to ESC-05), [ADR-0001](../decisions/0001-system-architecture.md), [ADR-0004](../decisions/0004-api-conventions.md), [ADR-0005](../decisions/0005-intent-independent-retrieval.md), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md), [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md), [ADR-0014](../decisions/0014-citations-to-order-context.md), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md), [ADR-0016](../decisions/0016-hosting-on-free-tiers.md), [account management design](account-management.md), [contract rules](../rules/contracts.md)
 
 ## Summary
 
@@ -82,7 +82,7 @@ Revision 2 needs a new approval.
 |---|---|
 | `frontend` | Calls only `backend`. Has three areas: `/shop` for customers, `/console` for staff and managers, and `/admin` for admins. Polls a ticket while its suggestion is pending. Shows only the actions listed in `allowed_actions`. Shows AI text exactly as `backend` returns it, and highlights any placeholder in it ([UI-43](../rules/ui.md#console-interaction)). |
 | `backend` | Creates a suggestion when a ticket is created and runs it through the suggestion job queue. Pseudonymizes the message before calling `ai-service`, and restores pseudonyms for staff. Calls `/v1/analyses` and `/v1/drafts` in parallel. Stores every suggestion snapshot and writes the audit log. Enforces the ticket state machine, roles, object-level access, and the authority rule. Computes reports. Measures handling time. |
-| `ai-service` | Serves `/v1/analyses` and `/v1/drafts` on pseudonymized text, without per-ticket state. Rejects LLM output that uses a placeholder absent from the prompt. Serves KB document versions, and the release ID with the versions of its loaded assets. Reaches the LLM provider only through the egress proxy. |
+| `ai-service` | Serves `/v1/analyses` and `/v1/drafts` on pseudonymized text, without per-ticket state. Rejects LLM output that uses a placeholder absent from the prompt. Serves KB document versions, and the release ID with the versions of its loaded assets. Calls only the LLM provider hosts on the egress allow-list ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#egress-control)). |
 
 ### Roles and permissions
 
@@ -116,10 +116,10 @@ The roles are `customer`, `staff`, `manager`, and `admin` ([ADR-0012](../decisio
 
 - A ticket has `is_authority_required`, a ticket-level property that `backend` sets to `true` when any suggestion of that ticket carries the reason code `requires_authority`, in its routing or in its draft outcome. `backend` sets it in the transaction that stores that result.
 - `requires_authority` covers refund decisions, transaction disputes, policy exceptions, legal claims, and suspected fraud (ESC-03). The reason code `human_agent_requested` does not set the property.
-- `ai-service` sets `requires_authority` from these signals, and each signal can only add it:
+- `ai-service` sets `requires_authority` from two signals, and each signal can only add it:
   - a sensitive intent, at least `request_refund`, with a significant probability in the intent distribution ([ADR-0005](../decisions/0005-intent-independent-retrieval.md), statement 5);
-  - a term of the sensitive-term list, for legal claims and suspected fraud;
-  - the LLM, if the `ai-service` pipeline design adopts this signal after measuring it.
+  - a term of the sensitive-term list, for legal claims and suspected fraud.
+- The LLM never sets `requires_authority`; it only writes the draft. The project lead decided this on 2026-11-12.
 - The property is never cleared in v1. Correcting the intent or re-running the suggestion cannot remove it. A sensitive intent chosen by staff sets it in the same way, because the override replaces the intent distribution. A choice that staff replace before its draft outcome arrives sets nothing, because staff withdrew it.
 - While any part of the current suggestion is `pending`, staff cannot send a reply (`409 suggestion-pending`). This closes the gap where the flag is not yet known.
 - Staff can correct the intent only when an intent is known: the analysis of the current suggestion is `ready`, or the current suggestion already carries an `intent_override`. Every signal of the model's analysis is therefore stored before any correction. A correction is allowed while a draft is generating: it cancels the draft call and starts a new draft ([Suggestion lifecycle](#suggestion-lifecycle)).
@@ -642,12 +642,13 @@ An escalation records `escalate`. For a reply proposal, the record keeps both th
 | `escalations` | Escalations in the period, by staff reason code |
 | `ai_outcomes` | Suggestions completed in the period, by draft status and by AI reason code, without `cancelled` drafts |
 | `end_to_end_latency_ms` | p50 and p95, from ticket creation until the draft part of the ticket's first suggestion left `pending` ([NFR-08](../product/requirements.md#5-quality-requirements)) |
-| `suggestion_latency_ms` | p50 and p95 per part, from suggestion creation until the part left `pending` |
 | `ai_error_rate` | Share of suggestions with a part `unavailable` or a draft `llm_unavailable` |
 | `llm_cost_micro_usd` | Total, and average per suggestion that called the LLM |
 | `handling_time_ms` | p50 by handling mode (NFR-11) |
 
-Infrastructure cost (NFR-10) is reported from AWS billing, not from this report.
+Only managers see the report ([ADR-0012](../decisions/0012-roles-v1.md)). The console shows each figure with a label in business language, its unit, and its target where the requirements give one ([UI-44](../rules/ui.md#console-interaction)). The report holds no intent figures, such as the override rate or decisions by intent, and no latency per suggestion part: those are developer metrics on the Staff outcomes and AI pipeline dashboards of Grafana ([LOG-27](../rules/logging-and-observability.md#dashboards)).
+
+Infrastructure cost (NFR-10) is the price of the hosting plans ([ADR-0016](../decisions/0016-hosting-on-free-tiers.md#deviations-from-the-requirements)), not a figure of this report.
 
 #### Admin operations
 
@@ -727,7 +728,7 @@ Values missing from the source files are never invented. A document without a re
 | Same failure on the draft call | Draft `unavailable`; the analysis is still shown when ready | Use-case test; consumer contract test |
 | `ai-service` returns a documented `4xx` | Part `unavailable` with `ai_service_unavailable`; logged at `error` as a defect | Use-case test with a fake client returning `422` |
 | `ai-service` returns an unknown status or reason code | Treated as unavailable or as an unspecified reason ([CON-22](../rules/contracts.md#evolution)) | Consumer test with a mock returning unknown values |
-| LLM fails inside `ai-service`, or the egress proxy refuses the host | Draft `llm_unavailable`; analysis present | Provider contract test with the LLM adapter faked to fail |
+| LLM fails inside `ai-service`, or a call to a host that is not on the egress allow-list is refused | Draft `llm_unavailable`; analysis present | Provider contract test with the LLM adapter faked to fail |
 | Pseudonymization fails, or its output exceeds 4 000 characters | No call to `ai-service`; both parts `unavailable` with `pseudonymization_failed`; ticket stays `open` | Use-case test with a failing fake pseudonymizer that asserts no call was made |
 | A personal value of the ticket appears in a request to `ai-service` | A defect: known values and detected values never leave `backend` | Guardrail test over every request the fake `ai-service` client receives (NFR-06) |
 | A detector misses an unknown name or address in a message | The value reaches `ai-service`; the second layer masks only patterns. Every miss counts against NFR-06 and is reported | NFR-06 suite with messages that name third persons |
@@ -774,10 +775,11 @@ Values missing from the source files are never invented. A document without a re
 - **One `/v1/suggestions` endpoint in `ai-service`** instead of analyses and drafts: rejected in [ADR-0005](../decisions/0005-intent-independent-retrieval.md).
 - **One ticket view for every role**, with fields hidden by role: rejected, because a hidden field can leak through a bug. Separate shop, console, and admin schemas make "a customer never sees a draft" and "an admin never sees a ticket" structural.
 - **Synchronous AI call during ticket creation:** rejected, because the customer would wait for the LLM and an AI failure would fail ticket creation.
-- **Push updates (server-sent events or WebSockets):** deferred. Polling fits v1. With two `backend` replicas, push would also need a shared publish-subscribe channel ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)).
+- **Push updates (server-sent events or WebSockets):** deferred. Polling fits v1. With more than one `backend` replica, push would also need a shared publish-subscribe channel ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)).
 - **Authority taken only from the current suggestion:** rejected after review, because an intent correction could remove the flag. The flag is sticky per ticket.
 - **Staff may send authority-required replies after acknowledging a warning:** rejected by the team in favor of manager approval.
-- **Reports as Grafana dashboards:** rejected. Telemetry is disposable and is not the record of truth ([LOG-33](../rules/logging-and-observability.md#alerts-and-retention)). Grafana sits outside the access control of `backend` (FR-08). The observability stack may also be reduced to fit the memory budget ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)). Grafana stays the developer view.
+- **Reports as Grafana dashboards:** rejected. Telemetry is disposable and is not the record of truth ([LOG-33](../rules/logging-and-observability.md#alerts-and-retention)). Grafana sits outside the access control of `backend` (FR-08). Grafana stays the developer view.
+- **An in-app developer screen that shows every record:** rejected by the project lead on 2026-11-12. Developers use Grafana, the Supabase dashboard of the database ([ADR-0016](../decisions/0016-hosting-on-free-tiers.md)), and dev mode ([UI-35](../rules/ui.md#developer-views)).
 - **In-process job runner with a re-queue at startup** (revision 1): replaced by the PostgreSQL job queue, because two replicas could process one job twice ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)).
 - **Blocking intent corrections until the draft is ready:** rejected. Staff would wait up to the draft timeout for a draft they already know is wrong. Only the analysis, which has no LLM step, finishes first.
 - **Finishing the analysis of a superseded suggestion to keep its flag:** rejected. It needs an exception to the job rules, and it is not needed: an intent correction is accepted only after the analysis, so the flag is already stored.
@@ -812,6 +814,7 @@ Values missing from the source files are never invented. A document without a re
 - **Spans:** `create_ticket`, `run_suggestion_job`, `pseudonymize_message`, `call_ai_service` (with the endpoint as an attribute), `save_decision`, `send_reply`, `build_report`.
 - **Metrics:** `supportiq.ticket.handling.duration` by mode, `supportiq.staff.decisions`, `supportiq.ai_service.unavailable`, `supportiq.suggestion.duration` (ms, by part), `supportiq.pseudonymization.outcomes` (by outcome), and `supportiq.suggestion_job.lease_expirations`.
 - The trace ID is stored with each suggestion and audit log entry, and shown in the developer details panel ([UI-35](../rules/ui.md#developer-views)).
+- Dev mode has two layers ([UI-35](../rules/ui.md#developer-views)). An environment setting makes it available: on in local development, off in the demo deployment. Where it is available, each `staff`, `manager`, and `admin` user switches it on or off for themselves, as a display preference stored in the browser. Customers never get it. It only adds display on the screens of each role, never changes permissions, and offers no sign-in as another account.
 - Telemetry never contains message text, AI text, pseudonym map values, or the original values behind pseudonyms ([LOG-29](../rules/logging-and-observability.md#privacy-in-telemetry)).
 
 ## Security and privacy
@@ -820,7 +823,7 @@ Values missing from the source files are never invented. A document without a re
 |---|---|
 | `frontend` → `backend` | Credentials (Secret), only to `createSession`. Messages and replies (Confidential) |
 | `backend` → `ai-service` | Pseudonymized message and allow-listed order context (Confidential, without identifiers); `as_of`, KB version, intent override (Internal). Detected names, emails, phone numbers, addresses, order IDs, tracking codes, and transaction IDs are replaced; a value that every detector misses can remain ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#detection)). No account IDs and no `other_orders` |
-| `ai-service` → LLM provider | The pseudonymized message after masking, KB snippets, and the order fields a prompt needs, through the egress proxy ([SEC-04 to SEC-06](../rules/security-and-privacy.md#data-sent-to-llm-providers), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md)) |
+| `ai-service` → LLM provider | The pseudonymized message after masking, KB snippets, and the order fields a prompt needs, only to hosts on the egress allow-list ([SEC-04 to SEC-06](../rules/security-and-privacy.md#data-sent-to-llm-providers), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md)) |
 | `backend` → `/shop` | Catalog products (Public); the caller's own orders and tickets, and sent replies only (Confidential) |
 | `backend` → `/console` | Customer display name, message, order details, the customer's other orders without addresses, and suggestions with pseudonyms restored (Confidential), to staff and managers only. Reports (Internal), to managers only |
 | `backend` → `/admin` | Display names (Confidential, staff identity), roles, and statuses (Internal) of `staff`, `manager`, and `admin` accounts; versions in use (Internal). No customer data |
@@ -832,18 +835,19 @@ Every schema property states its data class ([SEC-03](../rules/security-and-priv
 
 1. Done on 2026-10-24: revision 1 was approved and ADR-0009 accepted.
 2. Done on 2026-10-24: UI-16, UI-17, and UI-19 were updated for the reply proposal flow.
-3. Revision 2, dated 2026-10-28 and updated 2026-11-05, is in review together with ADR-0010, ADR-0011, and ADR-0014. ADR-0012 and ADR-0013 were accepted on 2026-11-05.
+3. Revision 2, dated 2026-10-28 and updated 2026-11-05, was reviewed together with ADR-0010, ADR-0011, and ADR-0014. ADR-0012 and ADR-0013 were accepted on 2026-11-05, and ADR-0010, ADR-0011, and ADR-0014 on 2026-11-12. The `ai-service` part of revision 2 is still in review (step 10).
 4. Done on 2026-11-05: the project lead approved the `frontend` ↔ `backend` part of revision 2 for contract PR 2 and its implementation, exactly these operations: `createSession`, `getCurrentSession`, `deleteCurrentSession`, `listShopProducts`, `getShopProduct`, `listShopOrders`, `getShopOrder`, `createShopTicket`, `listShopTickets`, `getShopTicket`, `listAdminAccounts`, `changeAccountRole`, `changeAccountStatus`, and the health checks. The rest of revision 2 stays in review with the AI and ML members: the console operations, `getAdminVersions`, and the `ai-service` contract.
 5. Decided on 2026-11-05: contract PR 2 lands before contract PR 1. It adds only the shared schemas that the `backend` contract needs now ([Common elements](#common-elements)).
 6. Contract PR 2: `backend.openapi.yaml` 1.0.0 with the operations of step 4, its examples, `CHANGELOG.md`, the shared schemas of step 5, and the contract tooling with its commands in `contracts/README.md`.
 7. Contract PR 1: `ai-service.openapi.yaml` 1.0.0, its examples, and the remaining shared schemas. Later `backend` contract changes add the console operations and `getAdminVersions`.
 8. Contract PR 3: `kb-contract.md` structure, completed when the KB files arrive.
 9. Implementation starts in parallel against mocks. These follow-up design docs come first:
-   - the `ai-service` pipeline: routing per the escalation rules, the list of sensitive intents, whether the LLM is a third authority signal ([SEC-26](../rules/security-and-privacy.md#prompt-injection) applies) and, if so, how that signal stays known when a correction cancels the draft that would carry it, step budgets, retrieval limits (N, k, and snippet length), the maximum output tokens, an LLM spending limit, the grounding check including order citations, placeholder instructions and the output check, and the `as_of` confirmation;
+   - the `ai-service` pipeline: routing per the escalation rules, the list of sensitive intents, step budgets, retrieval limits (N, k, and snippet length), the maximum output tokens, an LLM spending limit, the grounding check including order citations, placeholder instructions and the output check, and the `as_of` confirmation. Whether the LLM is a third authority signal was decided on 2026-11-12: it is not ([Authority rule](#authority-rule-fr-06));
    - the `backend` foundation: tables, database roles, sessions, idempotency, the audit log schema, and the seed and reset commands, in the [backend foundation design](backend-foundation.md);
    - the `backend` ticket workflow: job queue schema and settings, pseudonymization detectors and the named-entity library, how a storage error while writing the pseudonym map is retried (it is not a `pseudonymization_failed`), report queries, and a decision-record export that keeps original values out ([SEC-37](../rules/security-and-privacy.md#pseudonymization));
    - the screens of `/console`, `/shop`, and `/admin`: the [console UI](console-ui.md), [shop UI](shop-ui.md), and [admin UI](admin-ui.md) designs;
    - the evaluation protocol ([DATA-20](../rules/data-and-ml.md#splits-and-evaluation-protocol)).
+10. Done on 2026-11-12: the project lead approved the remaining `frontend` ↔ `backend` part of revision 2, the console operations and `getAdminVersions`, with the decisions of 2026-11-11 on reports and dev mode applied above. The `ai-service` contract stays in review. On the same day the project lead decided that the LLM never sets `requires_authority`: only the intent model and the sensitive-term list do, and the LLM only writes the draft ([Authority rule](#authority-rule-fr-06)). The KB data contract stays open until the KB files arrive (step 8).
 
 Nothing is deployed yet, so no migration or rollback is needed.
 

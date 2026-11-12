@@ -1,7 +1,7 @@
 # ADR-0014: Citations to the order context
 
-- **Status:** Proposed
-- **Date:** 2026-11-04
+- **Status:** Accepted
+- **Date:** 2026-11-12
 - **Deciders:** Team
 - **Related:** [Requirements](../product/requirements.md) (FR-03, FR-04, FR-05, NFR-04, ESC-04), [ADR-0001](0001-system-architecture.md), [ADR-0005](0005-intent-independent-retrieval.md), [contracts v1 design](../design/contracts-v1.md), [console UI design](../design/console-ui.md), [TEST-26](../rules/testing.md#guardrail-tests)
 

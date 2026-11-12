@@ -63,7 +63,7 @@ These steps work from a fresh clone.
    uv run --env-file .env backend seed
    ```
 
-Docker is not part of local development. Only CI builds the [`Dockerfile`](Dockerfile); Docker Compose comes with `deploy/`.
+Docker is not part of local development. CI builds the [`Dockerfile`](Dockerfile), and Render runs it in the demo deployment ([ADR-0016](../docs/decisions/0016-hosting-on-free-tiers.md)).
 
 ## Commands
 

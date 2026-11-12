@@ -3,7 +3,7 @@
 - **Status:** Approved
 - **Owner:** frontend engineer
 - **Reviewers:** backend engineer, contracts gatekeeper
-- **Last reviewed:** 2026-11-11
+- **Last reviewed:** 2026-11-12
 - **Related:** [Requirements](../product/requirements.md) (FR-08, FR-11), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md), [contracts v1 design](contracts-v1.md) (revision 2, in review), [account management design](account-management.md), [console UI design](console-ui.md) (tokens), [UI rules](../rules/ui.md#shop)
 
 ## Summary
@@ -12,7 +12,7 @@ This design fixes the screens of `/shop`, where simulated customers browse a rea
 
 On 2026-11-05 the team chose the layout: My orders is a list, and each order page holds the order details, every ticket about that order with its reply, and a message box. A Support page lists every ticket, and each one opens on the page of its order.
 
-**Revision of 2026-11-07, decided by the project lead:** after a timeout, a lost connection, `502`, or `504`, nobody knows whether a message arrived: `backend` may finish a write after `frontend` stopped waiting (`backend` contract, Timeouts), and a write in flight can fail with `502` ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), Proposed). Version 1.0.1 of the `backend` contract states this in its text on responses from the ingress. The same holds for a `2xx` whose body cannot be read, and for a later failure with the same key, unless `backend` refuses it with `422` or `404`. The `Idempotency-Key` now stays with a message until the send succeeds or the text changes, and the banner says that the message may have arrived. The first decision is kept under [Alternatives considered](#alternatives-considered). The revision also records that a product appears at most once in an order, and where the focus goes after sending.
+**Revision of 2026-11-07, decided by the project lead:** after a timeout, a lost connection, `502`, or `504`, nobody knows whether a message arrived: `backend` may finish a write after `frontend` stopped waiting (`backend` contract, Timeouts), and a write in flight can fail with `502` ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)). Version 1.0.1 of the `backend` contract states this in its text on responses from the ingress. The same holds for a `2xx` whose body cannot be read, and for a later failure with the same key, unless `backend` refuses it with `422` or `404`. The `Idempotency-Key` now stays with a message until the send succeeds or the text changes, and the banner says that the message may have arrived. The first decision is kept under [Alternatives considered](#alternatives-considered). The revision also records that a product appears at most once in an order, and where the focus goes after sending.
 
 **Revision of 2026-11-11, for [ADR-0015](../decisions/0015-account-creation-and-password-changes.md):** the account menu replaces the customer's display name and Sign out in the top bar, and adds Change password, which opens the shared page `/change-password`. Both are defined in the [account management design](account-management.md#account-menu). The earlier top bar is kept under [Alternatives considered](#alternatives-considered).
 

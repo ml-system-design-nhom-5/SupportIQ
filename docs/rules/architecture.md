@@ -1,6 +1,6 @@
 # Architecture rules
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-07
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-12
 
 Rules for where code lives, how parts depend on each other, and how the system grows without rewrites. The component map and its reasons are in [ADR-0001](../decisions/0001-system-architecture.md).
 
@@ -34,7 +34,7 @@ Rules for where code lives, how parts depend on each other, and how the system g
 
 **ARCH-10.** Each component has its own README, configuration, Dockerfile, test suite, and dependency lockfile.
 
-**ARCH-42.** Deployment configuration (the Compose file, Nginx, the egress proxy, and observability provisioning) lives in `deploy/` ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)). Components never read files from `deploy/` at runtime; they receive values through their settings.
+**ARCH-42.** Deployment configuration (the setup steps and the settings of each hosting platform, without secret values, and observability provisioning) lives in `deploy/` ([ADR-0016](../decisions/0016-hosting-on-free-tiers.md)). Two parts live where their platform reads them: the deploy workflow in `.github/workflows/`, and the Pages Function with its routes in `frontend/`. Components never read files from `deploy/` at runtime; they receive values through their settings.
 
 ## Layers
 
