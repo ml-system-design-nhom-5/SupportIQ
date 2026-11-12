@@ -98,10 +98,10 @@ from supportiq_backend.suggestions.domain import (
     build_part_audit_data,
     build_suggestion_request,
     build_unavailable_completion,
-    check_cited_facts,
     choose_view_trigger,
     get_part_status,
     plan_requested_suggestion,
+    read_cited_facts,
     read_order_fact,
 )
 
@@ -195,10 +195,10 @@ __all__ = [
     "build_part_audit_data",
     "build_suggestion_request",
     "build_unavailable_completion",
-    "check_cited_facts",
     "choose_view_trigger",
     "get_part_status",
     "plan_requested_suggestion",
+    "read_cited_facts",
     "read_order_fact",
     "record_ai_service_failure",
 ]

@@ -73,6 +73,10 @@ QUEUED_JOB = {"state": "queued", "attempt_number": 0}
 DONE_AFTER_ONE_CLAIM = {"state": "done", "attempt_number": 1}
 DRAFT_COMPLETED_AT = "SELECT completed_at FROM suggestion_parts WHERE part = 'draft'"
 JOB_TIMES = "SELECT ARRAY[lease_expires_at, updated_at] FROM suggestion_jobs"
+PART_RESULTS_ARE_ABSENT = """
+    SELECT bool_and(versions IS NULL AND mask_count_by_type IS NULL AND result IS NULL)
+    FROM suggestion_parts
+"""
 
 
 async def load_suggestion(engine: AsyncEngine, suggestion_id: SuggestionId) -> Suggestion | None:
@@ -140,6 +144,18 @@ async def test_insert_suggestion_leaves_the_request_absent_until_pseudonymizatio
     # Absent is SQL NULL, the only value that `save_request` and the trigger of `r0003` treat
     # as "not written yet" (design, Tables), never the JSON value `null`.
     assert await builder.scalar("SELECT request IS NULL FROM suggestions") is True
+
+
+async def test_insert_suggestion_leaves_the_results_of_its_pending_parts_absent(
+    app_engine: AsyncEngine, builder: DatabaseBuilder
+) -> None:
+    suggestion = build_new_suggestion(builder, await insert_ticket(builder), NOW)
+
+    await insert_suggestion(app_engine, suggestion)
+
+    # A pending part has no versions, masks, or result yet: SQL NULL, never the JSON value
+    # `null` (design, Tables: "optional").
+    assert await builder.scalar(PART_RESULTS_ARE_ABSENT) is True
 
 
 async def test_load_suggestion_of_an_unknown_suggestion_is_none(app_engine: AsyncEngine) -> None:

@@ -3,7 +3,8 @@
 The table `OUTCOMES` of `tests.contract.outcomes` lists them, and a test compares the table
 with the contract, so a status added to the contract fails here until it has its test. `500`
 comes from a failure inside the request, through the real exception handler, and `503` from a
-replica with no database.
+replica with no database. The ai-service of every replica is an in-memory one that answers with
+the examples of its contract, so no outcome depends on the network (TEST-16).
 """
 
 from collections.abc import MutableSequence
@@ -31,6 +32,7 @@ from tests.contract.calls import (
 )
 from tests.contract.documented import list_operations, validate_response
 from tests.contract.outcomes import OTHER_KEY, OUTCOMES, UNPROCESSABLE, Condition, Outcome
+from tests.integration.ai_service_doubles import FakeAiService, serve_examples
 from tests.integration.application import (
     RunningBackend,
     build_settings,
@@ -76,6 +78,7 @@ class FailingMiddleware:
 def client_under(
     condition: Condition, worker_database: WorkerDatabase
 ) -> AbstractAsyncContextManager[httpx.AsyncClient]:
+    ai_service = FakeAiService(serve_examples)
     match condition:
         case Condition.REQUEST_FAILS:
             app = create_app(
@@ -83,6 +86,7 @@ def client_under(
                 RecordingEventRecorder(),
                 FakeClock(),
                 background=BackgroundWork.NONE,
+                ai_service_transport=ai_service,
             )
             # Starlette runs this list in order, so the last entry is the innermost middleware.
             middleware: MutableSequence[Middleware] = app.user_middleware
@@ -90,10 +94,15 @@ def client_under(
             return running_app(app)
         case Condition.NO_DATABASE:
             settings = build_settings(worker_database, database_url_app=UNREACHABLE_URL)
-            return running_client(settings, RecordingEventRecorder(), FakeClock())
+            return running_client(
+                settings, RecordingEventRecorder(), FakeClock(), ai_service=ai_service
+            )
         case Condition.HEALTHY:
             return running_client(
-                build_settings(worker_database), RecordingEventRecorder(), FakeClock()
+                build_settings(worker_database),
+                RecordingEventRecorder(),
+                FakeClock(),
+                ai_service=ai_service,
             )
         case _:
             assert_never(condition)

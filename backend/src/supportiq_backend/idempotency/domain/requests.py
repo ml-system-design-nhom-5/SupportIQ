@@ -22,6 +22,9 @@ from supportiq_backend.idempotency.domain.errors import (
 from supportiq_backend.platform import OperationId
 
 _KEY_PATTERN = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+# The stored body of a response without one, such as a `204`: the record holds a JSON value,
+# and the JSON value `null` stands for no body.
+NO_CONTENT_BODY = "null"
 
 # A key as the contract defines it: a UUID in lowercase hexadecimal with hyphens.
 IdempotencyKey = NewType("IdempotencyKey", UUID)
@@ -48,11 +51,6 @@ class IdempotentRequest:
     operation: OperationId
     key: IdempotencyKey
     request_hash: RequestHash
-
-
-# The stored body of a response without one, such as a `204`: the record holds a JSON value,
-# and the JSON value `null` stands for no body.
-NO_CONTENT_BODY = "null"
 
 
 @dataclass(frozen=True, slots=True)

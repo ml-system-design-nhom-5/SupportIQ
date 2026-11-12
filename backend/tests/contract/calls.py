@@ -40,7 +40,8 @@ class World:
         tokens: The raw session identifier of a signed-in account of each role.
         product_id: A product.
         order_id: An order of the signed-in customer.
-        ticket_id: An `open` ticket of the signed-in customer, without a suggestion.
+        ticket_id: An `open` ticket of the signed-in customer whose current suggestion ended
+            unavailable, so a retry is valid.
         other_ticket_id: Another `open` ticket of that customer, without a suggestion.
         authority_ticket_id: An `open` ticket of that customer that requires authority.
         target_account_id: A `staff` account that an admin can change.
@@ -143,8 +144,6 @@ async def ticket_with_failed_suggestion(
 def valid_calls(world: World) -> Mapping[str, Call]:
     """Return a request of each operation that succeeds for the role that the contract names.
 
-    The one exception is `createSuggestion`, whose comment says why.
-
     Args:
         world: The records.
 
@@ -206,8 +205,8 @@ def _console_calls(world: World) -> Mapping[str, Call]:
         "listConsoleTickets": Call("GET", CONSOLE_TICKETS, role="staff", params={"status": "open"}),
         "getConsoleTicket": Call("GET", console_ticket, role="staff"),
         "recordTicketView": Call("POST", f"{console_ticket}/views", role="staff", key=KEY),
-        # A retry. `DatabaseBuilder` inserts no suggestion, so `ticket_id` has none to retry,
-        # and this call gets `422 nothing-to-retry`.
+        # A retry, valid because the current suggestion of `ticket_id` ended unavailable
+        # (`ticket_with_failed_suggestion`), so this call gets `202`.
         "createSuggestion": Call(
             "POST", f"{console_ticket}/suggestions", role="staff", key=KEY, body={}
         ),

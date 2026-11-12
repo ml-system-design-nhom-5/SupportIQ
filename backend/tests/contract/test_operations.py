@@ -17,6 +17,7 @@ from schemathesis import BaseSchema
 
 from supportiq_backend.composition_root import BackgroundWork, create_app
 from tests.contract.documented import list_operations
+from tests.integration.ai_service_doubles import FakeAiService, serve_examples
 from tests.integration.application import RunningBackend, build_settings
 from tests.integration.database import WorkerDatabase
 from tests.unit.platform.fakes import FakeClock, RecordingEventRecorder
@@ -82,6 +83,7 @@ def test_the_application_serves_exactly_the_operations_of_the_contract(
         RecordingEventRecorder(),
         FakeClock(),
         background=BackgroundWork.NONE,
+        ai_service_transport=FakeAiService(serve_examples),
     )
 
     assert served_operations(app) == documented_operations(contract)
@@ -113,6 +115,7 @@ def test_only_send_reply_sends_a_reply(worker_database: WorkerDatabase) -> None:
         RecordingEventRecorder(),
         FakeClock(),
         background=BackgroundWork.NONE,
+        ai_service_transport=FakeAiService(serve_examples),
     )
 
     reply_routes = {

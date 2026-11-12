@@ -270,6 +270,7 @@ class FakeAiService:
     versions: AssetVersions | BackendError = field(default_factory=build_versions)
     analysis_requests: list[SuggestionRequest] = field(default_factory=list[SuggestionRequest])
     draft_requests: list[SuggestionRequest] = field(default_factory=list[SuggestionRequest])
+    version_reads: int = 0
 
     @property
     def requests(self) -> tuple[SuggestionRequest, ...]:
@@ -291,7 +292,8 @@ class FakeAiService:
         return self.draft_result
 
     async def fetch_asset_versions(self) -> AssetVersions:
-        """Answer the read of the loaded versions."""
+        """Count the read of the loaded versions and answer it."""
+        self.version_reads += 1
         if isinstance(self.versions, BackendError):
             raise self.versions
         return self.versions

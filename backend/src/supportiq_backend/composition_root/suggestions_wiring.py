@@ -156,6 +156,7 @@ def wire_suggestions(
     session_factory: async_sessionmaker[AsyncSession],
     shared: SharedPorts,
     authorizer: Authorizer,
+    ai_service_transport: httpx.AsyncBaseTransport | None,
 ) -> SuggestionsWiring:
     """Create the ai-service client, pseudonymization, the claim loop, and the starter.
 
@@ -166,12 +167,15 @@ def wire_suggestions(
         session_factory: The session factory of the replicas.
         shared: The shared ports.
         authorizer: The role checks.
+        ai_service_transport: The transport of the ai-service client; None for the network.
 
     Returns:
         The wiring.
     """
     ai_client = create_ai_service_client(
-        str(settings.ai_service_base_url), settings.ai_service_token.get_secret_value()
+        str(settings.ai_service_base_url),
+        settings.ai_service_token.get_secret_value(),
+        transport=ai_service_transport,
     )
     ai_service = HttpAiService(
         ai_client,

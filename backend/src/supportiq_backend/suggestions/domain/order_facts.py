@@ -1,10 +1,10 @@
-"""The facts of an order context, and the check that a draft cites only facts it was sent.
+"""The facts of an order context, and the facts that a draft cites from it.
 
 `ai-service` never returns a draft that cites an order field absent from the request: such a
 draft is `grounding_failed` (contracts v1 design, Errors). A draft that does so anyway is a
-response outside the contract, so its part becomes unavailable instead of being stored with
-a citation that the workspace cannot show (backend ticket workflow design, The `ai-service`
-client).
+response outside the contract, so reading its cited facts fails and its part becomes
+unavailable instead of being stored with a citation that the workspace cannot show (backend
+ticket workflow design, The `ai-service` client).
 """
 
 from collections.abc import Callable, Mapping
@@ -54,20 +54,31 @@ def read_order_fact(context: OrderContext, field: OrderContextField) -> OrderFac
     return _FACT_READERS[field](context)
 
 
-def check_cited_facts(outcome: DraftOutcome, context: OrderContext | None) -> None:
-    """Refuse a draft that cites an order field without a value in the request's context.
+def read_cited_facts(outcome: DraftOutcome, context: OrderContext | None) -> tuple[OrderFact, ...]:
+    """Return the facts that a ready draft cites, refusing a cited field that was not sent.
 
     Args:
         outcome: The draft outcome that ai-service returned.
         context: The order context that the request carried; absent without an order.
 
+    Returns:
+        The value of each order citation, in the order of the citations. Empty for a draft
+        that cites only KB documents and for an outcome without a draft.
+
     Raises:
         AiServiceContractError: An order citation names a field that was not sent.
     """
     if not isinstance(outcome, DraftReady):
-        return
-    for citation in outcome.draft.citations:
-        if not isinstance(citation, OrderContextCitation):
-            continue
-        if context is None or read_order_fact(context, citation.field) is None:
-            raise AiServiceContractError
+        return ()
+    return tuple(
+        _read_sent_fact(context, citation.field)
+        for citation in outcome.draft.citations
+        if isinstance(citation, OrderContextCitation)
+    )
+
+
+def _read_sent_fact(context: OrderContext | None, field: OrderContextField) -> OrderFact:
+    fact = None if context is None else read_order_fact(context, field)
+    if fact is None:
+        raise AiServiceContractError
+    return fact

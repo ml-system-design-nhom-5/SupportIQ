@@ -9,6 +9,10 @@ from supportiq_backend.tickets.domain.console import ConsoleTicket, TicketAction
 from supportiq_backend.tickets.domain.replies import SentReply
 from supportiq_backend.tickets.domain.tickets import TicketId, TicketStatus
 
+# The workspace lists at most this many other orders of the customer (`backend` contract
+# 1.2.0, `TicketWorkspace.other_orders`, `maxItems`).
+OTHER_ORDERS_LIMIT = 20
+
 
 @dataclass(frozen=True, slots=True, repr=False)
 class RestoredSuggestion:
@@ -39,11 +43,6 @@ class ReplyRecord:
 
     reply: SentReply
     sent_by_display_name: str
-
-
-# The workspace lists at most this many other orders of the customer (`backend` contract
-# 1.2.0, `TicketWorkspace.other_orders`, `maxItems`).
-OTHER_ORDERS_LIMIT = 20
 
 
 @dataclass(frozen=True, slots=True, repr=False)

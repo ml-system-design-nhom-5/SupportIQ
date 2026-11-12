@@ -62,11 +62,14 @@ class Authorizer:
             return SupportPrincipal(principal.account_id, SupportRole(principal.role.value))
         raise self._denied(principal, operation)
 
-    def require_manager(self, principal: Principal, operation: OperationId) -> SupportPrincipal:
+    def require_manager(
+        self, principal: Principal | SupportPrincipal, operation: OperationId
+    ) -> SupportPrincipal:
         """Allow only managers, for the reports and the queues that only they see (ADR-0012).
 
         Args:
-            principal: The caller.
+            principal: The caller; a console use case passes it as the member of support
+                that `require_support` returned.
             operation: The operation, for the event.
 
         Returns:
@@ -75,7 +78,11 @@ class Authorizer:
         Raises:
             ForbiddenRoleError: The caller is not a manager.
         """
-        support = self.require_support(principal, operation)
+        support = (
+            principal
+            if isinstance(principal, SupportPrincipal)
+            else self.require_support(principal, operation)
+        )
         if support.role is SupportRole.MANAGER:
             return support
         raise self._denied(principal, operation)
@@ -97,7 +104,9 @@ class Authorizer:
             return AdminPrincipal(principal.account_id)
         raise self._denied(principal, operation)
 
-    def _denied(self, principal: Principal, operation: OperationId) -> ForbiddenRoleError:
+    def _denied(
+        self, principal: Principal | SupportPrincipal, operation: OperationId
+    ) -> ForbiddenRoleError:
         self._events.record(
             EventName.PERMISSION_DENIED,
             account_id=principal.account_id,
@@ -125,11 +134,11 @@ async def require_active_admin(accounts: InternalAccountStore, admin: AdminPrinc
         raise SessionRequiredError
 
 
-def _role_of(principal: Principal) -> str:
+def _role_of(principal: Principal | SupportPrincipal) -> str:
     match principal:
         case CustomerPrincipal():
             return Role.CUSTOMER.value
-        case InternalPrincipal():
+        case InternalPrincipal() | SupportPrincipal():
             return principal.role.value
         case _:
             assert_never(principal)

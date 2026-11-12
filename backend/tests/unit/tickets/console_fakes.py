@@ -1,12 +1,22 @@
-"""In-memory fakes of the console ports of tickets, and a harness of the console use cases."""
+"""A harness of the console use cases of tickets, on in-memory fakes of their ports."""
 
-from collections.abc import Mapping
-from dataclasses import dataclass, field, replace
+import json
+from dataclasses import dataclass, replace
 from datetime import datetime
+from uuid import UUID
 
-from supportiq_backend.accounts import AccountId, Authorizer, DisplayName
-from supportiq_backend.idempotency import IdempotencyGuard
+from supportiq_backend.accounts import (
+    AccountId,
+    Authorizer,
+    CustomerPrincipal,
+    InternalPrincipal,
+    InternalRole,
+    SupportPrincipal,
+    SupportRole,
+)
+from supportiq_backend.idempotency import IdempotencyGuard, IdempotencyKey, StoredResponse
 from supportiq_backend.suggestions import (
+    Suggestion,
     SuggestionStarter,
     SuggestionStarterPorts,
     SuggestionTicketId,
@@ -16,15 +26,19 @@ from supportiq_backend.tickets import (
     ConsolePorts,
     ConsoleStores,
     ConsoleTicket,
-    ConsoleTicketPosition,
-    RecordedDecision,
-    SentReply,
+    GetConsoleTicket,
+    HandlingMode,
+    ListConsoleTickets,
+    RecordTicketView,
+    ReplyRecord,
+    SendReply,
     TicketId,
     TicketStatus,
 )
 from tests.unit.audit.fakes import FakeAuditLog
 from tests.unit.idempotency.fakes import FakeIdempotencyStore
 from tests.unit.platform.fakes import (
+    FAKE_CLOCK_START,
     FakeClock,
     FakeTransactionRunner,
     FixedTraceContext,
@@ -32,7 +46,7 @@ from tests.unit.platform.fakes import (
     RecordingStepTracer,
     SequentialIdGenerator,
 )
-from tests.unit.pseudonymization.fakes import FakeCustomerRecords
+from tests.unit.pseudonymization.fakes import CUSTOMER_ID, REFERENCES, FakeCustomerRecords
 from tests.unit.suggestions.builders import STAFF_ACCOUNT_ID
 from tests.unit.suggestions.fakes import (
     FakeAiService,
@@ -41,73 +55,19 @@ from tests.unit.suggestions.fakes import (
     FakeTicketLinks,
     RecordingSuggestionQueue,
 )
+from tests.unit.tickets.fakes import FakeConsoleTicketStore, FakeReplyStore, FakeStaffDirectory
 
 RETENTION_MS = 86_400_000
-STAFF_NAME = DisplayName("Staff One")
-
-
-@dataclass(slots=True)
-class FakeConsoleTicketStore:
-    """Keep console tickets by ID."""
-
-    tickets: dict[TicketId, ConsoleTicket] = field(default_factory=dict[TicketId, ConsoleTicket])
-
-    async def lock_console_ticket(self, ticket_id: TicketId) -> ConsoleTicket | None:
-        """Return the ticket."""
-        return self.tickets.get(ticket_id)
-
-    async def load_console_ticket(self, ticket_id: TicketId) -> ConsoleTicket | None:
-        """Return the ticket."""
-        return self.tickets.get(ticket_id)
-
-    async def load_console_tickets(
-        self, status: TicketStatus, *, after: ConsoleTicketPosition | None, limit: int
-    ) -> tuple[ConsoleTicket, ...]:
-        """Return the tickets of a status in insertion order."""
-        del after
-        return tuple(ticket for ticket in self.tickets.values() if ticket.status is status)[:limit]
-
-    async def start_handling(self, ticket_id: TicketId, started_at: datetime) -> None:
-        """Start the handling clock."""
-        self.tickets[ticket_id] = replace(self.tickets[ticket_id], handling_started_at=started_at)
-
-    async def close_ticket(self, ticket_id: TicketId, closed_at: datetime) -> None:
-        """Close the ticket."""
-        self.tickets[ticket_id] = replace(
-            self.tickets[ticket_id], status=TicketStatus.CLOSED, closed_at=closed_at
-        )
-
-
-@dataclass(slots=True)
-class FakeReplyStore:
-    """Keep replies and decisions."""
-
-    replies: dict[TicketId, SentReply] = field(default_factory=dict[TicketId, SentReply])
-    decisions: list[RecordedDecision] = field(default_factory=list[RecordedDecision])
-
-    async def insert_reply(self, reply: SentReply) -> None:
-        """Keep the one reply of a ticket."""
-        assert reply.ticket_id not in self.replies
-        self.replies[reply.ticket_id] = reply
-
-    async def load_reply(self, ticket_id: TicketId) -> SentReply | None:
-        """Return the reply of a ticket."""
-        return self.replies.get(ticket_id)
-
-    async def insert_decision(self, decision: RecordedDecision) -> None:
-        """Keep the decision."""
-        self.decisions.append(decision)
-
-
-@dataclass(slots=True)
-class FakeStaffDirectory:
-    """Name the one staff account of the tests."""
-
-    async def load_display_names(
-        self, account_ids: frozenset[AccountId]
-    ) -> Mapping[AccountId, DisplayName]:
-        """Return the name of the known account."""
-        return {STAFF_ACCOUNT_ID: STAFF_NAME} if STAFF_ACCOUNT_ID in account_ids else {}
+TICKET_ID = TicketId("TCK-1042")
+KEY = IdempotencyKey(UUID("00000000-0000-4000-8000-000000000123"))
+# The callers after the role check of a console use case.
+STAFF = SupportPrincipal(STAFF_ACCOUNT_ID, SupportRole.STAFF)
+MANAGER = SupportPrincipal(STAFF_ACCOUNT_ID, SupportRole.MANAGER)
+# The callers as signed in, before any role check.
+SIGNED_IN_STAFF = InternalPrincipal(STAFF_ACCOUNT_ID, InternalRole.STAFF)
+SIGNED_IN_MANAGER = InternalPrincipal(STAFF_ACCOUNT_ID, InternalRole.MANAGER)
+CUSTOMER = CustomerPrincipal(AccountId("00000000-0000-4000-8000-0000000000cc"), CUSTOMER_ID)
+ADMIN = InternalPrincipal(AccountId("00000000-0000-4000-8000-0000000000ad"), InternalRole.ADMIN)
 
 
 @dataclass(slots=True)
@@ -118,6 +78,7 @@ class ConsoleHarness:
     replies: FakeReplyStore
     suggestions: FakeSuggestionStore
     links: FakeTicketLinks
+    records: FakeCustomerRecords
     audit: FakeAuditLog
     events: RecordingEventRecorder
     queue: RecordingSuggestionQueue
@@ -140,6 +101,7 @@ def build_console_harness(
         replies=fakes.replies,
         suggestions=fakes.suggestions,
         links=fakes.links,
+        records=fakes.records,
         audit=fakes.audit,
         events=events,
         queue=queue,
@@ -147,6 +109,62 @@ def build_console_harness(
         transactions=FakeTransactionRunner(fakes.to_console_stores(restorer or FakeRestorer())),
         ports=_build_ports(events, queue, service),
     )
+
+
+def build_console_ticket(
+    ticket_id: TicketId = TICKET_ID,
+    *,
+    status: TicketStatus = TicketStatus.OPEN,
+    handling_mode: HandlingMode = HandlingMode.ASSISTED,
+    is_authority_required: bool = False,
+    handling_started_at: datetime | None = None,
+) -> ConsoleTicket:
+    """Build a ticket of the one customer about its one order, without a current suggestion."""
+    return ConsoleTicket(
+        ticket_id=ticket_id,
+        status=status,
+        handling_mode=handling_mode,
+        is_authority_required=is_authority_required,
+        created_at=FAKE_CLOCK_START,
+        handling_started_at=handling_started_at,
+        closed_at=None,
+        customer_id=CUSTOMER_ID,
+        order_id=REFERENCES.order_id,
+        current_suggestion_id=None,
+        message="Where is my refund?",
+    )
+
+
+def with_suggestion(harness: ConsoleHarness, suggestion: Suggestion) -> ConsoleHarness:
+    """Keep the suggestion and make it the current suggestion of its ticket."""
+    ticket_id = TicketId(suggestion.ticket_id)
+    ticket = replace(
+        harness.tickets.tickets[ticket_id], current_suggestion_id=suggestion.suggestion_id
+    )
+    harness.tickets.tickets[ticket_id] = ticket
+    harness.links.tickets[suggestion.ticket_id] = _link_of(ticket)
+    harness.suggestions.data.add(suggestion)
+    return harness
+
+
+def build_list(harness: ConsoleHarness) -> ListConsoleTickets:
+    """Build `listConsoleTickets` on the harness."""
+    return ListConsoleTickets(harness.transactions, harness.ports)
+
+
+def build_get(harness: ConsoleHarness) -> GetConsoleTicket:
+    """Build `getConsoleTicket` on the harness."""
+    return GetConsoleTicket(harness.transactions, harness.ports)
+
+
+def build_view(harness: ConsoleHarness) -> RecordTicketView:
+    """Build `recordTicketView` on the harness."""
+    return RecordTicketView(harness.transactions, harness.ports)
+
+
+def build_send(harness: ConsoleHarness) -> SendReply:
+    """Build `sendReply` on the harness, with a response that names the reply."""
+    return SendReply(harness.transactions, harness.ports, _render_reply)
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,6 +175,7 @@ class _FakeStores:
     replies: FakeReplyStore
     suggestions: FakeSuggestionStore
     links: FakeTicketLinks
+    records: FakeCustomerRecords
     audit: FakeAuditLog
 
     @classmethod
@@ -168,12 +187,10 @@ class _FakeStores:
             suggestions=FakeSuggestionStore(),
             links=FakeTicketLinks(
                 tickets={
-                    SuggestionTicketId(ticket.ticket_id): TicketForSuggestion(
-                        ticket.current_suggestion_id, True, True, ticket.status.value
-                    )
-                    for ticket in tickets
+                    SuggestionTicketId(ticket.ticket_id): _link_of(ticket) for ticket in tickets
                 }
             ),
+            records=FakeCustomerRecords(),
             audit=FakeAuditLog(),
         )
 
@@ -184,7 +201,7 @@ class _FakeStores:
             replies=self.replies,
             suggestions=self.suggestions,
             links=self.links,
-            records=FakeCustomerRecords(),
+            records=self.records,
             staff=FakeStaffDirectory(),
             restorer=restorer,
             idempotency=FakeIdempotencyStore(),
@@ -215,3 +232,11 @@ def _build_ports(
         ),
         ai_service=ai_service,
     )
+
+
+def _link_of(ticket: ConsoleTicket) -> TicketForSuggestion:
+    return TicketForSuggestion(ticket.current_suggestion_id, True, True, ticket.status.value)
+
+
+def _render_reply(record: ReplyRecord) -> StoredResponse:
+    return StoredResponse(201, json.dumps({"reply_id": str(record.reply.reply_id)}))

@@ -60,7 +60,7 @@ from supportiq_backend.suggestions.domain import (
     build_part_audit_data,
     build_suggestion_request,
     build_unavailable_completion,
-    check_cited_facts,
+    read_cited_facts,
 )
 
 
@@ -249,7 +249,9 @@ class SuggestionJobRunner:
             self._ports.steps.record_ai_service_endpoint(AiServiceOperation.CREATE_DRAFT)
             try:
                 received = await self._ports.ai_service.draft(request)
-                check_cited_facts(received.outcome, request.order_context)
+                # Only the check matters here: a draft that cites an order field the request
+                # did not carry is a response outside the contract.
+                read_cited_facts(received.outcome, request.order_context)
             except AiServiceUnavailableError as error:
                 self._record_call_failure(job, AiServiceOperation.CREATE_DRAFT, error)
                 return None

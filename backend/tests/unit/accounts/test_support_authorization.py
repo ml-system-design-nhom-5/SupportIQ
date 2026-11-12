@@ -86,3 +86,28 @@ def test_require_manager_refuses_every_other_role_with_one_event(
         "role": role,
         "operation_id": "listConsoleTickets",
     }
+
+
+def test_require_manager_returns_a_support_manager_as_it_is_without_an_event() -> None:
+    events = RecordingEventRecorder()
+    support = SupportPrincipal(STAFF_ACCOUNT_ID, SupportRole.MANAGER)
+
+    manager = Authorizer(events).require_manager(support, OperationId.LIST_CONSOLE_TICKETS)
+
+    assert manager is support
+    assert events.names() == ()
+
+
+def test_require_manager_refuses_support_staff_with_one_event() -> None:
+    events = RecordingEventRecorder()
+    support = SupportPrincipal(STAFF_ACCOUNT_ID, SupportRole.STAFF)
+
+    with pytest.raises(ForbiddenRoleError):
+        Authorizer(events).require_manager(support, OperationId.LIST_CONSOLE_TICKETS)
+
+    (denied,) = events.of(EventName.PERMISSION_DENIED)
+    assert denied.attributes == {
+        "account_id": STAFF_ACCOUNT_ID,
+        "role": "staff",
+        "operation_id": "listConsoleTickets",
+    }

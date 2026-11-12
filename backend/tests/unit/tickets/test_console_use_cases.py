@@ -5,59 +5,39 @@ authority, also while a part is pending (FR-06), and no body with a placeholder 
 (SEC-38).
 """
 
-import json
-from dataclasses import replace
-from uuid import UUID
-
 import pytest
 
-from supportiq_backend.accounts import (
-    AccountId,
-    CustomerId,
-    CustomerPrincipal,
-    ForbiddenRoleError,
-    InternalPrincipal,
-    InternalRole,
-    SupportPrincipal,
-    SupportRole,
-)
+from supportiq_backend.accounts import ForbiddenRoleError, Principal
 from supportiq_backend.audit import AuditEventType
-from supportiq_backend.commerce import OrderId
-from supportiq_backend.idempotency import IdempotencyKey, StoredResponse
+from supportiq_backend.commerce import AddressedOrder
 from supportiq_backend.platform import EventName
 from supportiq_backend.suggestions import (
     AiReasonCode,
     AiServiceContractError,
     AiServiceUnavailableError,
     InvalidTicketStateError,
-    Suggestion,
     SuggestionPendingError,
     SuggestionTrigger,
 )
 from supportiq_backend.tickets import (
     AiDraftReply,
     AuthorityRequiredError,
-    ConsoleTicket,
     DecisionType,
-    GetConsoleTicket,
     HandlingMode,
-    ListConsoleTickets,
     NoAiDraftReply,
     PlaceholderInBodyError,
-    RecordTicketView,
     RejectedAiDraftReply,
-    ReplyRecord,
-    SendReply,
     StaffReasonCode,
     TicketAction,
-    TicketId,
     TicketStatus,
 )
+from supportiq_backend.tickets.domain import OTHER_ORDERS_LIMIT
+from tests.unit.commerce.fakes import build_order
 from tests.unit.platform.fakes import FAKE_CLOCK_START
+from tests.unit.pseudonymization.fakes import REFERENCES
 from tests.unit.suggestions.builders import (
     OTHER_KB_VERSION,
     PREDICTED_INTENT,
-    STAFF_ACCOUNT_ID,
     SUGGESTION_ID,
     build_draft_ready,
     build_failed_suggestion,
@@ -67,60 +47,41 @@ from tests.unit.suggestions.builders import (
     with_override,
 )
 from tests.unit.suggestions.fakes import FakeAiService, FakeRestorer
-from tests.unit.tickets.console_fakes import ConsoleHarness, build_console_harness
+from tests.unit.tickets.console_fakes import (
+    ADMIN,
+    CUSTOMER,
+    KEY,
+    MANAGER,
+    SIGNED_IN_STAFF,
+    STAFF,
+    TICKET_ID,
+    build_console_harness,
+    build_console_ticket,
+    build_get,
+    build_list,
+    build_send,
+    build_view,
+    with_suggestion,
+)
 
-TICKET_ID = TicketId("TCK-1042")
-KEY = IdempotencyKey(UUID("00000000-0000-4000-8000-000000000123"))
-STAFF = SupportPrincipal(STAFF_ACCOUNT_ID, SupportRole.STAFF)
-MANAGER = SupportPrincipal(STAFF_ACCOUNT_ID, SupportRole.MANAGER)
 DRAFT_TEXT = "Hello [NAME_1], your refund is under review."
 RESTORED_DRAFT_TEXT = "Hello Lan Tran, your refund is under review."
 RESTORER = FakeRestorer({"[NAME_1]": "Lan Tran"})
-
-
-def build_ticket(
-    *,
-    status: TicketStatus = TicketStatus.OPEN,
-    is_authority_required: bool = False,
-    handling_mode: HandlingMode = HandlingMode.ASSISTED,
-    handling_started_at: object = None,
-) -> ConsoleTicket:
-    return ConsoleTicket(
-        ticket_id=TICKET_ID,
-        status=status,
-        handling_mode=handling_mode,
-        is_authority_required=is_authority_required,
-        created_at=FAKE_CLOCK_START,
-        handling_started_at=FAKE_CLOCK_START if handling_started_at else None,
-        closed_at=None,
-        customer_id=CustomerId("00000000-0000-4000-8000-0000000000c1"),
-        order_id=OrderId("ORD-20901"),
-        current_suggestion_id=SUGGESTION_ID,
-        message="Where is my refund?",
-    )
-
-
-def with_suggestion(harness: ConsoleHarness, suggestion: Suggestion) -> ConsoleHarness:
-    harness.suggestions.data.add(suggestion)
-    return harness
-
-
-def render_reply(record: ReplyRecord) -> StoredResponse:
-    return StoredResponse(201, json.dumps({"reply_id": str(record.reply.reply_id)}))
-
-
-def build_send(harness: ConsoleHarness) -> SendReply:
-    return SendReply(harness.transactions, harness.ports, render_reply)
 
 
 def ai_draft_reply(body: str = RESTORED_DRAFT_TEXT) -> AiDraftReply:
     return AiDraftReply(body, SUGGESTION_ID, frozenset(), (), None)
 
 
+def addressed(order_id: str) -> AddressedOrder:
+    return AddressedOrder(build_order(order_id), REFERENCES.shipping_address)
+
+
 @pytest.mark.anyio
 async def test_staff_never_send_on_a_ticket_that_requires_authority_even_while_pending() -> None:
     harness = with_suggestion(
-        build_console_harness(build_ticket(is_authority_required=True)), build_suggestion()
+        build_console_harness(build_console_ticket(is_authority_required=True)),
+        build_suggestion(),
     )
 
     with pytest.raises(AuthorityRequiredError):
@@ -133,7 +94,7 @@ async def test_staff_never_send_on_a_ticket_that_requires_authority_even_while_p
 @pytest.mark.anyio
 async def test_a_manager_sends_the_reply_of_a_ticket_that_requires_authority() -> None:
     harness = with_suggestion(
-        build_console_harness(build_ticket(is_authority_required=True), restorer=RESTORER),
+        build_console_harness(build_console_ticket(is_authority_required=True), restorer=RESTORER),
         build_ready_suggestion(build_draft_ready((0, DRAFT_TEXT))),
     )
 
@@ -145,7 +106,7 @@ async def test_a_manager_sends_the_reply_of_a_ticket_that_requires_authority() -
 @pytest.mark.anyio
 async def test_an_unchanged_restored_draft_is_sent_and_approved() -> None:
     harness = with_suggestion(
-        build_console_harness(build_ticket(), restorer=RESTORER),
+        build_console_harness(build_console_ticket(), restorer=RESTORER),
         build_ready_suggestion(build_draft_ready((0, DRAFT_TEXT))),
     )
 
@@ -165,7 +126,7 @@ async def test_an_unchanged_restored_draft_is_sent_and_approved() -> None:
 @pytest.mark.anyio
 async def test_a_body_with_a_placeholder_is_refused_and_nothing_is_stored() -> None:
     harness = with_suggestion(
-        build_console_harness(build_ticket(), restorer=RESTORER),
+        build_console_harness(build_console_ticket(), restorer=RESTORER),
         build_ready_suggestion(build_draft_ready((0, DRAFT_TEXT))),
     )
 
@@ -179,7 +140,7 @@ async def test_a_body_with_a_placeholder_is_refused_and_nothing_is_stored() -> N
 @pytest.mark.anyio
 async def test_a_repeated_reply_with_the_same_key_sends_nothing_more() -> None:
     harness = with_suggestion(
-        build_console_harness(build_ticket(), restorer=RESTORER),
+        build_console_harness(build_console_ticket(), restorer=RESTORER),
         build_ready_suggestion(build_draft_ready((0, DRAFT_TEXT))),
     )
     send = build_send(harness)
@@ -193,7 +154,7 @@ async def test_a_repeated_reply_with_the_same_key_sends_nothing_more() -> None:
 
 @pytest.mark.anyio
 async def test_a_pending_part_refuses_the_reply_of_a_manager() -> None:
-    harness = with_suggestion(build_console_harness(build_ticket()), build_suggestion())
+    harness = with_suggestion(build_console_harness(build_console_ticket()), build_suggestion())
 
     with pytest.raises(SuggestionPendingError):
         await build_send(harness).execute(MANAGER, TICKET_ID, NoAiDraftReply("Hi", None), KEY)
@@ -202,24 +163,17 @@ async def test_a_pending_part_refuses_the_reply_of_a_manager() -> None:
 @pytest.mark.anyio
 async def test_a_closed_ticket_refuses_a_second_reply() -> None:
     harness = with_suggestion(
-        build_console_harness(build_ticket(status=TicketStatus.CLOSED)), build_ready_suggestion()
+        build_console_harness(build_console_ticket(status=TicketStatus.CLOSED)),
+        build_ready_suggestion(),
     )
 
     with pytest.raises(InvalidTicketStateError):
         await build_send(harness).execute(MANAGER, TICKET_ID, NoAiDraftReply("Hi", None), KEY)
 
 
-@pytest.mark.parametrize(
-    "principal",
-    [
-        CustomerPrincipal(AccountId("a1"), CustomerId("c1")),
-        InternalPrincipal(AccountId("a2"), InternalRole.ADMIN),
-    ],
-)
-def test_customers_and_admins_may_not_send_replies(
-    principal: CustomerPrincipal | InternalPrincipal,
-) -> None:
-    harness = build_console_harness(build_ticket())
+@pytest.mark.parametrize("principal", [CUSTOMER, ADMIN])
+def test_customers_and_admins_may_not_send_replies(principal: Principal) -> None:
+    harness = build_console_harness(build_console_ticket())
 
     with pytest.raises(ForbiddenRoleError):
         build_send(harness).authorize(principal)
@@ -227,9 +181,11 @@ def test_customers_and_admins_may_not_send_replies(
 
 @pytest.mark.anyio
 async def test_the_first_view_starts_the_handling_clock_without_a_new_suggestion() -> None:
-    harness = with_suggestion(build_console_harness(build_ticket()), build_ready_suggestion())
+    harness = with_suggestion(
+        build_console_harness(build_console_ticket()), build_ready_suggestion()
+    )
 
-    await RecordTicketView(harness.transactions, harness.ports).execute(STAFF, TICKET_ID, KEY)
+    await build_view(harness).execute(STAFF, TICKET_ID, KEY)
 
     assert harness.tickets.tickets[TICKET_ID].handling_started_at == FAKE_CLOCK_START
     assert harness.queue.notifications == []
@@ -239,12 +195,13 @@ async def test_the_first_view_starts_the_handling_clock_without_a_new_suggestion
 async def test_the_first_view_reruns_a_suggestion_made_with_another_kb_version() -> None:
     harness = with_suggestion(
         build_console_harness(
-            build_ticket(), ai_service=FakeAiService(versions=build_versions(OTHER_KB_VERSION))
+            build_console_ticket(),
+            ai_service=FakeAiService(versions=build_versions(OTHER_KB_VERSION)),
         ),
         with_override(build_ready_suggestion(), PREDICTED_INTENT),
     )
 
-    await RecordTicketView(harness.transactions, harness.ports).execute(STAFF, TICKET_ID, KEY)
+    await build_view(harness).execute(STAFF, TICKET_ID, KEY)
 
     new = harness.suggestions.data.suggestions[harness.queue.notifications[0][1]]
     assert new.trigger is SuggestionTrigger.KB_VERSION_CHANGED
@@ -255,12 +212,12 @@ async def test_the_first_view_reruns_a_suggestion_made_with_another_kb_version()
 async def test_a_view_is_recorded_when_ai_service_does_not_answer_the_kb_read() -> None:
     harness = with_suggestion(
         build_console_harness(
-            build_ticket(), ai_service=FakeAiService(versions=AiServiceUnavailableError())
+            build_console_ticket(), ai_service=FakeAiService(versions=AiServiceUnavailableError())
         ),
         build_ready_suggestion(),
     )
 
-    await RecordTicketView(harness.transactions, harness.ports).execute(STAFF, TICKET_ID, KEY)
+    await build_view(harness).execute(STAFF, TICKET_ID, KEY)
 
     assert harness.tickets.tickets[TICKET_ID].handling_started_at == FAKE_CLOCK_START
     assert harness.queue.notifications == []
@@ -271,12 +228,12 @@ async def test_a_view_is_recorded_when_ai_service_does_not_answer_the_kb_read() 
 async def test_a_kb_read_answered_outside_the_contract_is_logged_as_a_violation() -> None:
     harness = with_suggestion(
         build_console_harness(
-            build_ticket(), ai_service=FakeAiService(versions=AiServiceContractError())
+            build_console_ticket(), ai_service=FakeAiService(versions=AiServiceContractError())
         ),
         build_ready_suggestion(),
     )
 
-    await RecordTicketView(harness.transactions, harness.ports).execute(STAFF, TICKET_ID, KEY)
+    await build_view(harness).execute(STAFF, TICKET_ID, KEY)
 
     (event,) = harness.events.of(EventName.AI_SERVICE_CONTRACT_VIOLATED)
     assert event.attributes["ai_service_operation"] == "getAssetVersions"
@@ -286,11 +243,11 @@ async def test_a_kb_read_answered_outside_the_contract_is_logged_as_a_violation(
 @pytest.mark.anyio
 async def test_a_later_view_retries_a_suggestion_that_ai_service_failed() -> None:
     harness = with_suggestion(
-        build_console_harness(build_ticket(handling_started_at=True)),
+        build_console_harness(build_console_ticket(handling_started_at=FAKE_CLOCK_START)),
         build_failed_suggestion(AiReasonCode.AI_SERVICE_UNAVAILABLE),
     )
 
-    await RecordTicketView(harness.transactions, harness.ports).execute(STAFF, TICKET_ID, KEY)
+    await build_view(harness).execute(STAFF, TICKET_ID, KEY)
 
     new = harness.suggestions.data.suggestions[harness.queue.notifications[0][1]]
     assert new.trigger is SuggestionTrigger.RETRY
@@ -299,49 +256,66 @@ async def test_a_later_view_retries_a_suggestion_that_ai_service_failed() -> Non
 @pytest.mark.anyio
 async def test_a_view_of_a_failed_pseudonymization_starts_nothing() -> None:
     harness = with_suggestion(
-        build_console_harness(build_ticket(handling_started_at=True)),
+        build_console_harness(build_console_ticket(handling_started_at=FAKE_CLOCK_START)),
         build_failed_suggestion(AiReasonCode.PSEUDONYMIZATION_FAILED),
     )
 
-    await RecordTicketView(harness.transactions, harness.ports).execute(STAFF, TICKET_ID, KEY)
+    await build_view(harness).execute(STAFF, TICKET_ID, KEY)
 
     assert harness.queue.notifications == []
 
 
 @pytest.mark.anyio
-async def test_a_view_of_a_manual_ticket_never_calls_ai_service() -> None:
-    harness = build_console_harness(
-        replace(build_ticket(handling_mode=HandlingMode.MANUAL), current_suggestion_id=None),
-        ai_service=FakeAiService(versions=AiServiceUnavailableError()),
+async def test_a_first_view_of_a_manual_ticket_with_a_suggestion_calls_no_ai_service() -> None:
+    harness = with_suggestion(
+        build_console_harness(build_console_ticket(handling_mode=HandlingMode.MANUAL)),
+        build_ready_suggestion(),
     )
 
-    await RecordTicketView(harness.transactions, harness.ports).execute(STAFF, TICKET_ID, KEY)
+    await build_view(harness).execute(STAFF, TICKET_ID, KEY)
 
     assert harness.tickets.tickets[TICKET_ID].handling_started_at == FAKE_CLOCK_START
+    assert harness.ai_service.version_reads == 0
     assert harness.ai_service.requests == ()
+    assert harness.queue.notifications == []
+    assert list(harness.suggestions.data.suggestions) == [SUGGESTION_ID]
+
+
+@pytest.mark.anyio
+async def test_a_first_view_of_a_ticket_without_a_suggestion_calls_no_ai_service() -> None:
+    harness = build_console_harness(build_console_ticket())
+
+    await build_view(harness).execute(STAFF, TICKET_ID, KEY)
+
+    assert harness.tickets.tickets[TICKET_ID].handling_started_at == FAKE_CLOCK_START
+    assert harness.ai_service.version_reads == 0
+    assert harness.ai_service.requests == ()
+    assert harness.queue.notifications == []
 
 
 @pytest.mark.anyio
 async def test_staff_may_list_only_the_open_queue() -> None:
-    harness = build_console_harness(build_ticket())
-    principal = InternalPrincipal(STAFF_ACCOUNT_ID, InternalRole.STAFF)
-    use_case = ListConsoleTickets(harness.transactions, harness.ports)
+    harness = build_console_harness(build_console_ticket())
 
     with pytest.raises(ForbiddenRoleError):
-        await use_case.execute(principal, TicketStatus.CLOSED, None, 10)
+        await build_list(harness).execute(STAFF, TicketStatus.CLOSED, None, 10)
+
+    (denied,) = harness.events.of(EventName.PERMISSION_DENIED)
+    assert denied.attributes == {
+        "account_id": STAFF.account_id,
+        "role": "staff",
+        "operation_id": "listConsoleTickets",
+    }
 
 
 @pytest.mark.anyio
 async def test_the_workspace_restores_the_draft_and_names_the_allowed_actions() -> None:
     harness = with_suggestion(
-        build_console_harness(build_ticket(), restorer=RESTORER),
+        build_console_harness(build_console_ticket(), restorer=RESTORER),
         build_ready_suggestion(build_draft_ready((0, DRAFT_TEXT))),
     )
-    principal = InternalPrincipal(STAFF_ACCOUNT_ID, InternalRole.STAFF)
 
-    workspace = await GetConsoleTicket(harness.transactions, harness.ports).execute(
-        principal, TICKET_ID
-    )
+    workspace = await build_get(harness).execute(SIGNED_IN_STAFF, TICKET_ID)
 
     assert workspace.suggestion is not None
     assert workspace.suggestion.draft_text == RESTORED_DRAFT_TEXT
@@ -350,13 +324,27 @@ async def test_the_workspace_restores_the_draft_and_names_the_allowed_actions() 
 
 
 @pytest.mark.anyio
-async def test_a_manager_lists_a_queue_with_the_customer_and_the_suggestion() -> None:
-    harness = with_suggestion(build_console_harness(build_ticket()), build_ready_suggestion())
-    principal = InternalPrincipal(STAFF_ACCOUNT_ID, InternalRole.MANAGER)
-
-    page = await ListConsoleTickets(harness.transactions, harness.ports).execute(
-        principal, TicketStatus.OPEN, None, 10
+async def test_the_workspace_loads_at_most_the_limit_of_other_orders() -> None:
+    harness = build_console_harness(build_console_ticket())
+    ticket_order = addressed(REFERENCES.order_id)
+    other_orders = tuple(
+        addressed(f"ORD-{30_001 + number}") for number in range(OTHER_ORDERS_LIMIT + 1)
     )
+    harness.records.orders = (ticket_order, *other_orders)
+
+    workspace = await build_get(harness).execute(SIGNED_IN_STAFF, TICKET_ID)
+
+    assert workspace.order == ticket_order
+    assert workspace.other_orders == tuple(item.order for item in other_orders[:OTHER_ORDERS_LIMIT])
+
+
+@pytest.mark.anyio
+async def test_a_manager_lists_a_queue_with_the_customer_and_the_suggestion() -> None:
+    harness = with_suggestion(
+        build_console_harness(build_console_ticket()), build_ready_suggestion()
+    )
+
+    page = await build_list(harness).execute(MANAGER, TicketStatus.OPEN, None, 10)
 
     (summary,) = page.items
     assert summary.customer_display_name == "Lan Tran"
@@ -367,7 +355,7 @@ async def test_a_manager_lists_a_queue_with_the_customer_and_the_suggestion() ->
 @pytest.mark.anyio
 async def test_a_rejected_draft_records_the_staff_reason_codes() -> None:
     harness = with_suggestion(
-        build_console_harness(build_ticket(), restorer=RESTORER),
+        build_console_harness(build_console_ticket(), restorer=RESTORER),
         build_ready_suggestion(build_draft_ready((0, DRAFT_TEXT))),
     )
     reply = RejectedAiDraftReply(
@@ -384,7 +372,7 @@ async def test_a_rejected_draft_records_the_staff_reason_codes() -> None:
 @pytest.mark.anyio
 async def test_a_reply_without_a_draft_records_no_decision() -> None:
     harness = with_suggestion(
-        build_console_harness(build_ticket()),
+        build_console_harness(build_console_ticket()),
         build_failed_suggestion(AiReasonCode.AI_SERVICE_UNAVAILABLE),
     )
 

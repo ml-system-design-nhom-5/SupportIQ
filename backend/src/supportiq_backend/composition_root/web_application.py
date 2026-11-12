@@ -9,6 +9,7 @@ from collections.abc import AsyncGenerator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from enum import StrEnum
 
+import httpx
 from fastapi import FastAPI
 from opentelemetry.trace import Tracer
 
@@ -49,6 +50,7 @@ def create_app(
     clock: Clock,
     *,
     background: BackgroundWork = BackgroundWork.SUGGESTION_JOBS,
+    ai_service_transport: httpx.AsyncBaseTransport | None = None,
 ) -> FastAPI:
     """Create the application with every route of the contract and the health checks.
 
@@ -57,11 +59,13 @@ def create_app(
         events: Where events are recorded.
         clock: The clock of the process.
         background: What the replica runs beside its requests.
+        ai_service_transport: The transport of the ai-service client; None for the network.
+            Tests pass an in-memory one, so no test opens a socket to ai-service.
 
     Returns:
         The application, ready for an ASGI server.
     """
-    runtime = build_runtime(settings, events, clock)
+    runtime = build_runtime(settings, events, clock, ai_service_transport)
     app = FastAPI(
         lifespan=_build_lifespan(runtime, events, background),
         openapi_url=None,
@@ -104,7 +108,8 @@ def _build_lifespan(
 
 
 async def _shut_down(runtime: Runtime, events: EventRecorder, tracer: Tracer) -> None:
-    # Every resource is released even when the server stops with an error.
+    # Runs even when the server stops with an error. The tracer provider is shut down last,
+    # and even when releasing another resource fails, so the spans of the shutdown are exported.
     try:
         with tracer.start_as_current_span(STOP_SPAN):
             events.record(EventName.SHUTDOWN_STARTED)

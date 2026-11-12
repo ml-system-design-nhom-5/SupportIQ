@@ -69,6 +69,9 @@ ANALYSIS_COLUMNS = """
     FROM suggestion_parts WHERE part = 'analysis'
 """
 ANALYSIS_COMPLETED_AT = "SELECT completed_at FROM suggestion_parts WHERE part = 'analysis'"
+ANALYSIS_MASKS_ARE_ABSENT = (
+    "SELECT mask_count_by_type IS NULL FROM suggestion_parts WHERE part = 'analysis'"
+)
 PARTS_WITH_A_RESULT_COLUMN = """
     SELECT count(*) FROM suggestion_parts
     WHERE release_id IS NOT NULL OR versions IS NOT NULL OR latency_ms IS NOT NULL
@@ -236,6 +239,18 @@ async def test_complete_part_writes_the_llm_usage_and_the_masks_of_a_draft(
     }
 
 
+async def test_complete_part_leaves_the_masks_of_an_analysis_absent(
+    app_engine: AsyncEngine, builder: DatabaseBuilder
+) -> None:
+    suggestion_id = await new_suggestion(app_engine, builder)
+    analysis = build_analysis_completion(received_analysis_example("draft"), COMPLETED_AT)
+
+    await complete_parts(app_engine, suggestion_id, analysis)
+
+    # An analysis masks nothing. Absent is SQL NULL, never the JSON value `null`.
+    assert await builder.scalar(ANALYSIS_MASKS_ARE_ABSENT) is True
+
+
 async def test_complete_part_without_a_result_leaves_the_optional_columns_absent(
     app_engine: AsyncEngine, builder: DatabaseBuilder
 ) -> None:
@@ -244,7 +259,8 @@ async def test_complete_part_without_a_result_leaves_the_optional_columns_absent
 
     await complete_parts(app_engine, suggestion_id, *failed)
 
-    # Absent is SQL NULL, never the JSON value `null` (design, Tables: "optional").
+    # Absent is SQL NULL, never the JSON value `null`, which `IS NOT NULL` matches (design,
+    # Tables: "optional").
     assert await builder.scalar(PARTS_WITH_A_RESULT_COLUMN) == 0
 
 

@@ -6,8 +6,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from supportiq_backend.accounts import CustomerId, ForbiddenRoleError, SupportRole
-from supportiq_backend.commerce import OrderId
+from supportiq_backend.accounts import ForbiddenRoleError, SupportRole
 from supportiq_backend.suggestions import (
     AiReasonCode,
     InvalidTicketStateError,
@@ -29,7 +28,6 @@ from supportiq_backend.tickets import (
     ReplyBasisInvalidError,
     StaffReasonCode,
     TicketAction,
-    TicketId,
     TicketStatus,
     WarningsNotAcknowledgedError,
     build_draft_text,
@@ -40,7 +38,6 @@ from supportiq_backend.tickets import (
     derive_decision,
     validate_reply_body,
 )
-from tests.unit.platform.fakes import FAKE_CLOCK_START
 from tests.unit.suggestions.builders import (
     PREDICTED_INTENT,
     SUGGESTION_ID,
@@ -51,6 +48,7 @@ from tests.unit.suggestions.builders import (
     build_ready_suggestion,
     build_suggestion,
 )
+from tests.unit.tickets.console_fakes import build_console_ticket
 
 DRAFT_TEXT = "Hello Lan, your refund is under review."
 STAFF = SupportRole.STAFF
@@ -65,19 +63,10 @@ def build_ticket(
     is_authority_required: bool = False,
     handling_mode: HandlingMode = HandlingMode.ASSISTED,
 ) -> ConsoleTicket:
-    return ConsoleTicket(
-        ticket_id=TicketId("TCK-1042"),
-        status=status,
-        handling_mode=handling_mode,
-        is_authority_required=is_authority_required,
-        created_at=FAKE_CLOCK_START,
-        handling_started_at=None,
-        closed_at=None,
-        customer_id=CustomerId("00000000-0000-4000-8000-0000000000c1"),
-        order_id=OrderId("ORD-20901"),
-        current_suggestion_id=SUGGESTION_ID,
-        message="Where is my refund?",
+    ticket = build_console_ticket(
+        status=status, handling_mode=handling_mode, is_authority_required=is_authority_required
     )
+    return replace(ticket, current_suggestion_id=SUGGESTION_ID)
 
 
 def ai_draft_reply(body: str = DRAFT_TEXT, **changes: object) -> AiDraftReply:

@@ -140,7 +140,7 @@ class ListConsoleTickets:
 
     async def execute(
         self,
-        principal: Principal,
+        support: SupportPrincipal,
         status: TicketStatus,
         after: ConsoleTicketPosition | None,
         limit: int,
@@ -148,7 +148,7 @@ class ListConsoleTickets:
         """Load one page of a queue.
 
         Args:
-            principal: The caller.
+            support: The caller, from `authorize`.
             status: The queue; staff may ask for `open` only.
             after: The last ticket of the previous page, or None for the first page.
             limit: The maximum number of tickets.
@@ -157,15 +157,11 @@ class ListConsoleTickets:
             The page.
 
         Raises:
-            ForbiddenRoleError: The caller is a customer or an admin, or staff asked for
-                another queue than `open`.
+            ForbiddenRoleError: Staff asked for another queue than `open`.
             DatabaseUnavailableError: The database is not available or a timeout fired.
         """
-        # The handler checks the role before it parses the request; the use case checks it
-        # again, so no caller can skip it.
-        self.authorize(principal)
         if status is not TicketStatus.OPEN:
-            self._ports.authorizer.require_manager(principal, OperationId.LIST_CONSOLE_TICKETS)
+            self._ports.authorizer.require_manager(support, OperationId.LIST_CONSOLE_TICKETS)
         async with self._transactions.begin() as transaction:
             stores = transaction.stores
             tickets = await stores.tickets.load_console_tickets(

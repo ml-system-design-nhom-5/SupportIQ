@@ -89,7 +89,7 @@ jobs:
       SEED_PASSWORD_MANAGER: ci-manager
       SEED_PASSWORD_ADMIN: ci-admin
       # A dummy service token and an address where nothing listens: the tests serve
-      # ai-service from fakes and never open a socket (TEST-15).
+      # ai-service from in-memory fakes and never call ai-service over the network (TEST-16).
       AI_SERVICE_BASE_URL: http://ai-service.invalid
       AI_SERVICE_TOKEN: ci-ai-service-token
     steps:

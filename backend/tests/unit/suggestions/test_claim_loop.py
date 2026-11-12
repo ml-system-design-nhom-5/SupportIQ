@@ -5,7 +5,11 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from supportiq_backend.platform import DatabaseUnavailableError, EventName
+from supportiq_backend.platform import (
+    MILLISECONDS_PER_SECOND,
+    DatabaseUnavailableError,
+    EventName,
+)
 from supportiq_backend.suggestions import (
     ClaimedJob,
     ClaimLoop,
@@ -21,6 +25,8 @@ from tests.unit.suggestions.fakes import FakeSuggestionData, FakeSuggestionJobSt
 SETTINGS = QueueSettings(workers_per_replica=2, lease_ms=15_000, max_attempts=3, poll_ms=500)
 NEW_SUGGESTION_ID = SuggestionId("00000000-0000-4000-8000-000000000099")
 FAILED = EventName.SUGGESTION_JOB_FAILED
+# The longest a test may run its loop before it fails instead of hanging; a guard, not a wait.
+BOUND_MS = 5_000
 
 
 @dataclass(slots=True)
@@ -60,13 +66,18 @@ def queued_jobs() -> FakeSuggestionJobStore:
     return FakeSuggestionJobStore(data)
 
 
+def bounded() -> asyncio.Timeout:
+    return asyncio.timeout(BOUND_MS / MILLISECONDS_PER_SECOND)
+
+
 @pytest.mark.anyio
 async def test_the_loop_claims_and_runs_a_queued_job() -> None:
     runner = RecordingRunner()
     events = RecordingEventRecorder()
     loop = build_loop(runner, queued_jobs(), events)
 
-    await loop.run()
+    async with bounded():
+        await loop.run()
 
     assert runner.jobs == [ClaimedJob(SUGGESTION_ID, TICKET_ID, 1)]
     assert EventName.SUGGESTION_JOB_CLAIMED in events.names()
@@ -78,7 +89,8 @@ async def test_a_failing_job_is_logged_once_and_the_loop_survives() -> None:
     events = RecordingEventRecorder()
     loop = build_loop(runner, queued_jobs(), events)
 
-    await loop.run()
+    async with bounded():
+        await loop.run()
 
     (failure,) = events.of(EventName.SUGGESTION_JOB_FAILED)
     assert failure.attributes["error_type"] == "DatabaseUnavailableError"
@@ -91,7 +103,8 @@ async def test_each_error_of_a_job_group_is_logged_with_its_own_type() -> None:
     events = RecordingEventRecorder()
     loop = build_loop(runner, queued_jobs(), events)
 
-    await loop.run()
+    async with bounded():
+        await loop.run()
 
     error_types = {event.attributes["error_type"] for event in events.of(FAILED)}
     assert error_types == {"DatabaseUnavailableError", "ValueError"}
@@ -104,7 +117,7 @@ async def test_a_claim_that_fails_with_any_error_is_logged_and_the_loop_goes_on(
     jobs = FakeSuggestionJobStore(claim_failure=RuntimeError("driver bug"))
     loop = build_loop(runner, jobs, events)
 
-    async with asyncio.TaskGroup() as group:
+    async with bounded(), asyncio.TaskGroup() as group:
         task = group.create_task(loop.run())
         await asyncio.sleep(0)
         is_running = not task.done()
@@ -122,7 +135,7 @@ async def test_a_failing_claim_is_logged_and_the_loop_waits() -> None:
     jobs = FakeSuggestionJobStore(claim_failure=DatabaseUnavailableError())
     loop = build_loop(runner, jobs, events)
 
-    async with asyncio.TaskGroup() as group:
+    async with bounded(), asyncio.TaskGroup() as group:
         group.create_task(loop.run())
         await asyncio.sleep(0)
         loop.stop()
@@ -160,7 +173,7 @@ async def test_a_new_suggestion_cancels_the_running_call_of_an_older_one() -> No
         events,
     )
 
-    async with asyncio.TaskGroup() as group:
+    async with bounded(), asyncio.TaskGroup() as group:
         group.create_task(loop.run())
         await started.wait()
         loop.notify_new_suggestion(TICKET_ID, NEW_SUGGESTION_ID)
@@ -201,11 +214,57 @@ async def test_a_job_claimed_again_after_its_lease_cancels_its_earlier_attempt()
         FakeTransactionRunner(ClaimStores(jobs)), SlowRunner(), SETTINGS, FakeClock(), events
     )
 
-    async with asyncio.TaskGroup() as group:
+    async with bounded(), asyncio.TaskGroup() as group:
         group.create_task(loop.run())
-        async with asyncio.timeout(1):
-            await second_started.wait()
+        await second_started.wait()
         loop.stop()
 
     assert attempts == [1, 2]
     assert cancelled == [1]
+
+
+@pytest.mark.anyio
+async def test_a_cancelled_earlier_attempt_keeps_the_running_entry_of_the_new_attempt() -> None:
+    jobs = queued_jobs()
+    events = RecordingEventRecorder()
+    cancelled: list[int] = []
+    second_started = asyncio.Event()
+    first_cancelled = asyncio.Event()
+    release = asyncio.Event()
+
+    @dataclass(slots=True)
+    class ReclaimedRunner:
+        """A runner whose attempts wait for the release; the first one outlives its lease."""
+
+        async def run(self, job: ClaimedJob) -> None:
+            """Block the attempt, and mark when the second starts and the first is cancelled."""
+            if job.attempt_number > 1:
+                second_started.set()
+            else:
+                # The lease of the first attempt expires while it runs.
+                jobs.data.jobs[SUGGESTION_ID].state = JobState.QUEUED
+            try:
+                await release.wait()
+            except asyncio.CancelledError:
+                cancelled.append(job.attempt_number)
+                if job.attempt_number == 1:
+                    first_cancelled.set()
+                raise
+
+    loop = ClaimLoop(
+        FakeTransactionRunner(ClaimStores(jobs)), ReclaimedRunner(), SETTINGS, FakeClock(), events
+    )
+
+    async with bounded(), asyncio.TaskGroup() as group:
+        group.create_task(loop.run())
+        await second_started.wait()
+        await first_cancelled.wait()
+        # Only the running entry of the second attempt lets the new suggestion cancel it.
+        loop.notify_new_suggestion(TICKET_ID, NEW_SUGGESTION_ID)
+        # An attempt that the notification missed ends here instead of blocking the stop.
+        release.set()
+        loop.stop()
+
+    (cancellation,) = events.of(EventName.SUGGESTION_PART_CANCELLED)
+    assert cancelled == [1, 2]
+    assert cancellation.attributes == {"ticket_id": TICKET_ID, "suggestion_id": SUGGESTION_ID}

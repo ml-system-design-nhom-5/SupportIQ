@@ -43,6 +43,7 @@ class CreateSuggestionHarness:
     Attributes:
         create: The use case.
         suggestions: The suggestion store.
+        audit: The audit log.
         queue: The notifications of the claim loop.
         events: The recorded events.
         transactions: The transaction runner, which counts commits.
@@ -50,6 +51,7 @@ class CreateSuggestionHarness:
 
     create: CreateSuggestion
     suggestions: FakeSuggestionStore
+    audit: FakeAuditLog
     queue: RecordingSuggestionQueue
     events: RecordingEventRecorder
     transactions: FakeTransactionRunner[CreateSuggestionStores]
@@ -78,12 +80,13 @@ def build_create_suggestion_harness(
     store = FakeSuggestionStore()
     for suggestion in suggestions:
         store.data.add(suggestion)
+    audit = FakeAuditLog()
     events = RecordingEventRecorder()
     queue = RecordingSuggestionQueue()
     clock = FakeClock()
     transactions = FakeTransactionRunner(
         CreateSuggestionStores(
-            store, FakeTicketLinks(tickets=dict(tickets)), FakeIdempotencyStore(), FakeAuditLog()
+            store, FakeTicketLinks(tickets=dict(tickets)), FakeIdempotencyStore(), audit
         ),
         commit_failure=commit_failure,
     )
@@ -106,4 +109,4 @@ def build_create_suggestion_harness(
         events=events,
     )
     create = CreateSuggestion(transactions, ports, render_suggestion_id)
-    return CreateSuggestionHarness(create, store, queue, events, transactions)
+    return CreateSuggestionHarness(create, store, audit, queue, events, transactions)

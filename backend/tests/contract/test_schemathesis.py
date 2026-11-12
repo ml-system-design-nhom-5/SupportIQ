@@ -3,7 +3,9 @@
 Hypothesis runs derandomized, so each run sends the same requests. Each generated request
 carries the session cookie of a role that may call the operation, because the contract's
 `sessionCookie` scheme cannot say which role that is. Every response is checked against the
-contract: status, media type, headers, and schema.
+contract: status, media type, headers, and schema. The ai-service of the application is an
+in-memory one that answers with the examples of its contract, so no request depends on the
+network (TEST-16).
 """
 
 import asyncio
@@ -22,6 +24,7 @@ from schemathesis.python.asgi import shutdown_lifespans
 from supportiq_backend.composition_root import BackgroundWork, create_app
 from supportiq_backend.composition_root.seed_commands import seed
 from tests.contract.conftest import CONTRACT_FILE
+from tests.integration.ai_service_doubles import FakeAiService, serve_examples
 from tests.integration.application import ALLOWED_ORIGIN, build_settings
 from tests.integration.builders import FAILED_SUGGESTION, DatabaseBuilder
 from tests.integration.database import WorkerDatabase, create_owner_engine
@@ -206,6 +209,7 @@ def load_contract(
         RecordingEventRecorder(),
         FakeClock(),
         background=BackgroundWork.NONE,
+        ai_service_transport=FakeAiService(serve_examples),
     )
     return schema
 

@@ -1,15 +1,17 @@
 """Recording a ticket view over HTTP against PostgreSQL (`recordTicketView`).
 
-The first view of an open ticket in `assisted` mode reads the KB version of ai-service. These
-tests run ai-service on a loopback port where nothing listens, so the read fails at once and
-the view is still recorded (backend ticket workflow design, Views).
+The first view of an open ticket in `assisted` mode that has a current suggestion reads the KB
+version of ai-service; a ticket without a suggestion reads nothing. The ai-service of these
+tests is an in-memory one that refuses every connection, so that read fails at once and the
+view is still recorded (backend ticket workflow design, Views).
 """
 
-from collections.abc import AsyncIterator
 from http import HTTPStatus
 
 import pytest
 
+from supportiq_backend.platform import EventName
+from tests.integration.ai_service_doubles import FakeAiService, refuse_connection
 from tests.integration.application import (
     ORIGIN_HEADERS,
     RunningBackend,
@@ -32,36 +34,18 @@ from tests.unit.platform.fakes import FAKE_CLOCK_START, FakeClock, RecordingEven
 pytestmark = pytest.mark.anyio
 
 VIEWS = "/views"
-# Nothing listens on port 1 of the loopback address, so a connection is refused at once.
-UNREACHABLE_AI_SERVICE_URL = "http://127.0.0.1:1"
-
-
-@pytest.fixture
-async def backend_without_ai_service(
-    worker_database: WorkerDatabase,
-) -> AsyncIterator[RunningBackend]:
-    """Run the application with an ai-service that refuses every connection.
-
-    Args:
-        worker_database: The database of the worker.
-
-    Yields:
-        The running application with its fake clock and its recorded events.
-    """
-    clock = FakeClock()
-    events = RecordingEventRecorder()
-    settings = build_settings(worker_database, ai_service_base_url=UNREACHABLE_AI_SERVICE_URL)
-    async with running_client(settings, events, clock) as client:
-        yield RunningBackend(client, clock, events)
+ASSET_VERSIONS_PATH = "/v1/asset-versions"
+GET_ASSET_VERSIONS = "getAssetVersions"
+HANDLING_STARTED_AT = "SELECT handling_started_at FROM tickets WHERE ticket_id = :ticket_id"
 
 
 async def test_first_view_returns_204_without_a_body(
-    backend_without_ai_service: RunningBackend, builder: DatabaseBuilder
+    backend: RunningBackend, builder: DatabaseBuilder
 ) -> None:
     headers = (await sign_in_as_support(builder)).headers
     ticket = await open_ticket(builder)
 
-    response = await backend_without_ai_service.client.post(
+    response = await backend.client.post(
         ticket_path(ticket.ticket_id, VIEWS), headers=key_headers(headers)
     )
 
@@ -69,32 +53,40 @@ async def test_first_view_returns_204_without_a_body(
     assert response.content == b""
 
 
-async def test_first_view_starts_the_handling_clock_while_ai_service_is_down(
-    backend_without_ai_service: RunningBackend, builder: DatabaseBuilder
+async def test_first_view_is_recorded_while_ai_service_refuses_the_kb_read(
+    worker_database: WorkerDatabase, builder: DatabaseBuilder
 ) -> None:
+    ai_service = FakeAiService(refuse_connection)
+    events = RecordingEventRecorder()
     headers = (await sign_in_as_support(builder)).headers
     ticket = await open_ticket(builder)
+    # Only a first view of a ticket with a current suggestion reads the KB version.
+    await builder.suggestion(ticket.ticket_id)
+    settings = build_settings(worker_database)
 
-    await backend_without_ai_service.client.post(
-        ticket_path(ticket.ticket_id, VIEWS), headers=key_headers(headers)
-    )
+    async with running_client(settings, events, FakeClock(), ai_service=ai_service) as client:
+        response = await client.post(
+            ticket_path(ticket.ticket_id, VIEWS), headers=key_headers(headers)
+        )
 
-    started_at = await builder.scalar(
-        "SELECT handling_started_at FROM tickets WHERE ticket_id = :ticket_id",
-        ticket_id=ticket.ticket_id,
-    )
+    started_at = await builder.scalar(HANDLING_STARTED_AT, ticket_id=ticket.ticket_id)
+    (failure,) = events.of(EventName.AI_SERVICE_CALL_FAILED)
+    assert response.status_code == HTTPStatus.NO_CONTENT
+    assert response.content == b""
+    assert ai_service.paths() == [ASSET_VERSIONS_PATH]
+    assert failure.attributes["ai_service_operation"] == GET_ASSET_VERSIONS
     assert started_at == FAKE_CLOCK_START
 
 
 async def test_repeated_view_with_the_same_key_returns_204_again(
-    backend_without_ai_service: RunningBackend, builder: DatabaseBuilder
+    backend: RunningBackend, builder: DatabaseBuilder
 ) -> None:
     headers = (await sign_in_as_support(builder)).headers
     ticket = await open_ticket(builder)
     path = ticket_path(ticket.ticket_id, VIEWS)
-    await backend_without_ai_service.client.post(path, headers=key_headers(headers))
+    await backend.client.post(path, headers=key_headers(headers))
 
-    repeated = await backend_without_ai_service.client.post(path, headers=key_headers(headers))
+    repeated = await backend.client.post(path, headers=key_headers(headers))
 
     assert repeated.status_code == HTTPStatus.NO_CONTENT
 

@@ -82,13 +82,19 @@ def build_tracer_provider(settings: Settings) -> TracerProvider:
     return create_tracer_provider(None)
 
 
-def build_runtime(settings: Settings, events: EventRecorder, clock: Clock) -> Runtime:
+def build_runtime(
+    settings: Settings,
+    events: EventRecorder,
+    clock: Clock,
+    ai_service_transport: httpx.AsyncBaseTransport | None,
+) -> Runtime:
     """Create the resources of a replica and wire every feature on them.
 
     Args:
         settings: The validated settings.
         events: Where events are recorded.
         clock: The clock of the process.
+        ai_service_transport: The transport of the ai-service client; None for the network.
 
     Returns:
         The runtime. Nothing here opens a connection.
@@ -100,7 +106,9 @@ def build_runtime(settings: Settings, events: EventRecorder, clock: Clock) -> Ru
     tracer_provider = build_tracer_provider(settings)
     shared = build_shared_ports(settings, events, clock, tracer_provider)
     accounts = wire_accounts(settings, session_factory, shared)
-    suggestions = wire_suggestions(settings, session_factory, shared, accounts.authorizer)
+    suggestions = wire_suggestions(
+        settings, session_factory, shared, accounts.authorizer, ai_service_transport
+    )
     return Runtime(
         tracer_provider=tracer_provider,
         app_engine=engine,

@@ -130,10 +130,10 @@ def _add_read_routes(router: APIRouter, routes: ConsoleTicketRoutes) -> None:
         limit: Annotated[str | None, Query()] = None,
         cursor: Annotated[str | None, Query()] = None,
     ) -> Response:
-        use_case.authorize(session.principal)
+        support = use_case.authorize(session.principal)
         queue = parse_status_filter(status)
         page = await use_case.execute(
-            session.principal, queue, parse_console_cursor(cursor, queue), parse_limit(limit)
+            support, queue, parse_console_cursor(cursor, queue), parse_limit(limit)
         )
         return json_response(to_summary_page(page))
 
