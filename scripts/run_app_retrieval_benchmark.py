@@ -257,6 +257,29 @@ def main():
             hit_str = f"{p_m['hit_at_3']:.4f}" if isinstance(p_m['hit_at_3'], (int, float)) else str(p_m['hit_at_3'])
             summary_md += f"| `{intent_name}` | {p_m['answerable_count']} | {rec_str} | {hit_str} |\n"
 
+    summary_md += """
+## Architectural Reconciliation & Governance
+
+1. **Runtime vs. Offline Pipeline Ownership:**
+   - **Runtime Retrieval Ownership:** Fully owned and implemented under `apps/core_backend/retrieval/` (`adapter.py`, `encoder.py`, `importer.py`, `index.py`). The production service (`apps/ai_service/main.py`) directly instantiates and queries `RetrievalAdapter`.
+   - **Offline Pipeline Status:** The placeholder directories `pipeline/retrieval/` and `pipeline/monitoring/` have been deleted per explicit user request. Reusable benchmark generation and acceptance evaluation scripts are maintained under `scripts/generate_app_retrieval_gold.py` and `scripts/run_app_retrieval_benchmark.py`.
+   - **Index Persistence Justification:** The historical 2026-11-04 plan referenced an offline `pipeline/retrieval/build_index.py`. However, for SupportIQ's active 14-document policy corpus, `PolicyEncoder` loads `BAAI/bge-small-en-v1.5` and compiles the in-memory normalized NumPy dot-product index in ~3 seconds on startup. Persisting a static index to disk would create synchronization and drift hazards between `approved_kb.v2.json`, `kb-release.json`, and disk artifacts without latency advantages. The dynamic in-memory index is therefore the intended, drift-free production design.
+
+2. **Documented Verification Commands:**
+   - Run acceptance retrieval benchmark:
+     ```sh
+     & "$env:VIRTUAL_ENV/Scripts/python.exe" scripts/run_app_retrieval_benchmark.py
+     ```
+   - Run dedicated retrieval and grounding unit tests:
+     ```sh
+     & "$env:VIRTUAL_ENV/Scripts/python.exe" -m pytest tests/unit/test_retrieval_grounding_b2.py
+     ```
+   - Re-generate / verify gold benchmark:
+     ```sh
+     & "$env:VIRTUAL_ENV/Scripts/python.exe" scripts/generate_app_retrieval_gold.py
+     ```
+"""
+
     summary_path = out_dir / "retrieval_summary.md"
     summary_path.write_text(summary_md, encoding="utf-8")
 
