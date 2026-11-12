@@ -58,6 +58,14 @@ Root interpreter: `F:/Năm 3/SD/project/SupportIQ/.venv/Scripts/python.exe`. Nat
 
 ## Coordinator integration and verdict
 
+### Integration checkpoint: Worker A
+
+Worker A commits `bb3754c`, `cbeb761`, and `36d82c8` were reviewed and integrated as `8203996`, `7fd798c`, and `ad7833b`. Coordinator verification: 32 dedicated routing regressions passed; 63 existing routing, grounding, authority, and backend safety checks passed. Root services have not yet been reloaded with these changes; accounting and collector review remain open.
+
+Use `artifacts/evaluation/final-routing-20261112-v3/ROBUSTNESS_REPORT.md` as the corrected Worker A report; v1/v2 reports are historical and superseded. Current actual-model evidence shows 80/80 OOD cases without a draft recommendation, 23/23 explicit sensitive scenarios retaining authority, 2/2 valid courier pickup cases reaching drafting, and 21/34 answerable acceptance cases reaching drafting. These are component observations, not whole-system acceptance. Severe typo accuracy remains 59.92%, with macro-F1 0.6267.
+
+The 11 unanswerable cases reaching draft recommendation require additional coordinator-owned downstream evaluation; they are not implicitly covered by Worker C's separately frozen suite. The synthetic encoder-failure case was not injected in this component run and receives no fault-handling success credit. Mandatory escalation action correctness remains unresolved even where abstention prevents drafting.
+
 - [ ] Approve independent local gold before scored runs and synchronize workers on reviewed commits. Review changes and tests before cherry-picking; resolve overlap preserving B1 safety and persisted metadata.
 - [ ] Run the current-model routing suite and bounded live application evaluation after final reload. AI-grade all factual claims against captured sources; separate supported, unsupported, unverifiable and business-inappropriate advice. Target >=90% supported; mandatory escalation scenarios all correct, no auto-sends/transactions.
 - [ ] Execute paired agent trials on >=12 same-case tasks, record real wall times, order, outputs and approve/edit/reject decisions; report denominators and simulation limits.
