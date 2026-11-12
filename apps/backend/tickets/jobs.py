@@ -59,9 +59,12 @@ class SuggestionWorker:
                 pass
             self.stop_event.wait(self.settings.job_poll_interval_ms / 1000)
 
-    def claim(self):
+    def claim(self, suggestion_id=None):
         with self.database.transaction() as session:
-            job = session.scalar(select(SuggestionJob).where(SuggestionJob.finished.is_(False), or_(SuggestionJob.lease_until.is_(None), SuggestionJob.lease_until < utcnow())).with_for_update(skip_locked=True).limit(1))
+            query = select(SuggestionJob).where(SuggestionJob.finished.is_(False), or_(SuggestionJob.lease_until.is_(None), SuggestionJob.lease_until < utcnow()))
+            if suggestion_id:
+                query = query.where(SuggestionJob.suggestion_id == suggestion_id)
+            job = session.scalar(query.with_for_update(skip_locked=True).limit(1))
             if job is None:
                 return None
             suggestion = session.get(Suggestion, job.suggestion_id)
@@ -74,7 +77,8 @@ class SuggestionWorker:
                 for part in ("analysis_status", "draft_status"):
                     if data[part] == "pending":
                         data[part] = "unavailable"
-                data["reason_codes"] = ["ai_service_unavailable"]
+                data["reason_codes"] = list(set(data.get("reason_codes", [])) | {"ai_service_unavailable"})
+                data["staff_note"] = "The AI service is unavailable after retries. Review the customer message and order records to write a reply manually."
                 suggestion.payload, suggestion.completed_at, job.finished = data, utcnow(), True
                 return None
             job.attempts += 1
@@ -118,10 +122,24 @@ class SuggestionWorker:
                 return part, None, round((time.perf_counter() - started) * 1000)
         # 1. Fetch analysis first
         part, analysis_res, latency = fetch("analysis")
+        if analysis_res is None:
+            # AI service failed on analysis: fail closed to manual fallback immediately without waiting for draft timeout
+            self.store(identifier, token, "analysis", None, latency)
+            synthesized_draft = {
+                "status": "unavailable",
+                "reason_codes": ["ai_service_unavailable"],
+                "staff_note": "The AI service is unavailable. Review the customer message and order records to write a reply manually.",
+                "versions": {},
+                "step_latency_ms": {},
+                "mask_count_by_type": {}
+            }
+            self.store(identifier, token, "draft", synthesized_draft, 0)
+            return
+
         self.store(identifier, token, part, analysis_res, latency)
 
         # 2. If analysis abstained or escalated, avoid redundant model inference and LLM call
-        if analysis_res is not None and analysis_res.get("routing", {}).get("recommendation") != "draft":
+        if analysis_res.get("routing", {}).get("recommendation") != "draft":
             rec = analysis_res["routing"]["recommendation"]
             codes = analysis_res["routing"]["reason_codes"]
             synthesized_draft = {
@@ -139,6 +157,19 @@ class SuggestionWorker:
 
         # 3. Otherwise execute draft
         part, draft_res, latency = fetch("draft")
+        if draft_res is None:
+            synthesized_draft = {
+                "analysis": analysis_res,
+                "status": "unavailable",
+                "reason_codes": ["ai_service_unavailable"],
+                "staff_note": "Draft generation is unavailable. Review the retrieved sources and write a reply manually.",
+                "versions": analysis_res.get("versions", {}),
+                "step_latency_ms": {},
+                "mask_count_by_type": {}
+            }
+            self.store(identifier, token, "draft", synthesized_draft, latency)
+            return
+
         self.store(identifier, token, part, draft_res, latency)
 
     def store(self, identifier, token, part, result, latency_ms):
@@ -157,17 +188,20 @@ class SuggestionWorker:
                     return
                 data["analysis_status" if part == "analysis" else "draft_status"] = "unavailable"
                 data["reason_codes"] = list(set(data.get("reason_codes", [])) | {"ai_service_unavailable"})
+                if "staff_note" not in data or not data["staff_note"]:
+                    data["staff_note"] = "The AI service is unavailable. Review the customer message and order records to write a reply manually."
             else:
-                analysis = result if part == "analysis" else result["analysis"]
-                data.update(analysis_status="ready", analysis=analysis, versions=analysis["versions"])
+                analysis = result.get("analysis") if part == "draft" else result
+                if analysis:
+                    data.update(analysis_status="ready", analysis=analysis, versions=analysis.get("versions"))
                 if part == "draft":
-                    data.update(draft_status=result["status"], reason_codes=result["reason_codes"], warnings=analysis.get("warnings", []), staff_note=result.get("staff_note"))
+                    data.update(draft_status=result["status"], reason_codes=result["reason_codes"], warnings=(analysis or {}).get("warnings", []), staff_note=result.get("staff_note"))
                     if result.get("draft"):
                         data["draft"] = result["draft"]
                     data["llm_usage"] = result.get("llm_usage")
                     data["failure_code"] = result.get("failure_code")
                     data["step_latency_ms"] = {**data["step_latency_ms"], **result.get("step_latency_ms", {})}
-                codes = set(analysis["routing"]["reason_codes"]) | set(result.get("reason_codes", []))
+                codes = set((analysis or {}).get("routing", {}).get("reason_codes", [])) | set(result.get("reason_codes", []))
                 if "requires_authority" in codes:
                     ticket.is_authority_required = True
             suggestion.payload = data
