@@ -1,0 +1,57 @@
+description: >-
+  The allow-list of simulated order facts that `backend` sends to `ai-service` for the order of
+  a ticket (SEC-05). It holds no identifier, no address, no
+  payment data, and nothing about other orders, so it identifies no person on its own. Every
+  field is optional: an absent field is not applicable or unknown, never zero (DATA-15). At least
+  one field is present. Data class: Confidential.
+type: object
+additionalProperties: false
+minProperties: 1
+properties:
+  order_status:
+    $ref: './OrderStatus.yaml'
+    description: >-
+      The status of the order. Data class: Confidential.
+  placed_at:
+    $ref: './Timestamp.yaml'
+    description: >-
+      When the customer placed the order. Data class: Confidential.
+  order_total:
+    $ref: './Money.yaml'
+    description: >-
+      The total the customer paid for the order, including `shipping_cost`. Data class:
+      Confidential.
+  shipping_cost:
+    $ref: './Money.yaml'
+    description: >-
+      The shipping cost of the order, in the same currency as `order_total`. Data class:
+      Confidential.
+  shipment_status:
+    $ref: './ShipmentStatus.yaml'
+    description: >-
+      The status of the shipment of the order. Data class: Confidential.
+  estimated_delivery_at:
+    $ref: './Timestamp.yaml'
+    description: >-
+      When the carrier expects to deliver the parcel. Absent when the carrier gave no estimate.
+      Data class: Confidential.
+  delivered_at:
+    $ref: './Timestamp.yaml'
+    description: >-
+      When the carrier delivered the parcel. Absent until the parcel is delivered. Data class:
+      Confidential.
+  refund_status:
+    $ref: './RefundStatus.yaml'
+    description: >-
+      The status of the refund of the order. Absent when no refund was requested. Data class:
+      Confidential.
+  refund_amount:
+    $ref: './Money.yaml'
+    description: >-
+      The amount of the refund, requested or decided. Absent when no refund was requested. Data
+      class: Confidential.
+  refund_requested_at:
+    $ref: './Timestamp.yaml'
+    description: >-
+      When the customer requested the refund. Absent when no refund was requested. Data class:
+      Confidential.
