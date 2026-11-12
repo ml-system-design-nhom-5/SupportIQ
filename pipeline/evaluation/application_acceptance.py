@@ -1210,7 +1210,35 @@ class ApplicationAcceptanceRunner:
 
         lines.extend([
             "",
-            "## 5. Verification Commands for Integration",
+            "## 5. Deployed Provenance Hashes & Live Service Versions",
+            "",
+            "> [!NOTE]",
+            "> Local asset hashes represent local deployment expectations. Observed service versions reflect runtime responses from the service under test.",
+            "",
+            "| Asset / Property | Kind | Identifier / Value | Hash (SHA-256) |",
+            "|---|:---:|---|---|",
+        ])
+
+        expected_hashes = meta.get("local_expected_provenance_hashes", {})
+        lines.append(f"| **Deployed Knowledge Base** | Local Asset | `data/knowledge/approved_kb.v2.json` | `{expected_hashes.get('approved_kb_v2_sha256', 'N/A')}` |")
+        lines.append(f"| **Gateway Release Manifest** | Local Asset | `apps/ai_service/kb-release.json` | `{expected_hashes.get('ai_service_kb_release_sha256', 'N/A')}` |")
+        lines.append(f"| **Routing Policy** | Local Asset | `apps/core_backend/config/policies/intent_policy.v2.json` | `{expected_hashes.get('routing_policy_sha256', 'N/A')}` |")
+        lines.append(f"| **Runner Configuration** | Local Config | *(safe without secrets)* | `{expected_hashes.get('runner_config_sha256', 'N/A')}` |")
+        lines.append(f"| **Raw Execution Records** | Run Output | `raw_records.json` | `{meta.get('raw_records_sha256', 'N/A')}` |")
+
+        live_prov = meta.get("observed_live_service_provenance", {})
+        lines.extend([
+            "",
+            "### Observed Live Service Metadata",
+            "",
+            f"- **Observed Release ID(s):** `{live_prov.get('release_id') or ['unobserved']}`",
+            f"- **Observed Model Version(s):** `{live_prov.get('model_version') or ['unobserved']}`",
+            f"- **Observed KB Version(s):** `{live_prov.get('kb_version') or ['unobserved']}`",
+            f"- **Observed Prompt Version(s):** `{live_prov.get('prompt_version') or ['unobserved']}`",
+            f"- **Observed LLM Model(s):** `{live_prov.get('llm_model') or ['unobserved']}`",
+            f"- **Observed Provider(s):** `{live_prov.get('provider') or ['unobserved']}`",
+            "",
+            "## 6. Verification Commands for Integration",
             "",
             "```powershell",
             "# 1. Environment preflight check",
