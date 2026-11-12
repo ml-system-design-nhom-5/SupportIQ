@@ -1,0 +1,562 @@
+# In tests/unit/test_preparation.py
+from pathlib import Path
+import pandas as pd
+import pytest
+
+def test_data_science_packages_installed():
+    import pandas as pd
+    import numpy as np
+    import sklearn
+    import joblib
+    import matplotlib
+    assert pd.__version__ is not None
+    assert np.__version__ is not None
+    assert sklearn.__version__ is not None
+    assert joblib.__version__ is not None
+    assert matplotlib.__version__ is not None
+
+def test_id_generation_formatting_and_auto_increment(tmp_path: Path):
+    from pipeline.preparation.utils import get_next_id
+
+    fixed_date = "03-11-2026"
+    # Empty dir should start with 00
+    id_0 = get_next_id(tmp_path, date_str=fixed_date)
+    assert id_0 == "03-11-2026-00"
+
+    # Simulate existing folders
+    (tmp_path / "03-11-2026-00").mkdir()
+    (tmp_path / "03-11-2026-01").mkdir()
+    (tmp_path / "other-dir").mkdir()
+
+    id_next = get_next_id(tmp_path, date_str=fixed_date)
+    assert id_next == "03-11-2026-02"
+
+def test_sha256_and_json_io(tmp_path: Path):
+    from pipeline.preparation.utils import compute_sha256, save_json, load_json
+
+    test_file = tmp_path / "sample.txt"
+    test_file.write_text("supportiq", encoding="utf-8")
+    sha = compute_sha256(test_file)
+    assert len(sha) == 64
+    assert sha.isupper()
+
+    json_file = tmp_path / "data.json"
+    data = {"run_id": "03-11-2026-00", "count": 42}
+    save_json(data, json_file)
+    loaded = load_json(json_file)
+    assert loaded == data
+
+def test_constants_count():
+    from pipeline.preparation.utils import STANDARD_INTENTS, STANDARD_CATEGORIES
+    assert len(STANDARD_INTENTS) == 46
+    assert len(STANDARD_CATEGORIES) == 13
+
+def test_inspect_dataset_creates_expected_artifacts(tmp_path: Path):
+    from pipeline.preparation.inspect_data import inspect_dataset
+
+    csv_path = tmp_path / "sample.csv"
+    df = pd.DataFrame({
+        "instruction": ["How to track order?", "Cancel my order please", "Check refund status"],
+        "intent": ["track_order", "cancel_order", "refund_status"],
+        "category": ["ORDER", "ORDER", "RETURNS"],
+        "tags": ["order", "cancel", "refund"],
+        "response": ["resp1", "resp2", "resp3"]
+    })
+    df.to_csv(csv_path, index=False)
+
+    artifacts_dir = tmp_path / "artifacts"
+    result = inspect_dataset(csv_path, artifacts_dir, run_id="03-11-2026-00")
+
+    assert result["run_id"] == "03-11-2026-00"
+    assert result["total_samples"] == 3
+    assert (artifacts_dir / "profile.json").exists()
+    assert (artifacts_dir / "class_distribution.csv").exists()
+    assert (artifacts_dir / "figures" / "class_distribution.png").exists()
+    assert (artifacts_dir / "figures" / "length_distribution.png").exists()
+    assert (artifacts_dir / "figures" / "category_intent_matrix.png").exists()
+
+def test_validate_dataset_detects_errors_and_duplicates(tmp_path: Path):
+    from pipeline.preparation.validate_data import validate_dataset
+
+    csv_path = tmp_path / "dirty.csv"
+    df = pd.DataFrame({
+        "instruction": [
+            "Valid question?",
+            "",  # empty string
+            "Where is order?",
+            "Where is order?",  # exact duplicate same intent
+            "Cancel my order",
+            "cancel my order ", # normalized duplicate conflicting intent!
+            "Unknown intent query"
+        ],
+        "intent": [
+            "track_order",
+            "track_order",
+            "track_order",
+            "track_order",
+            "cancel_order",
+            "track_order",      # conflict!
+            "non_existent_intent"
+        ],
+        "category": [
+            "ORDER",
+            "ORDER",
+            "ORDER",
+            "ORDER",
+            "ORDER",
+            "ORDER",
+            "UNKNOWN_CAT"
+        ]
+    })
+    df.to_csv(csv_path, index=False)
+
+    artifacts_dir = tmp_path / "artifacts"
+    report = validate_dataset(csv_path, artifacts_dir, run_id="03-11-2026-00")
+
+    assert report["summary"]["total_records"] == 7
+    assert report["summary"]["missing_instruction"] == 1
+    assert report["summary"]["invalid_intents"] == 1
+    assert report["summary"]["conflicting_duplicates"] >= 1
+
+    assert (artifacts_dir / "validation_report.json").exists()
+    assert (artifacts_dir / "review_candidates.csv").exists()
+    assert (artifacts_dir / "duplicate_groups.csv").exists()
+
+def test_clean_dataset_quarantines_and_cleans(tmp_path: Path):
+    from pipeline.preparation.clean_data import clean_dataset
+
+    csv_path = tmp_path / "raw.csv"
+    df = pd.DataFrame({
+        "instruction": [
+            "  Please track {{Tracking Number}}!  ",
+            "Please track {{Tracking Number}}!", # exact duplicate
+            "Cancel order {{Order History}}",
+            "cancel order {{order history}}",   # conflict if different intent
+            "  ",                               # empty
+            "Valid inquiry with unknown intent"
+        ],
+        "intent": [
+            "track_order",
+            "track_order",
+            "cancel_order",
+            "refund_status",                    # conflict!
+            "track_order",
+            "unknown_intent"
+        ],
+        "category": ["ORDER", "ORDER", "ORDER", "RETURNS", "ORDER", "MISC"]
+    })
+    df.to_csv(csv_path, index=False)
+
+    processed_dir = tmp_path / "processed"
+    report_dir = tmp_path / "artifacts"
+    res = clean_dataset(csv_path, processed_dir, report_dir, dataset_version="03-11-2026-00", run_id="03-11-2026-00")
+
+    cleaned_csv = processed_dir / "03-11-2026-00" / "cleaned.csv"
+    quarantined_csv = processed_dir / "03-11-2026-00" / "quarantined.csv"
+    report_json = report_dir / "cleaning_report.json"
+
+    assert cleaned_csv.exists()
+    assert quarantined_csv.exists()
+    assert report_json.exists()
+
+    df_cleaned = pd.read_csv(cleaned_csv)
+    df_quarantined = pd.read_csv(quarantined_csv)
+
+    # Cleaned should have 1 row: "Please track {{Tracking Number}}!" (deduplicated)
+    assert len(df_cleaned) == 1
+    assert "sample_id" in df_cleaned.columns
+    assert df_cleaned.iloc[0]["instruction"] == "Please track {{Tracking Number}}!"
+
+    # Quarantined should contain the conflicting pair, empty row, and unknown intent
+    assert len(df_quarantined) == 4
+    assert set(df_quarantined["quarantine_reason"]).issuperset({
+        "conflicting_labels_across_duplicates",
+        "missing_required_fields",
+        "invalid_intent_label"
+    })
+
+def test_split_dataset_stratified_no_leakage(tmp_path: Path):
+    from pipeline.preparation.split_data import split_dataset
+
+    cleaned_csv = tmp_path / "cleaned.csv"
+    records = []
+    for i in range(25):
+        records.append({
+            "sample_id": f"s_a_{i}",
+            "instruction": f"Query type A variant {i % 5}",
+            "intent": "track_order",
+            "category": "ORDER"
+        })
+        records.append({
+            "sample_id": f"s_b_{i}",
+            "instruction": f"Query type B variant {i % 5}",
+            "intent": "cancel_order",
+            "category": "ORDER"
+        })
+    df = pd.DataFrame(records)
+    df.to_csv(cleaned_csv, index=False)
+
+    splits_dir = tmp_path / "splits"
+    report_dir = tmp_path / "artifacts"
+
+    res = split_dataset(
+        cleaned_csv=cleaned_csv,
+        splits_dir=splits_dir,
+        report_dir=report_dir,
+        split_version="03-11-2026-00",
+        run_id="03-11-2026-00",
+        test_size=0.2,
+        n_splits=3,
+        random_state=42
+    )
+
+    assignments_csv = splits_dir / "03-11-2026-00" / "split_assignments.csv"
+    report_json = report_dir / "split_report.json"
+
+    assert assignments_csv.exists()
+    assert report_json.exists()
+
+    df_assign = pd.read_csv(assignments_csv)
+    assert len(df_assign) == 50
+    assert set(df_assign["partition"]) == {"train", "test"}
+
+    # Merge with original data to verify group leakage
+    merged = df_assign.merge(df, on="sample_id")
+    train_texts = set(merged[merged["partition"] == "train"]["instruction"])
+    test_texts = set(merged[merged["partition"] == "test"]["instruction"])
+
+    # NO LEAKAGE: Intersection of texts between train and test must be empty!
+    assert len(train_texts.intersection(test_texts)) == 0
+
+    # Cross-fold leakage check for train partition
+    train_df = merged[merged["partition"] == "train"]
+    folds = train_df["fold"].unique()
+    for f1 in folds:
+        for f2 in folds:
+            if f1 != f2:
+                texts_f1 = set(train_df[train_df["fold"] == f1]["instruction"])
+                texts_f2 = set(train_df[train_df["fold"] == f2]["instruction"])
+                assert len(texts_f1.intersection(texts_f2)) == 0
+
+def test_intent_feature_pipeline_preserves_placeholders_and_persists(tmp_path: Path):
+    from pipeline.preparation.features import IntentFeaturePipeline
+
+    texts = [
+        "Track my package with {{Tracking Number}} please",
+        "View {{Order History}} and cancel order",
+        "Check refund status"
+    ]
+    pipeline = IntentFeaturePipeline(max_features=50, ngram_range=(1, 2), min_df=1)
+    matrix = pipeline.fit_transform(texts)
+    assert matrix.shape[0] == 3
+
+    # Ensure placeholder was kept as a feature token
+    vocab = pipeline.get_feature_names()
+    assert any("{{tracking number}}" in term.lower() for term in vocab)
+
+    # Test persistence with joblib
+    model_path = tmp_path / "tfidf.joblib"
+    pipeline.save(model_path)
+    assert model_path.exists()
+
+    loaded_pipeline = IntentFeaturePipeline.load(model_path)
+    test_matrix = loaded_pipeline.transform(["Where is {{Tracking Number}}?"])
+    assert test_matrix.shape[1] == matrix.shape[1]
+
+def test_run_full_preparation_synthetic_end_to_end(tmp_path: Path):
+    from pipeline.preparation.run_preparation import run_full_preparation
+
+    raw_csv = tmp_path / "raw.csv"
+    records = []
+    # Generate 50 valid records across 2 standard intents
+    for i in range(25):
+        records.append({
+            "instruction": f"I want to track order {{Order History}} number {i}",
+            "intent": "track_order",
+            "category": "ORDER",
+            "tags": "order,track",
+            "response": "Response"
+        })
+        records.append({
+            "instruction": f"Please cancel order {{Order History}} number {i}",
+            "intent": "cancel_order",
+            "category": "ORDER",
+            "tags": "order,cancel",
+            "response": "Response"
+        })
+    pd.DataFrame(records).to_csv(raw_csv, index=False)
+
+    base_dir = tmp_path
+    result = run_full_preparation(
+        input_csv=raw_csv,
+        base_dir=base_dir,
+        run_id="03-11-2026-00",
+        dataset_version="03-11-2026-00",
+        split_version="03-11-2026-00",
+        n_splits=3,
+        test_size=0.2,
+    )
+
+    run_id = result["run_id"]
+    assert run_id == "03-11-2026-00"
+
+    # Check processed data
+    assert (base_dir / "data" / "datasets" / "processed" / run_id / "cleaned.csv").exists()
+    assert (base_dir / "data" / "datasets" / "processed" / run_id / "quarantined.csv").exists()
+
+    # Check splits
+    assert (base_dir / "data" / "datasets" / "splits" / run_id / "split_assignments.csv").exists()
+
+    # Check preparation artifacts
+    prep_dir = base_dir / "artifacts" / "preparation" / run_id
+    assert (prep_dir / "manifest.json").exists()
+    assert (prep_dir / "profile.json").exists()
+    assert (prep_dir / "validation_report.json").exists()
+    assert (prep_dir / "cleaning_report.json").exists()
+    assert (prep_dir / "split_report.json").exists()
+
+    # Check models artifact
+    assert (base_dir / "artifacts" / "models" / run_id / "tfidf.joblib").exists()
+
+def test_quarantined_schema_consistency_when_empty(tmp_path: Path):
+    from pipeline.preparation.clean_data import clean_dataset
+
+    raw_csv = tmp_path / "all_clean.csv"
+    df = pd.DataFrame({
+        "instruction": ["Track my order please"],
+        "intent": ["track_order"],
+        "category": ["ORDER"]
+    })
+    df.to_csv(raw_csv, index=False)
+
+    processed_dir = tmp_path / "proc"
+    report_dir = tmp_path / "rep"
+    clean_dataset(raw_csv, processed_dir, report_dir, dataset_version="03-11-2026-00")
+
+    quarantined_csv = processed_dir / "03-11-2026-00" / "quarantined.csv"
+    assert quarantined_csv.exists()
+    df_q = pd.read_csv(quarantined_csv)
+    # Must NOT contain internal helper columns instruction_cleaned or _orig_idx
+    assert "instruction_cleaned" not in df_q.columns
+    assert "_orig_idx" not in df_q.columns
+    assert list(df_q.columns) == ["instruction", "intent", "category", "quarantine_reason"]
+
+def test_intent_whitespace_stripping_and_no_false_conflict(tmp_path: Path):
+    from pipeline.preparation.clean_data import clean_dataset
+
+    raw_csv = tmp_path / "intent_spaces.csv"
+    df = pd.DataFrame({
+        "instruction": ["Track my order", "Track my order"],
+        "intent": ["track_order", "track_order "],  # Trailing space in raw intent
+        "category": ["ORDER", "ORDER"]
+    })
+    df.to_csv(raw_csv, index=False)
+
+    processed_dir = tmp_path / "proc"
+    report_dir = tmp_path / "rep"
+    res = clean_dataset(raw_csv, processed_dir, report_dir, dataset_version="03-11-2026-00")
+
+    # Should NOT be flagged as conflicting intents because stripped intent is identical!
+    assert res["quarantined_samples"] == 0
+    assert res["final_clean_samples"] == 1
+    cleaned_df = pd.read_csv(processed_dir / "03-11-2026-00" / "cleaned.csv")
+    assert cleaned_df.iloc[0]["intent"] == "track_order"
+
+def test_shared_nfkc_normalization_consistency():
+    from pipeline.preparation.utils import normalize_instruction_text
+
+    # Compatibility character (halfwidth vs fullwidth or ligatures)
+    fullwidth_text = "Ｔｒａｃｋ   ｏｒｄｅｒ {{Order}} "
+    normalized = normalize_instruction_text(fullwidth_text)
+    assert normalized == "Track order {{Order}}"
+
+# === NEW TESTS ADDRESSING FEEDBACK ===
+
+def test_transformer_applies_nfkc_normalization_consistently():
+    from pipeline.preparation.features import IntentFeaturePipeline
+
+    # Train vocabulary on normalized text
+    pipeline = IntentFeaturePipeline(max_features=50, ngram_range=(1, 1), min_df=1)
+    pipeline.fit(["Track order"])
+
+    # Raw fullwidth query must produce non-zero features matching "Track order"
+    vec_ascii = pipeline.transform(["Track order"])
+    vec_fullwidth = pipeline.transform(["Ｔｒａｃｋ ｏｒｄｅｒ"])
+
+    assert vec_ascii.nnz > 0
+    assert vec_fullwidth.nnz == vec_ascii.nnz
+    assert (vec_ascii.toarray() == vec_fullwidth.toarray()).all()
+
+def test_near_duplicate_key_normalizes_punctuation():
+    from pipeline.preparation.utils import get_near_duplicate_key
+
+    # Sentences differing only in punctuation or spacing around punctuation must yield identical key
+    k1 = get_near_duplicate_key("can I buy through your app?")
+    k2 = get_near_duplicate_key("can I buy through your app ?")
+    k3 = get_near_duplicate_key("Can I buy through your app!")
+    k4 = get_near_duplicate_key("CAN I BUY THROUGH YOUR APP")
+
+    assert k1 == k2 == k3 == k4
+    assert k1 != ""
+
+    # Placeholders must be preserved within the near duplicate key
+    kp1 = get_near_duplicate_key("Where is {{Tracking Number}}?")
+    kp2 = get_near_duplicate_key("Where is {{Tracking Number}}")
+    assert kp1 == kp2
+    assert "{{tracking number}}" in kp1
+
+def test_clean_data_quarantines_near_duplicate_conflicting_intents(tmp_path: Path):
+    from pipeline.preparation.clean_data import clean_dataset
+
+    raw_csv = tmp_path / "near_dup_conflict.csv"
+    df = pd.DataFrame({
+        "instruction": [
+            "how do i return a product in store",   # no question mark
+            "how do I return a product in store?",  # has question mark, uppercase I
+            "where is my package",                  # distinct query
+        ],
+        "intent": [
+            "return_policy",
+            "return_product_in_store",              # conflicting intent on near-duplicate!
+            "delivery_issue",
+        ],
+        "category": ["RETURNS", "RETURNS", "DELIVERY"]
+    })
+    df.to_csv(raw_csv, index=False)
+
+    processed_dir = tmp_path / "proc"
+    report_dir = tmp_path / "rep"
+    res = clean_dataset(raw_csv, processed_dir, report_dir, dataset_version="03-11-2026-00")
+
+    assert res["quarantined_samples"] == 2
+    assert res["final_clean_samples"] == 1
+    cleaned_df = pd.read_csv(processed_dir / "03-11-2026-00" / "cleaned.csv")
+    assert cleaned_df.iloc[0]["intent"] == "delivery_issue"
+
+def test_split_dataset_exact_target_ratio_and_near_duplicate_leakage(tmp_path: Path):
+    from pipeline.preparation.split_data import split_dataset
+
+    cleaned_csv = tmp_path / "cleaned.csv"
+    # Create 100 samples across 2 intents, with near-duplicates (varying punctuation)
+    records = []
+    for i in range(50):
+        punct = "?" if i % 2 == 0 else " !"
+        records.append({
+            "sample_id": f"sample_a_{i:04d}",
+            "instruction": f"Order track question variant {i % 10}{punct}",
+            "intent": "track_order",
+            "category": "ORDER"
+        })
+        records.append({
+            "sample_id": f"sample_b_{i:04d}",
+            "instruction": f"Refund inquiry variant {i % 10}{punct}",
+            "intent": "refund_status",
+            "category": "RETURNS"
+        })
+    pd.DataFrame(records).to_csv(cleaned_csv, index=False)
+
+    splits_dir = tmp_path / "splits"
+    report_dir = tmp_path / "rep"
+
+    # Test with test_size=0.3
+    res = split_dataset(
+        cleaned_csv=cleaned_csv,
+        splits_dir=splits_dir,
+        report_dir=report_dir,
+        split_version="03-11-2026-00",
+        run_id="03-11-2026-00",
+        test_size=0.3,
+        n_splits=5,
+        random_state=42
+    )
+
+    df_assign = pd.read_csv(splits_dir / "03-11-2026-00" / "split_assignments.csv")
+    actual_test_ratio = res["summary"]["actual_test_ratio"]
+    assert abs(actual_test_ratio - 0.3) < 0.05  # Close to requested ratio
+
+    # Check zero near-duplicate leakage
+    from pipeline.preparation.utils import get_near_duplicate_key
+    df_raw = pd.read_csv(cleaned_csv)
+    merged = df_assign.merge(df_raw, on="sample_id")
+    merged["near_key"] = merged["instruction"].apply(get_near_duplicate_key)
+
+    train_keys = set(merged[merged["partition"] == "train"]["near_key"])
+    test_keys = set(merged[merged["partition"] == "test"]["near_key"])
+    assert len(train_keys.intersection(test_keys)) == 0
+
+def test_clean_data_quarantines_invalid_category(tmp_path: Path):
+    from pipeline.preparation.clean_data import clean_dataset
+
+    raw_csv = tmp_path / "invalid_cat.csv"
+    df = pd.DataFrame({
+        "instruction": ["Valid instruction here"],
+        "intent": ["track_order"],
+        "category": ["NON_EXISTENT_CAT"]  # Invalid category!
+    })
+    df.to_csv(raw_csv, index=False)
+
+    processed_dir = tmp_path / "proc"
+    report_dir = tmp_path / "rep"
+    res = clean_dataset(raw_csv, processed_dir, report_dir, dataset_version="03-11-2026-00")
+
+    assert res["quarantined_samples"] == 1
+    assert res["final_clean_samples"] == 0
+    quarantined_df = pd.read_csv(processed_dir / "03-11-2026-00" / "quarantined.csv")
+    assert quarantined_df.iloc[0]["quarantine_reason"] == "invalid_category_label"
+
+def test_run_preparation_aborts_if_cleaned_data_has_violations(tmp_path: Path, monkeypatch):
+    from pipeline.preparation.run_preparation import run_full_preparation
+    import pipeline.preparation.run_preparation as runner_mod
+
+    raw_csv = tmp_path / "raw.csv"
+    pd.DataFrame({
+        "instruction": ["Valid track query"],
+        "intent": ["track_order"],
+        "category": ["ORDER"]
+    }).to_csv(raw_csv, index=False)
+
+    # Monkeypatch clean_dataset to return a corrupted cleaned.csv with an invalid category
+    original_clean = runner_mod.clean_dataset
+    def mock_clean(*args, **kwargs):
+        res = original_clean(*args, **kwargs)
+        corrupted_df = pd.DataFrame({
+            "sample_id": ["sample_000000"],
+            "instruction": ["Some text"],
+            "intent": ["track_order"],
+            "category": ["CORRUPTED_CATEGORY"]
+        })
+        corrupted_df.to_csv(res["artifacts"]["cleaned_csv"], index=False)
+        return res
+
+    monkeypatch.setattr(runner_mod, "clean_dataset", mock_clean)
+
+    with pytest.raises(ValueError, match="integrity validation"):
+        run_full_preparation(input_csv=raw_csv, base_dir=tmp_path, run_id="03-11-2026-00")
+
+def test_refuse_overwriting_existing_versions(tmp_path: Path):
+    from pipeline.preparation.clean_data import clean_dataset
+    from pipeline.preparation.split_data import split_dataset
+
+    csv_path = tmp_path / "sample.csv"
+    pd.DataFrame({
+        "instruction": ["Track order"],
+        "intent": ["track_order"],
+        "category": ["ORDER"]
+    }).to_csv(csv_path, index=False)
+
+    proc_dir = tmp_path / "proc"
+    rep_dir = tmp_path / "rep"
+    splits_dir = tmp_path / "splits"
+
+    # First clean succeeds
+    clean_dataset(csv_path, proc_dir, rep_dir, dataset_version="03-11-2026-00")
+    # Second clean with same version must raise FileExistsError without overwrite=True
+    with pytest.raises(FileExistsError):
+        clean_dataset(csv_path, proc_dir, rep_dir, dataset_version="03-11-2026-00", overwrite=False)
+
+    # First split succeeds
+    cleaned_csv = proc_dir / "03-11-2026-00" / "cleaned.csv"
+    split_dataset(cleaned_csv, splits_dir, rep_dir, split_version="03-11-2026-00", n_splits=2, test_size=0.5)
+    # Second split with same version must raise FileExistsError without overwrite=True
+    with pytest.raises(FileExistsError):
+        split_dataset(cleaned_csv, splits_dir, rep_dir, split_version="03-11-2026-00", overwrite=False)

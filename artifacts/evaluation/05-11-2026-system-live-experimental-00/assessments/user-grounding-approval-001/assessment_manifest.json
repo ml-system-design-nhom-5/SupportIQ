@@ -1,0 +1,20 @@
+{
+  "schema_version": "v1.0",
+  "assessment_id": "user-grounding-approval-001",
+  "parent_run_manifest_sha256": "FAABC546B7C7D67647688DE09C6972E67B4E96EACA152E67B3E2A7D60AB3A737",
+  "created_at": "2026-11-05T05:36:07.097105+00:00",
+  "files": {
+    "annotations.snapshot.jsonl": {
+      "path": "annotations.snapshot.jsonl",
+      "sha256": "BA246B0D7CDE7C1B0A84A204EA325882094387DBA7AAA2041F0117EAF862729B"
+    },
+    "assessment_metrics.json": {
+      "path": "assessment_metrics.json",
+      "sha256": "FF7D5093A79DF1778CECD4D3B9533082F3DB3D4D8A2D419513F9B4FD92AE9B30"
+    },
+    "assessment_report.md": {
+      "path": "assessment_report.md",
+      "sha256": "13966B3F74A8A1AFE34F4BB0D664C42B457A083A6D08A3DCE3FDC76701060D30"
+    }
+  }
+}

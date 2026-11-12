@@ -1,0 +1,94 @@
+{
+  "core_intents": [
+    "track_order",
+    "return_policy",
+    "delivery_issue",
+    "human_agent",
+    "refund_policy",
+    "shipping_costs",
+    "cancel_order",
+    "refund_status",
+    "return_product",
+    "request_refund",
+    "delivery_time",
+    "payment_issue"
+  ],
+  "n_core_intents": 12,
+  "per_intent": {
+    "track_order": {
+      "precision": 0.9881889763779528,
+      "recall": 0.9007177033492823,
+      "f1": 0.9424280350438048,
+      "support": 836
+    },
+    "return_policy": {
+      "precision": 0.9901356350184957,
+      "recall": 0.9582338902147971,
+      "f1": 0.9739235900545785,
+      "support": 838
+    },
+    "delivery_issue": {
+      "precision": 0.9941107184923439,
+      "recall": 0.9976359338061466,
+      "f1": 0.9958702064896755,
+      "support": 846
+    },
+    "human_agent": {
+      "precision": 0.9964328180737217,
+      "recall": 0.995249406175772,
+      "f1": 0.995840760546643,
+      "support": 842
+    },
+    "refund_policy": {
+      "precision": 0.990521327014218,
+      "recall": 0.9928741092636579,
+      "f1": 0.9916963226571768,
+      "support": 842
+    },
+    "shipping_costs": {
+      "precision": 0.997563946406821,
+      "recall": 0.9939320388349514,
+      "f1": 0.9957446808510638,
+      "support": 824
+    },
+    "cancel_order": {
+      "precision": 0.992831541218638,
+      "recall": 0.9904648390941597,
+      "f1": 0.9916467780429594,
+      "support": 839
+    },
+    "refund_status": {
+      "precision": 0.9776733254994124,
+      "recall": 0.9822904368358913,
+      "f1": 0.9799764428739693,
+      "support": 847
+    },
+    "return_product": {
+      "precision": 0.9770114942528736,
+      "recall": 0.9085510688836105,
+      "f1": 0.9415384615384615,
+      "support": 842
+    },
+    "request_refund": {
+      "precision": 0.9853479853479854,
+      "recall": 0.9987623762376238,
+      "f1": 0.9920098340503996,
+      "support": 808
+    },
+    "delivery_time": {
+      "precision": 0.9923371647509579,
+      "recall": 0.9948783610755442,
+      "f1": 0.9936061381074168,
+      "support": 781
+    },
+    "payment_issue": {
+      "precision": 0.9964664310954063,
+      "recall": 1.0,
+      "f1": 0.9982300884955753,
+      "support": 846
+    }
+  },
+  "macro_precision": 0.989885113629069,
+  "macro_recall": 0.9761325136476198,
+  "macro_f1": 0.9827092782293104
+}

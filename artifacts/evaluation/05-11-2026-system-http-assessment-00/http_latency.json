@@ -1,0 +1,31 @@
+{
+  "measurement_scope": "api_total",
+  "transport": "loopback HTTP",
+  "endpoint": "POST /api/demo/runs",
+  "includes": [
+    "client HTTP",
+    "session middleware",
+    "ML HTTP inference",
+    "routing",
+    "commerce",
+    "retrieval",
+    "LLM",
+    "SQLite persistence",
+    "response serialization"
+  ],
+  "excludes": [
+    "model loading",
+    "warmup",
+    "browser rendering",
+    "human review"
+  ],
+  "requests_count": 100,
+  "warmup_count": 5,
+  "p50_seconds": 2.2144458000038867,
+  "p95_seconds": 10.680979499986279,
+  "technical_errors": 0,
+  "http_timeouts": 0,
+  "server_restarts": 0,
+  "drafts": 17,
+  "latency_target_met": true
+}

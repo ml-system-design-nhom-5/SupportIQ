@@ -1,0 +1,18 @@
+{
+  "scope": "bounded Gemini provider load; max 12 calls; concurrency <= 4",
+  "inputs": {
+    "kb": {
+      "path": "data/knowledge/approved_kb.v2.json",
+      "sha256": "f8dcfbbdbb9cb2cd7a09d2ec12e0149083fdd4fa04931df6261fc4d1e6425fec"
+    },
+    "document_id": "POL-RET-001"
+  },
+  "files": {
+    "summary.json": {
+      "sha256": "a67e51dff53b743b7a06ec336599a415b8a060394e6c8c7e731f19d931c93db5"
+    },
+    "results.jsonl": {
+      "sha256": "f3c861837e63dbe759e7d234b75a604eceaecf7053dc8ec41ac97f858f27e7c9"
+    }
+  }
+}

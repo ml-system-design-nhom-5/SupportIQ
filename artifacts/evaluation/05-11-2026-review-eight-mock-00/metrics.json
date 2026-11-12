@@ -1,0 +1,121 @@
+{
+  "summary": {
+    "total_cases": 50,
+    "executed_cases": 50,
+    "completed_ok": 50,
+    "timeouts": 0,
+    "errors": 0,
+    "missing": 0
+  },
+  "routing": {
+    "total_cases": 50,
+    "must_escalate_total": 17,
+    "must_escalate_correct": 4,
+    "must_escalate_success_rate": 0.2353,
+    "must_escalate_ci": [
+      0.0956,
+      0.4726
+    ],
+    "guardrail_passed": false,
+    "coverage": 0.62,
+    "coverage_ci": [
+      0.4815,
+      0.7414
+    ],
+    "selective_accuracy": 0.3548,
+    "selective_accuracy_ci": [
+      0.2112,
+      0.5305
+    ],
+    "draft_yield": 0.06
+  },
+  "retrieval": {
+    "total_cases": 50,
+    "answerable_count": 14,
+    "unanswerable_count": 36,
+    "recall_at_3": 0.2143,
+    "recall_at_3_raw": 0.21428571428571427,
+    "hit_at_3": 0.2143,
+    "hit_at_3_ci": [
+      0.0757,
+      0.4759
+    ],
+    "false_evidence_count": 0,
+    "false_evidence_rate": 0.0,
+    "false_evidence_ci": [
+      0.0,
+      0.0964
+    ],
+    "safety_violations": 0,
+    "safety_guardrail_passed": true
+  },
+  "drafting": {
+    "draft_expected_count": 14,
+    "draft_produced_count": 3,
+    "draft_coverage": 0.2143
+  },
+  "by_slice": {
+    "supported": {
+      "total": 20,
+      "ok": 20,
+      "error": 0,
+      "timeout": 0,
+      "missing": 0
+    },
+    "unsupported": {
+      "total": 10,
+      "ok": 10,
+      "error": 0,
+      "timeout": 0,
+      "missing": 0
+    },
+    "answerable": {
+      "total": 10,
+      "ok": 10,
+      "error": 0,
+      "timeout": 0,
+      "missing": 0
+    },
+    "unanswerable": {
+      "total": 5,
+      "ok": 5,
+      "error": 0,
+      "timeout": 0,
+      "missing": 0
+    },
+    "uncertainty_and_faults": {
+      "total": 5,
+      "ok": 5,
+      "error": 0,
+      "timeout": 0,
+      "missing": 0
+    }
+  },
+  "latency": {
+    "measurement_scope": "pipeline_total",
+    "p50_seconds": 0.02,
+    "warm_p95_seconds": 0.0302,
+    "requests_count": 10,
+    "warmup_count": 2
+  },
+  "ml": {
+    "status": "verified",
+    "model_type": "distilbert_sequence_classification",
+    "package_version": "v1.0.0",
+    "macro_f1": 0.9952684306823985,
+    "cv_protocol": "10-fold cross-validation",
+    "cv_report_sha256": "9609B6604C0C137365DB927F0EB149BDD4AF54FDF3CA22AA1ADB235BF22A3972",
+    "release_sha256": "C0749FFDB1AAD91C94D00D3F9EB039C83BBB4468E34FC80D5A8EB35832568CB8",
+    "per_intent": {}
+  },
+  "oversight": {
+    "total_scenarios": 7,
+    "passed_scenarios": 7,
+    "failed_scenarios": 0,
+    "status": "pass"
+  },
+  "component_probes": {
+    "total_probes": 50,
+    "successful_probes": 50
+  }
+}

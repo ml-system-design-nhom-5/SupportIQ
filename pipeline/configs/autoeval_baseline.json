@@ -1,0 +1,747 @@
+{
+ "meta": {
+  "run_id": "20261106-003402-baseline",
+  "created_at": "2026-11-05T17:36:16.672871+00:00",
+  "suites": [
+   "llm",
+   "ml"
+  ],
+  "llm_mode": "offline",
+  "note": "Baseline for --compare (commit 159f9e6, model dc7af8cf, numpy backend). Refresh after an accepted change: copy the new report.json here."
+ },
+ "summary": {
+  "pass": 3,
+  "fail": 7,
+  "warn": 7,
+  "skipped": 0,
+  "not_run": 9,
+  "passed": false
+ },
+ "results": {
+  "ml": {
+   "model": {
+    "model_dir": "/home/claude/ae/repo/artifacts/models/trained/distilbert-supportiq",
+    "pinned_model_version": "v1.0.0",
+    "weights_sha256": "dc7af8cffb19fe7711ed5a5d0137ffff3d7d1a1f43bad5a35edff8c8de4c1302",
+    "tokenizer_sha256": "5f218e0ea9eaa9f154815cc067351fb941bea26da81bfd12af3ded3cc66fa3ff",
+    "checksum_match": true,
+    "n_labels": 46,
+    "label_bijection": true,
+    "ok": true
+   },
+   "backend": "numpy",
+   "policy_version": "v2.0.0",
+   "noise": {
+    "clean": {
+     "n": 84,
+     "accuracy": 0.7738095238095238,
+     "macro_f1": 0.7858164983164984,
+     "median_confidence": 0.8559430156028637
+    },
+    "casual": {
+     "n": 84,
+     "accuracy": 0.7023809523809523,
+     "macro_f1": 0.7358930786562365,
+     "median_confidence": 0.7966873222143334
+    },
+    "typo": {
+     "n": 252,
+     "accuracy": 0.5992063492063492,
+     "macro_f1": 0.6266862956329259,
+     "median_confidence": 0.7162083736513718
+    },
+    "typo_f1_drop": 0.15913020268357247,
+    "casual_f1_drop": 0.049923419660261814,
+    "max_f1_drop": 0.15913020268357247
+   },
+   "oos": {
+    "n": 80,
+    "flagged_rate": 0.975,
+    "low_conf_rate": 0.7625,
+    "drafted": 2,
+    "by_category": {
+     "ecommerce_not_in_taxonomy": {
+      "n": 15,
+      "flagged_rate": 1.0,
+      "low_conf_rate": 0.7333333333333333,
+      "drafted": 0
+     },
+     "general": {
+      "n": 20,
+      "flagged_rate": 1.0,
+      "low_conf_rate": 0.95,
+      "drafted": 0
+     },
+     "multi_intent": {
+      "n": 13,
+      "flagged_rate": 0.9230769230769231,
+      "low_conf_rate": 0.46153846153846156,
+      "drafted": 1
+     },
+     "other_domain": {
+      "n": 20,
+      "flagged_rate": 0.95,
+      "low_conf_rate": 0.75,
+      "drafted": 1
+     },
+     "vague": {
+      "n": 12,
+      "flagged_rate": 1.0,
+      "low_conf_rate": 0.8333333333333334,
+      "drafted": 0
+     }
+    },
+    "auroc_entropy": 0.8001488095238095,
+    "auroc_one_minus_conf": 0.7555059523809524,
+    "confident_misses": [
+     {
+      "id": "oos-general-20",
+      "text": "Give me a motivational quote.",
+      "pred": "submit_feedback",
+      "conf": 0.8040708364201401,
+      "action": "escalate"
+     },
+     {
+      "id": "oos-other_domain-06",
+      "text": "How do I reset my router's wifi password?",
+      "pred": "recover_password",
+      "conf": 0.9942417857310101,
+      "action": "escalate"
+     },
+     {
+      "id": "oos-other_domain-20",
+      "text": "How do I report a lost passport?",
+      "pred": "missing_item",
+      "conf": 0.8907915613010013,
+      "action": "escalate"
+     },
+     {
+      "id": "oos-ecommerce_not_in_taxonomy-14",
+      "text": "Can I pre-order an item that is not released yet?",
+      "pred": "missing_item",
+      "conf": 0.8865400613307112,
+      "action": "escalate"
+     },
+     {
+      "id": "oos-vague-01",
+      "text": "help",
+      "pred": "pay",
+      "conf": 0.9243061731987097,
+      "action": "escalate"
+     },
+     {
+      "id": "oos-multi_intent-01",
+      "text": "Cancel order ORD-1001 and also tell me your store opening hours",
+      "pred": "store_opening_hours",
+      "conf": 0.9887044805789956,
+      "action": "escalate"
+     },
+     {
+      "id": "oos-multi_intent-05",
+      "text": "Track my order and send me an invoice for last month",
+      "pred": "request_invoice",
+      "conf": 0.8075972527126001,
+      "action": "escalate"
+     },
+     {
+      "id": "oos-multi_intent-06",
+      "text": "I was charged twice and the item arrived broken",
+      "pred": "damaged_delivery",
+      "conf": 0.9850307298404576,
+      "action": "escalate"
+     },
+     {
+      "id": "oos-multi_intent-08",
+      "text": "What's your return policy and can I close my account?",
+      "pred": "return_policy",
+      "conf": 0.9604858028424131,
+      "action": "retrieve_draft"
+     },
+     {
+      "id": "oos-multi_intent-12",
+      "text": "Track ORD-1001 and recover my password please",
+      "pred": "recover_password",
+      "conf": 0.9938141389062571,
+      "action": "escalate"
+     },
+     {
+      "id": "oos-multi_intent-13",
+      "text": "The item is damaged, I want my money back and to talk to a manager",
+      "pred": "damaged_delivery",
+      "conf": 0.9361269522817427,
+      "action": "escalate"
+     }
+    ]
+   },
+   "benchmark": {
+    "n_cases": 156,
+    "n_labeled": 151,
+    "accuracy": 0.6688741721854304,
+    "macro_f1": 0.6112617817444896,
+    "team_accuracy": 0.8211920529801324,
+    "scope_accuracy": 0.8609271523178808,
+    "supported_intent_accuracy": 0.8,
+    "by_slice": {
+     "answerable": {
+      "n": 24,
+      "accuracy": 0.7083333333333334,
+      "macro_f1": 0.7705627705627706,
+      "median_confidence": 0.8749960272149728
+     },
+     "supported": {
+      "n": 60,
+      "accuracy": 0.8,
+      "macro_f1": 0.8246632996632997,
+      "median_confidence": 0.8559430156028637
+     },
+     "unanswerable": {
+      "n": 18,
+      "accuracy": 0.4444444444444444,
+      "macro_f1": 0.2502164502164502,
+      "median_confidence": 0.7266743902457563
+     },
+     "uncertainty_and_faults": {
+      "n": 15,
+      "accuracy": 0.26666666666666666,
+      "macro_f1": 0.19047619047619044,
+      "median_confidence": 0.6611268397973642
+     },
+     "unsupported": {
+      "n": 34,
+      "accuracy": 0.7058823529411765,
+      "macro_f1": 0.6764705882352942,
+      "median_confidence": 0.8707464756482877
+     }
+    },
+    "calibration": {
+     "ece": 0.10646298185893097,
+     "reliability": [
+      {
+       "bin": "[0.1,0.2)",
+       "n": 3,
+       "accuracy": 0.0,
+       "mean_confidence": 0.1475
+      },
+      {
+       "bin": "[0.2,0.3)",
+       "n": 9,
+       "accuracy": 0.4444,
+       "mean_confidence": 0.2524
+      },
+      {
+       "bin": "[0.3,0.4)",
+       "n": 14,
+       "accuracy": 0.4286,
+       "mean_confidence": 0.3503
+      },
+      {
+       "bin": "[0.4,0.5)",
+       "n": 4,
+       "accuracy": 0.5,
+       "mean_confidence": 0.4436
+      },
+      {
+       "bin": "[0.5,0.6)",
+       "n": 14,
+       "accuracy": 0.5,
+       "mean_confidence": 0.5349
+      },
+      {
+       "bin": "[0.6,0.7)",
+       "n": 16,
+       "accuracy": 0.375,
+       "mean_confidence": 0.6562
+      },
+      {
+       "bin": "[0.7,0.8)",
+       "n": 9,
+       "accuracy": 0.5556,
+       "mean_confidence": 0.742
+      },
+      {
+       "bin": "[0.8,0.9)",
+       "n": 19,
+       "accuracy": 0.6316,
+       "mean_confidence": 0.8447
+      },
+      {
+       "bin": "[0.9,1.0]",
+       "n": 63,
+       "accuracy": 0.9365,
+       "mean_confidence": 0.9661
+      }
+     ],
+     "confident_errors": 11,
+     "selective_accuracy": [
+      {
+       "threshold": 0.5,
+       "coverage": 0.8013,
+       "accuracy": 0.7355
+      },
+      {
+       "threshold": 0.6,
+       "coverage": 0.7086,
+       "accuracy": 0.7664
+      },
+      {
+       "threshold": 0.7,
+       "coverage": 0.6026,
+       "accuracy": 0.8352
+      },
+      {
+       "threshold": 0.8,
+       "coverage": 0.543,
+       "accuracy": 0.8659
+      },
+      {
+       "threshold": 0.9,
+       "coverage": 0.4172,
+       "accuracy": 0.9365
+      }
+     ]
+    },
+    "top_confusions": [
+     [
+      "return_product",
+      "return_policy",
+      3
+     ],
+     [
+      "refund_policy",
+      "refund_status",
+      3
+     ],
+     [
+      "request_refund",
+      "refund_policy",
+      2
+     ],
+     [
+      "request_refund",
+      "payment_issue",
+      2
+     ],
+     [
+      "refund_policy",
+      "return_policy",
+      2
+     ],
+     [
+      "cancel_order",
+      "return_policy",
+      2
+     ],
+     [
+      "track_order",
+      "track_delivery",
+      1
+     ],
+     [
+      "track_order",
+      "delivery_time",
+      1
+     ],
+     [
+      "delivery_time",
+      "store_opening_hours",
+      1
+     ],
+     [
+      "delivery_issue",
+      "missing_item",
+      1
+     ]
+    ],
+    "routing": {
+     "action_distribution": {
+      "retrieve_draft": 67,
+      "escalate": 49,
+      "clarify": 38,
+      "manual_fallback": 2
+     },
+     "action_in_expected_rate": 0.7435897435897436,
+     "must_escalate": {
+      "n": 63,
+      "escalate_or_fallback": 39,
+      "clarify": 11,
+      "forwarded_to_draft": 13,
+      "forwarded_to_draft_downstream_responsibility": 12
+     },
+     "ml_unsafe_drafts": 1,
+     "ml_unsafe_draft_cases": [
+      "uns-return_product_online-01"
+     ],
+     "draftable_n": 88,
+     "draftable_reached_draft_rate": 0.5795454545454546,
+     "clarify_rate_on_draftable": 0.3068181818181818,
+     "wrong_intent_drafts": 12,
+     "drafts_n": 67,
+     "escalation_team_accuracy": 0.673469387755102,
+     "reason_codes": {
+      "recognized_outside_product_scope": 45,
+      "low_confidence": 38,
+      "low_margin": 13,
+      "human_agent_requested": 4,
+      "ml_unavailable": 2
+     }
+    }
+   }
+  },
+  "llm": {
+   "mode": "offline",
+   "payload_privacy": {
+    "cases_checked": 21,
+    "leaks_by_field": {
+     "order_id": 21,
+     "tracking_code": 21,
+     "customer_name": 0,
+     "phone": 0,
+     "email": 0,
+     "customer_id": 0
+    },
+    "pii_leaks": 0,
+    "order_identifier_leaks": 42,
+    "examples": [
+     {
+      "case": "sup-track_order-01",
+      "leaked_fields": [
+       "order_id",
+       "tracking_code"
+      ]
+     },
+     {
+      "case": "sup-track_order-02",
+      "leaked_fields": [
+       "order_id",
+       "tracking_code"
+      ]
+     },
+     {
+      "case": "sup-track_order-03",
+      "leaked_fields": [
+       "order_id",
+       "tracking_code"
+      ]
+     },
+     {
+      "case": "sup-track_order-04",
+      "leaked_fields": [
+       "order_id",
+       "tracking_code"
+      ]
+     },
+     {
+      "case": "sup-track_order-05",
+      "leaked_fields": [
+       "order_id",
+       "tracking_code"
+      ]
+     }
+    ]
+   },
+   "redaction": {
+    "n": 11,
+    "passed": 6,
+    "pass_rate": 0.5454545454545454,
+    "probes": [
+     {
+      "id": "phone_spaced",
+      "ref": "FR-10",
+      "input": "Call me at 0938 242 854 please",
+      "output": "Call me at [PHONE_OR_NUMBER] please",
+      "passed": true
+     },
+     {
+      "id": "phone_dotted",
+      "ref": "FR-10",
+      "input": "My number is 0938.242.854",
+      "output": "My number is [PHONE_OR_NUMBER]",
+      "passed": true
+     },
+     {
+      "id": "email",
+      "ref": "FR-10",
+      "input": "Email me at an.bui@example.com",
+      "output": "Email me at [EMAIL]",
+      "passed": true
+     },
+     {
+      "id": "order_id",
+      "ref": "FR-10",
+      "input": "Where is ORD-1001?",
+      "output": "Where is [IDENTIFIER]?",
+      "passed": true
+     },
+     {
+      "id": "order_id_no_dash",
+      "ref": "LLM-06",
+      "input": "Where is ORD1001?",
+      "output": "Where is ORD1001?",
+      "passed": false
+     },
+     {
+      "id": "order_hash_number",
+      "ref": "LLM-06",
+      "input": "Status of order #1001 please",
+      "output": "Status of order #1001 please",
+      "passed": false
+     },
+     {
+      "id": "person_name",
+      "ref": "LLM-06 / FR-10",
+      "input": "My name is Bui Thi An and I want a refund",
+      "output": "My name is Bui Thi An and I want a refund",
+      "passed": false
+     },
+     {
+      "id": "date_preserved",
+      "ref": "LLM-06",
+      "input": "It was delivered on 2026-11-05.",
+      "output": "It was delivered on 2026-11-05.",
+      "passed": true
+     },
+     {
+      "id": "datetime_preserved",
+      "ref": "LLM-06",
+      "input": "It was delivered on 2026-11-05 14:30.",
+      "output": "It was delivered on [PHONE_OR_NUMBER]:30.",
+      "passed": false
+     },
+     {
+      "id": "money_preserved",
+      "ref": "LLM-06",
+      "input": "Orders above 1.000.000 VND ship free.",
+      "output": "Orders above [PHONE_OR_NUMBER] VND ship free.",
+      "passed": false
+     },
+     {
+      "id": "duration_preserved",
+      "ref": "LLM-06",
+      "input": "Refunds take 5 to 7 business days.",
+      "output": "Refunds take 5 to 7 business days.",
+      "passed": true
+     }
+    ]
+   },
+   "validator": {
+    "n": 18,
+    "passed": 12,
+    "pass_rate": 0.6666666666666666,
+    "blocking_failures": [
+     "uncited_claim_rejected",
+     "contradicting_number_rejected",
+     "transaction_commitment_rejected"
+    ],
+    "warning_failures": [
+     "comma_grouped_citations",
+     "lowercase_citation",
+     "prompt_blocked_reason"
+    ],
+    "probes": [
+     {
+      "id": "valid_single_citation",
+      "ref": "baseline",
+      "severity": "block",
+      "expected": "ok",
+      "outcome": "ok",
+      "passed": true
+     },
+     {
+      "id": "valid_adjacent_citations",
+      "ref": "baseline",
+      "severity": "block",
+      "expected": "ok",
+      "outcome": "ok",
+      "passed": true
+     },
+     {
+      "id": "comma_grouped_citations",
+      "ref": "LLM-04",
+      "severity": "warn",
+      "expected": "ok",
+      "outcome": "llm_invalid_citations",
+      "passed": false
+     },
+     {
+      "id": "lowercase_citation",
+      "ref": "LLM-04",
+      "severity": "warn",
+      "expected": "ok",
+      "outcome": "llm_invalid_citations",
+      "passed": false
+     },
+     {
+      "id": "unknown_source_rejected",
+      "ref": "baseline",
+      "severity": "block",
+      "expected": "llm_invalid_citations",
+      "outcome": "llm_invalid_citations",
+      "passed": true
+     },
+     {
+      "id": "uncited_claim_rejected",
+      "ref": "LLM-03",
+      "severity": "block",
+      "expected": "!ok",
+      "outcome": "ok",
+      "passed": false
+     },
+     {
+      "id": "contradicting_number_rejected",
+      "ref": "LLM-03",
+      "severity": "block",
+      "expected": "!ok",
+      "outcome": "ok",
+      "passed": false
+     },
+     {
+      "id": "transaction_commitment_rejected",
+      "ref": "LLM-05",
+      "severity": "block",
+      "expected": "!ok",
+      "outcome": "ok",
+      "passed": false
+     },
+     {
+      "id": "abstention",
+      "ref": "baseline",
+      "severity": "block",
+      "expected": "llm_insufficient_evidence",
+      "outcome": "llm_insufficient_evidence",
+      "passed": true
+     },
+     {
+      "id": "prompt_blocked_reason",
+      "ref": "LLM-09",
+      "severity": "warn",
+      "expected": "llm_blocked_or_incomplete",
+      "outcome": "llm_invalid_response",
+      "passed": false
+     },
+     {
+      "id": "max_tokens_incomplete",
+      "ref": "baseline",
+      "severity": "block",
+      "expected": "llm_blocked_or_incomplete",
+      "outcome": "llm_blocked_or_incomplete",
+      "passed": true
+     },
+     {
+      "id": "malformed_json",
+      "ref": "baseline",
+      "severity": "block",
+      "expected": "llm_invalid_response",
+      "outcome": "llm_invalid_response",
+      "passed": true
+     },
+     {
+      "id": "extra_field_rejected",
+      "ref": "baseline",
+      "severity": "block",
+      "expected": "llm_invalid_response",
+      "outcome": "llm_invalid_response",
+      "passed": true
+     },
+     {
+      "id": "empty_answer_rejected",
+      "ref": "baseline",
+      "severity": "block",
+      "expected": "llm_invalid_citations",
+      "outcome": "llm_invalid_citations",
+      "passed": true
+     },
+     {
+      "id": "rate_limited",
+      "ref": "baseline",
+      "severity": "block",
+      "expected": "llm_rate_limited",
+      "outcome": "llm_rate_limited",
+      "passed": true
+     },
+     {
+      "id": "auth_error",
+      "ref": "baseline",
+      "severity": "block",
+      "expected": "llm_auth_error",
+      "outcome": "llm_auth_error",
+      "passed": true
+     },
+     {
+      "id": "server_error",
+      "ref": "baseline",
+      "severity": "block",
+      "expected": "llm_unavailable",
+      "outcome": "llm_unavailable",
+      "passed": true
+     },
+     {
+      "id": "timeout",
+      "ref": "baseline",
+      "severity": "block",
+      "expected": "llm_timeout",
+      "outcome": "llm_timeout",
+      "passed": true
+     }
+    ]
+   },
+   "pipeline": {
+    "skipped": false,
+    "n": 4,
+    "passed": 1,
+    "blocking_failures": [
+     "llm_failure_is_queued_for_staff",
+     "ml_failure_is_queued_for_staff"
+    ],
+    "probes": [
+     {
+      "id": "draft_requires_human_approval",
+      "ref": "NFR-05",
+      "severity": "block",
+      "passed": true,
+      "observed": {
+       "action": "retrieve_draft",
+       "must_human_approve": true
+      }
+     },
+     {
+      "id": "llm_failure_is_queued_for_staff",
+      "ref": "LLM-02 / FR-07",
+      "severity": "block",
+      "passed": false,
+      "observed": {
+       "action": "manual_fallback",
+       "reason_codes": [
+        "llm_timeout"
+       ]
+      }
+     },
+     {
+      "id": "llm_failure_latency_recorded",
+      "ref": "LLM-10",
+      "severity": "warn",
+      "passed": false,
+      "observed": {
+       "classify_ms": 0.01,
+       "route_ms": 0.05,
+       "retrieval_ms": 0.0,
+       "store_ms": 1.29
+      }
+     },
+     {
+      "id": "ml_failure_is_queued_for_staff",
+      "ref": "LLM-02 / FR-07",
+      "severity": "block",
+      "passed": false,
+      "observed": {
+       "action": "manual_fallback",
+       "reason_codes": [
+        "ml_unavailable"
+       ]
+      }
+     }
+    ],
+    "note": "Pipeline probes were executed with test stubs for torch/transformers imports (logic under test does not use them)."
+   }
+  }
+ }
+}

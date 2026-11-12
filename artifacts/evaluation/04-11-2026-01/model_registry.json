@@ -1,0 +1,96 @@
+{
+  "linear_svm": {
+    "model_id": "linear_svm",
+    "candidate_id": "linear_svm__C=1.0",
+    "type": "baseline",
+    "origin": "local_baseline_training",
+    "provenance_status": "verified",
+    "eligible_for_independent_ranking": true,
+    "preprocessing": "TF-IDF (unigram + bigram, max_features=10000, sublinear_tf=True)",
+    "device": "cpu",
+    "training_samples": 37911,
+    "cv_protocol": "10-fold cross-validation",
+    "artifact_hashes": {
+      "bundle": "BB20C4CEAA8C44D4D58C208BF24FD8DDFB72E41209C4E3114BC973B8FBE924F0"
+    }
+  },
+  "logistic_regression": {
+    "model_id": "logistic_regression",
+    "candidate_id": "logistic_regression__C=10.0",
+    "type": "baseline",
+    "origin": "local_baseline_training",
+    "provenance_status": "verified",
+    "eligible_for_independent_ranking": true,
+    "preprocessing": "TF-IDF (unigram + bigram, max_features=10000, sublinear_tf=True)",
+    "device": "cpu",
+    "training_samples": 37911,
+    "cv_protocol": "10-fold cross-validation",
+    "artifact_hashes": {
+      "bundle": "23152C26BD402F772DFB4CDE64EFD8D838194C0E5FE69818EFCEA169512CE207"
+    }
+  },
+  "multinomial_nb": {
+    "model_id": "multinomial_nb",
+    "candidate_id": "multinomial_nb__alpha=0.1",
+    "type": "baseline",
+    "origin": "local_baseline_training",
+    "provenance_status": "verified",
+    "eligible_for_independent_ranking": true,
+    "preprocessing": "TF-IDF (unigram + bigram, max_features=10000, sublinear_tf=True)",
+    "device": "cpu",
+    "training_samples": 37911,
+    "cv_protocol": "10-fold cross-validation",
+    "artifact_hashes": {
+      "bundle": "62280C15A7CFE182E6A53A512159E3ABAFA3744144C4774E3BB99D52357CB3E5"
+    }
+  },
+  "supportiq_distilbert": {
+    "model_id": "supportiq_distilbert",
+    "candidate_id": "supportiq_distilbert",
+    "type": "transformer",
+    "origin": "local_finetuned",
+    "base_model": "distilbert/distilbert-base-uncased",
+    "provenance_status": "verified",
+    "eligible_for_independent_ranking": true,
+    "membership_evidence": {
+      "evidence_path": "F:\\Năm 3\\SD\\project\\SupportIQ\\artifacts\\models\\trained\\distilbert-supportiq\\train_sample_ids.json",
+      "checksum": "AEA5D14F09C8BBAB63FBAFE2FAB37C5060705C25798598F3D232F7DC21CE9220",
+      "verified": true,
+      "training_samples_verified": 37911,
+      "test_overlap_samples": 0
+    },
+    "notes": "Verified independent test isolation",
+    "preprocessing": "HF DistilBertTokenizer (truncation max_length=64)",
+    "device": "cpu",
+    "training_samples": 9200,
+    "cv_protocol": "none",
+    "artifact_hashes": {
+      "config": "6FA1FA9CC6A94063A977B0ADAF2C9C3B296CF296D4AD9DCC6F2C52CA3BAC9CB2",
+      "tokenizer_config": "A0CC1FAF9647CB9748CB7E94443DDED7C5EF0C9428FB43ADDE9A723955D8250A",
+      "tokenizer": "5F218E0EA9EAA9F154815CC067351FB941BEA26DA81BFD12AF3DED3CC66FA3FF",
+      "weights": "DC7AF8CFFB19FE7711ED5A5D0137FFFF3D7D1A1F43BAD5A35EDFF8C8DE4C1302",
+      "training_report": "9609B6604C0C137365DB927F0EB149BDD4AF54FDF3CA22AA1ADB235BF22A3972"
+    }
+  },
+  "supportpilot_distilbert": {
+    "model_id": "supportpilot_distilbert",
+    "candidate_id": "supportpilot_distilbert",
+    "type": "transformer",
+    "origin": "external_finetuned",
+    "base_model": "abdulmuinnn/supportpilot-distilbert",
+    "provenance_status": "unverified",
+    "eligible_for_independent_ranking": false,
+    "membership_evidence": null,
+    "notes": "Unverified training split overlap risk; score is descriptive only",
+    "preprocessing": "HF DistilBertTokenizer (truncation max_length=64)",
+    "device": "cpu",
+    "training_samples": "unknown",
+    "cv_protocol": "none",
+    "artifact_hashes": {
+      "config": "6FA1FA9CC6A94063A977B0ADAF2C9C3B296CF296D4AD9DCC6F2C52CA3BAC9CB2",
+      "tokenizer_config": "564D3C87EC68100573B0CF064D0BC91A46691F7356EC82FFA416C66DDAEB9395",
+      "tokenizer": "8406160B692103EB0AF606FFD0D7963678491AA8719A131FD165927E64EB5416",
+      "weights": "66DAF66AB6C5B55CC7D2DCCF6B1DC69EF5F5512B513E4D77AB2476B15DC198DC"
+    }
+  }
+}
