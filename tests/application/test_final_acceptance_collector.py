@@ -16,6 +16,7 @@ Verifies:
 - Exclusive run directory creation (exist_ok=False)
 """
 
+import hashlib
 import json
 from pathlib import Path
 import pytest
@@ -343,6 +344,84 @@ def test_collector_error_resilience(tmp_path):
         assert r["is_success"] is False
 
 
+def test_collector_get_encoder_positive_real_encoder(monkeypatch):
+    """Positive test: _get_encoder accepts faithful real PolicyEncoder with populated model/tokenizer and mock_mode=False."""
+    class FaithfulRealEncoder:
+        def __init__(self):
+            self.mock_mode = False
+            self.device = "cpu"
+            self.model = object()  # populated model
+            self.tokenizer = object()  # populated tokenizer
+            # Deliberately NO self.encoder attribute, faithfully matching PolicyEncoder
+
+    monkeypatch.setattr(
+        "apps.core_backend.retrieval.adapter.PolicyEncoder",
+        lambda *args, **kwargs: FaithfulRealEncoder(),
+    )
+
+    # 1. In live mode: faithfully accepts real encoder without fallback
+    collector_live = AcceptanceEvidenceCollector(mode="live", max_cases=1)
+    enc_live = collector_live._get_encoder()
+    assert isinstance(enc_live, FaithfulRealEncoder)
+    assert not hasattr(enc_live, "encoder")
+    assert enc_live.mock_mode is False
+    assert enc_live.model is not None
+    assert enc_live.tokenizer is not None
+    assert collector_live.encoder_provenance == "real_bge_policy_encoder"
+    assert collector_live.encoder_error is None
+
+    # 2. In mock mode: also uses real encoder when successfully initialized
+    collector_mock = AcceptanceEvidenceCollector(mode="mock", max_cases=1)
+    enc_mock = collector_mock._get_encoder()
+    assert isinstance(enc_mock, FaithfulRealEncoder)
+    assert collector_mock.encoder_provenance == "real_bge_policy_encoder"
+    assert collector_mock.encoder_error is None
+
+
+def test_collector_get_encoder_negative_mock_mode_rejected_in_live(monkeypatch):
+    """Negative failure test: _get_encoder rejects PolicyEncoder with mock_mode=True in live mode."""
+    class MockModeEncoder:
+        def __init__(self):
+            self.mock_mode = True
+            self.device = "cpu"
+            self.model = object()
+            self.tokenizer = object()
+
+    monkeypatch.setattr(
+        "apps.core_backend.retrieval.adapter.PolicyEncoder",
+        lambda *args, **kwargs: MockModeEncoder(),
+    )
+
+    collector = AcceptanceEvidenceCollector(mode="live", max_cases=1)
+    with pytest.raises(
+        RuntimeError, match="PolicyEncoder initialized in mock_mode=True, real encoder required"
+    ):
+        collector._get_encoder()
+    assert collector.encoder_provenance == "failed_real_encoder_fail_closed"
+
+
+def test_collector_get_encoder_negative_unpopulated_model_rejected_in_live(monkeypatch):
+    """Negative failure test: _get_encoder rejects PolicyEncoder with unpopulated model or tokenizer in live mode."""
+    class UnpopulatedEncoder:
+        def __init__(self):
+            self.mock_mode = False
+            self.device = "cpu"
+            self.model = None  # Unpopulated model
+            self.tokenizer = object()
+
+    monkeypatch.setattr(
+        "apps.core_backend.retrieval.adapter.PolicyEncoder",
+        lambda *args, **kwargs: UnpopulatedEncoder(),
+    )
+
+    collector = AcceptanceEvidenceCollector(mode="live", max_cases=1)
+    with pytest.raises(
+        RuntimeError, match="PolicyEncoder initialized with None model or tokenizer"
+    ):
+        collector._get_encoder()
+    assert collector.encoder_provenance == "failed_real_encoder_fail_closed"
+
+
 def test_collector_live_encoder_fails_closed_without_mock_fallback(monkeypatch):
     """Live mode strictly fails closed when real encoder fails; never falls back to MockPolicyEncoder."""
     collector = AcceptanceEvidenceCollector(mode="live", max_cases=1)
@@ -360,40 +439,72 @@ def test_collector_live_encoder_fails_closed_without_mock_fallback(monkeypatch):
 
 
 def test_collector_atomic_kb_release_pair_matching(tmp_path):
-    """Constructor accepts both declared LF and CRLF pairs atomically, and rejects mixed pairs."""
+    """Constructor accepts both declared normalized LF and CRLF pairs atomically, and rejects mixed pairs."""
     manifest = json.loads((REPO_ROOT / "data/benchmarks/final_acceptance/suite_manifest.json").read_text(encoding="utf-8"))
     prov = manifest["provenance"]["kb_reconciliation"]
 
-    # 1. Worker LF pair is recognized
-    collector_lf = AcceptanceEvidenceCollector(mode="mock", max_cases=1)
+    # Read raw bytes of disk files to construct real normalized LF and CRLF files
+    kb_raw = (REPO_ROOT / "data/knowledge/approved_kb.v2.json").read_bytes()
+    rel_raw = (REPO_ROOT / "apps/ai_service/kb-release.json").read_bytes()
+
+    kb_lf_bytes = kb_raw.replace(b"\r\n", b"\n")
+    kb_crlf_bytes = kb_lf_bytes.replace(b"\n", b"\r\n")
+
+    rel_lf_bytes = rel_raw.replace(b"\r\n", b"\n")
+    rel_crlf_bytes = rel_lf_bytes.replace(b"\n", b"\r\n")
+
+    # Verify the normalized bytes match manifest declared hashes
+    assert hashlib.sha256(kb_lf_bytes).hexdigest() == prov["worker_local_worktree"]["local_kb_source_sha256"]
+    assert hashlib.sha256(rel_lf_bytes).hexdigest() == prov["worker_local_worktree"]["local_kb_release_sha256"]
+    assert hashlib.sha256(kb_crlf_bytes).hexdigest() == prov["deployed_root_serving_gateway"]["kb_source_sha256"]
+    assert hashlib.sha256(rel_crlf_bytes).hexdigest() == prov["deployed_root_serving_gateway"]["kb_release_sha256"]
+
+    # Create explicit temp files for LF pair
+    kb_lf_path = tmp_path / "kb_lf.json"
+    kb_lf_path.write_bytes(kb_lf_bytes)
+    rel_lf_path = tmp_path / "rel_lf.json"
+    rel_lf_path.write_bytes(rel_lf_bytes)
+
+    # Create explicit temp files for CRLF pair
+    kb_crlf_path = tmp_path / "kb_crlf.json"
+    kb_crlf_path.write_bytes(kb_crlf_bytes)
+    rel_crlf_path = tmp_path / "rel_crlf.json"
+    rel_crlf_path.write_bytes(rel_crlf_bytes)
+
+    # 1. Test worker LF pair is recognized
+    collector_lf = AcceptanceEvidenceCollector(
+        mode="mock",
+        max_cases=1,
+        active_kb_path=kb_lf_path,
+        release_path=rel_lf_path,
+    )
     assert collector_lf.matched_kb_provenance == "worker_local_worktree"
     assert collector_lf.matched_line_ending == "LF"
 
-    # 2. Deployed root CRLF pair is recognized
-    # Create mock files matching root CRLF hashes
-    root_kb_hash = prov["deployed_root_serving_gateway"]["kb_source_sha256"]
-    root_rel_hash = prov["deployed_root_serving_gateway"]["kb_release_sha256"]
+    # 2. Test deployed root CRLF pair is recognized
+    collector_crlf = AcceptanceEvidenceCollector(
+        mode="mock",
+        max_cases=1,
+        active_kb_path=kb_crlf_path,
+        release_path=rel_crlf_path,
+    )
+    assert collector_crlf.matched_kb_provenance == "deployed_root_serving_gateway"
+    assert collector_crlf.matched_line_ending == "CRLF"
 
-    # Test mixed pair rejection: worker LF KB with root CRLF release
-    tampered_manifest = dict(manifest)
-    tampered_manifest["provenance"] = dict(manifest["provenance"])
-    tampered_manifest["provenance"]["kb_reconciliation"] = {
-        "worker_local_worktree": {
-            "local_kb_source_sha256": "bad_hash_1",
-            "local_kb_release_sha256": "bad_hash_2",
-            "line_ending": "LF",
-        },
-        "deployed_root_serving_gateway": {
-            "kb_source_sha256": "bad_hash_3",
-            "kb_release_sha256": "bad_hash_4",
-            "line_ending": "CRLF",
-        },
-    }
-    bad_manifest_path = tmp_path / "mixed_pair_manifest.json"
-    bad_manifest_path.write_text(json.dumps(tampered_manifest), encoding="utf-8")
-
+    # 3. Test actual mixed pair rejection: worker LF KB with deployed root CRLF release
     with pytest.raises(ValueError, match="Unrecognized or mixed KB and release hash pair"):
         AcceptanceEvidenceCollector(
             mode="mock",
-            manifest_path=bad_manifest_path,
+            max_cases=1,
+            active_kb_path=kb_lf_path,
+            release_path=rel_crlf_path,
+        )
+
+    # 4. Test actual mixed pair rejection: deployed root CRLF KB with worker LF release
+    with pytest.raises(ValueError, match="Unrecognized or mixed KB and release hash pair"):
+        AcceptanceEvidenceCollector(
+            mode="mock",
+            max_cases=1,
+            active_kb_path=kb_crlf_path,
+            release_path=rel_lf_path,
         )

@@ -620,8 +620,10 @@ class AcceptanceEvidenceCollector:
                 enc = PolicyEncoder()
                 if getattr(enc, "encoder_error", None):
                     raise RuntimeError(f"PolicyEncoder error: {enc.encoder_error}")
-                if getattr(enc, "encoder", None) is None:
-                    raise RuntimeError("PolicyEncoder initialized with None encoder")
+                if getattr(enc, "mock_mode", False) is True:
+                    raise RuntimeError("PolicyEncoder initialized in mock_mode=True, real encoder required")
+                if getattr(enc, "model", None) is None or getattr(enc, "tokenizer", None) is None:
+                    raise RuntimeError("PolicyEncoder initialized with None model or tokenizer")
                 self._shared_encoder = enc
                 self.encoder_provenance = "real_bge_policy_encoder"
             except Exception as e:

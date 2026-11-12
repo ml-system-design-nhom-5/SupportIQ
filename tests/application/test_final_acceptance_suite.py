@@ -218,8 +218,32 @@ def test_manifest_sha256_checksums_and_reconciliation(suite_manifest):
     assert root_served["combined_kb_version_hash"] == "32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
 
     local_worker = reconcile["worker_local_worktree"]
-    assert local_worker["local_kb_source_sha256"] == compute_sha256(REPO_ROOT / "data/knowledge/approved_kb.v2.json")
-    assert local_worker["local_kb_release_sha256"] == compute_sha256(REPO_ROOT / "apps/ai_service/kb-release.json")
+    assert local_worker["local_kb_source_sha256"] == "aaa924c4b48dcd53a14269045b278b66f6e5e8ae9d1b614cd59b757102b78594"
+    assert local_worker["local_kb_release_sha256"] == "33cf05b50c25384fbb208cd0c0c5cae71991d29a0f754cb1b20a1d6d7285cdaa"
+
+    # Verify that disk files match one of the declared valid pairs (worker LF or root CRLF)
+    disk_kb_hash = compute_sha256(REPO_ROOT / "data/knowledge/approved_kb.v2.json")
+    disk_rel_hash = compute_sha256(REPO_ROOT / "apps/ai_service/kb-release.json")
+    disk_pair = (disk_kb_hash, disk_rel_hash)
+    valid_pairs = {
+        (local_worker["local_kb_source_sha256"], local_worker["local_kb_release_sha256"]),
+        (root_served["kb_source_sha256"], root_served["kb_release_sha256"]),
+    }
+    assert disk_pair in valid_pairs, f"Disk files ({disk_pair}) must match either declared LF or CRLF pair"
+
+    # Explicitly test real normalized LF and CRLF byte hashes
+    kb_raw = (REPO_ROOT / "data/knowledge/approved_kb.v2.json").read_bytes()
+    rel_raw = (REPO_ROOT / "apps/ai_service/kb-release.json").read_bytes()
+
+    kb_norm_lf = kb_raw.replace(b"\r\n", b"\n")
+    kb_norm_crlf = kb_norm_lf.replace(b"\n", b"\r\n")
+    assert hashlib.sha256(kb_norm_lf).hexdigest() == local_worker["local_kb_source_sha256"]
+    assert hashlib.sha256(kb_norm_crlf).hexdigest() == root_served["kb_source_sha256"]
+
+    rel_norm_lf = rel_raw.replace(b"\r\n", b"\n")
+    rel_norm_crlf = rel_norm_lf.replace(b"\n", b"\r\n")
+    assert hashlib.sha256(rel_norm_lf).hexdigest() == local_worker["local_kb_release_sha256"]
+    assert hashlib.sha256(rel_norm_crlf).hexdigest() == root_served["kb_release_sha256"]
 
 
 def test_paired_agent_tasks_structure_and_order(paired_tasks, suite_cases):
