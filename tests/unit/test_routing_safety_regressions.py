@@ -467,3 +467,70 @@ def test_llm_insufficient_evidence_escalates_and_preserves_billable_usage():
     assert result['status'] == 'escalation_recommended'
     assert 'insufficient_evidence' in result['reason_codes']
     assert result['llm_usage']['total_tokens'] == 115
+
+
+def test_final_case_13_exact_unauthorized_fraud_escalation():
+    """Verify final-case-13 pattern escalates immediately with requires_authority and 0 LLM calls."""
+    llm = SpyLLM(should_fail=True)
+    engine = make_engine(predictor=MockPredictor(confidence=0.79, intent="payment_issue"), llm=llm)
+    msg = "Someone made an unauthorized transaction on my credit card for order #TK-889123; this is fraudulent and I demand an immediate reversal and chargeback!"
+    res = engine.analyse({"message": msg, "as_of": "2026-06-15T10:00:00Z"})
+    assert res["routing"]["recommendation"] == "escalate"
+    assert "requires_authority" in res["routing"]["reason_codes"]
+    draft_res = engine.draft({"message": msg, "as_of": "2026-06-15T10:00:00Z"})
+    assert draft_res["status"] == "escalation_recommended"
+    assert "requires_authority" in draft_res["reason_codes"]
+    assert not llm.calls
+
+
+def test_final_case_14_exact_manager_exception_escalation_overrides_low_confidence():
+    """Verify final-case-14 pattern escalates with requires_authority despite low confidence."""
+    llm = SpyLLM(should_fail=True)
+    engine = make_engine(predictor=MockPredictor(confidence=0.446, intent="payment_issue"), llm=llm)
+    msg = "I bought an expensive camera 65 days ago, used it on vacation, broke the lens seal, and insist on a manager exception full refund right now."
+    res = engine.analyse({"message": msg, "as_of": "2026-06-15T10:00:00Z"})
+    assert res["routing"]["recommendation"] == "escalate"
+    assert "requires_authority" in res["routing"]["reason_codes"]
+    draft_res = engine.draft({"message": msg, "as_of": "2026-06-15T10:00:00Z"})
+    assert draft_res["status"] == "escalation_recommended"
+    assert "requires_authority" in draft_res["reason_codes"]
+    assert not llm.calls
+
+
+def test_frozen_11_supplement_cases_all_escalate_offline():
+    """Verify all 11 frozen unanswerable supplement cases route to escalate with insufficient_evidence."""
+    from pathlib import Path
+    import json
+    supplement_path = Path(__file__).resolve().parents[2] / "data/benchmarks/final_acceptance_supplement/cases.jsonl"
+    if not supplement_path.exists():
+        pytest.skip("Supplement benchmark not found")
+    with open(supplement_path, "r", encoding="utf-8") as f:
+        cases = [json.loads(line) for line in f if line.strip()]
+    assert len(cases) == 11
+    llm = SpyLLM(should_fail=True)
+    engine = make_engine(llm=llm)
+    for c in cases:
+        req = {"message": c["text"], "as_of": "2026-06-15T10:00:00Z"}
+        ans = engine.analyse(req)
+        assert ans["routing"]["recommendation"] == "escalate", f"Failed escalate on {c['id']}: {ans['routing']}"
+        assert "insufficient_evidence" in ans["routing"]["reason_codes"], f"Missing insufficient_evidence on {c['id']}"
+        draft_res = engine.draft(req)
+        assert draft_res["status"] == "escalation_recommended", f"Failed escalation_recommended on {c['id']}"
+        assert not llm.calls, f"SpyLLM called unexpectedly on {c['id']}"
+
+
+def test_benign_qualifiers_and_courier_pickup_remain_draftable():
+    """Verify positive non-regression: Tiki courier pickup, currency numbers, and standard return queries remain draftable."""
+    engine = make_engine(predictor=MockPredictor(confidence=0.90, intent="return_policy"))
+    benign_queries = [
+        "Does Tiki provide free courier pickup for returns?",
+        "How does free courier pickup work when I request a return on Tiki?",
+        "Can I return an item that cost 2024 VND?",
+        "What is the standard return window for fashion items?",
+        "Can I return a fashion item within 30 days if it was sold by Tiki Trading?",
+    ]
+    for q in benign_queries:
+        res = engine.analyse({"message": q, "as_of": "2026-06-15T10:00:00Z"})
+        assert res["routing"]["recommendation"] == "draft", f"Unexpected non-draft for benign query: '{q}': {res['routing']}"
+        assert "insufficient_evidence" not in res["routing"]["reason_codes"]
+        assert "requires_authority" not in res["routing"]["reason_codes"]

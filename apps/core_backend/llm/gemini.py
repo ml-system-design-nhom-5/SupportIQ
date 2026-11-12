@@ -21,12 +21,18 @@ class LLMError(Exception):
         metadata: dict[str, Any] | None = None,
         latency_seconds: float | None = None,
         attempts: list[dict[str, Any]] | None = None,
+        stage: str | None = None,
+        http_status: int | None = None,
+        exception_category: str | None = None,
     ):
         self.code = code
         self.usage = usage or {}
         self.metadata = metadata or {}
         self.latency_seconds = latency_seconds
         self.attempts = attempts or []
+        self.stage = stage
+        self.http_status = http_status
+        self.exception_category = exception_category
         super().__init__(code)
 
 
@@ -239,14 +245,62 @@ class GeminiDraftClient:
                 self._http = httpx.Client(timeout=timeout, follow_redirects=False)
             response = self._http.post(url, headers={"x-goog-api-key": self._api_key}, json=payload,
                                        timeout=timeout)
-        except httpx.TimeoutException:
+        except httpx.ConnectTimeout:
             latency_sec = round(time.perf_counter() - started, 4)
-            att = [{"attempt_index": 0, "status": "llm_timeout", "latency_seconds": latency_sec, "usage": {}, "metadata": metadata}]
-            raise LLMError("llm_timeout", metadata=metadata, latency_seconds=latency_sec, attempts=att) from None
+            att = [{
+                "attempt_index": 0,
+                "status": "llm_timeout",
+                "stage": "connect",
+                "http_status": None,
+                "exception_category": "connect_timeout",
+                "latency_seconds": latency_sec,
+                "usage": {},
+                "metadata": metadata,
+            }]
+            raise LLMError("llm_timeout", metadata=metadata, latency_seconds=latency_sec, attempts=att,
+                           stage="connect", http_status=None, exception_category="connect_timeout") from None
+        except (httpx.ReadTimeout, httpx.WriteTimeout, httpx.PoolTimeout, httpx.TimeoutException):
+            latency_sec = round(time.perf_counter() - started, 4)
+            att = [{
+                "attempt_index": 0,
+                "status": "llm_timeout",
+                "stage": "transport",
+                "http_status": None,
+                "exception_category": "timeout",
+                "latency_seconds": latency_sec,
+                "usage": {},
+                "metadata": metadata,
+            }]
+            raise LLMError("llm_timeout", metadata=metadata, latency_seconds=latency_sec, attempts=att,
+                           stage="transport", http_status=None, exception_category="timeout") from None
+        except (httpx.ConnectError, httpx.NetworkError):
+            latency_sec = round(time.perf_counter() - started, 4)
+            att = [{
+                "attempt_index": 0,
+                "status": "llm_unavailable",
+                "stage": "connect",
+                "http_status": None,
+                "exception_category": "network_error",
+                "latency_seconds": latency_sec,
+                "usage": {},
+                "metadata": metadata,
+            }]
+            raise LLMError("llm_unavailable", metadata=metadata, latency_seconds=latency_sec, attempts=att,
+                           stage="connect", http_status=None, exception_category="network_error") from None
         except httpx.HTTPError:
             latency_sec = round(time.perf_counter() - started, 4)
-            att = [{"attempt_index": 0, "status": "llm_unavailable", "latency_seconds": latency_sec, "usage": {}, "metadata": metadata}]
-            raise LLMError("llm_unavailable", metadata=metadata, latency_seconds=latency_sec, attempts=att) from None
+            att = [{
+                "attempt_index": 0,
+                "status": "llm_unavailable",
+                "stage": "transport",
+                "http_status": None,
+                "exception_category": "http_error",
+                "latency_seconds": latency_sec,
+                "usage": {},
+                "metadata": metadata,
+            }]
+            raise LLMError("llm_unavailable", metadata=metadata, latency_seconds=latency_sec, attempts=att,
+                           stage="transport", http_status=None, exception_category="http_error") from None
 
         latency_sec = round(time.perf_counter() - started, 4)
         if response.status_code != 200:
@@ -266,14 +320,51 @@ class GeminiDraftClient:
             code = {400: "llm_request_rejected", 401: "llm_auth_error", 403: "llm_auth_error",
                     404: "llm_model_unavailable", 429: "llm_rate_limited"}.get(response.status_code, "llm_unavailable")
             # Never expose a provider response body, request headers, or exception repr.
-            att = [{"attempt_index": 0, "status": code, "latency_seconds": latency_sec, "usage": usage, "metadata": metadata}]
-            raise LLMError(code, usage=usage, metadata=metadata, latency_seconds=latency_sec, attempts=att)
+            att = [{
+                "attempt_index": 0,
+                "status": code,
+                "stage": "http_response",
+                "http_status": response.status_code,
+                "exception_category": "http_status",
+                "latency_seconds": latency_sec,
+                "usage": usage,
+                "metadata": metadata,
+            }]
+            raise LLMError(code, usage=usage, metadata=metadata, latency_seconds=latency_sec, attempts=att,
+                           stage="http_response", http_status=response.status_code, exception_category="http_status")
 
         usage = {}
         try:
-            data = response.json()
+            try:
+                data = response.json()
+            except Exception:
+                att = [{
+                    "attempt_index": 0,
+                    "status": "llm_invalid_response",
+                    "stage": "response_parse",
+                    "http_status": response.status_code,
+                    "exception_category": "json_decode_error",
+                    "latency_seconds": latency_sec,
+                    "usage": {},
+                    "metadata": metadata,
+                }]
+                raise LLMError("llm_invalid_response", usage={}, metadata=metadata, latency_seconds=latency_sec, attempts=att,
+                               stage="response_parse", http_status=response.status_code, exception_category="json_decode_error") from None
+
             if not isinstance(data, dict):
-                raise ValueError("Response payload is not a JSON object")
+                att = [{
+                    "attempt_index": 0,
+                    "status": "llm_invalid_response",
+                    "stage": "response_parse",
+                    "http_status": response.status_code,
+                    "exception_category": "invalid_payload_type",
+                    "latency_seconds": latency_sec,
+                    "usage": {},
+                    "metadata": metadata,
+                }]
+                raise LLMError("llm_invalid_response", usage={}, metadata=metadata, latency_seconds=latency_sec, attempts=att,
+                               stage="response_parse", http_status=response.status_code, exception_category="invalid_payload_type")
+
             if "modelVersion" in data:
                 metadata["model_version"] = data["modelVersion"]
             else:
@@ -286,23 +377,78 @@ class GeminiDraftClient:
                      and type(v) is int and v >= 0}
             candidate = data["candidates"][0]
             if (data.get("promptFeedback") or {}).get("blockReason") or candidate.get("finishReason") != "STOP":
-                att = [{"attempt_index": 0, "status": "llm_blocked_or_incomplete", "latency_seconds": latency_sec, "usage": usage, "metadata": metadata}]
-                raise LLMError("llm_blocked_or_incomplete", usage=usage, metadata=metadata, latency_seconds=latency_sec, attempts=att)
+                att = [{
+                    "attempt_index": 0,
+                    "status": "llm_blocked_or_incomplete",
+                    "stage": "generation_finish",
+                    "http_status": response.status_code,
+                    "exception_category": "blocked_or_incomplete",
+                    "latency_seconds": latency_sec,
+                    "usage": usage,
+                    "metadata": metadata,
+                }]
+                raise LLMError("llm_blocked_or_incomplete", usage=usage, metadata=metadata, latency_seconds=latency_sec, attempts=att,
+                               stage="generation_finish", http_status=response.status_code, exception_category="blocked_or_incomplete")
             text = "".join(p.get("text", "") for p in candidate["content"]["parts"] if not p.get("thought"))
-            draft = DraftOutput.model_validate_json(text)
+            try:
+                draft = DraftOutput.model_validate_json(text)
+            except Exception:
+                att = [{
+                    "attempt_index": 0,
+                    "status": "llm_invalid_response",
+                    "stage": "schema_validation",
+                    "http_status": response.status_code,
+                    "exception_category": "schema_validation_error",
+                    "latency_seconds": latency_sec,
+                    "usage": usage,
+                    "metadata": metadata,
+                }]
+                raise LLMError("llm_invalid_response", usage=usage, metadata=metadata, latency_seconds=latency_sec, attempts=att,
+                               stage="schema_validation", http_status=response.status_code, exception_category="schema_validation_error") from None
+
             if not draft.answerable:
-                att = [{"attempt_index": 0, "status": "llm_insufficient_evidence", "latency_seconds": latency_sec, "usage": usage, "metadata": metadata}]
-                raise LLMError("llm_insufficient_evidence", usage=usage, metadata=metadata, latency_seconds=latency_sec, attempts=att)
+                att = [{
+                    "attempt_index": 0,
+                    "status": "llm_insufficient_evidence",
+                    "stage": "answerability_check",
+                    "http_status": response.status_code,
+                    "exception_category": "unanswerable",
+                    "latency_seconds": latency_sec,
+                    "usage": usage,
+                    "metadata": metadata,
+                }]
+                raise LLMError("llm_insufficient_evidence", usage=usage, metadata=metadata, latency_seconds=latency_sec, attempts=att,
+                               stage="answerability_check", http_status=response.status_code, exception_category="unanswerable") from None
             known = {s["id"] for s in sources}
             inline = set(re.findall(r"\[(S\d+)\]", draft.answer))
             if not draft.answer.strip() or not draft.citations or set(draft.citations) != inline or not inline.issubset(known):
-                att = [{"attempt_index": 0, "status": "llm_invalid_citations", "latency_seconds": latency_sec, "usage": usage, "metadata": metadata}]
-                raise LLMError("llm_invalid_citations", usage=usage, metadata=metadata, latency_seconds=latency_sec, attempts=att)
+                att = [{
+                    "attempt_index": 0,
+                    "status": "llm_invalid_citations",
+                    "stage": "citation_validation",
+                    "http_status": response.status_code,
+                    "exception_category": "invalid_citations",
+                    "latency_seconds": latency_sec,
+                    "usage": usage,
+                    "metadata": metadata,
+                }]
+                raise LLMError("llm_invalid_citations", usage=usage, metadata=metadata, latency_seconds=latency_sec, attempts=att,
+                               stage="citation_validation", http_status=response.status_code, exception_category="invalid_citations") from None
         except LLMError:
             raise
         except (KeyError, IndexError, AttributeError, TypeError, ValueError, ValidationError):
-            att = [{"attempt_index": 0, "status": "llm_invalid_response", "latency_seconds": latency_sec, "usage": usage, "metadata": metadata}]
-            raise LLMError("llm_invalid_response", usage=usage, metadata=metadata, latency_seconds=latency_sec, attempts=att) from None
+            att = [{
+                "attempt_index": 0,
+                "status": "llm_invalid_response",
+                "stage": "response_parse",
+                "http_status": getattr(response, "status_code", None),
+                "exception_category": "parse_error",
+                "latency_seconds": latency_sec,
+                "usage": usage,
+                "metadata": metadata,
+            }]
+            raise LLMError("llm_invalid_response", usage=usage, metadata=metadata, latency_seconds=latency_sec, attempts=att,
+                           stage="response_parse", http_status=getattr(response, "status_code", None), exception_category="parse_error") from None
         return {"body": draft.answer.strip(), "provider": "google_ai_studio", "model": self.model,
                 "input_snapshot": snapshot, "is_clarification": draft.is_clarification,
                 "model_version": data.get("modelVersion", self.model), "prompt_version": PROMPT_VERSION,
@@ -314,6 +460,9 @@ class GeminiDraftClient:
                     {
                         "attempt_index": 0,
                         "status": "success",
+                        "stage": "complete",
+                        "http_status": response.status_code,
+                        "exception_category": None,
                         "latency_seconds": latency_sec,
                         "usage": usage,
                         "model": self.model,

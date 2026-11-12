@@ -587,6 +587,174 @@ class TestBudgetedDraftClientRetryAccounting:
         assert result["usage"]["promptTokenCount"] == 200
         assert result["usage"]["candidatesTokenCount"] == 50
 
+    def test_budgeted_draft_client_validates_finite_positive_bounds(self):
+        """BudgetedDraftClient rejects non-finite or non-positive budget and attempt timeouts."""
+        with pytest.raises(ValueError, match="budget_seconds must be a finite positive number"):
+            BudgetedDraftClient(None, budget_seconds=0)
+        with pytest.raises(ValueError, match="budget_seconds must be a finite positive number"):
+            BudgetedDraftClient(None, budget_seconds=-5.0)
+        with pytest.raises(ValueError, match="budget_seconds must be a finite positive number"):
+            BudgetedDraftClient(None, budget_seconds=float("inf"))
+
+        with pytest.raises(ValueError, match="attempt_timeout_seconds must be a finite positive number"):
+            BudgetedDraftClient(None, attempt_timeout_seconds=0)
+        with pytest.raises(ValueError, match="attempt_timeout_seconds must be a finite positive number"):
+            BudgetedDraftClient(None, attempt_timeout_seconds=-1.0)
+        with pytest.raises(ValueError, match="attempt_timeout_seconds must be a finite positive number"):
+            BudgetedDraftClient(None, attempt_timeout_seconds=float("nan"))
+
+    def test_default_attempt_timeout_is_five_seconds(self):
+        """Default attempt timeout is exactly 5.0s across all clients without magic routing."""
+        clock_state = [0.0]
+        recorded_timeouts = []
+
+        class MockClient:
+            def generate(self, *args, timeout_seconds=None, **kwargs):
+                recorded_timeouts.append(timeout_seconds)
+                clock_state[0] += 5.0
+                raise LLMError("llm_timeout", latency_seconds=5.0)
+
+        budgeted = BudgetedDraftClient(MockClient(), clock=lambda: clock_state[0])
+        with pytest.raises(LLMError):
+            budgeted.generate("q", "intent", [])
+
+        assert recorded_timeouts == [5.0, 5.0]
+
+    def test_generic_client_success_leaves_http_status_unobserved_null(self):
+        """Generic/mock client without HTTP transport metadata defaults http_status to None, not assumed 200."""
+        class PlainMockClient:
+            def generate(self, *args, **kwargs):
+                return {"body": "Answer [S1]", "provider": "mock"}
+
+        budgeted = BudgetedDraftClient(PlainMockClient())
+        res = budgeted.generate("q", "intent", [])
+        assert len(res["attempts"]) == 1
+        assert res["attempts"][0]["http_status"] is None
+
+    def test_just_over_five_second_request_succeeds_on_attempt_zero_with_advancing_clock(self):
+        """Advancing fake clock past 5s (5.2s) proves request succeeds on attempt 0 within 7s cap,
+        without triggering false-alarm retry or wasting a second call."""
+        clock_state = [0.0]
+
+        def fake_clock():
+            return clock_state[0]
+
+        recorded_timeouts = []
+
+        class AdvancingClient:
+            def generate(self, *args, timeout_seconds=None, **kwargs):
+                recorded_timeouts.append(timeout_seconds)
+                # Client call takes 5.2s, advancing clock
+                clock_state[0] += 5.2
+                return {
+                    "body": "Grounded answer [S1]",
+                    "usage": {"promptTokenCount": 600, "candidatesTokenCount": 90, "totalTokenCount": 690},
+                    "provider": "google_ai_studio",
+                    "model": "gemini-3.1-flash-lite",
+                    "latency_seconds": 5.2,
+                    "attempts": [{"stage": "complete", "http_status": 200}],
+                }
+
+        client = AdvancingClient()
+        budgeted = BudgetedDraftClient(client, clock=fake_clock, budget_seconds=10.0, attempt_timeout_seconds=7.0)
+        result = budgeted.generate("question", "intent", [])
+
+        # Attempt 0 was offered 7.0s and finished at t=5.2s
+        assert recorded_timeouts == [7.0]
+        assert len(result["attempts"]) == 1
+        assert result["attempts"][0]["status"] == "success"
+        assert result["attempts"][0]["latency_seconds"] == 5.2
+        assert result["attempts"][0]["stage"] == "complete"
+        assert result["attempts"][0]["http_status"] == 200
+        assert result["attempts"][0]["exception_category"] is None
+        assert result["body"] == "Grounded answer [S1]"
+
+    def test_just_over_five_second_transient_failure_retries_with_remaining_budget_advancing_clock(self):
+        """When attempt 0 takes 5.5s (just over 5s) and fails transiently,
+        fake clock advances and attempt 1 receives exactly the remaining 4.5s of the 10s budget."""
+        clock_state = [0.0]
+
+        def fake_clock():
+            return clock_state[0]
+
+        recorded_timeouts = []
+
+        class FailingAdvancingClient:
+            def generate(self, *args, timeout_seconds=None, **kwargs):
+                recorded_timeouts.append(timeout_seconds)
+                if len(recorded_timeouts) == 1:
+                    # Attempt 0 takes 5.5s then fails with network error
+                    clock_state[0] += 5.5
+                    raise LLMError(
+                        "llm_unavailable",
+                        metadata={"provider": "google_ai_studio", "model": "gemini-3.1-flash-lite"},
+                        latency_seconds=5.5,
+                        stage="connect",
+                        http_status=None,
+                        exception_category="network_error",
+                    )
+                # Attempt 1 takes 2.0s and succeeds
+                clock_state[0] += 2.0
+                return {
+                    "body": "Second attempt answer [S1]",
+                    "usage": {"promptTokenCount": 600, "candidatesTokenCount": 80, "totalTokenCount": 680},
+                    "provider": "google_ai_studio",
+                    "model": "gemini-3.1-flash-lite",
+                    "latency_seconds": 2.0,
+                    "attempts": [{"stage": "complete", "http_status": 200}],
+                }
+
+        client = FailingAdvancingClient()
+        budgeted = BudgetedDraftClient(client, clock=fake_clock, budget_seconds=10.0, attempt_timeout_seconds=7.0)
+        result = budgeted.generate("question", "intent", [])
+
+        # Attempt 0 offered 7.0s; at t=5.5s it failed. Remaining = 10.0 - 5.5 = 4.5s.
+        # Attempt 1 offered min(7.0, 4.5) = 4.5s.
+        assert recorded_timeouts == [7.0, 4.5]
+        assert len(result["attempts"]) == 2
+        assert result["attempts"][0]["status"] == "llm_unavailable"
+        assert result["attempts"][0]["stage"] == "connect"
+        assert result["attempts"][0]["http_status"] is None
+        assert result["attempts"][0]["exception_category"] == "network_error"
+        assert result["attempts"][1]["status"] == "success"
+        assert result["attempts"][1]["stage"] == "complete"
+        assert result["attempts"][1]["http_status"] == 200
+        assert result["latency_seconds"] == pytest.approx(7.5, rel=1e-2)
+
+    def test_both_attempts_exhaust_ten_second_budget_advancing_clock(self):
+        """When attempt 0 takes 7.0s and times out, attempt 1 gets remaining 3.0s and times out,
+        raising LLMError with full attempt history and sanitized telemetry."""
+        clock_state = [0.0]
+
+        def fake_clock():
+            return clock_state[0]
+
+        recorded_timeouts = []
+
+        class TimingOutClient:
+            def generate(self, *args, timeout_seconds=None, **kwargs):
+                recorded_timeouts.append(timeout_seconds)
+                if len(recorded_timeouts) == 1:
+                    clock_state[0] += 7.0
+                    raise LLMError("llm_timeout", metadata={"provider": "google_ai_studio"}, latency_seconds=7.0,
+                                   stage="transport", http_status=None, exception_category="timeout")
+                clock_state[0] += 3.0
+                raise LLMError("llm_timeout", metadata={"provider": "google_ai_studio"}, latency_seconds=3.0,
+                               stage="transport", http_status=None, exception_category="timeout")
+
+        client = TimingOutClient()
+        budgeted = BudgetedDraftClient(client, clock=fake_clock, budget_seconds=10.0, attempt_timeout_seconds=7.0)
+        with pytest.raises(LLMError) as exc_info:
+            budgeted.generate("question", "intent", [])
+
+        err = exc_info.value
+        assert recorded_timeouts == [7.0, 3.0]
+        assert len(err.attempts) == 2
+        assert err.attempts[0]["status"] == "llm_timeout"
+        assert err.attempts[0]["stage"] == "transport"
+        assert err.attempts[1]["status"] == "llm_timeout"
+        assert err.latency_seconds == pytest.approx(10.0, rel=1e-2)
+
 
 class TestGeminiDraftClientDirectAttemptAccounting:
     """Tests proving direct GeminiDraftClient attaches attempts on success and failure."""
@@ -612,6 +780,9 @@ class TestGeminiDraftClientDirectAttemptAccounting:
         assert len(err.attempts) == 1
         assert err.attempts[0]["status"] == "llm_unavailable"
         assert err.attempts[0]["metadata"]["provider"] == "google_ai_studio"
+        assert err.attempts[0]["stage"] == "http_response"
+        assert err.attempts[0]["http_status"] == 503
+        assert err.attempts[0]["exception_category"] == "http_status"
 
     def test_gemini_client_attaches_attempts_on_invalid_response(self):
         import httpx
@@ -640,9 +811,66 @@ class TestGeminiDraftClientDirectAttemptAccounting:
         assert err.code == "llm_invalid_response"
         assert len(err.attempts) == 1
         assert err.attempts[0]["status"] == "llm_invalid_response"
+        assert err.attempts[0]["stage"] == "schema_validation"
+        assert err.attempts[0]["http_status"] == 200
+        assert err.attempts[0]["exception_category"] == "schema_validation_error"
         # Consumed tokens are preserved!
         assert err.usage["promptTokenCount"] == 150
         assert err.attempts[0]["usage"]["promptTokenCount"] == 150
+
+    def test_gemini_client_attaches_attempts_on_timeout(self):
+        import httpx
+
+        def handler(request):
+            raise httpx.ReadTimeout("Read timed out")
+
+        client = GeminiDraftClient(
+            api_key="test-key",
+            model="gemini-3.1-flash-lite",
+            http_client=httpx.Client(transport=httpx.MockTransport(handler)),
+        )
+        evidence = [{"document_id": "d1", "version": "1.0", "title": "T", "excerpt": "Excerpt"}]
+
+        with pytest.raises(LLMError) as exc_info:
+            client.generate("q", "intent", evidence)
+
+        err = exc_info.value
+        assert err.code == "llm_timeout"
+        assert len(err.attempts) == 1
+        assert err.attempts[0]["status"] == "llm_timeout"
+        assert err.attempts[0]["stage"] == "transport"
+        assert err.attempts[0]["http_status"] is None
+        assert err.attempts[0]["exception_category"] == "timeout"
+
+    def test_schema_parse_failure_suppresses_raw_exception_context_and_secrets(self):
+        """When JSON decoding or schema validation fails, raw exception context is suppressed with `from None`
+        ensuring tracebacks contain no raw response bodies, payload text, or sensitive credentials."""
+        import traceback
+        import httpx
+
+        raw_secret_body = "SENSITIVE_CUSTOMER_SECRET_PAYLOAD_BODY_NOT_JSON"
+
+        def handler(request):
+            return httpx.Response(200, text=raw_secret_body)
+
+        client = GeminiDraftClient(
+            api_key="SUPER_SECRET_GEMINI_KEY_1234567890",
+            model="gemini-3.1-flash-lite",
+            http_client=httpx.Client(transport=httpx.MockTransport(handler)),
+        )
+        evidence = [{"document_id": "d1", "version": "1.0", "title": "T", "excerpt": "Excerpt"}]
+
+        with pytest.raises(LLMError) as exc_info:
+            client.generate("q", "intent", evidence)
+
+        err = exc_info.value
+        assert err.code == "llm_invalid_response"
+        assert err.__cause__ is None
+        assert err.__suppress_context__ is True
+
+        formatted = "".join(traceback.format_exception(err))
+        assert "SUPER_SECRET_GEMINI_KEY" not in formatted
+        assert "SENSITIVE_CUSTOMER_SECRET_PAYLOAD" not in formatted
 
 
 class TestModelTierAndMissingTotalEdgeCases:
