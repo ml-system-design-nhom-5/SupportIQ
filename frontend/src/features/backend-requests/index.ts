@@ -35,6 +35,11 @@ export {
   categorizeFailure,
   describeFailure,
 } from "@/features/backend-requests/model/describe-failure";
+export {
+  toOrderStatus,
+  toRefundStatus,
+  toShipmentStatus,
+} from "@/features/backend-requests/model/order-statuses";
 export type {
   ProblemType,
   RequestFailure,

@@ -3,21 +3,76 @@
  */
 export type { AccountMenuProps, AccountMenuVariant } from "@/design-system/components/account-menu";
 export { AccountMenu } from "@/design-system/components/account-menu";
+export type {
+  AiReasonCodeName,
+  RecommendationName,
+} from "@/design-system/components/ai-presentations";
+export {
+  presentationByAiReasonCode,
+  presentationByRecommendation,
+} from "@/design-system/components/ai-presentations";
 export type { AppBarProps, AppBarVariant } from "@/design-system/components/app-bar";
 export { AppBar } from "@/design-system/components/app-bar";
 export type { BreadcrumbsProps, BreadcrumbStep } from "@/design-system/components/breadcrumbs";
 export { Breadcrumbs } from "@/design-system/components/breadcrumbs";
+export type { CenteredContentProps } from "@/design-system/components/centered-content";
+export { CenteredContent } from "@/design-system/components/centered-content";
 export type { CenteredPanelProps } from "@/design-system/components/centered-panel";
 export { CenteredPanel } from "@/design-system/components/centered-panel";
+export type {
+  CitationMarkerProps,
+  CitationSource,
+} from "@/design-system/components/citation-marker";
+export { CitationMarker } from "@/design-system/components/citation-marker";
+export type {
+  ConfidenceBandName,
+  ConfidenceMeterProps,
+} from "@/design-system/components/confidence-meter";
+export { ConfidenceMeter } from "@/design-system/components/confidence-meter";
+export type { ConsoleShellProps } from "@/design-system/components/console-shell";
+export { ConsoleShell } from "@/design-system/components/console-shell";
+export type {
+  CustomerOrderOption,
+  CustomerOrdersProps,
+} from "@/design-system/components/customer-orders";
+export { CustomerOrders } from "@/design-system/components/customer-orders";
 export type { DateTextProps } from "@/design-system/components/date-text";
 export { DateText } from "@/design-system/components/date-text";
+export type {
+  DraftTextParagraph,
+  DraftTextProps,
+  DraftTextSegment,
+} from "@/design-system/components/draft-text";
+export { DraftText } from "@/design-system/components/draft-text";
 export type { FormFieldProps } from "@/design-system/components/form-field";
 export { FormField, getFieldDescriptionId } from "@/design-system/components/form-field";
+export type { InboxItemProps } from "@/design-system/components/inbox-item";
+export { InboxItem } from "@/design-system/components/inbox-item";
+export { InboxItemSkeleton } from "@/design-system/components/inbox-item-skeleton";
+export type { InboxLayoutProps } from "@/design-system/components/inbox-layout";
+export { InboxLayout } from "@/design-system/components/inbox-layout";
+export type { InboxMessageProps } from "@/design-system/components/inbox-message";
+export { InboxMessage } from "@/design-system/components/inbox-message";
+export type { InboxPanelProps } from "@/design-system/components/inbox-panel";
+export { InboxPanel } from "@/design-system/components/inbox-panel";
 export type {
   InlineMessageProps,
   InlineMessageTone,
 } from "@/design-system/components/inline-message";
 export { InlineMessage } from "@/design-system/components/inline-message";
+export type {
+  IntentChoiceCandidate,
+  IntentChoiceProps,
+} from "@/design-system/components/intent-choice";
+export { IntentChoice } from "@/design-system/components/intent-choice";
+export type {
+  IntentConfidence,
+  IntentStripCandidate,
+  IntentStripProps,
+} from "@/design-system/components/intent-strip";
+export { IntentStrip } from "@/design-system/components/intent-strip";
+export type { KbDocumentTextProps } from "@/design-system/components/kb-document-text";
+export { KbDocumentText } from "@/design-system/components/kb-document-text";
 export type { LoadMoreButtonProps } from "@/design-system/components/load-more-button";
 export { LoadMoreButton } from "@/design-system/components/load-more-button";
 export type {
@@ -30,6 +85,19 @@ export type { MessageAuthor, MessageBubbleProps } from "@/design-system/componen
 export { MessageBubble } from "@/design-system/components/message-bubble";
 export type { MoneyTextProps } from "@/design-system/components/money-text";
 export { MoneyText } from "@/design-system/components/money-text";
+export type { OrderChipProps } from "@/design-system/components/order-chip";
+export { OrderChip } from "@/design-system/components/order-chip";
+export type {
+  CitedOrderFact,
+  OrderCitationMarkerProps,
+} from "@/design-system/components/order-citation-marker";
+export { OrderCitationMarker } from "@/design-system/components/order-citation-marker";
+export type { OrderFactItem, OrderFactsProps } from "@/design-system/components/order-facts";
+export { OrderFacts } from "@/design-system/components/order-facts";
+export type { OrderRecordProps } from "@/design-system/components/order-record";
+export { OrderRecord } from "@/design-system/components/order-record";
+export type { OrderRecordHeaderProps } from "@/design-system/components/order-record-header";
+export { OrderRecordHeader } from "@/design-system/components/order-record-header";
 export type { OrderRowProps, OrderRowStatus } from "@/design-system/components/order-row";
 export { OrderRow } from "@/design-system/components/order-row";
 export type {
@@ -58,6 +126,10 @@ export type {
   RowTrailingOnPhone,
 } from "@/design-system/components/row-list-item";
 export { RowListItem } from "@/design-system/components/row-list-item";
+export type { SourceListItem, SourceListProps } from "@/design-system/components/source-list";
+export { SourceList } from "@/design-system/components/source-list";
+export type { StaffNoteProps } from "@/design-system/components/staff-note";
+export { StaffNote } from "@/design-system/components/staff-note";
 export type { StateMessageProps } from "@/design-system/components/state-message";
 export { StateMessage } from "@/design-system/components/state-message";
 export type { StatusBadgeProps } from "@/design-system/components/status-badge";
@@ -66,6 +138,10 @@ export type { StatusBannerProps, StatusBannerTone } from "@/design-system/compon
 export { StatusBanner } from "@/design-system/components/status-banner";
 export type {
   AccountStatusName,
+  AiStatusName,
+  ConsoleTicketStatusName,
+  DocumentValidityName,
+  HandlingModeName,
   InternalRoleName,
   OrderStatusName,
   RefundStatusName,
@@ -75,23 +151,37 @@ export type {
   StatusTone,
 } from "@/design-system/components/status-presentations";
 export {
+  authorityRequiredPresentation,
   presentationByAccountStatus,
+  presentationByAiStatus,
+  presentationByConsoleTicketStatus,
+  presentationByDocumentValidity,
+  presentationByHandlingMode,
   presentationByInternalRole,
   presentationByOrderStatus,
   presentationByRefundStatus,
   presentationByShipmentStatus,
   presentationByShopTicketStatus,
 } from "@/design-system/components/status-presentations";
+export type { TagProps } from "@/design-system/components/tag";
+export { Tag } from "@/design-system/components/tag";
+export type { TicketHeaderProps } from "@/design-system/components/ticket-header";
+export { TicketHeader } from "@/design-system/components/ticket-header";
+export { TicketHeaderSkeleton } from "@/design-system/components/ticket-header-skeleton";
 export type { TicketItemProps, TicketItemReply } from "@/design-system/components/ticket-item";
 export { TicketItem } from "@/design-system/components/ticket-item";
 export type { TraceIdProps } from "@/design-system/components/trace-id";
 export { TraceId } from "@/design-system/components/trace-id";
+export type { WarningListItem, WarningListProps } from "@/design-system/components/warning-list";
+export { WarningList } from "@/design-system/components/warning-list";
+export type { WorkspaceLayoutProps } from "@/design-system/components/workspace-layout";
+export { WorkspaceLayout } from "@/design-system/components/workspace-layout";
 export type { Clock } from "@/design-system/format/clock";
 export { ClockContext, systemClock, useNow } from "@/design-system/format/clock";
 export { formatDate, formatDateTime, formatRelativeTime } from "@/design-system/format/date-time";
 export type { Money } from "@/design-system/format/money";
 export { formatMoney } from "@/design-system/format/money";
-export { formatCount } from "@/design-system/format/number";
+export { formatCount, formatPercent } from "@/design-system/format/number";
 export type {
   ButtonProps,
   ButtonSize,
@@ -115,6 +205,11 @@ export type {
   DataTableRow,
 } from "@/design-system/primitives/data-table";
 export { buildRowHeaderId, DataTable } from "@/design-system/primitives/data-table";
+export type {
+  DescriptionItem,
+  DescriptionListProps,
+} from "@/design-system/primitives/description-list";
+export { DescriptionList } from "@/design-system/primitives/description-list";
 export type { DialogReturnFocus } from "@/design-system/primitives/dialog-return-focus";
 export type { FieldLabelProps } from "@/design-system/primitives/field-label";
 export { FieldLabel } from "@/design-system/primitives/field-label";
@@ -128,11 +223,13 @@ export type { IconProps, IconSize, IconTone } from "@/design-system/primitives/i
 export { Icon } from "@/design-system/primitives/icon";
 export type { IdentifierProps, IdentifierSize } from "@/design-system/primitives/identifier";
 export { Identifier } from "@/design-system/primitives/identifier";
+export type { MenuSelectOption, MenuSelectProps } from "@/design-system/primitives/menu-select";
+export { MenuSelect } from "@/design-system/primitives/menu-select";
 export type { NavItemProps } from "@/design-system/primitives/nav-item";
 export { NavItem } from "@/design-system/primitives/nav-item";
 export type { PageColumnArea, PageColumnProps } from "@/design-system/primitives/page-column";
 export { PageColumn } from "@/design-system/primitives/page-column";
-export type { PanelProps } from "@/design-system/primitives/panel";
+export type { PanelProps, PanelTone } from "@/design-system/primitives/panel";
 export { Panel } from "@/design-system/primitives/panel";
 export type { PanelHeaderProps } from "@/design-system/primitives/panel-header";
 export { PanelHeader } from "@/design-system/primitives/panel-header";
@@ -143,8 +240,12 @@ export type {
 export { PanelSection } from "@/design-system/primitives/panel-section";
 export type { PasswordInputProps } from "@/design-system/primitives/password-input";
 export { PasswordInput } from "@/design-system/primitives/password-input";
+export type { PopoverProps, PopoverWidth } from "@/design-system/primitives/popover";
+export { Popover } from "@/design-system/primitives/popover";
 export type { RadioGroupProps, RadioOption } from "@/design-system/primitives/radio-group";
 export { RadioGroup } from "@/design-system/primitives/radio-group";
+export type { SheetProps } from "@/design-system/primitives/sheet";
+export { Sheet } from "@/design-system/primitives/sheet";
 export type {
   SkeletonHeight,
   SkeletonProps,

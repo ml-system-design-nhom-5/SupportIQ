@@ -12,9 +12,7 @@ import { ChevronDown, KeyRound, LogOut, User } from "lucide-react";
 import { cn } from "@/design-system/primitives/class-names";
 import { FOCUS_RING_CLASSES } from "@/design-system/primitives/focus-ring";
 import { Icon } from "@/design-system/primitives/icon";
-
-const ITEM_CLASSES =
-  "flex cursor-default items-center gap-2 rounded-sm p-2 font-medium text-text outline-none data-disabled:opacity-45 data-highlighted:bg-background data-highlighted:outline-2 data-highlighted:-outline-offset-2 data-highlighted:outline-focus-ring";
+import { MENU_ITEM_CLASSES } from "@/design-system/primitives/menu-item";
 
 /** `shop` hides the trigger text at phone width; `console` is the desktop bar (UI-33). */
 export type AccountMenuVariant = "shop" | "console";
@@ -78,12 +76,12 @@ export function AccountMenu({
             <span className="text-text-muted">{roleLabel}</span>
           </DropdownMenuPrimitive.Label>
           <DropdownMenuPrimitive.Separator className="my-1 border-t border-border" />
-          <DropdownMenuPrimitive.Item className={ITEM_CLASSES} onSelect={onChangePassword}>
+          <DropdownMenuPrimitive.Item className={MENU_ITEM_CLASSES} onSelect={onChangePassword}>
             <Icon icon={KeyRound} />
             Change password
           </DropdownMenuPrimitive.Item>
           <DropdownMenuPrimitive.Item
-            className={ITEM_CLASSES}
+            className={MENU_ITEM_CLASSES}
             disabled={isSigningOut}
             onSelect={onSignOut}
           >

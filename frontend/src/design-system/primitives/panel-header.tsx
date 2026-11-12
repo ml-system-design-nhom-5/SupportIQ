@@ -1,10 +1,22 @@
 /**
  * The header row of a {@link Panel}: an icon, a heading, and optional trailing content.
  */
+import { cva } from "class-variance-authority";
 import type { LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, use } from "react";
 
 import { Icon } from "@/design-system/primitives/icon";
+import { PanelDensityContext } from "@/design-system/primitives/panel-density";
+
+const headerVariants = cva("flex items-center gap-2 border-b border-border", {
+  variants: {
+    density: { comfortable: "px-4 py-4 sm:px-6", compact: "px-4 py-3" },
+  },
+});
+
+const headingVariants = cva("font-semibold", {
+  variants: { density: { comfortable: "text-base", compact: "text-sm" } },
+});
 
 /** Props of {@link PanelHeader}. */
 export type PanelHeaderProps = {
@@ -23,10 +35,11 @@ export type PanelHeaderProps = {
  */
 export function PanelHeader({ icon, level, title, trailing }: PanelHeaderProps) {
   const Heading = level === 2 ? "h2" : "h3";
+  const density = use(PanelDensityContext);
   return (
-    <div className="flex items-center gap-2 border-b border-border px-4 py-4 sm:px-6">
+    <div className={headerVariants({ density })}>
       <Icon icon={icon} />
-      <Heading className="text-base font-semibold">{title}</Heading>
+      <Heading className={headingVariants({ density })}>{title}</Heading>
       {trailing === undefined ? null : <div className="ml-auto">{trailing}</div>}
     </div>
   );

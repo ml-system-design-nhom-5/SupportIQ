@@ -37,3 +37,16 @@ export const resetAccountPasswordRoute: FakeRoute = {
   method: "POST",
   path: /^\/v1\/admin\/accounts\/[^/]+\/password-resets$/,
 };
+export const listConsoleTicketsRoute: FakeRoute = { method: "GET", path: "/v1/console/tickets" };
+export const getConsoleTicketRoute: FakeRoute = {
+  method: "GET",
+  path: /^\/v1\/console\/tickets\/[^/]+$/,
+};
+export const recordTicketViewRoute: FakeRoute = {
+  method: "POST",
+  path: /^\/v1\/console\/tickets\/[^/]+\/views$/,
+};
+export const getConsoleKbDocumentVersionRoute: FakeRoute = {
+  method: "GET",
+  path: /^\/v1\/console\/kb-documents\/[^/]+\/versions\/[^/]+$/,
+};

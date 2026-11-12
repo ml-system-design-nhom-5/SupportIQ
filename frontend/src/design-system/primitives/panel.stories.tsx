@@ -60,3 +60,23 @@ export const CenteredSection: Story = {
     ),
   },
 };
+
+export const CompactAiPanel: Story = {
+  args: {
+    as: "section",
+    label: "AI recommendation",
+    tone: "ai",
+    density: "compact",
+    children: (
+      <>
+        <PanelHeader icon={LifeBuoy} level={2} title="AI recommendation" />
+        <PanelSection>
+          <Text>A console panel of AI output.</Text>
+        </PanelSection>
+        <PanelSection layout="centered">
+          <Text>A centered section.</Text>
+        </PanelSection>
+      </>
+    ),
+  },
+};

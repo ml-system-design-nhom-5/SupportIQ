@@ -32,6 +32,7 @@ const stackVariants = cva("flex min-w-0", {
       end: "justify-end",
       between: "justify-between",
     },
+    shouldWrap: { true: "flex-wrap", false: "" },
   },
 });
 
@@ -54,13 +55,16 @@ export type StackProps = {
   readonly justify?: "start" | "center" | "end" | "between";
   /** Names a `section` or `nav` landmark when it has no visible heading. */
   readonly label?: string;
+  /** True lets the items of a row continue on the next line, such as a row of badges. */
+  readonly shouldWrap?: boolean;
   readonly children: ReactNode;
 };
 
 /**
  * Lay out children in a row or a column.
  *
- * @param props - The element, the direction, the gap, the alignment, and the children.
+ * @param props - The element, the direction, the gap, the alignment, the wrapping, and the
+ *   children.
  * @returns The stack.
  */
 export function Stack({
@@ -70,10 +74,14 @@ export function Stack({
   align = "stretch",
   justify = "start",
   label,
+  shouldWrap = false,
   children,
 }: StackProps) {
   return (
-    <Element aria-label={label} className={stackVariants({ direction, gap, align, justify })}>
+    <Element
+      aria-label={label}
+      className={stackVariants({ direction, gap, align, justify, shouldWrap })}
+    >
       {children}
     </Element>
   );

@@ -3,7 +3,7 @@
  * change, the signed-in account, and the end of a session (ADR-0009, ADR-0015).
  */
 export { endSession } from "@/features/session/api/session-cache";
-export { useSignedInAccountId } from "@/features/session/api/use-current-session";
+export { useSignedInAccountId, useSignedInRole } from "@/features/session/api/use-current-session";
 export type { SignInCredentials } from "@/features/session/api/use-sign-in";
 export type { AreaLoadFailureProps } from "@/features/session/components/area-load-failure";
 export { AreaLoadFailure } from "@/features/session/components/area-load-failure";

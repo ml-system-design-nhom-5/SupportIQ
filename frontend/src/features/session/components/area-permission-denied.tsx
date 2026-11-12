@@ -1,7 +1,8 @@
 /**
  * The permission-denied state of an area (`403` when a screen loads): the shop for a support or
- * admin account (shop UI design, States), the admin area for any other role (admin UI design,
- * States). `backend` decided it; the UI only shows it (UI-40).
+ * admin account (shop UI design, States), the console for a customer or admin account (console UI
+ * design, States), the admin area for any other role (admin UI design, States). `backend` decided
+ * it; the UI only shows it (UI-40).
  */
 import { Lock } from "lucide-react";
 
@@ -16,6 +17,11 @@ const textByArea: Readonly<
     description:
       "You are signed in with a support or admin account. Sign out, then sign in with a customer account.",
   },
+  console: {
+    title: "The console is for support accounts",
+    description:
+      "You are signed in with a customer or admin account. Sign out, then sign in with a staff or manager account.",
+  },
   admin: {
     title: "The admin area is for admin accounts",
     description:
@@ -24,7 +30,7 @@ const textByArea: Readonly<
 };
 
 /** The area that refused the account. */
-export type RestrictedArea = "shop" | "admin";
+export type RestrictedArea = "shop" | "console" | "admin";
 
 /** Props of {@link AreaPermissionDenied}. */
 export type AreaPermissionDeniedProps = {

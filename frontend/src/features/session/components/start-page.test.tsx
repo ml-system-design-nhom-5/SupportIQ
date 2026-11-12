@@ -1,7 +1,7 @@
 import { screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { getCurrentSessionRoute } from "@/test/backend-routes";
+import { getCurrentSessionRoute, listConsoleTicketsRoute } from "@/test/backend-routes";
 import { readExampleWith } from "@/test/contract-examples";
 import { createFakeBackend, exampleAnswer } from "@/test/fake-backend";
 import { renderApp } from "@/test/render-app";
@@ -15,6 +15,7 @@ describe("StartPage", () => {
   ])("opens the area of a %s session: %s", async (example, path) => {
     const backend = createFakeBackend();
     backend.answer(getCurrentSessionRoute, exampleAnswer(200, "getCurrentSession", example));
+    backend.answer(listConsoleTicketsRoute, exampleAnswer(200, "listConsoleTickets", "open-queue"));
 
     const { router } = renderApp({ path: "/", backend });
 

@@ -1,7 +1,7 @@
 import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { getCurrentSessionRoute } from "@/test/backend-routes";
+import { getCurrentSessionRoute, listConsoleTicketsRoute } from "@/test/backend-routes";
 import { createFakeBackend, exampleAnswer } from "@/test/fake-backend";
 import { renderApp } from "@/test/render-app";
 
@@ -15,6 +15,7 @@ import { renderApp } from "@/test/render-app";
 function openWithSession(path: string, sessionExample: string) {
   const backend = createFakeBackend();
   backend.answer(getCurrentSessionRoute, exampleAnswer(200, "getCurrentSession", sessionExample));
+  backend.answer(listConsoleTicketsRoute, exampleAnswer(200, "listConsoleTickets", "open-queue"));
   return renderApp({ path, backend });
 }
 
@@ -45,15 +46,24 @@ describe("ShopLayout", () => {
 });
 
 describe("ConsoleLayout", () => {
-  it("shows the console app shell with the account menu, and no ticket feature", async () => {
+  it("shows SupportIQ Console with Tickets, the account menu, and the inbox", async () => {
     openWithSession("/console", "manager");
 
     const bar = await screen.findByRole("banner");
     expect(bar).toHaveTextContent("SupportIQConsole");
+    expect(within(bar).getByRole("link", { name: "Tickets" })).toHaveAttribute("href", "/console");
     expect(within(bar).getByRole("button", { name: "Hoa Pham · Manager" })).toBeVisible();
-    expect(
-      screen.getByRole("heading", { level: 1, name: "The ticket inbox is not available yet" }),
-    ).toBeVisible();
+    expect(await screen.findByRole("complementary", { name: "Inbox" })).toBeVisible();
+    expect(screen.getByRole("main")).toBeInTheDocument();
+  });
+
+  it("shows only the brand and the account menu to a session of another role", async () => {
+    openWithSession("/console", "customer");
+
+    const bar = await screen.findByRole("banner");
+    expect(bar).toHaveTextContent("SupportIQConsole");
+    expect(within(bar).queryByRole("navigation")).not.toBeInTheDocument();
+    expect(within(bar).getByRole("button", { name: "Lan Tran · Customer" })).toBeVisible();
   });
 });
 
