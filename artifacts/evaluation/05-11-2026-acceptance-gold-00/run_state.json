@@ -1,7 +1,0 @@
-{
-  "status": "failed",
-  "mode": "system",
-  "profile": "live",
-  "error": "Live preflight failed: artifact 'config.json' checksum mismatch: expected 6fa1fa9cc6a94063a977b0adaf2c9c3b296cf296d4ad9dcc6f2c52ca3bac9cb2, got 6FA1FA9CC6A94063A977B0ADAF2C9C3B296CF296D4AD9DCC6F2C52CA3BAC9CB2",
-  "failed_at": "2026-11-05T08:38:10.516499+00:00"
-}

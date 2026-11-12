@@ -1,9 +1,0 @@
-requirement,category,evidence,status,notes
-ML Quality (CV Macro-F1 >= 0.85),ML,CV Winner linear_svm__C=1.0: Macro-F1 = 0.9903,pass,10-fold cross-validation target from problem specification
-ML Quality (Hold-out Test Macro-F1),ML,CV Winner linear_svm__C=1.0: Test Macro-F1 = 0.9916,reported,Locked hold-out test set evaluation; no post-test tuning permitted
-ML Robustness (Perturbation Slices),ML,No suite provided,not_evaluated,"Behavior under casing, typos, OOD, and entity variations"
-Retrieval Quality (Recall@3 >= 0.80),System,N/A in ML evaluation mode,not_evaluated,Evaluated during system retrieval pipeline benchmarking
-LLM Grounding (>= 90% Supported Claims),System,N/A in ML evaluation mode,not_evaluated,Evaluated during system citation and claim annotation audit
-Oversight & Safety (100% Escalation & Approval),System,N/A in ML evaluation mode,not_evaluated,Evaluated during system guardrail and policy verification
-Reliability & Fault Tolerance,System,N/A in ML evaluation mode,not_evaluated,Evaluated during system resilience and fallback testing
-End-to-End Latency & Cost,System,N/A in ML evaluation mode,not_evaluated,Classifier latency reported separately in baseline comparison

@@ -1,7 +1,0 @@
-{
-  "measurement_scope": "pipeline_total",
-  "p50_seconds": 0.0375,
-  "warm_p95_seconds": 0.0768,
-  "requests_count": 100,
-  "warmup_count": 5
-}

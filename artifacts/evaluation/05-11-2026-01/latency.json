@@ -1,6 +1,0 @@
-{
-  "p50_seconds": 0.0152,
-  "warm_p95_seconds": 0.0362,
-  "requests_count": 100,
-  "warmup_count": 5
-}
