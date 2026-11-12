@@ -1,0 +1,65 @@
+{
+  "summary": "No draft: escalation is recommended",
+  "description": "The customer asks for a person (ESC-03). Staff decide whether to escalate.",
+  "value": {
+    "status": "escalation_recommended",
+    "reason_codes": [
+      "human_agent_requested"
+    ],
+    "analysis": {
+      "intent": {
+        "source": "model",
+        "label": "human_agent",
+        "probability": 0.97,
+        "confidence_band": "high"
+      },
+      "alternatives": [
+        {
+          "label": "customer_service",
+          "probability": 0.02
+        }
+      ],
+      "is_in_scope": true,
+      "documents": [],
+      "routing": {
+        "recommendation": "escalate",
+        "reason_codes": [
+          "human_agent_requested"
+        ]
+      },
+      "warnings": [],
+      "versions": {
+        "release_id": "release-2026-11-12-sample",
+        "model_version": "intent-model-sample-1",
+        "kb_version": "kb-sample-1",
+        "mapping_version": "mapping-sample-1",
+        "prompt_version": "prompts-sample-1",
+        "routing_version": "routing-sample-1",
+        "index_version": "index-sample-1"
+      },
+      "step_latencies": {
+        "total_ms": 168,
+        "analysis_ms": 168
+      }
+    },
+    "staff_note": "The customer asks to talk to a person. Escalation to a manager is recommended.",
+    "versions": {
+      "release_id": "release-2026-11-12-sample",
+      "model_version": "intent-model-sample-1",
+      "kb_version": "kb-sample-1",
+      "mapping_version": "mapping-sample-1",
+      "prompt_version": "prompts-sample-1",
+      "routing_version": "routing-sample-1",
+      "index_version": "index-sample-1"
+    },
+    "step_latencies": {
+      "total_ms": 170,
+      "analysis_ms": 168
+    },
+    "mask_count_by_type": {
+      "email": 0,
+      "phone": 0,
+      "card": 0
+    }
+  }
+}

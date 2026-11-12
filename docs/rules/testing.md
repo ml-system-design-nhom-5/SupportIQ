@@ -74,7 +74,7 @@ describe("DraftEditor", () => {
 - whitespace-only text, very long text, and non-ASCII text;
 - typos and unusual phrasing (Bitext `tags` slices);
 - values exactly at, just below, and just above every threshold;
-- validity boundaries: `effective_from == as_of`, `effective_to == as_of`, overlapping versions;
+- validity boundaries: `effective_start_at == as_of`, `effective_end_at == as_of`, overlapping versions;
 - unknown enum values and missing optional fields;
 - duplicate requests with the same idempotency key;
 - timeouts, retries, and partial results.

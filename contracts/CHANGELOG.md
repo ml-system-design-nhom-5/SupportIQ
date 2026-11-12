@@ -74,3 +74,25 @@ Contract PR 2. The first version of the `frontend` ↔ `backend` contract, for t
 - Reusable parameters (`traceparent`, `Idempotency-Key`, `limit`, `cursor`, and the path identifiers) and one shared response for each error outcome.
 - The caller's timeout of 10 000 ms and the bounds of `backend`, under Timeouts.
 - An example file for every outcome of every operation, in `examples/<operationId>/` and, for the shared error responses, in `examples/problems/`.
+
+## `ai-service.openapi.yaml`
+
+### [1.0.0] - 2026-11-12
+
+Contract PR 1. The first version of the `backend` ↔ `ai-service` contract, from the `ai-service` part of the [contracts v1 design](../docs/design/contracts-v1.md#ai-service-contract-ai-serviceopenapiyaml) and the project lead's decisions of 2026-11-12. There is no earlier consumer, so the change has no compatibility impact. The paths are those that the AI and ML code on `org/main` already serves. Where that code breaks a rule, this contract follows the rule, and the design lists the differences as [work for the join](../docs/design/contracts-v1.md#work-for-the-join-with-the-ai-and-ml-code).
+
+#### Added
+
+- Suggestions: `createAnalysis` (`POST /v1/analyses`), the pipeline up to routing without the LLM, and `createDraft` (`POST /v1/drafts`), the whole pipeline, both with the body `SuggestionRequest` ([ADR-0005](../docs/decisions/0005-intent-independent-retrieval.md)). `createDraft` returns `DraftOutcome`, a union discriminated by `status`: `DraftReadyOutcome` carries the draft, and `NoDraftOutcome` (`abstained`, `escalation_recommended`, `llm_unavailable`) never does. Every failure of the drafting step ends as `llm_unavailable`, and the reason code says which.
+- KB: `getKbDocumentVersion` (`GET /v1/kb-documents/{document_id}/versions/{version}`), one version of the loaded KB with the fields of the citation view.
+- Releases: `getAssetVersions` (`GET /v1/asset-versions`), the `release_id` and the asset versions of the loaded release manifest (DATA-56).
+- Health: `checkLiveness` and `checkReadiness`, which answer `204`. Readiness depends on the release manifest, not on the LLM provider.
+- The `serviceToken` security scheme: every operation except the health checks requires `Authorization: Bearer <service token>`, a Secret that `backend` and `ai-service` share, and returns `401 unauthenticated` without it. The project lead decided this on 2026-11-12, because `ai-service` may run on a public host ([ADR-0016, Open questions](../docs/decisions/0016-hosting-on-free-tiers.md#open-questions)).
+- Shared schemas in `schemas/`: `IntentLabel`, `ConfidenceBand`, `AiReasonCode`, `DocumentValidity`, `KbDocumentId`, `KbDocumentVersionTag`, `AiItemId`, `AssetVersion`, `AssetVersions`, `OrderContextField`, `OrderContext`, `Citation` with its variants `KbDocumentCitation` and `OrderContextCitation`, `RankedDocument`, `DraftSegment`, `Warning`, and `Placeholder`.
+- The contract's own schemas, among them `PseudonymizedText` (1 to 4 000 characters), `AnalysisIntent` (discriminated by `source`; a staff-chosen intent has no probability), `AiServiceReasonCode` (no code that only `backend` sets), `StepLatencies`, `MaskCountByType`, `LlmUsage`, and `KbDocumentVersion`.
+- An example file for every routing recommendation, every draft status, and every problem: `examples/createAnalysis/`, `examples/createDraft/`, `examples/getKbDocumentVersion/`, `examples/getAssetVersions/`, and three new files in `examples/problems/`. A grounding failure has its own example, which ends as `llm_unavailable`.
+- Tooling: `redocly.yaml` lints and bundles both contracts with the same rules, `pnpm run mock:ai-service` serves the new mock on port 4012, and `pnpm run check:mock` also checks the service token, the closed request body, and two example files of `ai-service`.
+
+#### Changed
+
+- `supportiq/property-naming` accepts the timestamp `as_of`, which keeps its glossary name. It is the one exception to the `_at` suffix of CON-18.

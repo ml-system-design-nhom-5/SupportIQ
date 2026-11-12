@@ -92,7 +92,7 @@ The mockups of the form dialogs are shown in the account management design: [adm
 ### Versions in use
 
 - The page is read-only and says so.
-- The asset rows follow `AssetVersions` in the release manifest ([DATA-56](../rules/data-and-ml.md#models-and-artifacts)): the release ID, the model artifact, the KB, the document-to-intent mapping, the prompts, the routing configuration, and the retrieval index. The exact field names are set in contract PR 1.
+- The asset rows follow `AssetVersions` in the release manifest ([DATA-56](../rules/data-and-ml.md#models-and-artifacts)): the release ID, the model artifact, the KB, the document-to-intent mapping, the prompts, the routing configuration, and the retrieval index, in the fields `release_id`, `model_version`, `kb_version`, `mapping_version`, `prompt_version`, `routing_version`, and `index_version` of `AssetVersions` (contract PR 1).
 - When `ai_service_status` is `unavailable`, a banner in the `danger` role says so and tells the admin to reload the page later, and every `ai-service` row shows "Unknown". The `backend` build is still shown.
 
 ![Versions in use](assets/admin-ui/admin-versions.png)
