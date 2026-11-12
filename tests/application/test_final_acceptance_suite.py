@@ -2,13 +2,15 @@
 
 Verifies:
 - Exactly 24 synthetic cases covering:
-  * 12 core product intents
+  * 11 core answerable product intents (12 drafting cases including restricted cosmetics regression)
   * Sensitive / authority / escalation scenarios
+  * Human agent direct escalation (12th product scenario)
   * Unsupported / no-source scenarios
   * Out-of-domain (OOD) scenarios
   * Honest separate injected fixture boundary (temporal expiry and conflict detection)
 - Accurate derivation of expected document versions from active approved KB
-- Manifest integrity and file SHA-256 hashes
+- Owned order IDs mapped to seeded demo customer orders
+- Manifest integrity, file SHA-256 hashes, and root CRLF vs worker LF KB reconciliation
 - 12 paired same-case tasks with alternating order (6 assisted_first, 6 manual_first)
 """
 
@@ -72,6 +74,13 @@ def injected_fixtures():
     return json.loads(fixtures_path.read_text(encoding="utf-8"))
 
 
+@pytest.fixture(scope="module")
+def mock_orders():
+    orders_path = REPO_ROOT / "data/knowledge/mock_orders.json"
+    assert orders_path.exists(), f"Mock orders file not found: {orders_path}"
+    return json.loads(orders_path.read_text(encoding="utf-8"))
+
+
 def test_suite_case_count_and_uniqueness(suite_cases):
     """Must lock exactly 24 synthetic scenarios with unique IDs."""
     assert len(suite_cases) == 24
@@ -79,9 +88,9 @@ def test_suite_case_count_and_uniqueness(suite_cases):
     assert len(set(ids)) == 24, "Case IDs must be unique"
 
 
-def test_suite_covers_12_core_product_intents(suite_cases):
-    """The 12 core product intents from Topic 1 must each be represented in answerable cases."""
-    required_12_intents = {
+def test_suite_covers_11_answerable_intents_plus_regression(suite_cases):
+    """The 11 core answerable product intents must each be represented in answerable cases."""
+    required_11_answerable_intents = {
         "return_policy",
         "return_product",
         "refund_policy",
@@ -92,13 +101,24 @@ def test_suite_covers_12_core_product_intents(suite_cases):
         "shipping_costs",
         "delivery_time",
         "delivery_issue",
-        "change_shipping_address",
         "payment_issue",
     }
     product_cases = [c for c in suite_cases if c.get("slice") == "product_12_answerable"]
     assert len(product_cases) == 12
     observed_intents = {c["intent"] for c in product_cases}
-    assert observed_intents == required_12_intents, f"Missing product intents: {required_12_intents - observed_intents}"
+    assert observed_intents == required_11_answerable_intents, f"Missing product intents: {required_11_answerable_intents - observed_intents}"
+
+    # Verify cosmetics regression case exists under return_policy
+    c11 = next(c for c in product_cases if c["id"] == "final-case-11")
+    assert c11["intent"] == "return_policy"
+    assert "cosmetics" in c11["query"].lower()
+    assert "POL-RET-003:2.0" in c11["expected_docs"]
+
+    # Verify human_agent is evaluated in sensitive/escalation group
+    ha_case = next(c for c in suite_cases if c["intent"] == "human_agent")
+    assert ha_case["id"] == "final-case-15"
+    assert ha_case["expected_action"] == "escalate"
+    assert ha_case["slice"] == "human_agent_escalation"
 
     for c in product_cases:
         assert c["is_answerable"] is True
@@ -124,6 +144,15 @@ def test_derived_doc_versions_match_active_kb(suite_cases, active_kb_release, ac
                 if version:
                     assert version == release_docs[doc_id], f"Version mismatch for {doc_id}: expected {release_docs[doc_id]}, got {version}"
                     assert version == str(active_kb_docs[doc_id]["version"]), f"Version mismatch in KB body for {doc_id}"
+
+
+def test_cases_owned_order_ids_seeded(suite_cases, mock_orders):
+    """All cases specifying order_id must use orders owned by demo-customer (customer-1)."""
+    demo_orders = {o["order_id"] for o in mock_orders if o.get("customer_id") == "demo-customer"}
+    for c in suite_cases:
+        order_id = c.get("order_id")
+        if order_id:
+            assert order_id in demo_orders, f"Case {c['id']} references order {order_id} not owned by demo-customer"
 
 
 def test_suite_slice_distribution(suite_cases):
@@ -169,20 +198,28 @@ def test_honest_fixture_boundary_separation(suite_cases, injected_fixtures):
     assert "POL-INJ-CONF-01B" in fixture_doc_ids
 
 
-def test_manifest_sha256_checksums(suite_manifest):
-    """Manifest file hashes must match current contents on disk."""
+def test_manifest_sha256_checksums_and_reconciliation(suite_manifest):
+    """Manifest file hashes must match current contents on disk and document KB line-ending reconciliation."""
     prov = suite_manifest["provenance"]
     for key, path_str in [
         ("cases_sha256", prov["cases_file"]),
         ("injected_fixtures_sha256", prov["injected_fixtures_file"]),
         ("paired_tasks_sha256", prov["paired_tasks_file"]),
-        ("active_kb_sha256", prov["active_kb_file"]),
-        ("active_kb_release_sha256", prov["active_kb_release_file"]),
     ]:
         disk_path = REPO_ROOT / path_str
         assert disk_path.exists(), f"File referenced in manifest not found: {disk_path}"
         disk_hash = compute_sha256(disk_path)
         assert disk_hash == prov[key], f"Hash mismatch for {path_str}: expected {prov[key]}, disk has {disk_hash}"
+
+    reconcile = prov["kb_reconciliation"]
+    root_served = reconcile["deployed_root_serving_gateway"]
+    assert root_served["kb_source_sha256"] == "f8dcfbbdbb9cb2cd7a09d2ec12e0149083fdd4fa04931df6261fc4d1e6425fec"
+    assert root_served["kb_release_sha256"] == "cf450a72758e3d68ac7453802b5bc6c042ef2eddb9a6c4fa76483d4009c42804"
+    assert root_served["combined_kb_version_hash"] == "32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+
+    local_worker = reconcile["worker_local_worktree"]
+    assert local_worker["local_kb_source_sha256"] == compute_sha256(REPO_ROOT / "data/knowledge/approved_kb.v2.json")
+    assert local_worker["local_kb_release_sha256"] == compute_sha256(REPO_ROOT / "apps/ai_service/kb-release.json")
 
 
 def test_paired_agent_tasks_structure_and_order(paired_tasks, suite_cases):

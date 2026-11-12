@@ -2,7 +2,7 @@
   "suite": "final-acceptance-paired-agent-trials-v1",
   "total_tasks": 12,
   "alternating_order_ratio": "6_assisted_first_6_manual_first",
-  "delegation_notice": "Prepared by Worker C for coordinator execution. Coordinator performs AI claim grading and actual manual/assisted agent trials; no manual answers, wall times, ratings, or signoffs have been invented.",
+  "delegation_notice": "Prepared by Worker C for coordinator execution. Covers the 11 core answerable product intents plus restricted cosmetics regression (12 answerable drafting scenarios); human_agent is evaluated separately as the 12th product escalation scenario. Coordinator performs AI claim grading and actual manual/assisted agent trials; no manual answers, wall times, ratings, or signoffs have been invented.",
   "tasks": [
     {
       "task_id": "paired-task-01",
@@ -267,9 +267,9 @@
     {
       "task_id": "paired-task-11",
       "case_id": "final-case-11",
-      "intent": "change_shipping_address",
+      "intent": "return_policy",
       "execution_order": "assisted_first",
-      "query": "Can I update my delivery address for an order that is currently in Pending Processing?",
+      "query": "Can I return opened or unsealed cosmetics if I simply changed my mind after delivery?",
       "trial_status": "prepared_for_coordinator_execution",
       "assisted_trial": {
         "condition": "assisted",

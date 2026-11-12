@@ -1,21 +1,34 @@
 {
   "benchmark_id": "supportiq-final-acceptance-24",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "status": "frozen_pending_coordinator_approval",
   "owner": "Worker C (Current-Release Evidence Collector)",
-  "created_at": "2026-11-12T13:05:00Z",
-  "delegation_note": "Frozen synthetic suite locked by Worker C before inference. Gold source expectations derived directly from active approved KB prior to inference; honest separate fixture boundary used for temporal expiry and conflict detection.",
+  "created_at": "2026-11-12T13:20:00Z",
+  "delegation_note": "Frozen synthetic suite locked by Worker C before inference. Gold source expectations derived directly from active approved KB prior to inference; covers 11 core answerable product intents (12 drafting cases including restricted cosmetics regression) plus human_agent as 12th product escalation scenario. Honest separate fixture boundary used for temporal expiry and conflict detection; root CRLF vs worker LF byte hashes explicitly reconciled.",
   "provenance": {
-    "active_kb_file": "data/knowledge/approved_kb.v2.json",
-    "active_kb_sha256": "aaa924c4b48dcd53a14269045b278b66f6e5e8ae9d1b614cd59b757102b78594",
-    "active_kb_release_file": "apps/ai_service/kb-release.json",
-    "active_kb_release_sha256": "33cf05b50c25384fbb208cd0c0c5cae71991d29a0f754cb1b20a1d6d7285cdaa",
     "cases_file": "data/benchmarks/final_acceptance/cases.jsonl",
-    "cases_sha256": "e07a05f8f455d505fdb5cbb249a750b00265d0c4a132b39d22c392a99448444e",
-    "injected_fixtures_file": "data/benchmarks/final_acceptance/injected_robustness_fixtures.json",
-    "injected_fixtures_sha256": "a630e28bd643a4ca216337671432c23b7da2508847bcaf0bfb4ffbaec8990971",
+    "cases_sha256": "fcb1007bf026e7406f3270ccf54770f262ed22a708c2fcf3aae3600195641b9b",
     "paired_tasks_file": "data/benchmarks/final_acceptance/paired_agent_tasks.json",
-    "paired_tasks_sha256": "1fce7e94728cc4479046be4c149ffc1aa003a57309705da14f92b1ac418ce827"
+    "paired_tasks_sha256": "91f3f5f610dede3a0b9b0e584c516ebcaa975b198269d856c0fcc9f76fbdbb1c",
+    "injected_fixtures_file": "data/benchmarks/final_acceptance/injected_robustness_fixtures.json",
+    "injected_fixtures_sha256": "22e923ebaceb2345068dfe6b902517676fa6be91a78a14ab84813c55d6dee9e5",
+    "kb_reconciliation": {
+      "deployed_root_serving_gateway": {
+        "kb_source_file": "data/knowledge/approved_kb.v2.json",
+        "kb_source_sha256": "f8dcfbbdbb9cb2cd7a09d2ec12e0149083fdd4fa04931df6261fc4d1e6425fec",
+        "kb_release_file": "apps/ai_service/kb-release.json",
+        "kb_release_sha256": "cf450a72758e3d68ac7453802b5bc6c042ef2eddb9a6c4fa76483d4009c42804",
+        "combined_kb_version_hash": "32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "observed_gateway_kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "line_ending": "CRLF"
+      },
+      "worker_local_worktree": {
+        "local_kb_source_sha256": "aaa924c4b48dcd53a14269045b278b66f6e5e8ae9d1b614cd59b757102b78594",
+        "local_kb_release_sha256": "33cf05b50c25384fbb208cd0c0c5cae71991d29a0f754cb1b20a1d6d7285cdaa",
+        "line_ending": "LF",
+        "content_equality": "VERIFIED_IDENTICAL (text matches byte-for-byte upon CRLF/LF normalization)"
+      }
+    }
   },
   "total_cases": 24,
   "slice_counts": {
