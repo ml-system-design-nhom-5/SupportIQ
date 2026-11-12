@@ -26,6 +26,11 @@ from supportiq_backend.platform import (
     RequestContractError,
     SpanName,
 )
+from supportiq_backend.suggestions import (
+    SuggestionStarter,
+    SuggestionStarterPorts,
+    SuggestionTrigger,
+)
 from supportiq_backend.tickets import (
     CreateShopTicket,
     CreateShopTicketPorts,
@@ -46,9 +51,15 @@ from tests.unit.platform.fakes import (
     FAKE_CLOCK_START,
     FakeClock,
     FakeTransactionRunner,
+    FixedTraceContext,
     RecordingEventRecorder,
     RecordingStepTracer,
     SequentialIdGenerator,
+)
+from tests.unit.suggestions.fakes import (
+    FakeSuggestionStore,
+    FakeTicketLinks,
+    RecordingSuggestionQueue,
 )
 from tests.unit.tickets.fakes import FIRST_TICKET_ID, FakeTicketStore
 
@@ -73,13 +84,31 @@ def render_ticket_id(ticket: ShopTicket) -> StoredResponse:
     return StoredResponse(201, f"{ticket.ticket_id}|{ticket.created_at.isoformat()}")
 
 
-def build_stores(tickets: FakeTicketStore | None = None) -> ShopTicketStores:
+def build_stores(
+    tickets: FakeTicketStore | None = None, suggestions: FakeSuggestionStore | None = None
+) -> ShopTicketStores:
     return ShopTicketStores(
         tickets=tickets or FakeTicketStore(),
         orders=FakeCommerceGateway(
             orders={CUSTOMER_ID: (build_order(ORDER_ID), build_order(OTHER_ORDER_ID))}
         ),
         idempotency=FakeIdempotencyStore(),
+        suggestions=suggestions or FakeSuggestionStore(),
+        links=FakeTicketLinks(),
+    )
+
+
+def build_starter(
+    clock: FakeClock, events: RecordingEventRecorder, queue: RecordingSuggestionQueue
+) -> SuggestionStarter:
+    return SuggestionStarter(
+        SuggestionStarterPorts(
+            clock=clock,
+            ids=SequentialIdGenerator(start=100),
+            traces=FixedTraceContext(),
+            events=events,
+            queue=queue,
+        )
     )
 
 
@@ -88,6 +117,7 @@ def build_create(
     events: RecordingEventRecorder | None = None,
     handling_mode: HandlingMode = HandlingMode.ASSISTED,
     steps: RecordingStepTracer | None = None,
+    queue: RecordingSuggestionQueue | None = None,
 ) -> CreateShopTicket:
     recorder = events or RecordingEventRecorder()
     clock = FakeClock()
@@ -100,6 +130,7 @@ def build_create(
             ids=SequentialIdGenerator(),
             events=recorder,
             steps=steps or RecordingStepTracer(),
+            starter=build_starter(clock, recorder, queue or RecordingSuggestionQueue()),
         ),
         handling_mode,
         render_ticket_id,
@@ -372,3 +403,35 @@ async def test_failure_to_open_the_transaction_reaches_the_list_and_the_read() -
 async def test_only_a_customer_can_read_a_ticket() -> None:
     with pytest.raises(ForbiddenRoleError):
         await build_get(FakeTicketStore()).execute(STAFF, FIRST_TICKET_ID)
+
+
+@pytest.mark.anyio
+async def test_an_assisted_ticket_gets_its_first_suggestion_in_the_same_transaction() -> None:
+    suggestions = FakeSuggestionStore()
+    transactions = FakeTransactionRunner(build_stores(suggestions=suggestions))
+    queue = RecordingSuggestionQueue()
+    create = build_create(transactions, queue=queue)
+
+    await create.execute(CUSTOMER, NewShopTicket(OrderId(ORDER_ID), MESSAGE), KEY)
+
+    (suggestion,) = suggestions.data.suggestions.values()
+    assert suggestion.trigger is SuggestionTrigger.TICKET_CREATED
+    assert suggestion.requested_by is None
+    assert transactions.commit_count == 1
+    assert queue.notifications == [(FIRST_TICKET_ID, suggestion.suggestion_id)]
+
+
+@pytest.mark.anyio
+async def test_a_manual_ticket_gets_no_suggestion_and_wakes_no_claim_loop() -> None:
+    suggestions = FakeSuggestionStore()
+    queue = RecordingSuggestionQueue()
+    create = build_create(
+        FakeTransactionRunner(build_stores(suggestions=suggestions)),
+        handling_mode=HandlingMode.MANUAL,
+        queue=queue,
+    )
+
+    await create.execute(CUSTOMER, NewShopTicket(OrderId(ORDER_ID), MESSAGE), KEY)
+
+    assert suggestions.data.suggestions == {}
+    assert queue.notifications == []

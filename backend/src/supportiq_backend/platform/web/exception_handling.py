@@ -150,7 +150,11 @@ class _ProblemHandler:
                 ErrorCode.INVALID_REQUEST
                 | ErrorCode.UNAUTHENTICATED
                 | ErrorCode.FORBIDDEN
+                | ErrorCode.AUTHORITY_REQUIRED
                 | ErrorCode.NOT_FOUND
+                | ErrorCode.INVALID_TICKET_STATE
+                | ErrorCode.SUGGESTION_PENDING
+                | ErrorCode.SUGGESTION_SUPERSEDED
                 | ErrorCode.IDEMPOTENCY_KEY_REUSED
                 | ErrorCode.LOGIN_NAME_TAKEN
             ):

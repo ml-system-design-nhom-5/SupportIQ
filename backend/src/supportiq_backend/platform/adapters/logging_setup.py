@@ -34,6 +34,13 @@ REDACTED = "<redacted>"
 ALLOWED_ATTRIBUTES = frozenset(
     {
         "ticket_id",
+        "suggestion_id",
+        "suggestion_part",
+        "suggestion_trigger",
+        "attempt_number",
+        "ai_service_operation",
+        "draft_status",
+        "decision_type",
         "reason_code",
         "duration_ms",
         "error_type",

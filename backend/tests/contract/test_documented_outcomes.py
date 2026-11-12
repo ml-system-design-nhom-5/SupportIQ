@@ -18,7 +18,7 @@ from starlette.middleware import Middleware
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from supportiq_backend.accounts import PasswordHash
-from supportiq_backend.composition_root import create_app
+from supportiq_backend.composition_root import BackgroundWork, create_app
 from tests.contract.calls import (
     KEY,
     NEW_ACCOUNT,
@@ -78,7 +78,12 @@ def client_under(
 ) -> AbstractAsyncContextManager[httpx.AsyncClient]:
     match condition:
         case Condition.REQUEST_FAILS:
-            app = create_app(build_settings(worker_database), RecordingEventRecorder(), FakeClock())
+            app = create_app(
+                build_settings(worker_database),
+                RecordingEventRecorder(),
+                FakeClock(),
+                background=BackgroundWork.NONE,
+            )
             # Starlette runs this list in order, so the last entry is the innermost middleware.
             middleware: MutableSequence[Middleware] = app.user_middleware
             middleware.append(Middleware(FailingMiddleware))

@@ -1,23 +1,49 @@
-"""The wiring of tickets: its stores, use cases, and router (ARCH-21)."""
+"""The wiring of tickets: its stores, use cases, and routers (ARCH-21)."""
 
 from fastapi import APIRouter
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from supportiq_backend.accounts.adapters.staff_directory import PostgresStaffDirectory
+from supportiq_backend.audit.adapters.audit_log import PostgresAuditLog
 from supportiq_backend.commerce.adapters.commerce_gateway import PostgresCommerceGateway
+from supportiq_backend.commerce.adapters.customer_records import PostgresCustomerRecords
 from supportiq_backend.composition_root.accounts_wiring import AccountsWiring
 from supportiq_backend.composition_root.shared_ports import SharedPorts
+from supportiq_backend.composition_root.suggestions_wiring import SuggestionsWiring
 from supportiq_backend.idempotency.adapters.idempotency_store import PostgresIdempotencyStore
+from supportiq_backend.platform import EventRecorder
 from supportiq_backend.platform.adapters.database import SqlAlchemyTransactionRunner
 from supportiq_backend.platform.settings import HandlingModeSetting, Settings
+from supportiq_backend.pseudonymization import RestorePseudonyms
+from supportiq_backend.pseudonymization.adapters.pseudonym_map_store import (
+    PostgresPseudonymMapStore,
+)
+from supportiq_backend.suggestions.adapters.suggestion_store import PostgresSuggestionStore
 from supportiq_backend.tickets import (
+    ConsolePorts,
+    ConsoleStores,
     CreateShopTicket,
     CreateShopTicketPorts,
+    GetConsoleTicket,
     GetShopTicket,
     HandlingMode,
+    ListConsoleTickets,
     ListShopTickets,
+    RecordTicketView,
+    SendReply,
     ShopTicketStores,
 )
+from supportiq_backend.tickets.adapters.console_store import (
+    PostgresConsoleTicketStore,
+    PostgresReplyStore,
+    PostgresTicketLinks,
+)
 from supportiq_backend.tickets.adapters.ticket_store import PostgresTicketStore
+from supportiq_backend.tickets.api.console import (
+    ConsoleTicketRoutes,
+    build_console_tickets_router,
+    render_sent_reply,
+)
 from supportiq_backend.tickets.api.shop import (
     ShopTicketRoutes,
     build_shop_tickets_router,
@@ -38,7 +64,7 @@ def to_handling_mode(setting: HandlingModeSetting) -> HandlingMode:
 
 
 def build_shop_ticket_stores(session: AsyncSession) -> ShopTicketStores:
-    """Build the stores of the ticket use cases on one session, so all commit together.
+    """Build the stores of the shop's ticket use cases on one session, so all commit together.
 
     Args:
         session: The session of the transaction.
@@ -50,7 +76,42 @@ def build_shop_ticket_stores(session: AsyncSession) -> ShopTicketStores:
         tickets=PostgresTicketStore(session),
         orders=PostgresCommerceGateway(session),
         idempotency=PostgresIdempotencyStore(session),
+        suggestions=PostgresSuggestionStore(session),
+        links=PostgresTicketLinks(session),
     )
+
+
+class ConsoleStoreBuilder:
+    """Build the stores of the console use cases on one session, so all commit together."""
+
+    def __init__(self, events: EventRecorder) -> None:
+        """Keep the event recorder of the restorer.
+
+        Args:
+            events: Where a pseudonym missing from a map is recorded.
+        """
+        self._events = events
+
+    def __call__(self, session: AsyncSession) -> ConsoleStores:
+        """Build the stores; the restorer reads the map in the same transaction (ADR-0010).
+
+        Args:
+            session: The session of the transaction.
+
+        Returns:
+            The stores.
+        """
+        return ConsoleStores(
+            tickets=PostgresConsoleTicketStore(session),
+            replies=PostgresReplyStore(session),
+            suggestions=PostgresSuggestionStore(session),
+            links=PostgresTicketLinks(session),
+            records=PostgresCustomerRecords(session),
+            staff=PostgresStaffDirectory(session),
+            restorer=RestorePseudonyms(PostgresPseudonymMapStore(session), self._events),
+            idempotency=PostgresIdempotencyStore(session),
+            audit=PostgresAuditLog(session),
+        )
 
 
 def wire_tickets(
@@ -58,18 +119,33 @@ def wire_tickets(
     session_factory: async_sessionmaker[AsyncSession],
     shared: SharedPorts,
     accounts: AccountsWiring,
-) -> APIRouter:
-    """Create the use cases of tickets and their router.
+    suggestions: SuggestionsWiring,
+) -> tuple[APIRouter, ...]:
+    """Create the use cases of tickets and their routers.
 
     Args:
         settings: The validated settings.
         session_factory: The session factory of the replicas.
         shared: The shared ports.
         accounts: The role checks and the session dependency.
+        suggestions: The starter of suggestions and the ai-service client.
 
     Returns:
-        The router of the shop's ticket operations.
+        The routers of the shop's and the console's ticket operations.
     """
+    return (
+        _wire_shop(settings, session_factory, shared, accounts, suggestions),
+        _wire_console(session_factory, shared, accounts, suggestions),
+    )
+
+
+def _wire_shop(
+    settings: Settings,
+    session_factory: async_sessionmaker[AsyncSession],
+    shared: SharedPorts,
+    accounts: AccountsWiring,
+    suggestions: SuggestionsWiring,
+) -> APIRouter:
     transactions = SqlAlchemyTransactionRunner(session_factory, build_shop_ticket_stores)
     return build_shop_tickets_router(
         ShopTicketRoutes(
@@ -83,11 +159,43 @@ def wire_tickets(
                     ids=shared.ids,
                     events=shared.events,
                     steps=shared.steps,
+                    starter=suggestions.starter,
                 ),
                 to_handling_mode(settings.default_handling_mode),
                 render_created_ticket,
             ),
             get_ticket=GetShopTicket(transactions, accounts.authorizer),
+            check_origin=accounts.check_origin,
+            current_session=accounts.current_session,
+        )
+    )
+
+
+def _wire_console(
+    session_factory: async_sessionmaker[AsyncSession],
+    shared: SharedPorts,
+    accounts: AccountsWiring,
+    suggestions: SuggestionsWiring,
+) -> APIRouter:
+    transactions = SqlAlchemyTransactionRunner(session_factory, ConsoleStoreBuilder(shared.events))
+    ports = ConsolePorts(
+        authorizer=accounts.authorizer,
+        guard=shared.guard,
+        clock=shared.clock,
+        ids=shared.ids,
+        traces=shared.traces,
+        events=shared.events,
+        steps=shared.steps,
+        starter=suggestions.starter,
+        ai_service=suggestions.ai_service,
+    )
+    return build_console_tickets_router(
+        ConsoleTicketRoutes(
+            list_tickets=ListConsoleTickets(transactions, ports),
+            get_ticket=GetConsoleTicket(transactions, ports),
+            record_view=RecordTicketView(transactions, ports),
+            create_suggestion=suggestions.create_suggestion,
+            send_reply=SendReply(transactions, ports, render_sent_reply),
             check_origin=accounts.check_origin,
             current_session=accounts.current_session,
         )

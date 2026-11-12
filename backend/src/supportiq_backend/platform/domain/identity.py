@@ -14,6 +14,11 @@ class SpanName(StrEnum):
     """The steps of backend that have a span of their own (LOG-20)."""
 
     CREATE_TICKET = "create_ticket"
+    RUN_SUGGESTION_JOB = "run_suggestion_job"
+    PSEUDONYMIZE_MESSAGE = "pseudonymize_message"
+    CALL_AI_SERVICE = "call_ai_service"
+    SAVE_DECISION = "save_decision"
+    SEND_REPLY = "send_reply"
 
 
 class IdGenerator(Protocol):
@@ -59,10 +64,41 @@ class StepTracer(Protocol):
         """
         ...
 
+    def background_step(self, name: SpanName, trace_id: TraceId) -> AbstractContextManager[None]:
+        """Open the root span of work outside a request, in the trace that queued it (LOG-06).
+
+        A suggestion job runs in the trace of the request that created its suggestion, so the
+        trace ID that the suggestion stores names the job's spans too (LOG-04).
+
+        Args:
+            name: The step.
+            trace_id: The trace to join.
+
+        Returns:
+            The context that holds the span.
+        """
+        ...
+
     def record_ticket(self, ticket_id: str) -> None:
         """Name the ticket of the current step, so a trace is found by its ID (LOG-07).
 
         Args:
             ticket_id: The ticket, an Internal identifier.
+        """
+        ...
+
+    def record_pseudonym_count(self, count: int) -> None:
+        """Record how many pseudonyms the current step wrote, never their values (LOG-29).
+
+        Args:
+            count: The number of distinct pseudonyms.
+        """
+        ...
+
+    def record_ai_service_endpoint(self, endpoint: str) -> None:
+        """Name the `ai-service` operation that the current step calls.
+
+        Args:
+            endpoint: The operation ID, such as `createDraft`.
         """
         ...

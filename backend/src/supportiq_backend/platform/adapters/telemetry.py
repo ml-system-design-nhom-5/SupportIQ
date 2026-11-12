@@ -21,8 +21,15 @@ from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import Event, ReadableSpan, Span, SpanProcessor, TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter
+from opentelemetry.sdk.trace.id_generator import RandomIdGenerator
 from opentelemetry.sdk.trace.sampling import ALWAYS_ON, ParentBased
-from opentelemetry.trace import Status, StatusCode
+from opentelemetry.trace import (
+    NonRecordingSpan,
+    SpanContext,
+    Status,
+    StatusCode,
+    TraceFlags,
+)
 from opentelemetry.util.types import AttributeValue
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -36,6 +43,8 @@ from supportiq_backend.platform.domain import (
 
 EXCEPTION_EVENT_NAME = "exception"
 TICKET_ID_ATTRIBUTE = "ticket_id"
+PSEUDONYM_COUNT_ATTRIBUTE = "pseudonym_count"
+AI_SERVICE_OPERATION_ATTRIBUTE = "ai_service_operation"
 # The trace ID of work without a span. The composition root starts a span for every request
 # and every command, so a record carries it only when tracing was not set up.
 NO_TRACE_ID = TraceId("0" * 32)
@@ -67,11 +76,14 @@ ALLOWED_SPAN_ATTRIBUTES = frozenset(
         "server.port",
         "error.type",
         TICKET_ID_ATTRIBUTE,
+        PSEUDONYM_COUNT_ATTRIBUTE,
+        AI_SERVICE_OPERATION_ATTRIBUTE,
     }
 )
 ALLOWED_EXCEPTION_ATTRIBUTES = frozenset({"exception.type"})
 _NO_NAMES: frozenset[str] = frozenset()
 _STEP_TRACER_NAME = "supportiq_backend.steps"
+_HEXADECIMAL_BASE = 16
 
 
 class OpenTelemetryTraceContext:
@@ -105,6 +117,7 @@ class OpenTelemetryStepTracer:
             tracer_provider: The tracer provider of the process.
         """
         self._tracer = tracer_provider.get_tracer(_STEP_TRACER_NAME)
+        self._span_ids = RandomIdGenerator()
 
     @contextmanager
     def step(self, name: SpanName) -> Generator[None]:
@@ -122,6 +135,33 @@ class OpenTelemetryStepTracer:
         ):
             yield
 
+    @contextmanager
+    def background_step(self, name: SpanName, trace_id: TraceId) -> Generator[None]:
+        """Open the root span of work outside a request, in the trace that queued it (LOG-06).
+
+        Args:
+            name: The step.
+            trace_id: The trace to join, as 32 hexadecimal characters.
+
+        Yields:
+            Nothing. An exception leaves the span unmarked, as in `step`.
+        """
+        parent = NonRecordingSpan(
+            SpanContext(
+                trace_id=int(trace_id, _HEXADECIMAL_BASE),
+                span_id=self._span_ids.generate_span_id(),
+                is_remote=True,
+                trace_flags=TraceFlags(TraceFlags.SAMPLED),
+            )
+        )
+        with self._tracer.start_as_current_span(
+            name.value,
+            context=trace.set_span_in_context(parent),
+            record_exception=False,
+            set_status_on_exception=False,
+        ):
+            yield
+
     def record_ticket(self, ticket_id: str) -> None:
         """Name the ticket of the current step, so a trace is found by its ID (LOG-07).
 
@@ -129,6 +169,22 @@ class OpenTelemetryStepTracer:
             ticket_id: The ticket, an Internal identifier.
         """
         trace.get_current_span().set_attribute(TICKET_ID_ATTRIBUTE, ticket_id)
+
+    def record_pseudonym_count(self, count: int) -> None:
+        """Record how many pseudonyms the current step wrote, never their values (LOG-29).
+
+        Args:
+            count: The number of distinct pseudonyms.
+        """
+        trace.get_current_span().set_attribute(PSEUDONYM_COUNT_ATTRIBUTE, count)
+
+    def record_ai_service_endpoint(self, endpoint: str) -> None:
+        """Name the `ai-service` operation that the current step calls.
+
+        Args:
+            endpoint: The operation ID, such as `createDraft`.
+        """
+        trace.get_current_span().set_attribute(AI_SERVICE_OPERATION_ATTRIBUTE, endpoint)
 
 
 class RedactingSpanProcessor(SpanProcessor):

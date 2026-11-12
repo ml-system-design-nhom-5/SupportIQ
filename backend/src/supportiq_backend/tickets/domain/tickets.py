@@ -76,20 +76,35 @@ class ShopTicketRecord:
 
 
 @dataclass(frozen=True, slots=True, repr=False)
+class ShopReply:
+    """The reply that staff sent, as the customer reads it. The body is Confidential.
+
+    Attributes:
+        body: The text, exactly as staff sent it.
+        sent_at: When it was sent.
+    """
+
+    body: str
+    sent_at: datetime
+
+
+@dataclass(frozen=True, slots=True, repr=False)
 class ShopTicket:
-    """A customer's ticket, as the shop shows it.
+    """A customer's ticket, as the shop shows it. It holds no AI output (ADR-0013).
 
     Attributes:
         ticket_id: The identifier.
         order_id: The order that the ticket is about.
         message: The customer's message, exactly as written.
         created_at: When the customer sent the message.
+        reply: The reply, once staff sent it.
     """
 
     ticket_id: TicketId
     order_id: OrderId
     message: str
     created_at: datetime
+    reply: ShopReply | None = None
 
 
 @dataclass(frozen=True, slots=True)

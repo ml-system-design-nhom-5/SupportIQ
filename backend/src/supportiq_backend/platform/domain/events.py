@@ -36,6 +36,24 @@ class EventName(StrEnum):
     SIGN_IN_THROTTLED = "sign_in.throttled"
     PERMISSION_DENIED = "permission.denied"
     TICKET_CREATED = "ticket.created"
+    SUGGESTION_REQUESTED = "suggestion.requested"
+    SUGGESTION_SUPERSEDED = "suggestion.superseded"
+    SUGGESTION_PART_CANCELLED = "suggestion.part_cancelled"
+    SUGGESTION_COMPLETED = "suggestion.completed"
+    SUGGESTION_JOB_CLAIMED = "suggestion_job.claimed"
+    SUGGESTION_JOB_LEASE_EXPIRED = "suggestion_job.lease_expired"
+    SUGGESTION_JOB_FAILED = "suggestion_job.failed"
+    PSEUDONYMIZATION_FAILED = "pseudonymization.failed"
+    PSEUDONYMIZATION_REJECTED = "pseudonymization.rejected"
+    PSEUDONYM_RESTORE_FAILED = "pseudonym.restore_failed"
+    AI_SERVICE_CALLED = "ai_service.called"
+    AI_SERVICE_CALL_FAILED = "ai_service.call_failed"
+    AI_SERVICE_CONTRACT_VIOLATED = "ai_service.contract_violated"
+    TICKET_VIEWED = "ticket.viewed"
+    TICKET_MANUAL_HANDLING_STARTED = "ticket.manual_handling_started"
+    INTENT_OVERRIDDEN = "intent.overridden"
+    DECISION_RECORDED = "decision.recorded"
+    REPLY_SENT = "reply.sent"
     ACCOUNT_ROLE_CHANGED = "account.role_changed"
     ACCOUNT_STATUS_CHANGED = "account.status_changed"
     ACCOUNT_CREATED = "account.created"
@@ -108,6 +126,56 @@ EVENT_DESCRIPTIONS: Mapping[EventName, EventDescription] = MappingProxyType(
             EventLevel.WARNING, "Request refused because the role may not call the operation"
         ),
         EventName.TICKET_CREATED: EventDescription(EventLevel.INFO, "Ticket created"),
+        EventName.SUGGESTION_REQUESTED: EventDescription(
+            EventLevel.INFO, "Suggestion created and its job queued"
+        ),
+        EventName.SUGGESTION_SUPERSEDED: EventDescription(
+            EventLevel.INFO, "Suggestion superseded by a newer one of the ticket"
+        ),
+        EventName.SUGGESTION_PART_CANCELLED: EventDescription(
+            EventLevel.INFO, "Running call cancelled because its suggestion was superseded"
+        ),
+        EventName.SUGGESTION_COMPLETED: EventDescription(
+            EventLevel.INFO, "Suggestion completed with no part pending"
+        ),
+        EventName.SUGGESTION_JOB_CLAIMED: EventDescription(
+            EventLevel.INFO, "Suggestion job claimed under a lease"
+        ),
+        EventName.SUGGESTION_JOB_LEASE_EXPIRED: EventDescription(
+            EventLevel.WARNING,
+            "Suggestion job ran out of attempts, so its pending parts are unavailable",
+        ),
+        EventName.SUGGESTION_JOB_FAILED: EventDescription(
+            EventLevel.ERROR, "Suggestion job failed and waits for its lease to expire"
+        ),
+        EventName.PSEUDONYMIZATION_FAILED: EventDescription(
+            EventLevel.ERROR, "Pseudonymization failed, so nothing was sent to ai-service"
+        ),
+        EventName.PSEUDONYMIZATION_REJECTED: EventDescription(
+            EventLevel.WARNING,
+            "Pseudonymized text is longer than its limit, so nothing was sent to ai-service",
+        ),
+        EventName.PSEUDONYM_RESTORE_FAILED: EventDescription(
+            EventLevel.ERROR, "A pseudonym in stored AI text is missing from the map"
+        ),
+        EventName.AI_SERVICE_CALLED: EventDescription(
+            EventLevel.INFO, "Call to ai-service answered with a result"
+        ),
+        EventName.AI_SERVICE_CALL_FAILED: EventDescription(
+            EventLevel.WARNING, "Call to ai-service timed out, was unreachable, or failed"
+        ),
+        EventName.AI_SERVICE_CONTRACT_VIOLATED: EventDescription(
+            EventLevel.ERROR, "Call to ai-service was refused or answered outside its contract"
+        ),
+        EventName.TICKET_VIEWED: EventDescription(EventLevel.INFO, "Ticket view recorded"),
+        EventName.TICKET_MANUAL_HANDLING_STARTED: EventDescription(
+            EventLevel.WARNING, "The AI could not run, so the ticket is handled manually"
+        ),
+        EventName.INTENT_OVERRIDDEN: EventDescription(
+            EventLevel.INFO, "Intent confirmed or corrected by staff"
+        ),
+        EventName.DECISION_RECORDED: EventDescription(EventLevel.INFO, "Staff decision recorded"),
+        EventName.REPLY_SENT: EventDescription(EventLevel.INFO, "Reply sent to the customer"),
         EventName.ACCOUNT_ROLE_CHANGED: EventDescription(EventLevel.INFO, "Account role changed"),
         EventName.ACCOUNT_STATUS_CHANGED: EventDescription(
             EventLevel.INFO, "Account status changed"

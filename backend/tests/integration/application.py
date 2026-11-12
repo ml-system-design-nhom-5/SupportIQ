@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import httpx
 from fastapi import FastAPI
 
-from supportiq_backend.composition_root import create_app
+from supportiq_backend.composition_root import BackgroundWork, create_app
 from supportiq_backend.platform import EventRecorder
 from supportiq_backend.platform.settings import Settings
 from tests.integration.database import WorkerDatabase
@@ -78,7 +78,9 @@ async def running_client(
     Yields:
         A client whose requests go to the application in the test process.
     """
-    async with running_app(create_app(settings, events, clock)) as client:
+    # No claim loop: no job runs behind the back of a test of the HTTP operations.
+    app = create_app(settings, events, clock, background=BackgroundWork.NONE)
+    async with running_app(app) as client:
         yield client
 
 

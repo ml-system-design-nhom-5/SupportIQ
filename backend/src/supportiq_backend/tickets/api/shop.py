@@ -13,6 +13,7 @@ from supportiq_backend.generated import (
     CreateShopTicketRequest,
     Cursor,
     MessageText,
+    ShopReplyView,
     ShopTicketPage,
     ShopTicketStatus,
     ShopTicketView,
@@ -77,15 +78,22 @@ def to_shop_ticket_view(ticket: ShopTicket) -> ShopTicketView:
         ticket: The ticket.
 
     Returns:
-        The contract model. Every ticket is `received`, because no operation sends a reply
-        until the ticket workflow adds them.
+        The contract model: `received` until staff send the reply, then `replied` with it.
     """
+    reply = ticket.reply
     return ShopTicketView(
         ticket_id=ticket.ticket_id,
         order_id=ticket.order_id,
         message=MessageText(ticket.message),
         created_at=format_timestamp(ticket.created_at),
-        customer_status=ShopTicketStatus.received,
+        customer_status=ShopTicketStatus.received if reply is None else ShopTicketStatus.replied,
+        reply=(
+            MISSING
+            if reply is None
+            else ShopReplyView(
+                body=MessageText(reply.body), sent_at=format_timestamp(reply.sent_at)
+            )
+        ),
     )
 
 

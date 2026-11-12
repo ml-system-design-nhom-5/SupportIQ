@@ -1,0 +1,395 @@
+"""The console ports of tickets on `tickets`, `customer_messages`, `replies`, and decisions.
+
+Every action locks the ticket row first with `SELECT ... FOR UPDATE`, so two actions on one
+ticket run one after the other, whatever replica answers (backend ticket workflow design).
+"""
+
+from datetime import datetime
+from uuid import UUID
+
+from sqlalchemy import Row, Select, and_, collate, insert, or_, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from supportiq_backend.accounts import AccountId, CustomerId
+from supportiq_backend.commerce import OrderId
+from supportiq_backend.platform import is_storable_text
+from supportiq_backend.platform.persistence import BYTE_ORDER_COLLATION
+from supportiq_backend.suggestions import (
+    SuggestionId,
+    SuggestionTicketId,
+    TicketForSuggestion,
+    TicketMessage,
+)
+from supportiq_backend.tickets.adapters.tables import (
+    CustomerMessageRow,
+    ReplyRow,
+    StaffDecisionRow,
+    TicketRow,
+)
+from supportiq_backend.tickets.domain import (
+    ConsoleTicket,
+    ConsoleTicketPosition,
+    HandlingMode,
+    ProposalId,
+    RecordedDecision,
+    ReplyBasis,
+    ReplyId,
+    SentReply,
+    StaffReasonCode,
+    TicketId,
+    TicketStatus,
+)
+
+type _ConsoleColumns = tuple[
+    str,
+    str,
+    str,
+    bool,
+    datetime,
+    datetime | None,
+    datetime | None,
+    UUID,
+    str | None,
+    UUID | None,
+    str,
+]
+
+
+class PostgresConsoleTicketStore:
+    """Implement the `ConsoleTicketStore` port in the transaction of one session."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        """Bind the store to the session of a transaction.
+
+        Args:
+            session: The session of the use case's transaction.
+        """
+        self._session = session
+
+    async def lock_console_ticket(self, ticket_id: TicketId) -> ConsoleTicket | None:
+        """Lock a ticket row with `SELECT ... FOR UPDATE` and load it with its message.
+
+        Args:
+            ticket_id: The ticket, as a request sent it.
+
+        Returns:
+            The ticket, or None when it is unknown.
+        """
+        if not is_storable_text(ticket_id):
+            return None
+        statement = (
+            _select_console_tickets()
+            .where(TicketRow.ticket_id == ticket_id)
+            .with_for_update(of=TicketRow)
+        )
+        row = (await self._session.execute(statement)).one_or_none()
+        return None if row is None else _to_console_ticket(row)
+
+    async def load_console_ticket(self, ticket_id: TicketId) -> ConsoleTicket | None:
+        """Load a ticket with its message, without a lock.
+
+        Args:
+            ticket_id: The ticket, as a request sent it.
+
+        Returns:
+            The ticket, or None when it is unknown.
+        """
+        if not is_storable_text(ticket_id):
+            return None
+        statement = _select_console_tickets().where(TicketRow.ticket_id == ticket_id)
+        row = (await self._session.execute(statement)).one_or_none()
+        return None if row is None else _to_console_ticket(row)
+
+    async def load_console_tickets(
+        self, status: TicketStatus, *, after: ConsoleTicketPosition | None, limit: int
+    ) -> tuple[ConsoleTicket, ...]:
+        """Load the tickets in one status, in the order of their queue.
+
+        Args:
+            status: The queue.
+            after: The last ticket of the previous page, or None for the first page.
+            limit: The maximum number of tickets.
+
+        Returns:
+            The tickets.
+        """
+        ticket_order = collate(TicketRow.ticket_id, BYTE_ORDER_COLLATION)
+        statement = _select_console_tickets().where(TicketRow.status == status.value)
+        if status is TicketStatus.CLOSED:
+            moment = TicketRow.closed_at
+            ordered = statement.order_by(moment.desc(), ticket_order)
+            if after is not None:
+                ordered = ordered.where(
+                    or_(
+                        moment < after.moment,
+                        and_(moment == after.moment, ticket_order > after.ticket_id),
+                    )
+                )
+        else:
+            moment = TicketRow.created_at
+            ordered = statement.order_by(moment, ticket_order)
+            if after is not None:
+                ordered = ordered.where(
+                    or_(
+                        moment > after.moment,
+                        and_(moment == after.moment, ticket_order > after.ticket_id),
+                    )
+                )
+        rows = await self._session.execute(ordered.limit(limit))
+        return tuple(_to_console_ticket(row) for row in rows)
+
+    async def start_handling(self, ticket_id: TicketId, started_at: datetime) -> None:
+        """Set `handling_started_at`, which starts the handling clock (NFR-11).
+
+        Args:
+            ticket_id: The ticket, locked, whose clock has not started.
+            started_at: The time of the first view.
+        """
+        await self._session.execute(
+            update(TicketRow)
+            .where(TicketRow.ticket_id == ticket_id, TicketRow.handling_started_at.is_(None))
+            .values(handling_started_at=started_at)
+        )
+
+    async def close_ticket(self, ticket_id: TicketId, closed_at: datetime) -> None:
+        """Set the ticket `closed`, when its reply is sent.
+
+        Args:
+            ticket_id: The ticket, locked.
+            closed_at: When the reply was sent.
+        """
+        await self._session.execute(
+            update(TicketRow)
+            .where(TicketRow.ticket_id == ticket_id)
+            .values(status=TicketStatus.CLOSED.value, closed_at=closed_at)
+        )
+
+
+class PostgresReplyStore:
+    """Implement the `ReplyStore` port in the transaction of one session."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        """Bind the store to the session of a transaction.
+
+        Args:
+            session: The session of the use case's transaction.
+        """
+        self._session = session
+
+    async def insert_reply(self, reply: SentReply) -> None:
+        """Insert the one reply of a ticket; the unique `ticket_id` refuses a second one.
+
+        Args:
+            reply: The reply.
+        """
+        await self._session.execute(
+            insert(ReplyRow).values(
+                reply_id=reply.reply_id,
+                ticket_id=reply.ticket_id,
+                basis=reply.basis.value,
+                suggestion_id=_optional_uuid(reply.suggestion_id),
+                proposal_id=reply.proposal_id,
+                acknowledged_warning_ids=list(reply.acknowledged_warning_ids),
+                staff_reason_codes=[code.value for code in reply.staff_reason_codes],
+                sent_by_account_id=UUID(reply.sent_by),
+                sent_at=reply.sent_at,
+                body=reply.body,
+                note=reply.note,
+            )
+        )
+
+    async def load_reply(self, ticket_id: TicketId) -> SentReply | None:
+        """Load the reply of a ticket.
+
+        Args:
+            ticket_id: The ticket.
+
+        Returns:
+            The reply, or None before it is sent.
+        """
+        row = await self._session.scalar(select(ReplyRow).where(ReplyRow.ticket_id == ticket_id))
+        if row is None:
+            return None
+        return SentReply(
+            reply_id=ReplyId(row.reply_id),
+            ticket_id=TicketId(row.ticket_id),
+            basis=ReplyBasis(row.basis),
+            body=row.body,
+            suggestion_id=None
+            if row.suggestion_id is None
+            else SuggestionId(str(row.suggestion_id)),
+            proposal_id=None if row.proposal_id is None else ProposalId(row.proposal_id),
+            acknowledged_warning_ids=tuple(row.acknowledged_warning_ids),
+            staff_reason_codes=tuple(StaffReasonCode(code) for code in row.staff_reason_codes),
+            note=row.note,
+            sent_by=AccountId(str(row.sent_by_account_id)),
+            sent_at=row.sent_at,
+        )
+
+    async def insert_decision(self, decision: RecordedDecision) -> None:
+        """Insert a staff decision; it holds no text (ADR-0006).
+
+        Args:
+            decision: The decision.
+        """
+        staff_decision = decision.decision
+        await self._session.execute(
+            insert(StaffDecisionRow).values(
+                decision_id=decision.decision_id,
+                ticket_id=decision.ticket_id,
+                suggestion_id=UUID(staff_decision.suggestion_id),
+                decision_type=staff_decision.decision_type.value,
+                staff_reason_codes=[code.value for code in staff_decision.staff_reason_codes],
+                change_ratio=staff_decision.change_ratio,
+                final_intent=(
+                    None
+                    if staff_decision.final_intent is None
+                    else staff_decision.final_intent.value
+                ),
+                decided_by_account_id=UUID(decision.decided_by),
+                proposed_by_account_id=_optional_uuid(decision.proposed_by),
+                is_proposal_changed=decision.is_proposal_changed,
+                decided_at=decision.decided_at,
+            )
+        )
+
+
+class PostgresTicketLinks:
+    """Implement the `SuggestionTickets` and `TicketAuthority` ports of suggestions."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        """Bind the links to the session of a transaction.
+
+        Args:
+            session: The session of the use case's transaction.
+        """
+        self._session = session
+
+    async def lock_ticket(self, ticket_id: SuggestionTicketId) -> TicketForSuggestion | None:
+        """Lock a ticket row for the rest of the transaction.
+
+        Args:
+            ticket_id: The ticket, as a request sent it.
+
+        Returns:
+            The ticket, or None when it is unknown.
+        """
+        if not is_storable_text(ticket_id):
+            return None
+        row = (
+            await self._session.execute(
+                select(TicketRow.current_suggestion_id, TicketRow.status, TicketRow.handling_mode)
+                .where(TicketRow.ticket_id == ticket_id)
+                .with_for_update()
+            )
+        ).one_or_none()
+        if row is None:
+            return None
+        return TicketForSuggestion(
+            current_suggestion_id=(
+                None
+                if row.current_suggestion_id is None
+                else SuggestionId(str(row.current_suggestion_id))
+            ),
+            is_open=TicketStatus(row.status) is TicketStatus.OPEN,
+            is_assisted=HandlingMode(row.handling_mode) is HandlingMode.ASSISTED,
+            status_name=row.status,
+        )
+
+    async def set_current_suggestion(
+        self, ticket_id: SuggestionTicketId, suggestion_id: SuggestionId
+    ) -> None:
+        """Make a suggestion the ticket's current one.
+
+        Args:
+            ticket_id: The ticket, locked by the transaction.
+            suggestion_id: The new suggestion.
+        """
+        await self._session.execute(
+            update(TicketRow)
+            .where(TicketRow.ticket_id == ticket_id)
+            .values(current_suggestion_id=UUID(suggestion_id))
+        )
+
+    async def load_ticket_message(self, ticket_id: SuggestionTicketId) -> TicketMessage | None:
+        """Load what a job needs of its ticket.
+
+        Args:
+            ticket_id: The ticket.
+
+        Returns:
+            The message and its context, or None when the ticket is unknown.
+        """
+        row = (
+            await self._session.execute(
+                select(
+                    CustomerMessageRow.body,
+                    TicketRow.created_at,
+                    TicketRow.customer_id,
+                    TicketRow.order_id,
+                )
+                .join(CustomerMessageRow, CustomerMessageRow.ticket_id == TicketRow.ticket_id)
+                .where(TicketRow.ticket_id == ticket_id)
+            )
+        ).one_or_none()
+        if row is None:
+            return None
+        return TicketMessage(
+            ticket_id=ticket_id,
+            message=row.body,
+            created_at=row.created_at,
+            customer_id=CustomerId(str(row.customer_id)),
+            order_id=None if row.order_id is None else OrderId(row.order_id),
+        )
+
+    async def set_authority_required(self, ticket_id: SuggestionTicketId) -> None:
+        """Set `is_authority_required`; a trigger keeps it from going back to false.
+
+        Args:
+            ticket_id: The ticket, locked by the transaction.
+        """
+        await self._session.execute(
+            update(TicketRow)
+            .where(TicketRow.ticket_id == ticket_id, TicketRow.is_authority_required.is_(False))
+            .values(is_authority_required=True)
+        )
+
+
+def _select_console_tickets() -> Select[_ConsoleColumns]:
+    return select(
+        TicketRow.ticket_id,
+        TicketRow.status,
+        TicketRow.handling_mode,
+        TicketRow.is_authority_required,
+        TicketRow.created_at,
+        TicketRow.handling_started_at,
+        TicketRow.closed_at,
+        TicketRow.customer_id,
+        TicketRow.order_id,
+        TicketRow.current_suggestion_id,
+        CustomerMessageRow.body,
+    ).join(CustomerMessageRow, CustomerMessageRow.ticket_id == TicketRow.ticket_id)
+
+
+def _to_console_ticket(row: Row[_ConsoleColumns]) -> ConsoleTicket:
+    return ConsoleTicket(
+        ticket_id=TicketId(row.ticket_id),
+        status=TicketStatus(row.status),
+        handling_mode=HandlingMode(row.handling_mode),
+        is_authority_required=row.is_authority_required,
+        created_at=row.created_at,
+        handling_started_at=row.handling_started_at,
+        closed_at=row.closed_at,
+        customer_id=CustomerId(str(row.customer_id)),
+        order_id=None if row.order_id is None else OrderId(row.order_id),
+        current_suggestion_id=(
+            None
+            if row.current_suggestion_id is None
+            else SuggestionId(str(row.current_suggestion_id))
+        ),
+        message=row.body,
+    )
+
+
+def _optional_uuid(identifier: str | None) -> UUID | None:
+    return None if identifier is None else UUID(identifier)

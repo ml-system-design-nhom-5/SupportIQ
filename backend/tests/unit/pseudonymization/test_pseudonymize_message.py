@@ -1,0 +1,223 @@
+"""Tests of `PseudonymizeMessage` and `RestorePseudonyms` with fakes of every port (SEC-36)."""
+
+from dataclasses import dataclass
+
+import pytest
+
+from supportiq_backend.audit import AuditEventType
+from supportiq_backend.commerce import OrderId
+from supportiq_backend.platform import DatabaseUnavailableError, EventName
+from supportiq_backend.pseudonymization import (
+    Detector,
+    DetectorError,
+    KnownValueDetector,
+    LiteralPlaceholderDetector,
+    MapTicketId,
+    MessageToPseudonymize,
+    PatternDetector,
+    PseudonymizationError,
+    PseudonymizationPorts,
+    PseudonymizationStores,
+    PseudonymizeMessage,
+    RestorePseudonyms,
+)
+from supportiq_backend.pseudonymization.domain import (
+    Detection,
+    KnownValue,
+    PseudonymEntry,
+    PseudonymType,
+)
+from tests.unit.audit.fakes import FakeAuditLog
+from tests.unit.platform.fakes import (
+    FakeClock,
+    FakeTransactionRunner,
+    FixedTraceContext,
+    RecordingEventRecorder,
+    RecordingStepTracer,
+    SequentialIdGenerator,
+)
+from tests.unit.pseudonymization.fakes import (
+    CONTACT,
+    CUSTOMER_ID,
+    REFERENCES,
+    FakeCustomerRecords,
+    FakePseudonymMapStore,
+)
+
+TICKET_ID = MapTicketId("TCK-1042")
+MESSAGE = (
+    "Hi, I am Lan Tran (lan.tran@example.test, +84 90 111 0001). Order ORD-20901 was sent "
+    "with TRK-0000020901 to 12 Example Street, Ba Dinh, Hanoi. My card is 4111 1111 1111 1111."
+)
+SEEDED_VALUES = (
+    CONTACT.display_name,
+    CONTACT.email,
+    CONTACT.phone,
+    REFERENCES.order_id,
+    "TRK-0000020901",
+    REFERENCES.shipping_address,
+    "4111 1111 1111 1111",
+)
+DETECTORS: tuple[Detector, ...] = (
+    LiteralPlaceholderDetector(),
+    KnownValueDetector(),
+    PatternDetector(),
+)
+
+
+@dataclass(slots=True)
+class FailingDetector:
+    """A detector that cannot run, as a named-entity model that failed would."""
+
+    def detect(
+        self, message: str, known_values: tuple[KnownValue, ...], /
+    ) -> tuple[Detection, ...]:
+        """Raise the error of a detector that cannot run."""
+        del message, known_values
+        raise DetectorError
+
+
+@dataclass(slots=True)
+class Harness:
+    """The use case with its fakes."""
+
+    pseudonymize: PseudonymizeMessage
+    pseudonyms: FakePseudonymMapStore
+    audit: FakeAuditLog
+    events: RecordingEventRecorder
+    transactions: FakeTransactionRunner[PseudonymizationStores]
+
+
+def build_harness(
+    detectors: tuple[Detector, ...] = DETECTORS,
+    records: FakeCustomerRecords | None = None,
+    pseudonyms: FakePseudonymMapStore | None = None,
+) -> Harness:
+    store = pseudonyms or FakePseudonymMapStore()
+    audit = FakeAuditLog()
+    events = RecordingEventRecorder()
+    transactions = FakeTransactionRunner(
+        PseudonymizationStores(store, records or FakeCustomerRecords(), audit)
+    )
+    use_case = PseudonymizeMessage(
+        transactions,
+        PseudonymizationPorts(
+            detectors=detectors,
+            clock=FakeClock(),
+            ids=SequentialIdGenerator(),
+            traces=FixedTraceContext(),
+            events=events,
+            steps=RecordingStepTracer(),
+        ),
+    )
+    return Harness(use_case, store, audit, events, transactions)
+
+
+def ticket_message(message: str = MESSAGE) -> MessageToPseudonymize:
+    return MessageToPseudonymize(TICKET_ID, message, CUSTOMER_ID, OrderId(REFERENCES.order_id))
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("seeded_value", SEEDED_VALUES)
+async def test_no_seeded_personal_value_remains_in_the_pseudonymized_text(
+    seeded_value: str,
+) -> None:
+    harness = build_harness()
+
+    text = await harness.pseudonymize.pseudonymize(ticket_message())
+
+    assert seeded_value not in text
+
+
+@pytest.mark.anyio
+async def test_the_first_run_stores_the_map_and_audits_the_counts_by_type() -> None:
+    harness = build_harness()
+
+    await harness.pseudonymize.pseudonymize(ticket_message())
+
+    stored = harness.pseudonyms.entries_by_ticket[TICKET_ID]
+    (entry,) = harness.audit.entries
+    assert stored["[NAME_1]"].original_value == "Lan Tran"
+    assert entry.event_type is AuditEventType.MESSAGE_PSEUDONYMIZED
+    assert entry.data["outcome"] == "succeeded"
+    assert entry.data["card_count"] == 1
+    assert harness.transactions.commit_count == 1
+
+
+@pytest.mark.anyio
+async def test_a_later_run_reuses_the_stored_map_and_gives_the_same_text() -> None:
+    harness = build_harness()
+    first = await harness.pseudonymize.pseudonymize(ticket_message())
+
+    second = await harness.pseudonymize.pseudonymize(ticket_message())
+
+    assert second == first
+
+
+@pytest.mark.anyio
+async def test_a_stored_map_that_differs_fails_closed() -> None:
+    pseudonyms = FakePseudonymMapStore(
+        {TICKET_ID: {"[NAME_1]": PseudonymEntry("[NAME_1]", PseudonymType.NAME, "Minh Le")}}
+    )
+    harness = build_harness(pseudonyms=pseudonyms)
+
+    with pytest.raises(PseudonymizationError):
+        await harness.pseudonymize.pseudonymize(ticket_message())
+
+
+@pytest.mark.anyio
+async def test_a_failing_detector_fails_closed_and_audits_the_failure() -> None:
+    harness = build_harness((*DETECTORS, FailingDetector()))
+
+    with pytest.raises(DetectorError):
+        await harness.pseudonymize.pseudonymize(ticket_message())
+
+    (entry,) = harness.audit.entries
+    assert entry.data == {"outcome": "failed", "failure_reason": "detector_error"}
+    assert harness.pseudonyms.entries_by_ticket == {}
+    assert harness.events.names() == (EventName.PSEUDONYMIZATION_FAILED,)
+
+
+@pytest.mark.anyio
+async def test_a_text_over_the_limit_fails_closed_with_a_warning() -> None:
+    harness = build_harness()
+
+    with pytest.raises(PseudonymizationError):
+        await harness.pseudonymize.pseudonymize(ticket_message("ORD-20901 " * 500))
+
+    assert harness.events.names() == (EventName.PSEUDONYMIZATION_REJECTED,)
+
+
+@pytest.mark.anyio
+async def test_missing_known_values_fail_closed() -> None:
+    harness = build_harness(records=FakeCustomerRecords(contact=None))
+
+    with pytest.raises(DetectorError):
+        await harness.pseudonymize.pseudonymize(ticket_message())
+
+
+@pytest.mark.anyio
+async def test_a_storage_error_is_no_pseudonymization_failure() -> None:
+    harness = build_harness(
+        pseudonyms=FakePseudonymMapStore(insert_failure=DatabaseUnavailableError())
+    )
+
+    with pytest.raises(DatabaseUnavailableError):
+        await harness.pseudonymize.pseudonymize(ticket_message())
+
+    assert harness.audit.entries == []
+    assert harness.transactions.commit_count == 0
+
+
+@pytest.mark.anyio
+async def test_restore_logs_once_when_a_pseudonym_is_missing_from_the_map() -> None:
+    pseudonyms = FakePseudonymMapStore(
+        {TICKET_ID: {"[NAME_1]": PseudonymEntry("[NAME_1]", PseudonymType.NAME, "Lan Tran")}}
+    )
+    events = RecordingEventRecorder()
+    restorer = RestorePseudonyms(pseudonyms, events)
+
+    restored = await restorer.restore(TICKET_ID, ("Hi [NAME_1]", "[NAME_2] and [NAME_3]"))
+
+    assert restored == ("Hi Lan Tran", "[NAME_2] and [NAME_3]")
+    assert events.names() == (EventName.PSEUDONYM_RESTORE_FAILED,)

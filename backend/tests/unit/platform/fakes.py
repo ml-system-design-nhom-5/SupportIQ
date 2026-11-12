@@ -140,6 +140,9 @@ class RecordingStepTracer:
 
     steps: list[SpanName] = field(default_factory=list[SpanName])
     tickets: list[str] = field(default_factory=list[str])
+    joined_traces: list[TraceId] = field(default_factory=list[TraceId])
+    pseudonym_counts: list[int] = field(default_factory=list[int])
+    ai_service_endpoints: list[str] = field(default_factory=list[str])
 
     @contextmanager
     def step(self, name: SpanName) -> Generator[None]:
@@ -154,6 +157,21 @@ class RecordingStepTracer:
         self.steps.append(name)
         yield
 
+    @contextmanager
+    def background_step(self, name: SpanName, trace_id: TraceId) -> Generator[None]:
+        """Keep the step and the trace it joins.
+
+        Args:
+            name: The step.
+            trace_id: The trace.
+
+        Yields:
+            Nothing.
+        """
+        self.steps.append(name)
+        self.joined_traces.append(trace_id)
+        yield
+
     def record_ticket(self, ticket_id: str) -> None:
         """Keep the ticket of the step.
 
@@ -161,6 +179,22 @@ class RecordingStepTracer:
             ticket_id: The ticket.
         """
         self.tickets.append(ticket_id)
+
+    def record_pseudonym_count(self, count: int) -> None:
+        """Keep the number of pseudonyms of the step.
+
+        Args:
+            count: The number.
+        """
+        self.pseudonym_counts.append(count)
+
+    def record_ai_service_endpoint(self, endpoint: str) -> None:
+        """Keep the `ai-service` operation of the step.
+
+        Args:
+            endpoint: The operation ID.
+        """
+        self.ai_service_endpoints.append(endpoint)
 
 
 class FakeReadinessProbe:

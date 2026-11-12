@@ -1,7 +1,7 @@
 [project]
 name = "supportiq-backend"
 version = "0.1.0"
-description = "SupportIQ backend: sign-in, the read-only shop, shop tickets, and internal accounts."
+description = "SupportIQ backend: sign-in, the read-only shop, the ticket workflow, and internal accounts."
 readme = "README.md"
 # One Python version for all Python code, pinned with ../.python-version (PY-01).
 requires-python = "~=3.14.4"
@@ -11,6 +11,7 @@ dependencies = [
     "argon2-cffi==25.1.0",
     "asyncpg==0.32.0",
     "fastapi==0.162.0",
+    "httpx==0.28.1",
     "opentelemetry-api==1.45.2",
     "opentelemetry-exporter-otlp-proto-http==1.45.2",
     "opentelemetry-instrumentation-fastapi==0.66b2",
@@ -33,7 +34,6 @@ dev = [
     "anyio==4.16.0",
     "coverage==7.17.2",
     "datamodel-code-generator==0.90.0",
-    "httpx==0.28.1",
     "hypothesis==6.170.15",
     "import-linter==2.16",
     "pip-audit==2.10.1",
@@ -79,13 +79,24 @@ target-pydantic-version = "2.14"
 # platform.web, which a unit test checks against the contract's pattern.
 type-overrides = { Timestamp = "builtins.str" }
 
+# The models of the `ai-service` contract, which only the adapters of `suggestions` read
+# (backend ticket workflow design, The `ai-service` client). `uv run datamodel-codegen
+# --profile ai-service` writes them; the profile keeps every option above and changes only the
+# input and the output.
+[tool.datamodel-codegen.profiles.ai-service]
+input = "../contracts/ai-service.openapi.yaml"
+output = "src/supportiq_backend/suggestions/adapters/generated/__init__.py"
+
 # ----- Formatting and linting (PY-03, PY-04, PY-05) -----
 [tool.ruff]
 line-length = 100
 target-version = "py314"
 src = ["src", "tests"]
 # Generated code is never linted (CON-26).
-extend-exclude = ["src/supportiq_backend/generated"]
+extend-exclude = [
+    "src/supportiq_backend/generated",
+    "src/supportiq_backend/suggestions/adapters/generated",
+]
 
 [tool.ruff.lint]
 select = [
@@ -121,8 +132,16 @@ known-first-party = ["supportiq_backend", "tests"]
 # ----- Type checking (PY-03, CODE-26) -----
 [tool.pyright]
 include = ["src", "tests"]
-exclude = ["src/supportiq_backend/generated", "**/__pycache__", ".venv"]
-ignore = ["src/supportiq_backend/generated"]
+exclude = [
+    "src/supportiq_backend/generated",
+    "src/supportiq_backend/suggestions/adapters/generated",
+    "**/__pycache__",
+    ".venv",
+]
+ignore = [
+    "src/supportiq_backend/generated",
+    "src/supportiq_backend/suggestions/adapters/generated",
+]
 typeCheckingMode = "strict"
 pythonVersion = "3.14"
 venvPath = "."
@@ -156,7 +175,10 @@ filterwarnings = ["error"]
 branch = true
 source = ["supportiq_backend"]
 # Generated code is excluded from coverage (CON-26, TEST-22).
-omit = ["*/supportiq_backend/generated/*"]
+omit = [
+    "*/supportiq_backend/generated/*",
+    "*/supportiq_backend/suggestions/adapters/generated/*",
+]
 
 [tool.coverage.report]
 # The overall floor of TEST-21. The floor for the domain and application layers is checked by
@@ -186,6 +208,8 @@ containers = [
     "supportiq_backend.accounts",
     "supportiq_backend.commerce",
     "supportiq_backend.tickets",
+    "supportiq_backend.suggestions",
+    "supportiq_backend.pseudonymization",
     "supportiq_backend.audit",
     "supportiq_backend.idempotency",
 ]
@@ -203,6 +227,8 @@ type = "layers"
 layers = [
     "supportiq_backend.composition_root",
     "supportiq_backend.tickets",
+    "supportiq_backend.suggestions",
+    "supportiq_backend.pseudonymization",
     "supportiq_backend.commerce",
     "supportiq_backend.accounts",
     "supportiq_backend.audit | supportiq_backend.idempotency",
@@ -219,6 +245,10 @@ source_modules = [
     "supportiq_backend.commerce.application",
     "supportiq_backend.tickets.domain",
     "supportiq_backend.tickets.application",
+    "supportiq_backend.suggestions.domain",
+    "supportiq_backend.suggestions.application",
+    "supportiq_backend.pseudonymization.domain",
+    "supportiq_backend.pseudonymization.application",
     "supportiq_backend.audit.domain",
     "supportiq_backend.idempotency.domain",
     "supportiq_backend.idempotency.application",
@@ -244,6 +274,10 @@ source_modules = [
     "supportiq_backend.commerce.application",
     "supportiq_backend.tickets.domain",
     "supportiq_backend.tickets.application",
+    "supportiq_backend.suggestions.domain",
+    "supportiq_backend.suggestions.application",
+    "supportiq_backend.pseudonymization.domain",
+    "supportiq_backend.pseudonymization.application",
     "supportiq_backend.audit.domain",
     "supportiq_backend.idempotency.domain",
     "supportiq_backend.idempotency.application",
@@ -257,6 +291,8 @@ forbidden_modules = [
     "supportiq_backend.commerce.api",
     "supportiq_backend.tickets.adapters",
     "supportiq_backend.tickets.api",
+    "supportiq_backend.suggestions.adapters",
+    "supportiq_backend.pseudonymization.adapters",
     "supportiq_backend.audit.adapters",
     "supportiq_backend.idempotency.adapters",
     "supportiq_backend.platform.adapters",
@@ -270,6 +306,8 @@ source_modules = [
     "supportiq_backend.accounts.adapters",
     "supportiq_backend.commerce.adapters",
     "supportiq_backend.tickets.adapters",
+    "supportiq_backend.suggestions.adapters",
+    "supportiq_backend.pseudonymization.adapters",
     "supportiq_backend.audit.adapters",
     "supportiq_backend.idempotency.adapters",
     "supportiq_backend.platform.adapters",
@@ -284,6 +322,8 @@ source_modules = [
     "supportiq_backend.accounts.adapters",
     "supportiq_backend.commerce.adapters",
     "supportiq_backend.tickets.adapters",
+    "supportiq_backend.suggestions.adapters",
+    "supportiq_backend.pseudonymization.adapters",
     "supportiq_backend.audit.adapters",
     "supportiq_backend.idempotency.adapters",
 ]
@@ -296,6 +336,8 @@ forbidden_modules = [
     "supportiq_backend.commerce.api",
     "supportiq_backend.tickets.application",
     "supportiq_backend.tickets.api",
+    "supportiq_backend.suggestions.application",
+    "supportiq_backend.pseudonymization.application",
     "supportiq_backend.idempotency.application",
     "supportiq_backend.platform.adapters",
     "supportiq_backend.platform.web",
@@ -327,6 +369,8 @@ source_modules = [
     "supportiq_backend.platform.web",
 ]
 forbidden_modules = [
+    "supportiq_backend.suggestions.adapters",
+    "supportiq_backend.pseudonymization.adapters",
     "supportiq_backend.accounts.adapters",
     "supportiq_backend.commerce.adapters",
     "supportiq_backend.tickets.adapters",
@@ -340,7 +384,16 @@ name = "tickets reaches other features only through their public API (ARCH-17)"
 type = "forbidden"
 allow_indirect_imports = true
 source_modules = ["supportiq_backend.tickets"]
+# The console's order view reuses the shop's order mapping, because both map the same shared
+# contract schemas (`ShopOrderLine`, `ShopShipmentView`, `ShopRefundView`; CODE-48).
+ignore_imports = ["supportiq_backend.tickets.api.console_views -> supportiq_backend.commerce.api.shop"]
 forbidden_modules = [
+    "supportiq_backend.suggestions.domain",
+    "supportiq_backend.suggestions.application",
+    "supportiq_backend.suggestions.adapters",
+    "supportiq_backend.pseudonymization.domain",
+    "supportiq_backend.pseudonymization.application",
+    "supportiq_backend.pseudonymization.adapters",
     "supportiq_backend.commerce.domain",
     "supportiq_backend.commerce.application",
     "supportiq_backend.commerce.adapters",
@@ -397,6 +450,75 @@ type = "forbidden"
 allow_indirect_imports = true
 source_modules = ["supportiq_backend.audit", "supportiq_backend.idempotency"]
 forbidden_modules = [
+    "supportiq_backend.platform.domain",
+    "supportiq_backend.platform.application",
+    "supportiq_backend.platform.adapters",
+    "supportiq_backend.platform.settings",
+]
+
+[[tool.importlinter.contracts]]
+name = "suggestions reaches other features only through their public API (ARCH-17)"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = ["supportiq_backend.suggestions"]
+forbidden_modules = [
+    "supportiq_backend.pseudonymization.domain",
+    "supportiq_backend.pseudonymization.application",
+    "supportiq_backend.pseudonymization.adapters",
+    "supportiq_backend.commerce.domain",
+    "supportiq_backend.commerce.application",
+    "supportiq_backend.commerce.adapters",
+    "supportiq_backend.commerce.api",
+    "supportiq_backend.accounts.domain",
+    "supportiq_backend.accounts.application",
+    "supportiq_backend.accounts.adapters",
+    "supportiq_backend.accounts.api",
+    "supportiq_backend.audit.domain",
+    "supportiq_backend.audit.adapters",
+    "supportiq_backend.idempotency.domain",
+    "supportiq_backend.idempotency.application",
+    "supportiq_backend.idempotency.adapters",
+    "supportiq_backend.platform.domain",
+    "supportiq_backend.platform.application",
+    "supportiq_backend.platform.adapters",
+    "supportiq_backend.platform.settings",
+]
+
+[[tool.importlinter.contracts]]
+name = "Only pseudonymization reads its internals and the pseudonym map (SEC-37)"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = [
+    "supportiq_backend.accounts",
+    "supportiq_backend.audit",
+    "supportiq_backend.commerce",
+    "supportiq_backend.idempotency",
+    "supportiq_backend.platform",
+    "supportiq_backend.suggestions",
+    "supportiq_backend.tickets",
+]
+forbidden_modules = [
+    "supportiq_backend.pseudonymization.domain",
+    "supportiq_backend.pseudonymization.application",
+    "supportiq_backend.pseudonymization.adapters",
+]
+
+[[tool.importlinter.contracts]]
+name = "pseudonymization reaches other features only through their public API (ARCH-17)"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = ["supportiq_backend.pseudonymization"]
+forbidden_modules = [
+    "supportiq_backend.commerce.domain",
+    "supportiq_backend.commerce.application",
+    "supportiq_backend.commerce.adapters",
+    "supportiq_backend.commerce.api",
+    "supportiq_backend.accounts.domain",
+    "supportiq_backend.accounts.application",
+    "supportiq_backend.accounts.adapters",
+    "supportiq_backend.accounts.api",
+    "supportiq_backend.audit.domain",
+    "supportiq_backend.audit.adapters",
     "supportiq_backend.platform.domain",
     "supportiq_backend.platform.application",
     "supportiq_backend.platform.adapters",

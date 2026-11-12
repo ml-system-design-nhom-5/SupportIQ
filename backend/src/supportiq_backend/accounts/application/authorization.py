@@ -10,6 +10,8 @@ from supportiq_backend.accounts.domain.identity import (
     InternalRole,
     Principal,
     Role,
+    SupportPrincipal,
+    SupportRole,
 )
 from supportiq_backend.accounts.domain.ports import InternalAccountStore
 from supportiq_backend.platform import EventName, EventRecorder, OperationId
@@ -41,6 +43,41 @@ class Authorizer:
         """
         if isinstance(principal, CustomerPrincipal):
             return principal
+        raise self._denied(principal, operation)
+
+    def require_support(self, principal: Principal, operation: OperationId) -> SupportPrincipal:
+        """Allow only staff and managers, for the operations of `/v1/console/` (SEC-41).
+
+        Args:
+            principal: The caller.
+            operation: The operation, for the event.
+
+        Returns:
+            The caller as a member of support.
+
+        Raises:
+            ForbiddenRoleError: The caller is a customer or an admin.
+        """
+        if isinstance(principal, InternalPrincipal) and principal.role is not InternalRole.ADMIN:
+            return SupportPrincipal(principal.account_id, SupportRole(principal.role.value))
+        raise self._denied(principal, operation)
+
+    def require_manager(self, principal: Principal, operation: OperationId) -> SupportPrincipal:
+        """Allow only managers, for the reports and the queues that only they see (ADR-0012).
+
+        Args:
+            principal: The caller.
+            operation: The operation, for the event.
+
+        Returns:
+            The caller as a manager.
+
+        Raises:
+            ForbiddenRoleError: The caller is not a manager.
+        """
+        support = self.require_support(principal, operation)
+        if support.role is SupportRole.MANAGER:
+            return support
         raise self._denied(principal, operation)
 
     def require_admin(self, principal: Principal, operation: OperationId) -> AdminPrincipal:

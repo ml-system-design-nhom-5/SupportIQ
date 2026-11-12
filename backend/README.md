@@ -1,6 +1,6 @@
 # backend
 
-`backend` is the SupportIQ component that owns sign-in, the read-only shop, shop tickets, internal accounts, the simulated commerce data, and the audit log ([ADR-0001](../docs/decisions/0001-system-architecture.md)). It implements the [backend foundation design](../docs/design/backend-foundation.md) and the [account management design](../docs/design/account-management.md) against [`contracts/backend.openapi.yaml`](../contracts/backend.openapi.yaml) 1.1.0: the 13 operations of the foundation design, the three operations of account management, and the two health checks. Contract 1.2.0 adds the console operations and `getAdminVersions`; `backend` implements them, and everything else that involves `ai-service`, after the [backend ticket workflow design](../docs/design/backend-ticket-workflow.md) is approved. Until then its provider contract tests fail on those operations.
+`backend` is the SupportIQ component that owns sign-in, the read-only shop, the ticket workflow behind `/console`, internal accounts, the simulated commerce data, the pseudonym maps, and the audit log ([ADR-0001](../docs/decisions/0001-system-architecture.md)). It implements the [backend foundation design](../docs/design/backend-foundation.md), the [account management design](../docs/design/account-management.md), and the [backend ticket workflow design](../docs/design/backend-ticket-workflow.md) against [`contracts/backend.openapi.yaml`](../contracts/backend.openapi.yaml) 1.2.0, and it calls `ai-service` through [`contracts/ai-service.openapi.yaml`](../contracts/ai-service.openapi.yaml) 1.0.0. The ticket workflow lands in steps on the branch `build/ticket-workflow` ([design, Rollout](../docs/design/backend-ticket-workflow.md#rollout)): `listConsoleTickets`, `getConsoleTicket`, `recordTicketView`, `createSuggestion`, and `sendReply` are served; `createReplyProposal`, `createEscalation`, `getConsoleKbDocumentVersion`, `getConsoleReport`, `getAdminVersions`, the two one-off commands, and the named-entity detector of [ADR-0017](../docs/decisions/0017-named-entity-model-from-its-release-url.md) are not yet. Until they are, the provider contract tests fail on those operations.
 
 ## Run and test
 
@@ -49,7 +49,7 @@ These steps work from a fresh clone.
    uv sync --locked
    ```
 
-5. Create your settings. `.env` is ignored by git, and its values never leave your machine. Replace every placeholder, and use the same owner password as in step 3.
+5. Create your settings. `.env` is ignored by git, and its values never leave your machine. Replace every placeholder, and use the same owner password as in step 3. A `.env` made before the ticket workflow needs the two new required settings `AI_SERVICE_BASE_URL` and `AI_SERVICE_TOKEN` of `.env.example`; without them `backend` does not start.
 
    ```bash
    cp .env.example .env
@@ -118,10 +118,12 @@ backend/
 │   ├── idempotency/        # Records of retryable writes and the idempotency guard
 │   ├── accounts/           # Sign-in, sessions, roles, internal accounts, and passwords
 │   ├── commerce/           # The read-only catalog, orders, shipments, and refunds
-│   ├── tickets/            # Shop tickets and customer messages
+│   ├── tickets/            # Tickets, messages, the console workflow, replies, and decisions
+│   ├── suggestions/        # Suggestions, the job queue and its claim loop, the ai-service client
+│   ├── pseudonymization/   # The detectors and the pseudonym map; only it reads the map (SEC-37)
 │   ├── composition_root/   # The only place that wires everything: the command and the app
 │   ├── migrations/         # Alembic migrations and the SQL script of supportiq_app
-│   └── generated/          # Models generated from the contract; never edited by hand
+│   └── generated/          # Models generated from the backend contract; never edited by hand
 ├── seed/                   # The seed file
 ├── tests/
 │   ├── unit/               # Domain and application, with fakes; the network is blocked
@@ -141,12 +143,13 @@ Each feature has the layers of [ARCH-16](../docs/rules/architecture.md):
 | `adapters/` | PostgreSQL and other implementations of the ports | `domain/` of the feature, and public APIs |
 | `api/` | Routes and the mapping between contract models and domain types | `application/`, `domain/`, and `generated/` |
 
-Features depend on each other in one direction, `tickets`, `commerce`, `accounts`, then `audit` and `idempotency`, then `platform`, and only through the `__init__.py` of the feature, its public API (ARCH-17, ARCH-18). `uv run lint-imports` enforces this with the contracts in [`pyproject.toml`](pyproject.toml). `platform` has two more public entry points: `platform.web` for the interface layers, and `platform.persistence` for the PostgreSQL adapters.
+Features depend on each other in one direction, `tickets`, `suggestions`, `pseudonymization`, `commerce`, `accounts`, then `audit` and `idempotency`, then `platform`, and only through the `__init__.py` of the feature, its public API (ARCH-17, ARCH-18). `suggestions` reads and links ticket rows through the ports `SuggestionTickets` and `TicketAuthority`, which an adapter of `tickets` implements. Only `pseudonymization` imports its own internals, and its public API offers exactly two functions to the others: `PseudonymizeMessage.pseudonymize` and `RestorePseudonyms.restore` (ADR-0010, item 6). The console's order view reuses the shop's order mapping of `commerce.api.shop`, the one import that the contracts ignore by name. `uv run lint-imports` enforces this with the contracts in [`pyproject.toml`](pyproject.toml). `platform` has two more public entry points: `platform.web` for the interface layers, and `platform.persistence` for the PostgreSQL adapters.
 
-The generated models are written by one command, and CI fails when the committed file differs:
+The generated models are written by two commands, one per contract, and CI fails when a committed file differs. The models of `ai-service` live in `suggestions/adapters/generated/`, because only the adapters of `suggestions` read them:
 
 ```bash
 uv run datamodel-codegen
+uv run datamodel-codegen --profile ai-service
 ```
 
 ## Database
@@ -154,6 +157,11 @@ uv run datamodel-codegen
 - `backend serve` connects only as `supportiq_app`, which has `SELECT` on commerce data and no `UPDATE` or `DELETE` on the audit log or on customer messages ([design, Database roles and privileges](../docs/design/backend-foundation.md#database-roles-and-privileges)). It can insert `staff` and `manager` accounts and update password hashes, never delete an account, and a trigger refuses an `admin` account from every role but the owner ([migration `r0002`](../docs/design/account-management.md#migration-r0002)). The tests connect the same way, so they prove the privileges.
 - To add a migration, add one file to [`migrations/versions/`](src/supportiq_backend/migrations/versions/) that follows `r0001_foundation_schema.py`: one schema change, raw SQL, the privileges of every new table, and a working downgrade (PY-40). `tests/integration/schema/test_migration.py` runs upgrade and downgrade.
 - Every table of the backend is listed in [`migrations/tables.py`](src/supportiq_backend/migrations/tables.py), which `reset` empties.
+- Migration `r0003` adds the tables of the ticket workflow ([design, Tables](../docs/design/backend-ticket-workflow.md#tables)). Triggers keep a final suggestion part and a stored request unchanged, and let `tickets.status` change only along the state machine. `supportiq_app` may only select and insert pseudonym maps, replies, proposals, escalations, and staff decisions.
+
+## Suggestion jobs
+
+Each replica runs one claim loop with `SUGGESTION_WORKERS_PER_REPLICA` slots, started and stopped by the lifespan of the app ([ADR-0011](../docs/decisions/0011-deployment-and-runtime-topology.md#suggestion-job-queue), ARCH-41). A use case that creates a suggestion wakes the loop of its replica after the commit; otherwise the loop polls every `SUGGESTION_QUEUE_POLL_MS`. A job pseudonymizes the message first, in its own transaction, and sends nothing when that fails (SEC-36); it then calls `createAnalysis` and `createDraft` in parallel, or only `createDraft` with an intent override, and stores each result only while its attempt and its suggestion are current (ERR-22). A job of a stopped replica is claimed again when its lease expires. The tests of the HTTP operations create the app with `BackgroundWork.NONE`, so no job runs behind their back.
 
 ## Events
 
@@ -174,16 +182,23 @@ Every log line is one JSON object on standard output, with the attributes of an 
 | `account.password_changed` | An account changes its own password, with whether its other sessions ended |
 | `password_change.failed`, `password_change.throttled` | A password change refused because the current password was wrong, or because the login name reached the sign-in failure limit |
 | `ticket.created` | A customer creates a ticket, with `ticket_id` |
+| `ticket.viewed`, `ticket.manual_handling_started` | Staff open a ticket; the AI of a ticket could not run, with the reason code |
+| `suggestion.requested`, `suggestion.superseded`, `suggestion.part_cancelled`, `suggestion.completed` | A suggestion is created, replaced by a newer one, has its running calls cancelled, or ends with its draft status |
+| `suggestion_job.claimed`, `suggestion_job.lease_expired`, `suggestion_job.failed` | The claim loop claims a job, ends a job without attempts left, or logs a failure once and goes on |
+| `pseudonymization.failed`, `pseudonymization.rejected` | Pseudonymization fails closed because of a defect, or because the text is over 4 000 characters (ADR-0010, Failure handling) |
+| `pseudonym.restore_failed` | A pseudonym of stored AI text is missing from the map |
+| `ai_service.called`, `ai_service.call_failed`, `ai_service.contract_violated` | A call to `ai-service` answers, times out or fails, or is refused with `4xx` or answered outside the contract |
+| `intent.overridden`, `reply.sent`, `decision.recorded` | Staff choose an intent, send a reply, or record a decision about a draft |
 | `command.failed` | A one-off command fails, with the error type |
 | `database.migrated`, `database_role.applied` | A one-off database command succeeds |
 | `seed.loaded`, `seed.reset`, `seed.reset_cancelled` | The seed and reset commands |
 
-Every request has a trace with its database spans, and ticket creation has the span `create_ticket` with `ticket_id` ([LOG-20](../docs/rules/logging-and-observability.md), LOG-07). A failure marks the span of its request or command with the status and an exception event (LOG-22). `TRACE_EXPORTER` chooses whether spans leave the process; before they do, every attribute outside an allow-list is dropped, an exception keeps only its type, and a status keeps only its code. A line that a library logs outside every span carries IDs of the process.
+Every request has a trace with its database spans, and ticket creation has the span `create_ticket` with `ticket_id` ([LOG-20](../docs/rules/logging-and-observability.md), LOG-07). A suggestion job runs in the span `run_suggestion_job`, in the trace of the request that created its suggestion, whose trace ID the suggestion stores; inside it are `pseudonymize_message` with `pseudonym_count` and `call_ai_service` with `ai_service_operation`. `sendReply` has the spans `send_reply` and `save_decision`. A failure marks the span of its request or command with the status and an exception event (LOG-22). `TRACE_EXPORTER` chooses whether spans leave the process; before they do, every attribute outside an allow-list is dropped, an exception keeps only its type, and a status keeps only its code. A line that a library logs outside every span carries IDs of the process.
 
 ## Known limits
 
 - Logs and metrics are not exported over OTLP (LOG-01, LOG-24, #2): logs go to standard output, only traces reach the exporter, and the metric `http.server.request.duration` does not exist yet. The design's Goals do not include them, and no collector exists until `deploy/`.
-- `customer_status` is always `received`, because no operation sends a reply until the ticket workflow adds it.
+- Pseudonymization runs without the named-entity detector of ADR-0010, step 4, until ADR-0017 lands it, so unknown names and addresses that no other step finds reach `ai-service`. The design does not allow a replica to run without that detector: the branch is not merged before it lands.
 - Eight `pyright: ignore` comments remain in `tests/contract/`, on calls into Schemathesis, whose public types leave generics unparametrized ([PY-13](../docs/rules/python.md), #3).
 
 ## Tests
@@ -193,7 +208,7 @@ Every request has a trace with its database spans, and ticket creation has the s
 | Unit | `tests/unit/` | Domain and application logic with a fake for every port, and the property that no sequence of role and status changes leaves no active manager or admin |
 | Integration | `tests/integration/` | Privileges and triggers, idempotency, account changes, creations, and password changes under concurrency, seed and reset, and each flow over HTTP |
 | Guardrails | `tests/integration/guardrails/` | The cases of [TEST-26](../docs/rules/testing.md) that apply here. `tests/contract/test_operations.py` and `tests/contract/test_permissions.py` hold the others |
-| Contract | `tests/contract/` | Schemathesis over all 18 operations, one test for each documented status, and every operation against all four roles |
+| Contract | `tests/contract/` | Schemathesis over every operation, one test for each documented status, and every operation against all four roles. `tests/contract/consumer/` reads every example of the `ai-service` contract through the client (CON-28) and needs no database |
 
 Tests run in random order and in parallel. Time comes from a fake clock, and Hypothesis runs derandomized, so a run repeats exactly with the `--randomly-seed=<seed>` value that pytest prints. The contract tests read `../contracts/`, so they need the whole repository.
 
@@ -206,6 +221,7 @@ Each direct dependency, with why it is here ([WF-27](../docs/rules/workflow.md#d
 | Name | Version | License | Why |
 |---|---|---|---|
 | fastapi | 0.162.0 | MIT | The web framework ([ADR-0003](../docs/decisions/0003-tech-stack.md)) |
+| httpx | 0.28.1 | BSD-3-Clause | The client of `ai-service`, created once at startup ([backend ticket workflow design](../docs/design/backend-ticket-workflow.md#the-ai-service-client)); the tests also use it over ASGI |
 | pydantic | 2.14.3 | MIT | Contract models and validation (ADR-0003) |
 | pydantic-core | 2.50.4 | MIT | `PydanticCustomError` in the validators of the settings, imported directly |
 | pydantic-settings | 2.16.2 | MIT | Typed settings, validated at startup (ARCH-34, PY-43) |
@@ -239,7 +255,6 @@ These runtime dependencies have a license outside the list of WF-30, and the pro
 | pytest-cov | 7.1.0 | MIT | Coverage from pytest (TEST-21) |
 | coverage | 7.17.2 | Apache-2.0 | Branch coverage and its floors (TEST-21) |
 | anyio | 4.16.0 | MIT | The pytest plugin of async tests |
-| httpx | 0.28.1 | BSD-3-Clause | The test client over ASGI (ADR-0003) |
 | hypothesis | 6.170.15 | MPL-2.0 | Property-based tests (ADR-0003, TEST-13). Its license is outside the list of WF-30, and the project lead accepted it |
 | schemathesis | 4.33.1 | MIT | Contract tests (ADR-0003, CON-27) |
 | datamodel-code-generator | 0.90.0 | MIT | Generates the models from the contract (ADR-0003, CON-25) |

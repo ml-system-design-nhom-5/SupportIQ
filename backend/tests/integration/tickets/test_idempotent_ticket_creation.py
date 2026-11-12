@@ -21,6 +21,7 @@ from supportiq_backend.platform.adapters.database import (
     SqlAlchemyTransactionRunner,
     create_session_factory,
 )
+from supportiq_backend.suggestions import SuggestionStarter, SuggestionStarterPorts
 from supportiq_backend.tickets import (
     CreateShopTicket,
     CreateShopTicketPorts,
@@ -50,10 +51,12 @@ from tests.integration.tickets.shop_requests import (
 from tests.unit.platform.fakes import (
     FAKE_CLOCK_START,
     FakeClock,
+    FixedTraceContext,
     RecordingEventRecorder,
     RecordingStepTracer,
     SequentialIdGenerator,
 )
+from tests.unit.suggestions.fakes import RecordingSuggestionQueue
 
 pytestmark = pytest.mark.anyio
 
@@ -235,6 +238,15 @@ async def test_failure_after_the_insert_leaves_no_record_in_postgresql(
             ids=SequentialIdGenerator(),
             events=events,
             steps=RecordingStepTracer(),
+            starter=SuggestionStarter(
+                SuggestionStarterPorts(
+                    clock=clock,
+                    ids=SequentialIdGenerator(start=100),
+                    traces=FixedTraceContext(),
+                    events=events,
+                    queue=RecordingSuggestionQueue(),
+                )
+            ),
         ),
         HandlingMode.ASSISTED,
         failing_render,
@@ -249,6 +261,7 @@ async def test_failure_after_the_insert_leaves_no_record_in_postgresql(
 
     assert await count_tickets(builder) == 0
     assert await builder.scalar("SELECT count(*) FROM customer_messages") == 0
+    assert await builder.scalar("SELECT count(*) FROM suggestions") == 0
     assert await builder.scalar("SELECT count(*) FROM idempotency_records") == 0
 
 

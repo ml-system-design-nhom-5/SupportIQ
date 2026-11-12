@@ -6,6 +6,8 @@ from supportiq_backend.platform.settings import Settings
 
 TEST_APP_URL = "postgresql+asyncpg://supportiq_app:app-test-password@127.0.0.1:5433/supportiq"
 TEST_ORIGIN = "http://shop.test"
+TEST_AI_SERVICE_URL = "http://ai-service.test"
+TEST_AI_SERVICE_TOKEN = "ai-service-test-token"
 
 
 class SettingsWithoutEnvironment(Settings):
@@ -48,5 +50,7 @@ def build_test_settings(**values: object) -> Settings:
     required: dict[str, object] = {
         "database_url_app": TEST_APP_URL,
         "allowed_origins": (TEST_ORIGIN,),
+        "ai_service_base_url": TEST_AI_SERVICE_URL,
+        "ai_service_token": TEST_AI_SERVICE_TOKEN,
     }
     return SettingsWithoutEnvironment.model_validate(required | values)

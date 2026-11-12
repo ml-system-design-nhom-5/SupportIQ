@@ -1,5 +1,13 @@
-"""Use cases of tickets."""
+"""Use cases of tickets: the shop's tickets and the console workflow."""
 
+from supportiq_backend.tickets.application.console import (
+    ConsolePorts,
+    ConsoleStores,
+    GetConsoleTicket,
+    ListConsoleTickets,
+    RecordTicketView,
+)
+from supportiq_backend.tickets.application.replies import SendReply
 from supportiq_backend.tickets.application.shop_tickets import (
     CreateShopTicket,
     CreateShopTicketPorts,
@@ -9,9 +17,15 @@ from supportiq_backend.tickets.application.shop_tickets import (
 )
 
 __all__ = [
+    "ConsolePorts",
+    "ConsoleStores",
     "CreateShopTicket",
     "CreateShopTicketPorts",
+    "GetConsoleTicket",
     "GetShopTicket",
+    "ListConsoleTickets",
     "ListShopTickets",
+    "RecordTicketView",
+    "SendReply",
     "ShopTicketStores",
 ]

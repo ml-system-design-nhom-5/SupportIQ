@@ -19,7 +19,7 @@ from schemathesis import APIOperation, BaseSchema, Case
 from schemathesis.core.adapter import OperationParameter, ResponsesContainer
 from schemathesis.python.asgi import shutdown_lifespans
 
-from supportiq_backend.composition_root import create_app
+from supportiq_backend.composition_root import BackgroundWork, create_app
 from supportiq_backend.composition_root.seed_commands import seed
 from tests.contract.conftest import CONTRACT_FILE
 from tests.integration.application import ALLOWED_ORIGIN, build_settings
@@ -171,7 +171,12 @@ def load_contract(
     )
     schema = schemathesis.openapi.from_path(CONTRACT_FILE, config=config)  # pyright: ignore[reportUnknownMemberType]  # Schemathesis leaves PathLike unparametrized, #3
     leave_out_traceparent(schema)
-    schema.app = create_app(build_settings(worker_database), RecordingEventRecorder(), FakeClock())
+    schema.app = create_app(
+        build_settings(worker_database),
+        RecordingEventRecorder(),
+        FakeClock(),
+        background=BackgroundWork.NONE,
+    )
     return schema
 
 
