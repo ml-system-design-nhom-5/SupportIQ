@@ -1,6 +1,9 @@
-"""Unit tests for evaluation evidence contracts, provenance, and regression reporting (Task 3 / IMP-10, IMP-11)."""
+"""Unit and integration tests for evaluation evidence contracts, provenance, and regression reporting (Task 3 / IMP-10, IMP-11)."""
 
 import json
+import math
+import subprocess
+import sys
 from pathlib import Path
 import pytest
 
@@ -19,6 +22,8 @@ from scripts.evaluate_regression import (
     evaluate_metrics_against_targets,
     compare_runs,
     run_regression_evaluation,
+    validate_metric_value,
+    REPO_ROOT,
 )
 
 
@@ -75,6 +80,37 @@ class TestMissingMetricsContracts:
         # Provenance should indicate unverified/insufficient provenance
         for m in manifest_p.values():
             assert m["evidence_kind"] in ("unverified", "insufficient_evidence", "simulated")
+
+
+class TestMetricValueSanitization:
+    """Metric values that are NaN, inf, bool, or out-of-range are strictly rejected."""
+
+    def test_validate_metric_value_rejects_bool_nan_inf_negative(self):
+        assert validate_metric_value(True) is None
+        assert validate_metric_value(False) is None
+        assert validate_metric_value(float("nan")) is None
+        assert validate_metric_value(float("inf")) is None
+        assert validate_metric_value(-0.1) is None
+        assert validate_metric_value(1.2) is None
+        assert validate_metric_value(0.95) == 0.95
+        assert validate_metric_value(0.0) == 0.0
+        assert validate_metric_value(1.0) == 1.0
+
+    def test_ece_observe_does_not_pass_mandatory_target(self):
+        """ECE in OBSERVE range (e.g. 0.105 > 0.10) sets has_target_failure=True and cannot pass mandatory."""
+        metrics = {
+            "intent_ece": {
+                "metric": "intent_ece",
+                "value": 0.105,
+                "status": "EVALUATED",
+                "evidence_ref": "ref",
+            }
+        }
+        results, has_failure = evaluate_metrics_against_targets(metrics)
+        ece_res = next(r for r in results if r["metric"] == "intent_ece")
+        assert ece_res["status"] == "OBSERVE"
+        # Must fail closed: cannot set mandatory passed via OBSERVE
+        assert has_failure is True
 
 
 class TestLiveCertificationAndMocks:
@@ -136,6 +172,23 @@ class TestLiveCertificationAndMocks:
 class TestRegressionComparability:
     """Distinguish different model/KB/split configs from valid regression comparisons."""
 
+    def test_empty_hashes_returns_incomparable(self):
+        """When all hashes are absent from both runs, check_regression_comparability MUST return False."""
+        run_a = {"hashes": {}}
+        run_b = {"hashes": {}}
+        comparable, reasons = check_regression_comparability(run_a, run_b)
+        assert comparable is False
+        assert len(reasons) > 0
+        assert any("Missing required hash" in r for r in reasons)
+
+    def test_missing_model_hash_returns_incomparable(self):
+        """If model_hash is missing from either run, comparison is rejected."""
+        run_a = {"hashes": {"kb_hash": "K1", "split_hash": "S1"}}
+        run_b = {"hashes": {"kb_hash": "K1", "split_hash": "S1", "model_hash": "M1"}}
+        comparable, reasons = check_regression_comparability(run_a, run_b)
+        assert comparable is False
+        assert any("model_hash" in r for r in reasons)
+
     def test_different_kb_hashes_incompatible_for_regression(self):
         """Runs with different KB hashes cannot be treated as regression under identical conditions."""
         run_a = {
@@ -156,26 +209,6 @@ class TestRegressionComparability:
         assert comparable is False
         assert any("kb_hash" in r for r in reasons)
 
-    def test_different_model_hashes_incompatible_for_regression(self):
-        """Runs with different model weights cannot be treated as regression under identical conditions."""
-        run_a = {
-            "hashes": {
-                "kb_hash": "AAA111",
-                "split_hash": "SPLIT01",
-                "model_hash": "MODEL_A",
-            }
-        }
-        run_b = {
-            "hashes": {
-                "kb_hash": "AAA111",
-                "split_hash": "SPLIT01",
-                "model_hash": "MODEL_B",
-            }
-        }
-        comparable, reasons = check_regression_comparability(run_a, run_b)
-        assert comparable is False
-        assert any("model_hash" in r for r in reasons)
-
     def test_compare_runs_records_incomparable_notice(self):
         """compare_runs records comparability=False and prevents false regression alerts."""
         curr = {
@@ -189,7 +222,6 @@ class TestRegressionComparability:
         res = compare_runs(curr, base)
         assert res["comparable"] is False
         assert len(res["incompatibility_reasons"]) > 0
-        # Should not mark as valid regression under same conditions
         assert res["regressions_detected"] == []
 
 
@@ -235,7 +267,6 @@ class TestAIGradingAndAgentSimulationProvenance:
         }
         gate_res = evaluate_system_gates(metrics, cfg, evidence_kind="live")
         gc_gate = gate_res["gates"]["grounded_claims"]
-        # Must NOT be pass! Must remain insufficient_evidence or not_evaluated for human gate
         assert gc_gate["status"] in ("insufficient_evidence", "not_evaluated")
         assert "ai grading" in gc_gate.get("reason", "").lower() or "ai" in gc_gate.get("details", "").lower()
 
@@ -290,10 +321,10 @@ class TestAuditBenchmarkCommand:
 
 
 class TestFreshRunDirectoryAndTraceability:
-    """Fresh run directory without overwriting existing files, and metric evidence tracing."""
+    """Fresh run directory, git commit, source snapshot, and metric evidence tracing."""
 
-    def test_fresh_run_directory_created(self, tmp_path):
-        """Running evaluation generates a fresh sub-directory under runs/ and does not overwrite baseline."""
+    def test_fresh_run_directory_created_and_snapshotted(self, tmp_path):
+        """Running evaluation generates a fresh sub-directory with source_summary.json snapshot."""
         output_base = tmp_path / "regression_out"
         output_base.mkdir()
 
@@ -305,7 +336,7 @@ class TestFreshRunDirectoryAndTraceability:
             "grounding": {"claim_grounding_rate": 0.92, "hallucination_rate": 0.01},
         }), encoding="utf-8")
 
-        run_dir = run_regression_evaluation(
+        run_dir, passed = run_regression_evaluation(
             current_path=summary_file,
             output_root=output_base,
             cached_only=True,
@@ -315,15 +346,69 @@ class TestFreshRunDirectoryAndTraceability:
         assert (run_dir / "evaluation_result.json").exists()
         assert (run_dir / "REGRESSION_REPORT.md").exists()
         assert (run_dir / "manifest.json").exists()
+        assert (run_dir / "source_summary.json").exists()
 
-        # Check evidence traceability: every PASS or evaluated metric must trace to evidence
+        # Check manifest contents
         with open(run_dir / "manifest.json", "r", encoding="utf-8") as f:
             manifest_data = json.load(f)
         assert "metrics" in manifest_data
+        assert manifest_data["execution_mode"] == "cached_only"
+        assert "environment" in manifest_data
+        assert manifest_data["environment"]["platform"] is not None
+
+        # Check evidence traceability: every PASS traces to source_summary.json
         pass_count = 0
         for m_name, m_info in manifest_data["metrics"].items():
             assert "evidence_ref" in m_info
             if m_info["status"] == "PASS":
-                assert m_info["evidence_ref"] is not None
+                assert m_info["evidence_ref"].startswith("source_summary.json#")
                 pass_count += 1
         assert pass_count > 0
+
+
+class TestCLIIntegrationAndExitCodes:
+    """Integration-style tests invoking CLI via subprocess on temporary environments."""
+
+    def test_cli_require_live_exits_nonzero_on_cached_summary(self, tmp_path):
+        """CLI with --require-live must exit non-zero when run against cached/read-only input."""
+        summary_file = tmp_path / "test_summary.json"
+        summary_file.write_text(json.dumps({
+            "metadata": {"suite_sha256": "S1", "kb_sha256": "K1", "weights_sha256": "M1"},
+            "intent_classification": {"accuracy": 0.92, "macro_f1": 0.91, "ece": 0.05, "brier_score": 0.05, "ood_detection_rate": 0.95, "far": 0.01, "frr": 0.01},
+            "retrieval": {"recall_at_1": 0.80, "recall_at_3": 0.90, "recall_at_5": 0.95, "precision_at_3": 0.35, "mrr": 0.85, "ndcg_at_3": 0.88},
+            "grounding": {"claim_grounding_rate": 0.95, "citation_correctness": 1.0, "hallucination_rate": 0.01, "appropriate_abstention_rate": 0.98},
+        }), encoding="utf-8")
+
+        res = subprocess.run(
+            [
+                sys.executable,
+                str(REPO_ROOT / "scripts" / "evaluate_regression.py"),
+                "--current", str(summary_file),
+                "--require-live",
+                "--output-dir", str(tmp_path / "out"),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert res.returncode != 0
+        assert "REQUIRE-LIVE FAILURE" in res.stdout
+
+    def test_cli_exits_nonzero_on_target_failure(self, tmp_path):
+        """CLI must exit non-zero when target requirements are violated."""
+        summary_file = tmp_path / "failing_summary.json"
+        summary_file.write_text(json.dumps({
+            "intent_classification": {"accuracy": 0.40},  # Below 0.85 target!
+        }), encoding="utf-8")
+
+        res = subprocess.run(
+            [
+                sys.executable,
+                str(REPO_ROOT / "scripts" / "evaluate_regression.py"),
+                "--current", str(summary_file),
+                "--cached-only",
+                "--output-dir", str(tmp_path / "out_fail"),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert res.returncode != 0

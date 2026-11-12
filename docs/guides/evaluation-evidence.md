@@ -86,42 +86,55 @@ Qua rà soát mã nguồn `scripts/run_benchmarks.py`, phát hiện:
    - Tự động cộng `grounded_claims += len(claims)` và gán `hallucination_rate = 0.0`. Không thực hiện sinh draft qua LLM và không có đối chiếu claim thực tế.
 
 **Biện pháp kiểm soát:**
-- Module `pipeline.evaluation.system_contracts` cung cấp hàm `audit_synthetic_benchmark(summary)` để phát hiện các dấu hiệu gán số liệu tĩnh này.
-- `scripts/evaluate_regression.py` tự động kích hoạt audit: nếu phát hiện số liệu synthetic trong lượt chạy live, hệ thống sẽ cảnh báo `[AUDIT WARNING]` và hạ cấp `evidence_kind` xuống `simulated`, ngăn chặn việc cấp chứng nhận giả mạo.
+- Module `pipeline.evaluation.system_contracts` cung cấp hàm `audit_synthetic_benchmark(summary)` để phát hiện các dấu hiệu gán số liệu tĩnh này. Đây là cơ chế phát hiện bất thường (anomaly check), không phải cơ chế xác thực chứng nhận. Việc không phát hiện chữ ký tĩnh **không đồng nghĩa** với việc số liệu đã được chứng minh; chứng nhận live đòi hỏi manifest có chữ ký, hashes hợp lệ và hồ sơ suy luận gốc.
+- `scripts/evaluate_regression.py` tự động kích hoạt audit: nếu phát hiện số liệu synthetic trong lượt chạy live, hệ thống cảnh báo `[AUDIT WARNING]` và từ chối cấp chứng nhận live.
+- Mọi giá trị chỉ số dạng `NaN`, `inf`, `bool`, số âm hoặc vượt khoảng $[0.0, 1.0]$ đều bị từ chối (`NOT_EVALUATED`), không được phép pass.
+- Với chỉ số ECE, nếu rơi vào khoảng `OBSERVE` ($0.10 < \text{ECE} \le 0.12$), hệ thống vẫn coi đây là chưa đạt chỉ tiêu kiến trúc (`has_target_failure = True`) và không cho phép `all_mandatory_passed = True`.
+- Cờ `--require-live` đóng vai trò cổng kiểm định nghiệm thu: nếu chạy trên dữ liệu cached, thiếu chứng minh model trained, hoặc bất kỳ gate nào không đạt, CLI sẽ kết thúc với mã lỗi khác 0 (`exit 1`), tuyệt đối không tự ý đổi nhãn dữ liệu cũ thành live.
 
 ---
 
-## 5. Cấu trúc Manifest Chuẩn (IMP-11)
+## 5. Cấu trúc Manifest Chuẩn và Snapshot Nguồn (IMP-11)
 
-Mỗi lần chạy tạo một file `manifest.json` tuân thủ schema `EvaluationManifest`:
+Mỗi lần chạy tạo một file `manifest.json` tuân thủ schema `EvaluationManifest`, đồng thời lưu snapshot tệp tóm tắt đầu vào thành `source_summary.json` trong chính thư mục chạy để bảo đảm `evidence_ref` trỏ tới tệp vật lý có thực:
 
 ```json
 {
   "schema_version": "v1.1",
   "run_id": "regression_20261112_063408Z_b5bed0e3",
   "created_at": "2026-11-12T06:34:08.634164+00:00",
-  "git_commit": "5e0cda5cb24a79ff2d6892ab7abf611c3da054d5",
+  "git_commit": "bc17c29ca6cd191a497274171fa9260fec3c6bb5",
   "evidence_kind": "cached",
-  "model_mode": "trained",
+  "model_mode": "unverified",
   "evaluator_type": "none",
   "study_type": "none",
   "execution_mode": "cached_only",
   "hashes": {
     "kb_hash": "AAA924C4B48DCD53A14269045B278B66F6E5E8AE9D1B614CD59B757102B78594",
     "split_hash": "C54C7EFCD2D363317A87344CD12C76791DB35EC17CA83A2E02B8FCB43F23150B",
-    "model_hash": null
+    "model_hash": "M1_HASH"
   },
   "counts": {
     "total_evaluated_metrics": 17
+  },
+  "environment": {
+    "python_version": "3.12.14",
+    "platform": "Windows-11"
+  },
+  "files": {
+    "source_summary.json": {
+      "path": "source_summary.json",
+      "sha256": "47DD4F21AF5C2DE33B8D446EF55708BD8236212D0983616DCAEECF1530771570"
+    }
   },
   "metrics": {
     "grounding_hallucination_rate": {
       "metric": "grounding_hallucination_rate",
       "value": 0.01,
       "status": "PASS",
-      "evidence_ref": "summary#grounding.hallucination_rate",
+      "evidence_ref": "source_summary.json#grounding.hallucination_rate",
       "evidence_kind": "cached",
-      "model_mode": "trained",
+      "model_mode": "unverified",
       "target": 0.02,
       "operator": "<="
     }

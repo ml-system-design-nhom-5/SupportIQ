@@ -605,13 +605,25 @@ def check_regression_comparability(
     run_a: Dict[str, Any],
     run_b: Dict[str, Any],
 ) -> Tuple[bool, List[str]]:
-    """Determine whether two evaluation runs share identical KB, dataset split, model, and config.
-    Returns (True, []) if comparable under identical conditions, or (False, reasons) if configurations differ.
+    """Determine whether two evaluation runs share identical KB, dataset split, model, prompt, and config.
+    Requires complete, non-empty provenance for both runs.
+    Returns (True, []) if comparable under identical conditions, or (False, reasons) if configurations differ or provenance is missing.
     """
     reasons: List[str] = []
 
-    def _extract_hashes(r: Dict[str, Any]) -> Dict[str, Optional[str]]:
+    def _extract_provenance(r: Dict[str, Any]) -> Dict[str, Optional[str]]:
         h = dict(r.get("hashes", {}))
+        manifest = r.get("manifest", {})
+        if isinstance(manifest, dict):
+            h.update(manifest.get("hashes", {}))
+            files = manifest.get("files", {})
+            if "kb" in files and "kb_hash" not in h:
+                h["kb_hash"] = files["kb"].get("sha256")
+            if "cases" in files and "split_hash" not in h:
+                h["split_hash"] = files["cases"].get("sha256")
+            if "model" in files and "model_hash" not in h:
+                h["model_hash"] = files["model"].get("sha256")
+
         meta = r.get("metadata", {})
         if "kb_hash" not in h and "kb_sha256" in meta:
             h["kb_hash"] = meta["kb_sha256"]
@@ -619,16 +631,53 @@ def check_regression_comparability(
             h["split_hash"] = meta["suite_sha256"]
         if "model_hash" not in h and "weights_sha256" in meta:
             h["model_hash"] = meta["weights_sha256"]
+        if "prompt_hash" not in h and "prompt_sha256" in meta:
+            h["prompt_hash"] = meta["prompt_sha256"]
+        if "config_hash" not in h and "config_sha256" in meta:
+            h["config_hash"] = meta["config_sha256"]
+
+        summary = r.get("summary", {})
+        if isinstance(summary, dict):
+            s_meta = summary.get("metadata", {})
+            if "kb_hash" not in h and "kb_sha256" in s_meta:
+                h["kb_hash"] = s_meta["kb_sha256"]
+            if "split_hash" not in h and "suite_sha256" in s_meta:
+                h["split_hash"] = s_meta["suite_sha256"]
+            if "model_hash" not in h and "weights_sha256" in s_meta:
+                h["model_hash"] = s_meta["weights_sha256"]
+
         return h
 
-    h_a = _extract_hashes(run_a)
-    h_b = _extract_hashes(run_b)
+    h_a = _extract_provenance(run_a)
+    h_b = _extract_provenance(run_b)
 
-    for key in ("kb_hash", "split_hash", "model_hash"):
+    # Required provenance: KB, split, and model hashes must be non-empty in BOTH runs
+    required_hashes = ("kb_hash", "split_hash", "model_hash")
+    for key in required_hashes:
         val_a = h_a.get(key)
         val_b = h_b.get(key)
+        if not val_a:
+            reasons.append(f"Missing required hash '{key}' in current run")
+        if not val_b:
+            reasons.append(f"Missing required hash '{key}' in baseline run")
         if val_a and val_b and val_a != val_b:
             reasons.append(f"{key} mismatch: {val_a} != {val_b}")
+
+    # Optional hashes (prompt, config) must match if present in both
+    for opt_key in ("prompt_hash", "config_hash"):
+        opt_a = h_a.get(opt_key)
+        opt_b = h_b.get(opt_key)
+        if opt_a and opt_b and opt_a != opt_b:
+            reasons.append(f"{opt_key} mismatch: {opt_a} != {opt_b}")
+
+    # Evidence kind must match between runs
+    def _extract_kind(r: Dict[str, Any]) -> Optional[str]:
+        return r.get("evidence_kind") or r.get("manifest", {}).get("evidence_kind") if isinstance(r.get("manifest"), dict) else None
+
+    kind_a = _extract_kind(run_a)
+    kind_b = _extract_kind(run_b)
+    if kind_a and kind_b and kind_a != kind_b:
+        reasons.append(f"evidence_kind mismatch: '{kind_a}' vs '{kind_b}'")
 
     return (len(reasons) == 0, reasons)
 
@@ -643,8 +692,8 @@ def check_mixed_evidence(manifest_data: Dict[str, Any]) -> Tuple[bool, List[str]
     profile = manifest_data.get("profile")
 
     if evidence_kind == "live":
-        if model_mode in ("heuristic_demo", "unavailable", "synthetic"):
-            reasons.append(f"Live evidence declared with non-live model_mode: '{model_mode}'")
+        if model_mode in ("heuristic_demo", "unavailable", "synthetic", "unverified", "unknown", None):
+            reasons.append(f"Live evidence declared with unverified/non-live model_mode: '{model_mode}'")
         if profile in ("mock", "simulated"):
             reasons.append(f"Live evidence declared with mock execution profile: '{profile}'")
         
@@ -652,15 +701,20 @@ def check_mixed_evidence(manifest_data: Dict[str, Any]) -> Tuple[bool, List[str]
         metrics = manifest_data.get("metrics", {})
         if isinstance(metrics, dict):
             for m_name, m_val in metrics.items():
-                m_dict = m_val if isinstance(m_val, dict) else m_val.model_dump()
-                if m_dict.get("evidence_kind") in ("simulated", "mock"):
-                    reasons.append(f"Metric '{m_name}' has simulated evidence inside live run")
+                m_dict = m_val if isinstance(m_val, dict) else (m_val.model_dump() if hasattr(m_val, "model_dump") else {})
+                if m_dict.get("evidence_kind") in ("simulated", "mock", "cached", "unverified"):
+                    reasons.append(f"Metric '{m_name}' has non-live evidence kind: '{m_dict.get('evidence_kind')}'")
+                if m_dict.get("model_mode") in ("heuristic_demo", "synthetic", "unverified", "unknown"):
+                    reasons.append(f"Metric '{m_name}' has unverified model mode: '{m_dict.get('model_mode')}'")
 
     return (len(reasons) > 0, reasons)
 
 
 def audit_synthetic_benchmark(summary: Dict[str, Any]) -> Tuple[bool, List[str]]:
-    """Audit whether benchmark metrics were computed from actual runs or reused static/fabricated claims."""
+    """Audit anomaly heuristic: checks whether benchmark metrics match known static/synthetic templates.
+    NOTE: Absence of synthetic signatures is NOT positive evidence authentication. Positive certification
+    requires a cryptographically verified manifest, valid model hashes, and raw inference records.
+    """
     reasons: List[str] = []
 
     grounding = summary.get("grounding", {}) or summary.get("llm_grounding", {})

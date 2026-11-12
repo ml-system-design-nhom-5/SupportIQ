@@ -3,19 +3,28 @@
 
 Truthful evidence contracts:
 - Missing metrics cannot become 0.0 or PASS (marked NOT_EVALUATED / INSUFFICIENT_EVIDENCE).
+- Metric values that are NaN, inf, bool, or out-of-range are strictly rejected.
 - Mock, simulated, or heuristic demo runs cannot certify live acceptance.
 - Cached metrics cannot imply new inference execution (execution_mode: cached_only).
-- Two runs with differing KB/split/model hashes cannot be treated as regression under identical conditions.
-- Every metric traces to a run manifest and raw evidence reference (evidence_ref).
+- Read-only paths (--current, --skip-benchmark) are strictly labeled cached/no new inference.
+- --require-live is an assertive validation gate that fails non-zero if live criteria are unmet;
+  it never authorizes relabeling unauthenticated summaries as live or trained.
+- Absence of synthetic audit signatures is NOT evidence authentication.
+- Two runs with differing or missing KB/split/model hashes cannot be treated as regression under identical conditions.
+- Every metric traces to a run manifest and raw evidence reference (evidence_ref pointing to saved file).
 - Existing artifacts remain immutable; outputs write to a fresh run directory.
+- CLI exits non-zero if requested gates, targets, or live certification fail.
 """
 
 from __future__ import annotations
 
 import argparse
 import datetime
+import hashlib
 import json
+import math
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -61,26 +70,133 @@ TARGETS: Dict[str, Tuple[float, str]] = {
 }
 
 
+def compute_sha256(path: Path) -> str:
+    """Compute uppercase SHA-256 for a file."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        while chunk := f.read(65536):
+            h.update(chunk)
+    return h.hexdigest().upper()
+
+
+def get_git_commit(repo_root: Path = REPO_ROOT) -> Optional[str]:
+    """Capture current git commit sha or environment fallback."""
+    try:
+        res = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        commit = res.stdout.strip()
+        if commit:
+            return commit
+    except Exception:
+        pass
+    return os.environ.get("GIT_COMMIT")
+
+
+def validate_metric_value(raw_val: Any) -> Optional[float]:
+    """Validate numeric metric: reject bool, None, NaN, inf, or out-of-range numbers."""
+    if isinstance(raw_val, bool) or raw_val is None:
+        return None
+    try:
+        f_val = float(raw_val)
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(f_val) or math.isinf(f_val):
+        return None
+    if f_val < 0.0 or f_val > 1.0:
+        return None
+    return f_val
+
+
 def load_run_data(path: Optional[Path] = None) -> Optional[Dict[str, Any]]:
-    """Load evaluation summary or manifest JSON from path or default benchmark summary."""
+    """Load evaluation summary or manifest JSON from path or default benchmark summary,
+    preserving full nested provenance (hashes, manifest, metadata, files).
+    """
     p = path or BENCHMARK_SUMMARY_PATH
     if not p.is_absolute():
         p = (REPO_ROOT / p).resolve()
-    if p.exists():
-        try:
-            with open(p, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return None
-    return None
+    
+    if not p.exists():
+        return None
+
+    target_file = p
+    manifest_data = None
+
+    if p.is_dir():
+        # Directory passed: check for manifest.json and summary files
+        m_file = p / "manifest.json"
+        if m_file.exists():
+            try:
+                with open(m_file, "r", encoding="utf-8") as f:
+                    manifest_data = json.load(f)
+            except Exception:
+                pass
+        
+        candidates = ["source_summary.json", "benchmark_summary.json", "evaluation_result.json", "metrics.json"]
+        found = None
+        for c in candidates:
+            cand = p / c
+            if cand.exists():
+                found = cand
+                break
+        if not found:
+            return {"manifest": manifest_data} if manifest_data else None
+        target_file = found
+    else:
+        # File passed: check if sibling manifest.json exists
+        sibling_m = p.parent / "manifest.json"
+        if sibling_m.exists():
+            try:
+                with open(sibling_m, "r", encoding="utf-8") as f:
+                    manifest_data = json.load(f)
+            except Exception:
+                pass
+
+    try:
+        with open(target_file, "r", encoding="utf-8") as f:
+            raw_data = json.load(f)
+    except Exception:
+        return None
+
+    # Merge nested provenance
+    out_payload: Dict[str, Any] = {}
+    if isinstance(raw_data, dict):
+        if "summary" in raw_data:
+            out_payload["summary"] = raw_data["summary"]
+            out_payload["manifest"] = raw_data.get("manifest") or manifest_data
+            out_payload["hashes"] = raw_data.get("hashes", {})
+        else:
+            out_payload["summary"] = raw_data
+            out_payload["manifest"] = manifest_data
+            meta = raw_data.get("metadata", {})
+            out_payload["hashes"] = {
+                "kb_hash": meta.get("kb_sha256") or meta.get("kb_hash"),
+                "split_hash": meta.get("suite_sha256") or meta.get("split_hash"),
+                "model_hash": meta.get("weights_sha256") or meta.get("model_hash"),
+            }
+        
+        if manifest_data and isinstance(manifest_data, dict):
+            out_payload["hashes"].update(manifest_data.get("hashes", {}))
+            if "evidence_kind" not in out_payload:
+                out_payload["evidence_kind"] = manifest_data.get("evidence_kind")
+            if "model_mode" not in out_payload:
+                out_payload["model_mode"] = manifest_data.get("model_mode")
+
+    return out_payload
 
 
 def extract_metrics(
     summary: Dict[str, Any],
     manifest: Optional[Dict[str, Any]] = None,
+    source_ref_name: str = "source_summary.json",
 ) -> Dict[str, Dict[str, Any]]:
     """Extract metrics with strict provenance and evidence traceability.
-    Missing metrics are NOT defaulted to 0.0; they are assigned value=None and status='NOT_EVALUATED'.
+    Missing, NaN, inf, bool, or out-of-range metrics are NOT defaulted to 0.0;
+    they are assigned value=None and status='NOT_EVALUATED'.
     """
     m: Dict[str, Dict[str, Any]] = {}
 
@@ -93,13 +209,13 @@ def extract_metrics(
     # 1. Intent metrics
     intent = summary.get("intent_classification", {})
     intent_keys = {
-        "intent_accuracy": ("accuracy", "summary#intent_classification.accuracy"),
-        "intent_macro_f1": ("macro_f1", "summary#intent_classification.macro_f1"),
-        "intent_ece": ("ece", "summary#intent_classification.ece"),
-        "intent_brier": ("brier_score", "summary#intent_classification.brier_score"),
-        "intent_ood_detection": ("ood_detection_rate", "summary#intent_classification.ood_detection_rate"),
-        "intent_far": ("far", "summary#intent_classification.far"),
-        "intent_frr": ("frr", "summary#intent_classification.frr"),
+        "intent_accuracy": ("accuracy", f"{source_ref_name}#intent_classification.accuracy"),
+        "intent_macro_f1": ("macro_f1", f"{source_ref_name}#intent_classification.macro_f1"),
+        "intent_ece": ("ece", f"{source_ref_name}#intent_classification.ece"),
+        "intent_brier": ("brier_score", f"{source_ref_name}#intent_classification.brier_score"),
+        "intent_ood_detection": ("ood_detection_rate", f"{source_ref_name}#intent_classification.ood_detection_rate"),
+        "intent_far": ("far", f"{source_ref_name}#intent_classification.far"),
+        "intent_frr": ("frr", f"{source_ref_name}#intent_classification.frr"),
     }
     for m_name, (k, ref) in intent_keys.items():
         raw_val = intent.get(k)
@@ -108,14 +224,9 @@ def extract_metrics(
         elif m_name == "intent_frr" and raw_val is None:
             raw_val = intent.get("false_rejection_rate")
 
-        if raw_val is not None:
-            val = float(raw_val)
-            stat = "EVALUATED"
-            e_ref = ref
-        else:
-            val = None
-            stat = "NOT_EVALUATED"
-            e_ref = None
+        val = validate_metric_value(raw_val)
+        stat = "EVALUATED" if val is not None else "NOT_EVALUATED"
+        e_ref = ref if val is not None else None
 
         m[m_name] = {
             "metric": m_name,
@@ -129,23 +240,18 @@ def extract_metrics(
     # 2. RAG Retrieval metrics
     rag = summary.get("retrieval") or summary.get("rag_retrieval", {})
     rag_keys = {
-        "rag_recall_at_1": ("recall_at_1", "summary#retrieval.recall_at_1"),
-        "rag_recall_at_3": ("recall_at_3", "summary#retrieval.recall_at_3"),
-        "rag_recall_at_5": ("recall_at_5", "summary#retrieval.recall_at_5"),
-        "rag_precision_at_3": ("precision_at_3", "summary#retrieval.precision_at_3"),
-        "rag_mrr": ("mrr", "summary#retrieval.mrr"),
-        "rag_ndcg_at_3": ("ndcg_at_3", "summary#retrieval.ndcg_at_3"),
+        "rag_recall_at_1": ("recall_at_1", f"{source_ref_name}#retrieval.recall_at_1"),
+        "rag_recall_at_3": ("recall_at_3", f"{source_ref_name}#retrieval.recall_at_3"),
+        "rag_recall_at_5": ("recall_at_5", f"{source_ref_name}#retrieval.recall_at_5"),
+        "rag_precision_at_3": ("precision_at_3", f"{source_ref_name}#retrieval.precision_at_3"),
+        "rag_mrr": ("mrr", f"{source_ref_name}#retrieval.mrr"),
+        "rag_ndcg_at_3": ("ndcg_at_3", f"{source_ref_name}#retrieval.ndcg_at_3"),
     }
     for m_name, (k, ref) in rag_keys.items():
         raw_val = rag.get(k)
-        if raw_val is not None:
-            val = float(raw_val)
-            stat = "EVALUATED"
-            e_ref = ref
-        else:
-            val = None
-            stat = "NOT_EVALUATED"
-            e_ref = None
+        val = validate_metric_value(raw_val)
+        stat = "EVALUATED" if val is not None else "NOT_EVALUATED"
+        e_ref = ref if val is not None else None
 
         m[m_name] = {
             "metric": m_name,
@@ -159,21 +265,16 @@ def extract_metrics(
     # 3. Grounding metrics
     grounding = summary.get("grounding") or summary.get("llm_grounding", {})
     grounding_keys = {
-        "grounding_claim_grounding_rate": ("claim_grounding_rate", "summary#grounding.claim_grounding_rate"),
-        "grounding_citation_correctness": ("citation_correctness", "summary#grounding.citation_correctness"),
-        "grounding_hallucination_rate": ("hallucination_rate", "summary#grounding.hallucination_rate"),
-        "grounding_abstention_rate": ("appropriate_abstention_rate", "summary#grounding.appropriate_abstention_rate"),
+        "grounding_claim_grounding_rate": ("claim_grounding_rate", f"{source_ref_name}#grounding.claim_grounding_rate"),
+        "grounding_citation_correctness": ("citation_correctness", f"{source_ref_name}#grounding.citation_correctness"),
+        "grounding_hallucination_rate": ("hallucination_rate", f"{source_ref_name}#grounding.hallucination_rate"),
+        "grounding_abstention_rate": ("appropriate_abstention_rate", f"{source_ref_name}#grounding.appropriate_abstention_rate"),
     }
     for m_name, (k, ref) in grounding_keys.items():
         raw_val = grounding.get(k)
-        if raw_val is not None:
-            val = float(raw_val)
-            stat = "EVALUATED"
-            e_ref = ref
-        else:
-            val = None
-            stat = "NOT_EVALUATED"
-            e_ref = None
+        val = validate_metric_value(raw_val)
+        stat = "EVALUATED" if val is not None else "NOT_EVALUATED"
+        e_ref = ref if val is not None else None
 
         m[m_name] = {
             "metric": m_name,
@@ -193,13 +294,13 @@ def diagnose_metric(name: str, current: Optional[float], target: float, status: 
 
     if status in ("NOT_EVALUATED", "INSUFFICIENT_EVIDENCE") or current is None:
         return {
-            "diagnosis": f"Metric '{name}' was not evaluated or is missing from evidence.",
+            "diagnosis": f"Metric '{name}' was not evaluated, invalid, or is missing from evidence.",
             "recommendation": "Run evaluation on benchmark suite providing this metric before asserting compliance.",
         }
 
     if "ece" in name:
         return {
-            "diagnosis": f"Calibration ECE ({current:.4f}) exceeds {target:.4f}. Softmax probabilities are overconfident on peak classes.",
+            "diagnosis": f"Calibration ECE ({current:.4f}) exceeds target {target:.4f}. Softmax probabilities are overconfident on peak classes.",
             "recommendation": "Apply temperature scaling (T=1.12) to model logits or isotonic regression calibration on validation split.",
         }
     elif "recall" in name:
@@ -224,7 +325,8 @@ def evaluate_metrics_against_targets(
     allow_regression_comparison: bool = True,
 ) -> Tuple[List[Dict[str, Any]], bool]:
     """Measure metrics against architectural targets.
-    Missing metrics cannot pass; upper-bound checks fail closed.
+    Missing or invalid metrics cannot pass; upper-bound checks fail closed.
+    ECE over target cannot pass mandatory requirements via OBSERVE.
     """
     eval_results = []
     has_target_failure = False
@@ -263,7 +365,8 @@ def evaluate_metrics_against_targets(
                 status = "OBSERVE"
             else:
                 status = "FAIL"
-                has_target_failure = True
+            # NOTE: ECE over target is still a target gap; mandatory passed cannot be True
+            has_target_failure = True
         else:
             status = "PASS"
 
@@ -303,8 +406,8 @@ def compare_runs(
     current_run: Dict[str, Any],
     baseline_run: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Compare two evaluation runs, enforcing configuration comparability.
-    If KB/split/model hashes differ, comparability=False and false regressions are suppressed.
+    """Compare two evaluation runs, strictly enforcing configuration comparability.
+    If KB/split/model hashes differ or are absent, comparability=False and regressions are suppressed.
     """
     comparable, reasons = check_regression_comparability(current_run, baseline_run)
 
@@ -350,8 +453,10 @@ def run_regression_evaluation(
     require_live: bool = False,
     evaluator_type: Optional[str] = None,
     study_type: Optional[str] = None,
-) -> Path:
-    """Execute complete regression evaluation and write immutable artifacts to fresh run directory."""
+) -> Tuple[Path, bool]:
+    """Execute complete regression evaluation and write immutable artifacts to fresh run directory.
+    Returns (run_dir, success_flag).
+    """
     out_base = output_root or RUNS_DIR
     out_base.mkdir(parents=True, exist_ok=True)
 
@@ -368,20 +473,32 @@ def run_regression_evaluation(
     print("=" * 80)
 
     # 1. Benchmark Execution or Cached Discovery
-    current_summary = None
+    is_read_only = (current_path is not None) or skip_benchmark or cached_only
+    current_run_loaded = None
     if current_path:
-        current_summary = load_run_data(current_path)
+        current_run_loaded = load_run_data(current_path)
     elif not skip_benchmark and not cached_only:
         print("\n[Stage 1/4] Executing live benchmark evaluation...")
         runner_script = REPO_ROOT / "scripts/run_benchmarks.py"
         subprocess.run([sys.executable, str(runner_script)], check=True)
-        current_summary = load_run_data(BENCHMARK_SUMMARY_PATH)
+        current_run_loaded = load_run_data(BENCHMARK_SUMMARY_PATH)
     else:
-        current_summary = load_run_data(BENCHMARK_SUMMARY_PATH)
+        current_run_loaded = load_run_data(BENCHMARK_SUMMARY_PATH)
 
-    if not current_summary:
+    if not current_run_loaded or not current_run_loaded.get("summary"):
         print("[ERROR] Failed to load benchmark summary.")
         sys.exit(1)
+
+    current_summary = current_run_loaded["summary"]
+    source_manifest = current_run_loaded.get("manifest") or {}
+    source_hashes = current_run_loaded.get("hashes", {})
+
+    # Snapshot source summary into fresh run directory
+    source_snapshot_name = "source_summary.json"
+    source_snapshot_file = run_dir / source_snapshot_name
+    with open(source_snapshot_file, "w", encoding="utf-8") as f:
+        json.dump(current_summary, f, indent=2)
+    source_snapshot_sha256 = compute_sha256(source_snapshot_file)
 
     # Audit for synthetic values
     is_synthetic, audit_reasons = audit_synthetic_benchmark(current_summary)
@@ -390,24 +507,51 @@ def run_regression_evaluation(
         for r in audit_reasons:
             print(f"  - {r}")
 
-    previous_run = load_run_data(baseline_path) if baseline_path else None
+    # Determine execution mode and evidence kind
+    if is_read_only:
+        execution_mode = "cached_only"
+        # Reading existing files is cached; never infer live
+        evidence_kind = "cached" if not is_synthetic else "simulated"
+    else:
+        execution_mode = "new_execution"
+        evidence_kind = "simulated" if is_synthetic else "live"
 
-    # Determine evidence kind and modes
-    evidence_kind = "cached" if cached_only else ("live" if require_live else "simulated")
-    if is_synthetic and evidence_kind == "live":
-        print("[WARNING] Synthetic benchmark detected in live run request; downgrading to simulated.")
-        evidence_kind = "simulated"
+    # Model mode: never infer 'trained' from absence of synthetic signature
+    model_mode = source_manifest.get("model_mode")
+    if not model_mode:
+        model_mode = "synthetic" if is_synthetic else "unverified"
+
+    # Capture real environment & git commit
+    git_commit = get_git_commit(REPO_ROOT)
+    env_data = {
+        "python_version": sys.version.split()[0],
+        "platform": platform.platform(),
+        "system": platform.system(),
+        "machine": platform.machine(),
+    }
+    cfg_data = {
+        "targets": {k: {"threshold": v[0], "op": v[1]} for k, v in TARGETS.items()},
+        "tolerance": 0.015,
+        "evaluator_type": evaluator_type or "none",
+        "study_type": study_type or "none",
+    }
 
     current_run_payload = {
         "summary": current_summary,
         "manifest": {
             "run_id": run_id,
             "evidence_kind": evidence_kind,
-            "model_mode": "synthetic" if is_synthetic else "trained",
+            "model_mode": model_mode,
             "evaluator_type": evaluator_type or "none",
             "study_type": study_type or "none",
+            "hashes": source_hashes,
         },
+        "hashes": source_hashes,
+        "evidence_kind": evidence_kind,
+        "model_mode": model_mode,
     }
+
+    previous_run = load_run_data(baseline_path) if baseline_path else None
 
     # Comparability & Metrics evaluation
     comparison = compare_runs(
@@ -419,6 +563,7 @@ def run_regression_evaluation(
     regressions = comparison["regressions_detected"]
     comparable = comparison["comparable"]
     incomp_reasons = comparison["incompatibility_reasons"]
+    has_target_failure = comparison["has_target_failure"]
 
     # Manifest construction
     metric_prov_map = {}
@@ -429,7 +574,7 @@ def run_regression_evaluation(
             status=r["status"],
             evidence_ref=r["evidence_ref"],
             evidence_kind=evidence_kind,
-            model_mode="synthetic" if is_synthetic else "trained",
+            model_mode=model_mode,
             evaluator_type=evaluator_type or "none",
             study_type=study_type or "none",
             target=r["target"],
@@ -441,21 +586,70 @@ def run_regression_evaluation(
             recommendation=r["recommendation"],
         )
 
+    # Check mixed evidence
+    manifest_check_data = {
+        "evidence_kind": evidence_kind,
+        "model_mode": model_mode,
+        "profile": source_manifest.get("profile"),
+        "metrics": metric_prov_map,
+    }
+    is_mixed, mixed_reasons = check_mixed_evidence(manifest_check_data)
+    if is_mixed:
+        has_target_failure = True
+        print(f"\n[ERROR] Mixed evidence detected: {', '.join(mixed_reasons)}")
+
+    # Enforce --require-live validation
+    live_gate_errors: List[str] = []
+    if require_live:
+        if is_read_only or execution_mode == "cached_only":
+            live_gate_errors.append("--require-live cannot be satisfied by read-only / cached execution.")
+        if evidence_kind != "live":
+            live_gate_errors.append(f"--require-live requires evidence_kind='live', got '{evidence_kind}'.")
+        if model_mode != "trained":
+            live_gate_errors.append(f"--require-live requires verified trained model_mode, got '{model_mode}'.")
+        if is_mixed:
+            live_gate_errors.append(f"Mixed evidence rejected: {', '.join(mixed_reasons)}")
+        if is_synthetic:
+            live_gate_errors.append(f"Synthetic benchmark rejected: {', '.join(audit_reasons)}")
+        if has_target_failure:
+            live_gate_errors.append("Target requirements not satisfied under live assertion.")
+        if regressions:
+            live_gate_errors.append("Regressions detected under live assertion.")
+
+        if live_gate_errors:
+            has_target_failure = True
+            for err in live_gate_errors:
+                print(f"[REQUIRE-LIVE FAILURE] {err}")
+
+    all_mandatory_passed = (
+        not has_target_failure
+        and not regressions
+        and not is_mixed
+        and len(live_gate_errors) == 0
+    )
+
     manifest = EvaluationManifest(
         run_id=run_id,
         created_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        git_commit=git_commit,
         evidence_kind=evidence_kind,
-        model_mode="synthetic" if is_synthetic else "trained",
+        model_mode=model_mode,
         evaluator_type=evaluator_type or "none",
         study_type=study_type or "none",
-        execution_mode="cached_only" if cached_only else "new_execution",
-        hashes={
-            "kb_hash": current_summary.get("metadata", {}).get("kb_sha256"),
-            "split_hash": current_summary.get("metadata", {}).get("suite_sha256"),
-        },
+        execution_mode=execution_mode,
+        hashes=source_hashes,
+        config=cfg_data,
         counts={"total_evaluated_metrics": len(eval_results)},
+        environment=env_data,
         metrics=metric_prov_map,
-        all_mandatory_passed=(not comparison["has_target_failure"] and not regressions),
+        files={
+            source_snapshot_name: {
+                "path": source_snapshot_name,
+                "sha256": source_snapshot_sha256,
+            }
+        },
+        all_mandatory_passed=all_mandatory_passed,
+        summary_reason="All mandatory acceptance gates passed." if all_mandatory_passed else "Mandatory targets, comparability, or live requirements not satisfied.",
     )
 
     # 3. Output files into fresh run directory
@@ -466,14 +660,20 @@ def run_regression_evaluation(
     full_output = {
         "run_id": run_id,
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        "execution_mode": "cached_only" if cached_only else "new_execution",
+        "git_commit": git_commit,
+        "execution_mode": execution_mode,
         "evidence_kind": evidence_kind,
+        "model_mode": model_mode,
         "comparable_with_baseline": comparable,
         "incompatibility_reasons": incomp_reasons,
         "synthetic_audit_detected": is_synthetic,
         "audit_reasons": audit_reasons,
+        "mixed_evidence_detected": is_mixed,
+        "mixed_reasons": mixed_reasons,
+        "live_gate_errors": live_gate_errors,
         "evaluation": eval_results,
         "regressions_detected": regressions,
+        "all_mandatory_passed": all_mandatory_passed,
     }
 
     with open(eval_json_path, "w", encoding="utf-8") as f:
@@ -487,15 +687,18 @@ def run_regression_evaluation(
         f"# SupportIQ Automated Evaluation & Regression Report — `{run_id}`",
         "",
         f"> **Generated At:** `{datetime.datetime.now(datetime.timezone.utc).isoformat()}`  ",
+        f"> **Git Commit:** `{git_commit or 'untracked'}`  ",
         f"> **Evidence Kind:** `{evidence_kind}`  ",
-        f"> **Execution Mode:** `{'cached_only' if cached_only else 'new_execution'}`  ",
+        f"> **Execution Mode:** `{execution_mode}`  ",
+        f"> **Model Mode:** `{model_mode}`  ",
         f"> **Evaluator Type:** `{evaluator_type or 'none'}`  ",
         f"> **Study Type:** `{study_type or 'none'}`  ",
         f"> **Regression Status:** `{'REGRESSION DETECTED' if regressions else 'NO REGRESSION (STABLE)'}`  ",
+        f"> **Mandatory Gates Passed:** `{all_mandatory_passed}`  ",
         "",
     ]
 
-    if cached_only:
+    if execution_mode == "cached_only":
         md_lines.extend([
             "> [!NOTE]",
             "> **Cached Report:** This report was compiled from existing cached benchmark artifacts. "
@@ -508,6 +711,13 @@ def run_regression_evaluation(
             "> [!WARNING]",
             "> **Synthetic Benchmark Audit Finding:** Hardcoded claims or keyword-fallback predictions "
             "were detected in the source benchmark summary. These values cannot certify live acceptance.",
+            "",
+        ])
+
+    if is_mixed:
+        md_lines.extend([
+            "> [!CAUTION]",
+            f"> **Mixed Evidence Rejected:** {'; '.join(mixed_reasons)}.",
             "",
         ])
 
@@ -556,6 +766,7 @@ def run_regression_evaluation(
                 "",
             ])
 
+    audit_status_str = "FAIL (Synthetic detected)" if is_synthetic else ("UNVERIFIED (No signed model manifest)" if model_mode == "unverified" else "PASS (Verified)")
     md_lines.extend([
         "---",
         "",
@@ -563,7 +774,8 @@ def run_regression_evaluation(
         f"- **Run ID:** `{run_id}`",
         f"- **Run Directory:** `{run_dir}`",
         f"- **Manifest:** `{manifest_json_path}`",
-        f"- **Synthetic Benchmark Audit:** `{'FAIL (Synthetic detected)' if is_synthetic else 'PASS (Computed values)'}`",
+        f"- **Source Snapshot:** `{source_snapshot_file}` (`{source_snapshot_sha256}`)",
+        f"- **Synthetic Benchmark Audit:** `{audit_status_str}`",
         "",
     ])
 
@@ -571,7 +783,7 @@ def run_regression_evaluation(
         f.write("\n".join(md_lines))
 
     print(f"\nSaved evaluation artifacts to fresh directory:\n  {run_dir}")
-    return run_dir
+    return run_dir, all_mandatory_passed
 
 
 if __name__ == "__main__":
@@ -586,7 +798,7 @@ if __name__ == "__main__":
     parser.add_argument("--study-type", choices=["user_study", "agent_simulation", "none"], default=None, help="Study kind for timing")
     args = parser.parse_args()
 
-    run_dir = run_regression_evaluation(
+    run_dir, success = run_regression_evaluation(
         current_path=args.current,
         baseline_path=args.baseline,
         output_root=args.output_dir,
@@ -596,4 +808,4 @@ if __name__ == "__main__":
         evaluator_type=args.evaluator_type,
         study_type=args.study_type,
     )
-    sys.exit(0)
+    sys.exit(0 if success else 1)
