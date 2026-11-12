@@ -1,0 +1,15 @@
+{
+  "outcome": "success",
+  "usage": {
+    "promptTokenCount": 742,
+    "candidatesTokenCount": 54,
+    "totalTokenCount": 796
+  },
+  "prompt_version": "grounded-v3",
+  "trace": [
+    {
+      "http_status": 200,
+      "seconds": 1.4771466000020155
+    }
+  ]
+}
