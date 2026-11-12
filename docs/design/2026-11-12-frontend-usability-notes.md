@@ -1,10 +1,10 @@
 # Task F1 — Frontend Usability & Light Theme Verification Notes
 
-**Date:** 2026-11-12  
-**Task ID:** `task_b410705f67e2`  
-**Worktree:** `supportiq-frontend-usability-v2`  
-**Direction:** `achromatic-ledger`  
-**Seed:** `1338469755`  
+**Date:** 2026-11-12
+**Task ID:** `task_b410705f67e2`
+**Worktree:** `supportiq-frontend-usability-v2`
+**Direction:** `achromatic-ledger`
+**Seed:** `1338469755`
 **Theme:** Light (simple, high-contrast, non-decorative)
 
 ---
