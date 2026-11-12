@@ -41,14 +41,8 @@ from apps.core_backend.intent.schemas import RoutingContext, IntentPrediction
 from apps.core_backend.retrieval.adapter import RetrievalAdapter
 from apps.core_backend.retrieval.encoder import PolicyEncoder
 from apps.ai_service.engine import Engine, PLACEHOLDER
-
-
-def compute_sha256(path: Path) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        while chunk := f.read(65536):
-            h.update(chunk)
-    return h.hexdigest().upper()
+from apps.ml_inference.app import DEV_INTENT_PATTERNS as INTENT_KEYWORDS
+from pipeline.preparation.utils import compute_sha256
 
 
 # -----------------------------------------------------------------------------
@@ -88,24 +82,7 @@ def evaluate_intent_classification(
         "request_refund", "return_policy", "return_product", "shipping_costs"
     ]))
 
-    # Known intent keywords and patterns for deterministic evaluation
-    # across test cases when binary weights are evaluated
-    INTENT_KEYWORDS = {
-        "track_order": [r"track\b", r"where is my (order|package|shipment)", r"delivery status"],
-        "delivery_time": [r"when will .* arrive", r"delivery date", r"how long .* shipping", r"delivery estimate"],
-        "delivery_issue": [r"damaged", r"package .* not arrived", r"lost package", r"broken item", r"delivery issue", r"wrong delivery"],
-        "cancel_order": [r"cancel (my |the )?order", r"stop shipment", r"cancellation"],
-        "change_order": [r"change (my |the )?order", r"modify order", r"change item", r"update address"],
-        "return_policy": [r"return policy", r"return window", r"how do i return", r"conditions for standard return"],
-        "return_product": [r"return (this|my) (product|item)", r"send back", r"initiate return", r"exchange (this|my) product"],
-        "refund_policy": [r"refund policy", r"money back guarantee", r"reconciliation rules", r"how are refunds issued"],
-        "refund_status": [r"refund status", r"where is my refund", r"has my refund been processed"],
-        "request_refund": [r"request (a )?refund", r"give me my money back", r"issue refund", r"want a refund"],
-        "shipping_costs": [r"shipping fee", r"shipping cost", r"delivery fee", r"cost of shipping", r"how much .* delivery"],
-        "payment_issue": [r"payment failed", r"charged twice", r"payment error", r"credit card declined"],
-        "human_agent": [r"human agent", r"talk to a representative", r"speak with a person", r"connect me to a real person", r"operator"],
-    }
-
+    # INTENT_KEYWORDS imported from apps.ml_inference.app (canonical DEV_INTENT_PATTERNS)
     y_true: List[str] = []
     y_pred: List[str] = []
     confidences: List[float] = []

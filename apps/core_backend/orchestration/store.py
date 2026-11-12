@@ -18,6 +18,9 @@ class PersistentStore:
     def _connection(self) -> Generator[sqlite3.Connection, None, None]:
         """Context manager that guarantees connection is closed after use."""
         conn = sqlite3.connect(str(self.db_path), timeout=10.0)
+        conn.execute("PRAGMA journal_mode = WAL;")
+        conn.execute("PRAGMA busy_timeout = 5000;")
+        conn.execute("PRAGMA synchronous = NORMAL;")
         conn.row_factory = sqlite3.Row
         try:
             yield conn
@@ -45,6 +48,12 @@ class PersistentStore:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS llm_inputs (
+                    run_id TEXT PRIMARY KEY,
+                    snapshot_json TEXT NOT NULL
+                );
+            """)
             conn.commit()
 
     def get_run(self, run_id: str) -> Optional[Dict[str, Any]]:
@@ -58,7 +67,6 @@ class PersistentStore:
     def save_input_snapshot(self, run_id: str, snapshot: dict) -> None:
         """Persist sanitized evidence before egress, including failed LLM attempts."""
         with self._connection() as conn:
-            conn.execute('CREATE TABLE IF NOT EXISTS llm_inputs (run_id TEXT PRIMARY KEY, snapshot_json TEXT NOT NULL)')
             conn.execute('INSERT OR IGNORE INTO llm_inputs VALUES (?, ?)',
                          (run_id, json.dumps(snapshot, ensure_ascii=False)))
 

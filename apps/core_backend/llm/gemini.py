@@ -1,5 +1,6 @@
 """Google AI Studio generateContent client. Never sends the API key to the browser."""
 
+import hashlib
 import json
 import os
 import re
@@ -52,21 +53,30 @@ RESPONSE_SCHEMA = {
 }
 
 
+RE_EMAIL = re.compile(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}")
+RE_IDENTIFIER = re.compile(r"\b(?:ORD|cust|TIKI-TXN)-[\w-]+\b", re.IGNORECASE)
+RE_DATE_FORMAT = re.compile(r"\d{4}-\d{2}-\d{2}")
+RE_PHONE_NUMBER = re.compile(r"(?<!\w)\+?\d[\d .()-]{7,}\d(?!\w)")
+RE_REDACTED_TOKEN = re.compile(r"\b[A-Za-z0-9_-]{32,}\b")
+
+
+def _mask_phone_or_date(match: re.Match) -> str:
+    value = match.group()
+    if RE_DATE_FORMAT.fullmatch(value):
+        try:
+            date.fromisoformat(value)
+            return value
+        except ValueError:
+            pass
+    return "[PHONE_OR_NUMBER]"
+
+
 def redact_contacts(text: str) -> str:
     """Minimize common identifiers before sending the demo query to a provider."""
-    text = re.sub(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", "[EMAIL]", text)
-    text = re.sub(r"\b(?:ORD|cust|TIKI-TXN)-[\w-]+\b", "[IDENTIFIER]", text, flags=re.I)
-    def mask_number(match: re.Match) -> str:
-        value = match.group()
-        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
-            try:
-                date.fromisoformat(value)
-                return value
-            except ValueError:
-                pass
-        return "[PHONE_OR_NUMBER]"
-    text = re.sub(r"(?<!\w)\+?\d[\d .()-]{7,}\d(?!\w)", mask_number, text)
-    text = re.sub(r"\b[A-Za-z0-9_-]{32,}\b", "[REDACTED_TOKEN]", text)
+    text = RE_EMAIL.sub("[EMAIL]", text)
+    text = RE_IDENTIFIER.sub("[IDENTIFIER]", text)
+    text = RE_PHONE_NUMBER.sub(_mask_phone_or_date, text)
+    text = RE_REDACTED_TOKEN.sub("[REDACTED_TOKEN]", text)
     return text
 
 
@@ -79,7 +89,6 @@ def build_grounded_sources(
     Strictly excludes sensitive customer identifiers (phone, email, secret tokens).
     Assigns sequential source_id, document_id, version, excerpt, and SHA-256 digest.
     """
-    import hashlib
     sources: list[dict] = []
     idx = 1
 
@@ -147,7 +156,6 @@ def build_grounded_sources(
 
 
 def prepare_llm_input(question: str, intent: str, evidence: list[dict], business_context=None) -> dict:
-    import hashlib
     sources = build_grounded_sources(evidence, business_context)
     allowed = {'order_status', 'payment_status', 'refund_status', 'delivery_date',
                'estimated_delivery', 'expected_refund_time', 'can_cancel', 'eligible_for_return'}
@@ -166,13 +174,19 @@ class GeminiDraftClient:
         self._http = http_client
         self._owns_http = http_client is None
 
+    def __enter__(self) -> "GeminiDraftClient":
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.close()
+
     def close(self) -> None:
         if self._owns_http and self._http is not None:
             try:
                 self._http.close()
-                self._http = None
             except Exception:
                 pass
+            self._http = None
 
     @property
     def configured(self) -> bool:

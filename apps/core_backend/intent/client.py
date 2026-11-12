@@ -26,6 +26,12 @@ class IntentClient:
             self._owns_http = True
         return self._http
 
+    def __enter__(self) -> "IntentClient":
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.close()
+
     def close(self) -> None:
         if getattr(self, '_owns_http', False) and self._http is not None:
             try:
