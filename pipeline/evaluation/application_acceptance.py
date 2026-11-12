@@ -172,7 +172,7 @@ class MockAIHandler(http.server.BaseHTTPRequestHandler):
                     "total_tokens": 170,
                 },
                 "llm_metadata": {
-                    "provider": "mock",
+                    "provider": "google_ai_studio",
                     "model": "mock-eval-llm",
                     "model_version": "v1.0.0",
                     "prompt_version": "v2.0",
@@ -573,6 +573,13 @@ class ApplicationAcceptanceRunner:
         iso_timestamp = datetime.now(timezone.utc).isoformat()
         git_commit = get_git_commit_hash()
 
+        runner_config_dict = {
+            "num_warm_requests": getattr(self.config, "num_warm_requests", 4),
+            "poll_timeout_seconds": getattr(self.config, "poll_timeout_seconds", 25.0),
+            "analysis_timeout_ms": getattr(self.config, "analysis_timeout_ms", 3000),
+            "draft_timeout_ms": getattr(self.config, "draft_timeout_ms", 11000),
+        }
+
         # Handle empty results / zero measurements: fail closed and reject
         if not results:
             summary_data = {
@@ -588,6 +595,13 @@ class ApplicationAcceptanceRunner:
                     "scope": "end_to_end_application_acceptance",
                     "boundary": "POST /v1/shop/tickets -> PostgreSQL job -> GET /v1/console/tickets/{id} terminal state",
                     "certification_scope": "mock_simulation_only" if is_mock else "bounded_live_run",
+                    "certification_disclaimer": "Local runner checks alone cannot certify overall Topic 1 or production deployment; holistic multi-worker acceptance required.",
+                    "environment": {
+                        "os": platform.platform(),
+                        "python_version": platform.python_version(),
+                        "psycopg_impl": os.environ.get("PSYCOPG_IMPL", "unspecified"),
+                    },
+                    "runner_config": runner_config_dict,
                 },
                 "acceptance_summary": {
                     "runner_checks_passed": False,
@@ -629,13 +643,17 @@ class ApplicationAcceptanceRunner:
                     "total_candidate_tokens": None,
                     "total_thinking_tokens": None,
                     "total_completion_tokens": None,
+                    "total_tokens": None,
+                    "observed_thought_tokens": 0,
+                    "observed_partial_tokens": 0,
                     "thinking_tracked": False,
                     "all_requests_tracked_thinking": False,
-                    "total_tokens": None,
                     "cost_status": "unavailable",
                     "cost_usd": None,
                     "lower_bound_cost_usd": None,
                     "cost_note": "Empty run; no valid measurements executed.",
+                    "observed_models": [],
+                    "observed_providers": [],
                 },
                 "cases": [],
             }
@@ -678,10 +696,10 @@ class ApplicationAcceptanceRunner:
         auto_send_violations = sum(1 for r in results if not r.customer_reply_is_none or not r.observation_succeeded)
 
         # Per-billable attempt token and metadata validation
-        # Identify billable attempts (any request where drafting was invoked or tokens were returned)
         billable_attempts: List[Dict[str, Any]] = []
         observed_models: set[str] = set()
         observed_providers: set[str] = set()
+        observed_tiers: set[str] = set()
         token_coverage_valid = True
 
         for r in results:
@@ -691,7 +709,6 @@ class ApplicationAcceptanceRunner:
                 or bool(tok)
             )
 
-            # Record model and provider metadata if present
             meta = r.llm_metadata or {}
             m_val = meta.get("model") or r.versions.get("llm_model") or r.llm_model
             p_val = meta.get("provider") or r.versions.get("provider")
@@ -702,17 +719,16 @@ class ApplicationAcceptanceRunner:
                     observed_models.add(str(m_val))
                 if p_val:
                     observed_providers.add(str(p_val))
+                if t_val:
+                    observed_tiers.add(str(t_val))
 
-                # Extract input tokens (input_tokens or prompt_tokens)
                 in_tok = tok.get("input_tokens") if tok.get("input_tokens") is not None else tok.get("prompt_tokens")
-                # Extract candidate tokens (output_tokens, candidate_tokens, or completion_tokens)
                 out_tok = tok.get("output_tokens")
                 if out_tok is None:
                     out_tok = tok.get("candidate_tokens")
                 if out_tok is None:
                     out_tok = tok.get("completion_tokens")
 
-                # Extract thought tokens (thought_tokens or thinking_tokens)
                 th_tok = tok.get("thought_tokens")
                 if th_tok is None:
                     th_tok = tok.get("thinking_tokens")
@@ -737,30 +753,43 @@ class ApplicationAcceptanceRunner:
                     "tier": t_val,
                 })
 
-        # Token aggregation
+        # Token aggregation with strict complete null handling when thoughts are absent
+        observed_thought_tokens = 0
         if token_coverage_valid and billable_attempts:
             total_prompt_tokens = sum(b["input_tokens"] for b in billable_attempts)
             total_candidate_tokens = sum(b["output_tokens"] for b in billable_attempts)
             all_attempts_have_thought = all(b["has_valid_thought"] for b in billable_attempts)
-            total_thinking_tokens = sum(b["thought_tokens"] for b in billable_attempts if b["has_valid_thought"])
-            total_completion_tokens = total_candidate_tokens + total_thinking_tokens
-            total_tokens = total_prompt_tokens + total_completion_tokens if all_attempts_have_thought else (total_prompt_tokens + total_candidate_tokens)
             has_thinking_tracked = any(b["has_valid_thought"] for b in billable_attempts)
+            observed_thought_tokens = sum(b["thought_tokens"] for b in billable_attempts if b["has_valid_thought"])
+            observed_partial_tokens = total_prompt_tokens + total_candidate_tokens + observed_thought_tokens
+
+            if all_attempts_have_thought:
+                total_thinking_tokens = observed_thought_tokens
+                total_completion_tokens = total_candidate_tokens + total_thinking_tokens
+                total_tokens = total_prompt_tokens + total_completion_tokens
+            else:
+                # When thoughts are absent, complete billing totals are strictly null
+                total_thinking_tokens = None
+                total_completion_tokens = None
+                total_tokens = None
         elif not billable_attempts:
             total_prompt_tokens = 0
             total_candidate_tokens = 0
             total_thinking_tokens = 0
             total_completion_tokens = 0
             total_tokens = 0
+            observed_thought_tokens = 0
+            observed_partial_tokens = 0
             has_thinking_tracked = False
             all_attempts_have_thought = False
         else:
-            # Token coverage invalid: missing or non-integer tokens on a billable attempt
             total_prompt_tokens = None
             total_candidate_tokens = None
             total_thinking_tokens = None
             total_completion_tokens = None
             total_tokens = None
+            observed_thought_tokens = 0
+            observed_partial_tokens = 0
             has_thinking_tracked = False
             all_attempts_have_thought = False
 
@@ -792,7 +821,7 @@ class ApplicationAcceptanceRunner:
                 if is_mock:
                     # Mock token fixtures must NEVER be labeled with real-cost labels
                     cost_status = "mock_simulation_cost_estimate"
-                    calc_out = (total_candidate_tokens or 0) + (total_thinking_tokens or 0)
+                    calc_out = (total_candidate_tokens or 0) + (observed_thought_tokens or 0)
                     cost_usd = ((total_prompt_tokens or 0) * in_rate + calc_out * out_rate) / 1_000_000.0
                     lower_bound_cost_usd = ((total_prompt_tokens or 0) * in_rate + (total_candidate_tokens or 0) * out_rate) / 1_000_000.0
                     cost_note = (
@@ -818,14 +847,19 @@ class ApplicationAcceptanceRunner:
                         cost_note = f"Multiple distinct models observed across billable calls: {sorted(list(observed_models))}. Uniform pricing cannot be verified."
                     else:
                         single_model = list(observed_models)[0]
-                        # Exact canonical match required
-                        if single_model.strip().lower() != (expected_model or "").strip().lower():
+                        # Exact canonical model match required if model is declared or required by provenance
+                        if expected_model and single_model.strip().lower() != expected_model.strip().lower():
                             cost_status = "model_mismatch_unverified"
                             cost_usd = None
                             lower_bound_cost_usd = None
                             cost_note = f"Observed model '{single_model}' does not exactly match verified pricing model '{expected_model}'. Cost is unverified."
+                        elif not expected_model and (pricing.get("source_url") or pricing.get("verified_on")):
+                            cost_status = "model_missing_unverified"
+                            cost_usd = None
+                            lower_bound_cost_usd = None
+                            cost_note = "Pricing artifact has provenance sources but is missing declared model. Cost is unverified."
                         else:
-                            # Verify provider if present in pricing
+                            # Optional provider check if pricing.provider is present
                             expected_provider = pricing.get("provider")
                             provider_mismatch = False
                             if expected_provider:
@@ -839,16 +873,8 @@ class ApplicationAcceptanceRunner:
                                 cost_note = f"Observed provider does not match verified pricing provider '{expected_provider}'."
                             elif has_provenance:
                                 lower_bound_cost_usd = (total_prompt_tokens * in_rate + total_candidate_tokens * out_rate) / 1_000_000.0
-                                if all_attempts_have_thought:
-                                    cost_status = "verified_list_price_estimate"
-                                    cost_usd = (total_prompt_tokens * in_rate + total_completion_tokens * out_rate) / 1_000_000.0
-                                    lower_bound_cost_usd = cost_usd
-                                    cost_note = (
-                                        f"List-price estimate for {expected_model} ({pricing.get('tier', 'standard_paid')}) "
-                                        f"based on primary source {pricing.get('source_url')} verified on {pricing.get('verified_on')}. "
-                                        "Calculated with verified 100% per-request thought token coverage. Not an invoiced charge."
-                                    )
-                                else:
+
+                                if not all_attempts_have_thought:
                                     cost_status = "partial_lower_bound_missing_thinking"
                                     cost_usd = None
                                     cost_note = (
@@ -856,9 +882,47 @@ class ApplicationAcceptanceRunner:
                                         "Complete cost_usd is strictly null (None); lower_bound_cost_usd "
                                         "reflects lower bound excluding thinking tokens."
                                     )
+                                else:
+                                    expected_tier = pricing.get("tier", "standard_paid")
+                                    # Check for tier conflict if observed
+                                    tier_conflict = False
+                                    if observed_tiers:
+                                        if any(t.strip().lower() != expected_tier.strip().lower() for t in observed_tiers):
+                                            tier_conflict = True
+
+                                    if tier_conflict:
+                                        cost_status = "tier_mismatch_unverified"
+                                        cost_usd = None
+                                        lower_bound_cost_usd = None
+                                        cost_note = f"Observed billing tier(s) {sorted(list(observed_tiers))} do not match pricing tier '{expected_tier}'."
+                                    else:
+                                        calc_out = total_completion_tokens if total_completion_tokens is not None else (total_candidate_tokens + observed_thought_tokens)
+                                        calc_cost = (total_prompt_tokens * in_rate + calc_out * out_rate) / 1_000_000.0
+
+                                        # If account tier is unobserved/unknown from API metadata:
+                                        if not observed_tiers or any(b.get("tier") is None for b in billable_attempts):
+                                            cost_status = "conditional_list_price_estimate_unknown_account_tier"
+                                            cost_usd = calc_cost
+                                            lower_bound_cost_usd = calc_cost
+                                            cost_note = (
+                                                f"Conditional list-price estimate for {expected_model} ({expected_tier}) "
+                                                f"based on primary source {pricing.get('source_url')} verified on {pricing.get('verified_on')}. "
+                                                "Actual customer account billing tier is unverified (cannot be observed from API metadata). "
+                                                "Not an invoiced charge."
+                                            )
+                                        else:
+                                            cost_status = "verified_list_price_estimate"
+                                            cost_usd = calc_cost
+                                            lower_bound_cost_usd = calc_cost
+                                            cost_note = (
+                                                f"Verified list-price estimate for {expected_model} ({expected_tier}) "
+                                                f"based on primary source {pricing.get('source_url')} verified on {pricing.get('verified_on')}. "
+                                                "Matching provider and tier verified. Not an invoiced charge."
+                                            )
                             else:
                                 cost_status = "arithmetic_fixture_unverified"
-                                cost_usd = (total_prompt_tokens * in_rate + total_completion_tokens * out_rate) / 1_000_000.0
+                                calc_out = total_completion_tokens if total_completion_tokens is not None else total_candidate_tokens
+                                cost_usd = (total_prompt_tokens * in_rate + calc_out * out_rate) / 1_000_000.0
                                 lower_bound_cost_usd = (total_prompt_tokens * in_rate + total_candidate_tokens * out_rate) / 1_000_000.0
                                 cost_note = "Arithmetic unit test fixture only; rates lack primary source URL or verified_on provenance."
 
@@ -876,7 +940,6 @@ class ApplicationAcceptanceRunner:
             and failed_jobs == 0
         )
 
-        # Topic 1 / Production acceptance can NEVER be certified by runner checks alone
         global_production_accepted = False
 
         summary_data = {
@@ -896,12 +959,7 @@ class ApplicationAcceptanceRunner:
                     "python_version": platform.python_version(),
                     "psycopg_impl": os.environ.get("PSYCOPG_IMPL", "unspecified"),
                 },
-                "runner_config": {
-                    "num_warm_requests": self.config.num_warm_requests,
-                    "poll_timeout_seconds": self.config.poll_timeout_seconds,
-                    "analysis_timeout_ms": self.config.analysis_timeout_ms,
-                    "draft_timeout_ms": self.config.draft_timeout_ms,
-                },
+                "runner_config": runner_config_dict,
             },
             "acceptance_summary": {
                 "runner_checks_passed": runner_checks_passed,
@@ -943,14 +1001,18 @@ class ApplicationAcceptanceRunner:
                 "total_candidate_tokens": total_candidate_tokens,
                 "total_thinking_tokens": total_thinking_tokens,
                 "total_completion_tokens": total_completion_tokens,
+                "total_tokens": total_tokens,
+                "observed_thought_tokens": observed_thought_tokens,
+                "observed_partial_tokens": observed_partial_tokens,
                 "thinking_tracked": has_thinking_tracked,
                 "all_requests_tracked_thinking": all_attempts_have_thought,
-                "total_tokens": total_tokens,
                 "cost_status": cost_status,
                 "cost_usd": cost_usd,
                 "lower_bound_cost_usd": lower_bound_cost_usd,
                 "cost_note": cost_note,
                 "observed_models": sorted(list(observed_models)),
+                "observed_providers": sorted(list(observed_providers)),
+                "observed_tiers": sorted(list(observed_tiers)),
             },
             "cases": [r.as_dict() for r in results],
         }
@@ -975,28 +1037,40 @@ class ApplicationAcceptanceRunner:
         raw_json_bytes = json.dumps(raw_cases, indent=2, ensure_ascii=False).encode("utf-8")
         raw_records_sha256 = hashlib.sha256(raw_json_bytes).hexdigest().upper()
 
-        # Compute safe provenance hashes of dependencies and configurations
+        # Compute safe local expected hashes of deployed service assets (not legacy policies or offline manifests)
         repo_root = Path(__file__).resolve().parents[2]
-        kb_path = repo_root / "data" / "knowledge" / "policies.json"
-        kb_hash = compute_sha256(kb_path) if kb_path.exists() else None
+        approved_kb_v2 = repo_root / "data" / "knowledge" / "approved_kb.v2.json"
+        approved_kb_hash = compute_sha256(approved_kb_v2) if approved_kb_v2.exists() else None
+
+        ai_service_release = repo_root / "apps" / "ai_service" / "kb-release.json"
+        ai_service_release_hash = compute_sha256(ai_service_release) if ai_service_release.exists() else None
 
         policy_path = repo_root / "apps" / "core_backend" / "config" / "policies" / "intent_policy.v2.json"
         policy_hash = compute_sha256(policy_path) if policy_path.exists() else None
 
-        train_manifest = repo_root / "artifacts" / "training" / "03-11-2026-01" / "manifest.json"
-        model_hash = compute_sha256(train_manifest) if train_manifest.exists() else None
-
-        safe_config_json = json.dumps(summary_data["meta"]["runner_config"], sort_keys=True).encode("utf-8")
+        runner_cfg = summary_data["meta"].get("runner_config", {})
+        safe_config_json = json.dumps(runner_cfg, sort_keys=True).encode("utf-8")
         config_hash = hashlib.sha256(safe_config_json).hexdigest().upper()
+
+        # Distinguish local expectations from observed live service versions
+        observed_live_service = {
+            "release_id": sorted(list({r.versions.get("release_id") for r in results if r.versions.get("release_id")})),
+            "model_version": sorted(list({(r.llm_metadata.get("model_version") or r.versions.get("model_version")) for r in results if (r.llm_metadata.get("model_version") or r.versions.get("model_version"))})),
+            "kb_version": sorted(list({r.versions.get("kb_version") for r in results if r.versions.get("kb_version")})),
+            "prompt_version": sorted(list({(r.llm_metadata.get("prompt_version") or r.versions.get("prompt_version")) for r in results if (r.llm_metadata.get("prompt_version") or r.versions.get("prompt_version"))})),
+            "llm_model": sorted(list({(r.llm_metadata.get("model") or r.versions.get("llm_model") or r.llm_model) for r in results if (r.llm_metadata.get("model") or r.versions.get("llm_model") or r.llm_model)})),
+            "provider": sorted(list({(r.llm_metadata.get("provider") or r.versions.get("provider")) for r in results if (r.llm_metadata.get("provider") or r.versions.get("provider"))})),
+        }
 
         summary_data["meta"].update({
             "raw_records_sha256": raw_records_sha256,
-            "provenance_hashes": {
-                "kb_policies_sha256": kb_hash,
+            "local_expected_provenance_hashes": {
+                "approved_kb_v2_sha256": approved_kb_hash,
+                "ai_service_kb_release_sha256": ai_service_release_hash,
                 "routing_policy_sha256": policy_hash,
-                "model_manifest_sha256": model_hash,
                 "runner_config_sha256": config_hash,
             },
+            "observed_live_service_provenance": observed_live_service,
         })
 
         raw_file = run_dir / "raw_records.json"
@@ -1010,7 +1084,6 @@ class ApplicationAcceptanceRunner:
         md_file = run_dir / "acceptance_e2e_report.md"
         md_file.write_text(md_content, encoding="utf-8")
 
-        # Update latest_run.json pointer without overwriting old reports
         latest_pointer = base_output_dir / "latest_run.json"
         latest_data = {
             "latest_run_id": run_id,
@@ -1100,15 +1173,21 @@ class ApplicationAcceptanceRunner:
             f"| **Warm Runs** | {warm_info['count']} | p50: {warm_p50}, p95: {warm_p95} | Subsequent tickets on warmed worker thread |"
         )
 
+        prompt_str = str(tc["total_prompt_tokens"]) if tc["total_prompt_tokens"] is not None else "Unknown (incomplete token coverage)"
+        candidate_str = str(tc["total_candidate_tokens"]) if tc["total_candidate_tokens"] is not None else "Unknown (incomplete token coverage)"
+        thought_str = str(tc["total_thinking_tokens"]) if tc["total_thinking_tokens"] is not None else f"Unknown (observed partial: {tc.get('observed_thought_tokens', 0)})"
+        completion_str = str(tc["total_completion_tokens"]) if tc["total_completion_tokens"] is not None else "Unknown (missing thought tokens)"
+        total_str = str(tc["total_tokens"]) if tc["total_tokens"] is not None else f"Unknown (observed partial: {tc.get('observed_partial_tokens', 'N/A')})"
+
         lines.extend([
             "",
             "## 3. Token Usage and Pricing Coverage",
             "",
-            f"- **Prompt / Input Tokens:** `{tc['total_prompt_tokens']}`",
-            f"- **Candidate / Output Tokens:** `{tc.get('total_candidate_tokens')}`",
-            f"- **Thought Tokens:** `{tc.get('total_thinking_tokens')}` ({'complete coverage' if tc.get('all_requests_tracked_thinking') else ('partial/untracked' if tc.get('thinking_tracked') else 'omitted/untracked')})",
-            f"- **Total Completion Tokens:** `{tc['total_completion_tokens']}`",
-            f"- **Total Tokens:** `{tc['total_tokens']}`",
+            f"- **Prompt / Input Tokens:** `{prompt_str}`",
+            f"- **Candidate / Output Tokens:** `{candidate_str}`",
+            f"- **Thought Tokens:** `{thought_str}` ({'complete coverage' if tc.get('all_requests_tracked_thinking') else ('partial/untracked' if tc.get('thinking_tracked') else 'omitted/untracked')})",
+            f"- **Total Completion Tokens:** `{completion_str}`",
+            f"- **Total Tokens:** `{total_str}`",
             f"- **Cost Status:** `{tc['cost_status']}`",
             f"- **Estimated Cost (USD):** `{tc['cost_usd'] if tc['cost_usd'] is not None else 'UNAVAILABLE'}`",
             f"- **Lower Bound Cost (USD):** `{tc['lower_bound_cost_usd'] if tc.get('lower_bound_cost_usd') is not None else 'N/A'}`",
