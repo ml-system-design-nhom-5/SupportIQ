@@ -114,26 +114,28 @@ def test_known_value_detector_maps_folded_positions_back_to_the_message() -> Non
     assert found(detections, message) == [(PseudonymType.NAME, "Đặng Văn Bình")]
 
 
+def pattern_detections(message: str) -> list[tuple[PseudonymType, str]]:
+    return found(resolve_overlaps(PatternDetector().detect(message, ())), message)
+
+
+def detected_types(message: str) -> set[PseudonymType]:
+    return {pseudonym_type for pseudonym_type, _text in pattern_detections(message)}
+
+
 @pytest.mark.parametrize(
     ("message", "expected"),
     [
-        ("write to lan.tran@example.test", (PseudonymType.EMAIL, "lan.tran@example.test")),
-        ("a.b+c@sub.example.org", (PseudonymType.EMAIL, "a.b+c@sub.example.org")),
-        ("call 0901110001", (PseudonymType.PHONE, "0901110001")),
-        ("call +84 90 111 0002", (PseudonymType.PHONE, "+84 90 111 0002")),
-        ("call 090.111.0003", (PseudonymType.PHONE, "090.111.0003")),
-        ("card 4111-1111-1111-1111", (PseudonymType.CARD, "4111-1111-1111-1111")),
-        ("tracking TRK-0000020902", (PseudonymType.TRACKING_ID, "TRK-0000020902")),
-        ("payment TXN-00020901", (PseudonymType.TRANSACTION_ID, "TXN-00020901")),
-        ("order ORD-20999", (PseudonymType.ORDER_ID, "ORD-20999")),
+        ("write to lan.tran@example.test", "lan.tran@example.test"),
+        ("a.b+c@sub.example.org", "a.b+c@sub.example.org"),
+        ("MAIL: Minh.Le@Example.Test", "Minh.Le@Example.Test"),
+        ("x_y-z@ex-ample.test.", "x_y-z@ex-ample.test"),
+        ("<an@example.test>", "an@example.test"),
     ],
 )
-def test_pattern_detector_finds_values_with_their_format(
-    message: str, expected: tuple[PseudonymType, str]
+def test_email_pattern_finds_a_local_part_at_and_a_dotted_domain(
+    message: str, expected: str
 ) -> None:
-    detections = resolve_overlaps(PatternDetector().detect(message, ()))
-
-    assert found(detections, message) == [expected]
+    assert pattern_detections(message) == [(PseudonymType.EMAIL, expected)]
 
 
 @pytest.mark.parametrize(
@@ -141,16 +143,104 @@ def test_pattern_detector_finds_values_with_their_format(
     [
         "my mail is lan at example",
         "user@localhost",
-        "call 12345678",
-        "card 4111 1111 1111 1112",
-        "ORD-2090 and TRK-123 and TXN-1234567",
-        "price 129.00 USD",
+        "@example.test",
+        "lan@.test",
+        "lan@example.",
     ],
 )
-def test_pattern_detector_ignores_values_outside_the_formats(message: str) -> None:
-    detections = resolve_overlaps(PatternDetector().detect(message, ()))
+def test_email_pattern_ignores_text_without_both_parts(message: str) -> None:
+    assert PseudonymType.EMAIL not in detected_types(message)
 
-    assert found(detections, message) == []
+
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ("call 090111000", "090111000"),
+        ("call +84 9011 1000 12346", "+84 9011 1000 12346"),
+        ("call 0901110001 2pm", "0901110001"),
+        ("call 090.111.0003", "090.111.0003"),
+        ("call +84 90 111 0002", "+84 90 111 0002"),
+        ("reach me at 090-111-0004.", "090-111-0004"),
+    ],
+    ids=["9-digits", "15-digits", "before-a-time", "dots", "plus", "hyphens"],
+)
+def test_phone_pattern_finds_9_to_15_digits_in_whole_groups(message: str, expected: str) -> None:
+    assert pattern_detections(message) == [(PseudonymType.PHONE, expected)]
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "call 09011100",
+        "call 0901110001234567",
+        "code A0901110001",
+        "call 0901110001pm",
+        "price 129.00 USD",
+        "room 12 34 56 78",
+    ],
+    ids=["8-digits", "16-digits", "after-a-letter", "before-a-letter", "price", "short-groups"],
+)
+def test_phone_pattern_ignores_other_numbers(message: str) -> None:
+    assert PseudonymType.PHONE not in detected_types(message)
+
+
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ("card 4222222222222", "4222222222222"),
+        ("card 4111 1111 1111 1111 003", "4111 1111 1111 1111 003"),
+        ("card 4111 1111 1111 1111 12/27", VALID_CARD),
+        ("card 4111 1111 1111 1111 123", VALID_CARD),
+        ("card 4111-1111-1111-1111", "4111-1111-1111-1111"),
+        ("card 5555 5555 5555 4444", "5555 5555 5555 4444"),
+        ("amex 378282246310005", "378282246310005"),
+    ],
+    ids=["13-digits", "19-digits", "before-a-date", "before-digits", "hyphens", "spaces", "15"],
+)
+def test_card_pattern_finds_13_to_19_digits_that_pass_the_luhn_check(
+    message: str, expected: str
+) -> None:
+    assert pattern_detections(message) == [(PseudonymType.CARD, expected)]
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "card 4111111111111112",
+        "card 4111111111111",
+        "card 411111111111",
+        "card 41111111111111111111",
+        "card x4111111111111111",
+        "card 4111111111111111y",
+    ],
+    ids=["luhn", "13-invalid", "12-digits", "20-digits", "after-a-letter", "before-a-letter"],
+)
+def test_card_pattern_ignores_numbers_outside_the_format(message: str) -> None:
+    assert PseudonymType.CARD not in detected_types(message)
+
+
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ("order ORD-20999", (PseudonymType.ORDER_ID, "ORD-20999")),
+        ("(ORD-20901)", (PseudonymType.ORDER_ID, "ORD-20901")),
+        ("tracking TRK-0000020902", (PseudonymType.TRACKING_ID, "TRK-0000020902")),
+        ("payment TXN-00020901", (PseudonymType.TRANSACTION_ID, "TXN-00020901")),
+        ("TXN-00020901.", (PseudonymType.TRANSACTION_ID, "TXN-00020901")),
+    ],
+)
+def test_commerce_patterns_find_the_identifiers_of_the_seed(
+    message: str, expected: tuple[PseudonymType, str]
+) -> None:
+    assert pattern_detections(message) == [expected]
+
+
+@pytest.mark.parametrize(
+    "message",
+    ["ORD-2090", "TRK-123", "TXN-1234567", "XORD-20901", "ORD-209012"],
+)
+def test_commerce_patterns_ignore_other_formats(message: str) -> None:
+    assert pattern_detections(message) == []
 
 
 @pytest.mark.parametrize(

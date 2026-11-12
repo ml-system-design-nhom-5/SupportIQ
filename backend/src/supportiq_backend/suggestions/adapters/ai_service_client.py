@@ -166,7 +166,11 @@ class HttpAiService:
         try:
             async with asyncio.timeout(timeout_ms / MILLISECONDS_PER_SECOND):
                 response = await self._send(call, attempts)
-        except (TimeoutError, httpx.TransportError) as error:
+        except httpx.DecodingError as error:
+            # A body that its own encoding cannot decode is a response outside the contract.
+            raise AiServiceContractError from error
+        except (TimeoutError, httpx.RequestError) as error:
+            # Every other error of the library becomes the error of the port (ARCH-28).
             raise AiServiceUnavailableError from error
         return _read_success(response)
 

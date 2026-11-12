@@ -15,6 +15,7 @@ from supportiq_backend.accounts import AccountId
 from supportiq_backend.platform import InvalidRequestError
 from supportiq_backend.pseudonymization import contains_placeholder
 from supportiq_backend.suggestions import (
+    Analysis,
     IntentLabel,
     Suggestion,
     SuggestionId,
@@ -401,10 +402,12 @@ def _validate_note(staff_reason_codes: tuple[StaffReasonCode, ...], note: str | 
 
 
 def _warning_ids(suggestion: Suggestion | None) -> frozenset[str]:
-    draft = None if suggestion is None else suggestion.ready_draft
-    if draft is None:
+    # The warnings that the workspace shows: those of the analysis part, from the analysis
+    # call or, when that call failed, from the draft response. Two calls may name their
+    # warnings differently, so the analysis inside the draft response never decides.
+    if suggestion is None or not isinstance(suggestion.analysis, Analysis):
         return frozenset()
-    return frozenset(warning.warning_id for warning in draft.details.analysis.warnings)
+    return frozenset(warning.warning_id for warning in suggestion.analysis.warnings)
 
 
 def _basis_of(reply: ReplyRequest) -> ReplyBasis:

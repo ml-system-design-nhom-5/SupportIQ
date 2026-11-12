@@ -32,14 +32,16 @@ class FakePseudonymMapStore:
         default_factory=dict[MapTicketId, dict[str, PseudonymEntry]]
     )
     insert_failure: BackendError | None = None
+    insert_count: int = 0
 
-    async def insert_missing(
+    async def insert_map(
         self, ticket_id: MapTicketId, entries: tuple[PseudonymEntry, ...], created_at: datetime
     ) -> None:
-        """Insert the entries that the map does not hold, or raise the chosen failure."""
+        """Insert the map, keeping rows that exist, or raise the chosen failure."""
         del created_at
         if self.insert_failure is not None:
             raise self.insert_failure
+        self.insert_count += 1
         stored = self.entries_by_ticket.setdefault(ticket_id, {})
         for entry in entries:
             stored.setdefault(entry.pseudonym, entry)
@@ -79,6 +81,14 @@ class FakeCustomerRecords:
         """Return the names of the known customers."""
         return {key: name for key, name in self.names.items() if key in customer_ids}
 
-    async def load_addressed_orders(self, customer_id: CustomerId) -> tuple[AddressedOrder, ...]:
-        """Return the orders of the one customer."""
-        return self.orders if customer_id == CUSTOMER_ID else ()
+    async def load_addressed_orders(
+        self, customer_id: CustomerId, ticket_order_id: OrderId | None, other_order_limit: int
+    ) -> tuple[AddressedOrder, ...]:
+        """Return the orders of the one customer: the ticket's first, then the limit of others."""
+        if customer_id != CUSTOMER_ID:
+            return ()
+        ticket_orders = tuple(
+            item for item in self.orders if item.order.order_id == ticket_order_id
+        )
+        others = tuple(item for item in self.orders if item.order.order_id != ticket_order_id)
+        return (*ticket_orders, *others[:other_order_limit])

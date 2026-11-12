@@ -181,7 +181,26 @@ def wire_suggestions(
             read_ms=settings.ai_service_read_timeout_ms,
         ),
     )
-    queue_settings = to_queue_settings(settings)
+    claim_loop = _build_claim_loop(session_factory, shared, ai_service, to_queue_settings(settings))
+    starter = SuggestionStarter(
+        SuggestionStarterPorts(
+            clock=shared.clock,
+            ids=shared.ids,
+            traces=shared.traces,
+            events=shared.events,
+            queue=claim_loop,
+        )
+    )
+    create_suggestion = _build_create_suggestion(session_factory, shared, authorizer, starter)
+    return SuggestionsWiring(ai_client, ai_service, claim_loop, starter, create_suggestion)
+
+
+def _build_claim_loop(
+    session_factory: async_sessionmaker[AsyncSession],
+    shared: SharedPorts,
+    ai_service: HttpAiService,
+    queue_settings: QueueSettings,
+) -> ClaimLoop:
     runner = SuggestionJobRunner(
         SqlAlchemyTransactionRunner(session_factory, build_job_stores),
         JobRunnerPorts(
@@ -195,23 +214,22 @@ def wire_suggestions(
         ),
         queue_settings,
     )
-    claim_loop = ClaimLoop(
+    return ClaimLoop(
         SqlAlchemyTransactionRunner(session_factory, build_claim_stores),
         runner,
         queue_settings,
         shared.clock,
         shared.events,
     )
-    starter = SuggestionStarter(
-        SuggestionStarterPorts(
-            clock=shared.clock,
-            ids=shared.ids,
-            traces=shared.traces,
-            events=shared.events,
-            queue=claim_loop,
-        )
-    )
-    create_suggestion = CreateSuggestion(
+
+
+def _build_create_suggestion(
+    session_factory: async_sessionmaker[AsyncSession],
+    shared: SharedPorts,
+    authorizer: Authorizer,
+    starter: SuggestionStarter,
+) -> CreateSuggestion:
+    return CreateSuggestion(
         SqlAlchemyTransactionRunner(session_factory, build_create_suggestion_stores),
         CreateSuggestionPorts(
             authorizer=authorizer,
@@ -224,7 +242,6 @@ def wire_suggestions(
         ),
         render_created_suggestion,
     )
-    return SuggestionsWiring(ai_client, ai_service, claim_loop, starter, create_suggestion)
 
 
 def _build_pseudonymizer(

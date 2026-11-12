@@ -77,7 +77,8 @@ class Settings(BaseSettings):
     seed_password_manager: SeedPassword = None
     seed_password_admin: SeedPassword = None
     ai_service_base_url: HttpUrl
-    ai_service_token: SecretStr
+    # An empty token would send `Authorization: Bearer ` and fail every call (ERR-17).
+    ai_service_token: Annotated[SecretStr, Field(min_length=1)]
     ai_service_analysis_timeout_ms: PositiveInt = 3_000
     ai_service_draft_timeout_ms: PositiveInt = 11_000
     ai_service_read_timeout_ms: PositiveInt = 3_000

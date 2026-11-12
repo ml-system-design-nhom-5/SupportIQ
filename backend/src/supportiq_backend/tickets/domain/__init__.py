@@ -50,6 +50,7 @@ from supportiq_backend.tickets.domain.tickets import (
     build_new_shop_ticket,
 )
 from supportiq_backend.tickets.domain.workspace import (
+    OTHER_ORDERS_LIMIT,
     ConsoleTicketPosition,
     ReplyRecord,
     RestoredSuggestion,
@@ -60,6 +61,7 @@ from supportiq_backend.tickets.domain.workspace import (
 
 __all__ = [
     "MESSAGE_EXCERPT_LENGTH",
+    "OTHER_ORDERS_LIMIT",
     "AiDraftReply",
     "AuthorityRequiredError",
     "ConsoleTicket",

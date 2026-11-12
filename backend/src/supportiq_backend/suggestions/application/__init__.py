@@ -1,5 +1,9 @@
 """Use cases of suggestions: starting suggestions, the claim loop, and the job runner."""
 
+from supportiq_backend.suggestions.application.ai_service_failures import (
+    AiServiceOperation,
+    record_ai_service_failure,
+)
 from supportiq_backend.suggestions.application.claim_loop import ClaimLoop, ClaimStores, JobRunner
 from supportiq_backend.suggestions.application.create import (
     CreateSuggestion,
@@ -19,6 +23,7 @@ from supportiq_backend.suggestions.application.start import (
 )
 
 __all__ = [
+    "AiServiceOperation",
     "ClaimLoop",
     "ClaimStores",
     "CreateSuggestion",
@@ -32,4 +37,5 @@ __all__ = [
     "SuggestionStart",
     "SuggestionStarter",
     "SuggestionStarterPorts",
+    "record_ai_service_failure",
 ]

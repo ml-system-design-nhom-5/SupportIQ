@@ -384,9 +384,6 @@ name = "tickets reaches other features only through their public API (ARCH-17)"
 type = "forbidden"
 allow_indirect_imports = true
 source_modules = ["supportiq_backend.tickets"]
-# The console's order view reuses the shop's order mapping, because both map the same shared
-# contract schemas (`ShopOrderLine`, `ShopShipmentView`, `ShopRefundView`; CODE-48).
-ignore_imports = ["supportiq_backend.tickets.api.console_views -> supportiq_backend.commerce.api.shop"]
 forbidden_modules = [
     "supportiq_backend.suggestions.domain",
     "supportiq_backend.suggestions.application",

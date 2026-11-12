@@ -12,13 +12,13 @@ MapTicketId = NewType("MapTicketId", str)
 class PseudonymMapStore(Protocol):
     """Insert a ticket's map once and read it back; rows are never updated (ADR-0010)."""
 
-    async def insert_missing(
+    async def insert_map(
         self, ticket_id: MapTicketId, entries: tuple[PseudonymEntry, ...], created_at: datetime
     ) -> None:
-        """Insert the entries that the ticket's map does not hold yet.
+        """Insert the map of a ticket that has none yet.
 
-        A row that already exists stays as it is, so two jobs of one ticket that pseudonymize
-        at the same time both succeed, and the comparison that follows finds any difference.
+        A row that a concurrent first run of the same ticket inserted stays as it is, and the
+        comparison that follows finds any difference.
 
         Args:
             ticket_id: The ticket.
@@ -34,6 +34,6 @@ class PseudonymMapStore(Protocol):
             ticket_id: The ticket.
 
         Returns:
-            The entries, ordered by pseudonym type and number; empty when there is no map.
+            The entries, ordered by pseudonym; empty when there is no map.
         """
         ...

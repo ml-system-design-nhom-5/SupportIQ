@@ -1,10 +1,10 @@
 # Design: Console UI
 
-- **Status:** Approved
+- **Status:** In review
 - **Owner:** frontend engineer
 - **Reviewers:** backend engineer, ML engineer, RAG engineer, contracts gatekeeper
 - **Last reviewed:** 2026-11-12
-- **Related:** [Requirements](../product/requirements.md) (FR-01, FR-04 to FR-07, FR-10, NFR-11, ESC-01 to ESC-05), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0014](../decisions/0014-citations-to-order-context.md), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md), [contracts v1 design](contracts-v1.md) (revision 2), [account management design](account-management.md), [UI rules](../rules/ui.md)
+- **Related:** [Requirements](../product/requirements.md) (FR-01, FR-04 to FR-07, FR-10, NFR-11, ESC-01 to ESC-05), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0014](../decisions/0014-citations-to-order-context.md), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md), [ADR-0018](../decisions/0018-one-placeholder-label-and-retried-map-storage-errors.md), [contracts v1 design](contracts-v1.md) (revision 2), [account management design](account-management.md), [UI rules](../rules/ui.md)
 
 ## Summary
 
@@ -17,6 +17,8 @@ This design follows ADR-0012, ADR-0010, and ADR-0014, the last two accepted on 2
 **Revision of 2026-11-11, for [ADR-0015](../decisions/0015-account-creation-and-password-changes.md):** the app bar shows the account menu instead of the display name and Sign out, and the sign-in password field gets the show and hide toggle of the proposed UI-46 ([account management design](account-management.md#rule-changes)). The shared page `/change-password` joins the screens. All three are defined in the [account management design](account-management.md#screens-and-dialogs). The earlier app bar is kept under [Alternatives considered](#alternatives-considered).
 
 **Revision of 2026-11-12, for `backend` contract 1.2.0** ([backend ticket workflow design](backend-ticket-workflow.md)): the Closed queue lists the newest tickets first, by `closed_at`, which `TicketSummary` now carries; the developer details read the latencies from `step_latencies`; the warning `source_review_overdue` refers to a document version that the analysis retrieved, not to one that the draft cites; and the contract settled the excerpt length and the queue order, so only the polling interval stays open. The earlier order and the earlier meaning of the warning are kept under [Alternatives considered](#alternatives-considered). The project lead approved this revision on 2026-11-12.
+
+**Revision of 2026-11-12 (second), for [ADR-0018](../decisions/0018-one-placeholder-label-and-retried-map-storage-errors.md) and the polling intervals:** every text in the placeholder syntax, whether a mask, an unrestored pseudonym, or a restored `LITERAL`, carries one label, "Personal data or reserved text: replace before sending", because the console cannot tell them apart by their text alone; Send reply and Submit for approval stay disabled exactly as before ([Draft editing and citations](#draft-editing-and-citations)). The project lead decided the polling intervals on 2026-11-12: the inbox polls every 15 s while it is open, and the workspace polls every 2 s while a suggestion part is `pending` ([Inbox](#inbox), [Flow](#flow)), so no question about polling stays open. The two earlier labels are kept under [Alternatives considered](#alternatives-considered), and the mockup of the placeholder state is rendered again with the new label ([Rollout](#rollout), step 6).
 
 ## Goals and non-goals
 
@@ -41,7 +43,7 @@ This design follows ADR-0012, ADR-0010, and ADR-0014, the last two accepted on 2
 - When the AI drafts, abstains, or recommends escalation: [ESC-01 to ESC-05](../product/requirements.md#41-escalation-and-fallback-rules).
 - Data on screen: `TicketSummary`, `TicketWorkspace`, `SuggestionView`, `allowed_actions`, and the reply `basis` in the [contracts v1 design](contracts-v1.md#backend-contract-backendopenapiyaml).
 - Staff reason codes for reject and escalate: [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md#staff-reason-codes).
-- Placeholders that block sending: [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#placeholder-syntax) and [UI-43](../rules/ui.md#console-interaction).
+- Placeholders that block sending: [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#placeholder-syntax), [ADR-0018](../decisions/0018-one-placeholder-label-and-retried-map-storage-errors.md), and [UI-43](../rules/ui.md#console-interaction).
 
 ## Design
 
@@ -117,7 +119,7 @@ Placement rules:
 - Open, Awaiting approval, and Escalated tickets are sorted oldest first, so no ticket waits behind newer ones. Closed tickets are sorted newest first by `closed_at`, so the latest replies come first.
 - Each item shows the ticket ID, time received, customer, message excerpt, predicted intent with confidence, AI status, and the authority flag.
 - When `handling_started_at` is set, the item says who is likely working on it, for example "Opened 4 min ago". v1 has no ticket assignment, so two staff can still work on one ticket. The later send gets `409 invalid-ticket-state` after a reply, or `403 forbidden` after an escalation or a proposal.
-- One click opens a ticket. The inbox polls while it is open.
+- One click opens a ticket. The inbox polls every 15 s while it is open.
 
 When no ticket is selected, the middle shows [no-ticket-selected.png](assets/console-ui/no-ticket-selected.png). An empty inbox shows [inbox-empty.png](assets/console-ui/inbox-empty.png).
 
@@ -175,7 +177,7 @@ flowchart TD
 ```
 
 1. Staff open a ticket from the inbox. `frontend` records the view, which starts the handling clock, and loads the workspace. If the suggestion failed and can be retried, `backend` starts a retry.
-2. While a suggestion part is `pending`, the analysis appears as soon as it is ready and the reply area shows a skeleton ([UI-24](../rules/ui.md#states)). `frontend` polls.
+2. While a suggestion part is `pending`, the analysis appears as soon as it is ready and the reply area shows a skeleton ([UI-24](../rules/ui.md#states)). `frontend` polls the workspace every 2 s while a part is `pending`.
 3. The reply area depends on the draft status: a draft to review, a choice of intent (ESC-01), reason codes with an empty editor, or manual handling.
 4. Staff can correct the intent as soon as it is shown, while the ticket is open. The predicted intent appears only when the analysis is ready, so the authority flag is already known. If a draft is still generating, it is cancelled and a new draft starts. After a correction, the chosen intent stays on the strip and staff can change it again. If a correction fails on an old screen, the workspace reloads.
 5. Staff send, submit for approval, or escalate. Only actions in `allowed_actions` are enabled.
@@ -228,7 +230,7 @@ Choosing a second reason code is optional and adds one action. Choosing an inten
 - **View:** the draft shows each segment with its citation markers, and starts a new paragraph where `paragraph_index` changes. Hovering or focusing a KB marker shows the document title, version, effective dates, and snippet; activating it opens the document version (UI-20). A segment that states order facts has one order marker in neutral colors, without a number. Hovering or focusing it lists each cited field with its value and says "From order records, not AI"; activating it opens the order chip popover.
 - **Edit:** one plain-text editor starts from the draft's canonical `text` that `backend` builds, because the reply `body` is plain text and `backend` compares the sent body with that same `text` to record approve or edit. `frontend` never rebuilds the text from segments. Citation markers are hidden while editing. KB citations stay listed under Sources, the order chip stays visible, and a line under the editor says that edited text is not checked against the sources.
 - **Reject:** the AI draft stays visible, read-only and marked as rejected, above an empty editor.
-- **Placeholders:** a mask or an unrestored pseudonym in the draft or the editor is highlighted with the label "Personal data hidden: replace before sending". Customer text that only looks like a placeholder (a restored `LITERAL`) is highlighted with the label "Customer text in a reserved format: rephrase before sending". Send reply and Submit for approval stay disabled while the editor contains text in the placeholder syntax (UI-43).
+- **Placeholders:** every text in the placeholder syntax in the draft or the editor, whether a mask, an unrestored pseudonym, or customer text that only looks like a placeholder (a restored `LITERAL`), is highlighted with one label: "Personal data or reserved text: replace before sending" ([ADR-0018](../decisions/0018-one-placeholder-label-and-retried-map-storage-errors.md)). Send reply and Submit for approval stay disabled while the editor contains text in the placeholder syntax (UI-43).
 
 ![Citation marker on hover or focus](assets/console-ui/citation-popover.png)
 
@@ -369,6 +371,7 @@ The status `cancelled` has no presentation, because a superseded suggestion is n
 - **Locking the intent until the draft is ready, or a confirmation checkbox on manual replies:** rejected ([contracts v1](contracts-v1.md#alternatives-considered)).
 - **Closed tickets oldest first, like the other queues:** the inbox order until 2026-11-12. Replaced by newest first by `closed_at`, the order of `backend` contract 1.2.0, because no closed ticket waits for anyone.
 - **`source_review_overdue` only for document versions that the draft cites:** the meaning until 2026-11-12. Replaced by the versions that the analysis retrieved, because warnings belong to the analysis: the warnings of a draft are those of its embedded analysis, which exists before any citation ([`ai-service` contract](../../contracts/ai-service.openapi.yaml)).
+- **Two placeholder labels, "Personal data hidden: replace before sending" for a mask or an unrestored pseudonym and "Customer text in a reserved format: rephrase before sending" for a restored `LITERAL`:** the screen text until 2026-11-12. Replaced by one label ([ADR-0018](../decisions/0018-one-placeholder-label-and-retried-map-storage-errors.md)), because the console cannot tell a restored `LITERAL` from an unrestored pseudonym by its text alone: both match the same expression.
 - **The display name, the role, and Sign out directly in the app bar:** the app bar of the mockups until 2026-11-11. Replaced by the account menu, so that every role finds Change password in the same place ([ADR-0015](../decisions/0015-account-creation-and-password-changes.md)).
 
 ## Testing and evaluation
@@ -401,6 +404,7 @@ The status `cancelled` has no presentation, because a superseded suggestion is n
 3. The contract change that adds the console operations implements `TicketSummary`, `other_orders`, `CitationView`, `intent_override` in `SuggestionView`, and the draft `text` in `backend.openapi.yaml`.
 4. Implementation: token files and primitives, then domain components with stories, then screens against Prism mocks.
 5. Done on 2026-11-11: the project lead approved the revision of 2026-11-11, in place of a PR review. The account menu, the toggle, and `/change-password` are built after `backend` contract 1.1.0 ([account management design](account-management.md#rollout)).
+6. The revision of 2026-11-12 (second): `mockup.js` and [state-placeholder.png](assets/console-ui/state-placeholder.png) change to the single placeholder label of ADR-0018, and the PNG is rendered again ([Mockup sources](#mockup-sources)).
 
 ### Mockup sources
 
@@ -416,5 +420,4 @@ The page loads Inter and JetBrains Mono from Google Fonts.
 
 - With the inbox on screen, whether staff can collapse it to give the reply area more width, for example so a manager sees the proposal next to the AI draft (UI-19). The collapsed state would stay the same for every ticket, as UI-15 requires.
 - Keyboard movement through the inbox (arrow keys, or J and K). [UI-17](../rules/ui.md#console-interaction) forbids single-key shortcuts only for irreversible actions, so this is allowed.
-- The polling interval of the inbox and the workspace. `backend` contract 1.2.0 settled the excerpt length (at most 160 characters) and the queue order, without a sort parameter.
 - The text of the manual-process instructions ([UI-26](../rules/ui.md#states)). The team provides it. The mockups show a stand-in line.

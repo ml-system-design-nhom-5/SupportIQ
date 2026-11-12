@@ -6,6 +6,7 @@ because its model is a third-party library (ARCH-28, ADR-0017).
 
 import re
 from collections.abc import Callable, Iterator, Mapping
+from dataclasses import dataclass
 from types import MappingProxyType
 
 from supportiq_backend.commerce import (
@@ -28,14 +29,16 @@ from supportiq_backend.pseudonymization.domain.placeholders import (
 
 # A local part, `@`, and a domain with at least one dot (ADR-0010, Detection, step 3).
 _EMAIL_PATTERN = re.compile(r"(?<![\w.%+-])[\w.%+-]+@[\w-]+(?:\.[\w-]+)+(?![\w-])")
-# 9 to 15 digits, optionally with a leading `+`, and with one space, dot, or hyphen at most
-# between two digits. The whole run of digits must match, so no part of a longer number does.
-_PHONE_PATTERN = re.compile(
-    r"(?<![\w+])(?<![0-9][ .-])\+?[0-9](?:[ .-]?[0-9]){8,14}(?!\w)(?![ .-][0-9])"
-)
-# 13 to 19 digits, optionally grouped by spaces or hyphens, as a whole run; the Luhn check
-# follows.
-_CARD_PATTERN = re.compile(r"(?<!\w)(?<![0-9][ -])[0-9](?:[ -]?[0-9]){12,18}(?!\w)(?![ -][0-9])")
+# A run of digit groups with one separator between two groups: spaces, dots, or hyphens and
+# an optional leading `+` for phone numbers, spaces or hyphens for card numbers. A value is
+# a span of whole groups of a run, so it never starts or ends inside a group of digits, and
+# the text around the run may be anything but a letter or digit stuck to it ("2pm" ends no
+# value, "12/27" does).
+_PHONE_RUN = re.compile(r"\+?[0-9]+(?:[ .-][0-9]+)*")
+_CARD_RUN = re.compile(r"[0-9]+(?:[ -][0-9]+)*")
+_DIGIT_GROUP = re.compile(r"[0-9]+")
+_PHONE_DIGIT_COUNT = range(9, 16)
+_CARD_DIGIT_COUNT = range(13, 20)
 _LUHN_DOUBLED_DIGIT_LIMIT = 9
 _LUHN_MODULUS = 10
 
@@ -113,11 +116,11 @@ class PatternDetector:
         """
         return (
             *_find_pattern(message, _EMAIL_PATTERN, PseudonymType.EMAIL),
-            *_find_pattern(message, _PHONE_PATTERN, PseudonymType.PHONE),
-            *(
-                detection
-                for detection in _find_pattern(message, _CARD_PATTERN, PseudonymType.CARD)
-                if is_luhn_valid(message[detection.start : detection.end])
+            *_find_digit_values(
+                message, _PHONE_RUN, _PHONE_DIGIT_COUNT, PseudonymType.PHONE, _is_any_number
+            ),
+            *_find_digit_values(
+                message, _CARD_RUN, _CARD_DIGIT_COUNT, PseudonymType.CARD, is_luhn_valid
             ),
             *(
                 detection
@@ -162,6 +165,83 @@ def _find_known_value(
     for match in find_whole_words(folded_value, folded_message):
         start, end = to_original_span(match.start(), match.end())
         yield Detection(start, end, known_value.pseudonym_type, DetectionSource.KNOWN_VALUE)
+
+
+@dataclass(frozen=True, slots=True)
+class _DigitGroup:
+    start: int
+    end: int
+    digit_count: int
+    can_start: bool
+    can_end: bool
+
+
+def _find_digit_values(
+    message: str,
+    run_pattern: re.Pattern[str],
+    digit_counts: range,
+    pseudonym_type: PseudonymType,
+    is_valid: Callable[[str], bool],
+) -> Iterator[Detection]:
+    # From each group that can start a value, the longest span of whole groups with an
+    # allowed number of digits that passes the check; the overlap rule then keeps the
+    # longest of them (ADR-0010, Detection, steps 3 and 5).
+    for run in run_pattern.finditer(message):
+        groups = _digit_groups(message, run)
+        for first, group in enumerate(groups):
+            if not group.can_start:
+                continue
+            end = _longest_value_end(message, groups[first:], digit_counts, is_valid)
+            if end is not None:
+                yield Detection(group.start, end, pseudonym_type, DetectionSource.PATTERN)
+
+
+def _digit_groups(message: str, run: re.Match[str]) -> tuple[_DigitGroup, ...]:
+    matches = tuple(_DIGIT_GROUP.finditer(message, run.start(), run.end()))
+    starts_alone = run.start() == 0 or not _is_word_character(message[run.start() - 1])
+    ends_alone = run.end() == len(message) or not _is_word_character(message[run.end()])
+    last = len(matches) - 1
+    return tuple(
+        _DigitGroup(
+            # A leading `+` belongs to the first group.
+            start=run.start() if position == 0 else match.start(),
+            end=match.end(),
+            digit_count=match.end() - match.start(),
+            can_start=position > 0 or starts_alone,
+            can_end=position < last or ends_alone,
+        )
+        for position, match in enumerate(matches)
+    )
+
+
+def _longest_value_end(
+    message: str,
+    groups: tuple[_DigitGroup, ...],
+    digit_counts: range,
+    is_valid: Callable[[str], bool],
+) -> int | None:
+    longest: int | None = None
+    digit_count = 0
+    for group in groups:
+        digit_count += group.digit_count
+        if digit_count > max(digit_counts):
+            break
+        is_value = (
+            digit_count in digit_counts
+            and group.can_end
+            and is_valid(message[groups[0].start : group.end])
+        )
+        if is_value:
+            longest = group.end
+    return longest
+
+
+def _is_word_character(character: str) -> bool:
+    return character.isalnum() or character == "_"
+
+
+def _is_any_number(_number: str) -> bool:
+    return True
 
 
 def _find_pattern(

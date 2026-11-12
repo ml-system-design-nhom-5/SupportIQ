@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from itertools import count
 from uuid import UUID
 
-from sqlalchemy import insert, text
+from sqlalchemy import insert, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.sql import Executable
 
@@ -24,6 +24,11 @@ from supportiq_backend.commerce.adapters.tables import (
     ProductRow,
     RefundRow,
     ShipmentRow,
+)
+from supportiq_backend.suggestions.adapters.tables import (
+    SuggestionJobRow,
+    SuggestionPartRow,
+    SuggestionRow,
 )
 from supportiq_backend.tickets.adapters.tables import CustomerMessageRow, TicketRow
 from tests.unit.platform.fakes import FAKE_CLOCK_START
@@ -131,6 +136,27 @@ class TicketSpec:
     source: str = "shop"
     is_authority_required: bool = False
     created_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SuggestionSpec:
+    """A current suggestion of a ticket whose two parts share one state, and its job.
+
+    Attributes:
+        part_status: The status of both parts: `pending`, or `unavailable` with a reason.
+        reason_code: The reason code of both parts; set exactly when they are not pending.
+        job_state: The state of its job.
+    """
+
+    part_status: str = "pending"
+    reason_code: str | None = None
+    job_state: str = "queued"
+
+
+# A suggestion whose calls to ai-service failed, so a retry is valid (contract
+# `createSuggestion`).
+FAILED_SUGGESTION = SuggestionSpec("unavailable", "ai_service_unavailable", "done")
+SUGGESTION_TRACE_ID = "4bf92f3577b34da6a3ce929d0e0e4736"
 
 
 class DatabaseBuilder:
@@ -277,6 +303,55 @@ class DatabaseBuilder:
                 )
             )
         return str(ticket_id)
+
+    async def suggestion(self, ticket_id: str, spec: SuggestionSpec | None = None) -> UUID:
+        """Insert a suggestion with its two parts and its job, and make it the current one.
+
+        Args:
+            ticket_id: The ticket.
+            spec: The state of the parts and the job; pending parts and a queued job when None.
+
+        Returns:
+            The suggestion ID.
+        """
+        suggestion = spec or SuggestionSpec()
+        suggestion_id = self.next_uuid()
+        moment = self.next_time()
+        is_pending = suggestion.part_status == "pending"
+        await self._insert(
+            insert(SuggestionRow).values(
+                suggestion_id=suggestion_id,
+                ticket_id=ticket_id,
+                trigger="ticket_created",
+                created_at=moment,
+                trace_id=SUGGESTION_TRACE_ID,
+            ),
+            insert(SuggestionPartRow).values(
+                [
+                    {
+                        "suggestion_id": suggestion_id,
+                        "part": part,
+                        "status": suggestion.part_status,
+                        "reason_codes": []
+                        if suggestion.reason_code is None
+                        else [suggestion.reason_code],
+                        "completed_at": None if is_pending else moment,
+                    }
+                    for part in ("analysis", "draft")
+                ]
+            ),
+            insert(SuggestionJobRow).values(
+                suggestion_id=suggestion_id,
+                state=suggestion.job_state,
+                attempt_number=0 if suggestion.job_state == "queued" else 1,
+                created_at=moment,
+                updated_at=moment,
+            ),
+            update(TicketRow)
+            .where(TicketRow.ticket_id == ticket_id)
+            .values(current_suggestion_id=suggestion_id),
+        )
+        return suggestion_id
 
     async def session(
         self,

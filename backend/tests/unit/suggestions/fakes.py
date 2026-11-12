@@ -160,7 +160,7 @@ class FakeSuggestionJobStore:
     """Implement `SuggestionJobStore` on the shared data."""
 
     data: FakeSuggestionData = field(default_factory=FakeSuggestionData)
-    claim_failure: BackendError | None = None
+    claim_failure: Exception | None = None
 
     async def claim_next(self, now: datetime, lease_expires_at: datetime) -> ClaimedJob | None:
         """Claim the first queued job, in insertion order."""

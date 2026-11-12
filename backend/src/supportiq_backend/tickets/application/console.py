@@ -1,4 +1,4 @@
-"""The console's reads and views: `listConsoleTickets`, `getConsoleTicket`, `recordTicketView`.
+"""The console's reads: `listConsoleTickets` and `getConsoleTicket`, and their stores and ports.
 
 Every use case checks the role first, in the application layer (SEC-16), and an admin gets
 `403` on every one of them (SEC-41).
@@ -16,16 +16,10 @@ from supportiq_backend.audit import AuditLog
 from supportiq_backend.commerce import AddressedOrder, CustomerRecords, Order
 from supportiq_backend.idempotency import (
     IdempotencyGuard,
-    IdempotencyKey,
     IdempotencyStore,
-    RepeatedRequest,
-    RequesterId,
-    StoredResponse,
-    build_idempotent_request,
 )
 from supportiq_backend.platform import (
     Clock,
-    EventName,
     EventRecorder,
     IdGenerator,
     OperationId,
@@ -36,20 +30,15 @@ from supportiq_backend.platform import (
 from supportiq_backend.pseudonymization import MapTicketId
 from supportiq_backend.suggestions import (
     AiService,
-    AiServiceUnavailableError,
     DraftReady,
     PseudonymRestorer,
-    StartedSuggestion,
     Suggestion,
-    SuggestionStart,
     SuggestionStarter,
     SuggestionStore,
-    SuggestionTicketId,
     SuggestionTickets,
-    SuggestionTrigger,
-    choose_view_trigger,
 )
 from supportiq_backend.tickets.domain import (
+    OTHER_ORDERS_LIMIT,
     ConsoleTicket,
     ConsoleTicketPosition,
     ConsoleTicketStore,
@@ -66,10 +55,6 @@ from supportiq_backend.tickets.domain import (
     build_draft_text,
     compute_allowed_actions,
 )
-
-# The stored response of a view: `204` without a body (contract `recordTicketView`).
-VIEW_RECORDED = StoredResponse(204, "")
-TICKET_ID_FIELD = "ticket_id"
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,7 +148,7 @@ class ListConsoleTickets:
         """Load one page of a queue.
 
         Args:
-            principal: The caller, whose role check passed.
+            principal: The caller.
             status: The queue; staff may ask for `open` only.
             after: The last ticket of the previous page, or None for the first page.
             limit: The maximum number of tickets.
@@ -172,9 +157,13 @@ class ListConsoleTickets:
             The page.
 
         Raises:
-            ForbiddenRoleError: Staff asked for another queue than `open`.
+            ForbiddenRoleError: The caller is a customer or an admin, or staff asked for
+                another queue than `open`.
             DatabaseUnavailableError: The database is not available or a timeout fired.
         """
+        # The handler checks the role before it parses the request; the use case checks it
+        # again, so no caller can skip it.
+        self.authorize(principal)
         if status is not TicketStatus.OPEN:
             self._ports.authorizer.require_manager(principal, OperationId.LIST_CONSOLE_TICKETS)
         async with self._transactions.begin() as transaction:
@@ -247,7 +236,9 @@ class GetConsoleTicket:
                 else await restore_suggestion(stores.restorer, suggestion)
             )
             names = await stores.records.load_display_names(frozenset({ticket.customer_id}))
-            orders = await stores.records.load_addressed_orders(ticket.customer_id)
+            orders = await stores.records.load_addressed_orders(
+                ticket.customer_id, ticket.order_id, OTHER_ORDERS_LIMIT
+            )
             reply = await self._load_reply(stores, ticket)
         order, other_orders = _split_orders(ticket, orders)
         return TicketWorkspace(
@@ -268,140 +259,6 @@ class GetConsoleTicket:
         names = await stores.staff.load_display_names(frozenset({reply.sent_by}))
         # The foreign key of `replies.sent_by_account_id` makes the name always present.
         return ReplyRecord(reply, names[reply.sent_by])
-
-
-class RecordTicketView:
-    """Record that a person opened a ticket (`recordTicketView`)."""
-
-    def __init__(self, transactions: TransactionRunner[ConsoleStores], ports: ConsolePorts) -> None:
-        """Keep the dependencies.
-
-        Args:
-            transactions: Opens the transaction of the view.
-            ports: The ports.
-        """
-        self._transactions = transactions
-        self._ports = ports
-
-    def authorize(self, principal: Principal) -> SupportPrincipal:
-        """Allow only staff and managers, before the request is parsed.
-
-        Args:
-            principal: The caller.
-
-        Returns:
-            The caller as a member of support.
-
-        Raises:
-            ForbiddenRoleError: The caller is a customer or an admin.
-        """
-        return self._ports.authorizer.require_support(principal, OperationId.RECORD_TICKET_VIEW)
-
-    async def execute(
-        self, support: SupportPrincipal, ticket_id: TicketId, key: IdempotencyKey
-    ) -> StoredResponse:
-        """Record the view; the first one starts the handling clock (NFR-11).
-
-        The KB version of a first view is read from ai-service before any transaction, so no
-        transaction waits for ai-service. When ai-service does not answer in time, the view is
-        still recorded and no `kb_version_changed` suggestion starts.
-
-        Args:
-            support: The caller.
-            ticket_id: The ticket.
-            key: The `Idempotency-Key`.
-
-        Returns:
-            The `204` of the view, or the response of the first request with this key.
-
-        Raises:
-            TicketNotFoundError: The ticket is unknown.
-            IdempotencyKeyReusedError: The key was used with a different request.
-            DatabaseUnavailableError: The database is not available or a timeout fired.
-        """
-        loaded_kb_version = await self._read_kb_version_of_first_view(ticket_id)
-        request = build_idempotent_request(
-            RequesterId(support.account_id),
-            OperationId.RECORD_TICKET_VIEW,
-            key,
-            {TICKET_ID_FIELD: ticket_id},
-        )
-        started: StartedSuggestion | None = None
-        async with self._transactions.begin() as transaction:
-            stores = transaction.stores
-            ticket = await stores.tickets.lock_console_ticket(ticket_id)
-            if ticket is None:
-                raise TicketNotFoundError
-            claim = await self._ports.guard.claim(stores.idempotency, request)
-            if isinstance(claim, RepeatedRequest):
-                return claim.response
-            is_first_view = ticket.handling_started_at is None
-            if is_first_view:
-                await stores.tickets.start_handling(ticket_id, self._ports.clock.now())
-            started = await self._start_suggestion(
-                stores,
-                ticket,
-                support,
-                await self._choose_trigger(stores, ticket, is_first_view, loaded_kb_version),
-            )
-            await stores.idempotency.save_response(request, VIEW_RECORDED)
-            await transaction.commit()
-        if started is not None:
-            self._ports.starter.announce(started)
-        self._ports.events.record(EventName.TICKET_VIEWED, ticket_id=ticket_id)
-        return VIEW_RECORDED
-
-    async def _read_kb_version_of_first_view(self, ticket_id: TicketId) -> str | None:
-        async with self._transactions.begin() as transaction:
-            ticket = await transaction.stores.tickets.load_console_ticket(ticket_id)
-        if ticket is None or not _is_ai_handled(ticket) or ticket.handling_started_at is not None:
-            return None
-        try:
-            versions = await self._ports.ai_service.fetch_asset_versions()
-        except AiServiceUnavailableError:
-            # The view is recorded without a KB check (backend ticket workflow design).
-            return None
-        return versions.kb_version
-
-    async def _choose_trigger(
-        self,
-        stores: ConsoleStores,
-        ticket: ConsoleTicket,
-        is_first_view: bool,
-        loaded_kb_version: str | None,
-    ) -> tuple[Suggestion, SuggestionTrigger] | None:
-        if not _is_ai_handled(ticket):
-            return None
-        suggestion = await load_current_suggestion(stores.suggestions, ticket)
-        if suggestion is None:
-            return None
-        trigger = choose_view_trigger(
-            suggestion, is_first_view=is_first_view, loaded_kb_version=loaded_kb_version
-        )
-        return None if trigger is None else (suggestion, trigger)
-
-    async def _start_suggestion(
-        self,
-        stores: ConsoleStores,
-        ticket: ConsoleTicket,
-        support: SupportPrincipal,
-        chosen: tuple[Suggestion, SuggestionTrigger] | None,
-    ) -> StartedSuggestion | None:
-        if chosen is None:
-            return None
-        suggestion, trigger = chosen
-        # A new suggestion repeats the input of the current one, an intent that staff chose
-        # included (backend ticket workflow design, Calls).
-        return await self._ports.starter.start(
-            stores.suggestions,
-            stores.links,
-            SuggestionStart(
-                SuggestionTicketId(ticket.ticket_id),
-                trigger,
-                suggestion.intent_override,
-                support.account_id,
-            ),
-        )
 
 
 async def load_current_suggestion(
@@ -456,10 +313,6 @@ def _draft_text(draft: DraftReady | None, segment_texts: tuple[str, ...]) -> str
             for segment, text in zip(draft.draft.segments, segment_texts, strict=True)
         )
     )
-
-
-def _is_ai_handled(ticket: ConsoleTicket) -> bool:
-    return ticket.status is TicketStatus.OPEN and ticket.handling_mode is HandlingMode.ASSISTED
 
 
 def _split_orders(

@@ -78,6 +78,20 @@ class FailingDetector:
 
 
 @dataclass(slots=True)
+class CrashingDetector:
+    """A detector whose library raises an exception of its own, not a `DetectorError`."""
+
+    error: Exception
+
+    def detect(
+        self, message: str, known_values: tuple[KnownValue, ...], /
+    ) -> tuple[Detection, ...]:
+        """Raise the library's exception."""
+        del message, known_values
+        raise self.error
+
+
+@dataclass(slots=True)
 class Harness:
     """The use case with its fakes."""
 
@@ -155,14 +169,37 @@ async def test_a_later_run_reuses_the_stored_map_and_gives_the_same_text() -> No
 
 
 @pytest.mark.anyio
-async def test_a_stored_map_that_differs_fails_closed() -> None:
-    pseudonyms = FakePseudonymMapStore(
-        {TICKET_ID: {"[NAME_1]": PseudonymEntry("[NAME_1]", PseudonymType.NAME, "Minh Le")}}
-    )
+async def test_a_later_run_only_compares_and_never_inserts() -> None:
+    harness = build_harness()
+    await harness.pseudonymize.pseudonymize(ticket_message())
+
+    await harness.pseudonymize.pseudonymize(ticket_message())
+
+    assert harness.pseudonyms.insert_count == 1
+
+
+@pytest.mark.anyio
+async def test_a_stored_map_that_differs_fails_closed_and_adds_no_row() -> None:
+    stored = PseudonymEntry("[NAME_1]", PseudonymType.NAME, "Minh Le")
+    pseudonyms = FakePseudonymMapStore({TICKET_ID: {"[NAME_1]": stored}})
     harness = build_harness(pseudonyms=pseudonyms)
 
     with pytest.raises(PseudonymizationError):
         await harness.pseudonymize.pseudonymize(ticket_message())
+
+    assert harness.pseudonyms.entries_by_ticket[TICKET_ID] == {"[NAME_1]": stored}
+    assert harness.pseudonyms.insert_count == 0
+
+
+@pytest.mark.anyio
+async def test_a_failure_rolls_its_run_back_and_audits_in_a_transaction_of_its_own() -> None:
+    harness = build_harness((*DETECTORS, FailingDetector()))
+
+    with pytest.raises(DetectorError):
+        await harness.pseudonymize.pseudonymize(ticket_message())
+
+    assert harness.transactions.rollback_count == 1
+    assert harness.transactions.commit_count == 1
 
 
 @pytest.mark.anyio
@@ -175,6 +212,23 @@ async def test_a_failing_detector_fails_closed_and_audits_the_failure() -> None:
     (entry,) = harness.audit.entries
     assert entry.data == {"outcome": "failed", "failure_reason": "detector_error"}
     assert harness.pseudonyms.entries_by_ticket == {}
+    (event,) = harness.events.of(EventName.PSEUDONYMIZATION_FAILED)
+    assert not event.is_handled_input
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "error", [RuntimeError("model crashed"), ValueError("bad span"), KeyError("label")]
+)
+async def test_any_exception_of_a_detector_is_a_detector_error(error: Exception) -> None:
+    harness = build_harness((*DETECTORS, CrashingDetector(error)))
+
+    with pytest.raises(DetectorError) as caught:
+        await harness.pseudonymize.pseudonymize(ticket_message())
+
+    (entry,) = harness.audit.entries
+    assert caught.value.__cause__ is error
+    assert entry.data == {"outcome": "failed", "failure_reason": "detector_error"}
     assert harness.events.names() == (EventName.PSEUDONYMIZATION_FAILED,)
 
 
@@ -185,7 +239,9 @@ async def test_a_text_over_the_limit_fails_closed_with_a_warning() -> None:
     with pytest.raises(PseudonymizationError):
         await harness.pseudonymize.pseudonymize(ticket_message("ORD-20901 " * 500))
 
-    assert harness.events.names() == (EventName.PSEUDONYMIZATION_REJECTED,)
+    (event,) = harness.events.of(EventName.PSEUDONYMIZATION_FAILED)
+    assert event.is_handled_input
+    assert harness.events.names() == (EventName.PSEUDONYMIZATION_FAILED,)
 
 
 @pytest.mark.anyio

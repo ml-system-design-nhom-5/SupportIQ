@@ -50,13 +50,19 @@ class IdempotentRequest:
     request_hash: RequestHash
 
 
+# The stored body of a response without one, such as a `204`: the record holds a JSON value,
+# and the JSON value `null` stands for no body.
+NO_CONTENT_BODY = "null"
+
+
 @dataclass(frozen=True, slots=True)
 class StoredResponse:
     """The response of a successful write, returned again, unchanged, to every repeat.
 
     Attributes:
         status_code: The HTTP status, `201` for the writes of this version.
-        body: The exact JSON text of the body. Confidential: a ticket holds a message.
+        body: The exact JSON text of the body, or `NO_CONTENT_BODY` for a response without
+            one. Confidential: a ticket holds a message.
     """
 
     status_code: int

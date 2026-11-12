@@ -11,7 +11,7 @@ from dataclasses import asdict
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import ScalarSelect, and_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -203,27 +203,10 @@ class PostgresSuggestionJobStore:
         Returns:
             The claimed job, or None when nothing is claimable.
         """
-        candidate = aliased(SuggestionJobRow)
-        oldest_claimable = (
-            select(candidate.suggestion_id)
-            .where(
-                or_(
-                    candidate.state == JobState.QUEUED.value,
-                    and_(
-                        candidate.state == JobState.RUNNING.value,
-                        candidate.lease_expires_at <= now,
-                    ),
-                )
-            )
-            .order_by(candidate.created_at, candidate.suggestion_id)
-            .limit(1)
-            .with_for_update(skip_locked=True)
-            .scalar_subquery()
-        )
         claimed = (
             await self._session.execute(
                 update(SuggestionJobRow)
-                .where(SuggestionJobRow.suggestion_id == oldest_claimable)
+                .where(SuggestionJobRow.suggestion_id == _oldest_claimable_job(now))
                 .values(
                     state=JobState.RUNNING.value,
                     attempt_number=SuggestionJobRow.attempt_number + 1,
@@ -396,3 +379,25 @@ def _optional_value(label: IntentLabel | None) -> str | None:
 
 def _optional_uuid(account_id: AccountId | None) -> UUID | None:
     return None if account_id is None else UUID(account_id)
+
+
+def _oldest_claimable_job(now: datetime) -> ScalarSelect[UUID]:
+    # The oldest job that is queued, or running with an expired lease; a job that another
+    # claim holds is skipped instead of waited for (ADR-0011, Suggestion job queue, item 2).
+    candidate = aliased(SuggestionJobRow)
+    return (
+        select(candidate.suggestion_id)
+        .where(
+            or_(
+                candidate.state == JobState.QUEUED.value,
+                and_(
+                    candidate.state == JobState.RUNNING.value,
+                    candidate.lease_expires_at <= now,
+                ),
+            )
+        )
+        .order_by(candidate.created_at, candidate.suggestion_id)
+        .limit(1)
+        .with_for_update(skip_locked=True)
+        .scalar_subquery()
+    )

@@ -44,6 +44,7 @@ from tests.unit.platform.fakes import FAKE_CLOCK_START
 from tests.unit.suggestions.builders import (
     PREDICTED_INTENT,
     SUGGESTION_ID,
+    build_analysis,
     build_draft_ready,
     build_failed_suggestion,
     build_no_draft,
@@ -216,11 +217,37 @@ def test_ai_draft_is_refused_without_a_ready_draft() -> None:
 
 
 def test_every_warning_must_be_acknowledged() -> None:
-    suggestion = build_ready_suggestion(build_draft_ready(warning_ids=("w1", "w2")))
+    suggestion = build_suggestion(
+        analysis=build_analysis(warning_ids=("w1", "w2")), draft=build_draft_ready()
+    )
 
     with pytest.raises(WarningsNotAcknowledgedError):
         validate_reply_body(
             build_ticket(), suggestion, ai_draft_reply(acknowledged_warning_ids=frozenset({"w1"}))
+        )
+
+
+def test_the_warnings_to_acknowledge_are_those_of_the_analysis_part_that_staff_see() -> None:
+    suggestion = build_suggestion(
+        analysis=build_analysis(warning_ids=("analysis-w1",)),
+        draft=build_draft_ready(warning_ids=("draft-w1",)),
+    )
+    reply = ai_draft_reply(acknowledged_warning_ids=frozenset({"analysis-w1"}))
+
+    validate_reply_body(build_ticket(), suggestion, reply)
+
+
+def test_a_warning_of_the_analysis_inside_the_draft_response_is_not_the_one_shown() -> None:
+    suggestion = build_suggestion(
+        analysis=build_analysis(warning_ids=("analysis-w1",)),
+        draft=build_draft_ready(warning_ids=("draft-w1",)),
+    )
+
+    with pytest.raises(WarningsNotAcknowledgedError):
+        validate_reply_body(
+            build_ticket(),
+            suggestion,
+            ai_draft_reply(acknowledged_warning_ids=frozenset({"draft-w1"})),
         )
 
 

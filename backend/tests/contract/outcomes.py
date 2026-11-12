@@ -9,10 +9,18 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from http import HTTPStatus
 
-from tests.contract.calls import NEW_ACCOUNT, NEW_PASSWORD, Call, World
+from tests.contract.calls import (
+    NEW_ACCOUNT,
+    NEW_PASSWORD,
+    REPLY_WITHOUT_A_DRAFT,
+    Call,
+    World,
+    valid_calls,
+)
 
 OTHER_KEY = "00000000-0000-4000-8000-000000000002"
 UNKNOWN_ACCOUNT = "99999999-9999-4999-8999-999999999999"
+UNKNOWN_TICKET = "TCK-999999"
 
 
 class Condition(StrEnum):
@@ -89,6 +97,38 @@ def with_unknown_path_id(call: Call, _world: World) -> Call:
     return replace(call, path=call.path.rsplit("/", 1)[0] + "/UNKNOWN-1")
 
 
+def with_unknown_ticket(call: Call, world: World) -> Call:
+    return replace(call, path=call.path.replace(world.ticket_id, UNKNOWN_TICKET))
+
+
+def without_key(call: Call, _world: World) -> Call:
+    return replace(call, key=None)
+
+
+def with_unknown_status(call: Call, _world: World) -> Call:
+    return replace(call, params={"status": "unknown"})
+
+
+def as_staff_on_the_closed_queue(call: Call, _world: World) -> Call:
+    return replace(call, params={"status": "closed"})
+
+
+def with_key_reused_on_another_ticket(call: Call, world: World) -> Call:
+    return replace(call, path=call.path.replace(world.ticket_id, world.other_ticket_id), prior=call)
+
+
+def after_the_reply(call: Call, world: World) -> Call:
+    return replace(call, prior=valid_calls(world)["sendReply"])
+
+
+def on_a_ticket_that_requires_authority(call: Call, world: World) -> Call:
+    return replace(call, path=call.path.replace(world.ticket_id, world.authority_ticket_id))
+
+
+def with_placeholder_in_body(call: Call, _world: World) -> Call:
+    return replace(call, body={**REPLY_WITHOUT_A_DRAFT, "body": "We wrote to [EMAIL_1]."})
+
+
 def with_unknown_target(call: Call, world: World) -> Call:
     return replace(call, path=call.path.replace(str(world.target_account_id), UNKNOWN_ACCOUNT))
 
@@ -138,6 +178,13 @@ SHOP_OPERATIONS = (
     "createShopTicket",
     "getShopTicket",
 )
+CONSOLE_OPERATIONS = (
+    "listConsoleTickets",
+    "getConsoleTicket",
+    "recordTicketView",
+    "createSuggestion",
+    "sendReply",
+)
 ADMIN_OPERATIONS = (
     "listAdminAccounts",
     "createAdminAccount",
@@ -147,7 +194,12 @@ ADMIN_OPERATIONS = (
 )
 SESSION_OPERATIONS = ("getCurrentSession", "changeOwnPassword", "deleteCurrentSession")
 HEALTH_OPERATIONS = ("checkLiveness", "checkReadiness")
-OPERATIONS_WITH_A_SESSION = (*SESSION_OPERATIONS, *SHOP_OPERATIONS, *ADMIN_OPERATIONS)
+OPERATIONS_WITH_A_SESSION = (
+    *SESSION_OPERATIONS,
+    *SHOP_OPERATIONS,
+    *CONSOLE_OPERATIONS,
+    *ADMIN_OPERATIONS,
+)
 ALL_OPERATIONS = ("createSession", *OPERATIONS_WITH_A_SESSION, *HEALTH_OPERATIONS)
 OK_STATUSES = {
     "createSession": HTTPStatus.CREATED,
@@ -161,6 +213,11 @@ OK_STATUSES = {
     "listShopTickets": HTTPStatus.OK,
     "createShopTicket": HTTPStatus.CREATED,
     "getShopTicket": HTTPStatus.OK,
+    "listConsoleTickets": HTTPStatus.OK,
+    "getConsoleTicket": HTTPStatus.OK,
+    "recordTicketView": HTTPStatus.NO_CONTENT,
+    "createSuggestion": HTTPStatus.ACCEPTED,
+    "sendReply": HTTPStatus.CREATED,
     "listAdminAccounts": HTTPStatus.OK,
     "createAdminAccount": HTTPStatus.CREATED,
     "changeAccountRole": HTTPStatus.CREATED,
@@ -177,7 +234,22 @@ OUTCOMES: tuple[Outcome, ...] = (
         for operation in OPERATIONS_WITH_A_SESSION
     ),
     Outcome("createSession", HTTPStatus.UNAUTHORIZED, change=with_wrong_password),
-    *(Outcome(operation, HTTPStatus.FORBIDDEN, change=as_admin) for operation in SHOP_OPERATIONS),
+    *(
+        Outcome(operation, HTTPStatus.FORBIDDEN, change=as_admin)
+        for operation in (*SHOP_OPERATIONS, *CONSOLE_OPERATIONS)
+    ),
+    Outcome(
+        "listConsoleTickets",
+        HTTPStatus.FORBIDDEN,
+        change=as_staff_on_the_closed_queue,
+        label="-queue",
+    ),
+    Outcome(
+        "sendReply",
+        HTTPStatus.FORBIDDEN,
+        change=on_a_ticket_that_requires_authority,
+        label="-authority",
+    ),
     *(
         Outcome(operation, HTTPStatus.FORBIDDEN, change=as_customer)
         for operation in ADMIN_OPERATIONS
@@ -189,6 +261,9 @@ OUTCOMES: tuple[Outcome, ...] = (
             "deleteCurrentSession",
             "changeOwnPassword",
             "createShopTicket",
+            "recordTicketView",
+            "createSuggestion",
+            "sendReply",
             "createAdminAccount",
             "changeAccountRole",
             "changeAccountStatus",
@@ -197,7 +272,11 @@ OUTCOMES: tuple[Outcome, ...] = (
     ),
     *(
         Outcome(operation, HTTPStatus.NOT_FOUND, change=with_unknown_path_id)
-        for operation in ("getShopProduct", "getShopOrder", "getShopTicket")
+        for operation in ("getShopProduct", "getShopOrder", "getShopTicket", "getConsoleTicket")
+    ),
+    *(
+        Outcome(operation, HTTPStatus.NOT_FOUND, change=with_unknown_ticket)
+        for operation in ("recordTicketView", "createSuggestion", "sendReply")
     ),
     Outcome("listShopTickets", HTTPStatus.NOT_FOUND, change=with_unknown_order_filter),
     Outcome("createShopTicket", HTTPStatus.NOT_FOUND, change=with_unknown_order),
@@ -208,6 +287,13 @@ OUTCOMES: tuple[Outcome, ...] = (
         "createShopTicket",
         HTTPStatus.CONFLICT,
         change=with_reused_key({"order_id": "ORD-99999", "message": "Another message"}),
+    ),
+    Outcome("recordTicketView", HTTPStatus.CONFLICT, change=with_key_reused_on_another_ticket),
+    Outcome("createSuggestion", HTTPStatus.CONFLICT, change=after_the_reply),
+    Outcome(
+        "sendReply",
+        HTTPStatus.CONFLICT,
+        change=with_reused_key({**REPLY_WITHOUT_A_DRAFT, "body": "Another reply"}),
     ),
     Outcome("changeAccountRole", HTTPStatus.CONFLICT, change=with_reused_key({"role": "staff"})),
     Outcome(
@@ -249,12 +335,16 @@ OUTCOMES: tuple[Outcome, ...] = (
             "listAdminAccounts",
         )
     ),
+    Outcome("listConsoleTickets", UNPROCESSABLE, change=with_unknown_status),
+    Outcome("recordTicketView", UNPROCESSABLE, change=without_key),
     *(
         Outcome(operation, UNPROCESSABLE, change=with_invalid_body)
         for operation in (
             "createSession",
             "changeOwnPassword",
             "createShopTicket",
+            "createSuggestion",
+            "sendReply",
             "createAdminAccount",
             "changeAccountRole",
             "changeAccountStatus",
@@ -267,6 +357,7 @@ OUTCOMES: tuple[Outcome, ...] = (
         "changeOwnPassword", UNPROCESSABLE, change=with_wrong_current_password, label="-refused"
     ),
     Outcome("resetAccountPassword", UNPROCESSABLE, change=with_own_account, label="-refused"),
+    Outcome("sendReply", UNPROCESSABLE, change=with_placeholder_in_body, label="-placeholder"),
     *(
         Outcome(operation, HTTPStatus.INTERNAL_SERVER_ERROR, Condition.REQUEST_FAILS)
         for operation in ALL_OPERATIONS

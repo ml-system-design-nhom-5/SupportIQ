@@ -41,6 +41,11 @@ class ReplyRecord:
     sent_by_display_name: str
 
 
+# The workspace lists at most this many other orders of the customer (`backend` contract
+# 1.2.0, `TicketWorkspace.other_orders`, `maxItems`).
+OTHER_ORDERS_LIMIT = 20
+
+
 @dataclass(frozen=True, slots=True, repr=False)
 class TicketWorkspace:
     """Everything that staff and managers see of one ticket.
@@ -49,7 +54,8 @@ class TicketWorkspace:
         ticket: The ticket and its message.
         customer_display_name: The customer's name. Confidential.
         order: The ticket's order with its address; absent without one.
-        other_orders: The customer's other orders, newest first. Never sent to ai-service.
+        other_orders: The customer's other orders, newest first, at most
+            `OTHER_ORDERS_LIMIT`. Never sent to ai-service.
         suggestion: The current suggestion, restored; absent in manual mode.
         reply: The sent reply, when the ticket is closed.
         allowed_actions: What the caller may do now.

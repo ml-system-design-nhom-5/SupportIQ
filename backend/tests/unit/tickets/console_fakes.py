@@ -131,36 +131,72 @@ def build_console_harness(
     ai_service: FakeAiService | None = None,
     restorer: FakeRestorer | None = None,
 ) -> ConsoleHarness:
-    ticket_store = FakeConsoleTicketStore({ticket.ticket_id: ticket for ticket in tickets})
-    suggestions = FakeSuggestionStore()
-    links = FakeTicketLinks(
-        tickets={
-            SuggestionTicketId(ticket.ticket_id): TicketForSuggestion(
-                ticket.current_suggestion_id, True, True, ticket.status.value
-            )
-            for ticket in tickets
-        }
-    )
-    replies = FakeReplyStore()
-    audit = FakeAuditLog()
+    fakes = _FakeStores.of(tickets)
     events = RecordingEventRecorder()
     queue = RecordingSuggestionQueue()
-    clock = FakeClock()
     service = ai_service or FakeAiService()
-    transactions = FakeTransactionRunner(
-        ConsoleStores(
-            tickets=ticket_store,
-            replies=replies,
-            suggestions=suggestions,
-            links=links,
+    return ConsoleHarness(
+        tickets=fakes.tickets,
+        replies=fakes.replies,
+        suggestions=fakes.suggestions,
+        links=fakes.links,
+        audit=fakes.audit,
+        events=events,
+        queue=queue,
+        ai_service=service,
+        transactions=FakeTransactionRunner(fakes.to_console_stores(restorer or FakeRestorer())),
+        ports=_build_ports(events, queue, service),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _FakeStores:
+    """The fakes that the tests of the console inspect."""
+
+    tickets: FakeConsoleTicketStore
+    replies: FakeReplyStore
+    suggestions: FakeSuggestionStore
+    links: FakeTicketLinks
+    audit: FakeAuditLog
+
+    @classmethod
+    def of(cls, tickets: tuple[ConsoleTicket, ...]) -> "_FakeStores":
+        """Build empty stores that hold the tickets."""
+        return cls(
+            tickets=FakeConsoleTicketStore({ticket.ticket_id: ticket for ticket in tickets}),
+            replies=FakeReplyStore(),
+            suggestions=FakeSuggestionStore(),
+            links=FakeTicketLinks(
+                tickets={
+                    SuggestionTicketId(ticket.ticket_id): TicketForSuggestion(
+                        ticket.current_suggestion_id, True, True, ticket.status.value
+                    )
+                    for ticket in tickets
+                }
+            ),
+            audit=FakeAuditLog(),
+        )
+
+    def to_console_stores(self, restorer: FakeRestorer) -> ConsoleStores:
+        """Return the stores of the use cases, with the fakes that nothing inspects."""
+        return ConsoleStores(
+            tickets=self.tickets,
+            replies=self.replies,
+            suggestions=self.suggestions,
+            links=self.links,
             records=FakeCustomerRecords(),
             staff=FakeStaffDirectory(),
-            restorer=restorer or FakeRestorer(),
+            restorer=restorer,
             idempotency=FakeIdempotencyStore(),
-            audit=audit,
+            audit=self.audit,
         )
-    )
-    ports = ConsolePorts(
+
+
+def _build_ports(
+    events: RecordingEventRecorder, queue: RecordingSuggestionQueue, ai_service: FakeAiService
+) -> ConsolePorts:
+    clock = FakeClock()
+    return ConsolePorts(
         authorizer=Authorizer(events),
         guard=IdempotencyGuard(clock, RETENTION_MS),
         clock=clock,
@@ -177,17 +213,5 @@ def build_console_harness(
                 queue=queue,
             )
         ),
-        ai_service=service,
-    )
-    return ConsoleHarness(
-        ticket_store,
-        replies,
-        suggestions,
-        links,
-        audit,
-        events,
-        queue,
-        service,
-        transactions,
-        ports,
+        ai_service=ai_service,
     )

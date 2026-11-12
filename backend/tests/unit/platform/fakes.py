@@ -59,10 +59,12 @@ class RecordedEvent:
     Attributes:
         name: The event.
         attributes: Its attributes.
+        is_handled_input: Whether it was recorded as caused by handled input.
     """
 
     name: EventName
     attributes: Mapping[str, EventAttributeValue]
+    is_handled_input: bool = False
 
 
 @dataclass(slots=True)
@@ -79,6 +81,15 @@ class RecordingEventRecorder:
             **attributes: Its attributes.
         """
         self.events.append(RecordedEvent(event, dict(attributes)))
+
+    def record_handled_input(self, event: EventName, /, **attributes: EventAttributeValue) -> None:
+        """Keep the event and that handled input caused it.
+
+        Args:
+            event: The event.
+            **attributes: Its attributes.
+        """
+        self.events.append(RecordedEvent(event, dict(attributes), is_handled_input=True))
 
     def names(self) -> tuple[EventName, ...]:
         """Return the names of the recorded events, in order."""

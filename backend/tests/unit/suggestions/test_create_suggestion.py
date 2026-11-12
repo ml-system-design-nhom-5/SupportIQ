@@ -1,5 +1,6 @@
 """Tests of `CreateSuggestion` and of the suggestion rules it uses (contracts v1 design)."""
 
+import json
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -61,6 +62,7 @@ KEY = IdempotencyKey(UUID("00000000-0000-4000-8000-000000000321"))
 SUPPORT = SupportPrincipal(STAFF_ACCOUNT_ID, SupportRole.STAFF)
 CHOSEN_INTENT = IntentLabel.REQUEST_REFUND
 UNKNOWN_TICKET_ID = SuggestionTicketId("TCK-9")
+RETENTION_MS = 86_400_000
 
 
 @dataclass(slots=True)
@@ -74,7 +76,7 @@ class Harness:
 
 
 def render(suggestion: Suggestion) -> StoredResponse:
-    return StoredResponse(202, suggestion.suggestion_id)
+    return StoredResponse(202, json.dumps({"suggestion_id": suggestion.suggestion_id}))
 
 
 def build_harness(
@@ -94,33 +96,38 @@ def build_harness(
         }
     )
     audit = FakeAuditLog()
-    events = RecordingEventRecorder()
     queue = RecordingSuggestionQueue()
-    clock = FakeClock()
     create = CreateSuggestion(
         FakeTransactionRunner(
             CreateSuggestionStores(suggestions, links, FakeIdempotencyStore(), audit)
         ),
-        CreateSuggestionPorts(
-            authorizer=Authorizer(events),
-            guard=IdempotencyGuard(clock, 86_400_000),
-            starter=SuggestionStarter(
-                SuggestionStarterPorts(
-                    clock=clock,
-                    ids=SequentialIdGenerator(start=700),
-                    traces=FixedTraceContext(),
-                    events=events,
-                    queue=queue,
-                )
-            ),
-            clock=clock,
-            ids=SequentialIdGenerator(),
-            traces=FixedTraceContext(),
-            events=events,
-        ),
+        build_ports(RecordingEventRecorder(), queue),
         render,
     )
     return Harness(create, suggestions, audit, queue)
+
+
+def build_ports(
+    events: RecordingEventRecorder, queue: RecordingSuggestionQueue
+) -> CreateSuggestionPorts:
+    clock = FakeClock()
+    return CreateSuggestionPorts(
+        authorizer=Authorizer(events),
+        guard=IdempotencyGuard(clock, RETENTION_MS),
+        starter=SuggestionStarter(
+            SuggestionStarterPorts(
+                clock=clock,
+                ids=SequentialIdGenerator(start=700),
+                traces=FixedTraceContext(),
+                events=events,
+                queue=queue,
+            )
+        ),
+        clock=clock,
+        ids=SequentialIdGenerator(),
+        traces=FixedTraceContext(),
+        events=events,
+    )
 
 
 def new_suggestion(harness: Harness) -> Suggestion:

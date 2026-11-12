@@ -46,14 +46,14 @@ def example_body(operation: str, name: str) -> bytes:
 class ScriptedAiService:
     """Answer each call with the next response of a script, and keep every request."""
 
-    responses: list[httpx.Response | httpx.TransportError]
+    responses: list[httpx.Response | httpx.RequestError]
     requests: list[httpx.Request] = field(default_factory=list[httpx.Request])
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         """Answer the next scripted response."""
         self.requests.append(request)
         response = self.responses.pop(0)
-        if isinstance(response, httpx.TransportError):
+        if isinstance(response, httpx.RequestError):
             raise response
         return response
 
@@ -163,6 +163,28 @@ async def test_a_body_that_is_not_json_is_a_contract_error() -> None:
 
     with pytest.raises(AiServiceContractError):
         await build_client(script).analyze(REQUEST)
+
+
+@pytest.mark.anyio
+async def test_a_body_that_its_encoding_cannot_decode_is_a_contract_error() -> None:
+    body = httpx.ByteStream(b"not gzip")
+    script = ScriptedAiService(
+        [httpx.Response(HTTPStatus.OK, stream=body, headers={"Content-Encoding": "gzip"})]
+    )
+
+    with pytest.raises(AiServiceContractError):
+        await build_client(script).analyze(REQUEST)
+
+
+@pytest.mark.anyio
+async def test_any_other_error_of_the_library_makes_the_call_unavailable() -> None:
+    script = ScriptedAiService([httpx.TooManyRedirects("redirect loop")])
+
+    with pytest.raises(AiServiceUnavailableError) as caught:
+        await build_client(script).draft(REQUEST)
+
+    assert not isinstance(caught.value, AiServiceContractError)
+    assert len(script.requests) == 1
 
 
 @pytest.mark.anyio

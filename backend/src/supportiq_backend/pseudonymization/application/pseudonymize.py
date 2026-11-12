@@ -5,6 +5,7 @@ Storage and lifecycle, item 6). It runs as the first step of every suggestion jo
 """
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from supportiq_backend.accounts import CustomerId
 from supportiq_backend.audit import (
@@ -32,6 +33,7 @@ from supportiq_backend.platform import (
     TransactionRunner,
 )
 from supportiq_backend.pseudonymization.domain import (
+    Detection,
     Detector,
     DetectorError,
     KnownValue,
@@ -128,11 +130,11 @@ class PseudonymizeMessage:
         self._ports = ports
 
     async def pseudonymize(self, message: MessageToPseudonymize) -> str:
-        """Pseudonymize the message, store its map on the first run, and audit the outcome.
+        """Pseudonymize the message, keep one map per ticket, and audit the outcome.
 
-        The map is inserted in its own short transaction, before any call to `ai-service`.
-        Every later run computes the same map and reuses the stored one (ADR-0010, Storage
-        and lifecycle, item 2).
+        The first successful run inserts the map; every later run reads it and must compute
+        the same one (ADR-0010, Storage and lifecycle, item 2). A run that fails keeps no map
+        row: its audit entry is written in a transaction of its own.
 
         Args:
             message: The ticket's message and its records.
@@ -148,37 +150,46 @@ class PseudonymizeMessage:
         """
         with self._ports.steps.step(SpanName.PSEUDONYMIZE_MESSAGE):
             self._ports.steps.record_ticket(message.ticket_id)
-            async with self._transactions.begin() as transaction:
-                stores = transaction.stores
-                try:
-                    result = await self._pseudonymize(stores, message)
-                except PseudonymizationError as error:
-                    await stores.audit.append(self._failure_entry(message.ticket_id, error))
-                    await transaction.commit()
-                    self._record_failure(message.ticket_id, error)
-                    raise
-                await stores.audit.append(self._success_entry(message.ticket_id, result))
-                await transaction.commit()
+            try:
+                result = await self._pseudonymize(message)
+            except PseudonymizationError as error:
+                await self._audit_failure(message.ticket_id, error)
+                self._record_failure(message.ticket_id, error)
+                raise
             self._ports.steps.record_pseudonym_count(len(result.entries))
         return result.text
 
-    async def _pseudonymize(
-        self, stores: PseudonymizationStores, message: MessageToPseudonymize
-    ) -> PseudonymizedMessage:
-        known_values = build_known_values(*await _load_records(stores.records, message))
-        detections = tuple(
-            detection
-            for detector in self._ports.detectors
-            for detection in detector.detect(message.message, known_values)
-        )
-        result = build_pseudonymized_message(message.message, resolve_overlaps(detections))
-        await stores.pseudonyms.insert_missing(
-            message.ticket_id, result.entries, self._ports.clock.now()
-        )
-        stored = await stores.pseudonyms.load_entries(message.ticket_id)
-        if _entry_keys(stored) != _entry_keys(result.entries):
-            raise StoredMapDiffersError
+    async def _pseudonymize(self, message: MessageToPseudonymize) -> PseudonymizedMessage:
+        async with self._transactions.begin() as transaction:
+            stores = transaction.stores
+            known_values = build_known_values(*await _load_records(stores.records, message))
+            result = build_pseudonymized_message(
+                message.message, self._detect(message.message, known_values)
+            )
+            await _keep_one_map(
+                stores.pseudonyms, message.ticket_id, result.entries, self._ports.clock.now()
+            )
+            await stores.audit.append(self._success_entry(message.ticket_id, result))
+            await transaction.commit()
         return result
+
+    def _detect(self, message: str, known_values: tuple[KnownValue, ...]) -> tuple[Detection, ...]:
+        detections: list[Detection] = []
+        for detector in self._ports.detectors:
+            try:
+                detections.extend(detector.detect(message, known_values))
+            except Exception as error:
+                # Any exception of any detector fails closed (backend ticket workflow
+                # design, Pseudonymization, item 1).
+                raise DetectorError from error
+        return resolve_overlaps(detections)
+
+    async def _audit_failure(self, ticket_id: MapTicketId, error: PseudonymizationError) -> None:
+        # The transaction of the failed run rolled back, so no row of its map is kept
+        # (ADR-0010, Storage and lifecycle, items 3 and 4).
+        async with self._transactions.begin() as transaction:
+            await transaction.stores.audit.append(self._failure_entry(ticket_id, error))
+            await transaction.commit()
 
     def _success_entry(self, ticket_id: MapTicketId, result: PseudonymizedMessage) -> AuditEntry:
         data: dict[str, AuditValue] = {OUTCOME_FIELD: OUTCOME_SUCCEEDED}
@@ -205,12 +216,14 @@ class PseudonymizeMessage:
     def _record_failure(self, ticket_id: MapTicketId, error: PseudonymizationError) -> None:
         # A text that is too long is handled input; every other failure is a defect
         # (ADR-0010, Failure handling).
-        event = (
-            EventName.PSEUDONYMIZATION_REJECTED
+        record = (
+            self._ports.events.record_handled_input
             if isinstance(error, PseudonymizedTextTooLongError)
-            else EventName.PSEUDONYMIZATION_FAILED
+            else self._ports.events.record
         )
-        self._ports.events.record(event, ticket_id=ticket_id, reason_code=error.reason.value)
+        record(
+            EventName.PSEUDONYMIZATION_FAILED, ticket_id=ticket_id, reason_code=error.reason.value
+        )
 
 
 def build_known_values(
@@ -261,6 +274,22 @@ async def _load_records(
     if references is None:
         raise DetectorError
     return contact, references
+
+
+async def _keep_one_map(
+    pseudonyms: PseudonymMapStore,
+    ticket_id: MapTicketId,
+    entries: tuple[PseudonymEntry, ...],
+    created_at: datetime,
+) -> None:
+    # Only a ticket without a map gets one; a ticket with a map is only compared. Reading
+    # back after the insert also finds a different map that a concurrent first run stored.
+    stored = await pseudonyms.load_entries(ticket_id)
+    if not stored:
+        await pseudonyms.insert_map(ticket_id, entries, created_at)
+        stored = await pseudonyms.load_entries(ticket_id)
+    if _entry_keys(stored) != _entry_keys(entries):
+        raise StoredMapDiffersError
 
 
 def _entry_keys(entries: tuple[PseudonymEntry, ...]) -> frozenset[tuple[str, str, str]]:

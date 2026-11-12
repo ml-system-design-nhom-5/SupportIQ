@@ -7,6 +7,10 @@ from sqlalchemy import DateTime, Integer, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+# An absent value is SQL `NULL`, never the JSON value `null`: by default SQLAlchemy writes
+# Python `None` as JSON `null`, which `IS NULL` does not match.
+_NULLABLE_JSONB = JSONB(none_as_null=True)
+
 
 class SuggestionsTables(DeclarativeBase):
     """The declarative base of the tables that suggestions owns."""
@@ -24,7 +28,7 @@ class SuggestionRow(SuggestionsTables):
     requested_by_account_id: Mapped[UUID | None]
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     trace_id: Mapped[str] = mapped_column(Text)
-    request: Mapped[object | None] = mapped_column(JSONB)
+    request: Mapped[object | None] = mapped_column(_NULLABLE_JSONB)
 
 
 class SuggestionPartRow(SuggestionsTables):
@@ -37,14 +41,14 @@ class SuggestionPartRow(SuggestionsTables):
     status: Mapped[str] = mapped_column(Text)
     reason_codes: Mapped[list[str]] = mapped_column(JSONB)
     release_id: Mapped[str | None] = mapped_column(Text)
-    versions: Mapped[dict[str, str] | None] = mapped_column(JSONB)
+    versions: Mapped[dict[str, str] | None] = mapped_column(_NULLABLE_JSONB)
     latency_ms: Mapped[int | None] = mapped_column(Integer)
     llm_input_token_count: Mapped[int | None] = mapped_column(Integer)
     llm_output_token_count: Mapped[int | None] = mapped_column(Integer)
     llm_cost_micro_usd: Mapped[int | None] = mapped_column(Integer)
-    mask_count_by_type: Mapped[dict[str, int] | None] = mapped_column(JSONB)
+    mask_count_by_type: Mapped[dict[str, int] | None] = mapped_column(_NULLABLE_JSONB)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    result: Mapped[object | None] = mapped_column(JSONB)
+    result: Mapped[object | None] = mapped_column(_NULLABLE_JSONB)
 
 
 class SuggestionJobRow(SuggestionsTables):

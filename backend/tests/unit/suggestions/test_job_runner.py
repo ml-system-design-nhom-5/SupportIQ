@@ -24,10 +24,14 @@ from supportiq_backend.suggestions import (
     AiReasonCode,
     AiServiceContractError,
     ClaimedJob,
+    Draft,
+    IntentLabel,
     JobRunnerPorts,
     JobState,
     JobStores,
     MessagePseudonymizer,
+    OrderContextCitation,
+    OrderContextField,
     PartStatus,
     QueueSettings,
     ReceivedAnalysis,
@@ -38,6 +42,7 @@ from supportiq_backend.suggestions import (
     TicketForSuggestion,
     TicketMessage,
 )
+from supportiq_backend.suggestions.adapters.ai_service_payloads import to_request_body
 from tests.unit.audit.fakes import FakeAuditLog
 from tests.unit.commerce.fakes import FakeCommerceGateway, build_order
 from tests.unit.platform.fakes import (
@@ -78,14 +83,23 @@ from tests.unit.suggestions.fakes import (
 
 QUEUE_SETTINGS = QueueSettings(workers_per_replica=5, lease_ms=15_000, max_attempts=3, poll_ms=500)
 JOB = ClaimedJob(SUGGESTION_ID, TICKET_ID, attempt_number=1)
-MESSAGE = "I am Lan Tran, order ORD-20901, mail lan.tran@example.test, phone +84 90 111 0001."
+# Every value that backend holds for the ticket, the parts of the name alone included.
+MESSAGE = (
+    "I am Lan Tran: Lan for short, Tran in the shop. Order ORD-20901 went out with "
+    "TRK-0000020901 after payment TXN-00020901, to 12 Example Street, Ba Dinh, Hanoi. "
+    "Mail lan.tran@example.test or call +84 90 111 0001."
+)
 BOTH_CALLS = 2
 OWN_ANALYSIS_BODY = '{"analysis": "from createAnalysis"}'
 SEEDED_VALUES = (
     CONTACT.display_name,
+    *CONTACT.display_name.split(),
     CONTACT.email,
     CONTACT.phone,
     REFERENCES.order_id,
+    REFERENCES.tracking_code,
+    REFERENCES.transaction_id,
+    REFERENCES.shipping_address,
 )
 
 
@@ -119,19 +133,9 @@ def build_harness(
     ai_service: FakeAiService | None = None,
     pseudonymizer: MessagePseudonymizer | None = None,
     attempt_number: int = 1,
-    intent_override: bool = False,
+    intent_override: IntentLabel | None = None,
 ) -> Harness:
-    data = FakeSuggestionData()
-    suggestion = build_suggestion(intent_override=PREDICTED_INTENT if intent_override else None)
-    data.add(suggestion, state=JobState.RUNNING)
-    data.jobs[SUGGESTION_ID].attempt_number = attempt_number
-    data.state_by_body.update(
-        {
-            ANALYSIS_BODY: build_analysis(),
-            OWN_ANALYSIS_BODY: build_analysis(),
-            DRAFT_BODY: build_draft_ready(),
-        }
-    )
+    data = seed_running_job(attempt_number, intent_override)
     links = FakeTicketLinks(
         tickets={TICKET_ID: TicketForSuggestion(SUGGESTION_ID, True, True, "open")},
         messages={
@@ -148,16 +152,8 @@ def build_harness(
         service.links = links
     audit = FakeAuditLog()
     events = RecordingEventRecorder()
-    stores = JobStores(
-        jobs=FakeSuggestionJobStore(data),
-        suggestions=FakeSuggestionStore(data),
-        tickets=links,
-        authority=links,
-        orders=FakeCommerceGateway(orders={CUSTOMER_ID: (build_order(REFERENCES.order_id),)}),
-        audit=audit,
-    )
     runner = SuggestionJobRunner(
-        FakeTransactionRunner(stores),
+        FakeTransactionRunner(build_job_stores(data, links, audit)),
         JobRunnerPorts(
             pseudonymizer=pseudonymizer or FakePseudonymizer({"Lan Tran": "[NAME_1]"}),
             ai_service=service,
@@ -170,6 +166,35 @@ def build_harness(
         QUEUE_SETTINGS,
     )
     return Harness(runner, data, links, service, audit, events)
+
+
+def seed_running_job(
+    attempt_number: int, intent_override: IntentLabel | None
+) -> FakeSuggestionData:
+    data = FakeSuggestionData()
+    data.add(build_suggestion(intent_override=intent_override), state=JobState.RUNNING)
+    data.jobs[SUGGESTION_ID].attempt_number = attempt_number
+    data.state_by_body.update(
+        {
+            ANALYSIS_BODY: build_analysis(),
+            OWN_ANALYSIS_BODY: build_analysis(),
+            DRAFT_BODY: build_draft_ready(),
+        }
+    )
+    return data
+
+
+def build_job_stores(
+    data: FakeSuggestionData, links: FakeTicketLinks, audit: FakeAuditLog
+) -> JobStores:
+    return JobStores(
+        jobs=FakeSuggestionJobStore(data),
+        suggestions=FakeSuggestionStore(data),
+        tickets=links,
+        authority=links,
+        orders=FakeCommerceGateway(orders={CUSTOMER_ID: (build_order(REFERENCES.order_id),)}),
+        audit=audit,
+    )
 
 
 def statuses(harness: Harness) -> dict[SuggestionPart, tuple[PartStatus, tuple[AiReasonCode, ...]]]:
@@ -195,6 +220,31 @@ def real_pseudonymizer() -> PseudonymizeMessage:
 
 
 @pytest.mark.anyio
+async def test_a_draft_that_cites_an_order_field_not_sent_makes_the_draft_unavailable() -> None:
+    ready = build_draft_ready()
+    citing_refund = replace(
+        ready,
+        draft=Draft(
+            ready.draft.segments, (OrderContextCitation("c1", OrderContextField.REFUND_STATUS),)
+        ),
+    )
+    harness = build_harness(
+        ai_service=FakeAiService(
+            analysis_result=ReceivedAnalysis(build_analysis(), OWN_ANALYSIS_BODY),
+            draft_result=received_draft(citing_refund),
+        )
+    )
+
+    await harness.runner.run(JOB)
+
+    assert statuses(harness) == {
+        SuggestionPart.ANALYSIS: (PartStatus.READY, ()),
+        SuggestionPart.DRAFT: (PartStatus.UNAVAILABLE, (AiReasonCode.AI_SERVICE_UNAVAILABLE,)),
+    }
+    assert EventName.AI_SERVICE_CONTRACT_VIOLATED in harness.events.names()
+
+
+@pytest.mark.anyio
 async def test_a_failed_pseudonymization_sends_nothing_and_ends_both_parts() -> None:
     harness = build_harness(pseudonymizer=FakePseudonymizer(failure=DetectorError()))
 
@@ -215,8 +265,9 @@ async def test_no_seeded_personal_value_reaches_a_request_to_ai_service(seeded_v
 
     await harness.runner.run(JOB)
 
-    assert len(harness.ai_service.requests) == BOTH_CALLS
-    assert all(seeded_value not in request.message for request in harness.ai_service.requests)
+    bodies = [to_request_body(request) for request in harness.ai_service.requests]
+    assert len(bodies) == BOTH_CALLS
+    assert all(seeded_value not in body for body in bodies)
 
 
 @pytest.mark.anyio
@@ -313,7 +364,7 @@ async def test_a_failed_draft_after_a_ready_analysis_keeps_the_analysis() -> Non
 
 @pytest.mark.anyio
 async def test_an_intent_override_calls_only_the_draft_with_the_chosen_intent() -> None:
-    harness = build_harness(intent_override=True)
+    harness = build_harness(intent_override=PREDICTED_INTENT)
 
     await harness.runner.run(JOB)
 

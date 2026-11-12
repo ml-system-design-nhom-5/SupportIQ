@@ -33,10 +33,13 @@ from supportiq_backend.pseudonymization import (
     MessageToPseudonymize,
     PseudonymizationError,
 )
+from supportiq_backend.suggestions.application.ai_service_failures import (
+    AiServiceOperation,
+    record_ai_service_failure,
+)
 from supportiq_backend.suggestions.domain import (
     AiReasonCode,
     AiService,
-    AiServiceContractError,
     AiServiceUnavailableError,
     ClaimedJob,
     MessagePseudonymizer,
@@ -57,10 +60,8 @@ from supportiq_backend.suggestions.domain import (
     build_part_audit_data,
     build_suggestion_request,
     build_unavailable_completion,
+    check_cited_facts,
 )
-
-ANALYZE_OPERATION = "createAnalysis"
-DRAFT_OPERATION = "createDraft"
 
 
 @dataclass(frozen=True, slots=True)
@@ -226,18 +227,18 @@ class SuggestionJobRunner:
 
     async def _analyze_and_store(self, job: ClaimedJob, request: SuggestionRequest) -> None:
         with self._ports.steps.step(SpanName.CALL_AI_SERVICE):
-            self._ports.steps.record_ai_service_endpoint(ANALYZE_OPERATION)
+            self._ports.steps.record_ai_service_endpoint(AiServiceOperation.CREATE_ANALYSIS)
             try:
                 received = await self._ports.ai_service.analyze(request)
             except AiServiceUnavailableError as error:
                 # The draft response may still carry the analysis, so the part stays pending.
-                self._record_call_failure(job, ANALYZE_OPERATION, error)
+                self._record_call_failure(job, AiServiceOperation.CREATE_ANALYSIS, error)
                 return
         self._ports.events.record(
             EventName.AI_SERVICE_CALLED,
             ticket_id=job.ticket_id,
             suggestion_id=job.suggestion_id,
-            ai_service_operation=ANALYZE_OPERATION,
+            ai_service_operation=AiServiceOperation.CREATE_ANALYSIS.value,
         )
         await self._store(job, (build_analysis_completion(received, self._ports.clock.now()),))
 
@@ -245,12 +246,14 @@ class SuggestionJobRunner:
         self, job: ClaimedJob, request: SuggestionRequest
     ) -> ReceivedDraftOutcome | None:
         with self._ports.steps.step(SpanName.CALL_AI_SERVICE):
-            self._ports.steps.record_ai_service_endpoint(DRAFT_OPERATION)
+            self._ports.steps.record_ai_service_endpoint(AiServiceOperation.CREATE_DRAFT)
             try:
-                return await self._ports.ai_service.draft(request)
+                received = await self._ports.ai_service.draft(request)
+                check_cited_facts(received.outcome, request.order_context)
             except AiServiceUnavailableError as error:
-                self._record_call_failure(job, DRAFT_OPERATION, error)
+                self._record_call_failure(job, AiServiceOperation.CREATE_DRAFT, error)
                 return None
+        return received
 
     async def _store_draft(self, job: ClaimedJob, received: ReceivedDraftOutcome | None) -> None:
         now = self._ports.clock.now()
@@ -261,13 +264,13 @@ class SuggestionJobRunner:
             EventName.AI_SERVICE_CALLED,
             ticket_id=job.ticket_id,
             suggestion_id=job.suggestion_id,
-            ai_service_operation=DRAFT_OPERATION,
+            ai_service_operation=AiServiceOperation.CREATE_DRAFT.value,
         )
         completions = (
             build_embedded_analysis_completion(received, now),
             build_draft_completion(received, now),
         )
-        if await self._store(job, completions, is_last=True):
+        if await self._store_and_finish(job, completions):
             self._ports.events.record(
                 EventName.SUGGESTION_COMPLETED,
                 ticket_id=job.ticket_id,
@@ -280,7 +283,7 @@ class SuggestionJobRunner:
         completions = tuple(
             build_unavailable_completion(part, reason_code, now) for part in SuggestionPart
         )
-        if await self._store(job, completions, is_last=True):
+        if await self._store_and_finish(job, completions):
             self._ports.events.record(
                 EventName.TICKET_MANUAL_HANDLING_STARTED,
                 ticket_id=job.ticket_id,
@@ -297,19 +300,34 @@ class SuggestionJobRunner:
         )
         await self._end_unavailable(job, AiReasonCode.AI_SERVICE_UNAVAILABLE)
 
-    async def _store(
-        self, job: ClaimedJob, completions: tuple[PartCompletion, ...], *, is_last: bool = False
+    async def _store(self, job: ClaimedJob, completions: tuple[PartCompletion, ...]) -> bool:
+        async with self._transactions.begin() as transaction:
+            if not await self._store_parts(transaction.stores, job, completions):
+                return False
+            await transaction.commit()
+        return True
+
+    async def _store_and_finish(
+        self, job: ClaimedJob, completions: tuple[PartCompletion, ...]
     ) -> bool:
+        # The last results and the end of the job commit together, so a job is done only
+        # when no part of its suggestion is pending.
         async with self._transactions.begin() as transaction:
             stores = transaction.stores
-            if not await self._holds(stores, job):
+            if not await self._store_parts(stores, job, completions):
                 return False
-            for completion in completions:
-                if await stores.jobs.complete_part(job.suggestion_id, completion):
-                    await self._record_completion(stores, job, completion)
-            if is_last:
-                await stores.jobs.finish_job(job.suggestion_id, self._ports.clock.now())
+            await stores.jobs.finish_job(job.suggestion_id, self._ports.clock.now())
             await transaction.commit()
+        return True
+
+    async def _store_parts(
+        self, stores: JobStores, job: ClaimedJob, completions: tuple[PartCompletion, ...]
+    ) -> bool:
+        if not await self._holds(stores, job):
+            return False
+        for completion in completions:
+            if await stores.jobs.complete_part(job.suggestion_id, completion):
+                await self._record_completion(stores, job, completion)
         return True
 
     async def _record_completion(
@@ -351,18 +369,12 @@ class SuggestionJobRunner:
             await transaction.commit()
 
     def _record_call_failure(
-        self, job: ClaimedJob, operation: str, error: AiServiceUnavailableError
+        self, job: ClaimedJob, operation: AiServiceOperation, error: AiServiceUnavailableError
     ) -> None:
-        # A 4xx or a response outside the contract is a defect; a timeout, a connection error,
-        # or a 5xx is handled degradation (LOG-15).
-        event = (
-            EventName.AI_SERVICE_CONTRACT_VIOLATED
-            if isinstance(error, AiServiceContractError)
-            else EventName.AI_SERVICE_CALL_FAILED
-        )
-        self._ports.events.record(
-            event,
+        record_ai_service_failure(
+            self._ports.events,
+            operation,
+            error,
             ticket_id=job.ticket_id,
             suggestion_id=job.suggestion_id,
-            ai_service_operation=operation,
         )

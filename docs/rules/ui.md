@@ -89,7 +89,7 @@ flowchart TB
 
 **UI-42.** When a draft abstained for low confidence (ESC-01), the console shows the top three candidate intents with their confidence, each with a "Use this intent" action, and says that no draft is created until staff choose. The draft area shows no draft and no filler text.
 
-**UI-43.** AI text is shown exactly as `backend` returns it. Any text that matches the placeholder syntax ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#placeholder-syntax)), which means a mask or a pseudonym that `backend` could not restore, is highlighted with the label "Personal data hidden: replace before sending". Customer text that only looks like a placeholder (a restored `LITERAL`) is highlighted with the label "Customer text in a reserved format: rephrase before sending". Send reply and Submit for approval stay disabled while the reply editor contains text in the placeholder syntax. The UI never tries to restore or remove placeholders itself.
+**UI-43.** AI text is shown exactly as `backend` returns it. Every text that matches the placeholder syntax ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#placeholder-syntax)), whether a mask, a pseudonym that `backend` could not restore, or customer text that only looks like a placeholder (a restored `LITERAL`), is highlighted with one label: "Personal data or reserved text: replace before sending" ([ADR-0018](../decisions/0018-one-placeholder-label-and-retried-map-storage-errors.md)). Send reply and Submit for approval stay disabled while the reply editor contains text in the placeholder syntax. The UI never tries to restore or remove placeholders itself.
 
 ## States
 

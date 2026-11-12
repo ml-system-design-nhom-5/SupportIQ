@@ -26,6 +26,11 @@ OPERATIONS_WITH_ROLES = (
     "listShopTickets",
     "createShopTicket",
     "getShopTicket",
+    "listConsoleTickets",
+    "getConsoleTicket",
+    "recordTicketView",
+    "createSuggestion",
+    "sendReply",
     "listAdminAccounts",
     "createAdminAccount",
     "changeAccountRole",
@@ -34,6 +39,14 @@ OPERATIONS_WITH_ROLES = (
 )
 SHOP_OPERATIONS = tuple(name for name in OPERATIONS_WITH_ROLES if "Shop" in name)
 ADMIN_OPERATIONS = tuple(name for name in OPERATIONS_WITH_ROLES if "Account" in name)
+# The console operations that both support roles call (contracts v1 design, permission table).
+SUPPORT_OPERATIONS = (
+    "listConsoleTickets",
+    "getConsoleTicket",
+    "recordTicketView",
+    "createSuggestion",
+    "sendReply",
+)
 
 
 @pytest.fixture
@@ -82,3 +95,10 @@ def test_only_a_customer_calls_a_shop_operation(contract: BaseSchema, operation_
 @pytest.mark.parametrize("operation_id", ADMIN_OPERATIONS)
 def test_only_an_admin_calls_an_admin_operation(contract: BaseSchema, operation_id: str) -> None:
     assert roles_of(contract, operation_id) == ("admin",)
+
+
+@pytest.mark.parametrize("operation_id", SUPPORT_OPERATIONS)
+def test_only_staff_and_managers_call_a_support_operation(
+    contract: BaseSchema, operation_id: str
+) -> None:
+    assert roles_of(contract, operation_id) == ("staff", "manager")

@@ -5,6 +5,7 @@ authority, also while a part is pending (FR-06), and no body with a placeholder 
 (SEC-38).
 """
 
+import json
 from dataclasses import replace
 from uuid import UUID
 
@@ -26,6 +27,7 @@ from supportiq_backend.idempotency import IdempotencyKey, StoredResponse
 from supportiq_backend.platform import EventName
 from supportiq_backend.suggestions import (
     AiReasonCode,
+    AiServiceContractError,
     AiServiceUnavailableError,
     InvalidTicketStateError,
     Suggestion,
@@ -104,7 +106,7 @@ def with_suggestion(harness: ConsoleHarness, suggestion: Suggestion) -> ConsoleH
 
 
 def render_reply(record: ReplyRecord) -> StoredResponse:
-    return StoredResponse(201, str(record.reply.reply_id))
+    return StoredResponse(201, json.dumps({"reply_id": str(record.reply.reply_id)}))
 
 
 def build_send(harness: ConsoleHarness) -> SendReply:
@@ -262,6 +264,23 @@ async def test_a_view_is_recorded_when_ai_service_does_not_answer_the_kb_read() 
 
     assert harness.tickets.tickets[TICKET_ID].handling_started_at == FAKE_CLOCK_START
     assert harness.queue.notifications == []
+    assert EventName.AI_SERVICE_CALL_FAILED in harness.events.names()
+
+
+@pytest.mark.anyio
+async def test_a_kb_read_answered_outside_the_contract_is_logged_as_a_violation() -> None:
+    harness = with_suggestion(
+        build_console_harness(
+            build_ticket(), ai_service=FakeAiService(versions=AiServiceContractError())
+        ),
+        build_ready_suggestion(),
+    )
+
+    await RecordTicketView(harness.transactions, harness.ports).execute(STAFF, TICKET_ID, KEY)
+
+    (event,) = harness.events.of(EventName.AI_SERVICE_CONTRACT_VIOLATED)
+    assert event.attributes["ai_service_operation"] == "getAssetVersions"
+    assert harness.tickets.tickets[TICKET_ID].handling_started_at == FAKE_CLOCK_START
 
 
 @pytest.mark.anyio

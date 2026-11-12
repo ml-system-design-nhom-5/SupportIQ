@@ -11,7 +11,7 @@ import json
 import logging
 import re
 import secrets
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TextIO, assert_never
@@ -184,10 +184,29 @@ class StandardLibraryEventRecorder:
             event: The event from the catalog.
             **attributes: Scalar attributes. The formatter drops those not allow-listed.
         """
+        self._log(event, EVENT_DESCRIPTIONS[event].level, attributes)
+
+    def record_handled_input(self, event: EventName, /, **attributes: EventAttributeValue) -> None:
+        """Log one event that handled input caused, at its handled-input level.
+
+        Args:
+            event: The event from the catalog. An event without a handled-input level keeps
+                its level.
+            **attributes: Scalar attributes. The formatter drops those not allow-listed.
+        """
         description = EVENT_DESCRIPTIONS[event]
+        level = description.handled_input_level or description.level
+        self._log(event, level, attributes)
+
+    def _log(
+        self,
+        event: EventName,
+        level: EventLevel,
+        attributes: Mapping[str, EventAttributeValue],
+    ) -> None:
         self._logger.log(
-            _level_number(description.level),
-            description.message,
+            _level_number(level),
+            EVENT_DESCRIPTIONS[event].message,
             extra={
                 _EVENT_KEY: event,
                 _ATTRIBUTES_KEY: _EventAttributes(tuple(sorted(attributes.items()))),

@@ -23,6 +23,7 @@ from supportiq_backend.idempotency import (
     IdempotencyGuard,
     IdempotencyKey,
     IdempotencyStore,
+    IdempotentRequest,
     RepeatedRequest,
     RequesterId,
     StoredResponse,
@@ -39,7 +40,11 @@ from supportiq_backend.platform import (
     TransactionRunner,
     UnexpectedFailureError,
 )
-from supportiq_backend.suggestions.application.start import SuggestionStart, SuggestionStarter
+from supportiq_backend.suggestions.application.start import (
+    StartedSuggestion,
+    SuggestionStart,
+    SuggestionStarter,
+)
 from supportiq_backend.suggestions.domain import (
     MANUAL_MODE_STATE,
     IntentLabel,
@@ -50,6 +55,7 @@ from supportiq_backend.suggestions.domain import (
     SuggestionTicketId,
     SuggestionTickets,
     SuggestionTrigger,
+    TicketForSuggestion,
     plan_requested_suggestion,
 )
 
@@ -159,15 +165,7 @@ class CreateSuggestion:
             NothingToRetryError: A retry while nothing can be retried.
             DatabaseUnavailableError: The database is not available or a timeout fired.
         """
-        request = build_idempotent_request(
-            RequesterId(support.account_id),
-            OperationId.CREATE_SUGGESTION,
-            key,
-            {
-                TICKET_ID_FIELD: ticket_id,
-                INTENT_OVERRIDE_FIELD: "" if intent_override is None else intent_override.value,
-            },
-        )
+        request = _build_request(support, ticket_id, intent_override, key)
         async with self._transactions.begin() as transaction:
             stores = transaction.stores
             ticket = await stores.links.lock_ticket(ticket_id)
@@ -176,38 +174,46 @@ class CreateSuggestion:
             claim = await self._ports.guard.claim(stores.idempotency, request)
             if isinstance(claim, RepeatedRequest):
                 return claim.response
-            if not ticket.is_open:
-                raise InvalidTicketStateError(ticket.status_name)
-            if not ticket.is_assisted:
-                raise InvalidTicketStateError(MANUAL_MODE_STATE)
-            current = (
-                None
-                if ticket.current_suggestion_id is None
-                else await stores.suggestions.load_suggestion(ticket.current_suggestion_id)
+            started, response = await self._start(
+                stores, support, ticket_id, ticket, intent_override
             )
-            trigger, override = plan_requested_suggestion(current, intent_override)
-            started = await self._ports.starter.start(
-                stores.suggestions,
-                stores.links,
-                SuggestionStart(ticket_id, trigger, override, support.account_id),
-            )
-            suggestion_id = started.suggestion.suggestion_id
-            if trigger is SuggestionTrigger.INTENT_OVERRIDE:
-                await stores.audit.append(
-                    self._override_entry(support, current, started.suggestion)
-                )
-            created = await stores.suggestions.load_suggestion(suggestion_id)
-            if created is None:
-                raise UnexpectedFailureError
-            response = self._render_response(created)
             await stores.idempotency.save_response(request, response)
             await transaction.commit()
         self._ports.starter.announce(started)
-        if trigger is SuggestionTrigger.INTENT_OVERRIDE:
+        if started.suggestion.trigger is SuggestionTrigger.INTENT_OVERRIDE:
             self._ports.events.record(
-                EventName.INTENT_OVERRIDDEN, ticket_id=ticket_id, suggestion_id=suggestion_id
+                EventName.INTENT_OVERRIDDEN,
+                ticket_id=ticket_id,
+                suggestion_id=started.suggestion.suggestion_id,
             )
         return response
+
+    async def _start(
+        self,
+        stores: CreateSuggestionStores,
+        support: SupportPrincipal,
+        ticket_id: SuggestionTicketId,
+        ticket: TicketForSuggestion,
+        intent_override: IntentLabel | None,
+    ) -> tuple[StartedSuggestion, StoredResponse]:
+        _check_ticket_state(ticket)
+        current = (
+            None
+            if ticket.current_suggestion_id is None
+            else await stores.suggestions.load_suggestion(ticket.current_suggestion_id)
+        )
+        trigger, override = plan_requested_suggestion(current, intent_override)
+        started = await self._ports.starter.start(
+            stores.suggestions,
+            stores.links,
+            SuggestionStart(ticket_id, trigger, override, support.account_id),
+        )
+        if trigger is SuggestionTrigger.INTENT_OVERRIDE:
+            await stores.audit.append(self._override_entry(support, current, started.suggestion))
+        created = await stores.suggestions.load_suggestion(started.suggestion.suggestion_id)
+        if created is None:
+            raise UnexpectedFailureError
+        return started, self._render_response(created)
 
     def _override_entry(
         self, support: SupportPrincipal, current: Suggestion | None, new: NewSuggestion
@@ -229,3 +235,27 @@ class CreateSuggestion:
             trace_id=self._ports.traces.current_trace_id(),
             data=data,
         )
+
+
+def _build_request(
+    support: SupportPrincipal,
+    ticket_id: SuggestionTicketId,
+    intent_override: IntentLabel | None,
+    key: IdempotencyKey,
+) -> IdempotentRequest:
+    return build_idempotent_request(
+        RequesterId(support.account_id),
+        OperationId.CREATE_SUGGESTION,
+        key,
+        {
+            TICKET_ID_FIELD: ticket_id,
+            INTENT_OVERRIDE_FIELD: "" if intent_override is None else intent_override.value,
+        },
+    )
+
+
+def _check_ticket_state(ticket: TicketForSuggestion) -> None:
+    if not ticket.is_open:
+        raise InvalidTicketStateError(ticket.status_name)
+    if not ticket.is_assisted:
+        raise InvalidTicketStateError(MANUAL_MODE_STATE)

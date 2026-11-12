@@ -10,6 +10,7 @@ from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from enum import StrEnum
 
 from fastapi import FastAPI
+from opentelemetry.trace import Tracer
 
 from supportiq_backend.composition_root.runtime import Runtime, build_runtime
 from supportiq_backend.platform import Clock, EventName, EventRecorder
@@ -87,17 +88,28 @@ def _build_lifespan(
         with tracer.start_as_current_span(START_SPAN):
             instrument_engine(runtime.app_engine, runtime.tracer_provider)
             events.record(EventName.STARTUP_COMPLETED)
-        # The claim loop is owned by a task group, so it is awaited at shutdown (PY-33).
-        async with asyncio.TaskGroup() as group:
-            if background is BackgroundWork.SUGGESTION_JOBS:
-                group.create_task(runtime.claim_loop.run())
-            yield
-            runtime.claim_loop.stop()
+        try:
+            # The claim loop is owned by a task group, so it is awaited at shutdown (PY-33).
+            async with asyncio.TaskGroup() as group:
+                if background is BackgroundWork.SUGGESTION_JOBS:
+                    group.create_task(runtime.claim_loop.run())
+                try:
+                    yield
+                finally:
+                    runtime.claim_loop.stop()
+        finally:
+            await _shut_down(runtime, events, tracer)
+
+    return lifespan
+
+
+async def _shut_down(runtime: Runtime, events: EventRecorder, tracer: Tracer) -> None:
+    # Every resource is released even when the server stops with an error.
+    try:
         with tracer.start_as_current_span(STOP_SPAN):
             events.record(EventName.SHUTDOWN_STARTED)
             await runtime.ai_client.aclose()
             uninstrument_engines()
             await runtime.app_engine.dispose()
+    finally:
         runtime.tracer_provider.shutdown()
-
-    return lifespan

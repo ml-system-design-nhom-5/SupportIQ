@@ -7,6 +7,7 @@ from supportiq_backend.accounts.adapters.staff_directory import PostgresStaffDir
 from supportiq_backend.audit.adapters.audit_log import PostgresAuditLog
 from supportiq_backend.commerce.adapters.commerce_gateway import PostgresCommerceGateway
 from supportiq_backend.commerce.adapters.customer_records import PostgresCustomerRecords
+from supportiq_backend.commerce.api.shop import to_money, to_order_view
 from supportiq_backend.composition_root.accounts_wiring import AccountsWiring
 from supportiq_backend.composition_root.shared_ports import SharedPorts
 from supportiq_backend.composition_root.suggestions_wiring import SuggestionsWiring
@@ -44,6 +45,7 @@ from supportiq_backend.tickets.api.console import (
     build_console_tickets_router,
     render_sent_reply,
 )
+from supportiq_backend.tickets.api.order_views import OrderViewMappers
 from supportiq_backend.tickets.api.shop import (
     ShopTicketRoutes,
     build_shop_tickets_router,
@@ -198,5 +200,6 @@ def _wire_console(
             send_reply=SendReply(transactions, ports, render_sent_reply),
             check_origin=accounts.check_origin,
             current_session=accounts.current_session,
+            order_views=OrderViewMappers(to_order_view=to_order_view, to_money=to_money),
         )
     )

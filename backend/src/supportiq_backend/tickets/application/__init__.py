@@ -5,7 +5,6 @@ from supportiq_backend.tickets.application.console import (
     ConsoleStores,
     GetConsoleTicket,
     ListConsoleTickets,
-    RecordTicketView,
 )
 from supportiq_backend.tickets.application.replies import SendReply
 from supportiq_backend.tickets.application.shop_tickets import (
@@ -15,6 +14,7 @@ from supportiq_backend.tickets.application.shop_tickets import (
     ListShopTickets,
     ShopTicketStores,
 )
+from supportiq_backend.tickets.application.ticket_views import RecordTicketView
 
 __all__ = [
     "ConsolePorts",

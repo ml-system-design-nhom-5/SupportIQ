@@ -1,5 +1,6 @@
 """Tests of the shop's ticket use cases with fake ports (ADR-0013, ERR-15, SEC-17)."""
 
+import json
 from uuid import UUID
 
 import pytest
@@ -81,7 +82,7 @@ SECOND_TICKET = ShopTicket(TicketId("TCK-1002"), OTHER_ORDER_ID, "Second", FAKE_
 
 
 def render_ticket_id(ticket: ShopTicket) -> StoredResponse:
-    return StoredResponse(201, f"{ticket.ticket_id}|{ticket.created_at.isoformat()}")
+    return StoredResponse(201, json.dumps([ticket.ticket_id, ticket.created_at.isoformat()]))
 
 
 def build_stores(
@@ -181,7 +182,7 @@ async def test_creation_commits_once_and_returns_the_rendered_response() -> None
 
     response = await build_create(transactions).execute(CUSTOMER, NEW_TICKET, KEY)
 
-    assert response == StoredResponse(201, f"TCK-1001|{FAKE_CLOCK_START.isoformat()}")
+    assert response == StoredResponse(201, json.dumps(["TCK-1001", FAKE_CLOCK_START.isoformat()]))
     assert transactions.commit_count == 1
 
 

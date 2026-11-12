@@ -8,12 +8,12 @@ of a stopped replica.
 """
 
 import asyncio
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Protocol
 
 from supportiq_backend.platform import (
-    BackendError,
     Clock,
     EventName,
     EventRecorder,
@@ -123,10 +123,17 @@ class ClaimLoop:
                 if job is None:
                     await self._wait_for_work()
                     continue
-                task = group.create_task(self._run_job(job))
-                self._running[job.suggestion_id] = _RunningJob(job.ticket_id, task)
+                self._keep_running(job, group.create_task(self._run_job(job)))
             for running in self._running.values():
                 running.task.cancel()
+
+    def _keep_running(self, job: ClaimedJob, task: asyncio.Task[None]) -> None:
+        # A job claimed again after its lease expired may still run its earlier attempt here;
+        # that attempt can store nothing any more (ADR-0011, item 4), so it is cancelled.
+        earlier = self._running.get(job.suggestion_id)
+        if earlier is not None:
+            earlier.task.cancel()
+        self._running[job.suggestion_id] = _RunningJob(job.ticket_id, task)
 
     def _has_free_slot(self) -> bool:
         return len(self._running) < self._settings.workers_per_replica
@@ -139,7 +146,10 @@ class ClaimLoop:
                     now, now + timedelta(milliseconds=self._settings.lease_ms)
                 )
                 await transaction.commit()
-        except BackendError as error:
+        except Exception as error:
+            # Any failure of a claim is logged once and the loop polls again, so the loop
+            # never ends while the replica looks ready (backend ticket workflow design,
+            # Suggestions and the job queue, item 9).
             self._events.record(EventName.SUGGESTION_JOB_FAILED, error_type=type(error).__name__)
             return None
         if job is not None:
@@ -156,15 +166,20 @@ class ClaimLoop:
         # lease, so the loop stays alive (PY-21, LOG-17).
         try:
             await self._runner.run(job)
-        except Exception as error:
-            self._events.record(
-                EventName.SUGGESTION_JOB_FAILED,
-                ticket_id=job.ticket_id,
-                suggestion_id=job.suggestion_id,
-                error_type=type(error).__name__,
-            )
+        except* Exception as failures:
+            # The calls of a job run in a task group, so its errors arrive grouped; each is
+            # logged with its own type (LOG-17).
+            for error in _leaf_errors(failures):
+                self._events.record(
+                    EventName.SUGGESTION_JOB_FAILED,
+                    ticket_id=job.ticket_id,
+                    suggestion_id=job.suggestion_id,
+                    error_type=type(error).__name__,
+                )
         finally:
-            self._running.pop(job.suggestion_id, None)
+            running = self._running.get(job.suggestion_id)
+            if running is not None and running.task is asyncio.current_task():
+                del self._running[job.suggestion_id]
             self._wake_up.set()
 
     async def _wait_for_work(self) -> None:
@@ -175,3 +190,11 @@ class ClaimLoop:
             sleep.cancel()
             wake_up.cancel()
         self._wake_up.clear()
+
+
+def _leaf_errors(group: BaseExceptionGroup[Exception]) -> Iterator[Exception]:
+    for error in group.exceptions:
+        if isinstance(error, BaseExceptionGroup):
+            yield from _leaf_errors(error)
+        else:
+            yield error

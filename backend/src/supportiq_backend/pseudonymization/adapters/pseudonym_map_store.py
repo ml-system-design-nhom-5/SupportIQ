@@ -29,10 +29,10 @@ class PostgresPseudonymMapStore:
         """
         self._session = session
 
-    async def insert_missing(
+    async def insert_map(
         self, ticket_id: MapTicketId, entries: tuple[PseudonymEntry, ...], created_at: datetime
     ) -> None:
-        """Insert the entries that the ticket's map does not hold yet.
+        """Insert the map of a ticket that has none yet; a row stored meanwhile stays.
 
         Args:
             ticket_id: The ticket.

@@ -23,7 +23,7 @@ from supportiq_backend.composition_root import BackgroundWork, create_app
 from supportiq_backend.composition_root.seed_commands import seed
 from tests.contract.conftest import CONTRACT_FILE
 from tests.integration.application import ALLOWED_ORIGIN, build_settings
-from tests.integration.builders import DatabaseBuilder
+from tests.integration.builders import FAILED_SUGGESTION, DatabaseBuilder
 from tests.integration.database import WorkerDatabase, create_owner_engine
 from tests.unit.platform.fakes import FakeClock, RecordingEventRecorder
 
@@ -31,7 +31,12 @@ SEED_PATH = Path(__file__).parents[2] / "seed" / "synthetic-dev-only-v1.json"
 SEED_PASSWORD = "contract-test-password"
 EXAMPLES_PER_OPERATION = 25
 SESSION_COOKIE = "supportiq_session"
-LOGIN_NAME_OF_ROLE = {"customer": "customer-1", "admin": "admin-1"}
+LOGIN_NAME_OF_ROLE = {
+    "customer": "customer-1",
+    "staff": "staff-1",
+    "manager": "manager-1",
+    "admin": "admin-1",
+}
 ROLE_OF_OPERATION = {
     "getCurrentSession": "customer",
     "changeOwnPassword": "customer",
@@ -43,6 +48,12 @@ ROLE_OF_OPERATION = {
     "listShopTickets": "customer",
     "createShopTicket": "customer",
     "getShopTicket": "customer",
+    # A manager may list every queue; staff get `403` for every queue but `open`.
+    "listConsoleTickets": "manager",
+    "getConsoleTicket": "staff",
+    "recordTicketView": "staff",
+    "createSuggestion": "staff",
+    "sendReply": "staff",
     "listAdminAccounts": "admin",
     "createAdminAccount": "admin",
     "changeAccountRole": "admin",
@@ -55,13 +66,18 @@ ROLE_OF_OPERATION = {
 TRACEPARENT_REFERENCE = {"$ref": "#/components/parameters/Traceparent"}
 # The contract: a cursor is any text of 1 to 512 characters, and one that is malformed, or from
 # another operation, returns `422`; a change or a reset that breaks an admin limit returns `422`
-# with `violated_rule`; and a wrong current password returns `422` with
-# `current_password_incorrect`. So on these operations a request can match the schema and still
+# with `violated_rule`; a wrong current password returns `422` with
+# `current_password_incorrect`; a retry with nothing to retry, or an intent correction while no
+# intent is known, returns `422`; and a reply that breaks a rule of its basis, or holds a
+# placeholder, returns `422`. So on these operations a request can match the schema and still
 # get `422`. Every other operation keeps the strict default of the check.
 OPERATIONS_WITH_A_DOCUMENTED_422_FOR_VALID_DATA = [
     "listShopProducts",
     "listShopOrders",
     "listShopTickets",
+    "listConsoleTickets",
+    "createSuggestion",
+    "sendReply",
     "listAdminAccounts",
     "changeAccountRole",
     "changeAccountStatus",
@@ -95,6 +111,39 @@ class ContractRun:
 
 
 async def prepare_database(worker_database: WorkerDatabase) -> ContractRun:
+    await seed_database(worker_database)
+    engine = create_owner_engine(worker_database)
+    builder = DatabaseBuilder(engine)
+    account_of_role = {
+        role: await account_of(builder, login_name)
+        for role, login_name in LOGIN_NAME_OF_ROLE.items()
+    }
+    customer_id = await builder.scalar(
+        "SELECT customer_id FROM accounts WHERE account_id = :account_id",
+        account_id=account_of_role["customer"],
+    )
+    order_id = await builder.scalar(
+        "SELECT min(order_id) FROM orders WHERE customer_id = :customer_id",
+        customer_id=customer_id,
+    )
+    ticket_id = await builder.ticket(UUID(str(customer_id)), str(order_id))
+    # A suggestion that ended unavailable makes a retry valid and the workspace show it.
+    await builder.suggestion(ticket_id, FAILED_SUGGESTION)
+    run = ContractRun(
+        cookie_of_role=await sign_in_every_role(builder, account_of_role),
+        path_values={
+            "path.product_id": str(await builder.scalar("SELECT min(product_id) FROM products")),
+            "path.order_id": str(order_id),
+            "query.order_id": str(order_id),
+            "path.ticket_id": ticket_id,
+            "path.account_id": str(account_of_role["staff"]),
+        },
+    )
+    await engine.dispose()
+    return run
+
+
+async def seed_database(worker_database: WorkerDatabase) -> None:
     await seed(
         build_settings(
             worker_database,
@@ -107,34 +156,15 @@ async def prepare_database(worker_database: WorkerDatabase) -> ContractRun:
         RecordingEventRecorder(),
         seed_file=SEED_PATH,
     )
-    engine = create_owner_engine(worker_database)
-    builder = DatabaseBuilder(engine)
-    customer_account = await account_of(builder, "customer-1")
-    admin_account = await account_of(builder, "admin-1")
-    customer_id = await builder.scalar(
-        "SELECT customer_id FROM accounts WHERE account_id = :account_id",
-        account_id=customer_account,
-    )
-    order_id = await builder.scalar(
-        "SELECT min(order_id) FROM orders WHERE customer_id = :customer_id",
-        customer_id=customer_id,
-    )
-    ticket_id = await builder.ticket(UUID(str(customer_id)), str(order_id))
-    run = ContractRun(
-        cookie_of_role={
-            "customer": await builder.session(customer_account, "customer"),
-            "admin": await builder.session(admin_account, "admin"),
-        },
-        path_values={
-            "path.product_id": str(await builder.scalar("SELECT min(product_id) FROM products")),
-            "path.order_id": str(order_id),
-            "query.order_id": str(order_id),
-            "path.ticket_id": ticket_id,
-            "path.account_id": str(await account_of(builder, "staff-1")),
-        },
-    )
-    await engine.dispose()
-    return run
+
+
+async def sign_in_every_role(
+    builder: DatabaseBuilder, account_of_role: Mapping[str, UUID]
+) -> Mapping[str, str]:
+    cookie_of_role: dict[str, str] = {}
+    for role, account_id in account_of_role.items():
+        cookie_of_role[role] = await builder.session(account_id, role)
+    return cookie_of_role
 
 
 async def account_of(builder: DatabaseBuilder, login_name: str) -> UUID:

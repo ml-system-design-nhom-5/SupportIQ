@@ -100,13 +100,18 @@ class CustomerRecords(Protocol):
         """
         ...
 
-    async def load_addressed_orders(self, customer_id: CustomerId) -> tuple[AddressedOrder, ...]:
-        """Load every order of a customer with its shipping address, newest first.
+    async def load_addressed_orders(
+        self, customer_id: CustomerId, ticket_order_id: OrderId | None, other_order_limit: int
+    ) -> tuple[AddressedOrder, ...]:
+        """Load a ticket's order and the customer's newest other orders, with their addresses.
 
         Args:
             customer_id: The customer.
+            ticket_order_id: The ticket's order, always loaded when it is the customer's.
+            other_order_limit: The most other orders to load.
 
         Returns:
-            The orders, by `placed_at` descending, then by order ID.
+            The ticket's order first, then the other orders by `placed_at` descending, then by
+            order ID.
         """
         ...

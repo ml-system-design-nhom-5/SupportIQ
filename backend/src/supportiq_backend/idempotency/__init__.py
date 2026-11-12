@@ -2,6 +2,7 @@
 
 from supportiq_backend.idempotency.application import IdempotencyGuard
 from supportiq_backend.idempotency.domain import (
+    NO_CONTENT_BODY,
     CanonicalValue,
     ClaimOutcome,
     ExistingRecord,
@@ -23,6 +24,7 @@ from supportiq_backend.idempotency.domain import (
 )
 
 __all__ = [
+    "NO_CONTENT_BODY",
     "CanonicalValue",
     "ClaimOutcome",
     "ExistingRecord",

@@ -44,7 +44,6 @@ class EventName(StrEnum):
     SUGGESTION_JOB_LEASE_EXPIRED = "suggestion_job.lease_expired"
     SUGGESTION_JOB_FAILED = "suggestion_job.failed"
     PSEUDONYMIZATION_FAILED = "pseudonymization.failed"
-    PSEUDONYMIZATION_REJECTED = "pseudonymization.rejected"
     PSEUDONYM_RESTORE_FAILED = "pseudonym.restore_failed"
     AI_SERVICE_CALLED = "ai_service.called"
     AI_SERVICE_CALL_FAILED = "ai_service.call_failed"
@@ -79,10 +78,15 @@ class EventDescription:
     Attributes:
         level: The severity of the event (LOG-15).
         message: One sentence without variable data and without a trailing period (LOG-14).
+        handled_input_level: The severity when the event comes from input that backend
+            handles as designed instead of from a defect, for the few events that a design
+            gives two levels, such as `pseudonymization.failed` (ADR-0010, Failure handling).
+            Absent for every other event.
     """
 
     level: EventLevel
     message: str
+    handled_input_level: EventLevel | None = None
 
 
 EVENT_DESCRIPTIONS: Mapping[EventName, EventDescription] = MappingProxyType(
@@ -149,11 +153,9 @@ EVENT_DESCRIPTIONS: Mapping[EventName, EventDescription] = MappingProxyType(
             EventLevel.ERROR, "Suggestion job failed and waits for its lease to expire"
         ),
         EventName.PSEUDONYMIZATION_FAILED: EventDescription(
-            EventLevel.ERROR, "Pseudonymization failed, so nothing was sent to ai-service"
-        ),
-        EventName.PSEUDONYMIZATION_REJECTED: EventDescription(
-            EventLevel.WARNING,
-            "Pseudonymized text is longer than its limit, so nothing was sent to ai-service",
+            EventLevel.ERROR,
+            "Pseudonymization failed, so nothing was sent to ai-service",
+            handled_input_level=EventLevel.WARNING,
         ),
         EventName.PSEUDONYM_RESTORE_FAILED: EventDescription(
             EventLevel.ERROR, "A pseudonym in stored AI text is missing from the map"
@@ -204,11 +206,21 @@ class EventRecorder(Protocol):
     """Record a log event with scalar attributes (LOG-07, LOG-10)."""
 
     def record(self, event: EventName, /, **attributes: EventAttributeValue) -> None:
-        """Record one event.
+        """Record one event at the level of the catalog.
 
         Args:
             event: The event from the catalog.
             **attributes: Internal values only, such as `ticket_id` or `role` (LOG-29). The
                 logging setup drops every attribute that is not allow-listed.
+        """
+        ...
+
+    def record_handled_input(self, event: EventName, /, **attributes: EventAttributeValue) -> None:
+        """Record one event that handled input caused, at its `handled_input_level`.
+
+        Args:
+            event: An event of the catalog that has a `handled_input_level`; any other event
+                keeps its level.
+            **attributes: As for `record`.
         """
         ...

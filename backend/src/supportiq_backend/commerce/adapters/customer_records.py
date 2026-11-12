@@ -7,7 +7,7 @@ of one customer never reaches another customer's records (SEC-17).
 from collections.abc import Mapping
 from uuid import UUID
 
-from sqlalchemy import collate, select
+from sqlalchemy import case, collate, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from supportiq_backend.accounts import CustomerId
@@ -98,26 +98,40 @@ class PostgresCustomerRecords:
         )
         return {CustomerId(str(row.customer_id)): row.display_name for row in rows}
 
-    async def load_addressed_orders(self, customer_id: CustomerId) -> tuple[AddressedOrder, ...]:
-        """Load every order of a customer with its shipping address, newest first.
+    async def load_addressed_orders(
+        self, customer_id: CustomerId, ticket_order_id: OrderId | None, other_order_limit: int
+    ) -> tuple[AddressedOrder, ...]:
+        """Load a ticket's order and the customer's newest other orders, with their addresses.
 
         Args:
             customer_id: The customer.
+            ticket_order_id: The ticket's order, always loaded when it is the customer's.
+            other_order_limit: The most other orders to load.
 
         Returns:
-            The orders, by `placed_at` descending, then by order ID by code point.
+            The ticket's order first, then the other orders by `placed_at` descending, then by
+            order ID by code point.
         """
+        is_other_order = case((OrderRow.order_id == ticket_order_id, 0), else_=1)
         rows = (
             await self._session.scalars(
                 select(OrderRow)
                 .where(OrderRow.customer_id == UUID(customer_id))
                 .order_by(
-                    OrderRow.placed_at.desc(), collate(OrderRow.order_id, BYTE_ORDER_COLLATION)
+                    is_other_order,
+                    OrderRow.placed_at.desc(),
+                    collate(OrderRow.order_id, BYTE_ORDER_COLLATION),
                 )
+                .limit(other_order_limit + 1)
             )
         ).all()
         orders = await load_order_details(self._session, rows)
-        return tuple(
+        addressed = tuple(
             AddressedOrder(order, row.shipping_address)
             for order, row in zip(orders, rows, strict=True)
         )
+        # One row more than the limit leaves room for the ticket's order; without it among
+        # the rows, the extra one is cut.
+        ticket_orders = tuple(item for item in addressed if item.order.order_id == ticket_order_id)
+        others = tuple(item for item in addressed if item.order.order_id != ticket_order_id)
+        return (*ticket_orders, *others[:other_order_limit])

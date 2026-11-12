@@ -60,6 +60,11 @@ from supportiq_backend.suggestions.domain.labels import (
     OrderContextField,
     RoutingRecommendation,
 )
+from supportiq_backend.suggestions.domain.order_facts import (
+    OrderFact,
+    check_cited_facts,
+    read_order_fact,
+)
 from supportiq_backend.suggestions.domain.ports import (
     AiService,
     MessagePseudonymizer,
@@ -134,6 +139,7 @@ __all__ = [
     "OrderContext",
     "OrderContextCitation",
     "OrderContextField",
+    "OrderFact",
     "PartCompletion",
     "PartStatus",
     "PendingPart",
@@ -169,7 +175,9 @@ __all__ = [
     "build_part_audit_data",
     "build_suggestion_request",
     "build_unavailable_completion",
+    "check_cited_facts",
     "choose_view_trigger",
     "get_part_status",
     "plan_requested_suggestion",
+    "read_order_fact",
 ]

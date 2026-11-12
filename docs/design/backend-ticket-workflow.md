@@ -1,14 +1,16 @@
 # Design: Backend ticket workflow
 
-- **Status:** Approved
+- **Status:** In review
 - **Owner:** backend engineer
 - **Reviewers:** project lead, frontend engineer, ML engineer
 - **Last reviewed:** 2026-11-12
-- **Related:** [Requirements](../product/requirements.md) (FR-04 to FR-10, NFR-06 to NFR-11, ESC-01 to ESC-05), [ADR-0005](../decisions/0005-intent-independent-retrieval.md), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md), [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0014](../decisions/0014-citations-to-order-context.md), [ADR-0016](../decisions/0016-hosting-on-free-tiers.md), [ADR-0017](../decisions/0017-named-entity-model-from-its-release-url.md), [contracts v1 design](contracts-v1.md), [backend foundation design](backend-foundation.md), [console UI design](console-ui.md), `backend` contract 1.2.0 and `ai-service` contract 1.0.0 ([CHANGELOG](../../contracts/CHANGELOG.md))
+- **Related:** [Requirements](../product/requirements.md) (FR-04 to FR-10, NFR-06 to NFR-11, ESC-01 to ESC-05), [ADR-0005](../decisions/0005-intent-independent-retrieval.md), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md), [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0014](../decisions/0014-citations-to-order-context.md), [ADR-0016](../decisions/0016-hosting-on-free-tiers.md), [ADR-0017](../decisions/0017-named-entity-model-from-its-release-url.md), [ADR-0018](../decisions/0018-one-placeholder-label-and-retried-map-storage-errors.md), [contracts v1 design](contracts-v1.md), [backend foundation design](backend-foundation.md), [console UI design](console-ui.md), `backend` contract 1.2.0 and `ai-service` contract 1.0.0 ([CHANGELOG](../../contracts/CHANGELOG.md))
 
 ## Summary
 
 This design describes how `backend` runs the ticket workflow behind `/console`. It covers suggestions and their job queue, pseudonymization before every call to `ai-service`, the client that calls `ai-service`, replies, reply proposals, escalations, the authority rule, manual handling, staff decisions, the audit log, reports, and two one-off commands: the ticket import and the decision-record export. It is the third follow-up design of [contracts v1, Rollout, step 9](contracts-v1.md#rollout), and it fixes what that design left to `backend`. The internals of `ai-service` (routing, the list of sensitive intents, retrieval limits) wait for the join with the AI and ML code. Three choices were the project lead's: the named-entity library, the split of handling modes for the product-value study, and the initial values of the job queue. On 2026-11-12 the project lead chose the recommended option of each, and [ADR-0017](../decisions/0017-named-entity-model-from-its-release-url.md), accepted the same day, covers the install of the named-entity model.
+
+**Revision of 2026-11-12, for the `ai-service` service token, the log levels, and [ADR-0018](../decisions/0018-one-placeholder-label-and-retried-map-storage-errors.md):** the project lead decided these points on 2026-11-12. The new required secret setting `ai_service_token` (environment variable `AI_SERVICE_TOKEN`) holds the service token that `backend` sends as `Authorization: Bearer <token>` to `ai-service` (`ai-service` contract 1.0.0, `securitySchemes.serviceToken`); it is Secret ([SEC-10](../rules/security-and-privacy.md#secrets)), it is never logged, and startup fails when it is missing or empty ([ERR-17](../rules/errors-and-reliability.md#startup-and-health), [Settings](#settings)). The new event `ai_service.contract_violated` is logged at `error` for a `4xx` from `ai-service` or a response outside its contract, while `ai_service.call_failed` stays at `warning` for timeouts, connection errors, and `5xx` ([The `ai-service` client](#the-ai-service-client), [Observability](#observability)). `pseudonymization.failed` is logged at `warning` for a text over 4 000 characters, which is handled input, and at `error` otherwise ([ADR-0010, Failure handling](../decisions/0010-pseudonymization-and-egress-control.md#failure-handling)). `frontend` polls the inbox every 15 s while it is open, and the workspace every 2 s while a suggestion part is `pending` ([console UI design](console-ui.md#summary)). A transient database error while the pseudonym map is stored is not a pseudonymization failure ([ADR-0018](../decisions/0018-one-placeholder-label-and-retried-map-storage-errors.md)), as [Pseudonymization](#pseudonymization), item 3, already stated; item 1 now also names a stored map that differs from the computed one among the deterministic failures.
 
 ## Goals and non-goals
 
@@ -142,9 +144,9 @@ sequenceDiagram
         CL->>DB: Job done, nothing called
     else Claimed
         CL->>PS: Pseudonymized text of the ticket's message
-        alt A detector raised an error, or the text is over 4 000 characters
+        alt A detector raised an error, the text is over 4 000 characters, or the stored map differs
             CL->>DB: Both parts unavailable (pseudonymization_failed), job done; nothing sent
-        else A storage error while inserting the map
+        else A transient database error while storing the map
             CL->>CL: Roll back; the job stays running and is claimed again when its lease expires
         else Pseudonymized text ready
             par Analysis, unless the suggestion carries an intent override
@@ -180,9 +182,9 @@ A suggestion that `pseudonymization_failed` is never retried, because pseudonymi
 
 The detectors, their order, and the overlap rule are those of [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#detection). The known values of a ticket come from `commerce`: the customer's display name, email, and phone, and the order ID, tracking code, transaction ID, and shipping address of the ticket's order. The patterns use the formats of the seed (`ORD-` and five digits, `TRK-` and ten digits, `TXN-` and eight digits) ([backend foundation, Tables](backend-foundation.md#tables)).
 
-1. **Fail closed.** An exception from any detector, or a text over the 4 000 characters of `PseudonymizedText`, ends both parts `unavailable` with `pseudonymization_failed`, and nothing leaves `backend` (SEC-36). It writes `message.pseudonymized` with the outcome `failed`.
+1. **Fail closed.** An exception from any detector, a text over the 4 000 characters of `PseudonymizedText`, or a stored map that differs from the one computed now ends both parts `unavailable` with `pseudonymization_failed`, and nothing leaves `backend` (SEC-36). It writes `message.pseudonymized` with the outcome `failed`, and logs `pseudonymization.failed` at `warning` for the text over 4 000 characters, which is handled input, and at `error` otherwise ([ADR-0010, Failure handling](../decisions/0010-pseudonymization-and-egress-control.md#failure-handling)).
 2. **The named-entity detector loads at startup.** If its model cannot load, `backend` stops with a clear message, as a missing model artifact does ([ERR-17](../rules/errors-and-reliability.md#startup-and-health)). It never runs without that detector.
-3. **A storage error is not a pseudonymization failure.** When the insert of the map fails with a database error (a timeout, a lost connection, a serialization failure), the transaction rolls back and the job stays `running`. It is claimed again after its lease, and the next attempt computes the same map. When the attempts run out, both parts end `unavailable` with `ai_service_unavailable`, the outcome of a job without attempts left (ADR-0011, item 6), which staff can retry. This keeps `pseudonymization_failed` for the deterministic failures of item 1, which a retry cannot fix.
+3. **A storage error is not a pseudonymization failure** ([ADR-0018](../decisions/0018-one-placeholder-label-and-retried-map-storage-errors.md)). When the insert of the map fails with a database error (a timeout, a lost connection, a serialization failure), the transaction rolls back and the job stays `running`. It is claimed again after its lease, and the next attempt computes the same map. When the attempts run out, both parts end `unavailable` with `ai_service_unavailable`, the outcome of a job without attempts left (ADR-0011, item 6), which staff can retry. This keeps `pseudonymization_failed` for the deterministic failures of item 1, which a retry cannot fix.
 4. **Reuse.** The first successful run inserts the map. Later runs of the same ticket read it and produce the same text (ADR-0010, Storage and lifecycle, item 2).
 5. **Restore.** `getConsoleTicket` restores pseudonyms in draft segments, the canonical draft `text`, and the staff note. A mask, or a pseudonym missing from the map, stays as written and is logged once at `error` (`pseudonym.restore_failed`).
 
@@ -202,9 +204,10 @@ The detectors, their order, and the overlap rule are those of [ADR-0010](../deci
 
 - The `AiService` port of `suggestions` has four methods: `analyze`, `draft`, `get_kb_document_version`, and `get_asset_versions`. Its adapter uses the `httpx` client that `backend` already depends on, created once at startup ([ARCH-24](../rules/architecture.md#composition-root-and-dependency-injection)).
 - Timeouts come from the settings below. The adapter sends `traceparent` on every call ([LOG-05](../rules/logging-and-observability.md#correlation)).
-- `backend` itself retries `analyze` and `draft` once after a connection error or a `502` or `503` response, never after a timeout ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md#ai-service-replicas), item 2; ERR-12). The two reads are not retried.
-- Responses are parsed with the models generated from `ai-service` contract 1.0.0, in strict mode. A response outside the contract, including an unknown status or reason code, makes the part `unavailable` with `ai_service_unavailable` and is logged at `error` as a contract drift. Treating an unknown reason code as unavailable is the safe default of [CON-22](../rules/contracts.md#evolution): an unknown code could be one that requires authority.
-- A `4xx` from `ai-service` means that `backend` sent a request that `ai-service` refused, which is a defect: the part becomes `unavailable` and the call is logged at `error`.
+- Every call carries `Authorization: Bearer <token>` with the value of `ai_service_token`, the service token of `ai-service` contract 1.0.0 (`securitySchemes.serviceToken`). The token never appears in a log, a span, or an error message ([SEC-09](../rules/security-and-privacy.md#secrets)).
+- `backend` itself retries `analyze` and `draft` once after a connection error or a `502` or `503` response, never after a timeout ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md#ai-service-replicas), item 2; ERR-12). The two reads are not retried. A timeout, a connection error, or a `5xx` that remains after that retry makes the part `unavailable` with `ai_service_unavailable` and is logged once at `warning` as `ai_service.call_failed`, because the system behaved safely ([LOG-15](../rules/logging-and-observability.md#levels)).
+- Responses are parsed with the models generated from `ai-service` contract 1.0.0, in strict mode. A response outside the contract, including an unknown status or reason code, makes the part `unavailable` with `ai_service_unavailable` and is logged once at `error` as `ai_service.contract_violated`. Treating an unknown reason code as unavailable is the safe default of [CON-22](../rules/contracts.md#evolution): an unknown code could be one that requires authority.
+- A `4xx` from `ai-service` means that `backend` sent a request that `ai-service` refused, which is a defect: the part becomes `unavailable` and the call is logged once at `error` as `ai_service.contract_violated`.
 - `getConsoleKbDocumentVersion` and `getAdminVersions` call `ai-service` with `ai_service_read_timeout_ms`. The first answers `503 not-ready` when `ai-service` cannot answer, and `404` when `ai-service` answers `404`. The second answers `200` with `ai_service_status: unavailable`.
 
 ### Views and the triggers of new suggestions
@@ -293,6 +296,7 @@ New settings of `backend`, validated at startup ([ARCH-34](../rules/architecture
 | Setting | Initial value | Origin |
 |---|---|---|
 | `ai_service_base_url` | None; required | [ADR-0016](../decisions/0016-hosting-on-free-tiers.md), decided at the join |
+| `ai_service_token` (secret), environment variable `AI_SERVICE_TOKEN` | None; required. Startup fails when it is missing or empty ([ERR-17](../rules/errors-and-reliability.md#startup-and-health)) | `ai-service` contract 1.0.0, `securitySchemes.serviceToken`. Secret ([SEC-10](../rules/security-and-privacy.md#secrets)), never logged |
 | `ai_service_analysis_timeout_ms` | 3 000 | [contracts v1, Timeouts](contracts-v1.md#suggestion-lifecycle) |
 | `ai_service_draft_timeout_ms` | 11 000 | [contracts v1, Timeouts](contracts-v1.md#suggestion-lifecycle) |
 | `ai_service_read_timeout_ms` | 3 000 | The same bound as the analysis call, for the two reads |
@@ -337,13 +341,14 @@ The guardrails of the requirements hold: no reply without a staff action (FR-04)
 | Any code path writes a reply outside `sendReply` | Impossible: only `sendReply` inserts into `replies`, and a contract test lists every write | Contract test of the writes ([TEST-26](../rules/testing.md#guardrail-tests)) |
 | Staff send a reply on a ticket that requires authority | `403 authority-required`, also while a part is `pending`; nothing stored | Guardrail test |
 | The flag is set by a result that arrives while staff edit | The next send by staff gets `403 authority-required` | Use-case test with a draft outcome that carries `requires_authority` |
-| A detector raises an error, or the text is over 4 000 characters | Both parts `unavailable` with `pseudonymization_failed`; no call to `ai-service` | Use-case test with a failing fake detector that asserts no call |
+| A detector raises an error, the text is over 4 000 characters, or the stored map differs from the computed one | Both parts `unavailable` with `pseudonymization_failed`; no call to `ai-service`; `pseudonymization.failed` at `warning` for the long text and at `error` otherwise | Use-case tests with a failing fake detector, a long text, and a differing stored map, each asserting no call |
 | The named-entity model cannot load | `backend` does not start ([ERR-17](../rules/errors-and-reliability.md#startup-and-health)) | Startup test with a missing model |
 | A storage error while inserting the map | Roll back; the job is claimed again after its lease; no call before the map is stored | Integration test with a failing insert |
 | The attempts run out after storage errors or crashes | Pending parts `unavailable` with `ai_service_unavailable`; staff can retry | Use-case test |
 | A seeded personal value appears in a request to `ai-service` | A defect | Guardrail test over every request that the fake client receives (NFR-06) |
-| `ai-service` times out, is unreachable, or answers `5xx` | The part `unavailable` with `ai_service_unavailable`; the ticket stays `open` | Use-case test with a fake client; consumer test against the `ai-service` mock |
-| `ai-service` answers outside the contract, or with an unknown status or reason code | The part `unavailable`; logged at `error` | Consumer test with a mock that returns unknown values |
+| `ai-service` times out, is unreachable, or answers `5xx` | The part `unavailable` with `ai_service_unavailable`; the ticket stays `open`; `ai_service.call_failed` at `warning` | Use-case test with a fake client; consumer test against the `ai-service` mock |
+| `ai-service` answers `4xx`, outside the contract, or with an unknown status or reason code | The part `unavailable`; `ai_service.contract_violated` at `error` | Consumer test with a mock that returns unknown values or a `4xx` |
+| `ai_service_token` is missing or empty | `backend` does not start ([ERR-17](../rules/errors-and-reliability.md#startup-and-health)) | Settings test |
 | A replica crashes while it holds a job | The job is claimed again after its lease; results are stored once | Integration test with two loops and a stopped one |
 | A late result for a superseded suggestion, or under an older attempt | Discarded | Use-case test |
 | A retry after a failed intent correction | The `retry` suggestion keeps the intent that staff chose and calls only `/v1/drafts` | Use-case test |
@@ -361,7 +366,7 @@ The guardrails of the requirements hold: no reply without a staff action (FR-04)
 
 - **One worker per job with its own polling query** (ADR-0011 read literally): replaced by one claim loop per replica with free slots, which claims with the same single statement but sends one query per poll instead of one per idle worker.
 - **Pseudonymize at ticket creation:** rejected by [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#storage-and-lifecycle), item 1. Ticket creation never waits for it, and `manual` tickets are never pseudonymized.
-- **Treat a storage error of the map as `pseudonymization_failed`:** rejected. A storage error is not deterministic, and `pseudonymization_failed` blocks every retry.
+- **Treat a storage error of the map as `pseudonymization_failed`:** rejected. A storage error is not deterministic, and `pseudonymization_failed` blocks every retry. The first row of ADR-0010's Failure handling table said so; [ADR-0018](../decisions/0018-one-placeholder-label-and-retried-map-storage-errors.md) corrects it.
 - **Skip the draft call when the analysis recommends abstaining** (as `org/main` does): rejected. The draft outcome carries the reason codes and the staff note that the console shows, and `backend` would have to build a draft outcome itself, outside the contract.
 - **Compute reports in Python over every ticket** (as `org/main` does): rejected for SQL aggregates, which read only the period.
 - **Keep the pseudonym map in a JSON column of the suggestion** (as `org/main` does): rejected by SEC-37, which keeps the map in one table that only `pseudonymization` reads.
@@ -385,7 +390,8 @@ The NFR-08 load test and the pseudonymization trial run before the demo. No mode
 
 ## Observability
 
-- **Events** ([LOG-11](../rules/logging-and-observability.md#event-names)): `suggestion.requested`, `suggestion_job.claimed`, `suggestion_job.lease_expired`, `suggestion_job.failed`, `pseudonymization.failed`, `pseudonym.restore_failed`, `ai_service.called`, `ai_service.call_failed`, `suggestion.completed`, `suggestion.superseded`, `suggestion.part_cancelled`, `ticket.viewed`, `ticket.manual_handling_started`, `intent.overridden`, `reply_proposal.submitted`, `decision.recorded`, `reply.sent`, `ticket.escalated`, `report.built`, `tickets.imported`, `decisions.exported`. They are added to the catalog and the `backend` README with the code.
+- **Events** ([LOG-11](../rules/logging-and-observability.md#event-names)): `suggestion.requested`, `suggestion_job.claimed`, `suggestion_job.lease_expired`, `suggestion_job.failed`, `pseudonymization.failed`, `pseudonym.restore_failed`, `ai_service.called`, `ai_service.call_failed`, `ai_service.contract_violated`, `suggestion.completed`, `suggestion.superseded`, `suggestion.part_cancelled`, `ticket.viewed`, `ticket.manual_handling_started`, `intent.overridden`, `reply_proposal.submitted`, `decision.recorded`, `reply.sent`, `ticket.escalated`, `report.built`, `tickets.imported`, `decisions.exported`. They are added to the catalog and the `backend` README with the code.
+- **Levels** ([LOG-15](../rules/logging-and-observability.md#levels)): `ai_service.call_failed` at `warning` for a timeout, a connection error, or a `5xx`; `ai_service.contract_violated` at `error` for a `4xx` or a response outside the contract; `pseudonymization.failed` at `warning` for a text over 4 000 characters and at `error` otherwise; `pseudonym.restore_failed` at `error`.
 - **Spans** ([LOG-20](../rules/logging-and-observability.md#traces)): `run_suggestion_job`, `pseudonymize_message` (with `pseudonym_count`), `call_ai_service` (with the endpoint), `save_decision`, `send_reply`, `build_report`. A job starts its own span ([LOG-06](../rules/logging-and-observability.md#correlation)) and stores its trace ID in `suggestions.trace_id`, which the developer details show ([UI-35](../rules/ui.md#developer-views)).
 - **Metrics:** `supportiq.suggestion.duration` (ms, by part), `supportiq.ai_service.unavailable`, `supportiq.pseudonymization.outcomes` (by outcome), `supportiq.suggestion_job.lease_expirations`, `supportiq.suggestion_job.queue_wait` (ms), `supportiq.staff.decisions`, and `supportiq.ticket.handling.duration` (ms, by mode).
 - Telemetry never holds message text, AI text, pseudonym map values, or the original values behind pseudonyms ([LOG-29](../rules/logging-and-observability.md#privacy-in-telemetry)).
@@ -394,7 +400,7 @@ The NFR-08 load test and the pseudonymization trial run before the demo. No mode
 
 | Flow | Data and class |
 |---|---|
-| `backend` → `ai-service` | The pseudonymized message and the allow-listed order context (Confidential, no identifiers), `as_of`, the KB version, and the intent override (Internal). Nothing when pseudonymization failed |
+| `backend` → `ai-service` | The pseudonymized message and the allow-listed order context (Confidential, no identifiers), `as_of`, the KB version, and the intent override (Internal); the service token in the `Authorization` header (Secret). Nothing when pseudonymization failed |
 | `ai-service` → `backend` | AI text with placeholders (Confidential), stored as received |
 | `backend` → `/console` | AI text with pseudonyms restored (Confidential), to `staff` and `manager` only; reports (Internal), to `manager` only |
 | `backend` → the export file | Pseudonymized text and Internal fields; no reply body, no notes, no map |

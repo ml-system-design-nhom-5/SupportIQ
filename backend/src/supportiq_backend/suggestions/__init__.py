@@ -6,6 +6,7 @@ Other features start suggestions through `SuggestionStarter` and read them throu
 """
 
 from supportiq_backend.suggestions.application import (
+    AiServiceOperation,
     ClaimLoop,
     ClaimStores,
     CreateSuggestion,
@@ -19,6 +20,7 @@ from supportiq_backend.suggestions.application import (
     SuggestionStart,
     SuggestionStarter,
     SuggestionStarterPorts,
+    record_ai_service_failure,
 )
 from supportiq_backend.suggestions.domain import (
     MANUAL_MODE_STATE,
@@ -60,6 +62,7 @@ from supportiq_backend.suggestions.domain import (
     OrderContext,
     OrderContextCitation,
     OrderContextField,
+    OrderFact,
     PartCompletion,
     PartStatus,
     PendingPart,
@@ -95,9 +98,11 @@ from supportiq_backend.suggestions.domain import (
     build_part_audit_data,
     build_suggestion_request,
     build_unavailable_completion,
+    check_cited_facts,
     choose_view_trigger,
     get_part_status,
     plan_requested_suggestion,
+    read_order_fact,
 )
 
 __all__ = [
@@ -105,6 +110,7 @@ __all__ = [
     "AiReasonCode",
     "AiService",
     "AiServiceContractError",
+    "AiServiceOperation",
     "AiServiceUnavailableError",
     "AiWarning",
     "Analysis",
@@ -148,6 +154,7 @@ __all__ = [
     "OrderContext",
     "OrderContextCitation",
     "OrderContextField",
+    "OrderFact",
     "PartCompletion",
     "PartStatus",
     "PendingPart",
@@ -188,7 +195,10 @@ __all__ = [
     "build_part_audit_data",
     "build_suggestion_request",
     "build_unavailable_completion",
+    "check_cited_facts",
     "choose_view_trigger",
     "get_part_status",
     "plan_requested_suggestion",
+    "read_order_fact",
+    "record_ai_service_failure",
 ]

@@ -138,6 +138,8 @@ def test_the_service_token_stays_out_of_the_repr_of_the_settings() -> None:
         ("idempotency_retention_ms", 0),
         ("default_handling_mode", "automatic"),
         ("seed_password_admin", ""),
+        ("ai_service_token", ""),
+        ("ai_service_base_url", "not a url"),
         ("seed_password_staff", "x" * 129),
         ("trace_exporter", "zipkin"),
         ("otlp_traces_endpoint", "not a url"),
