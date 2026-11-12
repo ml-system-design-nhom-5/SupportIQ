@@ -937,8 +937,6 @@ class ApplicationAcceptanceRunner:
                 has_valid_tot = is_valid_token_count(tot_tok)
                 has_valid_thought = is_valid_token_count(th_tok)
 
-                is_draft_producing_status = att_status in ("draft_ready", "clarification", "success")
-
                 # If output is missing but provider reported totalTokenCount:
                 if not has_valid_out and has_valid_tot and has_valid_in:
                     if has_valid_thought:
@@ -947,17 +945,13 @@ class ApplicationAcceptanceRunner:
                             out_tok = tot_tok - in_tok - th_tok
                             has_valid_out = True
 
-                # For a failed attempt before candidate generation (e.g. llm_unavailable), output tokens is 0
-                if not has_valid_out and not is_draft_producing_status and not (att_status in ("abstained", "escalation_recommended")):
-                    out_tok = 0
-                    has_valid_out = True
-
                 # Input coverage: executed attempt must have valid input tokens
                 if not has_valid_in and not (att_status in ("abstained", "escalation_recommended")):
                     token_coverage_valid = False
 
-                # Output coverage: draft-producing attempt must have valid output tokens OR provider total to derive billable output
-                if not has_valid_out and not has_valid_tot and is_draft_producing_status:
+                # Output coverage: executed attempt must have valid output tokens OR provider total to derive billable output.
+                # Keep output unknown for every attempted status unless explicitly provider-reported or mathematically derivable.
+                if not has_valid_out and not has_valid_tot and not (att_status in ("abstained", "escalation_recommended")):
                     token_coverage_valid = False
 
                 if has_valid_tot and has_valid_in and has_valid_out:

@@ -855,7 +855,7 @@ class TestRetryAccountingAndMetadataSurvivalRegressions:
                             "attempt_index": 0,
                             "status": "llm_unavailable",
                             "latency_seconds": 1.5,
-                            "usage": {"promptTokenCount": 500},
+                            "usage": {"promptTokenCount": 500, "candidatesTokenCount": 0},
                             "metadata": {"provider": "google_ai_studio", "model": "gemini-2.5-flash"},
                         },
                         {
@@ -1155,7 +1155,7 @@ class TestRetryAccountingAndMetadataSurvivalRegressions:
                         {
                             "attempt_index": 0,
                             "status": "llm_unavailable",
-                            "usage": {"promptTokenCount": 500},
+                            "usage": {"promptTokenCount": 500, "candidatesTokenCount": 0},
                             # Missing metadata dict: provider and model are None
                         },
                         {
@@ -1180,4 +1180,38 @@ class TestRetryAccountingAndMetadataSurvivalRegressions:
 
         # Attempt 0 lacks model and provider metadata, and must not have inherited it from ticket-level
         assert tc["cost_status"] in ("unknown_model_unverified", "provider_missing_unverified")
+        assert tc["cost_usd"] is None
+
+    def test_invalid_response_missing_output_usage_fails_closed_and_keeps_tokens_unknown(self):
+        """When an attempt fails with llm_invalid_response (or llm_blocked_or_incomplete, llm_invalid_citations)
+        with usage={'input_tokens': 100, 'thought_tokens': 5} and output/total absent:
+        Output tokens must NOT be assumed to be 0 (since invalid response may have generated billable candidate tokens).
+        Candidates, completion, and total tokens must remain unknown (None), provider total must be None,
+        and cost_status must be incomplete_token_coverage (never verified_list_price_estimate).
+        """
+        results = [
+            TicketCaseResult(
+                case_index=0,
+                condition="cold",
+                message="Query yielding invalid schema response",
+                ticket_id="TCK-1006",
+                wall_latency_ms=1500.0,
+                analysis_status="ready",
+                draft_status="llm_invalid_response",
+                customer_reply_is_none=True,
+                tokens={"input_tokens": 100, "thought_tokens": 5},
+                llm_metadata={"provider": "google_ai_studio", "model": "gemini-3.1-flash-lite", "tier": "standard_paid"},
+                is_terminal=True,
+                is_success=False,
+            )
+        ]
+        config = ApplicationAcceptanceConfig(mode="live", verified_pricing=OFFICIAL_PRICING)
+        summary = ApplicationAcceptanceRunner(config)._compute_summary(results, output_dir=None)
+        tc = summary["tokens_and_cost"]
+
+        assert tc["total_candidate_tokens"] is None, "Missing candidate tokens in failed attempt must not be assumed 0"
+        assert tc["total_completion_tokens"] is None, "Completion tokens must not be fabricated from thoughts alone"
+        assert tc["total_tokens"] is None, "Total tokens must not be fabricated"
+        assert tc["provider_reported_total_tokens"] is None, "Provider total must be null when omitted"
+        assert tc["cost_status"] == "incomplete_token_coverage"
         assert tc["cost_usd"] is None
