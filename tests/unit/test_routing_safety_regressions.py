@@ -412,6 +412,7 @@ def test_contract_adapter_supported_comparable_case_matching():
     'This debit was unauthorized; I need to dispute the transaction.',
     'Please ask a human manager to approve an exception for my used camera.',
     'I need an exception to the refund policy.',
+    'I insist on a manager exception for my used product.',
 ])
 @pytest.mark.parametrize('confidence', [0.40, 0.95])
 def test_explicit_authority_requests_escalate_before_confidence_gate(message, confidence):
@@ -449,3 +450,20 @@ def test_unavailable_policy_scope_requires_escalation_instead_of_adjacent_policy
 def test_current_policy_information_remains_draftable_after_escalation_fix(message):
     result = make_engine().analyse({'message': message, 'as_of': '2026-11-12T00:00:00Z'})
     assert result['routing']['recommendation'] == 'draft'
+
+
+def test_cross_border_delivery_without_matching_policy_has_no_valid_document():
+    result = make_engine().analyse({'message': 'Is overseas express shipping available?', 'as_of': '2026-11-12T00:00:00Z'})
+    assert 'no_valid_document' in result['routing']['reason_codes']
+    assert result['routing']['recommendation'] == 'abstain'
+
+
+def test_llm_insufficient_evidence_escalates_and_preserves_billable_usage():
+    from apps.core_backend.llm.gemini import LLMError
+    class InsufficientLLM:
+        def generate(self, *args, **kwargs):
+            raise LLMError('llm_insufficient_evidence', usage={'promptTokenCount': 100, 'candidatesTokenCount': 15, 'totalTokenCount': 115})
+    result = make_engine(llm=InsufficientLLM()).draft({'message': 'What are the return conditions?', 'as_of': '2026-11-12T00:00:00Z'})
+    assert result['status'] == 'escalation_recommended'
+    assert 'insufficient_evidence' in result['reason_codes']
+    assert result['llm_usage']['total_tokens'] == 115

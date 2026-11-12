@@ -676,7 +676,7 @@ def test_gemini_client_and_engine_preserve_usage_on_insufficient_evidence():
         "order_context": {},
     }
     res = engine.draft(req)
-    assert res["status"] == "llm_unavailable"
+    assert res["status"] == "escalation_recommended"
     assert "grounding_failed" in res["reason_codes"]
     assert res["failure_code"] == "llm_insufficient_evidence"
     assert res["llm_usage"]["input_tokens"] == 200

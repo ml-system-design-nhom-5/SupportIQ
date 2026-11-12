@@ -19,7 +19,7 @@ SENSITIVE_AUTHORITY_PATTERN = re.compile(
     r"|chargeback|dispute[ds]?"
     r"|unauthorized(?:\s+(?:transaction|payment|charge|debit|deduction|activity|use|withdrawal))?"
     r"|not\s+authorized"
-    r"|(?:policy|refund|return|order|warranty)\s+exception"
+    r"|(?:policy|refund|return|order|warranty|manager|supervisor)\s+exception"
     r"|(?:make|request|grant|approve|demand|ask\s+for|need|want|seek)\s+(?:an?\s+)?exception"
     r"|exception\s+(?:request|to|clause)"
     r")\b",
@@ -164,9 +164,12 @@ class Engine:
         # Knowledge evidence validation: rely on retriever's configured relevance threshold (0.55 default),
         # avoiding dual hidden thresholds or artificial safe-by-refusal.
         retrieval_threshold = getattr(self.retriever, "relevance_threshold", 0.55)
+        cross_border = r'\b(?:international|overseas|cross-border)\b.{0,35}\b(?:delivery|shipping)\b'
+        uncovered_delivery = re.search(cross_border, request['message'], re.I) and not any(
+            re.search(cross_border, item.get('excerpt', ''), re.I) for item in evidence)
         has_scores = any(item.get("score") is not None for item in evidence)
         max_evidence_score = max((item.get("score") or 0.0) for item in evidence if item.get("score") is not None) if has_scores else 1.0
-        if not evidence or (has_scores and max_evidence_score < retrieval_threshold) or "below_relevance_threshold" in retrieved.get("reason_codes", []):
+        if not evidence or uncovered_delivery or (has_scores and max_evidence_score < retrieval_threshold) or "below_relevance_threshold" in retrieved.get("reason_codes", []):
             if "no_valid_document" not in codes:
                 codes.append("no_valid_document")
         scope_review = self._policy_scope_requires_review(request["message"], evidence)
@@ -209,11 +212,13 @@ class Engine:
             failure = 'grounding_failed' if code in ('llm_insufficient_evidence', 'llm_invalid_citations') else 'llm_invalid_output' if code in ('llm_invalid_response',) else 'llm_unavailable'
             err_result = {
                 **result,
-                "status": "llm_unavailable",
-                "reason_codes": list(set(codes) | {failure}),
+                "status": "escalation_recommended" if code == 'llm_insufficient_evidence' else "llm_unavailable",
+                "reason_codes": list(set(codes) | {failure} | ({'insufficient_evidence'} if code == 'llm_insufficient_evidence' else set())),
                 "failure_code": code if code.startswith("llm_") else "llm_unavailable",
                 "staff_note": "The LLM timed out after a bounded retry. Try AI again or use the retrieved sources to write a reply." if code == "llm_timeout" else "Draft generation is unavailable. Review the retrieved sources and write a reply manually.",
             }
+            if code == 'llm_insufficient_evidence':
+                err_result['staff_note'] = 'The retrieved sources cannot answer this request. Escalate for policy clarification before replying.'
             err_usage_dict = getattr(error, "usage", {}) or {}
             err_meta_dict = getattr(error, "metadata", {}) or {}
             err_latency = getattr(error, "latency_seconds", None)
