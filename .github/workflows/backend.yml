@@ -8,11 +8,11 @@ name: backend
 on:
   push:
     branches:
-      - chore/fe-be-supportiq-ecom
+      - main
       - "build/**"
   pull_request:
     branches:
-      - chore/fe-be-supportiq-ecom
+      - main
 
 permissions:
   contents: read

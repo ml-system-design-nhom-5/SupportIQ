@@ -1,0 +1,7 @@
+# The frozen data keep every byte, CRLF line ends included, so git never converts their line
+# ends, whatever core.autocrlf says (ADR-0017, Large files and data, statement 3). The hooks
+# that fix files skip the same paths (.pre-commit-config.yaml).
+data/raw/** -text
+eval/suites/**/*.csv -text
+eval/suites/**/*.json -text
+eval/suites/**/*.jsonl -text

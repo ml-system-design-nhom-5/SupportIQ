@@ -94,17 +94,17 @@ Run every command in the repository root.
 Every file in `.github/workflows/` follows these rules, including the `backend.yml` and `frontend.yml` files that the component owners add ([WF-19](../rules/workflow.md#continuous-integration)). actionlint checks the syntax of every workflow, the `workflow-*` hooks of `.pre-commit-config.yaml` check every rule that a pattern can check, and reviewers check the rest ([Who checks each rule](#who-checks-each-rule)).
 
 1. **One workflow per area.** The file is `.github/workflows/<area>.yml` with `name: <area>`: `repository`, `contracts`, `backend`, `frontend`.
-2. **Triggers.** Exactly these, and nothing else:
+2. **Triggers.** Exactly these, and nothing else ([ADR-0017, CI](../decisions/0017-repository-layout-and-ai-ml-migration.md#ci), statement 3):
 
    ```yaml
    on:
      push:
        branches:
-         - chore/fe-be-supportiq-ecom
+         - main
          - "build/**"
      pull_request:
        branches:
-         - chore/fe-be-supportiq-ecom
+         - main
    ```
 
 3. **No path filters.** No `paths` or `paths-ignore`, and no job-level or step-level `if:` that skips a check, so a required check always runs and always reports.
@@ -170,5 +170,4 @@ GitHub Actions cannot run locally. On the first push, check:
 
 ## Open questions
 
-- Pull requests into `main` run no workflow, because the triggers cover the integration branch `chore/fe-be-supportiq-ecom` and `build/**` only. Whether to add `main` before the integration branch is merged into it is a team decision.
 - External links are not checked yet, because a check that depends on other websites fails at random and must not block a merge. The proposal: a third workflow, `links.yml`, triggered only by `schedule` (weekly) and `workflow_dispatch`, runs lychee on every Markdown file and reports broken external links. It is never a required check, and broken links are fixed in a normal pull request. It needs a team decision, because it adds a workflow and a tool.

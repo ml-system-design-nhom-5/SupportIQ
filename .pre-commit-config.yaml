@@ -30,10 +30,16 @@ repos:
       - id: check-yaml
         # pnpm writes pnpm-lock.yaml as two YAML documents.
         args: [--allow-multiple-documents]
+      # The hooks that fix files never touch the frozen data: every file of data/raw/ and every
+      # data file of eval/suites/ keeps its bytes, CRLF line ends included. The READMEs of the
+      # suites are still checked (ADR-0017, Large files and data, statement 3; .gitattributes).
       - id: end-of-file-fixer
+        exclude: &frozen-data '^(data/raw/|eval/suites/(?!.*README\.md$))'
       - id: mixed-line-ending
         args: [--fix=lf]
+        exclude: *frozen-data
       - id: trailing-whitespace
+        exclude: *frozen-data
   - repo: https://github.com/gitleaks/gitleaks
     rev: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e  # frozen: v8.30.1
     hooks:
@@ -70,7 +76,7 @@ repos:
       - id: workflow-triggers
         name: "Workflow convention 2: exactly the push and pull_request triggers"
         language: pygrep
-        entry: '^on:\n  push:\n    branches:\n      - chore/fe-be-supportiq-ecom\n      - "build/\*\*"\n  pull_request:\n    branches:\n      - chore/fe-be-supportiq-ecom\n\n+(?=[^\s#])'
+        entry: '^on:\n  push:\n    branches:\n      - main\n      - "build/\*\*"\n  pull_request:\n    branches:\n      - main\n\n+(?=[^\s#])'
         args: [--multiline, --negate]
         files: ^\.github/workflows/
       - id: workflow-no-path-filters

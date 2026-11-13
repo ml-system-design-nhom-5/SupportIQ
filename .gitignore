@@ -6,6 +6,15 @@
 # Data: the raw Bitext download and intermediate outputs are not committed (DATA-07)
 data/raw/bitext/
 data/interim/
+# The code that ml/ took over from main still writes its datasets here, until the first PR
+# after the join moves it to data/raw/bitext/ and removes this line (ADR-0017)
+data/datasets/
+
+# Model weights and local databases: weights are release assets, never committed
+# (ADR-0017, Large files and data, statement 5; ADR-0018, Artifact store)
+*.safetensors
+*.pt
+*.sqlite3
 
 # Claude Code personal files
 .claude/settings.local.json
