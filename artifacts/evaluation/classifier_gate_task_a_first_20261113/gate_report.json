@@ -1,0 +1,210 @@
+{
+  "generated_at": "2026-11-13T02:17:30.078800+00:00",
+  "report_type": "task_c_classifier_acceptance_gate",
+  "gate_decision": "REJECT",
+  "failure_reasons": [
+    "34_label_regression_system_acceptance",
+    "missing_provenance_field:base_model",
+    "missing_provenance_field:dataset_hashes",
+    "missing_provenance_field:git_commit",
+    "missing_provenance_field:training_lineage",
+    "oos_draft_leak"
+  ],
+  "suite_classification_note": "system_acceptance_156 and final_acceptance_24 are explicitly labeled known_acceptance_regression_not_unseen_holdout.",
+  "provenance_audit": {
+    "candidate_dir": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-routing\\artifacts\\evaluation\\task_a_20261113\\candidate_model",
+    "manifest_path": "C:\\Users\\PC\\AppData\\Local\\Temp\\tmpzf2i1wm1\\manifest.json",
+    "files": {
+      "weights": {
+        "path": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-routing\\artifacts\\evaluation\\task_a_20261113\\candidate_model\\model.safetensors",
+        "exists": true,
+        "sha256": "1fc2d1b1c239709f88f1b7f1633a6446a7f5f606dac6ad820a1e6a00a9c92dcc",
+        "size_bytes": 267967920
+      },
+      "tokenizer": {
+        "path": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-routing\\artifacts\\evaluation\\task_a_20261113\\candidate_model\\tokenizer.json",
+        "exists": true,
+        "sha256": "5f218e0ea9eaa9f154815cc067351fb941bea26da81bfd12af3ded3cc66fa3ff",
+        "size_bytes": 711648
+      },
+      "config": {
+        "path": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-routing\\artifacts\\evaluation\\task_a_20261113\\candidate_model\\config.json",
+        "exists": true,
+        "sha256": "6fa1fa9cc6a94063a977b0adaf2c9c3b296cf296d4ad9dcc6f2c52ca3bac9cb2",
+        "size_bytes": 3349
+      }
+    },
+    "valid_46_label_bijection": true,
+    "num_labels": 46,
+    "provenance_passed": false,
+    "failure_reasons": [
+      "missing_provenance_field:training_lineage",
+      "missing_provenance_field:dataset_hashes",
+      "missing_provenance_field:base_model",
+      "missing_provenance_field:git_commit"
+    ],
+    "manifest": {
+      "provenance_status": "verified",
+      "dataset_source": "https://huggingface.co/datasets/bitext/Bitext-retail-ecommerce-llm-chatbot-training-dataset@12dd624ddcd3057382b2faad661bcda1fa869491",
+      "raw_sha256": "13A988266FED4E2B2C1FF947A89EF220CE09B5B13AC83C4A1496C0D7B81E8127",
+      "cleaned_sha256": "8BC10CFA056371BDECB3394BFD4C75EEE7E10022ACE5071833ECD140B2D75846",
+      "split_sha256": "1D366E898F6BA68BE46C5CA0F9059E9862FAD1D7BAFE350D9CDD310DD3E0A04C",
+      "split_policy": "template_group_id_disjoint_plus_bitext_46",
+      "artifact_hashes": {
+        "model.safetensors": "1fc2d1b1c239709f88f1b7f1633a6446a7f5f606dac6ad820a1e6a00a9c92dcc",
+        "tokenizer.json": "5f218e0ea9eaa9f154815cc067351fb941bea26da81bfd12af3ded3cc66fa3ff"
+      }
+    }
+  },
+  "split_isolation_and_contamination": {
+    "passed": true,
+    "failure_reasons": [],
+    "counts": {
+      "train": 108,
+      "calibration": 36,
+      "eval": 72
+    },
+    "group_counts": {
+      "train": 36,
+      "calibration": 12,
+      "eval": 24
+    },
+    "group_overlaps": {
+      "train_vs_calibration": [],
+      "train_vs_eval": [],
+      "calibration_vs_eval": []
+    },
+    "text_overlaps": {
+      "train_vs_calibration": 0,
+      "train_vs_eval": 0,
+      "calibration_vs_eval": 0
+    },
+    "gold_exact_matches": [],
+    "gold_high_jaccard_matches": []
+  },
+  "serving_baseline_evaluation": {
+    "model_name": "distilbert-supportiq",
+    "independent_holdout": {
+      "suite_role": "independent_group_isolated_holdout",
+      "n_total": 72,
+      "accuracy_46": 0.4722222222222222,
+      "macro_f1_46": 0.12571175627441614,
+      "ece_10bin": 0.16519799600872734,
+      "binary_top_label_brier": 0.24967350214648246,
+      "escalated_34": {
+        "n": 0,
+        "accuracy": 0.0,
+        "macro_f1": 0.0,
+        "unsafe_draft_eligible_count": 0
+      },
+      "supported_12": {
+        "n": 72,
+        "accuracy": 0.4722222222222222,
+        "macro_f1": 0.48189506571859514,
+        "raw_draft_eligible_count": 23,
+        "correct_intent_draft_eligible_count": 18
+      }
+    },
+    "ml_oos_80": {
+      "n_total": 80,
+      "flagged_safe_count": 80,
+      "false_draft_eligible_count": 0,
+      "false_draft_case_ids": []
+    },
+    "ml_noise_420": {
+      "n_total": 420,
+      "accuracy_12": 0.6547619047619048,
+      "macro_f1_12": 0.681716063566692,
+      "safe_routing_rate": 0.9285714285714286,
+      "ece_10bin": 0.09200162912408515,
+      "binary_top_label_brier": 0.18279472822996587
+    },
+    "known_acceptance_regression_not_unseen_holdout": {
+      "suite_role": "known_acceptance_regression_not_unseen_holdout",
+      "system_acceptance_156": {
+        "labeled_153_accuracy": 0.6666666666666666,
+        "labeled_153_macro_f1_46": 0.6119864194256491,
+        "escalated_34_n": 39,
+        "escalated_34_accuracy": 0.6153846153846154,
+        "escalated_34_macro_f1": 0.6470588235294118,
+        "draft_expected_34_raw_draft": 21,
+        "draft_expected_34_correct_intent_draft": 17,
+        "mandatory_63_strict_match": 21,
+        "mandatory_63_escalate": 16,
+        "mandatory_63_abstain_manual_fallback": 46,
+        "mandatory_63_real_unsafe_draft_leaks": []
+      },
+      "final_acceptance_24": {
+        "answerable_12_raw_draft": 5,
+        "answerable_12_correct_intent_draft": 4,
+        "answerable_12_wrong_intent_draft_cases": [
+          "final-case-02"
+        ],
+        "unanswerable_active_kb_draft_leaks": []
+      }
+    }
+  },
+  "candidate_evaluation": {
+    "model_name": "distilbert-supportiq-task-a-candidate",
+    "independent_holdout": {
+      "suite_role": "independent_group_isolated_holdout",
+      "n_total": 72,
+      "accuracy_46": 0.8333333333333334,
+      "macro_f1_46": 0.21970276100710884,
+      "ece_10bin": 0.07851701892084548,
+      "binary_top_label_brier": 0.10710362309670253,
+      "escalated_34": {
+        "n": 0,
+        "accuracy": 0.0,
+        "macro_f1": 0.0,
+        "unsafe_draft_eligible_count": 0
+      },
+      "supported_12": {
+        "n": 72,
+        "accuracy": 0.8333333333333334,
+        "macro_f1": 0.8421939171939171,
+        "raw_draft_eligible_count": 46,
+        "correct_intent_draft_eligible_count": 42
+      }
+    },
+    "ml_oos_80": {
+      "n_total": 80,
+      "flagged_safe_count": 78,
+      "false_draft_eligible_count": 2,
+      "false_draft_case_ids": [
+        "oos-multi_intent-02",
+        "oos-multi_intent-07"
+      ]
+    },
+    "ml_noise_420": {
+      "n_total": 420,
+      "accuracy_12": 0.8071428571428572,
+      "macro_f1_12": 0.8185538929995123,
+      "safe_routing_rate": 0.9476190476190476,
+      "ece_10bin": 0.05284976302867841,
+      "binary_top_label_brier": 0.12596493072150353
+    },
+    "known_acceptance_regression_not_unseen_holdout": {
+      "suite_role": "known_acceptance_regression_not_unseen_holdout",
+      "system_acceptance_156": {
+        "labeled_153_accuracy": 0.738562091503268,
+        "labeled_153_macro_f1_46": 0.6351349309949054,
+        "escalated_34_n": 39,
+        "escalated_34_accuracy": 0.5897435897435898,
+        "escalated_34_macro_f1": 0.6225490196078431,
+        "draft_expected_34_raw_draft": 30,
+        "draft_expected_34_correct_intent_draft": 28,
+        "mandatory_63_strict_match": 22,
+        "mandatory_63_escalate": 17,
+        "mandatory_63_abstain_manual_fallback": 45,
+        "mandatory_63_real_unsafe_draft_leaks": []
+      },
+      "final_acceptance_24": {
+        "answerable_12_raw_draft": 8,
+        "answerable_12_correct_intent_draft": 8,
+        "answerable_12_wrong_intent_draft_cases": [],
+        "unanswerable_active_kb_draft_leaks": []
+      }
+    }
+  }
+}

@@ -1,0 +1,189 @@
+{
+  "report_type": "b_candidate_edge_contracts_verification",
+  "generated_at": "2026-11-13T02:07:01.018530+00:00",
+  "source_commit": "ff0e147d0181317d1550cec8df53420d8eddf771",
+  "all_passed": true,
+  "checks": {
+    "hard_quota_429_with_valid_header": {
+      "passed": true,
+      "result": {
+        "schedule_id": "E01_hard_quota_429_with_valid_retry_after_header",
+        "category": "hard_quota_with_header",
+        "description": "429 QuotaFailure with valid Retry-After: 1 must still fail fast without retrying or sleeping.",
+        "expected_if_recovered": "fallback",
+        "terminal_status": "llm_unavailable",
+        "failure_code": "llm_rate_limited",
+        "reason_codes": [
+          "llm_unavailable"
+        ],
+        "fallback_triggered": true,
+        "draft_recovered": false,
+        "no_auto_send_verified": true,
+        "simulated_elapsed_seconds": 0.3,
+        "reported_llm_latency_seconds": 0.3,
+        "sum_attempt_latency_seconds": 0.3,
+        "total_sleep_seconds": 0,
+        "latency_includes_retry_waits": true,
+        "budget_respected_10s": true,
+        "max_requested_attempt_timeout_seconds": 5.0,
+        "attempt_cap_respected_5s": true,
+        "sleep_delays_seconds": [],
+        "attempt_count": 1,
+        "transport_call_count": 1,
+        "attempts": [
+          {
+            "attempt_index": 0,
+            "status": "llm_rate_limited",
+            "latency_seconds": 0.3,
+            "stage": "http_response",
+            "http_status": 429,
+            "exception_category": "http_status",
+            "usage": {},
+            "metadata": {
+              "provider": "google_ai_studio",
+              "model": "gemini-3.1-flash-lite",
+              "prompt_version": "grounded-v3"
+            }
+          }
+        ],
+        "transport_requests": [
+          {
+            "transport_call_index": 0,
+            "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+            "requested_read_timeout": 5.0,
+            "requested_connect_timeout": 3.0,
+            "simulated_step_outcome": "http_error",
+            "simulated_step_duration_seconds": 0.3
+          }
+        ],
+        "llm_usage_mapped": {},
+        "raw_usage_combined": {
+          "incomplete": true
+        },
+        "usage_status": "unknown_no_response",
+        "total_tokens_fabricated": false,
+        "http_clients_injected": 1
+      }
+    },
+    "untyped_retry_delay_rejected": {
+      "passed": true,
+      "result": {
+        "schedule_id": "E02_429_untyped_retry_delay_dict",
+        "category": "retry_info_untyped",
+        "description": "429 carrying retryDelay without google.rpc.RetryInfo @type must not retry.",
+        "expected_if_recovered": "fallback",
+        "terminal_status": "llm_unavailable",
+        "failure_code": "llm_rate_limited",
+        "reason_codes": [
+          "llm_unavailable"
+        ],
+        "fallback_triggered": true,
+        "draft_recovered": false,
+        "no_auto_send_verified": true,
+        "simulated_elapsed_seconds": 0.3,
+        "reported_llm_latency_seconds": 0.3,
+        "sum_attempt_latency_seconds": 0.3,
+        "total_sleep_seconds": 0,
+        "latency_includes_retry_waits": true,
+        "budget_respected_10s": true,
+        "max_requested_attempt_timeout_seconds": 5.0,
+        "attempt_cap_respected_5s": true,
+        "sleep_delays_seconds": [],
+        "attempt_count": 1,
+        "transport_call_count": 1,
+        "attempts": [
+          {
+            "attempt_index": 0,
+            "status": "llm_rate_limited",
+            "latency_seconds": 0.3,
+            "stage": "http_response",
+            "http_status": 429,
+            "exception_category": "http_status",
+            "usage": {},
+            "metadata": {
+              "provider": "google_ai_studio",
+              "model": "gemini-3.1-flash-lite",
+              "prompt_version": "grounded-v3"
+            }
+          }
+        ],
+        "transport_requests": [
+          {
+            "transport_call_index": 0,
+            "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+            "requested_read_timeout": 5.0,
+            "requested_connect_timeout": 3.0,
+            "simulated_step_outcome": "http_error",
+            "simulated_step_duration_seconds": 0.3
+          }
+        ],
+        "llm_usage_mapped": {},
+        "raw_usage_combined": {
+          "incomplete": true
+        },
+        "usage_status": "unknown_no_response",
+        "total_tokens_fabricated": false,
+        "http_clients_injected": 1
+      }
+    },
+    "success_wait_inclusive_fields": {
+      "latency_seconds": 2.1,
+      "transport_latency_seconds": 1.1,
+      "retry_wait_seconds": 1.0,
+      "passed": true
+    },
+    "failure_exception_wait_inclusive_fields": {
+      "code": "llm_unavailable",
+      "latency_seconds": 1.05,
+      "transport_latency_seconds": 0.8,
+      "retry_wait_seconds": 0.25,
+      "attempt_count": 2,
+      "passed": true
+    },
+    "malformed_injected_retry_after": {
+      "passed": true,
+      "cases": [
+        {
+          "injected": "'not-a-number'",
+          "calls": 1,
+          "sleep_calls": [],
+          "raised_code": "llm_unavailable",
+          "retry_wait_seconds": 0.0,
+          "passed": true
+        },
+        {
+          "injected": "True",
+          "calls": 1,
+          "sleep_calls": [],
+          "raised_code": "llm_unavailable",
+          "retry_wait_seconds": 0.0,
+          "passed": true
+        },
+        {
+          "injected": "nan",
+          "calls": 1,
+          "sleep_calls": [],
+          "raised_code": "llm_unavailable",
+          "retry_wait_seconds": 0.0,
+          "passed": true
+        },
+        {
+          "injected": "-3.0",
+          "calls": 1,
+          "sleep_calls": [],
+          "raised_code": "llm_unavailable",
+          "retry_wait_seconds": 0.0,
+          "passed": true
+        },
+        {
+          "injected": "90000.0",
+          "calls": 1,
+          "sleep_calls": [],
+          "raised_code": "llm_unavailable",
+          "retry_wait_seconds": 0.0,
+          "passed": true
+        }
+      ]
+    }
+  }
+}
