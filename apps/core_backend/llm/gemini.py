@@ -6,7 +6,8 @@ import os
 import re
 import time
 import math
-from datetime import date
+from datetime import date, timezone
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 import httpx
@@ -21,20 +22,126 @@ class LLMError(Exception):
         usage: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
         latency_seconds: float | None = None,
+        transport_latency_seconds: float | None = None,
+        retry_wait_seconds: float | None = None,
         attempts: list[dict[str, Any]] | None = None,
         stage: str | None = None,
         http_status: int | None = None,
         exception_category: str | None = None,
+        retry_after: float | None = None,
+        retry_after_invalid: bool = False,
     ):
         self.code = code
         self.usage = usage or {}
         self.metadata = metadata or {}
         self.latency_seconds = latency_seconds
+        self.transport_latency_seconds = transport_latency_seconds
+        self.retry_wait_seconds = retry_wait_seconds
         self.attempts = attempts or []
         self.stage = stage
         self.http_status = http_status
         self.exception_category = exception_category
+        self.retry_after = retry_after
+        self.retry_after_invalid = retry_after_invalid
         super().__init__(code)
+
+
+MAX_RETRY_AFTER_SECONDS = 86400.0
+_RETRY_INFO_TYPE = "type.googleapis.com/google.rpc.RetryInfo"
+_QUOTA_FAILURE_TYPE = "type.googleapis.com/google.rpc.QuotaFailure"
+
+
+def _validate_retry_delay(seconds: float) -> float | None:
+    if not math.isfinite(seconds) or seconds < 0.0 or seconds > MAX_RETRY_AFTER_SECONDS:
+        return None
+    return float(seconds)
+
+
+def _is_hard_quota_429(err_data: Any) -> bool:
+    """Detect documented daily/billing hard quota exhaustion in a 429 error payload."""
+    if not isinstance(err_data, dict):
+        return False
+    error_obj = err_data.get("error")
+    if not isinstance(error_obj, dict):
+        return False
+    details = error_obj.get("details")
+    if isinstance(details, list):
+        for detail in details:
+            if not isinstance(detail, dict):
+                continue
+            if detail.get("@type") != _QUOTA_FAILURE_TYPE:
+                continue
+            violations = detail.get("violations")
+            if isinstance(violations, list):
+                for violation in violations:
+                    if not isinstance(violation, dict):
+                        continue
+                    combined = " ".join(
+                        str(violation.get(k, "") or "")
+                        for k in ("quotaId", "quotaMetric", "description", "subject")
+                    )
+                    if re.search(r"PerDay|per_day|Daily|RequestsPerDay|TokensPerDay|Billing|limit:\s*0\b", combined, re.I):
+                        return True
+    message = str(error_obj.get("message", "") or "")
+    return bool(re.search(r"\b(daily quota|per day|requests per day|tokens per day|billing|limit:\s*0)\b", message, re.I))
+
+
+def _parse_retry_after(
+    response: httpx.Response,
+    err_data: Any = None,
+    now_ts: float | None = None,
+) -> float | None:
+    """Parse sanitized non-negative delay in seconds from Retry-After header or google.rpc.RetryInfo."""
+    raw = response.headers.get("retry-after")
+    if isinstance(raw, str):
+        stripped = raw.strip()
+        if stripped:
+            try:
+                return _validate_retry_delay(float(stripped))
+            except ValueError:
+                try:
+                    dt = parsedate_to_datetime(stripped)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    base_ts = time.time() if now_ts is None else now_ts
+                    return _validate_retry_delay(dt.timestamp() - base_ts)
+                except (TypeError, ValueError, OverflowError):
+                    return None
+        return None
+
+    if isinstance(err_data, dict):
+        error_obj = err_data.get("error")
+        details = error_obj.get("details") if isinstance(error_obj, dict) else None
+        if isinstance(details, list):
+            for detail in details:
+                if not isinstance(detail, dict):
+                    continue
+                if detail.get("@type") != _RETRY_INFO_TYPE:
+                    continue
+                retry_delay = detail.get("retryDelay")
+                if isinstance(retry_delay, str) and retry_delay.endswith("s"):
+                    try:
+                        return _validate_retry_delay(float(retry_delay[:-1]))
+                    except ValueError:
+                        return None
+    return None
+
+
+def _classify_http_status_error(status_code: int) -> str:
+    """Map provider HTTP status codes to stable internal transient or permanent error codes."""
+    if status_code == 400:
+        return "llm_request_rejected"
+    if status_code in (401, 403):
+        return "llm_auth_error"
+    if status_code == 404:
+        return "llm_model_unavailable"
+    if status_code == 408:
+        return "llm_timeout"
+    if status_code == 429:
+        return "llm_rate_limited"
+    if 400 <= status_code < 500:
+        return "llm_request_rejected"
+    return "llm_unavailable"
 
 
 class DraftOutput(BaseModel):
@@ -377,13 +484,25 @@ class GeminiDraftClient:
         self._http = http_client
         self._owns_http = http_client is None
 
+    def _get_http_client(self, timeout: httpx.Timeout) -> httpx.Client:
+        if self._http is None:
+            self._http = httpx.Client(timeout=timeout, follow_redirects=False)
+            self._owns_http = True
+        return self._http
+
     def close(self) -> None:
         if self._owns_http and self._http is not None:
             try:
                 self._http.close()
-                self._http = None
             except Exception:
                 pass
+            self._http = None
+
+    def __enter__(self) -> "GeminiDraftClient":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
 
     @property
     def configured(self) -> bool:
@@ -428,10 +547,9 @@ class GeminiDraftClient:
             "prompt_version": PROMPT_VERSION,
         }
         try:
-            if self._http is None:
-                self._http = httpx.Client(timeout=timeout, follow_redirects=False)
-            response = self._http.post(url, headers={"x-goog-api-key": self._api_key}, json=payload,
-                                       timeout=timeout)
+            client = self._get_http_client(timeout)
+            response = client.post(url, headers={"x-goog-api-key": self._api_key}, json=payload,
+                                   timeout=timeout)
         except httpx.ConnectTimeout:
             latency_sec = round(time.perf_counter() - started, 4)
             att = [{
@@ -492,6 +610,7 @@ class GeminiDraftClient:
         latency_sec = round(time.perf_counter() - started, 4)
         if response.status_code != 200:
             usage = {}
+            err_data = None
             try:
                 err_data = response.json()
                 if isinstance(err_data, dict):
@@ -503,9 +622,20 @@ class GeminiDraftClient:
                     if "modelVersion" in err_data:
                         metadata["model_version"] = err_data["modelVersion"]
             except Exception:
-                pass
-            code = {400: "llm_request_rejected", 401: "llm_auth_error", 403: "llm_auth_error",
-                    404: "llm_model_unavailable", 429: "llm_rate_limited"}.get(response.status_code, "llm_unavailable")
+                err_data = None
+            code = _classify_http_status_error(response.status_code)
+            hard_quota = response.status_code == 429 and _is_hard_quota_429(err_data)
+            has_retry_header = response.headers.get("retry-after") is not None
+            retry_after = (
+                _parse_retry_after(response, err_data)
+                if (code in ("llm_rate_limited", "llm_unavailable", "llm_timeout") and not hard_quota)
+                else None
+            )
+            retry_after_invalid = hard_quota or (
+                has_retry_header
+                and code in ("llm_rate_limited", "llm_unavailable", "llm_timeout")
+                and retry_after is None
+            )
             # Never expose a provider response body, request headers, or exception repr.
             att = [{
                 "attempt_index": 0,
@@ -518,7 +648,8 @@ class GeminiDraftClient:
                 "metadata": metadata,
             }]
             raise LLMError(code, usage=usage, metadata=metadata, latency_seconds=latency_sec, attempts=att,
-                           stage="http_response", http_status=response.status_code, exception_category="http_status")
+                           stage="http_response", http_status=response.status_code, exception_category="http_status",
+                           retry_after=retry_after, retry_after_invalid=retry_after_invalid)
 
         usage = {}
         try:
