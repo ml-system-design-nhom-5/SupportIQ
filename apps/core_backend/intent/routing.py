@@ -273,7 +273,7 @@ def decide_route(
         )
 
     # Gate 3: Confidence and margin check for the 11 supported product intents
-    if is_low_conf or is_low_margin:
+    if not has_valid_override and (is_low_conf or is_low_margin):
         reasons = []
         if is_low_conf:
             reasons.append("low_confidence")

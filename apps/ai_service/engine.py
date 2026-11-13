@@ -37,14 +37,27 @@ class Engine:
         These conservative English-language rules supplement retrieval; they are
         not a general semantic entailment or contradiction detector.
         """
-        policy_topic = re.search(r'\b(polic(?:y|ies)|rules?|terms?|refund|returns?|shipping|cancellation)\b', message, re.I)
-        if re.search(r'\binternal\s+(?:staff\s+)?(?:manual|procedures?)\b', message, re.I):
+        policy_topic = re.search(
+            r'\b(polic(?:y|ies)|rules?|terms?|refund|returns?|shipping|cancellation|guidelines?|procedures?|manuals?|compensation|shipments?)\b',
+            message,
+            re.I,
+        )
+        if re.search(
+            r'\b(?:internal|confidential|secret|restricted)\s+(?:staff\s+|audit\s+|company\s+)?(?:manual|procedures?|guidelines?|polic(?:y|ies)|rules?)\b',
+            message,
+            re.I,
+        ):
             return True
-        if policy_topic and re.search(r'\b(unapproved|proposed|draft|archived|discontinued|expired|legacy)\b', message, re.I):
+        if policy_topic and re.search(r'\b(unratified|unapproved|proposed|draft|archived|discontinued|expired|legacy)\b', message, re.I):
             return True
         if policy_topic and (
             re.search(r'\b(conflict|contradict\w*|inconsistent)\b', message, re.I)
             or re.search(r'\bstates?\s+both\b.+\bfor\s+the\s+same\b', message, re.I)
+            or re.search(
+                r'\bone\s+(?:section|clause|part|rule|policy)\s+says?\b.+\b(?:and\s+)?another\s+(?:section|clause|part|rule|policy)?\s*says?\b',
+                message,
+                re.I,
+            )
         ):
             return True
         if re.search(r'\b(customs|import\s+dut(?:y|ies))\b', message, re.I):
@@ -116,21 +129,32 @@ class Engine:
                 codes.append("low_confidence")
             if "out_of_scope_intent" not in codes:
                 codes.append("out_of_scope_intent")
+        all_46_labels = set(self.policy.get("all_46_labels", []))
+        recognized_outside_scope = (
+            label in all_46_labels and label not in self.policy["supported_12_intents"]
+        )
         if label not in self.policy["supported_12_intents"]:
             if "out_of_scope_intent" not in codes:
                 codes.append("out_of_scope_intent")
-        if label == "human_agent" or re.search(r"\b(human\s+agent|real\s+person|live\s+agent|human\s+operator|talk\s+to\s+a\s+human)\b", request["message"], re.I):
+        if label == "human_agent" or re.search(
+            r"\b(?:(?:human|real|live)\s+(?:(?:customer|support)\s+){0,2}(?:agent|person|operator|representative|staff)|talk\s+to\s+(?:a\s+)?human)\b",
+            request["message"],
+            re.I,
+        ):
             if "human_agent_requested" not in codes:
                 codes.append("human_agent_requested")
 
         # Escalated intents outside product scope explicitly requested in customer message
+        explicit_outside_scope_action = False
         if re.search(r"\b(close\s+(?:my\s+)?account|delete\s+(?:my\s+)?account)\b", request["message"], re.I):
+            explicit_outside_scope_action = True
             if "out_of_scope_intent" not in codes:
                 codes.append("out_of_scope_intent")
 
         # External postal pickup scheduling is an escalated intent (return_product_online) outside product scope.
         # Note: In-app Tiki courier pickup (POL-RET-002) is fully supported and must NOT be blocked.
         if re.search(r"\b(?:schedule|book|arrange)\s+(?:a\s+)?postal\s+pickup\b|\bpostal\s+pickup\b", request["message"], re.I):
+            explicit_outside_scope_action = True
             if "out_of_scope_intent" not in codes:
                 codes.append("out_of_scope_intent")
 
@@ -196,7 +220,19 @@ class Engine:
                               "snippet": item["excerpt"], "score": item.get("score"), "rank": index, "validity": "valid",
                               "effective_from": str(original.metadata.valid_from) if original else None,
                               "effective_to": str(original.metadata.valid_to) if original and original.metadata.valid_to else None})
-        recommendation = "escalate" if ("human_agent_requested" in codes or explicit_authority or scope_review) else "abstain" if set(codes) & {"low_confidence", "out_of_scope_intent", "no_valid_document", "conflicting_sources"} else "draft"
+        recommendation = (
+            "escalate"
+            if (
+                "human_agent_requested" in codes
+                or explicit_authority
+                or scope_review
+                or recognized_outside_scope
+                or explicit_outside_scope_action
+            )
+            else "abstain"
+            if set(codes) & {"low_confidence", "out_of_scope_intent", "no_valid_document", "conflicting_sources"}
+            else "draft"
+        )
         routing_payload = {"recommendation": recommendation, "reason_codes": codes}
         for rej_key in (
             "selective_accepted",

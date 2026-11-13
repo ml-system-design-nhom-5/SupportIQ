@@ -523,12 +523,18 @@ def test_engine_selective_acceptance_never_bypasses_existing_gates():
     assert low_conf_engine.draft(req)["status"] == "abstained"
     low_llm.generate.assert_not_called()
 
-    # 2. Out-of-scope intent gate still blocks
+    # 2. Recognized escalated intent outside product scope escalates, while unmapped OOD abstains
     oos_engine, oos_llm = _build_engine_fixture({**base_accepted, "intent": "use_app"})
     oos_analysis = oos_engine.analyse(req)
-    assert oos_analysis["routing"]["recommendation"] == "abstain"
+    assert oos_analysis["routing"]["recommendation"] == "escalate"
     assert "out_of_scope_intent" in oos_analysis["routing"]["reason_codes"]
     oos_llm.generate.assert_not_called()
+
+    unmapped_engine, unmapped_llm = _build_engine_fixture({**base_accepted, "intent": "unmapped_external_topic"})
+    unmapped_analysis = unmapped_engine.analyse(req)
+    assert unmapped_analysis["routing"]["recommendation"] == "abstain"
+    assert "out_of_scope_intent" in unmapped_analysis["routing"]["reason_codes"]
+    unmapped_llm.generate.assert_not_called()
 
     # 3. Missing retrieval evidence gate still blocks
     no_doc_engine, no_doc_llm = _build_engine_fixture(base_accepted, evidence=[])

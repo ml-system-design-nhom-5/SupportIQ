@@ -293,7 +293,7 @@ def test_escalation_03_unsupported_intent(ai_engine):
         "top_k": [{"intent": "change_account", "probability": 0.95}],
     }
     res = engine.draft({"message": "Please change my account email", "as_of": utcnow().isoformat()})
-    assert res["status"] == "abstained"
+    assert res["status"] == "escalation_recommended"
     assert "out_of_scope_intent" in res["reason_codes"]
 
 
