@@ -480,7 +480,7 @@ class GeminiDraftClient:
     def __init__(self, api_key: str | None = None, model: str | None = None,
                  http_client: httpx.Client | None = None):
         self._api_key = (api_key if api_key is not None else os.getenv("GEMINI_API_KEY", "")).strip()
-        self.model = model or os.getenv("GEMINI_MODEL", "gemini-4-hydrogen")
+        self.model = model or os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
         self._http = http_client
         self._owns_http = http_client is None
 

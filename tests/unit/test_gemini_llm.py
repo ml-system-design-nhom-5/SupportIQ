@@ -159,7 +159,7 @@ def test_runner_never_falls_back_to_template_on_llm_failure(tmp_path, no_evidenc
     assert len(calls)==(0 if no_evidence else 1)
 
 
-def test_hydrogen_is_default_and_sends_low_thinking_without_budget_or_sampling(monkeypatch):
+def test_flash_lite_default_and_explicit_hydrogen_low_thinking_compatibility(monkeypatch):
     from pathlib import Path
     from apps.ai_service.main import AiSettings
 
@@ -167,8 +167,9 @@ def test_hydrogen_is_default_and_sends_low_thinking_without_budget_or_sampling(m
     monkeypatch.setenv('GEMINI_API_KEY', 'hydrogen-test-key')
 
     env_example = (Path(__file__).resolve().parents[2] / '.env.example').read_text(encoding='utf-8')
-    assert 'GEMINI_MODEL=gemini-4-hydrogen' in env_example.splitlines()
-    assert AiSettings(_env_file=None).gemini_model == 'gemini-4-hydrogen'
+    assert 'GEMINI_MODEL=gemini-3.5-flash-lite' in env_example.splitlines()
+    assert AiSettings(_env_file=None).gemini_model == 'gemini-3.5-flash-lite'
+    assert GeminiDraftClient(api_key='test-key').model == 'gemini-3.5-flash-lite'
 
     captured = {}
 
@@ -210,6 +211,7 @@ def test_hydrogen_is_default_and_sends_low_thinking_without_budget_or_sampling(m
         )
 
     client = GeminiDraftClient(
+        model='gemini-4-hydrogen',
         http_client=httpx.Client(transport=httpx.MockTransport(handler))
     )
     assert client.model == 'gemini-4-hydrogen'
