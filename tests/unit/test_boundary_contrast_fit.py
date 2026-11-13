@@ -3,11 +3,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
+import pandas as pd
 import pytest
 import torch
 
@@ -87,6 +90,12 @@ def test_contrast_splits_group_isolation_semantic_and_balanced_targets(tmp_path:
         assert ({r["intent"] for r in neg_rows} & s46) == set()
         assert {"out_of_scope", "multi_intent", "other_domain"} <= {r["intent"] for r in neg_rows}
         validate_contrast_semantic_consistency(pos_rows, neg_rows, split_suffix, check_train_balance=(split_suffix == "train"))
+
+    bitext_test_rows = tbc._read_jsonl(ds / "bitext_test_6690.jsonl")
+    test_norms = {gate_mod.normalize_text(r["text"]) for r in bitext_test_rows}
+    noisy_rows = tbc._read_jsonl(ds / "bitext_train_noisy.jsonl")
+    assert not ({gate_mod.normalize_text(r["text"]) for r in noisy_rows} & test_norms)
+    assert not ({gate_mod.normalize_text(r["text"]) for r in trn} & test_norms)
 
 
 def test_contrast_semantic_validator_rejects_contradictions() -> None:
@@ -190,6 +199,9 @@ def test_rejector_fit_polarity_and_cal_only_selection(tmp_path: Path) -> None:
     assert stats["zero_cal_unsafe"] is True
     assert stats["cal_neg_false_draft"] == 0
     assert stats["cal_dom_correct_draft"] == 12
+    assert stats["cal_bitext_correct_draft"] == 4
+    assert stats["cal_human_agent_unsafe_draft"] == 0
+    assert stats["feasible_candidates"] > 0
 
     rej_dict = rej.to_dict()
     rej_dict["reject_when"] = "below"
@@ -242,16 +254,22 @@ def test_contrast_runner_dryrun_zero_fit_and_archive_orchestration(tmp_path: Pat
     (ds_dir / "split_manifest.json").write_bytes(split_bytes)
     (ds_dir / "dataset_lock_manifest.json").write_text(json.dumps({"counts": {}}), encoding="utf-8")
 
-    records_dir = main_cand / "run-records-fit2-boundary-contrast-v4"
+    records_dir = main_cand / "run-records-fit2-boundary-contrast-v4p1"
     fit_calls = []
+
+    src_rel = "scripts/run_boundary_contrast_fit.py"
+    src_sha = hashlib.sha256((REPO_ROOT / src_rel).read_bytes()).hexdigest()
+    prov_stub = {"git_commit": "b" * 40, "source_hashes": {src_rel: src_sha}}
 
     def _fake_fit(**kwargs):
         fit_calls.append(kwargs)
         assert (records_dir / "inputs" / "inputs_sha256_inventory.json").exists()
+        assert (records_dir / "source_snapshot" / "scripts" / "run_boundary_contrast_fit.py").exists()
         assert (records_dir / "environment.json").exists()
         rc = json.loads((records_dir / "run_config.json").read_text(encoding="utf-8"))
         assert rc["enable_selective_rejector"] is True
         assert rc["rejector_c_grid"] == [0.15, 0.35, 0.75, 1.5]
+        assert rc["source_hashes"][src_rel] == src_sha
         st = json.loads((records_dir / "status.json").read_text(encoding="utf-8"))
         assert st["status"] == "training"
 
@@ -263,11 +281,24 @@ def test_contrast_runner_dryrun_zero_fit_and_archive_orchestration(tmp_path: Pat
             json.dumps({"id2label": {str(i): lbl for i, lbl in enumerate(STANDARD_INTENTS_46)}}),
             encoding="utf-8",
         )
-        (cand / "candidate_provenance_manifest.json").write_bytes(b"{}")
         art_hashes = {
             fname: hashlib.sha256((cand / fname).read_bytes()).hexdigest()
             for fname in ("model.safetensors", "tokenizer.json", "config.json")
         }
+        (cand / "candidate_provenance_manifest.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": "candidate_provenance.v1",
+                    "provenance_status": "verified",
+                    "git_commit": "b" * 40,
+                    "base_model": {"init_weights_sha256": contrast_mod.EXPECTED_FIT2_SHA256},
+                    "training_lineage": {"fit_id": "fit2_supcon_energy"},
+                    "dataset_hashes": {"boundary_pos_train": pos_sha},
+                    "artifact_hashes": art_hashes,
+                }
+            ),
+            encoding="utf-8",
+        )
         (cand / "calibration_manifest.json").write_text(
             json.dumps(
                 {
@@ -291,20 +322,21 @@ def test_contrast_runner_dryrun_zero_fit_and_archive_orchestration(tmp_path: Pat
     with (
         patch.object(contrast_mod, "MAIN_CANDIDATES_DIR", main_cand),
         patch.object(contrast_mod, "LOCAL_CONTRAST_ROOT", local_root),
+        patch.object(contrast_mod, "verify_relevant_source_provenance", return_value=prov_stub),
         patch.object(contrast_mod, "run_preflight_validation", return_value=preflight_stub),
         patch.object(contrast_mod, "run_fit_and_lock_candidate", side_effect=_fake_fit),
         patch.object(contrast_mod, "verify_reload_from_archive", autospec=True, return_value={"reload_verified": True, "num_labels": 46}) as mock_reload,
-        patch.object(sys, "argv", ["prog", "--run-contrast-fit", "--run-id", "fit2-boundary-contrast-v4", "--enable-selective-rejector"]),
+        patch.object(sys, "argv", ["prog", "--run-contrast-fit", "--run-id", "fit2-boundary-contrast-v4p1", "--enable-selective-rejector"]),
     ):
         contrast_mod.main()
 
     assert len(fit_calls) == 1
     assert fit_calls[0]["enable_selective_rejector"] is True
-    assert fit_calls[0]["candidate_name"] == "fit2-boundary-contrast-v4"
+    assert fit_calls[0]["candidate_name"] == "fit2-boundary-contrast-v4p1"
     assert fit_calls[0]["epochs"] == 2
     assert fit_calls[0]["lr"] == 1e-5
-    mock_reload.assert_called_once_with(main_cand / "fit2-boundary-contrast-v4")
-    assert (main_cand / "fit2-boundary-contrast-v4" / "archive_sha_inventory.json").exists()
+    mock_reload.assert_called_once_with(main_cand / "fit2-boundary-contrast-v4p1")
+    assert (main_cand / "fit2-boundary-contrast-v4p1" / "archive_sha_inventory.json").exists()
     assert (records_dir / "sidecar_sha_inventory.json").exists()
 
 
@@ -361,3 +393,280 @@ def test_trainer_consumes_locked_weighted_schedule_and_preserves_default(tmp_pat
     with pytest.raises(ValueError, match="Invalid neg_repeat"):
         tbc.resolve_neg_repeat({"sample_id": "bad", "neg_repeat": True}, 12)
     assert AUTHORED_COMPOUND_FAMILIES and AUTHORED_NONRETAIL_OOD_FAMILIES
+
+
+def test_rejector_selector_rejects_all_abstain_unsafe_and_human_agent_leaks() -> None:
+    """Selector fails closed on all-abstain-only, unsafe-only (incl. human_agent), and 0-Bitext-coverage grids."""
+    policy_v2 = load_policy_v2(str(REPO_ROOT / "apps/core_backend/config/policies/intent_policy.v2.json"))
+    idx_sup = STANDARD_INTENTS_46.index("return_policy")
+    lg_sup = np.full((2, 46), -2.0, dtype=np.float64)
+    lg_sup[:, idx_sup] = 5.0
+    zeros_cls = np.zeros((2, 768), dtype=np.float64)
+
+    class _StubLogReg:
+        def __init__(self, **kwargs):
+            self.coef_ = np.zeros((1, 776), dtype=np.float64)
+            self.intercept_ = np.array([0.0], dtype=np.float64)
+
+        def fit(self, X, y):
+            return self
+
+    def _run_selector(p_dom, p_bit, p_neg, cal_dom_intents=("return_policy", "human_agent"), bit_intents=("return_policy",)):
+        def _fake_score(feats, params):
+            n = feats.shape[0]
+            if n == 2 and p_dom is not None:
+                return np.asarray(p_dom, dtype=np.float64)
+            return np.asarray(p_bit if n == len(bit_intents) else p_neg, dtype=np.float64)
+
+        scores = [np.asarray(p_dom, dtype=np.float64), np.asarray(p_bit, dtype=np.float64), np.asarray(p_neg, dtype=np.float64)]
+        call_idx = {"i": 0}
+
+        def _seq_score(feats, params):
+            out = scores[call_idx["i"] % 3]
+            call_idx["i"] += 1
+            return out
+
+        with (
+            patch.object(tbc, "LogisticRegression", _StubLogReg),
+            patch.object(tbc, "score_rejector", side_effect=_seq_score),
+        ):
+            return tbc.fit_selective_rejector_from_arrays(
+                model_version="v4p1-stub",
+                trn_logits=lg_sup,
+                trn_cls=zeros_cls,
+                trn_y=[1, 0],
+                cal_dom_logits=lg_sup[: len(cal_dom_intents)],
+                cal_dom_cls=zeros_cls[: len(cal_dom_intents)],
+                cal_dom_intents=list(cal_dom_intents),
+                bitext_cal_logits=lg_sup[: len(bit_intents)],
+                bitext_cal_cls=zeros_cls[: len(bit_intents)],
+                bitext_cal_intents=list(bit_intents),
+                cal_neg_logits=lg_sup[:1],
+                cal_neg_cls=zeros_cls[:1],
+                temperature=1.0,
+                policy_v2=policy_v2,
+                c_grid=(0.15, 0.35),
+            )
+
+    # 1. All-abstain-only grid: scores < 0.25 -> 0 drafts, 0 unsafe -> must fail closed
+    with pytest.raises(ValueError, match="No feasible CAL rejector point found.*max_dom_corr_when_safe=0/1"):
+        _run_selector([0.10, 0.10], [0.10], [0.10])
+
+    # 2. Unsafe-only grid via misclassified human_agent row routed to retrieve_draft -> must fail closed (never prefer coverage over safety)
+    with pytest.raises(ValueError, match="min_unsafe_when_nonzero_cov=1"):
+        _run_selector([0.85, 0.95], [0.85], [0.10])
+
+    # 3. Domain feasible but 0 Bitext SUPPORTED_11 coverage -> must fail closed
+    with pytest.raises(ValueError, match="max_bitext_corr_when_safe=0/1"):
+        _run_selector([0.85, 0.10], [0.10], [0.10])
+
+    # 4. Feasible selection succeeds only on safe tau separating human_agent/neg from dom + bitext SUPPORTED_11
+    rej, stats = _run_selector([0.70, 0.40], [0.70], [0.40])
+    assert stats["zero_cal_unsafe"] is True
+    assert stats["cal_human_agent_unsafe_draft"] == 0
+    assert stats["cal_dom_correct_draft"] == 1
+    assert stats["cal_bitext_correct_draft"] == 1
+    assert 0.41 <= rej.threshold <= 0.70
+
+
+def test_prepare_splits_excludes_noisy_overlap_with_test(tmp_path: Path) -> None:
+    """prepare_and_lock_splits excludes normalized overlaps between bitext_train_noisy and held-out Bitext test."""
+    init_dir = tmp_path / "init"
+    init_dir.mkdir()
+    (init_dir / "model.safetensors").write_bytes(b"weights")
+    art = tmp_path / "art"
+
+    colliding_text = "wheres my order check status"
+    train_rows = []
+    for i, lbl in enumerate(STANDARD_INTENTS_46):
+        if lbl == "track_order":
+            train_rows.append({"sample_id": "trn_cal_to", "instruction": "where is my order cal item", "intent": lbl})
+            train_rows.append({"sample_id": "trn_a_to", "instruction": "where is my order alpha", "intent": lbl})
+            train_rows.append({"sample_id": "trn_b_to", "instruction": "where is my order beta", "intent": lbl})
+        else:
+            txt = f"{lbl.replace('_', ' ')} unique base {i}"
+            train_rows.append({"sample_id": f"trn_cal_{i}", "instruction": txt + " cal only", "intent": lbl})
+            train_rows.append({"sample_id": f"trn_a_{i}", "instruction": txt, "intent": lbl})
+            train_rows.append({"sample_id": f"trn_b_{i}", "instruction": f"{lbl.replace('_', ' ')} second train item {i}", "intent": lbl})
+    test_df = pd.DataFrame([{"sample_id": "tst_0", "instruction": colliding_text, "intent": "track_order"}])
+    fake_lineage = SimpleNamespace(cleaned_sha256="c" * 64, splits_sha256="d" * 64, train_df=pd.DataFrame(train_rows), test_df=test_df)
+
+    def _fixed_audit(datasets_dir: Path, repo_root: Path):
+        datasets_dir.mkdir(parents=True, exist_ok=True)
+        (datasets_dir / "split_manifest.json").write_text("{}\n", encoding="utf-8")
+        for fn, row in (
+            ("boundary_pos_train.jsonl", {"sample_id": "p1", "instruction": "dom pos trn", "text": "dom pos trn", "intent": "track_order", "group_id": "g_pt"}),
+            ("boundary_neg_train.jsonl", {"sample_id": "n1", "instruction": "dom neg trn", "text": "dom neg trn", "intent": "out_of_scope", "group_id": "g_nt"}),
+            ("boundary_pos_calibration.jsonl", {"sample_id": "p2", "instruction": "dom pos cal", "text": "dom pos cal", "intent": "track_order", "group_id": "g_pc"}),
+            ("boundary_neg_calibration.jsonl", {"sample_id": "n2", "instruction": "dom neg cal", "text": "dom neg cal", "intent": "out_of_scope", "group_id": "g_nc"}),
+            ("boundary_pos_evaluation.jsonl", {"sample_id": "p3", "instruction": "dom pos evl", "text": "dom pos evl", "intent": "track_order", "group_id": "g_pe"}),
+            ("boundary_neg_evaluation.jsonl", {"sample_id": "n3", "instruction": "dom neg evl", "text": "dom neg evl", "intent": "out_of_scope", "group_id": "g_ne"}),
+        ):
+            (datasets_dir / fn).write_text(json.dumps(row) + "\n", encoding="utf-8")
+        return {"token_truncation_audit": {}, "overlap_audit": {}}
+
+    class _StubTok:
+        def encode(self, text, truncation=False, add_special_tokens=True):
+            return [1]
+
+    with (
+        patch.object(tbc, "audit_and_export_boundary_datasets", side_effect=_fixed_audit),
+        patch.object(tbc, "verify_original_46_label_lineage", return_value=fake_lineage),
+        patch.object(tbc, "_load_frozen_benchmark_texts", return_value=[]),
+        patch.object(tbc, "apply_realistic_noise", side_effect=lambda txt, _rng: colliding_text if "where is my order" in txt else f"noisy {txt}"),
+        patch.object(tbc.AutoTokenizer, "from_pretrained", return_value=_StubTok()),
+    ):
+        tbc.prepare_and_lock_splits(
+            worktree_root=REPO_ROOT,
+            data_repo_root=REPO_ROOT,
+            init_model_dir=init_dir,
+            artifact_root=art,
+            replay_per_class=1,
+            noise_aug_per_class=1,
+            bitext_cal_per_class=1,
+        )
+
+    noisy_rows = tbc._read_jsonl(art / "datasets" / "bitext_train_noisy.jsonl")
+    clean_rows = tbc._read_jsonl(art / "datasets" / "bitext_train_clean.jsonl")
+    assert any(r["intent"] == "track_order" for r in clean_rows)
+    assert len(noisy_rows) == 45
+    assert all(tbc._normalize_text(r["text"]) != tbc._normalize_text(colliding_text) for r in noisy_rows)
+
+
+def test_runner_source_provenance_ignores_unrelated_dirty_and_fails_on_relevant_dirty(tmp_path: Path) -> None:
+    """Relevant source guard ignores unrelated PPTX/.gitkeep/audit dirt and fails closed on relevant tracked edits."""
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path, check=True)
+
+    for rel in contrast_mod.RELEVANT_SOURCE_PATHS:
+        p = tmp_path / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(f"# {rel}\n", encoding="utf-8")
+    keep = tmp_path / "artifacts" / "models" / ".gitkeep"
+    keep.parent.mkdir(parents=True, exist_ok=True)
+    keep.write_text("", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, check=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=tmp_path, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    # Unrelated user files: deleted .gitkeep + untracked PPTX + untracked audit doc -> MUST pass
+    keep.unlink()
+    (tmp_path / "docs").mkdir(exist_ok=True)
+    (tmp_path / "docs" / "report.pptx").write_bytes(b"pptx")
+    (tmp_path / "docs" / "audit-b.md").write_text("audit", encoding="utf-8")
+    prov = contrast_mod.verify_relevant_source_provenance(tmp_path)
+    assert len(prov["git_commit"]) == 40
+    assert set(prov["source_hashes"]) == set(contrast_mod.RELEVANT_SOURCE_PATHS)
+
+    # Modify a relevant tracked file -> MUST fail closed
+    rel_file = tmp_path / "pipeline/training/boundary_contrast_data.py"
+    rel_file.write_text("# modified\n", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="Uncommitted changes in relevant source files"):
+        contrast_mod.verify_relevant_source_provenance(tmp_path)
+
+
+def test_gate_sequence_classifier_disabled_rejector_parity(tmp_path: Path) -> None:
+    """GateSequenceClassifier with disabled rejector matches runtime metadata (selective_accepted=None) and preserves routing."""
+    (tmp_path / "config.json").write_text(
+        json.dumps({"id2label": {str(i): lbl for i, lbl in enumerate(STANDARD_INTENTS_46)}}),
+        encoding="utf-8",
+    )
+    seen_hidden_flags = []
+    logits = torch.full((1, 46), -3.0, dtype=torch.float32)
+    logits[0, STANDARD_INTENTS_46.index("return_policy")] = 6.0
+
+    class _StubModel:
+        def eval(self):
+            return self
+
+        def to(self, _dev):
+            return self
+
+        def __call__(self, **kwargs):
+            seen_hidden_flags.append(bool(kwargs.get("output_hidden_states", False)))
+            return SimpleNamespace(logits=logits)
+
+    class _StubTok:
+        def __call__(self, text, **kwargs):
+            return {"input_ids": torch.ones((1, 8), dtype=torch.long), "attention_mask": torch.ones((1, 8), dtype=torch.long)}
+
+    disabled_rejector = {
+        "enabled": False,
+        "type": "logistic_regression_v1",
+        "feature_spec": "cls_l2_plus_logit_geometry_v1",
+        "feature_dim": 776,
+    }
+    with (
+        patch.object(gate_mod.AutoTokenizer, "from_pretrained", return_value=_StubTok()),
+        patch.object(gate_mod.AutoModelForSequenceClassification, "from_pretrained", return_value=_StubModel()),
+    ):
+        clf = gate_mod.GateSequenceClassifier(
+            "disabled-rej-parity",
+            tmp_path,
+            temperature=1.0,
+            calibrated=True,
+            rejector=disabled_rejector,
+        )
+    out = clf.predict("What is your return policy?")
+    assert seen_hidden_flags == [False]
+    assert out["selective_accepted"] is None
+    assert out["rejector_decision"] is None
+    assert out["rejected_by_experimental_adapter"] is False
+    assert out["rejection_score"] is None
+    assert out["intent"] == "return_policy"
+
+
+def test_runner_post_fit_provenance_failure_marks_incomplete(tmp_path: Path) -> None:
+    """Invalid archived candidate provenance fails closed and marks status=incomplete while preserving dirs."""
+    main_cand = tmp_path / "main_cand"
+    main_cand.mkdir(parents=True)
+    local_root = tmp_path / "local"
+    ds_dir = local_root / "dryrun" / "datasets"
+    ds_dir.mkdir(parents=True)
+    (ds_dir / "boundary_pos_train.jsonl").write_bytes(b"{}\n")
+    (ds_dir / "dataset_lock_manifest.json").write_text("{}", encoding="utf-8")
+
+    def _bad_prov_fit(**kwargs):
+        cand = kwargs["artifact_root"] / kwargs["output_subdir"]
+        cand.mkdir(parents=True, exist_ok=True)
+        (cand / "model.safetensors").write_bytes(b"w")
+        (cand / "tokenizer.json").write_bytes(b"{}")
+        (cand / "config.json").write_text(
+            json.dumps({"id2label": {str(i): lbl for i, lbl in enumerate(STANDARD_INTENTS_46)}}),
+            encoding="utf-8",
+        )
+        art_hashes = {
+            fname: hashlib.sha256((cand / fname).read_bytes()).hexdigest()
+            for fname in ("model.safetensors", "tokenizer.json", "config.json")
+        }
+        (cand / "calibration_manifest.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": "selective_calibration.v1",
+                    "artifact_hashes": art_hashes,
+                    "label_space": {"num_labels": 46, "valid_46_label_bijection": True, "id2label": {str(i): lbl for i, lbl in enumerate(STANDARD_INTENTS_46)}},
+                    "calibration": {"temperature": 1.0, "min_temperature": 1.0, "calibrated": True},
+                    "selective_rejector": {"enabled": False, "type": "logistic_regression_v1", "feature_spec": "logit_geometry_v1", "feature_dim": 8, "scaler_mean": [0.0]*8, "scaler_scale": [1.0]*8, "weights": [0.0]*8, "bias": 0.0, "threshold": 0.0},
+                }
+            ),
+            encoding="utf-8",
+        )
+        (cand / "candidate_provenance_manifest.json").write_text(json.dumps({"provenance_status": "unknown"}), encoding="utf-8")
+        return {}
+
+    prov_stub = {"git_commit": "b" * 40, "source_hashes": {"scripts/run_boundary_contrast_fit.py": "a" * 64}}
+    with (
+        patch.object(contrast_mod, "MAIN_CANDIDATES_DIR", main_cand),
+        patch.object(contrast_mod, "LOCAL_CONTRAST_ROOT", local_root),
+        patch.object(contrast_mod, "_snapshot_relevant_sources"),
+        patch.object(contrast_mod, "verify_relevant_source_provenance", return_value=prov_stub),
+        patch.object(contrast_mod, "run_preflight_validation", return_value={"dry_run": True, "canonical_prep": {}, "dataset_hashes": {}, "effective_exposure_counts": {}}),
+        patch.object(contrast_mod, "run_fit_and_lock_candidate", side_effect=_bad_prov_fit),
+        patch.object(sys, "argv", ["prog", "--run-contrast-fit", "--run-id", "fit2-bad-prov"]),
+    ):
+        with pytest.raises(ValueError, match="Archived candidate_provenance_manifest invalid"):
+            contrast_mod.main()
+
+    st = json.loads((main_cand / "run-records-fit2-bad-prov" / "status.json").read_text(encoding="utf-8"))
+    assert st["status"] == "incomplete"
+    assert (main_cand / "fit2-bad-prov").exists()

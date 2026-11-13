@@ -667,7 +667,14 @@ class GateSequenceClassifier:
             text, max_length=64, padding="max_length", truncation=True, return_tensors="pt"
         )
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
-        need_cls = bool(self.rejector and str(self.rejector.get("feature_spec", "")).startswith("cls_"))
+        rejector_active = bool(
+            self.rejector_fn is not None or (self.rejector and self.rejector.get("enabled", True) is not False)
+        )
+        need_cls = bool(
+            self.rejector_fn is None
+            and rejector_active
+            and str(self.rejector.get("feature_spec", "")).startswith("cls_")
+        )
         cls_embedding = None
         with torch.inference_mode():
             outputs = self.model(**inputs, output_hidden_states=True) if need_cls else self.model(**inputs)
@@ -702,7 +709,7 @@ class GateSequenceClassifier:
                     "margin": float(cal_probs[top1_idx] - cal_probs[top2_idx]),
                 }
             )
-        elif self.rejector is not None:
+        elif rejector_active and self.rejector is not None:
             rejected, rejection_score = _evaluate_experimental_rejector(
                 self.rejector, logits, raw_probs, cal_probs, cls_embedding=cls_embedding
             )
@@ -719,9 +726,9 @@ class GateSequenceClassifier:
             "score_kind": score_kind,
             "temperature": self.temperature if self.calibrated else 1.0,
             "rejected_by_experimental_adapter": bool(rejected),
-            "selective_accepted": (not bool(rejected)) if (self.rejector or self.rejector_fn) else None,
+            "selective_accepted": (not bool(rejected)) if rejector_active else None,
             "rejection_score": rejection_score,
-            "rejector_decision": ("reject" if rejected else "accept") if (self.rejector or self.rejector_fn) else None,
+            "rejector_decision": ("reject" if rejected else "accept") if rejector_active else None,
             "model_mode": "trained",
             "verified": True,
         }

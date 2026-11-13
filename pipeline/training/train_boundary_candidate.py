@@ -250,15 +250,31 @@ def fit_selective_rejector_from_arrays(
     bit_cal_routes = _route_probs(_softmax_np(bitext_cal_logits, temperature))
     cal_neg_routes = _route_probs(_softmax_np(cal_neg_logits, temperature))
 
-    sup11_cal_n = max(1, sum(1 for y in cal_dom_intents if y in SUPPORTED_11_DRAFT_SET))
-    bit_esc34_idx = [i for i, y in enumerate(bitext_cal_intents) if y in ESCALATED_34_INTENTS]
+    sup11_dom_raw = sum(1 for y in cal_dom_intents if y in SUPPORTED_11_DRAFT_SET)
+    sup11_bit_idx = [i for i, y in enumerate(bitext_cal_intents) if y in SUPPORTED_11_DRAFT_SET]
+    sup11_bit_raw = len(sup11_bit_idx)
+    if sup11_dom_raw + sup11_bit_raw == 0:
+        raise ValueError("Calibration set contains 0 SUPPORTED_11 draft-eligible rows across domain and Bitext")
+
     dom_esc34_n = sum(1 for y in cal_dom_intents if y in ESCALATED_34_INTENTS)
-    esc34_cal_total = max(1, dom_esc34_n + len(bit_esc34_idx))
+    dom_human_n = sum(1 for y in cal_dom_intents if y == "human_agent")
+    bit_esc34_idx = [i for i, y in enumerate(bitext_cal_intents) if y in ESCALATED_34_INTENTS]
+    bit_human_idx = [i for i, y in enumerate(bitext_cal_intents) if y == "human_agent"]
+    esc34_cal_total = dom_esc34_n + len(bit_esc34_idx)
+    human_cal_total = dom_human_n + len(bit_human_idx)
+    non_draft_cal_total = max(1, esc34_cal_total + human_cal_total)
     neg_cal_n = max(1, len(cal_neg_routes))
 
-    best_key: Tuple[int, float] = (-1, -1e9)
+    best_obj: float = -1e9
     best_params: Optional[SelectiveRejectorParams] = None
     best_stats: Dict[str, Any] = {}
+    feasible_candidates = 0
+    total_candidates = 0
+    safe_candidates = 0
+    nonzero_cov_candidates = 0
+    max_dom_corr_when_safe = 0
+    max_bit_corr_when_safe = 0
+    min_unsafe_when_nonzero_cov: Optional[int] = None
 
     for c_val in c_grid:
         clf = LogisticRegression(C=float(c_val), class_weight="balanced", max_iter=2500, random_state=42)
@@ -278,22 +294,34 @@ def fit_selective_rejector_from_arrays(
         cal_neg_p_in = score_rejector(cal_neg_feats, cand_rej)
 
         for tau in np.linspace(0.25, 0.90, 66):
+            total_candidates += 1
             tau_f = round(float(tau), 4)
-            pos_corr_draft = pos_raw_draft = esc34_unsafe_draft = 0
+            pos_dom_corr = pos_dom_raw = esc34_unsafe_draft = human_unsafe_draft = 0
             for i, gold_y in enumerate(cal_dom_intents):
                 pred_lbl, raw_act = cal_dom_routes[i]
                 eff_act = "manual_fallback" if (raw_act == "retrieve_draft" and cal_dom_p_in[i] < tau_f) else raw_act
                 if gold_y in SUPPORTED_11_DRAFT_SET and eff_act == "retrieve_draft":
-                    pos_raw_draft += 1
+                    pos_dom_raw += 1
                     if pred_lbl == gold_y:
-                        pos_corr_draft += 1
+                        pos_dom_corr += 1
                 elif gold_y in ESCALATED_34_INTENTS and eff_act == "retrieve_draft":
                     esc34_unsafe_draft += 1
+                elif gold_y == "human_agent" and eff_act == "retrieve_draft":
+                    human_unsafe_draft += 1
 
-            for i in bit_esc34_idx:
-                _, raw_act = bit_cal_routes[i]
+            pos_bit_corr = pos_bit_raw = 0
+            for i in sup11_bit_idx:
+                pred_lbl, raw_act = bit_cal_routes[i]
                 if raw_act == "retrieve_draft" and bit_cal_p_in[i] >= tau_f:
+                    pos_bit_raw += 1
+                    if pred_lbl == bitext_cal_intents[i]:
+                        pos_bit_corr += 1
+            for i in bit_esc34_idx:
+                if bit_cal_routes[i][1] == "retrieve_draft" and bit_cal_p_in[i] >= tau_f:
                     esc34_unsafe_draft += 1
+            for i in bit_human_idx:
+                if bit_cal_routes[i][1] == "retrieve_draft" and bit_cal_p_in[i] >= tau_f:
+                    human_unsafe_draft += 1
 
             neg_false_draft = neg_false_accept_any = 0
             for i, (_, raw_act) in enumerate(cal_neg_routes):
@@ -303,17 +331,41 @@ def fit_selective_rejector_from_arrays(
                 if raw_act == "retrieve_draft" and accepted:
                     neg_false_draft += 1
 
-            zero_unsafe = int(neg_false_draft == 0 and esc34_unsafe_draft == 0)
+            non_draft_unsafe = esc34_unsafe_draft + human_unsafe_draft
+            total_unsafe = neg_false_draft + non_draft_unsafe
+            zero_unsafe = total_unsafe == 0
+            nonzero_dom = sup11_dom_raw == 0 or pos_dom_corr > 0
+            nonzero_bit = sup11_bit_raw == 0 or pos_bit_corr > 0
+            nonzero_cov = nonzero_dom and nonzero_bit and (pos_dom_corr + pos_bit_corr > 0)
+
+            if zero_unsafe:
+                safe_candidates += 1
+                max_dom_corr_when_safe = max(max_dom_corr_when_safe, pos_dom_corr)
+                max_bit_corr_when_safe = max(max_bit_corr_when_safe, pos_bit_corr)
+            if nonzero_cov:
+                nonzero_cov_candidates += 1
+                min_unsafe_when_nonzero_cov = (
+                    total_unsafe if min_unsafe_when_nonzero_cov is None else min(min_unsafe_when_nonzero_cov, total_unsafe)
+                )
+            if not (zero_unsafe and nonzero_cov):
+                continue
+
+            feasible_candidates += 1
+            cov_rates = []
+            if sup11_dom_raw > 0:
+                cov_rates.append(pos_dom_corr / sup11_dom_raw)
+            if sup11_bit_raw > 0:
+                cov_rates.append(pos_bit_corr / sup11_bit_raw)
+            sup11_cov_score = sum(cov_rates) / len(cov_rates)
             tau_obj = (
-                (pos_corr_draft / sup11_cal_n)
+                sup11_cov_score
                 - 3.0 * (neg_false_draft / neg_cal_n)
-                - 3.0 * (esc34_unsafe_draft / esc34_cal_total)
+                - 3.0 * (non_draft_unsafe / non_draft_cal_total)
                 - 0.25 * (neg_false_accept_any / neg_cal_n)
                 - 0.02 * abs(tau_f - 0.50)
             )
-            rank_key = (zero_unsafe, tau_obj)
-            if rank_key > best_key:
-                best_key = rank_key
+            if best_params is None or tau_obj > best_obj:
+                best_obj = tau_obj
                 best_params = SelectiveRejectorParams(
                     enabled=True,
                     feature_spec=feature_spec,
@@ -327,19 +379,36 @@ def fit_selective_rejector_from_arrays(
                 best_stats = {
                     "rejector_c": float(c_val),
                     "threshold": tau_f,
-                    "zero_cal_unsafe": bool(zero_unsafe),
-                    "cal_dom_raw_draft": pos_raw_draft,
-                    "cal_dom_correct_draft": pos_corr_draft,
-                    "cal_dom_sup11_total": sup11_cal_n,
+                    "zero_cal_unsafe": True,
+                    "cal_dom_raw_draft": pos_dom_raw,
+                    "cal_dom_correct_draft": pos_dom_corr,
+                    "cal_dom_sup11_total": sup11_dom_raw,
+                    "cal_bitext_raw_draft": pos_bit_raw,
+                    "cal_bitext_correct_draft": pos_bit_corr,
+                    "cal_bitext_sup11_total": sup11_bit_raw,
+                    "cal_sup11_correct_draft": pos_dom_corr + pos_bit_corr,
+                    "cal_sup11_total": sup11_dom_raw + sup11_bit_raw,
                     "cal_esc34_unsafe_draft": esc34_unsafe_draft,
                     "cal_esc34_total": esc34_cal_total,
+                    "cal_human_agent_unsafe_draft": human_unsafe_draft,
+                    "cal_human_agent_total": human_cal_total,
+                    "cal_non_draft_unsafe_draft": non_draft_unsafe,
                     "cal_neg_false_draft": neg_false_draft,
                     "cal_neg_false_accept_any": neg_false_accept_any,
                     "cal_neg_total": len(cal_neg_routes),
+                    "total_candidates_evaluated": total_candidates,
                     "tau_objective": round(float(tau_obj), 5),
                 }
 
-    assert best_params is not None
+    if best_params is None:
+        raise ValueError(
+            "No feasible CAL rejector point found across C grid "
+            f"(evaluated={total_candidates}, safe={safe_candidates}, nonzero_cov={nonzero_cov_candidates}, "
+            f"max_dom_corr_when_safe={max_dom_corr_when_safe}/{sup11_dom_raw}, "
+            f"max_bitext_corr_when_safe={max_bit_corr_when_safe}/{sup11_bit_raw}, "
+            f"min_unsafe_when_nonzero_cov={min_unsafe_when_nonzero_cov})"
+        )
+    best_stats["feasible_candidates"] = feasible_candidates
     return best_params, best_stats
 
 
@@ -418,10 +487,11 @@ def prepare_and_lock_splits(
     gold_norms = {_normalize_text(t) for _, t in gold_bench if _normalize_text(t)}
     gold_toks = [_token_set(t) for _, t in gold_bench if len(_token_set(t)) >= 4]
 
-    # Exclude any Bitext row near frozen benchmarks or domain cal/eval
+    # Exclude any Bitext row near frozen benchmarks, held-out Bitext test, or domain cal/eval
     reserved_norms = {
         _normalize_text(r["instruction"]) for r in (pos_cal + neg_cal + pos_eval + neg_eval)
     }
+    test_norms = {_normalize_text(str(t)) for t in lineage.test_df["instruction"].tolist() if _normalize_text(str(t))}
 
     rng = random.Random(seed)
     bitext_cal_rows: List[Dict[str, Any]] = []
@@ -440,7 +510,7 @@ def prepare_and_lock_splits(
             txt = str(row.instruction)
             sid = str(row.sample_id)
             norm = _normalize_text(txt)
-            if not norm or norm in reserved_norms or _has_gold_conflict(txt, gold_norms, gold_toks):
+            if not norm or norm in reserved_norms or norm in test_norms or _has_gold_conflict(txt, gold_norms, gold_toks):
                 continue
             safe_records.append((sid, txt))
             if len(safe_records) >= bitext_cal_per_class + replay_per_class + 40:
@@ -493,7 +563,8 @@ def prepare_and_lock_splits(
 
         for a_i, (sid, txt) in enumerate(trn_slice[:noise_aug_per_class]):
             noisy_txt = apply_realistic_noise(txt, rng)
-            if _normalize_text(noisy_txt) in cal_norms_all or _has_gold_conflict(noisy_txt, gold_norms, gold_toks):
+            noisy_norm = _normalize_text(noisy_txt)
+            if not noisy_norm or noisy_norm in cal_norms_all or noisy_norm in test_norms or _has_gold_conflict(noisy_txt, gold_norms, gold_toks):
                 continue
             bitext_train_noisy_rows.append(
                 {

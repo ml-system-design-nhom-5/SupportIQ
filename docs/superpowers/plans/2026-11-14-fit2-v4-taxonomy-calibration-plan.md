@@ -6,7 +6,7 @@
 ## 1. Immutable Lineages & Canonical Inputs
 - **Starting Checkpoint:** `artifacts/models/candidates/reconstructed-fit2-supcon-20261113` (`model.safetensors` SHA-256 `f695b1fe514aba81aafc968823047d496b03474a0b47199c65eaac6bd93c6dfa`, `T=1.0`, `selective_rejector.enabled=false`).
 - **Preserved Baselines:** Serving `distilbert-supportiq` (`dc7af8cf...`), Closure (`95a940b6...`), and rejected `v1`/`v2`/`v3` records remain untouched.
-- **Canonical Bitext Prep:** `data/datasets/restored/bitext-12dd624/prep` (`cleaned.csv` SHA-256 `8bc10cfa056371bdecb3394bfd4c75eee7e10022ace5071833ecd140b2d75846`, `split_assignments.csv` SHA-256 `1d366e898f6ba68be46c5ca0f9059e9862fad1d7bafe350d9cdd310dd3e0a04c`).
+- **Canonical Bitext Prep:** `data/datasets/restored/bitext-12dd624/prep` (`cleaned.csv` SHA-256 `8bc10cfa056371bdecb3394bfd4c75eee7e10022ace5071833ecd140b2d75846`, `split_assignments.csv` SHA-256 `1d366e898f6ba68be46c5ca0f9059e9862fad1d7bafe350d9cdd310dd3e0a04c`). Noisy train augmentations (`bitext_train_noisy`) exclude normalized overlaps against held-out `bitext_test_6690`, `CAL`, `eval`, and frozen gold suites, verified end-to-end by `check_split_isolation_and_gold_contamination` across `full_eval_all + bitext_test`.
 
 ## 2. Semantic, Exposure, and OOD Fixes (`boundary_contrast_data.py`)
 1. **Active-KB Semantic Disambiguation:**
@@ -26,10 +26,10 @@
 - **Strict Split Isolation:**
   - Scalar `T >= 1.0` fitted strictly on isolated positive calibration (`pos_cal + bitext_cal`).
   - `StandardScaler` + `LogisticRegression` fitted strictly on `TRAIN` (`pos_train + bitext_clean + neg_train`).
-  - `(C, threshold)` selected strictly on isolated `CAL` (`pos_cal + bitext_cal + neg_cal`) with predeclared objective: rank `(zero_cal_unsafe, cal_dom_correct_draft / sup11_cal_n - 3.0 * neg_false_draft / neg_cal_n - 3.0 * esc34_unsafe_draft / esc34_cal_total - 0.25 * neg_false_accept_any / neg_cal_n - 0.02 * abs(tau - 0.50))`.
+  - `(C, threshold)` selected strictly on isolated `CAL` (`pos_cal + bitext_cal + neg_cal`): candidate points must first satisfy hard feasibility (`zero_cal_unsafe=True` across `neg_cal`, `ESCALATED_34`, AND `human_agent` on both domain CAL and Bitext CAL, plus nonzero `SUPPORTED_11` correct draft coverage on all present `cal_dom` and `bitext_cal` cohorts); fails closed (`ValueError`) if 0 feasible points exist. Among feasible points, ranks by `0.5 * (cal_dom_corr / sup11_dom) + 0.5 * (bitext_cal_corr / sup11_bitext) - 3.0 * neg_false_draft / neg_cal_n - 3.0 * non_draft_unsafe / non_draft_cal_total - 0.25 * neg_false_accept_any / neg_cal_n - 0.02 * abs(tau - 0.50)`.
 
-## 4. Future Authorized Budget & Evaluation Targets (Not Run Now)
-- **Authorized Future Compute Budget:** **1 GPU encoder fit** (`fit2_supcon_energy`, `epochs=2`, `batch_size=32`, `lr=1e-5`, `seed=42`, `--enable-selective-rejector`, `--run-id fit2-boundary-contrast-v4`) + **1 fixed small CPU rejector `C` grid** `(0.15, 0.35, 0.75, 1.5)`. Zero hidden extra encoder fits.
-- **Predeclared Command:**  
-  `python -m scripts.run_boundary_contrast_fit --run-contrast-fit --run-id fit2-boundary-contrast-v4 --enable-selective-rejector`
+## 4. Proposed Future Budget (Pending Coordinator Authorization — Not Yet Authorized)
+- **Proposed Compute Budget (Pending B Re-Review & Coordinator Approval):** **1 GPU encoder fit** (`fit2_supcon_energy`, `epochs=2`, `batch_size=32`, `lr=1e-5`, `seed=42`, `--enable-selective-rejector`, `--run-id fit2-boundary-contrast-v4p1`) + **1 fixed small CPU rejector `C` grid** `(0.15, 0.35, 0.75, 1.5)`. Zero hidden extra encoder fits. Runner verifies clean relevant tracked source provenance vs `HEAD` before starting and audits archived `candidate_provenance_manifest.json` + `calibration_manifest.json` after fit.
+- **Predeclared Command (If Authorized):**  
+  `python -m scripts.run_boundary_contrast_fit --run-contrast-fit --run-id fit2-boundary-contrast-v4p1 --enable-selective-rejector`
 - **Comparison & Acceptance Targets (Feasibility Unproved Until Run):** Compare against frozen Serving (`dc7af8cf`) and original Fit2 (`f695b1fe`): retain `>= 10/12` `final_acceptance_24`, `>= 25/34` `system_acceptance_156`, `ml_noise_420` macro-F1 `>= 0.8573` & `>= 267` correct drafts, and `0` unsafe leaks across all known suites + group-isolated holdout, followed by fresh independent checkpoint review.

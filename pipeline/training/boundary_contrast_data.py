@@ -327,6 +327,7 @@ def prepare_and_lock_contrast_splits(
     bitext_clean = _read_jsonl(datasets_dir / "bitext_train_clean.jsonl")
     bitext_noisy = _read_jsonl(datasets_dir / "bitext_train_noisy.jsonl")
     bitext_cal = _read_jsonl(datasets_dir / "bitext_cal.jsonl")
+    bitext_test = _read_jsonl(datasets_dir / "bitext_test_6690.jsonl")
 
     validate_boundary_split_taxonomy(pos_train_raw, neg_train, "base_train")
     validate_boundary_split_taxonomy(pos_cal_raw, neg_cal, "base_cal")
@@ -350,7 +351,9 @@ def prepare_and_lock_contrast_splits(
     gold_toks = [_token_set(t) for _, t in gold_bench if len(_token_set(t)) >= 4]
     existing_norms = {
         _normalize_text(r["text"])
-        for r in (pos_train + neg_train + pos_cal + neg_cal + pos_eval + neg_eval + bitext_clean + bitext_noisy + bitext_cal)
+        for r in (
+            pos_train + neg_train + pos_cal + neg_cal + pos_eval + neg_eval + bitext_clean + bitext_noisy + bitext_cal + bitext_test
+        )
     }
 
     s46 = set(STANDARD_INTENTS_46)
@@ -494,12 +497,21 @@ def prepare_and_lock_contrast_splits(
     full_train_all = pos_train + neg_train + bitext_clean + bitext_noisy
     full_cal_all = pos_cal + neg_cal + bitext_cal
     full_eval_all = pos_eval + neg_eval
+    full_eval_with_test = full_eval_all + bitext_test
+
+    trn_parents = {str(r["parent_sample_id"]) for r in full_train_all if r.get("parent_sample_id")}
+    cal_parents = {str(r["parent_sample_id"]) for r in full_cal_all if r.get("parent_sample_id")}
+    evl_parents = {str(r.get("parent_sample_id") or r.get("sample_id")) for r in bitext_test} | {
+        str(r["parent_sample_id"]) for r in full_eval_all if r.get("parent_sample_id")
+    }
+    if (trn_parents & cal_parents) or (trn_parents & evl_parents) or (cal_parents & evl_parents):
+        raise RuntimeError("Contrast parent_sample_id overlap across train/cal/eval+test")
 
     gold_tuples = [(f"gold_{i}", f"gold_{i}", t) for i, (_, t) in enumerate(gold_bench)]
     isolation = check_split_isolation_and_gold_contamination(
         train_rows=full_train_all,
         calibration_rows=full_cal_all,
-        eval_rows=full_eval_all,
+        eval_rows=full_eval_with_test,
         gold_texts=gold_tuples,
     )
     if not isolation["passed"]:
