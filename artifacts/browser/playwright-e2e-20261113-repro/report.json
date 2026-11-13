@@ -1,0 +1,686 @@
+{
+  "config": {
+    "argv": [
+      "C:\\Program Files\\nodejs\\node.exe",
+      "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-evidence\\apps\\frontend\\node_modules\\@playwright\\test\\cli.js",
+      "test",
+      "--reporter=json,list"
+    ],
+    "configFile": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-evidence\\apps\\frontend\\playwright.config.ts",
+    "rootDir": "C:/Users/PC/orca/workspaces/SupportIQ/supportiq-final-evidence/apps/frontend/e2e",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "C:/Users/PC/orca/workspaces/SupportIQ/supportiq-final-evidence/apps/frontend/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "desktop",
+        "name": "desktop",
+        "testDir": "C:/Users/PC/orca/workspaces/SupportIQ/supportiq-final-evidence/apps/frontend/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 60000
+      },
+      {
+        "outputDir": "C:/Users/PC/orca/workspaces/SupportIQ/supportiq-final-evidence/apps/frontend/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "tablet",
+        "name": "tablet",
+        "testDir": "C:/Users/PC/orca/workspaces/SupportIQ/supportiq-final-evidence/apps/frontend/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 60000
+      },
+      {
+        "outputDir": "C:/Users/PC/orca/workspaces/SupportIQ/supportiq-final-evidence/apps/frontend/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "mobile",
+        "name": "mobile",
+        "testDir": "C:/Users/PC/orca/workspaces/SupportIQ/supportiq-final-evidence/apps/frontend/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 60000
+      },
+      {
+        "outputDir": "C:/Users/PC/orca/workspaces/SupportIQ/supportiq-final-evidence/apps/frontend/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "small-phone",
+        "name": "small-phone",
+        "testDir": "C:/Users/PC/orca/workspaces/SupportIQ/supportiq-final-evidence/apps/frontend/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 60000
+      }
+    ],
+    "filteredProjects": [
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-evidence\\apps\\frontend\\test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "name": "desktop",
+        "testDir": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-evidence\\apps\\frontend\\e2e",
+        "snapshotDir": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-evidence\\apps\\frontend\\e2e",
+        "testIgnore": [],
+        "testMatch": "**/*.@(spec|test).?(c|m)[jt]s?(x)",
+        "timeout": 60000,
+        "use": {
+          "baseURL": "http://127.0.0.1:8089",
+          "channel": "msedge",
+          "headless": true,
+          "trace": "off",
+          "viewport": {
+            "width": 1440,
+            "height": 900
+          }
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "desktop"
+      },
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-evidence\\apps\\frontend\\test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "name": "tablet",
+        "testDir": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-evidence\\apps\\frontend\\e2e",
+        "snapshotDir": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-evidence\\apps\\frontend\\e2e",
+        "testIgnore": [],
+        "testMatch": "**/*.@(spec|test).?(c|m)[jt]s?(x)",
+        "timeout": 60000,
+        "use": {
+          "baseURL": "http://127.0.0.1:8089",
+          "channel": "msedge",
+          "headless": true,
+          "trace": "off",
+          "viewport": {
+            "width": 768,
+            "height": 1024
+          }
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "tablet"
+      },
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-evidence\\apps\\frontend\\test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "name": "mobile",
+        "testDir": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-evidence\\apps\\frontend\\e2e",
+        "snapshotDir": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-evidence\\apps\\frontend\\e2e",
+        "testIgnore": [],
+        "testMatch": "**/*.@(spec|test).?(c|m)[jt]s?(x)",
+        "timeout": 60000,
+        "use": {
+          "baseURL": "http://127.0.0.1:8089",
+          "channel": "msedge",
+          "headless": true,
+          "trace": "off",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          }
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "mobile"
+      },
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-evidence\\apps\\frontend\\test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "name": "small-phone",
+        "testDir": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-evidence\\apps\\frontend\\e2e",
+        "snapshotDir": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-evidence\\apps\\frontend\\e2e",
+        "testIgnore": [],
+        "testMatch": "**/*.@(spec|test).?(c|m)[jt]s?(x)",
+        "timeout": 60000,
+        "use": {
+          "baseURL": "http://127.0.0.1:8089",
+          "channel": "msedge",
+          "headless": true,
+          "trace": "off",
+          "viewport": {
+            "width": 360,
+            "height": 800
+          }
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": "small-phone"
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "json"
+      ],
+      [
+        "list"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "default",
+    "updateSourceMethod": "patch",
+    "version": "1.64.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "application.spec.ts",
+      "file": "application.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "customer request, human reply and customer receipt",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "desktop",
+              "projectName": "desktop",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 6366,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-13T01:32:09.760Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ac4d568caf1644a25ff7-496232429d68d8a78150",
+          "file": "application.spec.ts",
+          "line": 30,
+          "column": 1
+        },
+        {
+          "title": "admin confirmations, versions and manager reports",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "desktop",
+              "projectName": "desktop",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5192,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-13T01:32:16.330Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ac4d568caf1644a25ff7-78ceb0214d7503f99402",
+          "file": "application.spec.ts",
+          "line": 75,
+          "column": 1
+        },
+        {
+          "title": "general support without an order",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "desktop",
+              "projectName": "desktop",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2806,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-13T01:32:21.603Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ac4d568caf1644a25ff7-bf2547d2cc018d532647",
+          "file": "application.spec.ts",
+          "line": 96,
+          "column": 1
+        },
+        {
+          "title": "customer request, human reply and customer receipt",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "tablet",
+              "projectName": "tablet",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 3874,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  -  1\u001b[39m\n\u001b[31m+ Received  + 11\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   Object {\u001b[39m\n\u001b[31m+     \"description\": \"Ensure touch targets have sufficient size and space\",\u001b[39m\n\u001b[31m+     \"id\": \"target-size\",\u001b[39m\n\u001b[31m+     \"nodes\": Array [\u001b[39m\n\u001b[31m+       Array [\u001b[39m\n\u001b[31m+         \".source-row\",\u001b[39m\n\u001b[31m+       ],\u001b[39m\n\u001b[31m+     ],\u001b[39m\n\u001b[31m+   },\u001b[39m\n\u001b[31m+ ]\u001b[39m",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  -  1\u001b[39m\n\u001b[31m+ Received  + 11\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   Object {\u001b[39m\n\u001b[31m+     \"description\": \"Ensure touch targets have sufficient size and space\",\u001b[39m\n\u001b[31m+     \"id\": \"target-size\",\u001b[39m\n\u001b[31m+     \"nodes\": Array [\u001b[39m\n\u001b[31m+       Array [\u001b[39m\n\u001b[31m+         \".source-row\",\u001b[39m\n\u001b[31m+       ],\u001b[39m\n\u001b[31m+     ],\u001b[39m\n\u001b[31m+   },\u001b[39m\n\u001b[31m+ ]\u001b[39m\n    at capture (C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-evidence\\apps\\frontend\\e2e\\application.spec.ts:27:151)\n    at C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-evidence\\apps\\frontend\\e2e\\application.spec.ts:58:3",
+                    "location": {
+                      "file": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-evidence\\apps\\frontend\\e2e\\application.spec.ts",
+                      "column": 151,
+                      "line": 27
+                    },
+                    "snippet": "\u001b[0m \u001b[90m 25 |\u001b[39m   expect(\u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mevaluate(() \u001b[33m=>\u001b[39m document\u001b[33m.\u001b[39mdocumentElement\u001b[33m.\u001b[39mscrollWidth \u001b[33m>\u001b[39m innerWidth))\u001b[33m.\u001b[39mtoBe(\u001b[36mfalse\u001b[39m)\n \u001b[90m 26 |\u001b[39m   \u001b[36mconst\u001b[39m results \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m \u001b[36mnew\u001b[39m \u001b[33mAxeBuilder\u001b[39m({page})\u001b[33m.\u001b[39mwithTags([\u001b[32m'wcag2a'\u001b[39m\u001b[33m,\u001b[39m\u001b[32m'wcag2aa'\u001b[39m\u001b[33m,\u001b[39m\u001b[32m'wcag21aa'\u001b[39m\u001b[33m,\u001b[39m\u001b[32m'wcag22aa'\u001b[39m])\u001b[33m.\u001b[39manalyze()\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 27 |\u001b[39m   expect(results\u001b[33m.\u001b[39mviolations\u001b[33m.\u001b[39mmap(violation \u001b[33m=>\u001b[39m ({id\u001b[33m:\u001b[39mviolation\u001b[33m.\u001b[39mid\u001b[33m,\u001b[39m description\u001b[33m:\u001b[39mviolation\u001b[33m.\u001b[39mdescription\u001b[33m,\u001b[39m nodes\u001b[33m:\u001b[39mviolation\u001b[33m.\u001b[39mnodes\u001b[33m.\u001b[39mmap(node \u001b[33m=>\u001b[39m node\u001b[33m.\u001b[39mtarget)})))\u001b[33m.\u001b[39mtoEqual([])\n \u001b[90m    |\u001b[39m                                                                                                                                                       \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 28 |\u001b[39m }\n \u001b[90m 29 |\u001b[39m\n \u001b[90m 30 |\u001b[39m test(\u001b[32m'customer request, human reply and customer receipt'\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m ({page}\u001b[33m,\u001b[39m testInfo) \u001b[33m=>\u001b[39m {\u001b[0m"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-evidence\\apps\\frontend\\e2e\\application.spec.ts",
+                        "column": 151,
+                        "line": 27
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  -  1\u001b[39m\n\u001b[31m+ Received  + 11\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   Object {\u001b[39m\n\u001b[31m+     \"description\": \"Ensure touch targets have sufficient size and space\",\u001b[39m\n\u001b[31m+     \"id\": \"target-size\",\u001b[39m\n\u001b[31m+     \"nodes\": Array [\u001b[39m\n\u001b[31m+       Array [\u001b[39m\n\u001b[31m+         \".source-row\",\u001b[39m\n\u001b[31m+       ],\u001b[39m\n\u001b[31m+     ],\u001b[39m\n\u001b[31m+   },\u001b[39m\n\u001b[31m+ ]\u001b[39m\n\n  25 |   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false)\n  26 |   const results = await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa','wcag22aa']).analyze()\n> 27 |   expect(results.violations.map(violation => ({id:violation.id, description:violation.description, nodes:violation.nodes.map(node => node.target)}))).toEqual([])\n     |                                                                                                                                                       ^\n  28 | }\n  29 |\n  30 | test('customer request, human reply and customer receipt', async ({page}, testInfo) => {\n    at capture (C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-evidence\\apps\\frontend\\e2e\\application.spec.ts:27:151)\n    at C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-evidence\\apps\\frontend\\e2e\\application.spec.ts:58:3"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-13T01:32:25.302Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-evidence\\apps\\frontend\\test-results\\application-customer-reque-80b62--reply-and-customer-receipt-tablet\\error-context.md"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-evidence\\apps\\frontend\\e2e\\application.spec.ts",
+                    "column": 151,
+                    "line": 27
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "ac4d568caf1644a25ff7-3283f321a3df9d2124d7",
+          "file": "application.spec.ts",
+          "line": 30,
+          "column": 1
+        },
+        {
+          "title": "admin confirmations, versions and manager reports",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "tablet",
+              "projectName": "tablet",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2194,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-13T01:32:30.251Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ac4d568caf1644a25ff7-d319d5c3acb9776b904b",
+          "file": "application.spec.ts",
+          "line": 75,
+          "column": 1
+        },
+        {
+          "title": "general support without an order",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "tablet",
+              "projectName": "tablet",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2661,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-13T01:32:32.603Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ac4d568caf1644a25ff7-43cde45c3b9aac3a2406",
+          "file": "application.spec.ts",
+          "line": 96,
+          "column": 1
+        },
+        {
+          "title": "customer request, human reply and customer receipt",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "mobile",
+              "projectName": "mobile",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4741,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-13T01:32:36.105Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ac4d568caf1644a25ff7-4616ad4e59d57c6a85a5",
+          "file": "application.spec.ts",
+          "line": 30,
+          "column": 1
+        },
+        {
+          "title": "admin confirmations, versions and manager reports",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "mobile",
+              "projectName": "mobile",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5110,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-13T01:32:41.016Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ac4d568caf1644a25ff7-84568ca3f56732b384a4",
+          "file": "application.spec.ts",
+          "line": 75,
+          "column": 1
+        },
+        {
+          "title": "general support without an order",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "mobile",
+              "projectName": "mobile",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3006,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-13T01:32:46.173Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ac4d568caf1644a25ff7-50b17036beaf9d3e0e4e",
+          "file": "application.spec.ts",
+          "line": 96,
+          "column": 1
+        },
+        {
+          "title": "customer request, human reply and customer receipt",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "small-phone",
+              "projectName": "small-phone",
+              "results": [
+                {
+                  "workerIndex": 4,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5726,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-13T01:32:50.064Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ac4d568caf1644a25ff7-a97c8c2c361b49242990",
+          "file": "application.spec.ts",
+          "line": 30,
+          "column": 1
+        },
+        {
+          "title": "admin confirmations, versions and manager reports",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "small-phone",
+              "projectName": "small-phone",
+              "results": [
+                {
+                  "workerIndex": 4,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 5198,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-13T01:32:55.964Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ac4d568caf1644a25ff7-ed4c7662ca531e0b1564",
+          "file": "application.spec.ts",
+          "line": 75,
+          "column": 1
+        },
+        {
+          "title": "general support without an order",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "small-phone",
+              "projectName": "small-phone",
+              "results": [
+                {
+                  "workerIndex": 4,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2786,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-11-13T01:33:01.220Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "ac4d568caf1644a25ff7-1fbef05f287d02955179",
+          "file": "application.spec.ts",
+          "line": 96,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-11-13T01:32:09.139Z",
+    "duration": 55474.685999999994,
+    "expected": 11,
+    "skipped": 0,
+    "unexpected": 1,
+    "flaky": 0
+  }
+}

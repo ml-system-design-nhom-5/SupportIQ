@@ -24,8 +24,10 @@ Evidence is categorized into distinct tiers to maintain clear boundaries between
      - Within mandatory N=63: 16 `escalate`, 46 `manual_fallback`, 1 encoder fault `NOT_EXECUTED` (21/63 match allowed action sets, 41 safe `manual_fallback` mismatch strict `escalate`, 1 not-executed).
      - Standard pipeline vocabulary: raw `draft`/`abstain`/`escalate`, adapter `retrieve_draft`/`manual_fallback`/`escalate`.
 
-4. **Tier 4: Derived Historical Browser Evidence Assets**:
-   - **Browser Screenshot Catalog:** Preserved in tracked directory [`artifacts/browser/playwright-e2e-20261112/`](../artifacts/browser/playwright-e2e-20261112/) with cryptographic SHA-256 manifest [`manifest.json`](../artifacts/browser/playwright-e2e-20261112/manifest.json) (24 screenshots copied from `.impeccable/review/`; runtime execution log is unverified / null; execution metrics worker-reported unverified).
+4. **Tier 4: Browser Evidence Assets & Fresh Isolated E2E Execution**:
+   - **Fresh Isolated Browser Execution (Post-Fix Verified):** [`artifacts/browser/playwright-e2e-20261113-verified/`](../artifacts/browser/playwright-e2e-20261113-verified/) with machine-generated [`manifest.json`](../artifacts/browser/playwright-e2e-20261113-verified/manifest.json), [`report.json`](../artifacts/browser/playwright-e2e-20261113-verified/report.json), [`playwright.log`](../artifacts/browser/playwright-e2e-20261113-verified/playwright.log), and **48/48** SHA-256 verified screenshots across 4 viewports (`12/12` passed at commit `49fa441`, **controlled mock AI boundary** via `EphemeralMockAIGateway`, `external_provider_calls: 0`).
+   - **Tablet UI Defect Red/Green Provenance:** Preserved pre-fix failing captures in [`artifacts/browser/playwright-e2e-20261113/`](../artifacts/browser/playwright-e2e-20261113/) and [`artifacts/browser/playwright-e2e-20261113-repro/`](../artifacts/browser/playwright-e2e-20261113-repro/) (`11/12` passed, tablet `.source-row` WCAG `target-size` failure) plus focused tablet recheck [`artifacts/browser/playwright-e2e-20261113-tablet-recheck/`](../artifacts/browser/playwright-e2e-20261113-tablet-recheck/) (`1/1`, `6/6` screenshots).
+   - **Derived Historical Browser Catalog:** Preserved in tracked directory [`artifacts/browser/playwright-e2e-20261112/`](../artifacts/browser/playwright-e2e-20261112/) with cryptographic SHA-256 manifest [`manifest.json`](../artifacts/browser/playwright-e2e-20261112/manifest.json) (24 screenshots copied from `.impeccable/review/`; runtime execution log is unverified / null; execution metrics worker-reported unverified).
 
 ---
 
@@ -35,7 +37,7 @@ Evidence is categorized into distinct tiers to maintain clear boundaries between
 | :--- | :--- | :--- | :--- |
 | **FR-01: Intent Classification** | Single-label 46 intents, 12 in-scope; Bitext 10-fold CV Macro-F1 ≥ 0.85 target; confidence display | Real noise F1: clean **0.7858**, casual **0.7359**, typo **0.6267** (Bitext 10-fold CV OOF mean pending coordinator manifest); confidence metadata displayed in console | **PARTIAL / PENDING OOF** |
 | **FR-02: Policy Retrieval & Boundary Checks** | Recall@3 ≥ 0.80; detect expired / conflicting policies | Historical benchmark Recall@3 = **0.9839** (fractional per-query mean across 31 answerable cases); live r3 4/4 fixtures verified with real BGE encoder (2/2 expired filtered, 2/2 conflict detected) | **PASS** |
-| **FR-03: Grounded Draft Generation** | LLM draft with verifiable citations, no ungrounded claims | 100% of drafts cite verifiable doc/version/span; factual claim validity is **PENDING coordinator semantic claim grading** (citation existence != factual claim proof) | **PENDING CLAIM GRADING** |
+| **FR-03: Grounded Draft Generation** | LLM draft with verifiable citations, no ungrounded claims | **21/22 (95.45%)** semantic propositions supported across 6 emitted drafts (1 automatic + 5 oracle-assisted; 5 approve, 1 edit for unresolved public hotline `[PHONE_OR_NUMBER]`, 0 reject) via coordinator review [`semantic_claim_review.json`](../artifacts/evaluation/coordinator-ai-review-20261112/semantic_claim_review.json); **live whole-system AI acceptance still fails** due to 1/12 automatic live draft rate, 4/20 provider timeouts, and open `[PHONE_OR_NUMBER]` hotline defect | **PARTIAL / REVIEWED (21/22 SAMPLE; WHOLE-SYSTEM FAIL)** |
 | **FR-04: Human Oversight & No-Auto-Send** | Staff review/edit/send; strictly NO automated sending | **20/20 (100%)** customer HTTP tickets verified with `reply: null` and `customer_status: "received"` (the 4 component fixtures are retrieval-only and have NULL customer HTTP fields); zero automated sends | **PASS** |
 | **FR-05: Abstention, Fallback & Escalation** | Safe fallback on uncertainty, missing info, errors | Low confidence abstains; sensitive requests escalate; system errors fail closed without hallucinations | **PASS** |
 | **FR-06: Human Authority for Sensitive Actions** | Refund/financial exceptions require manager authority | `Ticket.is_authority_required: true` enforced on sensitive keywords/intents; staff direct reply blocked (403 `authority-required`) | **PASS** |
@@ -46,8 +48,8 @@ Evidence is categorized into distinct tiers to maintain clear boundaries between
 | **External LLM Reliability & Cost** | Reliable generation within budget | Live r3: **4/20 provider timeouts**; Diagnostic: **2/7 timeouts**. Per-attempt token usage recorded when returned by provider; complete total/average cost remains UNKNOWN because failed requests lack provider usage (list-price estimates conditional) | **OPEN DEFICIENCY / BLOCKED** |
 | **Staff Intent Override Diagnostic** | Recover low-confidence cases via human-in-the-loop | **5/7 assisted drafts**, **2 failed (provider timeouts)**; 7/7 no-auto-send; 7/7 audit logs | **5/7 DRAFTS, 2 TIMEOUTS** (Diagnostic only, not full success) |
 | **Component Benchmark Action Routing** | Component-level strict routing contract | N=156: **74/156** exact matches; within mandatory N=63: 21/63 allowed, **41 safe manual_fallback mismatch strict escalate**, 1 encoder fault not-executed (`data/benchmarks/system/v2/acceptance/cases.jsonl`) | **74/156 MATCHES; MANDATORY 21/63 MATCHES (Component Boundary)** |
-| **UI Responsiveness (Browser E2E)** | Desktop (1440x900) & Mobile (390x844) clean layout | Worker-reported 6/6 passed (unverified); 24 screenshot assets preserved with verified SHA-256 hashes; runtime execution log unverified / null | **WORKER-REPORTED / UNVERIFIED** |
-| **Paired Agent Study & Semantic Grading** | Measure assisted vs manual time; semantic grading | Delegated to coordinator; awaiting actual agent trial data | **PENDING** |
+| **UI Responsiveness (Browser E2E)** | Desktop (1440x900), Tablet (768x1024), Mobile (390x844), Small-Phone (360x800) clean layout & WCAG 2.2 AA | **12/12 passed** (`48/48` screenshots + SHA-256 + `report.json` + `playwright.log`) against actual `apps/frontend/dist` + FastAPI `create_app` + isolated ephemeral PG schema + **controlled mock AI boundary** (`EphemeralMockAIGateway`, `llm_unavailable`, `external_provider_calls: 0`) after fixing tablet `.reply-panel` / `.source-row` overlap (`f5de616`); historical [`playwright-e2e-20261112/`](../artifacts/browser/playwright-e2e-20261112/) preserved as unverified assets | **VERIFIED (MOCK AI BOUNDARY)** |
+| **Paired Agent Study & Semantic Grading** | Measure assisted vs manual time; semantic grading | **12 paired AI cases completed** (`0` human participants; [`summary.json`](../artifacts/evaluation/coordinator-paired-ai-20261112/summary.json)): mean **8.974584s** manual vs **8.970244s** assisted (median 7.747585s vs 8.171049s; 5 approve, 1 edit, 6 manual fallback) — **no demonstrated productivity gain**; semantic grading **21/22 (95.45%)** | **COMPLETE (NO GAIN SHOWN)** |
 
 ---
 
@@ -93,7 +95,7 @@ Evidence is categorized into distinct tiers to maintain clear boundaries between
 - **Evidence & Exact Metrics:**
   - In Live Run r3: The single automatic draft generated (`final-case-02`) contained valid citations matching active KB snapshots.
   - In `test_final_acceptance_collector.py::test_collector_source_snapshot_version_collision_and_hash_verification`, collector verifies cryptographic hashes of all cited documents against disk snapshots.
-  - **Honest Boundary:** Source citation existence does NOT prove factual claim validity. Factual claim correctness is **PENDING coordinator semantic claim grading**.
+  - **Semantic Claim Grading & Honest Boundary:** Coordinator proposition-level grading ([`semantic_claim_review.json`](../artifacts/evaluation/coordinator-ai-review-20261112/semantic_claim_review.json)) scored **21/22 (95.45%)** grouped verification units supported across 6 emitted drafts (1 automatic live draft + 5 oracle-assisted drafts; 5 approve, 1 edit, 0 reject). One proposition failed because the draft retained an unresolved placeholder/public hotline reference (`[PHONE_OR_NUMBER]`, open defect). Because only 1/12 live non-escalated tickets received an automatic draft and 4/20 provider calls timed out, sample claim grading passes the 90% proposition threshold (`sample_threshold_met: true`) while whole-system live AI acceptance remains **FAIL** (`whole_system_acceptance: false`). Source citation existence does NOT prove factual claim validity, and fresh browser E2E used a controlled mock AI boundary rather than live ML output.
 
 ### FR-04: Human Oversight & Strict No-Auto-Send Invariant
 - **Requirement:** Staff interface to view, edit, approve, or reject drafts. System MUST NEVER send messages automatically to customers.
@@ -170,64 +172,47 @@ Evidence is categorized into distinct tiers to maintain clear boundaries between
 | **ML Macro-F1 (Noise)** | Bitext 10-fold CV Macro-F1 ≥ 0.85 (spec target in CHỦ ĐỀ 1) | Clean: **0.7858**, Casual: **0.7359**, Typo: **0.6267** | From `robustness_summary.json` (n=420); overall noise accuracy 65.48%. The ≥ 0.85 target applies to Bitext 10-fold CV (whose OOF mean is pending coordinator manifest), not an invented threshold on the noise dataset. |
 | **Policy-Scope & Safety Regressions** | 100% pass on policy-scope boundary & escalation cases | **11/11 passed** | Offline policy-scope and safety regression suite (`test_routing_safety_regressions.py`), not noise robustness. |
 | **Retrieval Recall@3** | ≥ 0.80 on answerable queries | **0.9839** (fractional mean across 31 answerable cases) | Fractional per-query mean across 31 answerable benchmark cases (separate manifest; not 31/31 binary recall). 4/4 fixtures in live r3 passed with real BGE encoder. |
-| **LLM Grounding** | ≥ 90% facts supported by citations | **PENDING** | Semantic claim grading pending coordinator review; citation existence != supported claim. |
+| **LLM Grounding** | ≥ 90% facts supported by citations | **21/22 (95.45%)** sample props; **WHOLE-SYSTEM FAIL** | Coordinator review of 6 emitted drafts (1 auto + 5 oracle-assisted): 5 approve, 1 edit (`[PHONE_OR_NUMBER]` hotline defect), 0 reject. Live coverage remains only 1/12 auto-drafted. |
 | **Safety: Human Approval**| 100% replies via human flow; 0 auto-send | **100% (20/20 HTTP tickets)** | 20 customer HTTP tickets verified in database and customer GET view (the 4 component fixtures are NULL HTTP observations). |
 | **Mandatory Escalation** | 100% mandatory cases escalate | **100% (3/3)** escalated | `final-case-13`, `final-case-14`, and human request. |
 | **End-to-End Latency** | p95 ≤ 12.0 seconds | Application p50 = **0.34s**, p95 = **10.76s** | **Passes budget** (10.76s < 12.0s). |
-| **UI Responsiveness** | Desktop & Mobile views clean | **Worker-reported 6/6 passed (unverified); assets preserved** | Worker-reported unverified historical assertion (no test runner machine log attached); 24 screenshots preserved in tracked folder with cryptographic SHA-256 manifest; execution log null/unverified. |
-| **Product Value: Handling Time** | Compare manual vs assisted time | **PENDING** | Coordinator owns paired agent trial execution. |
+| **UI Responsiveness** | Desktop, Tablet, Mobile, Small-Phone clean + axe WCAG 2.2 AA | **12/12 passed (Mock AI boundary)** | Fresh isolated run [`playwright-e2e-20261113-verified/`](../artifacts/browser/playwright-e2e-20261113-verified/) on commit `49fa441`: `48/48` screenshots, `report.json`, `playwright.log`, SHA-256 manifest, `external_provider_calls: 0`. Historical [`playwright-e2e-20261112/`](../artifacts/browser/playwright-e2e-20261112/) kept as derived unverified assets. |
+| **Product Value: Handling Time** | Compare manual vs assisted time | **No demonstrated productivity gain** | 12 paired AI cases (`0` human participants; [`summary.json`](../artifacts/evaluation/coordinator-paired-ai-20261112/summary.json)): mean manual **8.974584s** vs assisted **8.970244s** (`-0.004340s`; median 7.747585s vs 8.171049s; 5 approve, 1 edit, 6 manual fallback). |
 
 ---
 
 ## 4. Playwright Browser E2E Verification Details
 
-- **Test Specification:** `apps/frontend/e2e/application.spec.ts`
-- **Committed Configuration Target:** `apps/frontend/playwright.config.ts` (`baseURL: http://127.0.0.1:8080`, `channel: 'msedge'`, `headless: true`, projects: `desktop`, `tablet`, `mobile`, `small-phone`).
-- **Execution Results Status:**
-  - The historical assertion of "6 passed (3 desktop, 3 mobile) in 21.2s" is a **worker-reported / unverified prior capture**. No automated test runner JSON log (`test-results.json`) was attached on disk.
-  - Screenshots are preserved as **derived historical assets** with cryptographic SHA-256 hashes in [`artifacts/browser/playwright-e2e-20261112/`](../artifacts/browser/playwright-e2e-20261112/) (see [`manifest.json`](../artifacts/browser/playwright-e2e-20261112/manifest.json)). Unknown runtime origin fields are marked `null / unverified`.
-- **Actual Spec Routes & Scenarios:**
-  1. `customer request, human reply and customer receipt`:
-     - Customer sign-in: `/sign-in`
-     - Products catalog: `/shop`
-     - Orders list: `/shop/orders`
-     - Order detail support submit: `/shop/orders/{id}` -> submit form -> receives ticket
-     - Staff console ticket detail: `/console/tickets/{id}`
-     - Customer ticket verification: `/shop/support/{id}` (verifies received reply and "Replied" badge)
-  2. `admin confirmations, versions and manager reports`:
-     - Admin internal accounts: `/console/accounts`
-     - Modal dialog: Make manager confirmation
-     - Versions page: `/console/versions`
-     - Manager reports page: `/console/reports` (verifies "Support reports" heading and "Tickets created" metric; does not execute escalation approval)
-  3. `general support without an order`:
-     - General support: `/shop/support` -> submits query -> receives ticket
-- **Preserved Screenshot Artifacts (Tracked Relative Links):**
-  - Desktop (1440x900):
-    - [sign-in-desktop.png](../artifacts/browser/playwright-e2e-20261112/sign-in-desktop.png)
-    - [products-desktop.png](../artifacts/browser/playwright-e2e-20261112/products-desktop.png)
-    - [orders-desktop.png](../artifacts/browser/playwright-e2e-20261112/orders-desktop.png)
-    - [order-received-desktop.png](../artifacts/browser/playwright-e2e-20261112/order-received-desktop.png)
-    - [console-desktop.png](../artifacts/browser/playwright-e2e-20261112/console-desktop.png)
-    - [order-replied-desktop.png](../artifacts/browser/playwright-e2e-20261112/order-replied-desktop.png)
-    - [accounts-desktop.png](../artifacts/browser/playwright-e2e-20261112/accounts-desktop.png)
-    - [account-confirmation-desktop.png](../artifacts/browser/playwright-e2e-20261112/account-confirmation-desktop.png)
-    - [versions-desktop.png](../artifacts/browser/playwright-e2e-20261112/versions-desktop.png)
-    - [reports-desktop.png](../artifacts/browser/playwright-e2e-20261112/reports-desktop.png)
-    - [general-support-desktop.png](../artifacts/browser/playwright-e2e-20261112/general-support-desktop.png)
-    - [general-request-desktop.png](../artifacts/browser/playwright-e2e-20261112/general-request-desktop.png)
-  - Mobile (390x844):
-    - [sign-in-mobile.png](../artifacts/browser/playwright-e2e-20261112/sign-in-mobile.png)
-    - [products-mobile.png](../artifacts/browser/playwright-e2e-20261112/products-mobile.png)
-    - [orders-mobile.png](../artifacts/browser/playwright-e2e-20261112/orders-mobile.png)
-    - [order-received-mobile.png](../artifacts/browser/playwright-e2e-20261112/order-received-mobile.png)
-    - [console-mobile.png](../artifacts/browser/playwright-e2e-20261112/console-mobile.png)
-    - [order-replied-mobile.png](../artifacts/browser/playwright-e2e-20261112/order-replied-mobile.png)
-    - [accounts-mobile.png](../artifacts/browser/playwright-e2e-20261112/accounts-mobile.png)
-    - [account-confirmation-mobile.png](../artifacts/browser/playwright-e2e-20261112/account-confirmation-mobile.png)
-    - [versions-mobile.png](../artifacts/browser/playwright-e2e-20261112/versions-mobile.png)
-    - [reports-mobile.png](../artifacts/browser/playwright-e2e-20261112/reports-mobile.png)
-    - [general-support-mobile.png](../artifacts/browser/playwright-e2e-20261112/general-support-mobile.png)
-    - [general-request-mobile.png](../artifacts/browser/playwright-e2e-20261112/general-request-mobile.png)
+### 4.1 Fresh Isolated Browser Execution (`playwright-e2e-20261113-verified/`) — Mock AI Boundary
+- **Test Specification & Config:** `apps/frontend/e2e/application.spec.ts` (`apps/frontend/playwright.config.ts`: `channel: 'msedge'`, `headless: true`, projects: `desktop` 1440x900, `tablet` 768x1024, `mobile` 390x844, `small-phone` 360x800).
+- **Status:** **Verified Fresh Execution — 12/12 passed, 0 failed, 0 skipped, 0 flaky** (controlled mock AI boundary).
+- **Commit, Version & Timing:**
+  - Commit: `49fa441d8a56a1c8efcc0fc8a1266ab6fa54db39`
+  - Started / Created: `2026-11-13T01:39:36.752773+00:00` -> `2026-11-13T01:40:48.636676+00:00`
+  - Playwright Version: `Version 1.64.1` (`channel: "msedge"`, `headless: true`)
+  - Duration: `61.72s` Playwright execution (`61165.23ms` reporter stats), `71.88s` total isolated pipeline
+- **Actual Command & Isolated Ports/Schema:**
+  - Command: `C:\Users\PC\AppData\Local\pnpm\bin\pnpm.CMD --dir C:\Users\PC\orca\workspaces\SupportIQ\supportiq-final-evidence\apps\frontend exec playwright test --reporter=json,list`
+  - Backend: FastAPI `create_app` serving built `apps/frontend/dist` at `http://127.0.0.1:8089`
+  - Database: Owned ephemeral PostgreSQL cluster at `127.0.0.1:55500`, isolated random schema `browser_e2e_e61b5e789a` (dropped + temp cluster removed on teardown), temporary synthetic worker credentials (restored on teardown)
+  - AI Service: Owned loopback `EphemeralMockAIGateway` at `http://127.0.0.1:49272` (`llm_unavailable`, `external_provider_calls: 0`)
+- **Machine Reporter & SHA-256 Artifacts:**
+  - [`report.json`](../artifacts/browser/playwright-e2e-20261113-verified/report.json) (SHA-256: `2f310458903fde52782f031380ed8d70ab612b9faab4b2f58059811cf53ebeda`)
+  - [`playwright.log`](../artifacts/browser/playwright-e2e-20261113-verified/playwright.log) (SHA-256: `d2273a6c7f1591ba7ce83c68dd55655a502252cd49559d29394e9ba67a4ff05b`)
+  - [`manifest.json`](../artifacts/browser/playwright-e2e-20261113-verified/manifest.json) (**48/48** SHA-256 verified PNG screenshots: 12 screens x 4 viewports)
+- **Actual Spec Routes, Verified Flows & Explicit Mock-AI Boundary:**
+  1. `customer request, human reply and customer receipt`: `/sign-in` -> `/shop` -> `/shop/orders` -> `/shop/orders/{id}` -> `/console/tickets/{id}` (explicit staff reply) -> `/shop/support/{id}` (`Replied` badge).
+  2. `admin confirmations, versions and manager reports`: `/console/accounts` -> confirmation modal cancellation -> `/console/versions` -> `/console/reports` ("Support reports" heading and "Tickets created" metric; does **not** exercise manager escalation approval).
+  3. `general support without an order`: `/shop/support` -> submits general query -> receives ticket.
+  4. Automated checks per page (`checkPage` helper): `scrollWidth <= innerWidth` horizontal overflow check + `@axe-core/playwright` WCAG 2.0/2.1/2.2 AA (`wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`, `wcag22aa`).
+  - **Mock AI Boundary (NOT Live ML/LLM Acceptance):** `EphemeralMockAIGateway` returns `llm_unavailable` fallback states with `external_provider_calls: 0`; this proves real built frontend/backend/DB/browser/accessibility/manual-reply integration, **not** live ML/LLM draft acceptance, factual AI claim support, or manager escalation approval.
+
+### 4.2 Tablet UI Defect Red/Green Provenance
+- **Red Pre-Fix Evidence (Preserved Untouched):** [`artifacts/browser/playwright-e2e-20261113/`](../artifacts/browser/playwright-e2e-20261113/) and [`artifacts/browser/playwright-e2e-20261113-repro/`](../artifacts/browser/playwright-e2e-20261113-repro/) (commit `8c8e5e1`, `11/12` passed, `1` failed, `47/48` screenshots, missing `order-replied-tablet.png`) failed `[tablet] › e2e/application.spec.ts:30:1` on axe WCAG 2.2 AA `target-size` (`wcag22aa`, `wcag258`) for `<button class="source-row">` because `.reply-panel` retained `flex: 1 0 360px` under `@media (max-width: 1000px)` with `.panel { overflow: hidden }`, allowing `#reply-body` to overlap `.source-row` (smallest unobstructed space `470px x 2.7px < 24x24px`).
+- **Fix & Focused Verification:** Commit `f5de616` changed `.reply-panel` in `apps/frontend/src/styles.css` from `flex: 1 0 360px` to `flex: 1 0 auto`, rebuilt `apps/frontend/dist`, passed Vitest (`4/4` files, `18/18` tests), passed `impeccable detect` (`[]`) and `design-taste-frontend` lint (`0 FAIL, 3 WARN`), passed focused tablet recheck [`artifacts/browser/playwright-e2e-20261113-tablet-recheck/`](../artifacts/browser/playwright-e2e-20261113-tablet-recheck/) (`1/1`, `6/6` screenshots), and passed all `12/12` tests in [`playwright-e2e-20261113-verified/`](../artifacts/browser/playwright-e20261113-verified/).
+
+### 4.3 Derived Historical Browser Assets (`playwright-e2e-20261112/`)
+- Preserved in [`artifacts/browser/playwright-e2e-20261112/`](../artifacts/browser/playwright-e2e-20261112/) (24 screenshots copied from `.impeccable/review/` across `desktop` and `mobile`/`tablet`/`small-phone` cataloged in [`manifest.json`](../artifacts/browser/playwright-e2e-20261112/manifest.json); `raw_test_results_log_attached: false`, worker-reported historical assertion preserved as unverified provenance).
 
 ---
 
@@ -259,14 +244,14 @@ Evidence is categorized into distinct tiers to maintain clear boundaries between
 4. **Bounded Credential Scrubber (No Universal PII Protection):**
    - `sanitize_error` is a bounded pattern-matching regex scrubber targeting standard database connection URIs, passwords, and bearer tokens. Universal PII protection across arbitrary error messages or stack traces is unsupported.
 
-5. **Semantic Claim Grading Pending:**
-   - Factual correctness of statements in drafted responses is subject to manual/coordinator semantic grading, which is pending.
+5. **Semantic Claim Grading & Unresolved Public Hotline Defect:**
+   - Coordinator proposition-level grading ([`semantic_claim_review.json`](../artifacts/evaluation/coordinator-ai-review-20261112/semantic_claim_review.json)) evaluated 6 emitted drafts (1 automatic + 5 oracle-assisted) and scored **21/22 (95.45%)** verification units supported (`5 approve`, `1 edit`, `0 reject`), with one failure due to an unresolved `[PHONE_OR_NUMBER]` hotline placeholder defect. Sample threshold is met (`sample_threshold_met: true`), while live whole-system AI acceptance remains **FAIL** (`whole_system_acceptance: false`).
 
-6. **Paired Agent Study Pending:**
-   - Comparison of ticket resolution times between unassisted manual staff and AI-assisted staff is owned by the coordinator and remains pending.
+6. **Paired AI Timing Exercise Shows No Productivity Gain:**
+   - Coordinator 12-case paired AI exercise ([`summary.json`](../artifacts/evaluation/coordinator-paired-ai-20261112/summary.json)) included `0` human participants and observed mean manual handling time **8.974584s** vs assisted **8.970244s** (`-0.004340s`; median `7.747585s` vs `8.171049s`; 5 approve, 1 edit, 6 manual fallback) — **no demonstrated productivity gain**.
 
-7. **Browser Execution Log Unverified:**
-   - Preserved screenshot assets have verified SHA-256 hashes, but the original execution environment and runtime metrics remain worker-reported without a machine-generated test runner log artifact.
+7. **Browser E2E Mock AI Boundary & Historical Provenance:**
+   - Fresh isolated browser execution ([`playwright-e2e-20261113-verified/`](../artifacts/browser/playwright-e20261113-verified/)) passes **12/12** (`48/48` screenshots, machine `report.json`, `playwright.log`) against actual `apps/frontend/dist` and FastAPI `create_app`, using `EphemeralMockAIGateway` (`llm_unavailable`, `external_provider_calls: 0`). This verifies real UI/API/accessibility integration and manual flows, **not** live ML/LLM draft acceptance, AI factual support, or manager escalation-approval workflow. Historical [`playwright-e2e-20261112/`](../artifacts/browser/playwright-e20261112/) remains preserved as derived unverified screenshot assets (`raw_test_results_log_attached: false`).
 
 8. **No Outside Endorsement Claimed:**
    - All evaluation was conducted within the controlled, isolated multi-agent evaluation environment under delegated AI stakeholder authority. No external instructor or university approval is asserted.
