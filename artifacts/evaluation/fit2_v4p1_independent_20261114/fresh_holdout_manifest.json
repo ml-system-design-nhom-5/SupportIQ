@@ -1,0 +1,50 @@
+{
+  "holdout_id": "fit2_v4p1_fresh_independent_34_20261114",
+  "status": "LOCKED_PRE_EVALUATION",
+  "cases_file": "artifacts/evaluation/fit2_v4p1_independent_20261114/fresh_holdout_34.jsonl",
+  "cases_sha256": "c1482fb4f8e60c58e0afc8b626fecce693dda9314559e22f9d92a195c9405f4c",
+  "total_cases": 34,
+  "slice_counts": {
+    "supported": 12,
+    "novel_ood": 11,
+    "mandatory_escalation": 11
+  },
+  "subgroup_counts": {
+    "supported/answerable": 11,
+    "supported/human_agent_escalation": 1,
+    "novel_ood/foreign_domain": 6,
+    "novel_ood/retail_adjacent_unsupported": 5,
+    "mandatory_escalation/compound": 6,
+    "mandatory_escalation/single": 5
+  },
+  "supported_intents": {
+    "track_order": 1,
+    "cancel_order": 1,
+    "delivery_time": 1,
+    "delivery_issue": 1,
+    "shipping_costs": 1,
+    "return_policy": 1,
+    "return_product": 1,
+    "refund_policy": 1,
+    "request_refund": 1,
+    "refund_status": 1,
+    "payment_issue": 1,
+    "human_agent": 1
+  },
+  "active_kb_release": "current-policies-v1",
+  "approved_kb_sha256": "f8dcfbbdbb9cb2cd7a09d2ec12e0149083fdd4fa04931df6261fc4d1e6425fec",
+  "kb_release_sha256": "cf450a72758e3d68ac7453802b5bc6c042ef2eddb9a6c4fa76483d4009c42804",
+  "intent_policy_sha256": "8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+  "isolation_audit": {
+    "files_scanned": 1141,
+    "corpus_texts": 54712,
+    "corpus_groups": 24151,
+    "group_overlaps": 0,
+    "exact_text_overlaps": 0,
+    "near_duplicates_jaccard_ge_0_70_or_seq_ge_0_85": 0,
+    "internal_duplicates": 0,
+    "max_jaccard_vs_corpus": 0.4737,
+    "max_seq_ratio_vs_corpus": 0.6286
+  },
+  "pre_prediction_guarantee": "Authored, verified, and committed prior to running any model prediction on fit2-boundary-contrast-v4p1 or baselines."
+}
