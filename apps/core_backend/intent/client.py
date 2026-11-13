@@ -1,9 +1,25 @@
 import logging
-from typing import Optional
+import math
+from typing import Any, Optional
 import httpx
 from apps.core_backend.intent.schemas import IntentPrediction
 
 logger = logging.getLogger("intent_client")
+
+
+def _validate_response_float(
+    value: Any,
+    field_name: str,
+    *,
+    min_value: float,
+    max_value: float,
+) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{field_name} must be a finite number, got {value!r}")
+    num = float(value)
+    if not math.isfinite(num) or num < min_value or num > max_value:
+        raise ValueError(f"{field_name} must be finite and in [{min_value}, {max_value}], got {value!r}")
+    return num
 
 class IntentClient:
     def __init__(
@@ -48,6 +64,8 @@ class IntentClient:
             resp = self._get_client().post(f"{self.base_url}/predict", json=payload, timeout=self.timeout)
             resp.raise_for_status()
             data = resp.json()
+            if not isinstance(data, dict):
+                raise ValueError("Inference response payload must be a JSON object")
 
             # Validate response model_version matches expected version
             resp_version = data.get("model_version")
@@ -57,18 +75,51 @@ class IntentClient:
                     intent="unknown",
                     confidence=0.0,
                     margin=0.0,
-                    model_version=resp_version or "unknown",
+                    model_version=resp_version if isinstance(resp_version, str) and resp_version else "unknown",
                     error=f"Model version mismatch: expected {self.expected_model_version}, got {resp_version}",
                 )
 
+            intent = data.get("intent")
+            if not isinstance(intent, str) or not intent.strip():
+                raise ValueError(f"Malformed intent in /predict response: {intent!r}")
+
+            confidence = _validate_response_float(
+                data.get("confidence"),
+                "confidence",
+                min_value=0.0,
+                max_value=1.0,
+            )
+            raw_margin_val = data.get("margin")
+            margin = (
+                _validate_response_float(raw_margin_val, "margin", min_value=-1.0, max_value=1.0)
+                if raw_margin_val is not None
+                else None
+            )
+
             return IntentPrediction(
-                intent=data["intent"],
-                confidence=data["confidence"],
-                margin=data.get("margin"),
-                model_version=data["model_version"],
+                intent=intent,
+                confidence=confidence,
+                margin=margin,
+                model_version=resp_version,
                 top_k=data.get("top_k"),
                 score_kind=data.get("score_kind", "uncalibrated_softmax"),
-                error=None,
+                request_id=data.get("request_id"),
+                model_checksum=data.get("model_checksum"),
+                tokenizer_checksum=data.get("tokenizer_checksum"),
+                model_mode=data.get("model_mode"),
+                verified=data.get("verified"),
+                raw_confidence=data.get("raw_confidence"),
+                raw_margin=data.get("raw_margin"),
+                raw_score_kind=data.get("raw_score_kind"),
+                calibration_temperature=data.get("calibration_temperature"),
+                calibration_schema_version=data.get("calibration_schema_version"),
+                calibration_checksum=data.get("calibration_checksum"),
+                selective_accepted=data.get("selective_accepted"),
+                selective_score=data.get("selective_score"),
+                selective_threshold=data.get("selective_threshold"),
+                rejected_by_experimental_adapter=data.get("rejected_by_experimental_adapter"),
+                rejector_decision=data.get("rejector_decision"),
+                error=data.get("error"),
             )
         except Exception as exc:
             logger.warning(f"Inference service failed: {exc}")
