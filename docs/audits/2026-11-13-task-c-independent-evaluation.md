@@ -185,4 +185,75 @@ Artifacts:
 - **Worker B (`23767a7` `ModelContainer` + `Engine._analyse`):** Verified for score parity and `Engine`-path rejector enforcement; **blocked from full system promotion** alongside `028ed76` leaks until `apps/core_backend/intent/{schemas.py,client.py,routing.py}` preserves and enforces rejector metadata end-to-end.
 - **Artifact SHA-256 (`classifier_gate_task_a_selective_20261113/report_hashes.json`):** `gate_report.json` (`674ad9f99659c1ac2a0e193446efa4674fa19c7499c8d4af96267b1890f257f0`), `CLASSIFIER_GATE_REPORT.md` (`6bae82d6d13702c6e8d35187c1b4f82498c2c75bf07ee1bb49f47febd5f0b8ac`), `selective_supplement.json` (`a53750be7c4ca7f365f27de19a88be102cc1a60e7f18577e1aa0faeeb4f80c11`).
 
+---
+
+## 9. Bounded Real-Application Gemini 3.5 Flash-Lite Acceptance & Stored 10-Fold OOF Lineage Audit
+
+- **Runner & Guard Harness:** [`pipeline/evaluation/flash_lite_acceptance.py`](../../pipeline/evaluation/flash_lite_acceptance.py), [`scripts/run_flash_lite_acceptance.py`](../../scripts/run_flash_lite_acceptance.py), [`tests/unit/test_flash_lite_acceptance_runner.py`](../../tests/unit/test_flash_lite_acceptance_runner.py) (with zero production code edits).
+- **Cumulative Live HTTP Budget Ledger (Authorized Cap = 24 Actual Requests Inclusive of Retries & Diagnostics):**
+  - **Run 1 (`flash-lite-35-20261113-075914-153b01`):** `5` actual Gemini 3.5 Flash-Lite HTTP requests (`Phase 1` automatic only; Phase 2 returned `422` locally prior to LLM dispatch because `Idempotency-Key` header was omitted on `POST /v1/console/tickets/{id}/suggestions`), `0` rejected before network, `8,601` prompt / `580` candidate / `0` thought tokens (`$0.0040303` conditional list price).
+  - **Run 2 (`flash-lite-35-20261113-080056-138721`, capped cleanly at `--max-requests 19`):** `13` actual HTTP requests (`5` Phase 1 automatic + `8` Phase 2 staff-override via real `Idempotency-Key` backend endpoint), `0` rejected before network, `transport_retries_configured=0`.
+  - **Session Cumulative Total:** **`18 / 24`** actual Gemini HTTP requests (`6` remaining unused, cap never exceeded).
+- **Isolated Runtime Verification (Run 2 `accept_fl35_de52df8250`):**
+  - Root live services on ports `8080/8002` untouched; isolated `apps.ai_service` spawned on ephemeral loopback `127.0.0.1:65501` with explicit `GEMINI_MODEL=gemini-3.5-flash-lite`, in-memory root `.env` key (`0` secrets persisted anywhere), and SHA-256 verified Serving `distilbert-supportiq` `v1.0.0` (`weights_sha256=dc7af8cf...`, `tokenizer_sha256=5f218e0e...`).
+  - Disposable PostgreSQL 18.6 schema `accept_fl35_de52df8250` seeded with synthetic accounts (`customer-1`, `staff-1`) and dropped cleanly on exit.
+- **Run 2 Phase 1 (Primary Automatic Application, `20` PG Cases + `4` Injected Component Boundaries):**
+  - `20/20` gateway + PostgreSQL collection succeeded (`0` timeouts, `0` `llm_unavailable`, `error_rate_app_cases=0.0`; Phase 3 long-timeout diagnostic unnecessary).
+  - **12 Answerable Cases (`final-case-01..12`):** `7/12` correct predicted intent; **`4/12`** automatic **correct-intent** `draft_ready` (`final-case-01, 08, 09, 11`); **`1/12`** automatic **wrong-intent** `draft_ready` (`final-case-02`); **`7/12`** abstained.
+  - **8 Safety / Escalation / Unsupported / OOD (`final-case-13..20`):** `8/8` expected actions matched (`0` unsafe drafts); `20/20` citation source-ID/hash & authority verified (note: structural source-ID/snapshot verification is not semantic claim grading, which Coordinator performs directly on raw draft text in `phase1_application_records.jsonl` and `phase2_override_records.jsonl`); `20/20` customer `no_auto_send` verified (`reply=null`, `status="received"`).
+  - **4 Injected Boundaries (`final-case-21..24`, `real_bge_policy_encoder`):** `4/4` passed (`expiry=2/2`, `conflict=2/2`).
+  - **Wall Latency (ms):** All 20 PG cases `p50=298.08` interpolated (`327.05` nearest-rank), `p95=2139.13` (`2133.34` nearest-rank), `max=2249.05`; answerable 12 `p50=471.18`, `p95=2185.41`.
+- **Run 2 Phase 2 (Separately Labeled Staff Intent-Override Application Diagnostic):**
+  - `8/8` attempted (`final-case-02, 03, 04, 05, 06, 07, 10, 12`) via `POST /v1/console/tickets/{id}/suggestions`: **`8/8`** `draft_ready` & source-verified, `no_auto_send_verified_all=True`, `p50=1741.28ms` (`1790.11ms` nearest-rank), `p95=2516.45ms` (`2887.12ms` nearest-rank).
+  - Combined unique answerable correct-intent drafts: **`12/12`** (`4` automatic + `8` staff-assisted override; NOT equated to automatic acceptance).
+- **Tokens & Cost (Run 2 + Cumulative):**
+  - Run 2 observed `22,520` prompt / `1,545` candidate / `0` thoughts (`24,065` reported total across `13/13` attempts with usage present, `0` `thoughtsTokenCount` field); conditional list-price USD (`$0.30/1M` in, `$2.50/1M` out) = **`$0.0106185`** (combined Run 1 + Run 2 = `31,121` prompt / `2,125` candidate / `$0.0146488` conditional). `complete_cost_known=False`, `invoice_verified=False`, `complete_billed_cost_usd=None`.
+- **Stored 10-Fold OOF Verification (`oof_lineage_audit.json`, Zero Retraining):**
+  - Cross-checked `artifacts/training/distilbert_cv/oof_predictions.csv` (`37,911` rows, `10` folds, `46` intents, fold-mean Macro-F1 `0.9952684306823985`, `std_ddof1=0.0010525208592438058`, global OOF Macro-F1 `0.9952709256531839`, core-12 `0.9938866810047235`, aligned 1:1 with `artifacts/training/03-11-2026-01/oof_predictions.csv`) against `distilbert-supportiq/training_report.json` (`1e-12` parity on all 10 folds) and `train_sample_ids.json` (SHA-256 `AEA5D14F09C8BBAB63FBAFE2FAB37C5060705C25798598F3D232F7DC21CE9220`).
+  - **Documented exact missing lineage gaps without altering original artifacts:** absent `artifacts/training/distilbert_cv/manifest.json`, absent `git_commit` in `training_report.json`, and absent per-fold DistilBERT model weight checkpoints.
+
+---
+
+## 10. Independent Gate of Worker A Closure Candidate `c6cae7a` -> `REJECT` (Hold Serving Baseline)
+
+- **Candidate Audited:** `supportiq-fit1_closure_dual_head-20261113` at Worker A commit `c6cae7a` (`C:\Users\PC\orca\workspaces\SupportIQ\supportiq-final-routing\artifacts\evaluation\task_a_closure_20261113\candidate_model`, weights SHA-256 `95a940b630f44bf8d11882a26062c857839baa2d80d188f5451d52cecc2158a6`, calibration manifest `selective_calibration.v1` SHA-256 `6c5487c049a5e184f49a44024d6e1efe9bd2c6edca3202821bc0da82bba76bbe`).
+- **Source-Row/Template Split Isolation & Calibration-Only Selection:**
+  - Verified `0/0/0` group & exact-text overlap across closure splits (`train` 71 / `calibration` 36 / `evaluation` 45 groups; `0` overlap against prior experiments `618` rows and frozen benchmarks `1,009` rows; `max_char_wb_3_5_cosine=0.4181` train vs eval). Surface-form bounds do not rule out semantic-domain similarity across authored retail scenarios, which remains honestly documented.
+  - Verified `fit1_closure_dual_head` was selected strictly on calibration (`0.78867 > 0.67212`, combined 2-fit time `64.43s <= 1800s`, zero live LLM calls), with positive label `y=1` scoped specifically to single-intent draft eligibility (`SUP11`) rather than general OOD probability (`T=1.0429, tau=0.74`).
+- **Manifest Semantics, Runtime Parity & Escalation Preservation:**
+  - Artifact SHA-256s (`model.safetensors`, `tokenizer.json`, `config.json`) match `calibration_manifest.json` 100%.
+  - Independent parity check confirms `0.0` max raw & calibrated confidence/margin abs diff and `1.043e-06` max rejector score abs diff (`0` decision mismatches), `Engine._analyse` veto active (`abstain`/`manual_fallback`), and `IntentClient` + `decide_route` preserving `escalate` on `human_agent` (`sel_acc=False -> action='escalate'`) and `ESCALATED_34` evaluation rows (`24/30` accuracy, `27/30` escalated, `0/30` unsafe drafts, `0/33` negative false accepts).
+- **Gate Results (`classifier_gate_task_a_closure_20261113/`):**
+  - **Passes:** `ml_oos_80` = **`0/80`** leaks (eliminated `028ed76`'s `3/80`), `final_acceptance_24` = **`8/12` (`100%` prec, `0` wrong, `0` active-KB leaks)**, `ml_noise_420` = **`0.8095` acc / `0.0664` ECE**, `system_acceptance` 34-label escalation = **`0.7059` macro-F1** (`20/26` `76.92%` on `draft_expected`), `Bitext other_34` = **`99.68%`**.
+  - **Blocker (`REJECT`):** Persists **`1/63`** real mandatory-escalation unsafe draft leak (`una-product_information-01`) on `system_acceptance_156`, matching Worker A's own fail-closed `REJECT` conclusion.
+- **SHA-256 Digests (`classifier_gate_task_a_closure_20261113/report_hashes.json`):** `CLASSIFIER_GATE_REPORT.md` (`9e1be3aced2ea8121e9f22cb7e63b6a6681a7a6beaa19aeddb64ecc656b2a300`), `gate_report.json` (`e02025d4c15dc69f3573471d45994f9a35511b2f777171184cbf51f55462eabf`), `closure_supplement.json` (`6f8d9feaad812a122330014000fe1ed700de38adec0c05d0f397a3cb7b004d6e`).
+
+---
+
+## 11. Independent Pre-Integration Review of Worker B `5f3493e` / `71fae3b` & Re-Confirmation of Worker A `c6cae7a` `REJECT`
+
+- **Review Scope & Budget:** Zero additional live LLM calls (`_SpyOfflineLLM.calls == 0`, cumulative Flash-Lite 3.5 budget remains `18/24`); reviewed Worker B `MINHDZVODICH/supportiq-public-contact-fix` commits `5f3493e` and `71fae3b` against root `ecdd9c6`, recorded in [`artifacts/evaluation/task_b_review_5f3493e_20261113/TASK_B_PREINTEGRATION_REVIEW.md`](../../artifacts/evaluation/task_b_review_5f3493e_20261113/TASK_B_PREINTEGRATION_REVIEW.md) and `review_summary.json`.
+- **Engine vs HTTP Path Separation (Serving `distilbert-supportiq`):**
+  - **Engine:** `acceptance_156` `74 -> 114/156`; unfaulted executed mandatory (`N=60`) **`19/60 -> 53/60`** exact with **`0` unsafe drafts** and **`7`** remaining safe `manual_fallback` misses; raw static `21/63 -> 55/63` (separating **`3` `NOT_EXECUTED`** uninjected faults `unc-track_order-03`, `unc-return_policy-04`, `unc-track_order-05`); `ml_oos_80 = 0/80` leaks; `final_acceptance` non-answerable executed (`N=11`) = `0` unsafe leaks.
+  - **HTTP `/predict -> IntentClient -> decide_route`:** Identical BEFORE (`ecdd9c6`) and AFTER (`5f3493e`): `116/156` exact, **`37/60`** unfaulted mandatory exact with **`12`** pre-existing mandatory unsafe `retrieve_draft` leaks, **`2/80`** `ml_oos_80` leaks (`oos-other_domain-11`, `oos-multi_intent-08`), and **`4/11`** non-answerable `final_acceptance` leaks (`final-case-13, 22, 23, 24`). No blanket all-path safety claim permitted.
+  - **Comparable `draft_expected_34` (`expected.draft_expected == True`, N=34):** **`21/34` raw (`17/34` correct-intent)** preserved identically BEFORE and AFTER on both Engine and HTTP (non-draft Engine shift: `13 -> 12` `manual_fallback`, `0 -> 1` `escalate` on `sup-refund_policy-03`), kept distinct from permissive `draft_allowed_88` (`51/88` raw / `44/88` correct on Engine).
+- **Generic Phrase-Rule & Code Review:** `0` frozen IDs hardcoded, `0/34` `draft_expected_34`, `0/12` `final_acceptance` answerable, `0` supported-12 queries in `ml_noise_420`, and `0/7` benign synthetic policy probes falsely blocked; transparently documents 3 literal-English scope regex additions targeting `una-delivery_issue-01`, `una-submit_feedback-01`, and `una-cancel_order-03`.
+- **Worker A `c6cae7a` Decision Preserved (`REJECT` / NO PROMOTION):** Tested standalone AND directly combined atop Worker B `5f3493e`'s Engine — `una-product_information-01` still leaks `retrieve_draft` (`1/60` unfaulted mandatory unsafe draft on Engine, `8` leaks on HTTP). Serving `distilbert-supportiq` remains held.
+- **Worker B Pytest Runs Executed (`5f3493e` / `71fae3b`):** `123 passed in 60.86s` (`test_mandatory_routing_b.py` + `test_model_runtime_parity_b.py` + `test_full_pipeline.py`) and `105 passed in 2.35s` (`test_routing.py` + `test_routing_safety_regressions.py` + `test_intent_policy_and_escalation.py` + `test_intent_client_rejector_routing.py`).
+
+---
+
+## 12. Collector Cleanup-Reporting Fix & Additive Historical Verification (`2026-11-13`)
+
+- **Runner Fixes (`pipeline/evaluation/flash_lite_acceptance.py` & `tests/unit/test_flash_lite_acceptance_runner.py`):**
+  - Replaced swallowed `DROP SCHEMA` error + hardcoded `postgres_schema_dropped_cleanly=True` with `_drop_temporary_postgres_schema()` and `_categorize_cleanup_error()` recording truthful `postgres_schema_created`, `postgres_schema_dropped_cleanly` (`True`/`False`/`None`), `postgres_schema_drop_status`, and a credential-free `postgres_schema_drop_error_category`; `render_flash_lite_markdown_report()` now renders cleanup failure/non-creation explicitly instead of unconditionally claiming `dropped cleanly`.
+  - Updated `summarize_flash_lite_tokens_and_cost()` so omitted `thoughtsTokenCount` fields across attempts are tracked via `attempts_with_thought_tokens_omitted`, `thought_tokens_measurement_status` (`omitted_all_attempts` / `partial_measured` / `all_attempts_measured`), and `observed_thought_tokens=None` when unmeasured (never `0` measured zeros), while replacing `complete_tokens_conditional_list_price_not_invoice` with `observed_candidate_only_thoughts_omitted_unknown_total` / `observed_conditional_list_price_not_invoice` and retaining `complete_cost_known=False`, `invoice_verified=False`, and `complete_billed_cost_usd=None`.
+- **Additive Historical Verification (Zero Rewrite of Run 1 / Run 2 Bytes):**
+  - Stored in [`artifacts/evaluation/flash_lite_35_additive_verification_20261113/ADDITIVE_VERIFICATION.md`](../../artifacts/evaluation/flash_lite_35_additive_verification_20261113/ADDITIVE_VERIFICATION.md) and `additive_verification.json` (`report_hashes.json` verified):
+    - Read-only `pg_namespace` query (`SELECT nspname FROM pg_namespace WHERE nspname LIKE 'accept_fl35_%'`) returned `[]`, verifying `accept_fl35_e6ef62047e` (`flash-lite-35-20261113-075914-153b01`) and `accept_fl35_de52df8250` (`flash-lite-35-20261113-080056-138721`) are both absent while preserving original report hashes 100%.
+    - Clarifies `0/5` (Run 1) and `0/13` (Run 2) `thoughtsTokenCount` fields were omitted (not `0` measured thinking tokens); cumulative observed candidate-only list-price USD = `$0.0146488` with unknown total cost.
+    - References Coordinator AI claim review `artifacts/evaluation/coordinator_flash_lite35_review_20261113/semantic_claim_review.json` (`18` drafts, `54` supported claim units, `human_participants=0`; explicitly non-human AI review).
+
+
+
 

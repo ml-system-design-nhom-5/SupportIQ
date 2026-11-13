@@ -1,0 +1,8 @@
+{
+  "dry_run_preflight.json": "a7815ba6c390ff18044aa86687de9f4f6fe5a5963807485649cd4587bdc5f558",
+  "flash_lite_acceptance_report.json": "ee35882bb3c340af6cdc056bfcc37b83a2d01f125acc11ede541bb69d0bc0bc3",
+  "FLASH_LITE_ACCEPTANCE_REPORT.md": "163c5e09d42bec401802c0359bf92fbffe0f318d1be73b6309b8f6ae68911068",
+  "oof_lineage_audit.json": "6658234ef64e5f0392db31d6a950d80aa8fce901ec29af020dbac0c1466b0607",
+  "phase1_application_records.jsonl": "f6c55b1bf443f00e0a8495d7ad276ce1b968822609fd0c83bd3788ab7720ef1c",
+  "phase2_override_records.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

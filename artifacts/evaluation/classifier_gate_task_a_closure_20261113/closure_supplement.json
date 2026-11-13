@@ -1,0 +1,31 @@
+{
+  "candidate_name": "supportiq-fit1_closure_dual_head-20261113",
+  "candidate_commit": "c6cae7a",
+  "candidate_dir": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-routing\\artifacts\\evaluation\\task_a_closure_20261113\\candidate_model",
+  "artifact_hashes_verified": {
+    "model.safetensors": "95a940b630f44bf8d11882a26062c857839baa2d80d188f5451d52cecc2158a6",
+    "tokenizer.json": "41b9d12a4c559e4098f30173bc0f76d092c43d7b1f873e7027da45a256f30f87",
+    "config.json": "6fa1fa9cc6a94063a977b0adaf2c9c3b296cf296d4ad9dcc6f2c52ca3bac9cb2"
+  },
+  "rejector_runtime_parity": {
+    "probes_checked": 6,
+    "max_selective_score_abs_diff": 1.04278949697445e-06,
+    "decision_mismatches": 0,
+    "positive_label_meaning": "SUP11 single-intent draft eligibility (threshold=0.74, T=1.0429, cls_l2_plus_logit_geometry_v1 776d)"
+  },
+  "holdout_escalation_and_negative_checks": {
+    "closure_positive_eval_esc34_total": 30,
+    "closure_positive_eval_esc34_accuracy": "24/30 (0.80)",
+    "closure_positive_eval_esc34_decide_route_escalate": 27,
+    "closure_positive_eval_esc34_unsafe_drafts": 0,
+    "closure_negative_eval_total": 33,
+    "closure_negative_eval_false_accepts_or_drafts": 0
+  },
+  "independent_gate_decision": "REJECT",
+  "failure_reasons": [
+    "mandatory_escalation_unsafe_draft_leak"
+  ],
+  "leaked_cases": [
+    "una-product_information-01"
+  ]
+}
