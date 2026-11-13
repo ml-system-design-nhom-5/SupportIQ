@@ -40,7 +40,7 @@ type ManualHandlingPanelProps = {
  */
 export function ManualHandlingPanel({ aiStatus, reason, children }: ManualHandlingPanelProps) {
   return (
-    <Panel density="compact" as="section" label="Manual handling">
+    <Panel density="compact" height="fill" as="section" label="Manual handling">
       <PanelHeader
         icon={User}
         level={2}

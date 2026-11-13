@@ -2,7 +2,7 @@ import { screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { IntentChoice } from "@/design-system/components/intent-choice";
-import { IntentStrip } from "@/design-system/components/intent-strip";
+import { type IntentCorrection, IntentStrip } from "@/design-system/components/intent-strip";
 import { renderUi } from "@/test/render-app";
 
 /** The intents of Other intent in these tests. */
@@ -24,20 +24,23 @@ const choiceCandidates = [
   { name: "Unspecified intent", probability: 0.11 },
 ] as const;
 
+/** The ID of Other intent in these tests. */
+const OTHER_INTENT_ID = "other-intent";
+
 /**
- * Render a strip that staff can correct.
+ * Render a strip that staff can correct, with no correction sending.
  *
- * @param isSending - Whether a correction is sending.
+ * @param overrides - The fields of the correction that a test changes.
  * @returns The handler of the corrections and the user-event instance.
  */
-function renderCorrectableStrip(isSending: boolean) {
+function renderCorrectableStrip(overrides: Partial<IntentCorrection> = {}) {
   const handleUseIntent = vi.fn();
   const { user } = renderUi(
     <IntentStrip
       intentName="Refund status"
       confidence={{ band: "high", probability: 0.91 }}
       candidates={candidates}
-      correction={{ otherIntents, isSending, onUseIntent: handleUseIntent }}
+      correction={{ otherIntents, isSending: false, onUseIntent: handleUseIntent, ...overrides }}
     />,
   );
   return { handleUseIntent, user };
@@ -62,7 +65,7 @@ function renderChoiceWithUse(isSending: boolean) {
 
 describe("IntentStrip with a correction", () => {
   it("uses a next candidate in one interaction (UI-22)", async () => {
-    const { handleUseIntent, user } = renderCorrectableStrip(false);
+    const { handleUseIntent, user } = renderCorrectableStrip();
 
     await user.click(screen.getByRole("button", { name: "Use Request refund 5%" }));
 
@@ -70,7 +73,7 @@ describe("IntentStrip with a correction", () => {
   });
 
   it("says Not right? Use: and keeps a candidate that staff cannot choose as plain text", () => {
-    renderCorrectableStrip(false);
+    renderCorrectableStrip();
 
     const strip = screen.getByRole("region", { name: "Intent" });
     expect(strip).toHaveTextContent("Not right? Use:Use Request refund 5%Unspecified intent 2%");
@@ -78,7 +81,7 @@ describe("IntentStrip with a correction", () => {
   });
 
   it("uses an intent from Other intent", async () => {
-    const { handleUseIntent, user } = renderCorrectableStrip(false);
+    const { handleUseIntent, user } = renderCorrectableStrip();
 
     await user.click(screen.getByRole("button", { name: "Other intent" }));
     await user.click(await screen.findByRole("menuitem", { name: "Track order" }));
@@ -87,7 +90,7 @@ describe("IntentStrip with a correction", () => {
   });
 
   it("disables the candidates and the intents of Other intent while a correction is sending", async () => {
-    const { handleUseIntent, user } = renderCorrectableStrip(true);
+    const { handleUseIntent, user } = renderCorrectableStrip({ isSending: true });
 
     const candidate = screen.getByRole("button", { name: "Use Request refund 5%" });
     await user.click(candidate);
@@ -99,6 +102,22 @@ describe("IntentStrip with a correction", () => {
       "true",
     );
     expect(handleUseIntent).not.toHaveBeenCalled();
+  });
+
+  it("lets a script move the focus to Other intent by its ID (UI-30)", () => {
+    renderCorrectableStrip({ otherIntentId: OTHER_INTENT_ID });
+
+    document.getElementById(OTHER_INTENT_ID)?.focus();
+
+    expect(screen.getByRole("button", { name: "Other intent" })).toHaveFocus();
+  });
+
+  it("keeps the menu named Other intent when the button has an ID", async () => {
+    const { user } = renderCorrectableStrip({ otherIntentId: OTHER_INTENT_ID });
+
+    await user.click(screen.getByRole("button", { name: "Other intent" }));
+
+    expect(await screen.findByRole("menu", { name: "Other intent" })).toBeVisible();
   });
 
   it("offers Other intent next to an intent that staff chose", () => {

@@ -1,7 +1,9 @@
 /**
  * How often the console asks `backend` again (console UI design, Inbox and Flow). `frontend` polls
  * because v1 has no push updates (contracts v1 design, Non-goals). The lead approved both values
- * on 2026-11-12, which answers the polling question of the console UI design.
+ * on 2026-11-12, which answers the polling question of the console UI design. The lead decided on
+ * 2026-11-13: no polling under 30 s; the workspace moves to server-sent events. Until the contract
+ * has them, the workspace keeps its interval while a part of the suggestion is `pending`.
  */
 import type { TicketWorkspace } from "@/features/console-tickets/model/workspace";
 import { hasPendingPart } from "@/features/console-tickets/model/workspace-state";
@@ -10,7 +12,7 @@ import { hasPendingPart } from "@/features/console-tickets/model/workspace-state
  * The inbox reloads its queue this often while it is open, so new tickets and the "Opened" line of
  * a colleague appear without a click.
  */
-export const INBOX_POLLING_INTERVAL_MS = 15_000;
+export const INBOX_POLLING_INTERVAL_MS = 30_000;
 
 /**
  * The workspace reloads the ticket this often while a part of the suggestion is `pending`, so the

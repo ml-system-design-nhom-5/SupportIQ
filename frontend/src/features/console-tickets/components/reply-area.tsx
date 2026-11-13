@@ -1,18 +1,21 @@
 /**
  * The reply area of the workspace in its state (console UI design, States and Actions): the panel
- * of the state, with the editor when staff may write and the action bar at its bottom (UI-16).
- * Send reply opens the confirmation, which the workspace shows (UI-17).
+ * of the state, which fills the rest of the column, with the editor when staff may write and the
+ * action bar at its bottom (UI-15, UI-16, placement rule 2). A closed ticket keeps the bar with
+ * every action disabled and the reason. Send reply opens the confirmation, which the workspace
+ * shows (UI-17).
  */
 import { RotateCcw } from "lucide-react";
 
-import { Button, PanelSection, StatusBanner } from "@/design-system";
-import { assertNever, describeFailure, type RequestFailure } from "@/features/backend-requests";
+import { Button, PanelSection } from "@/design-system";
+import { assertNever, type RequestFailure } from "@/features/backend-requests";
 import type { SuggestionRequests } from "@/features/console-tickets/api/use-create-suggestion";
 import { DraftModeActions } from "@/features/console-tickets/components/draft-mode-actions";
 import {
   type DraftContext,
   DraftReplyPanel,
 } from "@/features/console-tickets/components/draft-reply-panel";
+import { FailureViewBanner } from "@/features/console-tickets/components/failure-view-banner";
 import { ManualHandlingPanel } from "@/features/console-tickets/components/manual-handling-panel";
 import { NoDraftPanel } from "@/features/console-tickets/components/no-draft-panel";
 import { PendingDraftPanel } from "@/features/console-tickets/components/pending-draft-panel";
@@ -21,6 +24,7 @@ import { ReplyEditorSection } from "@/features/console-tickets/components/reply-
 import { SentReplyPanel } from "@/features/console-tickets/components/sent-reply-panel";
 import type { ReplyComposer } from "@/features/console-tickets/components/use-reply-composer";
 import { describeAiUnavailable } from "@/features/console-tickets/model/manual-handling";
+import { describeSuggestionFailure } from "@/features/console-tickets/model/suggestion-failure";
 import type { ReplyAreaState } from "@/features/console-tickets/model/workspace-state";
 
 /** What the reply area needs of the requests to the AI: Try AI again and the outdated draft. */
@@ -49,7 +53,11 @@ type ReplyAreaProps = {
 export function ReplyArea({ state, draftContext, composer, aiRequests }: ReplyAreaProps) {
   switch (state.kind) {
     case "sent":
-      return <SentReplyPanel reply={state.reply} />;
+      return (
+        <SentReplyPanel reply={state.reply}>
+          <ReplyActionBar composer={composer} actions={<UnavailableDraftActions />} />
+        </SentReplyPanel>
+      );
     case "manual_mode":
       return (
         <ManualHandlingPanel aiStatus="manual">
@@ -137,8 +145,8 @@ function WritingTools({
 }
 
 /**
- * Render Edit draft and Reject draft, disabled, while no draft is ready: the AI still works, or
- * staff choose an intent first.
+ * Render Edit draft and Reject draft, disabled, while no draft is ready: the AI still works, staff
+ * choose an intent first, or the ticket is closed.
  *
  * @returns The disabled buttons.
  */
@@ -147,22 +155,16 @@ function UnavailableDraftActions() {
 }
 
 /**
- * Say that Try AI again failed (UI-25).
+ * Say what happened to Try AI again when it failed (UI-25). After an unknown outcome, it never says
+ * that the AI did not start (ERR-16).
  *
  * @param props - The failure of the retry.
  * @returns The banner, announced as an alert.
  */
 function RetryFailureBanner({ failure }: { readonly failure: RequestFailure }) {
-  const { message, traceId } = describeFailure(failure);
   return (
     <PanelSection>
-      <StatusBanner
-        tone="danger"
-        lead="The AI did not start again."
-        {...(traceId === undefined ? {} : { traceId })}
-      >
-        {message}
-      </StatusBanner>
+      <FailureViewBanner failure={describeSuggestionFailure(failure, "retry")} />
     </PanelSection>
   );
 }

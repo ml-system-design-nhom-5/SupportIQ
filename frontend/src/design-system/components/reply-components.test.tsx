@@ -73,11 +73,14 @@ function renderEditor(overrides: Partial<ReplyEditorProps> = {}) {
 }
 
 describe("ActionBar", () => {
-  it("says above the buttons why an action is disabled (UI-16)", () => {
+  it("says on one line above the buttons why an action is disabled (UI-16)", () => {
     renderActionBar([buildSubmitItem()]);
 
-    expect(screen.getByText("Acknowledge 1 warning to send the reply.")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Send reply" })).toBeDisabled();
+    const reason = screen.getByText("Acknowledge 1 warning to send the reply.");
+    const firstButton = screen.getByRole("button", { name: "Escalate ticket" });
+
+    expect(reason).toBeVisible();
+    expect(reason.compareDocumentPosition(firstButton)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it("runs the More item that staff choose, named by its label and its second line", async () => {
@@ -305,12 +308,6 @@ describe("ReplyEditor", () => {
     const mark = screen.getByText("[EMAIL]");
     expect(mark.tagName).toBe("MARK");
     expect(mark.parentElement).toHaveAttribute("aria-hidden", "true");
-  });
-
-  it("takes no more characters than its limit", () => {
-    const { editor } = renderEditor({ maxLength: 10 });
-
-    expect(editor).toHaveAttribute("maxlength", "10");
   });
 });
 

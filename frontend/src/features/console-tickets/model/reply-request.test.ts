@@ -1,36 +1,22 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  initialComposerState,
+  acknowledgeWarning,
+  createComposerState,
+  followSuggestion,
   rejectDraft,
   startEditing,
 } from "@/features/console-tickets/model/reply-composer";
 import {
   buildSendReplyRequest,
   canChangeDraft,
-  type ComposerTicket,
   isSameReply,
-  toComposerTicket,
 } from "@/features/console-tickets/model/reply-request";
-import { toTicketWorkspace } from "@/features/console-tickets/model/workspace";
-import { buildWorkspaceRegions } from "@/features/console-tickets/model/workspace-regions";
-import { readOperationExample } from "@/test/contract-examples";
+import { DRAFT_READY_SUGGESTION_ID, readComposerTicket } from "@/test/console-screen";
 
-/** The current suggestion of the draft-ready and abstained-low-confidence examples. */
-const SUGGESTION_ID = "6b1f0c3e-2a4d-4e8f-9b7c-1d3e5f7a9b20";
-
-/**
- * Read the composer ticket of a workspace example.
- *
- * @param name - The example of `getConsoleTicket`.
- * @returns What the composer reads of it.
- */
-function readTicket(name: string): ComposerTicket {
-  const workspace = toTicketWorkspace(readOperationExample("getConsoleTicket", 200, name));
-  return toComposerTicket(workspace, buildWorkspaceRegions(workspace));
-}
-
-const draftReady = readTicket("draft-ready");
+const draftReady = readComposerTicket("draft-ready");
+const opened = createComposerState(DRAFT_READY_SUGGESTION_ID);
+const acknowledged = acknowledgeWarning(opened, { warningId: "w1", isAcknowledged: true });
 
 describe("toComposerTicket", () => {
   it("reads the ready draft, its suggestion, and its warnings", () => {
@@ -42,58 +28,93 @@ describe("toComposerTicket", () => {
         "correct_intent",
       ]),
       isAuthorityRequired: false,
+      isClosed: false,
       isSuggestionRunning: false,
-      suggestionId: SUGGESTION_ID,
-      draft: { suggestionId: SUGGESTION_ID },
+      suggestionId: DRAFT_READY_SUGGESTION_ID,
+      draft: { suggestionId: DRAFT_READY_SUGGESTION_ID },
       warningIds: ["w1"],
     });
     expect(draftReady.draft?.text).toMatch(/^Hello Lan Tran, thank you for your patience\./);
   });
 
   it("has no suggestion and no draft in manual mode", () => {
-    const manual = readTicket("manual-mode");
+    const manual = readComposerTicket("manual-mode");
 
     expect(manual).not.toHaveProperty("suggestionId");
     expect(manual).not.toHaveProperty("draft");
   });
 
   it("says that the AI is running while a part is pending", () => {
-    expect(readTicket("suggestion-pending")).toMatchObject({ isSuggestionRunning: true });
-    expect(readTicket("suggestion-pending")).not.toHaveProperty("draft");
+    expect(readComposerTicket("suggestion-pending")).toMatchObject({ isSuggestionRunning: true });
+    expect(readComposerTicket("suggestion-pending")).not.toHaveProperty("draft");
+  });
+
+  it("says that the AI is running while a correction or Try AI again is sending", () => {
+    expect(readComposerTicket("draft-ready", true)).toMatchObject({ isSuggestionRunning: true });
+  });
+
+  it("says that a ticket is closed", () => {
+    expect(readComposerTicket("closed")).toMatchObject({ isClosed: true });
   });
 });
 
 describe("buildSendReplyRequest of a ready draft", () => {
-  it("sends the draft as is with the basis ai_draft and every warning acknowledged", () => {
-    expect(buildSendReplyRequest(draftReady, initialComposerState)).toEqual({
+  it("sends the draft as is with the basis ai_draft and the acknowledged warning", () => {
+    expect(buildSendReplyRequest(draftReady, acknowledged)).toEqual({
       basis: "ai_draft",
       body: draftReady.draft?.text,
-      suggestion_id: SUGGESTION_ID,
+      suggestion_id: DRAFT_READY_SUGGESTION_ID,
+      acknowledged_warning_ids: ["w1"],
+    });
+  });
+
+  it("names only the warnings that staff acknowledged, so 422 stays the backstop (UI-18)", () => {
+    expect(buildSendReplyRequest(draftReady, opened)).toMatchObject({
+      acknowledged_warning_ids: [],
+    });
+  });
+
+  it("never names an acknowledged ID that the current draft does not have", () => {
+    const other = acknowledgeWarning(acknowledged, { warningId: "w9", isAcknowledged: true });
+
+    expect(buildSendReplyRequest(draftReady, other)).toMatchObject({
       acknowledged_warning_ids: ["w1"],
     });
   });
 
   it("sends the edited text with the basis ai_draft", () => {
     expect(
-      buildSendReplyRequest(draftReady, startEditing(initialComposerState, "Edited reply.")),
+      buildSendReplyRequest(draftReady, startEditing(acknowledged, "Edited reply.")),
     ).toMatchObject({ basis: "ai_draft", body: "Edited reply." });
+  });
+
+  it("sends the text kept over a new draft as an edit of the new draft", () => {
+    const kept = followSuggestion(
+      { ...rejectDraft(createComposerState("s0")), body: "Mine." },
+      DRAFT_READY_SUGGESTION_ID,
+    );
+
+    expect(buildSendReplyRequest(draftReady, kept)).toEqual({
+      basis: "ai_draft",
+      body: "Mine.",
+      suggestion_id: DRAFT_READY_SUGGESTION_ID,
+      acknowledged_warning_ids: [],
+    });
   });
 });
 
 describe("buildSendReplyRequest of a rejected draft", () => {
   it("sends the reason codes in the order of the contract, without a note", () => {
-    const rejected = rejectDraft(initialComposerState);
-
     expect(
       buildSendReplyRequest(draftReady, {
-        ...rejected,
+        ...rejectDraft(opened),
         body: "My own reply.",
         reasonCodes: new Set(["unsupported_claim", "wrong_intent"]),
       }),
     ).toEqual({
       basis: "rejected_ai_draft",
       body: "My own reply.",
-      suggestion_id: SUGGESTION_ID,
+      suggestion_id: DRAFT_READY_SUGGESTION_ID,
       staff_reason_codes: ["wrong_intent", "unsupported_claim"],
     });
   });
@@ -101,7 +122,7 @@ describe("buildSendReplyRequest of a rejected draft", () => {
   it("sends the note of the reason code other", () => {
     expect(
       buildSendReplyRequest(draftReady, {
-        ...rejectDraft(initialComposerState),
+        ...rejectDraft(opened),
         body: "My own reply.",
         reasonCodes: new Set(["other"]),
         note: "The customer called us.",
@@ -113,16 +134,23 @@ describe("buildSendReplyRequest of a rejected draft", () => {
 describe("buildSendReplyRequest without a ready draft", () => {
   it("sends the basis no_ai_draft with the suggestion that staff saw", () => {
     expect(
-      buildSendReplyRequest(readTicket("abstained-low-confidence"), {
-        ...initialComposerState,
+      buildSendReplyRequest(readComposerTicket("abstained-low-confidence"), {
+        ...opened,
         body: "My reply.",
       }),
-    ).toEqual({ basis: "no_ai_draft", body: "My reply.", suggestion_id: SUGGESTION_ID });
+    ).toEqual({
+      basis: "no_ai_draft",
+      body: "My reply.",
+      suggestion_id: DRAFT_READY_SUGGESTION_ID,
+    });
   });
 
   it("sends the basis no_ai_draft without a suggestion in manual mode", () => {
     expect(
-      buildSendReplyRequest(readTicket("manual-mode"), { ...initialComposerState, body: "Hi." }),
+      buildSendReplyRequest(readComposerTicket("manual-mode"), {
+        ...createComposerState(undefined),
+        body: "Hi.",
+      }),
     ).toEqual({ basis: "no_ai_draft", body: "Hi." });
   });
 });
@@ -134,20 +162,44 @@ describe("canChangeDraft", () => {
     ["abstained-low-confidence", false],
     ["read-only-for-staff", false],
   ])("answers for the %s example: %s", (name, canChange) => {
-    expect(canChangeDraft(readTicket(name))).toBe(canChange);
+    expect(canChangeDraft(readComposerTicket(name))).toBe(canChange);
   });
 });
 
 describe("isSameReply", () => {
-  it("matches the same reply confirmed again, and not a changed one", () => {
-    const first = buildSendReplyRequest(draftReady, initialComposerState);
+  const rejected = { ...rejectDraft(opened), body: "My own reply." };
 
-    expect(isSameReply(first, buildSendReplyRequest(draftReady, initialComposerState))).toBe(true);
+  it("matches the same reply confirmed again", () => {
     expect(
       isSameReply(
-        first,
-        buildSendReplyRequest(draftReady, startEditing(initialComposerState, "x")),
+        buildSendReplyRequest(draftReady, acknowledged),
+        buildSendReplyRequest(draftReady, acknowledged),
+      ),
+    ).toBe(true);
+  });
+
+  it.each([
+    ["another text", startEditing(acknowledged, "x")],
+    ["another acknowledgement", opened],
+  ])("does not match a reply with %s", (_case, state) => {
+    expect(
+      isSameReply(
+        buildSendReplyRequest(draftReady, acknowledged),
+        buildSendReplyRequest(draftReady, state),
       ),
     ).toBe(false);
+  });
+
+  it("does not match a rejection with other reason codes", () => {
+    const first = buildSendReplyRequest(draftReady, {
+      ...rejected,
+      reasonCodes: new Set(["wrong_intent"]),
+    });
+    const second = buildSendReplyRequest(draftReady, {
+      ...rejected,
+      reasonCodes: new Set(["kb_gap"]),
+    });
+
+    expect(isSameReply(first, second)).toBe(false);
   });
 });

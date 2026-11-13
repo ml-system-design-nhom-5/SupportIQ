@@ -6,9 +6,10 @@
  * `allowed_actions`; the UI never decides that itself (UI-40).
  *
  * One `Idempotency-Key` belongs to one staff action: automatic retries reuse it, and so does the
- * same action repeated after a failure, so a lost answer never starts a second suggestion (TS-29,
- * ERR-15). A refusal that means the screen was old, or a failure whose outcome is unknown, reloads
- * the workspace (console UI design, Flow step 4, Errors and guardrails).
+ * same action repeated on the same suggestion after a failure, so a lost answer never starts a
+ * second suggestion (TS-29, ERR-15). Once the workspace shows another suggestion, the action is a
+ * new one and gets a new key. A refusal that means the screen was old, or a failure whose outcome
+ * is unknown, reloads the workspace (console UI design, Flow step 4, Errors and guardrails).
  */
 import {
   type QueryClient,
@@ -31,6 +32,7 @@ import {
 import { consoleQueryKeys } from "@/features/console-tickets/api/console-query-keys";
 import type { ReadyDraft } from "@/features/console-tickets/model/draft";
 import type { ChoosableIntentLabel } from "@/features/console-tickets/model/intent-area";
+import type { SuggestionRequestKind } from "@/features/console-tickets/model/suggestion-failure";
 import type { TicketAction } from "@/features/console-tickets/model/ticket-actions";
 import {
   type Suggestion,
@@ -48,14 +50,25 @@ const problemTypesOfOldScreens: ReadonlySet<ProblemType> = new Set([
   "invalid_ticket_state",
 ]);
 
+/** The allowed action that each kind of request needs (UI-40). */
+const actionByRequestKind: Readonly<Record<SuggestionRequestKind, TicketAction>> = {
+  correction: "correct_intent",
+  retry: "retry_suggestion",
+};
+
 /** One staff action: a correction with the intent that staff chose, or a retry without one. */
 type SuggestionRequest = {
   readonly idempotencyKey: string;
+  /** The current suggestion of the workspace when staff acted; undefined when it had none. */
+  readonly suggestionId: string | undefined;
   /** The intent that staff chose; absent for a retry. */
   readonly intentOverride?: ChoosableIntentLabel;
   /** The ready draft that a correction makes outdated; absent when there was none. */
   readonly outdatedDraft?: ReadyDraft;
 };
+
+/** What staff chose for one action, before the hook adds the current suggestion and the key. */
+type StaffChoice = Omit<SuggestionRequest, "idempotencyKey" | "suggestionId">;
 
 /** The mutation of `createSuggestion`. */
 type SuggestionMutation = UseMutationResult<Suggestion, Error, SuggestionRequest>;
@@ -88,36 +101,63 @@ export type SuggestionRequests = {
  *
  * @param ticketId - The ticket of the address, whose workspace query the requests update.
  * @param workspace - The ticket as the workspace shows it: its allowed actions and its current
- *   draft.
+ *   suggestion with its draft.
+ * @param onStarted - Called once `backend` started the new suggestion, with the kind of request.
  * @returns The two requests, whether one is sending, their failures, and the outdated draft.
  */
 export function useCreateSuggestion(
   ticketId: string,
   workspace: TicketWorkspace,
+  onStarted?: (request: SuggestionRequestKind) => void,
 ): SuggestionRequests {
   const mutation = useSuggestionMutation(ticketId);
-  // One key for one action, like the fields of a form: the same intent, or a retry, sent again
-  // after a failure keeps it; another action, or any action after a success, gets a new key.
+  // One key for one action, like the fields of a form: the same intent, or a retry, sent again on
+  // the same suggestion after a failure keeps it; another action, an action on another
+  // suggestion, or any action after a success, gets a new key.
   const { getOrCreateKey, forgetKey } = useFormIdempotencyKey();
-  const send = (action: TicketAction, request: Omit<SuggestionRequest, "idempotencyKey">) => {
-    if (mutation.isPending || !workspace.allowedActions.has(action)) {
+  const send = (kind: SuggestionRequestKind, choice: StaffChoice) => {
+    if (mutation.isPending || !workspace.allowedActions.has(actionByRequestKind[kind])) {
       return;
     }
-    if (!(mutation.isError && mutation.variables.intentOverride === request.intentOverride)) {
+    const request = { ...choice, suggestionId: workspace.suggestion?.suggestionId };
+    if (!isRepeatOfFailedRequest(mutation, request)) {
       forgetKey();
     }
-    mutation.mutate({ ...request, idempotencyKey: getOrCreateKey() });
+    mutation.mutate(
+      { ...request, idempotencyKey: getOrCreateKey() },
+      { onSuccess: () => onStarted?.(kind) },
+    );
   };
   return {
     correctIntent: (intentLabel) => {
-      send("correct_intent", { intentOverride: intentLabel, ...getReadyDraft(workspace) });
+      send("correction", { intentOverride: intentLabel, ...getReadyDraft(workspace) });
     },
     retry: () => {
-      send("retry_suggestion", {});
+      send("retry", {});
     },
     isSending: mutation.isPending,
     ...describeOutcome(mutation, workspace),
   };
+}
+
+/**
+ * Tell whether staff repeat the request that failed last: the same action on the same suggestion,
+ * which reuses its key (TS-29).
+ *
+ * @param mutation - The mutation, with the variables of the last request.
+ * @param request - The new request, without its key.
+ * @returns True after a failed request with the same intent, or a failed retry, whose suggestion
+ *   is still the current one. A reload that shows another suggestion makes the action a new one.
+ */
+function isRepeatOfFailedRequest(
+  mutation: SuggestionMutation,
+  request: Omit<SuggestionRequest, "idempotencyKey">,
+): boolean {
+  return (
+    mutation.isError &&
+    mutation.variables.intentOverride === request.intentOverride &&
+    mutation.variables.suggestionId === request.suggestionId
+  );
 }
 
 /**

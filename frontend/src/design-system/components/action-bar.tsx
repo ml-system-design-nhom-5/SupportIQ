@@ -19,7 +19,7 @@ import { buttonVariants } from "@/design-system/primitives/button";
 import { cn } from "@/design-system/primitives/class-names";
 import { FOCUS_RING_CLASSES } from "@/design-system/primitives/focus-ring";
 import { Icon } from "@/design-system/primitives/icon";
-import { MENU_ITEM_CLASSES } from "@/design-system/primitives/menu-item";
+import { MENU_CONTENT_CLASSES, MENU_ITEM_CLASSES } from "@/design-system/primitives/menu-item";
 
 /** One action in the More menu. */
 export type ActionMenuItem = {
@@ -100,7 +100,7 @@ function MoreMenu({ items }: MoreMenuProps) {
           side="top"
           align="end"
           sideOffset={4}
-          className="z-20 flex max-w-menu min-w-menu flex-col rounded-md border border-border bg-surface-raised p-1 text-sm shadow-md"
+          className={cn(MENU_CONTENT_CLASSES, "max-w-menu")}
         >
           {items.map((item) => (
             <MoreMenuItem key={item.label} item={item} />

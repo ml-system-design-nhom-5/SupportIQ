@@ -1,46 +1,18 @@
 import { screen, waitFor, within } from "@testing-library/react";
-import type { UserEvent } from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import { sendReplyRoute } from "@/test/backend-routes";
 import {
-  type ConsoleAnswers,
-  openConsole,
+  DRAFT_READY_SUGGESTION_ID,
+  openReplyArea,
   readDraftText,
-  TICKET_PATH,
+  sendAndConfirm,
   workspaceExample,
 } from "@/test/console-screen";
-
-/** The current suggestion of the draft-ready example. */
-const SUGGESTION_ID = "6b1f0c3e-2a4d-4e8f-9b7c-1d3e5f7a9b20";
 
 /** A UUID in lowercase, as the contract requires of an `Idempotency-Key`. */
 const idempotencyKeyPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-
-/**
- * Open the workspace of TCK-1042 and wait for its reply area.
- *
- * @param answers - The answers that differ from the defaults: the draft-ready workspace.
- * @returns The rendered app and the `main` landmark.
- */
-async function openReplyArea(answers: ConsoleAnswers = {}) {
-  const rendered = openConsole(TICKET_PATH, answers);
-  await screen.findByRole("heading", { level: 1, name: /^Ticket / });
-  return { ...rendered, main: screen.getByRole("main") };
-}
-
-/**
- * Send the reply on the screen: Send reply, then the Send reply of the confirmation.
- *
- * @param user - The user of the test.
- * @param main - The `main` landmark.
- */
-async function sendAndConfirm(user: UserEvent, main: HTMLElement): Promise<void> {
-  await user.click(within(main).getByRole("button", { name: "Send reply" }));
-  const dialog = await screen.findByRole("alertdialog", { name: "Send this reply to Lan Tran?" });
-  await user.click(within(dialog).getByRole("button", { name: "Send reply" }));
-}
 
 describe("Send reply of a ready draft (UI-17, UI-18)", () => {
   it("stays disabled until the warning is acknowledged, and says why", async () => {
@@ -74,7 +46,7 @@ describe("Send reply of a ready draft (UI-17, UI-18)", () => {
     expect(request?.body).toEqual({
       basis: "ai_draft",
       body: readDraftText("draft-ready"),
-      suggestion_id: SUGGESTION_ID,
+      suggestion_id: DRAFT_READY_SUGGESTION_ID,
       acknowledged_warning_ids: ["w1"],
     });
   });

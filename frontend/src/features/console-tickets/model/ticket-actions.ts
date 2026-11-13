@@ -4,6 +4,7 @@
  * so the console offers no action that would be refused; it never decides a permission itself
  * (UI-40).
  */
+import type { TicketActionContract } from "@/features/console-tickets/api/contract-types";
 
 /** The actions of the contract, in its order. */
 const knownTicketActions = [
@@ -12,7 +13,7 @@ const knownTicketActions = [
   "escalate",
   "correct_intent",
   "retry_suggestion",
-] as const;
+] as const satisfies readonly TicketActionContract[];
 
 const ticketActions: ReadonlySet<string> = new Set(knownTicketActions);
 

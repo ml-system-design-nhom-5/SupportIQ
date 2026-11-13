@@ -42,15 +42,13 @@ export type ReplyEditorProps = {
   readonly placeholder?: string;
   /** Lines under the editor, each with an Info icon; they describe the editor. */
   readonly hints?: readonly string[];
-  /** The most characters the editor takes. */
-  readonly maxLength?: number;
 };
 
 /**
  * Render the editor and its hints.
  *
- * @param props - The name, the text and its handler, the marked runs, the placeholder, the hints,
- *   and the length limit.
+ * @param props - The name, the text and its handler, the marked runs, the placeholder, and the
+ *   hints.
  * @returns The editor.
  */
 export function ReplyEditor({
@@ -60,7 +58,6 @@ export function ReplyEditor({
   markedParts,
   placeholder,
   hints = [],
-  maxLength,
 }: ReplyEditorProps) {
   const hintsId = useId();
   const backdropRef = useRef<HTMLDivElement>(null);
@@ -82,7 +79,6 @@ export function ReplyEditor({
           value={value}
           rows={MIN_ROW_COUNT}
           placeholder={placeholder}
-          maxLength={maxLength}
           className={cn(
             LAYER_CLASSES,
             "resize-none border-border-strong bg-transparent text-text placeholder:text-text-muted",

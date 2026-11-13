@@ -24,6 +24,9 @@ import { renderWithDependencies } from "@/test/render-app";
 const idempotencyKeyPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
+/** A suggestion of TCK-1042 that no example has, for a reload that shows another suggestion. */
+const OTHER_SUGGESTION_ID = "3a5c7e9b-1d2f-4a6b-8c0d-e2f4a6b8c0d1";
+
 /** The draft-ready ticket after a correction: its suggestion is the one that the `202` started. */
 const workspaceAfterCorrection = workspaceWithSuggestion(
   "draft-ready",
@@ -148,6 +151,34 @@ describe("Correcting the intent from the strip (UI-22)", () => {
 
     const [firstKey, secondKey] = await readSuggestionKeys(backend, 2);
     expect(secondKey).toBe(firstKey);
+  });
+
+  it("gets a new Idempotency-Key once the reloaded ticket shows another suggestion", async () => {
+    const { user, backend, main } = await openWorkspace({
+      workspace: [
+        workspaceExample("draft-ready"),
+        workspaceWithSuggestion("draft-ready", {
+          suggestion_id: OTHER_SUGGESTION_ID,
+          draft: { draft_status: "pending" },
+        }),
+      ],
+      suggestion: [
+        { kind: "network_error" },
+        exampleAnswer(202, "createSuggestion", "intent-override"),
+      ],
+    });
+    await user.click(within(main).getByRole("button", { name: "Use Request refund 7%" }));
+    await waitFor(() => {
+      expect(within(main).getByRole("region", { name: "AI draft" })).toHaveTextContent(
+        "Generating draft",
+      );
+    });
+
+    await user.click(within(main).getByRole("button", { name: "Use Request refund 7%" }));
+
+    const [firstKey, secondKey] = await readSuggestionKeys(backend, 2);
+    expect(secondKey).toMatch(idempotencyKeyPattern);
+    expect(secondKey).not.toBe(firstKey);
   });
 
   it("marks the previous draft as outdated while the new draft generates", async () => {

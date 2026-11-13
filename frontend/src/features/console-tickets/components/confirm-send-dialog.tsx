@@ -3,12 +3,14 @@
  * names the customer, shows the start of the reply, and says that a sent reply cannot be changed.
  * Only its Send reply sends the reply (FR-04).
  */
+import { Send } from "lucide-react";
+
 import { ConfirmDialog, type DialogReturnFocus, ReplyPreview } from "@/design-system";
 
 /** Props of {@link ConfirmSendDialog}. */
 type ConfirmSendDialogProps = {
   readonly customerName: string;
-  /** The text that the customer receives. */
+  /** The text that the customer receives: the reply fixed when the confirmation opened. */
   readonly body: string;
   readonly returnFocus: DialogReturnFocus;
   readonly isSending: boolean;
@@ -41,7 +43,9 @@ export function ConfirmSendDialog({
             <ReplyPreview text={body} />
           </>
         ),
+        descriptionTone: "muted",
         confirmLabel: "Send reply",
+        confirmIcon: Send,
         pendingLabel: "Sending…",
         cancelLabel: "Keep editing",
       }}

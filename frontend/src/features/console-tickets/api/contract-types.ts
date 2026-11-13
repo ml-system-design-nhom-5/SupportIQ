@@ -61,3 +61,6 @@ export type SendReplyRequestContract = Schemas["SendReplyRequest"];
 
 /** `StaffReasonCode`: why staff edited, rejected, or escalated a draft (ADR-0006). */
 export type StaffReasonCodeContract = Schemas["StaffReasonCode"];
+
+/** `TicketAction`: an action that `backend` allows the caller on a ticket now. */
+export type TicketActionContract = Schemas["TicketAction"];

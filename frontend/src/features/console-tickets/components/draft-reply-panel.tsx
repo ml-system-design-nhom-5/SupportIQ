@@ -1,30 +1,31 @@
 /**
  * The reply area with a ready draft (console UI design, Actions, Draft editing and citations, and
  * States): the draft with its citation markers, the editor after Edit draft, or the reason codes,
- * the rejected draft, and an empty editor after Reject draft. Warnings sit at the top, next to the
- * action they block, and each needs an acknowledgement (UI-18). AI content carries the `ai` marker
+ * the rejected draft, and an empty editor after Reject draft. When a new draft replaced the one that
+ * staff worked on, their text stays in the editor and the new draft shows above it, read-only
+ * (Errors and guardrails, "The draft was superseded"). Warnings sit at the top, next to the action
+ * they block, and each needs an acknowledgement (UI-18). AI content carries the `ai` marker
  * (UI-13); text in the editor is staff text.
  */
-import { Pencil, Sparkles, X } from "lucide-react";
-
 import {
   Panel,
-  PanelHeader,
   PanelSection,
   presentationByAiReasonCode,
-  presentationByAiStatus,
-  RelativeTime,
   Stack,
-  StatusBadge,
+  StatusBanner,
   Tag,
-  Text,
   WarningList,
 } from "@/design-system";
+import { assertNever } from "@/features/backend-requests";
 import {
   type CitationContext,
   CitedDraft,
 } from "@/features/console-tickets/components/cited-draft";
 import { DraftModeActions } from "@/features/console-tickets/components/draft-mode-actions";
+import {
+  DraftPanelHeader,
+  getDraftPanelTitle,
+} from "@/features/console-tickets/components/draft-panel-header";
 import { RejectionReasons } from "@/features/console-tickets/components/rejection-reasons";
 import { ReplyActionBar } from "@/features/console-tickets/components/reply-action-bar";
 import { ReplyEditorSection } from "@/features/console-tickets/components/reply-editor-section";
@@ -38,6 +39,9 @@ import {
   startEditing,
   toggleReasonCode,
 } from "@/features/console-tickets/model/reply-composer";
+
+/** The hint under the editor of a reply that is sent as an edit of the AI draft. */
+const EDITED_TEXT_HINT = "Edited text is not checked against the sources.";
 
 /** What a draft needs: its warnings, its time, and its citations. */
 export type DraftContext = {
@@ -61,16 +65,17 @@ type DraftReplyPanelProps = {
  * @returns The panel with its action bar.
  */
 export function DraftReplyPanel({ composer, draft, context }: DraftReplyPanelProps) {
-  const { mode, change } = composer;
-  const isRejected = mode === "rejecting";
+  const { state, change } = composer;
+  const isRejected = state.draftMode === "rejecting";
   return (
     <Panel
       density="compact"
+      height="fill"
       as="section"
-      label={getTitle(mode)}
+      label={getDraftPanelTitle(state)}
       {...(isRejected ? {} : { tone: "ai" as const })}
     >
-      <DraftHeader mode={mode} generatedAt={context.generatedAt} />
+      <DraftPanelHeader state={state} generatedAt={context.generatedAt} />
       {isRejected || context.warnings.length === 0 ? null : (
         <PanelSection>
           <WarningList
@@ -79,9 +84,9 @@ export function DraftReplyPanel({ composer, draft, context }: DraftReplyPanelPro
               title: presentationByAiReasonCode[warning.reasonCode].label,
               description: warning.text,
             }))}
-            acknowledgedIds={composer.state.acknowledgedWarningIds}
+            acknowledgedIds={state.acknowledgedWarningIds}
             onAcknowledgedChange={(warningId, isAcknowledged) => {
-              change((state) => acknowledgeWarning(state, { warningId, isAcknowledged }));
+              change((current) => acknowledgeWarning(current, { warningId, isAcknowledged }));
             }}
           />
         </PanelSection>
@@ -91,11 +96,11 @@ export function DraftReplyPanel({ composer, draft, context }: DraftReplyPanelPro
         composer={composer}
         actions={
           <DraftModeActions
-            mode={mode}
+            mode={state.draftMode}
             canChange={composer.canChangeDraft}
             handlers={{
               onEdit: () => {
-                change((state) => startEditing(state, draft.text));
+                change((current) => startEditing(current, draft.text));
               },
               onDiscard: () => {
                 change(discardEdits);
@@ -112,118 +117,63 @@ export function DraftReplyPanel({ composer, draft, context }: DraftReplyPanelPro
 }
 
 /**
- * Render what the panel holds in its mode.
+ * Render what the panel holds in the mode of the draft.
  *
  * @param props - The composer, the draft, and what the draft needs.
- * @returns The draft, the editor, or the reasons with the rejected draft and the editor.
+ * @returns The draft; the editor; the new draft above the kept text; or the reasons with the
+ *   rejected draft and the editor.
  */
 function DraftBody({ composer, draft, context }: DraftReplyPanelProps) {
   const { state, change } = composer;
   const changeBody = (body: string) => {
     change((current) => ({ ...current, body }));
   };
-  if (composer.mode === "editing") {
-    return (
-      <ReplyEditorSection
-        value={state.body}
-        onChange={changeBody}
-        hints={["Edited text is not checked against the sources."]}
-      />
-    );
+  switch (state.draftMode) {
+    case "viewing":
+      return (
+        <PanelSection>
+          <CitedDraft draft={draft} {...context.citations} />
+        </PanelSection>
+      );
+    case "editing":
+      return (
+        <ReplyEditorSection value={state.body} onChange={changeBody} hints={[EDITED_TEXT_HINT]} />
+      );
+    case "keeping":
+      return (
+        <>
+          <PanelSection>
+            <StatusBanner tone="info" lead="The AI made a new draft.">
+              Your text is kept below it.
+            </StatusBanner>
+            <CitedDraft draft={draft} {...context.citations} />
+          </PanelSection>
+          <ReplyEditorSection value={state.body} onChange={changeBody} hints={[EDITED_TEXT_HINT]} />
+        </>
+      );
+    case "rejecting":
+      return (
+        <>
+          <RejectionReasons
+            reasonCodes={state.reasonCodes}
+            note={state.note}
+            onToggle={(reasonCode) => {
+              change((current) => toggleReasonCode(current, reasonCode));
+            }}
+            onNoteChange={(note) => {
+              change((current) => ({ ...current, note }));
+            }}
+          />
+          <PanelSection>
+            <Stack gap="2" align="start">
+              <Tag tone="neutral">Rejected</Tag>
+              <CitedDraft draft={draft} tone="muted" {...context.citations} />
+            </Stack>
+          </PanelSection>
+          <ReplyEditorSection value={state.body} onChange={changeBody} />
+        </>
+      );
+    default:
+      assertNever(state.draftMode);
   }
-  if (composer.mode !== "rejecting") {
-    return (
-      <PanelSection>
-        <CitedDraft draft={draft} {...context.citations} />
-      </PanelSection>
-    );
-  }
-  return (
-    <>
-      <RejectionReasons
-        reasonCodes={state.reasonCodes}
-        note={state.note}
-        onToggle={(reasonCode) => {
-          change((current) => toggleReasonCode(current, reasonCode));
-        }}
-        onNoteChange={(note) => {
-          change((current) => ({ ...current, note }));
-        }}
-      />
-      <PanelSection>
-        <Stack gap="2" align="start">
-          <Tag tone="neutral">Rejected</Tag>
-          <CitedDraft draft={draft} tone="muted" {...context.citations} />
-        </Stack>
-      </PanelSection>
-      <ReplyEditorSection value={state.body} onChange={changeBody} />
-    </>
-  );
-}
-
-/**
- * Render the header of the panel in its mode.
- *
- * @param props - The mode and when the suggestion started.
- * @returns The header.
- */
-function DraftHeader({
-  mode,
-  generatedAt,
-}: {
-  readonly mode: ReplyComposer["mode"];
-  readonly generatedAt: string;
-}) {
-  if (mode === "editing") {
-    return (
-      <PanelHeader
-        icon={Pencil}
-        level={2}
-        title="Edit draft"
-        trailing={
-          <Tag tone="ai" icon={Sparkles}>
-            Started from AI draft
-          </Tag>
-        }
-      />
-    );
-  }
-  if (mode === "rejecting") {
-    return (
-      <PanelHeader
-        icon={X}
-        level={2}
-        title="Draft rejected"
-        trailing={<Text tone="muted">Your reason improves the AI after review</Text>}
-      />
-    );
-  }
-  return (
-    <PanelHeader
-      icon={Sparkles}
-      level={2}
-      title="AI draft"
-      trailing={
-        <Stack direction="row" gap="2" align="center">
-          <StatusBadge presentation={presentationByAiStatus.draft_ready} />
-          <Text tone="muted">
-            Generated <RelativeTime timestamp={generatedAt} />
-          </Text>
-        </Stack>
-      }
-    />
-  );
-}
-
-/**
- * Name the panel in its mode.
- *
- * @param mode - What staff do with the draft.
- * @returns "AI draft", "Edit draft", or "Draft rejected".
- */
-function getTitle(mode: ReplyComposer["mode"]): string {
-  if (mode === "editing") {
-    return "Edit draft";
-  }
-  return mode === "rejecting" ? "Draft rejected" : "AI draft";
 }

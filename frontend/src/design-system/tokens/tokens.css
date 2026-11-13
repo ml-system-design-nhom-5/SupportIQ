@@ -118,6 +118,10 @@
   --container-popover-wide: 40rem;
   --container-hint: 20rem;
 
+  /* The least height of the reply panel, which fills the rest of the middle column (console UI
+     design, placement rule 2; mockup.css: `.col > .panel.fill { min-height: 280px }`). */
+  --height-reply-panel: 17.5rem;
+
   /* The neutral product image (UI-38): the same height at every width. */
   --aspect-*: initial;
   --height-product-card: 8.75rem;

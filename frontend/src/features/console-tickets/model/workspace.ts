@@ -118,12 +118,12 @@ export function toSuggestion(suggestion: SuggestionContract): Suggestion {
 }
 
 /**
- * Map the sent reply.
+ * Map a sent reply: the reply of a closed ticket, or the answer of `sendReply`.
  *
  * @param reply - A `ConsoleReplyView`.
  * @returns The body, who sent it, and when.
  */
-function toSentReply(reply: ConsoleReplyContract): SentReply {
+export function toSentReply(reply: ConsoleReplyContract): SentReply {
   requireMembers(reply, ["body", "sent_by", "sent_at"]);
   return { body: reply.body, sentByName: reply.sent_by.display_name, sentAt: reply.sent_at };
 }

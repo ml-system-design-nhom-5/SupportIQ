@@ -1,9 +1,13 @@
 import { screen, waitFor, within } from "@testing-library/react";
-import type { UserEvent } from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import { getConsoleTicketRoute, sendReplyRoute } from "@/test/backend-routes";
-import { type ConsoleAnswers, openConsole, workspaceExample } from "@/test/console-screen";
+import {
+  type ConsoleAnswers,
+  openConsole,
+  sendAndConfirm,
+  workspaceExample,
+} from "@/test/console-screen";
 import { exampleAnswer } from "@/test/fake-backend";
 import { testSettings } from "@/test/render-app";
 
@@ -29,18 +33,6 @@ async function sendManualReply(answers: ConsoleAnswers) {
   );
   await sendAndConfirm(rendered.user, main);
   return { ...rendered, main };
-}
-
-/**
- * Send the reply on the screen: Send reply, then the Send reply of the confirmation.
- *
- * @param user - The user of the test.
- * @param main - The `main` landmark.
- */
-async function sendAndConfirm(user: UserEvent, main: HTMLElement): Promise<void> {
-  await user.click(within(main).getByRole("button", { name: "Send reply" }));
-  const dialog = await screen.findByRole("alertdialog", { name: "Send this reply to Lan Tran?" });
-  await user.click(within(dialog).getByRole("button", { name: "Send reply" }));
 }
 
 describe("A refused send (console UI design, Errors and guardrails)", () => {
@@ -78,6 +70,19 @@ describe("A refused send (console UI design, Errors and guardrails)", () => {
       });
     },
   );
+
+  it("keeps saying what happened once the reload shows the ticket closed", async () => {
+    const { main } = await sendManualReply({
+      workspace: [workspaceExample("manual-mode"), workspaceExample("closed")],
+      reply: [exampleAnswer(409, "problems", "invalid-ticket-state")],
+    });
+
+    const sent = await within(main).findByRole("region", { name: "Reply sent" });
+    expect(within(sent).getByRole("alert")).toHaveTextContent(
+      "This ticket was already handled. It now shows its current state.",
+    );
+    expect(within(sent).getByRole("button", { name: "Send reply" })).toBeDisabled();
+  });
 
   it("keeps the text after a 422 and does not reload the ticket", async () => {
     const { main, backend } = await sendManualReply({

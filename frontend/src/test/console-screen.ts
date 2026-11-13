@@ -1,8 +1,18 @@
 /**
  * The console screens in tests: a fake backend that answers the session, the queue, the view, and
- * the workspace with the example files of the contract (TEST-11), and the variants of a workspace
- * example that no example covers yet, such as an analysis that is ready while the draft is pending.
+ * the workspace with the example files of the contract (TEST-11), the variants of a workspace
+ * example that no example covers yet, such as an analysis that is ready while the draft is pending,
+ * and the steps of the reply area that several tests share.
  */
+import { screen, within } from "@testing-library/react";
+import type { UserEvent } from "@testing-library/user-event";
+
+import {
+  type ComposerTicket,
+  toComposerTicket,
+} from "@/features/console-tickets/model/reply-request";
+import { toTicketWorkspace } from "@/features/console-tickets/model/workspace";
+import { buildWorkspaceRegions } from "@/features/console-tickets/model/workspace-regions";
 import {
   createSuggestionRoute,
   getConsoleKbDocumentVersionRoute,
@@ -12,7 +22,7 @@ import {
   recordTicketViewRoute,
   sendReplyRoute,
 } from "@/test/backend-routes";
-import { readExample } from "@/test/contract-examples";
+import { readExample, readOperationExample } from "@/test/contract-examples";
 import {
   createFakeBackend,
   exampleAnswer,
@@ -24,6 +34,9 @@ import { renderApp, testSettings } from "@/test/render-app";
 
 /** The path of the workspace of TCK-1042, the ticket of the examples. */
 export const TICKET_PATH = "/console/tickets/TCK-1042";
+
+/** The current suggestion of the draft-ready and abstained-low-confidence examples. */
+export const DRAFT_READY_SUGGESTION_ID = "6b1f0c3e-2a4d-4e8f-9b7c-1d3e5f7a9b20";
 
 /** What the console of a test receives. Each list is used in order, and its last answer repeats. */
 export type ConsoleAnswers = {
@@ -208,4 +221,51 @@ export function readDraftText(name: string): string {
     throw new Error(`contracts/examples/getConsoleTicket/${name}.json has no draft text.`);
   }
   return text;
+}
+
+/**
+ * Open the workspace of TCK-1042 and wait for it.
+ *
+ * @param answers - The answers that differ from the defaults: the draft-ready workspace.
+ * @returns The rendered app and the `main` landmark.
+ */
+export async function openReplyArea(answers: ConsoleAnswers = {}) {
+  const rendered = openConsole(TICKET_PATH, answers);
+  await screen.findByRole("heading", { level: 1, name: /^Ticket / });
+  return { ...rendered, main: screen.getByRole("main") };
+}
+
+/**
+ * Write a reply in the editor.
+ *
+ * @param user - The user of the test.
+ * @param main - The `main` landmark.
+ * @param text - The reply.
+ */
+export async function writeReply(user: UserEvent, main: HTMLElement, text: string): Promise<void> {
+  await user.type(within(main).getByRole("textbox", { name: "Reply to the customer" }), text);
+}
+
+/**
+ * Send the reply on the screen: Send reply, then the Send reply of the confirmation.
+ *
+ * @param user - The user of the test.
+ * @param main - The `main` landmark.
+ */
+export async function sendAndConfirm(user: UserEvent, main: HTMLElement): Promise<void> {
+  await user.click(within(main).getByRole("button", { name: "Send reply" }));
+  const dialog = await screen.findByRole("alertdialog", { name: "Send this reply to Lan Tran?" });
+  await user.click(within(dialog).getByRole("button", { name: "Send reply" }));
+}
+
+/**
+ * Read what the composer reads of a workspace example.
+ *
+ * @param name - The example of `getConsoleTicket`.
+ * @param isSuggestionRequested - True while an intent correction or Try AI again is sending.
+ * @returns The composer ticket.
+ */
+export function readComposerTicket(name: string, isSuggestionRequested = false): ComposerTicket {
+  const workspace = toTicketWorkspace(readOperationExample("getConsoleTicket", 200, name));
+  return toComposerTicket(workspace, buildWorkspaceRegions(workspace), isSuggestionRequested);
 }

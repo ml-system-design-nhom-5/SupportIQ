@@ -5,6 +5,7 @@
  * `502`, or `504` with a body that is not Problem Details (contracts v1 design, Common elements).
  * The browser reports a lost connection, and the client reports a timeout (ERR-09).
  */
+import type { ProblemTypeUrnContract } from "@/features/backend-requests/api/contract-types";
 import { assertNever } from "@/features/backend-requests/model/assert-never";
 
 /** The problem types of a write that `backend` looked at and refused. */
@@ -21,20 +22,29 @@ const problemTypesOfRefusals: ReadonlySet<ProblemType> = new Set([
 /** The statuses of a write in flight that the ingress lost (ADR-0011). */
 const unknownOutcomeStatuses: ReadonlySet<number> = new Set([502, 504]);
 
-const problemTypeByUrn: ReadonlyMap<string, ProblemType> = new Map([
-  ["urn:supportiq:problem:invalid-request", "invalid_request"],
-  ["urn:supportiq:problem:unauthenticated", "unauthenticated"],
-  ["urn:supportiq:problem:forbidden", "forbidden"],
-  ["urn:supportiq:problem:not-found", "not_found"],
-  ["urn:supportiq:problem:idempotency-key-reused", "idempotency_key_reused"],
-  ["urn:supportiq:problem:login-name-taken", "login_name_taken"],
-  ["urn:supportiq:problem:not-ready", "not_ready"],
-  ["urn:supportiq:problem:internal-error", "internal_error"],
-  ["urn:supportiq:problem:authority-required", "authority_required"],
-  ["urn:supportiq:problem:invalid-ticket-state", "invalid_ticket_state"],
-  ["urn:supportiq:problem:suggestion-pending", "suggestion_pending"],
-  ["urn:supportiq:problem:suggestion-superseded", "suggestion_superseded"],
-]);
+/**
+ * The problem type of each URN of the contract. A URN that the contract does not have, or one that
+ * it has and this map lacks, fails to compile.
+ */
+const problemTypeOfUrn: Readonly<Record<ProblemTypeUrnContract, Exclude<ProblemType, "unknown">>> =
+  {
+    "urn:supportiq:problem:invalid-request": "invalid_request",
+    "urn:supportiq:problem:unauthenticated": "unauthenticated",
+    "urn:supportiq:problem:forbidden": "forbidden",
+    "urn:supportiq:problem:not-found": "not_found",
+    "urn:supportiq:problem:idempotency-key-reused": "idempotency_key_reused",
+    "urn:supportiq:problem:login-name-taken": "login_name_taken",
+    "urn:supportiq:problem:not-ready": "not_ready",
+    "urn:supportiq:problem:internal-error": "internal_error",
+    "urn:supportiq:problem:authority-required": "authority_required",
+    "urn:supportiq:problem:invalid-ticket-state": "invalid_ticket_state",
+    "urn:supportiq:problem:suggestion-pending": "suggestion_pending",
+    "urn:supportiq:problem:suggestion-superseded": "suggestion_superseded",
+  };
+
+const problemTypeByUrn: ReadonlyMap<string, ProblemType> = new Map(
+  Object.entries(problemTypeOfUrn),
+);
 
 const traceIdPattern = /^[0-9a-f]{32}$/;
 

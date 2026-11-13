@@ -10,7 +10,7 @@ import { Check, ChevronDown } from "lucide-react";
 import { cn } from "@/design-system/primitives/class-names";
 import { FOCUS_RING_CLASSES } from "@/design-system/primitives/focus-ring";
 import { Icon } from "@/design-system/primitives/icon";
-import { MENU_ITEM_CLASSES } from "@/design-system/primitives/menu-item";
+import { MENU_CONTENT_CLASSES, MENU_ITEM_CLASSES } from "@/design-system/primitives/menu-item";
 
 /** One option of a {@link MenuSelect}. */
 export type MenuSelectOption<Value extends string> = {
@@ -65,7 +65,7 @@ export function MenuSelect<Value extends string>({
         <DropdownMenuPrimitive.Content
           align="start"
           sideOffset={4}
-          className="z-20 flex min-w-menu flex-col rounded-md border border-border bg-surface-raised p-1 text-sm shadow-md"
+          className={MENU_CONTENT_CLASSES}
         >
           <DropdownMenuPrimitive.Label className="p-2 text-xs text-text-muted">
             {label}

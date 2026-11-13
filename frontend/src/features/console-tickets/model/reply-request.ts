@@ -1,20 +1,13 @@
 /**
  * The reply that Send reply sends (console UI design, Actions): its `basis` follows from what
- * staff did, and Send reply stays disabled, with one line that says why, until the reply may be
- * sent (UI-16, UI-18, UI-43). `backend` checks every rule again and refuses with `403`, `409`, or
- * `422` (FR-04, FR-06, SEC-38); the console only spares staff a refused request. Nothing here sends:
- * only a staff click and a confirmation send a reply.
+ * staff did, and it names only the warnings that staff acknowledged, so `422` stays the backstop of
+ * UI-18. `backend` checks every rule again and refuses with `403`, `409`, or `422` (FR-04, FR-06,
+ * SEC-38). Nothing here sends: only a staff click and a confirmation send a reply.
  */
-import { formatCount } from "@/design-system";
-import { countContractCharacters, MESSAGE_MAX_LENGTH } from "@/features/backend-requests";
 import type { SendReplyRequestContract } from "@/features/console-tickets/api/contract-types";
-import { hasPlaceholder } from "@/features/console-tickets/model/placeholders";
 import type { SuggestionWarning } from "@/features/console-tickets/model/reason-codes";
 import type { ComposerState, DraftMode } from "@/features/console-tickets/model/reply-composer";
-import {
-  STAFF_NOTE_MAX_LENGTH,
-  staffReasonCodes,
-} from "@/features/console-tickets/model/staff-reason-codes";
+import { staffReasonCodes } from "@/features/console-tickets/model/staff-reason-codes";
 import type { TicketAction } from "@/features/console-tickets/model/ticket-actions";
 import type { TicketWorkspace } from "@/features/console-tickets/model/workspace";
 import {
@@ -26,7 +19,12 @@ import {
 export type ComposerTicket = {
   readonly allowedActions: ReadonlySet<TicketAction>;
   readonly isAuthorityRequired: boolean;
-  /** True while a part of the current suggestion is `pending`. */
+  /** True once the ticket is closed: its reply was sent. */
+  readonly isClosed: boolean;
+  /**
+   * True while a part of the current suggestion is `pending`, or while an intent correction or Try
+   * AI again is sending, which starts a new suggestion.
+   */
   readonly isSuggestionRunning: boolean;
   /** True when the AI abstained for low confidence: staff choose an intent first (ESC-01). */
   readonly isIntentChoiceNeeded: boolean;
@@ -53,19 +51,22 @@ export type ComposerMode = DraftMode | "writing";
  *
  * @param workspace - The ticket.
  * @param regions - The state of its reply area and the warnings of its analysis.
- * @returns The allowed actions, the authority flag, whether the AI is running, the current
- *   suggestion, its ready draft, and its warnings.
+ * @param isSuggestionRequested - True while an intent correction or Try AI again is sending.
+ * @returns The allowed actions, the authority flag, whether the ticket is closed, whether the AI
+ *   is running, the current suggestion, its ready draft, and its warnings.
  */
 export function toComposerTicket(
   workspace: TicketWorkspace,
   regions: ComposerRegions,
+  isSuggestionRequested: boolean,
 ): ComposerTicket {
   const suggestionId = workspace.suggestion?.suggestionId;
   const draftText = regions.reply.kind === "draft" ? regions.reply.draft.text : undefined;
   return {
     allowedActions: workspace.allowedActions,
     isAuthorityRequired: workspace.isAuthorityRequired,
-    isSuggestionRunning: hasPendingPart(workspace),
+    isClosed: workspace.status === "closed",
+    isSuggestionRunning: isSuggestionRequested || hasPendingPart(workspace),
     isIntentChoiceNeeded: regions.reply.kind === "choose_intent",
     ...(suggestionId === undefined ? {} : { suggestionId }),
     ...(suggestionId === undefined || draftText === undefined
@@ -131,7 +132,7 @@ export function isSameReply(
 
 /**
  * Build the body of `sendReply`, with the basis of the console UI design (Actions):
- * `ai_draft` for a ready draft sent as is or edited, with every warning acknowledged;
+ * `ai_draft` for a ready draft sent as is or edited, with the warnings that staff acknowledged;
  * `rejected_ai_draft` with the chosen reason codes; `no_ai_draft` without a ready draft.
  *
  * @param ticket - The ticket.
@@ -164,117 +165,8 @@ export function buildSendReplyRequest(
     basis: "ai_draft",
     body,
     suggestion_id: draft.suggestionId,
-    acknowledged_warning_ids: [...ticket.warningIds],
+    acknowledged_warning_ids: ticket.warningIds.filter((warningId) =>
+      state.acknowledgedWarningIds.has(warningId),
+    ),
   };
-}
-
-/**
- * Say why Send reply is disabled, in the line above the buttons (placement rule 2).
- *
- * @param ticket - The ticket.
- * @param state - What staff composed.
- * @returns The first reason that applies, or undefined when Send reply is enabled.
- */
-export function findSendBlock(ticket: ComposerTicket, state: ComposerState): string | undefined {
-  return (
-    findTicketBlock(ticket) ??
-    findRejectionBlock(getComposerMode(ticket, state), state) ??
-    findBodyBlock(getReplyBody(ticket, state)) ??
-    findWarningBlock(ticket, state)
-  );
-}
-
-/**
- * Say why the ticket allows no reply now.
- *
- * @param ticket - The ticket.
- * @returns The reason, or undefined when `send_reply` is allowed.
- */
-function findTicketBlock(ticket: ComposerTicket): string | undefined {
-  if (ticket.isSuggestionRunning) {
-    return "The AI is still working on this ticket.";
-  }
-  if (ticket.isIntentChoiceNeeded) {
-    return "Choose an intent to get a draft.";
-  }
-  if (ticket.allowedActions.has("send_reply")) {
-    return undefined;
-  }
-  return ticket.isAuthorityRequired
-    ? "Only a manager can send the reply of this ticket."
-    : "You cannot send a reply on this ticket.";
-}
-
-/**
- * Say what a rejection still needs (ADR-0006): a reason code, and a note for `other`.
- *
- * @param mode - What staff do.
- * @param state - What staff composed.
- * @returns The reason, or undefined when the rejection is complete or there is none.
- */
-function findRejectionBlock(mode: ComposerMode, state: ComposerState): string | undefined {
-  if (mode !== "rejecting") {
-    return undefined;
-  }
-  if (state.reasonCodes.size === 0) {
-    return "Choose why you rejected the draft to send the reply.";
-  }
-  if (!state.reasonCodes.has("other")) {
-    return undefined;
-  }
-  return findNoteBlock(state.note);
-}
-
-/**
- * Say what the note of the reason code `other` still needs.
- *
- * @param note - The note.
- * @returns The reason, or undefined when the note has from 1 to 1 000 characters.
- */
-function findNoteBlock(note: string): string | undefined {
-  if (note.trim() === "") {
-    return "Write a note for the reason Other to send the reply.";
-  }
-  return countContractCharacters(note) > STAFF_NOTE_MAX_LENGTH
-    ? `Shorten the note to ${formatCount(STAFF_NOTE_MAX_LENGTH)} characters to send the reply.`
-    : undefined;
-}
-
-/**
- * Say what the text of the reply still needs: some text, at most 2 000 characters, and no
- * placeholder (UI-43).
- *
- * @param body - The text that Send reply sends.
- * @returns The reason, or undefined when the text may be sent.
- */
-function findBodyBlock(body: string): string | undefined {
-  if (body.trim() === "") {
-    return "Write a reply to send it.";
-  }
-  if (countContractCharacters(body) > MESSAGE_MAX_LENGTH) {
-    return `Shorten the reply to ${formatCount(MESSAGE_MAX_LENGTH)} characters to send it.`;
-  }
-  return hasPlaceholder(body) ? "Replace the highlighted text to send the reply." : undefined;
-}
-
-/**
- * Say how many warnings staff still have to acknowledge (UI-18). A rejected draft and a reply
- * without a draft carry no warning.
- *
- * @param ticket - The ticket.
- * @param state - What staff composed.
- * @returns The reason, or undefined when every warning is acknowledged.
- */
-function findWarningBlock(ticket: ComposerTicket, state: ComposerState): string | undefined {
-  const mode = getComposerMode(ticket, state);
-  if (mode === "rejecting" || mode === "writing") {
-    return undefined;
-  }
-  const count = ticket.warningIds.filter(
-    (warningId) => !state.acknowledgedWarningIds.has(warningId),
-  ).length;
-  if (count === 0) {
-    return undefined;
-  }
-  return `Acknowledge ${formatCount(count)} ${count === 1 ? "warning" : "warnings"} to send the reply.`;
 }

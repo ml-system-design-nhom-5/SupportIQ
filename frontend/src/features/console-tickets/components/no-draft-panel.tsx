@@ -35,7 +35,7 @@ type NoDraftPanelProps = {
 export function NoDraftPanel({ outcome, children }: NoDraftPanelProps) {
   if (outcome.kind === "choose_intent") {
     return (
-      <Panel density="compact" as="section" label="AI draft">
+      <Panel density="compact" height="fill" as="section" label="AI draft">
         <PanelHeader icon={Sparkles} level={2} title="AI draft" />
         <PanelSection layout="centered">
           <Text tone="muted">No draft is created until you choose an intent.</Text>
@@ -46,7 +46,7 @@ export function NoDraftPanel({ outcome, children }: NoDraftPanelProps) {
   }
   const isEscalation = outcome.status === "escalation_recommended";
   return (
-    <Panel density="compact" as="section" label="Reply">
+    <Panel density="compact" height="fill" as="section" label="Reply">
       <PanelHeader
         icon={PenLine}
         level={2}

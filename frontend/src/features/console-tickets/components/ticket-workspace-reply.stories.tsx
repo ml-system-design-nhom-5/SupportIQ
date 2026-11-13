@@ -2,8 +2,14 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, screen, userEvent, within } from "storybook/test";
 
 import { TicketWorkspacePage } from "@/features/console-tickets/components/ticket-workspace-page";
-import { answerConsole, type ConsoleAnswers, workspaceExample } from "@/test/console-screen";
+import {
+  answerConsole,
+  type ConsoleAnswers,
+  workspaceExample,
+  workspaceWithSuggestion,
+} from "@/test/console-screen";
 import { ConsoleStoryFrame } from "@/test/console-story-frame";
+import { readOperationExample } from "@/test/contract-examples";
 import { exampleAnswer } from "@/test/fake-backend";
 import { withFakeBackend } from "@/test/story-backend";
 
@@ -159,5 +165,37 @@ export const AiUnavailableWithTryAiAgain: Story = {
     await expect(
       await within(canvasElement).findByRole("button", { name: "Try AI again" }),
     ).toBeEnabled();
+  },
+};
+export const TextKeptOverANewDraft: Story = {
+  decorators: withAnswers({
+    workspace: [
+      workspaceExample("draft-ready"),
+      workspaceWithSuggestion("draft-ready", {
+        suggestion_id: readOperationExample("createSuggestion", 202, "intent-override")
+          .suggestion_id,
+      }),
+    ],
+  }),
+  play: async (context) => {
+    const rejected = await rejectDraft(context);
+    await userEvent.type(
+      rejected.getByRole("textbox", { name: "Reply to the customer" }),
+      "My own reply.",
+    );
+    const canvas = within(context.canvasElement);
+    await userEvent.click(canvas.getByRole("button", { name: "Use Request refund 7%" }));
+
+    await expect(await canvas.findByRole("region", { name: "Reply" })).toHaveTextContent(
+      "The AI made a new draft. Your text is kept below it.",
+    );
+  },
+};
+export const Closed: Story = {
+  decorators: withAnswers({ workspace: [workspaceExample("closed")] }),
+  play: async ({ canvasElement }) => {
+    const sent = await within(canvasElement).findByRole("region", { name: "Reply sent" });
+
+    await expect(sent).toHaveTextContent("This ticket is closed. A reply was already sent.");
   },
 };

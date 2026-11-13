@@ -12,7 +12,7 @@ import { ChevronDown, KeyRound, LogOut, User } from "lucide-react";
 import { cn } from "@/design-system/primitives/class-names";
 import { FOCUS_RING_CLASSES } from "@/design-system/primitives/focus-ring";
 import { Icon } from "@/design-system/primitives/icon";
-import { MENU_ITEM_CLASSES } from "@/design-system/primitives/menu-item";
+import { MENU_CONTENT_CLASSES, MENU_ITEM_CLASSES } from "@/design-system/primitives/menu-item";
 
 /** `shop` hides the trigger text at phone width; `console` is the desktop bar (UI-33). */
 export type AccountMenuVariant = "shop" | "console";
@@ -69,7 +69,7 @@ export function AccountMenu({
         <DropdownMenuPrimitive.Content
           align="end"
           sideOffset={4}
-          className="z-20 flex max-w-menu min-w-menu flex-col rounded-md border border-border bg-surface-raised p-1 text-sm shadow-md"
+          className={cn(MENU_CONTENT_CLASSES, "max-w-menu")}
         >
           <DropdownMenuPrimitive.Label className="flex flex-col p-2">
             <span className="font-semibold wrap-anywhere text-text">{displayName}</span>

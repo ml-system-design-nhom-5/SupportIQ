@@ -12,11 +12,9 @@ import { useMutation, type UseMutationResult, useQueryClient } from "@tanstack/r
 import { useBackendClient } from "@/api/client";
 import { getRequestFailure, requestData, useWriteAttemptSender } from "@/features/backend-requests";
 import { consoleQueryKeys } from "@/features/console-tickets/api/console-query-keys";
-import type {
-  ConsoleReplyContract,
-  SendReplyRequestContract,
-} from "@/features/console-tickets/api/contract-types";
+import type { SendReplyRequestContract } from "@/features/console-tickets/api/contract-types";
 import { describeSendFailure } from "@/features/console-tickets/model/send-failure";
+import { type SentReply, toSentReply } from "@/features/console-tickets/model/workspace";
 
 /** One confirmed Send reply: the request body and its key. */
 export type ConfirmedReply = {
@@ -33,7 +31,7 @@ export type ConfirmedReply = {
  */
 export function useSendReply(
   ticketId: string,
-): UseMutationResult<ConsoleReplyContract, Error, ConfirmedReply> {
+): UseMutationResult<SentReply, Error, ConfirmedReply> {
   const client = useBackendClient();
   const queryClient = useQueryClient();
   const sendAttempt = useWriteAttemptSender();
@@ -55,7 +53,7 @@ export function useSendReply(
               },
               body: reply.request,
             }),
-          (sentReply) => sentReply,
+          toSentReply,
         ),
       ),
     onSuccess: reloadTicket,

@@ -11,30 +11,28 @@ import { Sparkles } from "lucide-react";
 import {
   IntentChoice,
   IntentStrip,
+  type IntentUse,
   Panel,
   PanelHeader,
   PanelSection,
   Skeleton,
-  StatusBanner,
   Text,
   VisuallyHidden,
 } from "@/design-system";
 import { assertNever, type RequestFailure } from "@/features/backend-requests";
+import { FailureViewBanner } from "@/features/console-tickets/components/failure-view-banner";
 import type { IntentCandidate } from "@/features/console-tickets/model/analysis";
 import type { Intent } from "@/features/console-tickets/model/intent";
 import {
   type ChoosableIntentLabel,
-  describeCorrectionFailure,
   getChoosableLabel,
   type IntentAreaState,
   listOtherIntents,
 } from "@/features/console-tickets/model/intent-area";
+import { describeSuggestionFailure } from "@/features/console-tickets/model/suggestion-failure";
 
-/** How staff use an intent of the strip or of the choice. */
-type IntentCorrectionUse = {
-  readonly isSending: boolean;
-  readonly onUseIntent: (intentLabel: ChoosableIntentLabel) => void;
-};
+/** The ID of Other intent, which takes the focus once a correction started a new draft (UI-30). */
+export const OTHER_INTENT_ID = "other-intent-button";
 
 /** Props of {@link IntentSection}. */
 type IntentSectionProps = {
@@ -63,7 +61,7 @@ export function IntentSection({
     <>
       <IntentRegion state={state} use={{ isSending, onUseIntent: onCorrectIntent }} />
       {correctionFailure === undefined ? null : (
-        <CorrectionFailureBanner failure={correctionFailure} />
+        <FailureViewBanner failure={describeSuggestionFailure(correctionFailure, "correction")} />
       )}
     </>
   );
@@ -80,7 +78,7 @@ function IntentRegion({
   use,
 }: {
   readonly state: IntentAreaState;
-  readonly use: IntentCorrectionUse;
+  readonly use: IntentUse<ChoosableIntentLabel>;
 }) {
   switch (state.kind) {
     case "none":
@@ -126,7 +124,7 @@ function IntentOfAnalysis({
   use,
 }: {
   readonly state: Extract<IntentAreaState, { readonly kind: "intent" }>;
-  readonly use: IntentCorrectionUse;
+  readonly use: IntentUse<ChoosableIntentLabel>;
 }) {
   const { intent } = state;
   return (
@@ -140,6 +138,7 @@ function IntentOfAnalysis({
         ? {
             correction: {
               ...use,
+              otherIntentId: OTHER_INTENT_ID,
               otherIntents: listOtherIntents(intent.intent).map((other) => ({
                 value: other.label,
                 name: other.name,
@@ -163,7 +162,7 @@ function IntentCandidates({
   use,
 }: {
   readonly state: Extract<IntentAreaState, { readonly kind: "choose" }>;
-  readonly use: IntentCorrectionUse;
+  readonly use: IntentUse<ChoosableIntentLabel>;
 }) {
   return (
     <IntentChoice
@@ -178,21 +177,6 @@ function IntentCandidates({
       ]}
       {...(state.canCorrect ? { use } : {})}
     />
-  );
-}
-
-/**
- * Say what happened to a correction that failed (UI-25).
- *
- * @param props - The failure.
- * @returns The banner, announced as an alert.
- */
-function CorrectionFailureBanner({ failure }: { readonly failure: RequestFailure }) {
-  const { lead, message, traceId } = describeCorrectionFailure(failure);
-  return (
-    <StatusBanner tone="danger" lead={lead} {...(traceId === undefined ? {} : { traceId })}>
-      {message}
-    </StatusBanner>
   );
 }
 

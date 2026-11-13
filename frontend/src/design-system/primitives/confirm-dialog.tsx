@@ -5,6 +5,8 @@
  * is a {@link FormDialog}.
  */
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog";
+import { cva } from "class-variance-authority";
+import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Button } from "@/design-system/primitives/button";
@@ -12,6 +14,10 @@ import {
   type DialogReturnFocus,
   returnFocusAfterDialog,
 } from "@/design-system/primitives/dialog-return-focus";
+
+const descriptionVariants = cva("text-sm", {
+  variants: { tone: { default: "text-text", muted: "text-text-muted" } },
+});
 
 /** `danger` marks a confirmation whose effect is hard to undo, such as Deactivate. */
 export type ConfirmDialogTone = "default" | "danger";
@@ -21,8 +27,15 @@ export type ConfirmDialogText = {
   /** Names the account and the change (UI-45). */
   readonly title: string;
   readonly description: ReactNode;
+  /**
+   * `muted` gives the description the muted text role, as in the console dialogs
+   * (dialog-confirm-send.png); `default` is the text role, as in the admin dialogs.
+   */
+  readonly descriptionTone?: "default" | "muted";
   /** A verb that names the result (UI-27). */
   readonly confirmLabel: string;
+  /** The icon before the confirm label, such as the send icon of Send reply. */
+  readonly confirmIcon?: LucideIcon;
   /** Shown on the confirm button while the change is sent. */
   readonly pendingLabel: string;
   /** The button that closes without the change, such as "Keep editing"; "Cancel" by default. */
@@ -76,7 +89,9 @@ export function ConfirmDialog({
           <AlertDialogPrimitive.Title className="text-lg font-semibold text-text">
             {text.title}
           </AlertDialogPrimitive.Title>
-          <AlertDialogPrimitive.Description className="text-sm text-text">
+          <AlertDialogPrimitive.Description
+            className={descriptionVariants({ tone: text.descriptionTone ?? "default" })}
+          >
             {text.description}
           </AlertDialogPrimitive.Description>
           <div className="flex justify-end gap-2">
@@ -87,6 +102,7 @@ export function ConfirmDialog({
             </AlertDialogPrimitive.Cancel>
             <Button
               variant={tone === "danger" ? "danger" : "primary"}
+              {...(text.confirmIcon === undefined ? {} : { leadingIcon: text.confirmIcon })}
               isPending={isPending}
               onClick={onConfirm}
             >

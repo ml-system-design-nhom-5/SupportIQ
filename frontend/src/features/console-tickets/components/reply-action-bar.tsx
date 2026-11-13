@@ -8,7 +8,7 @@ import { Send } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { ActionBar, Button, PanelSection } from "@/design-system";
-import { SendFailureBanner } from "@/features/console-tickets/components/send-failure-banner";
+import { FailureViewBanner } from "@/features/console-tickets/components/failure-view-banner";
 import type { ReplyComposer } from "@/features/console-tickets/components/use-reply-composer";
 
 /** Props of {@link ReplyActionBar}. */
@@ -30,7 +30,7 @@ export function ReplyActionBar({ composer, actions }: ReplyActionBarProps) {
     <>
       {sendFailure === undefined ? null : (
         <PanelSection>
-          <SendFailureBanner failure={sendFailure} />
+          <FailureViewBanner failure={sendFailure} />
         </PanelSection>
       )}
       <ActionBar

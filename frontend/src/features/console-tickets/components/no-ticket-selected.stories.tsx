@@ -71,7 +71,7 @@ export const UpdateFailed: Story = {
     await chooseQueue(inbox, "Open", "Closed");
     await within(inbox).findByRole("list", { name: "Closed tickets" });
 
-    // Back on Open, its queue loads again, as polling does every 15 s, and that load fails.
+    // Back on Open, its queue loads again, as polling does every 30 s, and that load fails.
     await chooseQueue(inbox, "Closed", "Open");
 
     await expect(await within(inbox).findByRole("alert")).toHaveTextContent(

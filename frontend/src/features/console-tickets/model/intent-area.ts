@@ -1,15 +1,9 @@
 /**
  * What the intent strip shows (console UI design, Workspace regions and States; FR-01, UI-22,
- * UI-42), and what a failed correction says. The intent sits directly under the customer message,
- * so staff check it first. Staff can correct it whenever `backend` allows it (`correct_intent`),
- * also while a draft is generating; the UI never decides that itself (UI-40).
+ * UI-42). The intent sits directly under the customer message, so staff check it first. Staff can
+ * correct it whenever `backend` allows it (`correct_intent`), also while a draft is generating; the
+ * UI never decides that itself (UI-40).
  */
-import {
-  describeFailure,
-  type FailureCategory,
-  isWriteOutcomeUnknown,
-  type RequestFailure,
-} from "@/features/backend-requests";
 import type { AnalysisIntent, IntentCandidate } from "@/features/console-tickets/model/analysis";
 import type { DraftPart } from "@/features/console-tickets/model/draft";
 import {
@@ -23,21 +17,6 @@ import { isLowConfidence } from "@/features/console-tickets/model/workspace-stat
 
 /** How many alternatives the strip shows next to the intent: the next two (FR-01). */
 const SHOWN_ALTERNATIVE_COUNT = 2;
-
-/**
- * What a correction from an old screen says. The workspace reloads after it, so staff see the
- * ticket as it is now (console UI design, Flow step 4, Errors and guardrails).
- */
-const OLD_SCREEN_MESSAGE = "This ticket changed in the meantime. It now shows its current state.";
-
-/**
- * The refusals of an old screen that {@link OLD_SCREEN_MESSAGE} explains: no intent is known any
- * more (`422`), or the ticket is no longer open in `assisted` mode (`409 invalid-ticket-state`).
- */
-const oldScreenCategories: ReadonlySet<FailureCategory> = new Set([
-  "invalid_request",
-  "invalid_state",
-]);
 
 /** An intent label that staff can choose: one of the 46 labels of the contract. */
 export type ChoosableIntentLabel = Exclude<IntentLabel, "unknown">;
@@ -67,16 +46,6 @@ export type IntentAreaState =
       /** True when `backend` allows a correction (`correct_intent`). */
       readonly canCorrect: boolean;
     };
-
-/** A failed correction as the intent section says it (UI-25). */
-export type CorrectionFailureView = {
-  /** What happened to the intent. */
-  readonly lead: string;
-  /** Why, and what to do next, in plain language. */
-  readonly message: string;
-  /** The copyable trace ID, when `backend` sent one. */
-  readonly traceId?: string;
-};
 
 /** Every intent that staff can choose, in the order of the contract, which is also by name. */
 const choosableIntents: readonly ChoosableIntent[] = intentLabels.map((label) => ({
@@ -135,27 +104,6 @@ export function listOtherIntents(intent: Intent): readonly ChoosableIntent[] {
  */
 export function getChoosableLabel(intent: Intent): ChoosableIntentLabel | undefined {
   return intent.label === "unknown" ? undefined : intent.label;
-}
-
-/**
- * Describe a failed correction. A refusal of an old screen says that the ticket changed, because
- * the workspace reloads after it; every other failure uses the shared message (TS-26).
- *
- * @param failure - The failure of `createSuggestion` with an intent.
- * @returns The lead, the message, and the trace ID when there is one. After an unknown outcome,
- *   the lead never says that the intent did not change (ERR-07).
- */
-export function describeCorrectionFailure(failure: RequestFailure): CorrectionFailureView {
-  const description = describeFailure(failure);
-  return {
-    lead: isWriteOutcomeUnknown(failure)
-      ? "The intent may have been changed."
-      : "The intent was not changed.",
-    message: oldScreenCategories.has(description.category)
-      ? OLD_SCREEN_MESSAGE
-      : description.message,
-    ...(description.traceId === undefined ? {} : { traceId: description.traceId }),
-  };
 }
 
 /**

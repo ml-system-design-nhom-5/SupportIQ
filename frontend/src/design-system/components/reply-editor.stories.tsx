@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { useState } from "react";
-import { expect, fn, userEvent, within } from "storybook/test";
+import { expect, fn, within } from "storybook/test";
 
 import { ReplyEditor } from "@/design-system/components/reply-editor";
 
@@ -71,32 +70,3 @@ export const LongTextGrows: Story = {
     await expect(backdrop?.scrollHeight).toBe(backdrop?.clientHeight);
   },
 };
-export const WithLengthLimit: Story = {
-  args: { value: "Hello", markedParts: [{ text: "Hello", isMarked: false }], maxLength: 10 },
-  render: (args) => <ControlledEditor {...args} />,
-  play: async ({ canvasElement }) => {
-    const editor = within(canvasElement).getByRole("textbox", { name: "Reply to the customer" });
-
-    await userEvent.type(editor, " there, friend");
-
-    await expect(editor).toHaveValue("Hello ther");
-  },
-};
-
-/**
- * Render the editor with its text held in the story. The story marks nothing.
- *
- * @param props - The props of the editor.
- * @returns The editor.
- */
-function ControlledEditor(props: Parameters<typeof ReplyEditor>[0]) {
-  const [value, setValue] = useState(props.value);
-  return (
-    <ReplyEditor
-      {...props}
-      value={value}
-      markedParts={[{ text: value, isMarked: false }]}
-      onChange={setValue}
-    />
-  );
-}

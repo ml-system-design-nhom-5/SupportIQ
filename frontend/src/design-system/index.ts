@@ -252,7 +252,7 @@ export type { NavItemProps } from "@/design-system/primitives/nav-item";
 export { NavItem } from "@/design-system/primitives/nav-item";
 export type { PageColumnArea, PageColumnProps } from "@/design-system/primitives/page-column";
 export { PageColumn } from "@/design-system/primitives/page-column";
-export type { PanelProps, PanelTone } from "@/design-system/primitives/panel";
+export type { PanelHeight, PanelProps, PanelTone } from "@/design-system/primitives/panel";
 export { Panel } from "@/design-system/primitives/panel";
 export type { PanelHeaderProps } from "@/design-system/primitives/panel-header";
 export { PanelHeader } from "@/design-system/primitives/panel-header";

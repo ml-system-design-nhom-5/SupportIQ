@@ -12,16 +12,12 @@ import {
   isWriteOutcomeUnknown,
   type RequestFailure,
 } from "@/features/backend-requests";
+import type { FailureView } from "@/features/console-tickets/model/failure-view";
 
 /** How the reply area shows a failed send. */
-export type SendFailureView = {
-  /** The bold first sentence: what happened to the reply. */
-  readonly lead: string;
-  /** What it means and what to do next. */
-  readonly message: string;
+export type SendFailureView = FailureView & {
   /** True when the workspace loads the ticket again. */
   readonly shouldReload: boolean;
-  readonly traceId?: string;
 };
 
 /** The categories whose refusal says that the ticket changed, with what the reply area says. */

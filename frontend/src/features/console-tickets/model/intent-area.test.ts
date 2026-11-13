@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { RequestFailure } from "@/features/backend-requests";
 import {
-  describeCorrectionFailure,
   getChoosableLabel,
   getIntentAreaState,
   listOtherIntents,
@@ -13,9 +11,6 @@ import {
   toTicketWorkspace,
 } from "@/features/console-tickets/model/workspace";
 import { readOperationExample, withoutMembers } from "@/test/contract-examples";
-
-/** A trace ID in the format of the contract. */
-const TRACE_ID = "e929d0e0e4736bf92f3577b34da6a3c2";
 
 /** How many intents the contract lists. */
 const INTENT_COUNT = 46;
@@ -173,41 +168,5 @@ describe("getChoosableLabel", () => {
     [{ label: "unknown", name: "Unspecified intent" }, undefined],
   ] as const)("reads the label of %j as %s (CON-22)", (intent, label) => {
     expect(getChoosableLabel(intent)).toBe(label);
-  });
-});
-
-describe("describeCorrectionFailure", () => {
-  it.each<[string, RequestFailure, string]>([
-    [
-      "409 suggestion-pending",
-      { kind: "problem", status: 409, problemType: "suggestion_pending", traceId: TRACE_ID },
-      "The AI is still working on this ticket. Wait until it is done, then try again.",
-    ],
-    [
-      "422 invalid-request",
-      { kind: "problem", status: 422, problemType: "invalid_request", traceId: TRACE_ID },
-      "This ticket changed in the meantime. It now shows its current state.",
-    ],
-    [
-      "409 invalid-ticket-state",
-      { kind: "problem", status: 409, problemType: "invalid_ticket_state", traceId: TRACE_ID },
-      "This ticket changed in the meantime. It now shows its current state.",
-    ],
-  ])(
-    "says that the intent was not changed after %s, with the trace ID",
-    (_case, failure, message) => {
-      expect(describeCorrectionFailure(failure)).toEqual({
-        lead: "The intent was not changed.",
-        message,
-        traceId: TRACE_ID,
-      });
-    },
-  );
-
-  it("never says that the intent did not change after an unknown outcome (ERR-07)", () => {
-    expect(describeCorrectionFailure({ kind: "network" })).toEqual({
-      lead: "The intent may have been changed.",
-      message: "The server could not be reached. Check your connection and try again.",
-    });
   });
 });

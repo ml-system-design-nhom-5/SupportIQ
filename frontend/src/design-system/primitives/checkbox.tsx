@@ -6,10 +6,10 @@ import { cn } from "@/design-system/primitives/class-names";
 import { FOCUS_RING_CLASSES } from "@/design-system/primitives/focus-ring";
 import { Text } from "@/design-system/primitives/text";
 
-/** Props of {@link Checkbox}. */
 /** The classes of a checkbox input, which the warning list shares (CODE-48). */
 export const CHECKBOX_INPUT_CLASSES = cn("size-4 shrink-0 accent-primary", FOCUS_RING_CLASSES);
 
+/** Props of {@link Checkbox}. */
 export type CheckboxProps = {
   readonly id: string;
   readonly label: string;

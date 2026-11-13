@@ -5,7 +5,8 @@
  * (TS-21). The order popover and the KB side sheet open from the header, the sources, and the
  * citation markers. Staff correct the intent from the strip; the reply area keeps the draft that
  * the correction made outdated while the new one generates (UI-22). Send reply opens the
- * confirmation, and only its Send reply sends the reply (UI-17, FR-04).
+ * confirmation, and only its Send reply sends the reply (UI-17, FR-04). After an action that
+ * replaces the element with the focus, the focus moves to what replaced it (UI-30).
  */
 import { useState } from "react";
 
@@ -15,10 +16,16 @@ import { useCreateSuggestion } from "@/features/console-tickets/api/use-create-s
 import { AiSidebar } from "@/features/console-tickets/components/ai-sidebar";
 import { ConfirmSendDialog } from "@/features/console-tickets/components/confirm-send-dialog";
 import { CustomerMessagePanel } from "@/features/console-tickets/components/customer-message-panel";
-import { IntentSection } from "@/features/console-tickets/components/intent-section";
+import {
+  IntentSection,
+  OTHER_INTENT_ID,
+} from "@/features/console-tickets/components/intent-section";
 import { KbDocumentSheet } from "@/features/console-tickets/components/kb-document-sheet";
+import { PENDING_DRAFT_HEADING_ID } from "@/features/console-tickets/components/pending-draft-panel";
 import { ReplyArea } from "@/features/console-tickets/components/reply-area";
+import { SENT_REPLY_HEADING_ID } from "@/features/console-tickets/components/sent-reply-panel";
 import type { OrderPopoverState } from "@/features/console-tickets/components/ticket-order-chip";
+import { useFocusRequest } from "@/features/console-tickets/components/use-focus-request";
 import { useReplyComposer } from "@/features/console-tickets/components/use-reply-composer";
 import { WorkspaceBanners } from "@/features/console-tickets/components/workspace-banners";
 import { WorkspaceHeader } from "@/features/console-tickets/components/workspace-header";
@@ -63,8 +70,17 @@ export function TicketWorkspaceView({
   const [orderPopover, setOrderPopover] = useState<OrderPopoverState>({ isOpen: false });
   const [openedSource, setOpenedSource] = useState<OpenedSource | undefined>(undefined);
   const regions = buildWorkspaceRegions(workspace);
-  const suggestionRequests = useCreateSuggestion(ticketId, workspace);
-  const composer = useReplyComposer(ticketId, toComposerTicket(workspace, regions));
+  const requestFocus = useFocusRequest();
+  const suggestionRequests = useCreateSuggestion(ticketId, workspace, (request) => {
+    requestFocus(request === "retry" ? PENDING_DRAFT_HEADING_ID : OTHER_INTENT_ID);
+  });
+  const composer = useReplyComposer(
+    ticketId,
+    toComposerTicket(workspace, regions, suggestionRequests.isSending),
+    () => {
+      requestFocus(SENT_REPLY_HEADING_ID);
+    },
+  );
   const hasBanners =
     workspace.isAuthorityRequired || viewFailure !== undefined || refreshFailure !== undefined;
   const openSource = (selection: SourceSelection, opener: HTMLElement) => {
@@ -144,11 +160,11 @@ export function TicketWorkspaceView({
           />
         }
       />
-      {composer.confirmationOpener === undefined ? null : (
+      {composer.confirmation === undefined ? null : (
         <ConfirmSendDialog
           customerName={workspace.customerName}
-          body={composer.body}
-          returnFocus={{ opener: composer.confirmationOpener, fallbackId: WORKSPACE_HEADING_ID }}
+          body={composer.confirmation.body}
+          returnFocus={{ opener: composer.confirmation.opener, fallbackId: WORKSPACE_HEADING_ID }}
           isSending={composer.isSending}
           onConfirm={composer.confirmSend}
           onCancel={composer.cancelSend}

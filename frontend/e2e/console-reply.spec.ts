@@ -39,6 +39,15 @@ const DRAFT_TEXT =
 const DRAFT_SENTENCE = "Your refund request for order ORD-20931 is under review.";
 /** The text that staff write themselves. */
 const STAFF_TEXT = "Your refund is under review. We will write to you again when it is decided.";
+/** The banner of a send whose outcome is unknown, such as after a lost connection (ERR-16). */
+const UNKNOWN_OUTCOME_BANNER =
+  "The reply may have been sent. We could not confirm it. Sending the same reply again is safe: the customer gets it once.";
+/**
+ * How far the clock of the page jumps after a failed send: far beyond the delay of an automatic
+ * retry (ERR-13), so a retry would go out. The clock is fake, so no test waits in real time
+ * (TEST-14).
+ */
+const RETRY_WAIT = "01:00";
 
 /** The examples that a flow starts with, as `Prefer` values. */
 type FlowExamples = {
@@ -49,13 +58,18 @@ type FlowExamples = {
   readonly reply?: string;
 };
 
-/** The next answer of the ticket after a write. */
-type TicketChange = {
-  /** Chooses the `Prefer` value of the later loads of the ticket, as {@link openTicket} returns. */
-  readonly chooseTicket: (prefer: string) => void;
-  /** The `Prefer` value after the write, such as `example=closed`. */
-  readonly prefer: string;
+/** The manual-mode ticket, whose reply staff write without a draft. */
+const manualReplyExamples: FlowExamples = {
+  ticket: "example=manual-mode",
+  reply: "example=without-ai-draft",
 };
+
+/**
+ * The next answer of the ticket after a write: the function that chooses the `Prefer` value of the
+ * later loads of the ticket, as {@link openTicket} returns it, and the value after the write, such
+ * as `example=closed`.
+ */
+type TicketChange = { readonly chooseTicket: (prefer: string) => void; readonly prefer: string };
 
 /** The deliberate actions of a flow (UI-41). */
 type ActionCounter = {
@@ -69,17 +83,19 @@ type ActionCounter = {
 type OpenConfirmation = { readonly dialog: Locator; readonly sentBodies: readonly unknown[] };
 
 /**
- * Sign in as staff, choose the examples of the flow, and open the ticket.
+ * Sign in as staff, choose the examples of the flow, and open the ticket. The ticket loads as
+ * closed once a reply goes out, because `sendReply` closes it (contract, `sendReply`).
  *
  * @param page - The page.
  * @param ticketPath - The path of the ticket.
- * @param examples - The `Prefer` values of the ticket and of the writes.
+ * @param examples - The `Prefer` values of the ticket and of the writes; the draft-ready ticket by
+ *   default.
  * @returns A function that chooses the `Prefer` value of the later loads of the ticket.
  */
 async function openTicket(
   page: Page,
   ticketPath: string,
-  examples: FlowExamples,
+  examples: FlowExamples = { ticket: "example=draft-ready" },
 ): Promise<(prefer: string) => void> {
   await preferOutcome(page, getSessionRequest, "example=staff");
   await preferOutcome(page, listTicketsRequest, "example=open-queue");
@@ -90,6 +106,7 @@ async function openTicket(
   );
   await preferOutcome(page, sendReplyRequest, examples.reply ?? "example=from-ai-draft");
   const chooseTicket = await preferOutcome(page, getTicketRequest, examples.ticket);
+  await changeTicketOnWrite(page, SEND_REPLY_URL, { chooseTicket, prefer: "example=closed" });
   await createSessionCookie(page);
   await page.goto(ticketPath);
   return chooseTicket;
@@ -111,6 +128,22 @@ async function changeTicketOnWrite(
     change.chooseTicket(change.prefer);
     await route.fallback();
   });
+}
+
+/**
+ * Lose the connection for the first `sendReply` only, as when the network drops once, and let every
+ * later one reach the mock. No response reaches the page, so the outcome is unknown (ERR-16).
+ *
+ * @param page - The page.
+ * @returns The `Idempotency-Key` of every `sendReply` that the page sends, in order.
+ */
+async function loseFirstSend(page: Page): Promise<readonly (string | undefined)[]> {
+  const keys: (string | undefined)[] = [];
+  await page.route(SEND_REPLY_URL, async (route) => {
+    keys.push(route.request().headers()["idempotency-key"]);
+    await (keys.length === 1 ? route.abort("failed") : route.fallback());
+  });
+  return keys;
 }
 
 /**
@@ -198,10 +231,7 @@ async function expectReplySent(page: Page): Promise<void> {
 }
 
 test("UI-41: a draft approved and sent takes 1 action (TEST-27)", async ({ page }) => {
-  const chooseTicket = await openTicket(page, DRAFT_READY_PATH, {
-    ticket: "example=draft-ready",
-  });
-  await changeTicketOnWrite(page, SEND_REPLY_URL, { chooseTicket, prefer: "example=closed" });
+  await openTicket(page, DRAFT_READY_PATH);
   const main = page.getByRole("main");
   await expect(main.getByRole("region", { name: "AI draft" })).toContainText(
     "1 warning to check before sending",
@@ -226,10 +256,7 @@ test("UI-41: a draft approved and sent takes 1 action (TEST-27)", async ({ page 
 });
 
 test("UI-41: a draft edited and sent takes 2 actions (TEST-27)", async ({ page }) => {
-  const chooseTicket = await openTicket(page, DRAFT_READY_PATH, {
-    ticket: "example=draft-ready",
-  });
-  await changeTicketOnWrite(page, SEND_REPLY_URL, { chooseTicket, prefer: "example=closed" });
+  await openTicket(page, DRAFT_READY_PATH);
   const main = page.getByRole("main");
   const actions = countActions();
 
@@ -256,10 +283,7 @@ test("UI-41: a draft edited and sent takes 2 actions (TEST-27)", async ({ page }
 test("UI-41: a draft rejected for one reason, with another reply sent, takes 3 actions", async ({
   page,
 }) => {
-  const chooseTicket = await openTicket(page, DRAFT_READY_PATH, {
-    ticket: "example=draft-ready",
-  });
-  await changeTicketOnWrite(page, SEND_REPLY_URL, { chooseTicket, prefer: "example=closed" });
+  await openTicket(page, DRAFT_READY_PATH);
   const main = page.getByRole("main");
   const actions = countActions();
 
@@ -287,11 +311,7 @@ test("TEST-27: an abstained ticket is handled manually, with a reply that staff 
 }) => {
   // No example of getConsoleTicket abstains for a reason other than low confidence, so the
   // manual-mode example stands for a ticket that staff handle without a draft.
-  const chooseTicket = await openTicket(page, MANUAL_MODE_PATH, {
-    ticket: "example=manual-mode",
-    reply: "example=without-ai-draft",
-  });
-  await changeTicketOnWrite(page, SEND_REPLY_URL, { chooseTicket, prefer: "example=closed" });
+  await openTicket(page, MANUAL_MODE_PATH, manualReplyExamples);
   const manual = page.getByRole("main").getByRole("region", { name: "Manual handling" });
   await expect(manual).toContainText("Refund decision or dispute?");
 
@@ -330,9 +350,7 @@ test("TEST-27: a low-confidence ticket gets a draft once staff confirm the inten
 });
 
 test("TEST-27: an intent correction produces a new draft", async ({ page }) => {
-  const chooseTicket = await openTicket(page, DRAFT_READY_PATH, {
-    ticket: "example=draft-ready",
-  });
+  const chooseTicket = await openTicket(page, DRAFT_READY_PATH);
   await changeTicketOnWrite(page, CREATE_SUGGESTION_URL, {
     chooseTicket,
     prefer: "example=intent-corrected",
@@ -396,4 +414,38 @@ test("TEST-27: a placeholder blocks Send reply until staff replace it (UI-43)", 
   await editor.fill("We sent the label to your email address.");
   await expect(send).toBeEnabled();
   await expect(main.locator("mark")).toHaveCount(0);
+});
+
+test("UI-18: Send reply stays disabled until the warning is acknowledged", async ({ page }) => {
+  await openTicket(page, DRAFT_READY_PATH);
+  const main = page.getByRole("main");
+  const send = main.getByRole("button", { name: "Send reply" });
+  await expect(send).toBeDisabled();
+  await expect(main).toContainText("Acknowledge 1 warning to send the reply.");
+
+  await main.getByRole("checkbox", { name: /^I have checked this/ }).check();
+
+  await expect(send).toBeEnabled();
+});
+
+test("TS-29: a lost send keeps the text, is not retried, and reuses its key", async ({ page }) => {
+  await page.clock.install();
+  await openTicket(page, MANUAL_MODE_PATH, manualReplyExamples);
+  const editor = page.getByRole("main").getByRole("textbox", { name: "Reply to the customer" });
+  await editor.fill(STAFF_TEXT);
+  const sentKeys = await loseFirstSend(page);
+
+  await sendAndConfirm(page);
+
+  await expect(page.getByRole("alert")).toHaveText(UNKNOWN_OUTCOME_BANNER);
+  await expect(editor).toHaveValue(STAFF_TEXT);
+  await page.clock.fastForward(RETRY_WAIT);
+  expect(sentKeys).toHaveLength(1);
+  await expectNoAccessibilityViolations(page);
+
+  const body = await sendAndConfirm(page);
+
+  expect(body).toEqual({ basis: "no_ai_draft", body: STAFF_TEXT });
+  expect(sentKeys).toEqual([expect.stringMatching(/^[0-9a-f-]{36}$/), sentKeys[0]]);
+  await expectReplySent(page);
 });
