@@ -29,10 +29,13 @@ def render(report: dict[str, Any]) -> str:
     meta, res, gates = report["meta"], report["results"], report["gates"]
     s = report["summary"]
     L = [f"# SupportIQ autoeval – {meta['run_id']}", "",
-         f"Kết luận: **{'ĐẠT' if s['passed'] else 'KHÔNG ĐẠT'}** · {s['fail']} gate chặn không đạt · {s['warn']} cảnh báo · {s['pass']} đạt · {s['skipped']} bỏ qua",
+         f"Kết luận: **{'ĐẠT' if s['passed'] else 'KHÔNG ĐẠT'}** · {s['fail']} gate chặn không đạt · {s['warn']} cảnh báo · {s['pass']} đạt · {s['skipped']} bỏ qua · {s.get('not_run', 0)} chưa chạy",
          "", f"- Suite: {', '.join(meta['suites'])} · LLM mode: {meta.get('llm_mode')} · commit: {meta.get('git_commit') or '—'}",
-         f"- Dữ liệu: manifest {'khớp' if meta['datasets']['ok'] else 'KHÔNG khớp: ' + ', '.join(meta['datasets'].get('mismatched', []))}",
-         f"- Thời gian chạy: {meta['duration_s']:.1f} s", "", "## Gates", "",
+         f"- Dữ liệu: manifest {'khớp' if meta['datasets'].get('ok') else 'KHÔNG khớp: ' + ', '.join(meta['datasets'].get('mismatched', []))}",
+         f"- Thời gian chạy: {meta['duration_s']:.1f} s"]
+    if meta.get("error"):
+        L.append(f"- Lỗi thiết lập / chạy: `{meta['error']}`")
+    L += ["", "## Gates", "",
          _table(["Trạng thái", "Gate", "Giá trị", "Ngưỡng", "Mức", "Tham chiếu", "Mô tả"],
                 [[ICON[g["status"]], g["id"], _f(g["value"]), f"{g['op']} {_f(g['threshold'])}", g["severity"], g.get("ref") or "", g.get("desc") or ""] for g in gates])]
     if report.get("regression"):
@@ -86,21 +89,26 @@ def render(report: dict[str, Any]) -> str:
 
     llm = res.get("llm")
     if llm:
-        pp, rd, va, pl = llm["payload_privacy"], llm["redaction"], llm["validator"], llm["pipeline"]
-        L += ["", "## LLM", "", "### Payload gửi Gemini", "",
-              f"{pp['cases_checked']} case có dữ kiện đơn hàng · rò rỉ theo trường: {pp['leaks_by_field']}", "",
-              "### Probe bộ kiểm tra phản hồi (validator)", "",
-              _table(["Probe", "Tham chiếu", "Mức", "Kỳ vọng", "Thực tế", "Kết quả"],
-                     [[p["id"], p["ref"], p["severity"], p["expected"], p["outcome"], "PASS" if p["passed"] else "FAIL"] for p in va["probes"]]),
-              "", "### Probe che dữ liệu (redact_contacts)", "",
-              _table(["Probe", "Tham chiếu", "Đầu vào", "Đầu ra", "Kết quả"],
-                     [[p["id"], p["ref"], p["input"], p["output"], "PASS" if p["passed"] else "FAIL"] for p in rd["probes"]]),
-              "", "### Pipeline khi LLM/ML lỗi", ""]
-        if pl.get("skipped"):
-            L.append(f"Bỏ qua: {pl['reason']} (cần cài đủ requirements của dự án, gồm torch).")
-        else:
-            L.append(_table(["Probe", "Tham chiếu", "Kết quả", "Quan sát"],
-                            [[p["id"], p["ref"], "PASS" if p["passed"] else "FAIL", p["observed"]] for p in pl["probes"]]))
+        pp, rd, va, pl = llm.get("payload_privacy"), llm.get("redaction"), llm.get("validator"), llm.get("pipeline")
+        L += ["", "## LLM"]
+        if pp:
+            L += ["", "### Payload gửi Gemini", "",
+                  f"{pp.get('cases_checked', '—')} case có dữ kiện đơn hàng · rò rỉ theo trường: {pp.get('leaks_by_field', {})}"]
+        if va:
+            L += ["", "### Probe bộ kiểm tra phản hồi (validator)", "",
+                  _table(["Probe", "Tham chiếu", "Mức", "Kỳ vọng", "Thực tế", "Kết quả"],
+                         [[p["id"], p["ref"], p["severity"], p["expected"], p["outcome"], "PASS" if p["passed"] else "FAIL"] for p in va.get("probes", [])])]
+        if rd:
+            L += ["", "### Probe che dữ liệu (redact_contacts)", "",
+                  _table(["Probe", "Tham chiếu", "Đầu vào", "Đầu ra", "Kết quả"],
+                         [[p["id"], p["ref"], p["input"], p["output"], "PASS" if p["passed"] else "FAIL"] for p in rd.get("probes", [])])]
+        if pl is not None:
+            L += ["", "### Pipeline khi LLM/ML lỗi", ""]
+            if pl.get("skipped"):
+                L.append(f"Bỏ qua: {pl['reason']} (cần cài đủ requirements của dự án, gồm torch).")
+            else:
+                L.append(_table(["Probe", "Tham chiếu", "Kết quả", "Quan sát"],
+                                [[p["id"], p["ref"], "PASS" if p["passed"] else "FAIL", p["observed"]] for p in pl.get("probes", [])]))
         lv = llm.get("live")
         if lv:
             L += ["", "### Live (Gemini thật)", ""]

@@ -36,18 +36,43 @@ def test_auroc_extremes():
 
 # ------------------------------------------------------------------ gates
 def test_gates_pass_fail_warn_skip_and_not_run():
-    results = {"ml": {"x": 0.95, "y": 3, "z": []}, "llm": {"live": {"skipped": True}}}
+    results = {"ml": {"x": 0.95, "y": 3, "z": [], "none_list": None}, "llm": {"live": {"skipped": True}}}
     gates = [
         {"id": "a", "metric": "ml.x", "op": ">=", "threshold": 0.9, "severity": "block"},
         {"id": "b", "metric": "ml.y", "op": "<=", "threshold": 1, "severity": "warn"},
         {"id": "c", "metric": "ml.y", "op": "<=", "threshold": 1, "severity": "block"},
         {"id": "d", "metric": "ml.z", "op": "empty", "threshold": None, "severity": "block"},
+        {"id": "d_none", "metric": "ml.none_list", "op": "empty", "threshold": None, "severity": "block"},
         {"id": "e", "metric": "llm.live.rate", "op": ">=", "threshold": 1, "severity": "block", "skip_if": "llm.live.skipped"},
         {"id": "f", "metric": "ml.missing", "op": ">=", "threshold": 1, "severity": "block"},
+        {"id": "f_warn", "metric": "ml.warn_missing", "op": ">=", "threshold": 1, "severity": "warn"},
         {"id": "g", "metric": "other.v", "op": ">=", "threshold": 1, "severity": "block"},
     ]
     status = {g["id"]: g["status"] for g in G.evaluate(results, gates, {"ml", "llm"})}
-    assert status == {"a": "pass", "b": "warn", "c": "fail", "d": "pass", "e": "skipped", "f": "not_run", "g": "not_run"}
+    assert status == {
+        "a": "pass",
+        "b": "warn",
+        "c": "fail",
+        "d": "pass",
+        "d_none": "fail",
+        "e": "skipped",
+        "f": "fail",
+        "f_warn": "not_run",
+        "g": "not_run",
+    }
+
+
+def test_gates_preserve_offline_live_exclusion_and_fail_missing_live_blocking():
+    gates = [
+        {"id": "live_blk", "metric": "llm.live.draft_rate_when_expected", "op": ">=", "threshold": 0.9, "severity": "block", "skip_if": "llm.live.skipped"},
+        {"id": "judge_adv", "metric": "llm.live.judge.grounded_rate", "op": ">=", "threshold": 0.9, "severity": "warn"},
+        {"id": "off_blk", "metric": "llm.payload_privacy.pii_leaks", "op": "==", "threshold": 0, "severity": "block"},
+    ]
+    off_status = {g["id"]: g["status"] for g in G.evaluate({"llm": {"mode": "offline", "payload_privacy": {"pii_leaks": 0}}}, gates, {"llm"})}
+    assert off_status == {"live_blk": "not_run", "judge_adv": "not_run", "off_blk": "pass"}
+
+    live_missing = {g["id"]: g["status"] for g in G.evaluate({"llm": {"mode": "live", "payload_privacy": {"pii_leaks": 0}}}, gates, {"llm"})}
+    assert live_missing == {"live_blk": "fail", "judge_adv": "not_run", "off_blk": "pass"}
 
 
 def test_regression_respects_direction_and_tolerance():
@@ -150,6 +175,209 @@ def test_live_mode_skips_without_key(monkeypatch, tmp_path):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     res = L.live(CONFIG, [], {}, {}, tmp_path, log=lambda *_: None)
     assert res == {"skipped": True, "reason": "GEMINI_API_KEY not set"}
+
+
+def _make_temp_autoeval_env(tmp_path: Path) -> tuple[Path, Path]:
+    from pipeline.evaluation.autoeval import cli as cli_mod  # noqa: F401
+    data_dir = tmp_path / "data"
+    autoeval_dir = tmp_path / "autoeval_data"
+    out_dir = tmp_path / "out"
+    data_dir.mkdir(parents=True)
+    autoeval_dir.mkdir(parents=True)
+    files = {
+        "benchmark": data_dir / "bench.jsonl",
+        "knowledge_base": data_dir / "kb.json",
+        "orders": data_dir / "orders.json",
+        "ml_noise": autoeval_dir / "ml_noise.jsonl",
+        "ml_oos": autoeval_dir / "ml_oos.jsonl",
+        "llm_cases": autoeval_dir / "llm_cases.jsonl",
+    }
+    for p in files.values():
+        p.write_text("{}\n" if p.suffix == ".jsonl" else "[]\n", encoding="utf-8")
+    manifest = {
+        "version": "test",
+        "seed": 42,
+        "files": {k: {"path": str(p), "sha256": D.sha256_text_file(p)} for k, p in files.items()},
+    }
+    (autoeval_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    cfg = {
+        "schema_version": 1,
+        "seed": 42,
+        "benchmark": str(files["benchmark"]),
+        "knowledge_base": str(files["knowledge_base"]),
+        "orders": str(files["orders"]),
+        "autoeval_dir": str(autoeval_dir),
+        "output_dir": str(out_dir),
+        "regression_tolerance": 0.02,
+        "gates": [
+            {"id": "llm_pii", "metric": "llm.payload_privacy.pii_leaks", "op": "==", "threshold": 0, "severity": "block"},
+            {"id": "llm_live", "metric": "llm.live.draft_rate_when_expected", "op": ">=", "threshold": 0.9, "severity": "block", "skip_if": "llm.live.skipped"},
+            {"id": "llm_adv", "metric": "llm.live.judge.grounded_rate", "op": ">=", "threshold": 0.9, "severity": "warn"},
+        ],
+    }
+    cfg_path = tmp_path / "autoeval.json"
+    cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+    return cfg_path, out_dir
+
+
+def test_cli_rejects_empty_and_unknown_suite(tmp_path: Path):
+    from pipeline.evaluation.autoeval import cli
+
+    cfg_path, out_dir = _make_temp_autoeval_env(tmp_path)
+    for bad in ("", "  ", "bogus", "llm,bogus"):
+        rc = cli.main(["--config", str(cfg_path), "run", "--suite", bad, "--out", str(out_dir)])
+        assert rc == 2
+
+
+def test_cli_fails_closed_on_missing_and_malformed_compare(monkeypatch, tmp_path: Path):
+    from pipeline.evaluation.autoeval import cli
+
+    cfg_path, out_dir = _make_temp_autoeval_env(tmp_path)
+    monkeypatch.setattr(L, "run", lambda *a, **kw: {"mode": "offline", "payload_privacy": {"pii_leaks": 0}})
+
+    bad_json = tmp_path / "bad.json"
+    bad_json.write_text("{not-json", encoding="utf-8")
+    no_results = tmp_path / "no_results.json"
+    no_results.write_text(json.dumps({"summary": {"passed": True}}), encoding="utf-8")
+
+    for compare_arg in (str(tmp_path / "missing.json"), str(bad_json), str(no_results)):
+        rc = cli.main(["--config", str(cfg_path), "run", "--suite", "llm", "--llm-mode", "offline", "--out", str(out_dir), "--compare", compare_arg])
+        assert rc == 2
+        assert not (out_dir / "latest.txt").exists()
+
+
+def test_cli_fails_closed_on_changed_or_malformed_manifest(monkeypatch, tmp_path: Path):
+    from pipeline.evaluation.autoeval import cli
+
+    cfg_path, out_dir = _make_temp_autoeval_env(tmp_path)
+    monkeypatch.setattr(L, "run", lambda *a, **kw: {"mode": "offline", "payload_privacy": {"pii_leaks": 0}})
+
+    # Changed tracked file
+    (tmp_path / "autoeval_data" / "llm_cases.jsonl").write_text('{"tampered": true}\n', encoding="utf-8")
+    rc1 = cli.main(["--config", str(cfg_path), "run", "--suite", "llm", "--out", str(out_dir), "--tag", "drift"])
+    assert rc1 == 2
+    assert not (out_dir / "latest.txt").exists()
+
+    # Corrupt manifest JSON
+    (tmp_path / "autoeval_data" / "manifest.json").write_text("{corrupt", encoding="utf-8")
+    rc2 = cli.main(["--config", str(cfg_path), "run", "--suite", "llm", "--out", str(out_dir), "--tag", "corrupt"])
+    assert rc2 == 2
+    err_files = list(out_dir.glob("*-corrupt/error.txt"))
+    assert err_files and err_files[0].read_text(encoding="utf-8").strip()
+
+
+def test_cli_fails_closed_on_missing_blocking_metric_and_all_not_run(monkeypatch, tmp_path: Path):
+    from pipeline.evaluation.autoeval import cli
+
+    cfg_path, out_dir = _make_temp_autoeval_env(tmp_path)
+    # Missing required llm.payload_privacy.pii_leaks while llm is selected
+    monkeypatch.setattr(L, "run", lambda *a, **kw: {"mode": "offline"})
+    rc = cli.main(["--config", str(cfg_path), "run", "--suite", "llm", "--out", str(out_dir), "--tag", "missing-metric"])
+    assert rc == 1
+    latest = Path((out_dir / "latest.txt").read_text(encoding="utf-8").strip())
+    rep = json.loads((latest / "report.json").read_text(encoding="utf-8"))
+    assert rep["summary"]["passed"] is False
+    assert rep["summary"]["fail"] == 1
+
+    # Selected suite with zero passing gates (all not_run) must not report passed
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    cfg["gates"] = [{"id": "ml_only", "metric": "ml.model.ok", "op": "==", "threshold": True, "severity": "block"}]
+    cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+    rc_not_run = cli.main(["--config", str(cfg_path), "run", "--suite", "llm", "--out", str(out_dir), "--tag", "all-not-run"])
+    assert rc_not_run == 1
+    latest2 = Path((out_dir / "latest.txt").read_text(encoding="utf-8").strip())
+    rep2 = json.loads((latest2 / "report.json").read_text(encoding="utf-8"))
+    assert rep2["summary"]["passed"] is False
+    assert rep2["summary"]["not_run"] == 1 and rep2["summary"]["pass"] == 0
+
+
+def test_cli_runtime_failure_returns_code_2_and_redacts_secrets(monkeypatch, tmp_path: Path, capsys):
+    from pipeline.evaluation.autoeval import cli
+
+    cfg_path, out_dir = _make_temp_autoeval_env(tmp_path)
+    monkeypatch.setenv("GEMINI_API_KEY", "AIza-super-secret-value")
+
+    def boom(*a, **kw):
+        raise RuntimeError("call failed https://u:dbsecret@host/db key=AIza-super-secret-value")
+
+    monkeypatch.setattr(L, "run", boom)
+    rc = cli.main(["--config", str(cfg_path), "run", "--suite", "llm", "--out", str(out_dir), "--tag", "boom"])
+    assert rc == 2
+    assert not (out_dir / "latest.txt").exists()
+    err_txt = next(out_dir.glob("*-boom/error.txt")).read_text(encoding="utf-8")
+    captured = capsys.readouterr()
+    for text in (err_txt, captured.err):
+        assert "AIza-super-secret-value" not in text
+        assert "dbsecret" not in text
+        assert "[REDACTED]" in text
+
+
+def test_cli_external_out_dir_offline_run_succeeds_and_excludes_live(monkeypatch, tmp_path: Path):
+    from pipeline.evaluation.autoeval import cli
+
+    cfg_path, out_dir = _make_temp_autoeval_env(tmp_path)
+    monkeypatch.setattr(L, "run", lambda *a, **kw: {"mode": "offline", "payload_privacy": {"pii_leaks": 0}})
+    rc = cli.main(["--config", str(cfg_path), "run", "--suite", "llm", "--llm-mode", "offline", "--out", str(out_dir), "--tag", "ok"])
+    assert rc == 0
+    run_dir = Path((out_dir / "latest.txt").read_text(encoding="utf-8").strip())
+    assert (run_dir / "report.json").is_file() and (run_dir / "report.md").is_file()
+    rep = json.loads((run_dir / "report.json").read_text(encoding="utf-8"))
+    assert rep["summary"]["passed"] is True
+    assert rep["summary"]["not_run"] == 2  # llm_live + llm_adv excluded offline
+
+
+def test_gates_do_not_skip_blocking_offline_pipeline_when_deps_missing():
+    gates = [
+        {"id": "pipe_blk", "metric": "llm.pipeline.blocking_failures", "op": "empty", "threshold": None, "severity": "block", "skip_if": "llm.pipeline.skipped"},
+        {"id": "live_blk", "metric": "llm.live.draft_rate_when_expected", "op": ">=", "threshold": 0.9, "severity": "block", "skip_if": "llm.live.skipped"},
+    ]
+    res = {"llm": {"mode": "live", "pipeline": {"skipped": True, "reason": "No torch"}, "live": {"skipped": True}}}
+    status = {g["id"]: g["status"] for g in G.evaluate(res, gates, {"llm"})}
+    assert status == {"pipe_blk": "fail", "live_blk": "skipped"}
+
+
+def test_cli_malformed_gate_op_and_type_mismatch_return_sanitized_code_2(monkeypatch, tmp_path: Path):
+    from pipeline.evaluation.autoeval import cli
+
+    cfg_path, out_dir = _make_temp_autoeval_env(tmp_path)
+    monkeypatch.setattr(L, "run", lambda *a, **kw: {"mode": "offline", "payload_privacy": {"pii_leaks": "bad-type"}})
+
+    # Type mismatch on numeric gate
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    cfg["gates"] = [{"id": "bad_type", "metric": "llm.payload_privacy.pii_leaks", "op": ">=", "threshold": 0, "severity": "block"}]
+    cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+    assert cli.main(["--config", str(cfg_path), "run", "--suite", "llm", "--out", str(out_dir), "--tag", "bad-type"]) == 2
+    assert not (out_dir / "latest.txt").exists()
+
+    # Unknown gate op
+    cfg["gates"] = [{"id": "bad_op", "metric": "llm.payload_privacy.pii_leaks", "op": "~=", "threshold": 0, "severity": "block"}]
+    cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+    assert cli.main(["--config", str(cfg_path), "run", "--suite", "llm", "--out", str(out_dir), "--tag", "bad-op"]) == 2
+    assert not (out_dir / "latest.txt").exists()
+
+
+def test_cli_compare_without_overlapping_metrics_fails_closed(monkeypatch, tmp_path: Path):
+    from pipeline.evaluation.autoeval import cli
+
+    cfg_path, out_dir = _make_temp_autoeval_env(tmp_path)
+    monkeypatch.setattr(L, "run", lambda *a, **kw: {"mode": "offline", "payload_privacy": {"pii_leaks": 0}})
+    ml_only_baseline = tmp_path / "ml_only.json"
+    ml_only_baseline.write_text(json.dumps({"results": {"ml": {"benchmark": {"accuracy": 0.9}}}}), encoding="utf-8")
+
+    rc = cli.main(["--config", str(cfg_path), "run", "--suite", "llm", "--out", str(out_dir), "--compare", str(ml_only_baseline), "--tag", "no-overlap"])
+    assert rc == 2
+    assert not (out_dir / "latest.txt").exists()
+    assert next(out_dir.glob("*-no-overlap/error.txt")).read_text(encoding="utf-8")
+
+
+def test_pipeline_probes_reflect_actual_manual_fallback_and_draft_contract():
+    res = L.pipeline_probes(CONFIG, L.load_kb(CONFIG))
+    assert res["skipped"] is False
+    assert res["blocking_failures"] == []
+    by_id = {p["id"]: p for p in res["probes"]}
+    assert by_id["draft_requires_human_approval"]["passed"] is True
+    assert by_id["llm_failure_is_queued_for_staff"]["passed"] is True
+    assert by_id["ml_failure_is_queued_for_staff"]["passed"] is True
 
 
 # ------------------------------------------------------------------ real model (opt-in)

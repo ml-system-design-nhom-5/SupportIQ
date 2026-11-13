@@ -279,7 +279,7 @@ def pipeline_probes(config: dict, kb: dict) -> dict[str, Any]:
                 time.sleep(0.01)
                 raise LLMError(self.fail)
             snap = prepare_llm_input(question, intent, evidence, business_context)
-            return {"body": "Returns are accepted within 30 days [S1].", "input_snapshot": snap, "citations": []}
+            return {"body": "Returns are accepted within 30 days [S1].", "input_snapshot": snap, "citations": ["S1"]}
 
     res = []
     with tempfile.TemporaryDirectory() as tmp:
@@ -287,10 +287,24 @@ def pipeline_probes(config: dict, kb: dict) -> dict[str, Any]:
             return PipelineRunner(intent_client=intent or Intent(), retrieval_adapter=Retrieval(), llm_client=llm or LLM(),
                                   store=PersistentStore(db_path=str(Path(tmp) / f"{name}.sqlite3")))
 
-        def queued(r, run_id):
+        def persisted_handoff(r, run_id: str, expected_reasons: set[str]) -> bool:
             # sqlite3's own context manager only commits; closing() releases the file so Windows can delete tmp.
             with closing(sqlite3.connect(str(r.store.db_path))) as con:
-                return con.execute("SELECT COUNT(*) FROM escalation_queue WHERE run_id=?", (run_id,)).fetchone()[0] > 0
+                run_row = con.execute("SELECT payload_json FROM runs WHERE run_id=?", (run_id,)).fetchone()
+                esc_hit = con.execute("SELECT COUNT(*) FROM escalation_queue WHERE run_id=?", (run_id,)).fetchone()[0] > 0
+            if not run_row:
+                return False
+            payload = json.loads(run_row[0])
+            action = payload.get("action")
+            reasons = set(payload.get("reason_codes") or [])
+            if action == "escalate" and not esc_hit:
+                return False
+            return (
+                action in ("escalate", "manual_fallback")
+                and payload.get("draft_body") is None
+                and payload.get("must_human_approve") is True
+                and bool(reasons & expected_reasons)
+            )
 
         ctx = RoutingContext(ticket_customer_id="demo-customer", verified_scope="ticket:read")
         r = runner("ok")
@@ -301,13 +315,15 @@ def pipeline_probes(config: dict, kb: dict) -> dict[str, Any]:
         r = runner("llmfail", llm=LLM("llm_timeout"))
         out = r.run("What is your return window?", ctx, run_id="probe-llm")
         res.append({"id": "llm_failure_is_queued_for_staff", "ref": "LLM-02 / FR-07", "severity": "block",
-                    "passed": queued(r, "probe-llm"), "observed": {"action": out["action"], "reason_codes": out["reason_codes"]}})
+                    "passed": persisted_handoff(r, "probe-llm", {"llm_timeout"}),
+                    "observed": {"action": out["action"], "reason_codes": out["reason_codes"]}})
         res.append({"id": "llm_failure_latency_recorded", "ref": "LLM-10", "severity": "warn",
                     "passed": "llm_ms" in out.get("stage_elapsed_ms", {}), "observed": out.get("stage_elapsed_ms")})
         r = runner("mlfail", intent=Intent(error="ml_timeout"))
         out = r.run("What is your return window?", ctx, run_id="probe-ml")
         res.append({"id": "ml_failure_is_queued_for_staff", "ref": "LLM-02 / FR-07", "severity": "block",
-                    "passed": queued(r, "probe-ml"), "observed": {"action": out["action"], "reason_codes": out["reason_codes"]}})
+                    "passed": persisted_handoff(r, "probe-ml", {"ml_timeout", "ml_unavailable", "ml_error"}),
+                    "observed": {"action": out["action"], "reason_codes": out["reason_codes"]}})
     return {"skipped": False, "n": len(res), "passed": sum(p["passed"] for p in res),
             "blocking_failures": [p["id"] for p in res if p["severity"] == "block" and not p["passed"]], "probes": res}
 
