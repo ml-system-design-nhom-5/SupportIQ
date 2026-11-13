@@ -1,0 +1,50 @@
+{
+  "holdout_id": "fit2_independent_gate_20261113",
+  "status": "LOCKED_PRE_CANDIDATE",
+  "cases_file": "artifacts/evaluation/fit2_independent_gate_20261113/cases.jsonl",
+  "cases_sha256": "19a56d87299fd28c177f38cce87691598b47c1ed35143ce29194d5215daecc2f",
+  "total_cases": 36,
+  "slice_counts": {
+    "supported": 12,
+    "novel_ood": 12,
+    "mandatory_escalation": 12
+  },
+  "subgroup_counts": {
+    "supported/answerable": 11,
+    "supported/human_agent_escalation": 1,
+    "novel_ood/foreign_domain": 6,
+    "novel_ood/retail_adjacent_unsupported": 6,
+    "mandatory_escalation/compound": 6,
+    "mandatory_escalation/single": 6
+  },
+  "supported_intents": {
+    "track_order": 1,
+    "cancel_order": 1,
+    "delivery_time": 1,
+    "delivery_issue": 1,
+    "shipping_costs": 1,
+    "return_policy": 1,
+    "return_product": 1,
+    "refund_policy": 1,
+    "request_refund": 1,
+    "refund_status": 1,
+    "payment_issue": 1,
+    "human_agent": 1
+  },
+  "as_of": [
+    "2026-11-13T09:00:00Z"
+  ],
+  "active_kb_release": "current-policies-v1",
+  "approved_kb_sha256": "aaa924c4b48dcd53a14269045b278b66f6e5e8ae9d1b614cd59b757102b78594",
+  "kb_release_sha256": "33cf05b50c25384fbb208cd0c0c5cae71991d29a0f754cb1b20a1d6d7285cdaa",
+  "intent_policy_sha256": "8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+  "overlap_corpus_prompts": 13271,
+  "overlap_corpus_files": 786,
+  "overlap_thresholds": {
+    "token_jaccard_lt": 0.7,
+    "char_seq_ratio_lt": 0.85
+  },
+  "max_jaccard_vs_history": 0.45,
+  "max_seq_ratio_vs_history": 0.619,
+  "visibility_rule": "Prompts/gold withheld from A and B until final candidate lock; only manifest/hash/count shared."
+}

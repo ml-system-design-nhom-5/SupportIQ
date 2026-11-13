@@ -1,0 +1,1786 @@
+{
+  "generated_at": "2026-11-13T13:05:42.563134+00:00",
+  "scope_note": "Paired 3-case comparison (final-case-02, final-case-03, final-case-10) under identical owner demo-customer, case as_of, active KB, real BGE, guarded Engine, max_attempts=1, and shared BudgetGuardedTransport(max_requests=6). Not a universal benchmark claim; C candidate REJECT stands.",
+  "budget_accounting": {
+    "previous_global_used": 18,
+    "authorized_remaining_cap": 6,
+    "actual_http_requests_made": 3,
+    "remaining_after_run": 3,
+    "global_used_after_run": 21,
+    "rejected_before_network_count": 0,
+    "transport_retries_configured": 0,
+    "budgeted_draft_client_max_attempts": 1,
+    "transport_records": [
+      {
+        "transport_call_index": 0,
+        "rejected_before_network": false,
+        "scheme": "https",
+        "host": "generativelanguage.googleapis.com",
+        "path": "/v1beta/models/gemini-3.5-flash-lite:generateContent",
+        "requested_read_timeout": 5.0,
+        "requested_connect_timeout": 3.0,
+        "outcome": "http_response",
+        "http_status": 200,
+        "duration_seconds": 2.0671
+      },
+      {
+        "transport_call_index": 1,
+        "rejected_before_network": false,
+        "scheme": "https",
+        "host": "generativelanguage.googleapis.com",
+        "path": "/v1beta/models/gemini-3.5-flash-lite:generateContent",
+        "requested_read_timeout": 5.0,
+        "requested_connect_timeout": 3.0,
+        "outcome": "http_response",
+        "http_status": 200,
+        "duration_seconds": 1.3102
+      },
+      {
+        "transport_call_index": 2,
+        "rejected_before_network": false,
+        "scheme": "https",
+        "host": "generativelanguage.googleapis.com",
+        "path": "/v1beta/models/gemini-3.5-flash-lite:generateContent",
+        "requested_read_timeout": 5.0,
+        "requested_connect_timeout": 3.0,
+        "outcome": "http_response",
+        "http_status": 200,
+        "duration_seconds": 1.7443
+      }
+    ]
+  },
+  "combined_tokens_and_cost": {
+    "total_attempts_counted": 3,
+    "attempts_missing_usage": 0,
+    "attempts_with_thought_tokens_field": 0,
+    "attempts_with_thought_tokens_omitted": 3,
+    "thought_tokens_measurement_status": "omitted_all_attempts",
+    "prompt_and_candidate_usage_present_all_attempts": true,
+    "all_billable_token_fields_measured": false,
+    "observed_prompt_tokens": 5249,
+    "observed_candidate_tokens": 404,
+    "observed_thought_tokens": null,
+    "observed_reported_total_tokens": 5653,
+    "observed_partial_total_tokens": 5653,
+    "complete_cost_known": false,
+    "invoice_verified": false,
+    "cost_status": "observed_candidate_only_thoughts_omitted_unknown_total",
+    "conditional_observed_list_price_basis": "observed_prompt_and_candidate_only_thoughts_omitted",
+    "conditional_observed_list_price_usd": 0.0025847,
+    "complete_billed_cost_usd": null,
+    "list_price_reference_used": {
+      "provider": "google_ai_studio",
+      "model": "gemini-3.5-flash-lite",
+      "tier": "standard_paid",
+      "modality": "text",
+      "input_cost_per_million": 0.3,
+      "output_cost_per_million": 2.5,
+      "output_includes_thinking": true,
+      "source_url": "https://aistudio.google.com/docs/pricing",
+      "verified_on": "2026-11-13",
+      "note": "Published standard paid-tier text token list rates for gemini-3.5-flash-lite (output rate includes thinking tokens); actual account billing tier/invoice is unverified.",
+      "configured_model": "gemini-3.5-flash-lite"
+    },
+    "note": "Conditional USD computed solely from observed tokens using published gemini-3.5-flash-lite list pricing ($0.30/1M in, $2.50/1M out incl. thinking); omitted thoughtsTokenCount means unmeasured (not zero thinking), failed attempts may omit usageMetadata, complete billed cost is unknown, and actual account tier/invoice is unverified."
+  },
+  "arms": {
+    "serving_dc7af8cf": {
+      "arm": "serving_dc7af8cf",
+      "isolated_runtime": {
+        "base_url": "http://127.0.0.1:57530",
+        "health_ready": {
+          "status": "ready",
+          "llm_enabled": true,
+          "llm_configured": true,
+          "retrieval_ready": true,
+          "model_mode": "trained",
+          "model_verified": true
+        },
+        "asset_versions": {
+          "release_id": "local-c0e0432c51999a83",
+          "versions": {
+            "release_id": "local-c0e0432c51999a83",
+            "model_version": "v1.0.0",
+            "model_mode": "trained",
+            "verified": true,
+            "kb_version": "sha256:e9194b2be7dd08913bda69ddd02ecf3447494d5db3dc3ae7cf24bcc030ebb960",
+            "mapping_version": "embedded:e9194b2be7dd08913bda69ddd02ecf3447494d5db3dc3ae7cf24bcc030ebb960",
+            "prompt_version": "grounded-v3",
+            "engine_version": "sha256:9c18500c9dc25b10fb13d9fe89b8e2858f532ab900ed47d76cb2d174ed5ee16d",
+            "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+            "index_version": "bge-small-en-v1.5:e9194b2be7dd08913bda69ddd02ecf3447494d5db3dc3ae7cf24bcc030ebb960"
+          }
+        },
+        "configured_model": "gemini-3.5-flash-lite",
+        "postgres_schema": "accept_cmp_serving_dc7af8cf_270bb14c",
+        "postgres_schema_created": true,
+        "postgres_schema_dropped_cleanly": true,
+        "postgres_schema_drop_status": "dropped_cleanly",
+        "postgres_schema_drop_error_category": null
+      },
+      "summary": {
+        "cases_evaluated": 3,
+        "eligible_for_llm_count": 1,
+        "abstained_without_llm_count": 2,
+        "escalated_without_llm_count": 0,
+        "actual_llm_attempts": 1,
+        "correct_intent_count": 1,
+        "draft_ready_count": 1,
+        "correct_intent_draft_ready_count": 0,
+        "wrong_intent_draft_ready_count": 1,
+        "source_verification_passed_count": 3
+      },
+      "tokens_and_cost": {
+        "total_attempts_counted": 1,
+        "attempts_missing_usage": 0,
+        "attempts_with_thought_tokens_field": 0,
+        "attempts_with_thought_tokens_omitted": 1,
+        "thought_tokens_measurement_status": "omitted_all_attempts",
+        "prompt_and_candidate_usage_present_all_attempts": true,
+        "all_billable_token_fields_measured": false,
+        "observed_prompt_tokens": 1787,
+        "observed_candidate_tokens": 156,
+        "observed_thought_tokens": null,
+        "observed_reported_total_tokens": 1943,
+        "observed_partial_total_tokens": 1943,
+        "complete_cost_known": false,
+        "invoice_verified": false,
+        "cost_status": "observed_candidate_only_thoughts_omitted_unknown_total",
+        "conditional_observed_list_price_basis": "observed_prompt_and_candidate_only_thoughts_omitted",
+        "conditional_observed_list_price_usd": 0.0009261,
+        "complete_billed_cost_usd": null,
+        "list_price_reference_used": {
+          "provider": "google_ai_studio",
+          "model": "gemini-3.5-flash-lite",
+          "tier": "standard_paid",
+          "modality": "text",
+          "input_cost_per_million": 0.3,
+          "output_cost_per_million": 2.5,
+          "output_includes_thinking": true,
+          "source_url": "https://aistudio.google.com/docs/pricing",
+          "verified_on": "2026-11-13",
+          "note": "Published standard paid-tier text token list rates for gemini-3.5-flash-lite (output rate includes thinking tokens); actual account billing tier/invoice is unverified.",
+          "configured_model": "gemini-3.5-flash-lite"
+        },
+        "note": "Conditional USD computed solely from observed tokens using published gemini-3.5-flash-lite list pricing ($0.30/1M in, $2.50/1M out incl. thinking); omitted thoughtsTokenCount means unmeasured (not zero thinking), failed attempts may omit usageMetadata, complete billed cost is unknown, and actual account tier/invoice is unverified."
+      },
+      "records": [
+        {
+          "phase": "classifier_vs_serving_live",
+          "case_id": "final-case-02",
+          "slice": "product_12_answerable",
+          "category": "product_intent",
+          "fixture_boundary": "active_kb",
+          "component_evidence": "application_postgresql_gateway",
+          "query": "How do I submit a return request on the Tiki app and schedule the free courier pickup?",
+          "expected_intent": "return_product",
+          "expected_action": "draft",
+          "expected_docs": [
+            "POL-RET-002:2.0"
+          ],
+          "expected_reasons": [],
+          "order_id": "ORD-1091",
+          "actual_executed_order_context": {
+            "order_status": "delivered",
+            "order_total": {
+              "amount_minor": 4650000,
+              "currency": "VND"
+            },
+            "shipping_cost": {
+              "amount_minor": 0,
+              "currency": "VND"
+            },
+            "shipment_status": "delivered"
+          },
+          "actual_executed_as_of": "2026-06-15T10:00:00Z",
+          "ticket_id": "TCK-1001",
+          "suggestion_id": "a734d3f2-5156-4e8c-9418-bd40e471bae1",
+          "intent_source": "model",
+          "predicted_intent": "return_policy",
+          "intent_confidence": 0.7699320316314697,
+          "intent_score_kind": "uncalibrated_softmax",
+          "correct_intent": false,
+          "submit_to_terminal_latency_ms": 2463.22,
+          "terminal_status": "draft_ready",
+          "analysis_status": "ready",
+          "draft_status": "draft_ready",
+          "failure_code": null,
+          "reason_codes": [],
+          "customer_no_auto_send_observed": true,
+          "customer_reply_is_none": true,
+          "customer_http_status": 200,
+          "response_versions": {
+            "release_id": "local-c0e0432c51999a83",
+            "model_version": "v1.0.0",
+            "model_mode": "trained",
+            "verified": true,
+            "kb_version": "sha256:e9194b2be7dd08913bda69ddd02ecf3447494d5db3dc3ae7cf24bcc030ebb960",
+            "mapping_version": "embedded:e9194b2be7dd08913bda69ddd02ecf3447494d5db3dc3ae7cf24bcc030ebb960",
+            "prompt_version": "grounded-v3",
+            "engine_version": "sha256:9c18500c9dc25b10fb13d9fe89b8e2858f532ab900ed47d76cb2d174ed5ee16d",
+            "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+            "index_version": "bge-small-en-v1.5:e9194b2be7dd08913bda69ddd02ecf3447494d5db3dc3ae7cf24bcc030ebb960"
+          },
+          "llm_metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.5-flash-lite",
+            "model_version": "gemini-3.5-flash-lite",
+            "prompt_version": "grounded-v3",
+            "attempts": [
+              {
+                "attempt_index": 0,
+                "status": "success",
+                "latency_seconds": 2.0694,
+                "stage": "complete",
+                "http_status": 200,
+                "exception_category": null,
+                "usage": {
+                  "promptTokenCount": 1787,
+                  "candidatesTokenCount": 156,
+                  "totalTokenCount": 1943
+                },
+                "metadata": {
+                  "provider": "google_ai_studio",
+                  "model": "gemini-3.5-flash-lite",
+                  "model_version": "gemini-3.5-flash-lite",
+                  "prompt_version": "grounded-v3"
+                }
+              }
+            ]
+          },
+          "reported_llm_model": "gemini-3.5-flash-lite",
+          "reported_llm_model_version": "gemini-3.5-flash-lite",
+          "usage_metadata": {
+            "input_tokens": 1787,
+            "output_tokens": 156,
+            "total_tokens": 1943
+          },
+          "attempts": [
+            {
+              "attempt_index": 0,
+              "status": "success",
+              "latency_seconds": 2.0694,
+              "stage": "complete",
+              "http_status": 200,
+              "exception_category": null,
+              "usage": {
+                "promptTokenCount": 1787,
+                "candidatesTokenCount": 156,
+                "totalTokenCount": 1943
+              },
+              "metadata": {
+                "provider": "google_ai_studio",
+                "model": "gemini-3.5-flash-lite",
+                "model_version": "gemini-3.5-flash-lite",
+                "prompt_version": "grounded-v3"
+              }
+            }
+          ],
+          "attempt_count": 1,
+          "step_latencies_ms": {
+            "analysis": 37,
+            "draft": 2123,
+            "llm": 2069
+          },
+          "full_draft_text": "To submit a return or exchange request on the Tiki app, navigate to 'Account' > 'Order Management' > select the order with 'Delivered' status > tap 'Request Return/Exchange'. Then, select the reason and upload 3-5 clear photos or a video demonstrating the product defect. Once Tiki receives the request, a shipping courier will pick up the item directly from your address for free within 1-2 business days, or you can drop off the package at a designated Tiki partner post office.",
+          "citations": [
+            {
+              "source_type": "document",
+              "document_id": "POL-RET-002",
+              "version": "2.0",
+              "content_hash": null,
+              "is_verified": true,
+              "verification_error": null
+            }
+          ],
+          "source_snapshots": {
+            "POL-RET-002:2.0": {
+              "doc_id": "POL-RET-002",
+              "document_id": "POL-RET-002",
+              "version": "2.0",
+              "is_verified": true,
+              "verification_error": null,
+              "title": "Return and Exchange Request Process and Steps on Tiki App",
+              "category": "return_refund",
+              "policy_key": null,
+              "content_hash": "2deef738f75b3f0cd7c6dd4f942b6fd98272d36d9db67f73b07912125aab410a",
+              "recomputed_content_hash": "2deef738f75b3f0cd7c6dd4f942b6fd98272d36d9db67f73b07912125aab410a",
+              "content": "To create a return or exchange request, customers navigate to 'Account' > 'Order Management' > select the order with 'Delivered' status > tap 'Request Return/Exchange'. Customers select the reason and upload 3-5 clear photos or a video demonstrating the product defect. Once the request is received by Tiki, shipping couriers will pick up the item directly from the customer's address for free within 1-2 business days, or customers may drop off the package at designated Tiki partner post offices.",
+              "valid_from": "2026-01-01T00:00:00Z",
+              "valid_to": "2026-12-31T23:59:59Z",
+              "status": "approved",
+              "approved_by": "lead_compliance_officer",
+              "approved_at": "2026-01-01T00:00:00Z",
+              "allowed_roles": [
+                "agent",
+                "staff",
+                "manager",
+                "admin",
+                "customer"
+              ]
+            },
+            "POL-SHIP-004:1.0": {
+              "doc_id": "POL-SHIP-004",
+              "document_id": "POL-SHIP-004",
+              "version": "1.0",
+              "is_verified": true,
+              "verification_error": null,
+              "title": "Handling Delayed, Lost, or Discrepant Delivery Statuses",
+              "category": "shipping_delivery",
+              "policy_key": null,
+              "content_hash": "ea5d0d68a1c2e927cfc5aba386bacbc3a3e2ed14cfa9cf132fd46bfff0370bbe",
+              "recomputed_content_hash": "ea5d0d68a1c2e927cfc5aba386bacbc3a3e2ed14cfa9cf132fd46bfff0370bbe",
+              "content": "In the event a Tiki order exceeds its estimated delivery date without arrival, or if a courier marks an order as 'Successfully Delivered' when the customer has not received the parcel, the customer must contact Tiki Customer Support within 24-48 hours via hotline 1900 6035. Tiki's dispatch team will verify courier GPS logs, coordinate with the delivery hub, and resolve the complaint. If an order is lost, Tiki will dispatch a replacement or issue a 100% refund.",
+              "valid_from": "2026-01-01T00:00:00Z",
+              "valid_to": "2026-12-31T23:59:59Z",
+              "status": "approved",
+              "approved_by": "lead_compliance_officer",
+              "approved_at": "2026-01-01T00:00:00Z",
+              "allowed_roles": [
+                "agent",
+                "staff",
+                "manager",
+                "admin",
+                "customer"
+              ]
+            },
+            "POL-ORD-002:1.0": {
+              "doc_id": "POL-ORD-002",
+              "document_id": "POL-ORD-002",
+              "version": "1.0",
+              "is_verified": true,
+              "verification_error": null,
+              "title": "Order Cancellation Rules and Conditions on Tiki",
+              "category": "orders",
+              "policy_key": null,
+              "content_hash": "b1cf02ac170e19895e5f685fec15a6a8e6ade325a43640fb2d001be551cfd380",
+              "recomputed_content_hash": "b1cf02ac170e19895e5f685fec15a6a8e6ade325a43640fb2d001be551cfd380",
+              "content": "Customers can click 'Cancel Order' directly on the Tiki app if the order is in 'Processing' or 'Awaiting Packing' status and has not yet been handed over to the shipping carrier. Once the order transitions to 'In Transit', the direct cancellation button is disabled; customers should reject the package upon courier contact. For canceled prepaid orders, refunds will be issued automatically according to Tiki refund policies.",
+              "valid_from": "2026-01-01T00:00:00Z",
+              "valid_to": "2026-12-31T23:59:59Z",
+              "status": "approved",
+              "approved_by": "lead_compliance_officer",
+              "approved_at": "2026-01-01T00:00:00Z",
+              "allowed_roles": [
+                "agent",
+                "staff",
+                "manager",
+                "admin",
+                "customer"
+              ]
+            }
+          },
+          "staff_note": "Review every claim against its cited source. AI output is supporting information; a person decides what to send.",
+          "raw_model_routing": {
+            "intent": {
+              "label": "return_policy",
+              "probability": 0.7699320316314697,
+              "confidence_band": "medium",
+              "source": "model",
+              "score_kind": "uncalibrated_softmax",
+              "model_mode": "trained",
+              "verified": true
+            },
+            "routing": {
+              "recommendation": "draft",
+              "reason_codes": []
+            },
+            "alternatives": [
+              {
+                "label": "return_product_online",
+                "probability": 0.060821689665317535,
+                "confidence_band": "low"
+              },
+              {
+                "label": "shipping_costs",
+                "probability": 0.0389271043241024,
+                "confidence_band": "low"
+              }
+            ],
+            "warnings": []
+          },
+          "collection_success": true,
+          "action_matches_expected": true,
+          "reasons_match_expected": true,
+          "authority_check_passed": true,
+          "source_verification_passed": true,
+          "is_success": false,
+          "arm": "serving_dc7af8cf",
+          "ticket_owner": "demo-customer",
+          "retrieved_documents": [
+            {
+              "document_id": "POL-RET-002",
+              "version": "2.0",
+              "title": "Return and Exchange Request Process and Steps on Tiki App",
+              "snippet": "Return and Exchange Request Process and Steps on Tiki App\nTo create a return or exchange request, customers navigate to 'Account' > 'Order Management' > select the order with 'Delivered' status > tap 'Request Return/Exchange'. Customers select the reason and upload 3-5 clear photos or a video demonstrating the product defect. Once the request is received by Tiki, shipping couriers will pick up the item directly from the customer's address for free within 1-2 business days, or customers may drop off the package at designated Tiki partner post offices.",
+              "score": 0.9809,
+              "rank": 1,
+              "validity": "valid",
+              "effective_from": "2026-01-01T00:00:00Z",
+              "effective_to": "2026-12-31T23:59:59Z"
+            },
+            {
+              "document_id": "POL-SHIP-004",
+              "version": "1.0",
+              "title": "Handling Delayed, Lost, or Discrepant Delivery Statuses",
+              "snippet": "Handling Delayed, Lost, or Discrepant Delivery Statuses\nIn the event a Tiki order exceeds its estimated delivery date without arrival, or if a courier marks an order as 'Successfully Delivered' when the customer has not received the parcel, the customer must contact Tiki Customer Support within 24-48 hours via hotline 1900 6035. Tiki's dispatch team will verify courier GPS logs, coordinate with the delivery hub, and resolve the complaint. If an order is lost, Tiki will dispatch a replacement or issue a 100% refund.",
+              "score": 0.7866,
+              "rank": 2,
+              "validity": "valid",
+              "effective_from": "2026-01-01T00:00:00Z",
+              "effective_to": "2026-12-31T23:59:59Z"
+            },
+            {
+              "document_id": "POL-ORD-002",
+              "version": "1.0",
+              "title": "Order Cancellation Rules and Conditions on Tiki",
+              "snippet": "Order Cancellation Rules and Conditions on Tiki\nCustomers can click 'Cancel Order' directly on the Tiki app if the order is in 'Processing' or 'Awaiting Packing' status and has not yet been handed over to the shipping carrier. Once the order transitions to 'In Transit', the direct cancellation button is disabled; customers should reject the package upon courier contact. For canceled prepaid orders, refunds will be issued automatically according to Tiki refund policies.",
+              "score": 0.763,
+              "rank": 3,
+              "validity": "valid",
+              "effective_from": "2026-01-01T00:00:00Z",
+              "effective_to": "2026-12-31T23:59:59Z"
+            }
+          ],
+          "routing_recommendation": "draft",
+          "eligible_for_llm": true
+        },
+        {
+          "phase": "classifier_vs_serving_live",
+          "case_id": "final-case-03",
+          "slice": "product_12_answerable",
+          "category": "product_intent",
+          "fixture_boundary": "active_kb",
+          "component_evidence": "application_postgresql_gateway",
+          "query": "What are the requirements for refund approval and are shipping fees refunded if I return due to personal preference?",
+          "expected_intent": "refund_policy",
+          "expected_action": "draft",
+          "expected_docs": [
+            "POL-REFUND-001:1.0"
+          ],
+          "expected_reasons": [],
+          "order_id": "ORD-1051",
+          "actual_executed_order_context": {
+            "order_status": "delivered",
+            "order_total": {
+              "amount_minor": 890000,
+              "currency": "VND"
+            },
+            "shipping_cost": {
+              "amount_minor": 0,
+              "currency": "VND"
+            },
+            "shipment_status": "delivered",
+            "refund_status": "under_review",
+            "refund_amount": {
+              "amount_minor": 890000,
+              "currency": "VND"
+            }
+          },
+          "actual_executed_as_of": "2026-06-15T10:00:00Z",
+          "ticket_id": "TCK-1002",
+          "suggestion_id": "1944f3d6-6f90-4d06-bcb6-99c098cf8c13",
+          "intent_source": "model",
+          "predicted_intent": "payment_issue",
+          "intent_confidence": 0.4416200518608093,
+          "intent_score_kind": "uncalibrated_softmax",
+          "correct_intent": false,
+          "submit_to_terminal_latency_ms": 210.6,
+          "terminal_status": "abstained",
+          "analysis_status": "ready",
+          "draft_status": "abstained",
+          "failure_code": null,
+          "reason_codes": [
+            "low_confidence",
+            "out_of_scope_intent",
+            "requires_authority"
+          ],
+          "customer_no_auto_send_observed": true,
+          "customer_reply_is_none": true,
+          "customer_http_status": 200,
+          "response_versions": {
+            "release_id": "local-c0e0432c51999a83",
+            "model_version": "v1.0.0",
+            "model_mode": "trained",
+            "verified": true,
+            "kb_version": "sha256:e9194b2be7dd08913bda69ddd02ecf3447494d5db3dc3ae7cf24bcc030ebb960",
+            "mapping_version": "embedded:e9194b2be7dd08913bda69ddd02ecf3447494d5db3dc3ae7cf24bcc030ebb960",
+            "prompt_version": "grounded-v3",
+            "engine_version": "sha256:9c18500c9dc25b10fb13d9fe89b8e2858f532ab900ed47d76cb2d174ed5ee16d",
+            "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+            "index_version": "bge-small-en-v1.5:e9194b2be7dd08913bda69ddd02ecf3447494d5db3dc3ae7cf24bcc030ebb960"
+          },
+          "llm_metadata": {},
+          "reported_llm_model": null,
+          "reported_llm_model_version": null,
+          "usage_metadata": {},
+          "attempts": [],
+          "attempt_count": 0,
+          "step_latencies_ms": {
+            "analysis": 90,
+            "draft": 0
+          },
+          "full_draft_text": null,
+          "citations": [],
+          "source_snapshots": {
+            "POL-REFUND-001:1.0": {
+              "doc_id": "POL-REFUND-001",
+              "document_id": "POL-REFUND-001",
+              "version": "1.0",
+              "is_verified": true,
+              "verification_error": null,
+              "title": "Safe Refund Reconciliation Rules and Principles on Tiki",
+              "category": "return_refund",
+              "policy_key": null,
+              "content_hash": "e925c3cbfe7ad12063e1fbd2499b8867f29160a8ad53c5c42155b9d74be0776c",
+              "recomputed_content_hash": "e925c3cbfe7ad12063e1fbd2499b8867f29160a8ad53c5c42155b9d74be0776c",
+              "content": "Refund requests are only processed once an order has been successfully canceled prior to dispatch, or after the Tiki warehouse receives and inspects the returned product to standard. All refund decisions must undergo reconciliation by authorized customer service personnel; AI is prohibited from autonomously approving monetary transactions. Original shipping fees are non-refundable if the return reason is based on personal preference.",
+              "valid_from": "2026-01-01T00:00:00Z",
+              "valid_to": "2026-12-31T23:59:59Z",
+              "status": "approved",
+              "approved_by": "lead_compliance_officer",
+              "approved_at": "2026-01-01T00:00:00Z",
+              "allowed_roles": [
+                "agent",
+                "staff",
+                "manager",
+                "admin",
+                "customer"
+              ]
+            },
+            "POL-ORD-002:1.0": {
+              "doc_id": "POL-ORD-002",
+              "document_id": "POL-ORD-002",
+              "version": "1.0",
+              "is_verified": true,
+              "verification_error": null,
+              "title": "Order Cancellation Rules and Conditions on Tiki",
+              "category": "orders",
+              "policy_key": null,
+              "content_hash": "b1cf02ac170e19895e5f685fec15a6a8e6ade325a43640fb2d001be551cfd380",
+              "recomputed_content_hash": "b1cf02ac170e19895e5f685fec15a6a8e6ade325a43640fb2d001be551cfd380",
+              "content": "Customers can click 'Cancel Order' directly on the Tiki app if the order is in 'Processing' or 'Awaiting Packing' status and has not yet been handed over to the shipping carrier. Once the order transitions to 'In Transit', the direct cancellation button is disabled; customers should reject the package upon courier contact. For canceled prepaid orders, refunds will be issued automatically according to Tiki refund policies.",
+              "valid_from": "2026-01-01T00:00:00Z",
+              "valid_to": "2026-12-31T23:59:59Z",
+              "status": "approved",
+              "approved_by": "lead_compliance_officer",
+              "approved_at": "2026-01-01T00:00:00Z",
+              "allowed_roles": [
+                "agent",
+                "staff",
+                "manager",
+                "admin",
+                "customer"
+              ]
+            },
+            "POL-RET-003:2.0": {
+              "doc_id": "POL-RET-003",
+              "document_id": "POL-RET-003",
+              "version": "2.0",
+              "is_verified": true,
+              "verification_error": null,
+              "title": "Restricted Return Categories and Non-Returnable Change-of-Mind Items on Tiki",
+              "category": "return_refund",
+              "policy_key": null,
+              "content_hash": "94bdfee5529f268548ee30c7537c47403b8a2a6f5fd2622dd2a877c797ee6bc5",
+              "recomputed_content_hash": "94bdfee5529f268548ee30c7537c47403b8a2a6f5fd2622dd2a877c797ee6bc5",
+              "content": "Product categories that do not support returns due to change of mind or personal preference include: Underwear, swimwear, cosmetics and chemicals with unsealed protective packaging, Tiki Ngon fresh groceries, dietary supplements, mobile top-up scratch cards, electronic service vouchers, and clearance outlet items marked as non-returnable. These items are only eligible for return or exchange if Tiki delivered an incorrect item or if there is a verified manufacturer defect.",
+              "valid_from": "2026-01-01T00:00:00Z",
+              "valid_to": "2026-12-31T23:59:59Z",
+              "status": "approved",
+              "approved_by": "lead_compliance_officer",
+              "approved_at": "2026-01-01T00:00:00Z",
+              "allowed_roles": [
+                "agent",
+                "staff",
+                "manager",
+                "admin",
+                "customer"
+              ]
+            }
+          },
+          "staff_note": "The model score or margin is below the routing threshold. Confirm or correct the intent before drafting.",
+          "raw_model_routing": {
+            "intent": {
+              "label": "payment_issue",
+              "probability": 0.4416200518608093,
+              "confidence_band": "low",
+              "source": "model",
+              "score_kind": "uncalibrated_softmax",
+              "model_mode": "trained",
+              "verified": true
+            },
+            "routing": {
+              "recommendation": "abstain",
+              "reason_codes": [
+                "low_confidence",
+                "out_of_scope_intent",
+                "requires_authority"
+              ]
+            },
+            "alternatives": [
+              {
+                "label": "shipping_costs",
+                "probability": 0.1646607369184494,
+                "confidence_band": "low"
+              },
+              {
+                "label": "return_policy",
+                "probability": 0.08452209085226059,
+                "confidence_band": "low"
+              }
+            ],
+            "warnings": []
+          },
+          "collection_success": true,
+          "action_matches_expected": false,
+          "reasons_match_expected": true,
+          "authority_check_passed": true,
+          "source_verification_passed": true,
+          "is_success": false,
+          "arm": "serving_dc7af8cf",
+          "ticket_owner": "demo-customer",
+          "retrieved_documents": [
+            {
+              "document_id": "POL-REFUND-001",
+              "version": "1.0",
+              "title": "Safe Refund Reconciliation Rules and Principles on Tiki",
+              "snippet": "Safe Refund Reconciliation Rules and Principles on Tiki\nRefund requests are only processed once an order has been successfully canceled prior to dispatch, or after the Tiki warehouse receives and inspects the returned product to standard. All refund decisions must undergo reconciliation by authorized customer service personnel; AI is prohibited from autonomously approving monetary transactions. Original shipping fees are non-refundable if the return reason is based on personal preference.",
+              "score": 0.7455,
+              "rank": 1,
+              "validity": "valid",
+              "effective_from": "2026-01-01T00:00:00Z",
+              "effective_to": "2026-12-31T23:59:59Z"
+            },
+            {
+              "document_id": "POL-ORD-002",
+              "version": "1.0",
+              "title": "Order Cancellation Rules and Conditions on Tiki",
+              "snippet": "Order Cancellation Rules and Conditions on Tiki\nCustomers can click 'Cancel Order' directly on the Tiki app if the order is in 'Processing' or 'Awaiting Packing' status and has not yet been handed over to the shipping carrier. Once the order transitions to 'In Transit', the direct cancellation button is disabled; customers should reject the package upon courier contact. For canceled prepaid orders, refunds will be issued automatically according to Tiki refund policies.",
+              "score": 0.6656,
+              "rank": 2,
+              "validity": "valid",
+              "effective_from": "2026-01-01T00:00:00Z",
+              "effective_to": "2026-12-31T23:59:59Z"
+            },
+            {
+              "document_id": "POL-RET-003",
+              "version": "2.0",
+              "title": "Restricted Return Categories and Non-Returnable Change-of-Mind Items on Tiki",
+              "snippet": "Restricted Return Categories and Non-Returnable Change-of-Mind Items on Tiki\nProduct categories that do not support returns due to change of mind or personal preference include: Underwear, swimwear, cosmetics and chemicals with unsealed protective packaging, Tiki Ngon fresh groceries, dietary supplements, mobile top-up scratch cards, electronic service vouchers, and clearance outlet items marked as non-returnable. These items are only eligible for return or exchange if Tiki delivered an incorrect item or if there is a verified manufacturer defect.",
+              "score": 0.6502,
+              "rank": 3,
+              "validity": "valid",
+              "effective_from": "2026-01-01T00:00:00Z",
+              "effective_to": "2026-12-31T23:59:59Z"
+            }
+          ],
+          "routing_recommendation": "abstain",
+          "eligible_for_llm": false
+        },
+        {
+          "phase": "classifier_vs_serving_live",
+          "case_id": "final-case-10",
+          "slice": "product_12_answerable",
+          "category": "product_intent",
+          "fixture_boundary": "active_kb",
+          "component_evidence": "application_postgresql_gateway",
+          "query": "The app shows my order was delivered but I never received the package from the courier.",
+          "expected_intent": "delivery_issue",
+          "expected_action": "draft",
+          "expected_docs": [
+            "POL-SHIP-004:1.0"
+          ],
+          "expected_reasons": [],
+          "order_id": "ORD-1005",
+          "actual_executed_order_context": {
+            "order_status": "shipped",
+            "order_total": {
+              "amount_minor": 1802000,
+              "currency": "VND"
+            },
+            "shipping_cost": {
+              "amount_minor": 22000,
+              "currency": "VND"
+            },
+            "shipment_status": "delayed"
+          },
+          "actual_executed_as_of": "2026-06-15T10:00:00Z",
+          "ticket_id": "TCK-1003",
+          "suggestion_id": "0162acc7-e3b8-4a86-a46e-b61fa93fe4b0",
+          "intent_source": "model",
+          "predicted_intent": "delivery_issue",
+          "intent_confidence": 0.2617541253566742,
+          "intent_score_kind": "uncalibrated_softmax",
+          "correct_intent": true,
+          "submit_to_terminal_latency_ms": 215.72,
+          "terminal_status": "abstained",
+          "analysis_status": "ready",
+          "draft_status": "abstained",
+          "failure_code": null,
+          "reason_codes": [
+            "low_confidence",
+            "out_of_scope_intent"
+          ],
+          "customer_no_auto_send_observed": true,
+          "customer_reply_is_none": true,
+          "customer_http_status": 200,
+          "response_versions": {
+            "release_id": "local-c0e0432c51999a83",
+            "model_version": "v1.0.0",
+            "model_mode": "trained",
+            "verified": true,
+            "kb_version": "sha256:e9194b2be7dd08913bda69ddd02ecf3447494d5db3dc3ae7cf24bcc030ebb960",
+            "mapping_version": "embedded:e9194b2be7dd08913bda69ddd02ecf3447494d5db3dc3ae7cf24bcc030ebb960",
+            "prompt_version": "grounded-v3",
+            "engine_version": "sha256:9c18500c9dc25b10fb13d9fe89b8e2858f532ab900ed47d76cb2d174ed5ee16d",
+            "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+            "index_version": "bge-small-en-v1.5:e9194b2be7dd08913bda69ddd02ecf3447494d5db3dc3ae7cf24bcc030ebb960"
+          },
+          "llm_metadata": {},
+          "reported_llm_model": null,
+          "reported_llm_model_version": null,
+          "usage_metadata": {},
+          "attempts": [],
+          "attempt_count": 0,
+          "step_latencies_ms": {
+            "analysis": 173,
+            "draft": 0
+          },
+          "full_draft_text": null,
+          "citations": [],
+          "source_snapshots": {
+            "POL-SHIP-004:1.0": {
+              "doc_id": "POL-SHIP-004",
+              "document_id": "POL-SHIP-004",
+              "version": "1.0",
+              "is_verified": true,
+              "verification_error": null,
+              "title": "Handling Delayed, Lost, or Discrepant Delivery Statuses",
+              "category": "shipping_delivery",
+              "policy_key": null,
+              "content_hash": "ea5d0d68a1c2e927cfc5aba386bacbc3a3e2ed14cfa9cf132fd46bfff0370bbe",
+              "recomputed_content_hash": "ea5d0d68a1c2e927cfc5aba386bacbc3a3e2ed14cfa9cf132fd46bfff0370bbe",
+              "content": "In the event a Tiki order exceeds its estimated delivery date without arrival, or if a courier marks an order as 'Successfully Delivered' when the customer has not received the parcel, the customer must contact Tiki Customer Support within 24-48 hours via hotline 1900 6035. Tiki's dispatch team will verify courier GPS logs, coordinate with the delivery hub, and resolve the complaint. If an order is lost, Tiki will dispatch a replacement or issue a 100% refund.",
+              "valid_from": "2026-01-01T00:00:00Z",
+              "valid_to": "2026-12-31T23:59:59Z",
+              "status": "approved",
+              "approved_by": "lead_compliance_officer",
+              "approved_at": "2026-01-01T00:00:00Z",
+              "allowed_roles": [
+                "agent",
+                "staff",
+                "manager",
+                "admin",
+                "customer"
+              ]
+            },
+            "POL-ORD-001:1.0": {
+              "doc_id": "POL-ORD-001",
+              "document_id": "POL-ORD-001",
+              "version": "1.0",
+              "is_verified": true,
+              "verification_error": null,
+              "title": "Instructions for Tracking Order Journey and Status on Tiki",
+              "category": "orders",
+              "policy_key": null,
+              "content_hash": "cfecb27c7546ff35f2b47b0803b86fea6cd8d866c96096733cb412e9aae2c679",
+              "recomputed_content_hash": "cfecb27c7546ff35f2b47b0803b86fea6cd8d866c96096733cb412e9aae2c679",
+              "content": "Customers can check order status by navigating to 'My Orders' on the Tiki app. Order statuses include: 'Pending Confirmation' (seller preparing), 'Pick Up in Progress' (packed, awaiting courier), 'In Transit' (courier delivering, real-time tracking code provided), 'Delivered' (completed), and 'Canceled'. Customers tap the tracking code to view details of each transit hub the parcel has passed through.",
+              "valid_from": "2026-01-01T00:00:00Z",
+              "valid_to": "2026-12-31T23:59:59Z",
+              "status": "approved",
+              "approved_by": "lead_compliance_officer",
+              "approved_at": "2026-01-01T00:00:00Z",
+              "allowed_roles": [
+                "agent",
+                "staff",
+                "manager",
+                "admin",
+                "customer"
+              ]
+            },
+            "POL-ORD-003:1.0": {
+              "doc_id": "POL-ORD-003",
+              "document_id": "POL-ORD-003",
+              "version": "1.0",
+              "is_verified": true,
+              "verification_error": null,
+              "title": "Instructions for Changing Delivery Address or Phone Number After Placing Order",
+              "category": "orders",
+              "policy_key": null,
+              "content_hash": "96a3d87bc7a88dd4f52f2a46cabf1e1e177bb86ae8385c0e2db6378e36c885db",
+              "recomputed_content_hash": "96a3d87bc7a88dd4f52f2a46cabf1e1e177bb86ae8385c0e2db6378e36c885db",
+              "content": "Customers may change the delivery address or phone number only once per order, provided the order remains in 'Pending Processing' status. When an order advances to 'Preparing Items' or 'Handed Over to Courier', modification features are locked to prevent parcel misrouting. Customers should contact the courier upon phone contact to arrange delivery at a nearby location.",
+              "valid_from": "2026-01-01T00:00:00Z",
+              "valid_to": "2026-12-31T23:59:59Z",
+              "status": "approved",
+              "approved_by": "lead_compliance_officer",
+              "approved_at": "2026-01-01T00:00:00Z",
+              "allowed_roles": [
+                "agent",
+                "staff",
+                "manager",
+                "admin",
+                "customer"
+              ]
+            }
+          },
+          "staff_note": "The model score or margin is below the routing threshold. Confirm or correct the intent before drafting.",
+          "raw_model_routing": {
+            "intent": {
+              "label": "delivery_issue",
+              "probability": 0.2617541253566742,
+              "confidence_band": "low",
+              "source": "model",
+              "score_kind": "uncalibrated_softmax",
+              "model_mode": "trained",
+              "verified": true
+            },
+            "routing": {
+              "recommendation": "abstain",
+              "reason_codes": [
+                "low_confidence",
+                "out_of_scope_intent"
+              ]
+            },
+            "alternatives": [
+              {
+                "label": "track_order",
+                "probability": 0.2611902058124542,
+                "confidence_band": "low"
+              },
+              {
+                "label": "missing_item",
+                "probability": 0.17785757780075073,
+                "confidence_band": "low"
+              }
+            ],
+            "warnings": []
+          },
+          "collection_success": true,
+          "action_matches_expected": false,
+          "reasons_match_expected": true,
+          "authority_check_passed": true,
+          "source_verification_passed": true,
+          "is_success": false,
+          "arm": "serving_dc7af8cf",
+          "ticket_owner": "demo-customer",
+          "retrieved_documents": [
+            {
+              "document_id": "POL-SHIP-004",
+              "version": "1.0",
+              "title": "Handling Delayed, Lost, or Discrepant Delivery Statuses",
+              "snippet": "Handling Delayed, Lost, or Discrepant Delivery Statuses\nIn the event a Tiki order exceeds its estimated delivery date without arrival, or if a courier marks an order as 'Successfully Delivered' when the customer has not received the parcel, the customer must contact Tiki Customer Support within 24-48 hours via hotline 1900 6035. Tiki's dispatch team will verify courier GPS logs, coordinate with the delivery hub, and resolve the complaint. If an order is lost, Tiki will dispatch a replacement or issue a 100% refund.",
+              "score": 0.8283,
+              "rank": 1,
+              "validity": "valid",
+              "effective_from": "2026-01-01T00:00:00Z",
+              "effective_to": "2026-12-31T23:59:59Z"
+            },
+            {
+              "document_id": "POL-ORD-001",
+              "version": "1.0",
+              "title": "Instructions for Tracking Order Journey and Status on Tiki",
+              "snippet": "Instructions for Tracking Order Journey and Status on Tiki\nCustomers can check order status by navigating to 'My Orders' on the Tiki app. Order statuses include: 'Pending Confirmation' (seller preparing), 'Pick Up in Progress' (packed, awaiting courier), 'In Transit' (courier delivering, real-time tracking code provided), 'Delivered' (completed), and 'Canceled'. Customers tap the tracking code to view details of each transit hub the parcel has passed through.",
+              "score": 0.6589,
+              "rank": 2,
+              "validity": "valid",
+              "effective_from": "2026-01-01T00:00:00Z",
+              "effective_to": "2026-12-31T23:59:59Z"
+            },
+            {
+              "document_id": "POL-ORD-003",
+              "version": "1.0",
+              "title": "Instructions for Changing Delivery Address or Phone Number After Placing Order",
+              "snippet": "Instructions for Changing Delivery Address or Phone Number After Placing Order\nCustomers may change the delivery address or phone number only once per order, provided the order remains in 'Pending Processing' status. When an order advances to 'Preparing Items' or 'Handed Over to Courier', modification features are locked to prevent parcel misrouting. Customers should contact the courier upon phone contact to arrange delivery at a nearby location.",
+              "score": 0.6297,
+              "rank": 3,
+              "validity": "valid",
+              "effective_from": "2026-01-01T00:00:00Z",
+              "effective_to": "2026-12-31T23:59:59Z"
+            }
+          ],
+          "routing_recommendation": "abstain",
+          "eligible_for_llm": false
+        }
+      ]
+    },
+    "fit2_f695b1fe": {
+      "arm": "fit2_f695b1fe",
+      "isolated_runtime": {
+        "base_url": "http://127.0.0.1:55011",
+        "health_ready": {
+          "status": "ready",
+          "llm_enabled": true,
+          "llm_configured": true,
+          "retrieval_ready": true,
+          "model_mode": "trained",
+          "model_verified": true
+        },
+        "asset_versions": {
+          "release_id": "local-29dd89bef453380d",
+          "versions": {
+            "release_id": "local-29dd89bef453380d",
+            "model_version": "fit2-supcon-energy-boundary-v1",
+            "model_mode": "trained",
+            "verified": true,
+            "kb_version": "sha256:e9194b2be7dd08913bda69ddd02ecf3447494d5db3dc3ae7cf24bcc030ebb960",
+            "mapping_version": "embedded:e9194b2be7dd08913bda69ddd02ecf3447494d5db3dc3ae7cf24bcc030ebb960",
+            "prompt_version": "grounded-v3",
+            "engine_version": "sha256:9c18500c9dc25b10fb13d9fe89b8e2858f532ab900ed47d76cb2d174ed5ee16d",
+            "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+            "index_version": "bge-small-en-v1.5:e9194b2be7dd08913bda69ddd02ecf3447494d5db3dc3ae7cf24bcc030ebb960"
+          }
+        },
+        "configured_model": "gemini-3.5-flash-lite",
+        "postgres_schema": "accept_cmp_fit2_f695b1fe_d7ca46ae",
+        "postgres_schema_created": true,
+        "postgres_schema_dropped_cleanly": true,
+        "postgres_schema_drop_status": "dropped_cleanly",
+        "postgres_schema_drop_error_category": null
+      },
+      "summary": {
+        "cases_evaluated": 3,
+        "eligible_for_llm_count": 2,
+        "abstained_without_llm_count": 1,
+        "escalated_without_llm_count": 0,
+        "actual_llm_attempts": 2,
+        "correct_intent_count": 3,
+        "draft_ready_count": 2,
+        "correct_intent_draft_ready_count": 2,
+        "wrong_intent_draft_ready_count": 0,
+        "source_verification_passed_count": 3
+      },
+      "tokens_and_cost": {
+        "total_attempts_counted": 2,
+        "attempts_missing_usage": 0,
+        "attempts_with_thought_tokens_field": 0,
+        "attempts_with_thought_tokens_omitted": 2,
+        "thought_tokens_measurement_status": "omitted_all_attempts",
+        "prompt_and_candidate_usage_present_all_attempts": true,
+        "all_billable_token_fields_measured": false,
+        "observed_prompt_tokens": 3462,
+        "observed_candidate_tokens": 248,
+        "observed_thought_tokens": null,
+        "observed_reported_total_tokens": 3710,
+        "observed_partial_total_tokens": 3710,
+        "complete_cost_known": false,
+        "invoice_verified": false,
+        "cost_status": "observed_candidate_only_thoughts_omitted_unknown_total",
+        "conditional_observed_list_price_basis": "observed_prompt_and_candidate_only_thoughts_omitted",
+        "conditional_observed_list_price_usd": 0.0016586,
+        "complete_billed_cost_usd": null,
+        "list_price_reference_used": {
+          "provider": "google_ai_studio",
+          "model": "gemini-3.5-flash-lite",
+          "tier": "standard_paid",
+          "modality": "text",
+          "input_cost_per_million": 0.3,
+          "output_cost_per_million": 2.5,
+          "output_includes_thinking": true,
+          "source_url": "https://aistudio.google.com/docs/pricing",
+          "verified_on": "2026-11-13",
+          "note": "Published standard paid-tier text token list rates for gemini-3.5-flash-lite (output rate includes thinking tokens); actual account billing tier/invoice is unverified.",
+          "configured_model": "gemini-3.5-flash-lite"
+        },
+        "note": "Conditional USD computed solely from observed tokens using published gemini-3.5-flash-lite list pricing ($0.30/1M in, $2.50/1M out incl. thinking); omitted thoughtsTokenCount means unmeasured (not zero thinking), failed attempts may omit usageMetadata, complete billed cost is unknown, and actual account tier/invoice is unverified."
+      },
+      "records": [
+        {
+          "phase": "classifier_vs_serving_live",
+          "case_id": "final-case-02",
+          "slice": "product_12_answerable",
+          "category": "product_intent",
+          "fixture_boundary": "active_kb",
+          "component_evidence": "application_postgresql_gateway",
+          "query": "How do I submit a return request on the Tiki app and schedule the free courier pickup?",
+          "expected_intent": "return_product",
+          "expected_action": "draft",
+          "expected_docs": [
+            "POL-RET-002:2.0"
+          ],
+          "expected_reasons": [],
+          "order_id": "ORD-1091",
+          "actual_executed_order_context": {
+            "order_status": "delivered",
+            "order_total": {
+              "amount_minor": 4650000,
+              "currency": "VND"
+            },
+            "shipping_cost": {
+              "amount_minor": 0,
+              "currency": "VND"
+            },
+            "shipment_status": "delivered"
+          },
+          "actual_executed_as_of": "2026-06-15T10:00:00Z",
+          "ticket_id": "TCK-1001",
+          "suggestion_id": "0f6e4083-1cf1-41ad-b875-5da319a9ad18",
+          "intent_source": "model",
+          "predicted_intent": "return_product",
+          "intent_confidence": 0.13192041218280792,
+          "intent_score_kind": "calibrated_probability",
+          "correct_intent": true,
+          "submit_to_terminal_latency_ms": 17.68,
+          "terminal_status": "abstained",
+          "analysis_status": "ready",
+          "draft_status": "abstained",
+          "failure_code": null,
+          "reason_codes": [
+            "low_confidence",
+            "out_of_scope_intent",
+            "requires_authority"
+          ],
+          "customer_no_auto_send_observed": true,
+          "customer_reply_is_none": true,
+          "customer_http_status": 200,
+          "response_versions": {
+            "release_id": "local-29dd89bef453380d",
+            "model_version": "fit2-supcon-energy-boundary-v1",
+            "model_mode": "trained",
+            "verified": true,
+            "kb_version": "sha256:e9194b2be7dd08913bda69ddd02ecf3447494d5db3dc3ae7cf24bcc030ebb960",
+            "mapping_version": "embedded:e9194b2be7dd08913bda69ddd02ecf3447494d5db3dc3ae7cf24bcc030ebb960",
+            "prompt_version": "grounded-v3",
+            "engine_version": "sha256:9c18500c9dc25b10fb13d9fe89b8e2858f532ab900ed47d76cb2d174ed5ee16d",
+            "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+            "index_version": "bge-small-en-v1.5:e9194b2be7dd08913bda69ddd02ecf3447494d5db3dc3ae7cf24bcc030ebb960"
+          },
+          "llm_metadata": {},
+          "reported_llm_model": null,
+          "reported_llm_model_version": null,
+          "usage_metadata": {},
+          "attempts": [],
+          "attempt_count": 0,
+          "step_latencies_ms": {
+            "analysis": 118,
+            "draft": 0
+          },
+          "full_draft_text": null,
+          "citations": [],
+          "source_snapshots": {
+            "POL-RET-002:2.0": {
+              "doc_id": "POL-RET-002",
+              "document_id": "POL-RET-002",
+              "version": "2.0",
+              "is_verified": true,
+              "verification_error": null,
+              "title": "Return and Exchange Request Process and Steps on Tiki App",
+              "category": "return_refund",
+              "policy_key": null,
+              "content_hash": "2deef738f75b3f0cd7c6dd4f942b6fd98272d36d9db67f73b07912125aab410a",
+              "recomputed_content_hash": "2deef738f75b3f0cd7c6dd4f942b6fd98272d36d9db67f73b07912125aab410a",
+              "content": "To create a return or exchange request, customers navigate to 'Account' > 'Order Management' > select the order with 'Delivered' status > tap 'Request Return/Exchange'. Customers select the reason and upload 3-5 clear photos or a video demonstrating the product defect. Once the request is received by Tiki, shipping couriers will pick up the item directly from the customer's address for free within 1-2 business days, or customers may drop off the package at designated Tiki partner post offices.",
+              "valid_from": "2026-01-01T00:00:00Z",
+              "valid_to": "2026-12-31T23:59:59Z",
+              "status": "approved",
+              "approved_by": "lead_compliance_officer",
+              "approved_at": "2026-01-01T00:00:00Z",
+              "allowed_roles": [
+                "agent",
+                "staff",
+                "manager",
+                "admin",
+                "customer"
+              ]
+            },
+            "POL-SHIP-004:1.0": {
+              "doc_id": "POL-SHIP-004",
+              "document_id": "POL-SHIP-004",
+              "version": "1.0",
+              "is_verified": true,
+              "verification_error": null,
+              "title": "Handling Delayed, Lost, or Discrepant Delivery Statuses",
+              "category": "shipping_delivery",
+              "policy_key": null,
+              "content_hash": "ea5d0d68a1c2e927cfc5aba386bacbc3a3e2ed14cfa9cf132fd46bfff0370bbe",
+              "recomputed_content_hash": "ea5d0d68a1c2e927cfc5aba386bacbc3a3e2ed14cfa9cf132fd46bfff0370bbe",
+              "content": "In the event a Tiki order exceeds its estimated delivery date without arrival, or if a courier marks an order as 'Successfully Delivered' when the customer has not received the parcel, the customer must contact Tiki Customer Support within 24-48 hours via hotline 1900 6035. Tiki's dispatch team will verify courier GPS logs, coordinate with the delivery hub, and resolve the complaint. If an order is lost, Tiki will dispatch a replacement or issue a 100% refund.",
+              "valid_from": "2026-01-01T00:00:00Z",
+              "valid_to": "2026-12-31T23:59:59Z",
+              "status": "approved",
+              "approved_by": "lead_compliance_officer",
+              "approved_at": "2026-01-01T00:00:00Z",
+              "allowed_roles": [
+                "agent",
+                "staff",
+                "manager",
+                "admin",
+                "customer"
+              ]
+            },
+            "POL-ORD-002:1.0": {
+              "doc_id": "POL-ORD-002",
+              "document_id": "POL-ORD-002",
+              "version": "1.0",
+              "is_verified": true,
+              "verification_error": null,
+              "title": "Order Cancellation Rules and Conditions on Tiki",
+              "category": "orders",
+              "policy_key": null,
+              "content_hash": "b1cf02ac170e19895e5f685fec15a6a8e6ade325a43640fb2d001be551cfd380",
+              "recomputed_content_hash": "b1cf02ac170e19895e5f685fec15a6a8e6ade325a43640fb2d001be551cfd380",
+              "content": "Customers can click 'Cancel Order' directly on the Tiki app if the order is in 'Processing' or 'Awaiting Packing' status and has not yet been handed over to the shipping carrier. Once the order transitions to 'In Transit', the direct cancellation button is disabled; customers should reject the package upon courier contact. For canceled prepaid orders, refunds will be issued automatically according to Tiki refund policies.",
+              "valid_from": "2026-01-01T00:00:00Z",
+              "valid_to": "2026-12-31T23:59:59Z",
+              "status": "approved",
+              "approved_by": "lead_compliance_officer",
+              "approved_at": "2026-01-01T00:00:00Z",
+              "allowed_roles": [
+                "agent",
+                "staff",
+                "manager",
+                "admin",
+                "customer"
+              ]
+            }
+          },
+          "staff_note": "The model score or margin is below the routing threshold. Confirm or correct the intent before drafting.",
+          "raw_model_routing": {
+            "intent": {
+              "label": "return_product",
+              "probability": 0.13192041218280792,
+              "confidence_band": "low",
+              "source": "model",
+              "score_kind": "calibrated_probability",
+              "model_mode": "trained",
+              "verified": true
+            },
+            "routing": {
+              "recommendation": "abstain",
+              "reason_codes": [
+                "low_confidence",
+                "out_of_scope_intent",
+                "requires_authority"
+              ]
+            },
+            "alternatives": [
+              {
+                "label": "return_policy",
+                "probability": 0.11687973141670227,
+                "confidence_band": "low"
+              },
+              {
+                "label": "return_product_online",
+                "probability": 0.0942159965634346,
+                "confidence_band": "low"
+              }
+            ],
+            "warnings": []
+          },
+          "collection_success": true,
+          "action_matches_expected": false,
+          "reasons_match_expected": true,
+          "authority_check_passed": true,
+          "source_verification_passed": true,
+          "is_success": false,
+          "arm": "fit2_f695b1fe",
+          "ticket_owner": "demo-customer",
+          "retrieved_documents": [
+            {
+              "document_id": "POL-RET-002",
+              "version": "2.0",
+              "title": "Return and Exchange Request Process and Steps on Tiki App",
+              "snippet": "Return and Exchange Request Process and Steps on Tiki App\nTo create a return or exchange request, customers navigate to 'Account' > 'Order Management' > select the order with 'Delivered' status > tap 'Request Return/Exchange'. Customers select the reason and upload 3-5 clear photos or a video demonstrating the product defect. Once the request is received by Tiki, shipping couriers will pick up the item directly from the customer's address for free within 1-2 business days, or customers may drop off the package at designated Tiki partner post offices.",
+              "score": 0.9809,
+              "rank": 1,
+              "validity": "valid",
+              "effective_from": "2026-01-01T00:00:00Z",
+              "effective_to": "2026-12-31T23:59:59Z"
+            },
+            {
+              "document_id": "POL-SHIP-004",
+              "version": "1.0",
+              "title": "Handling Delayed, Lost, or Discrepant Delivery Statuses",
+              "snippet": "Handling Delayed, Lost, or Discrepant Delivery Statuses\nIn the event a Tiki order exceeds its estimated delivery date without arrival, or if a courier marks an order as 'Successfully Delivered' when the customer has not received the parcel, the customer must contact Tiki Customer Support within 24-48 hours via hotline 1900 6035. Tiki's dispatch team will verify courier GPS logs, coordinate with the delivery hub, and resolve the complaint. If an order is lost, Tiki will dispatch a replacement or issue a 100% refund.",
+              "score": 0.7866,
+              "rank": 2,
+              "validity": "valid",
+              "effective_from": "2026-01-01T00:00:00Z",
+              "effective_to": "2026-12-31T23:59:59Z"
+            },
+            {
+              "document_id": "POL-ORD-002",
+              "version": "1.0",
+              "title": "Order Cancellation Rules and Conditions on Tiki",
+              "snippet": "Order Cancellation Rules and Conditions on Tiki\nCustomers can click 'Cancel Order' directly on the Tiki app if the order is in 'Processing' or 'Awaiting Packing' status and has not yet been handed over to the shipping carrier. Once the order transitions to 'In Transit', the direct cancellation button is disabled; customers should reject the package upon courier contact. For canceled prepaid orders, refunds will be issued automatically according to Tiki refund policies.",
+              "score": 0.763,
+              "rank": 3,
+              "validity": "valid",
+              "effective_from": "2026-01-01T00:00:00Z",
+              "effective_to": "2026-12-31T23:59:59Z"
+            }
+          ],
+          "routing_recommendation": "abstain",
+          "eligible_for_llm": false
+        },
+        {
+          "phase": "classifier_vs_serving_live",
+          "case_id": "final-case-03",
+          "slice": "product_12_answerable",
+          "category": "product_intent",
+          "fixture_boundary": "active_kb",
+          "component_evidence": "application_postgresql_gateway",
+          "query": "What are the requirements for refund approval and are shipping fees refunded if I return due to personal preference?",
+          "expected_intent": "refund_policy",
+          "expected_action": "draft",
+          "expected_docs": [
+            "POL-REFUND-001:1.0"
+          ],
+          "expected_reasons": [],
+          "order_id": "ORD-1051",
+          "actual_executed_order_context": {
+            "order_status": "delivered",
+            "order_total": {
+              "amount_minor": 890000,
+              "currency": "VND"
+            },
+            "shipping_cost": {
+              "amount_minor": 0,
+              "currency": "VND"
+            },
+            "shipment_status": "delivered",
+            "refund_status": "under_review",
+            "refund_amount": {
+              "amount_minor": 890000,
+              "currency": "VND"
+            }
+          },
+          "actual_executed_as_of": "2026-06-15T10:00:00Z",
+          "ticket_id": "TCK-1002",
+          "suggestion_id": "f667b1fd-79bb-4556-a70c-19555b9a1e74",
+          "intent_source": "model",
+          "predicted_intent": "refund_policy",
+          "intent_confidence": 0.9052128791809082,
+          "intent_score_kind": "calibrated_probability",
+          "correct_intent": true,
+          "submit_to_terminal_latency_ms": 1502.22,
+          "terminal_status": "draft_ready",
+          "analysis_status": "ready",
+          "draft_status": "draft_ready",
+          "failure_code": null,
+          "reason_codes": [],
+          "customer_no_auto_send_observed": true,
+          "customer_reply_is_none": true,
+          "customer_http_status": 200,
+          "response_versions": {
+            "release_id": "local-29dd89bef453380d",
+            "model_version": "fit2-supcon-energy-boundary-v1",
+            "model_mode": "trained",
+            "verified": true,
+            "kb_version": "sha256:e9194b2be7dd08913bda69ddd02ecf3447494d5db3dc3ae7cf24bcc030ebb960",
+            "mapping_version": "embedded:e9194b2be7dd08913bda69ddd02ecf3447494d5db3dc3ae7cf24bcc030ebb960",
+            "prompt_version": "grounded-v3",
+            "engine_version": "sha256:9c18500c9dc25b10fb13d9fe89b8e2858f532ab900ed47d76cb2d174ed5ee16d",
+            "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+            "index_version": "bge-small-en-v1.5:e9194b2be7dd08913bda69ddd02ecf3447494d5db3dc3ae7cf24bcc030ebb960"
+          },
+          "llm_metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.5-flash-lite",
+            "model_version": "gemini-3.5-flash-lite",
+            "prompt_version": "grounded-v3",
+            "attempts": [
+              {
+                "attempt_index": 0,
+                "status": "success",
+                "latency_seconds": 1.313,
+                "stage": "complete",
+                "http_status": 200,
+                "exception_category": null,
+                "usage": {
+                  "promptTokenCount": 1719,
+                  "candidatesTokenCount": 106,
+                  "totalTokenCount": 1825
+                },
+                "metadata": {
+                  "provider": "google_ai_studio",
+                  "model": "gemini-3.5-flash-lite",
+                  "model_version": "gemini-3.5-flash-lite",
+                  "prompt_version": "grounded-v3"
+                }
+              }
+            ]
+          },
+          "reported_llm_model": "gemini-3.5-flash-lite",
+          "reported_llm_model_version": "gemini-3.5-flash-lite",
+          "usage_metadata": {
+            "input_tokens": 1719,
+            "output_tokens": 106,
+            "total_tokens": 1825
+          },
+          "attempts": [
+            {
+              "attempt_index": 0,
+              "status": "success",
+              "latency_seconds": 1.313,
+              "stage": "complete",
+              "http_status": 200,
+              "exception_category": null,
+              "usage": {
+                "promptTokenCount": 1719,
+                "candidatesTokenCount": 106,
+                "totalTokenCount": 1825
+              },
+              "metadata": {
+                "provider": "google_ai_studio",
+                "model": "gemini-3.5-flash-lite",
+                "model_version": "gemini-3.5-flash-lite",
+                "prompt_version": "grounded-v3"
+              }
+            }
+          ],
+          "attempt_count": 1,
+          "step_latencies_ms": {
+            "analysis": 42,
+            "draft": 1379,
+            "llm": 1313
+          },
+          "full_draft_text": "Refund requests are processed once an order has been successfully canceled prior to dispatch, or after the Tiki warehouse receives and inspects the returned product to standard. All refund decisions must undergo reconciliation by authorized customer service personnel, as AI is prohibited from autonomously approving monetary transactions. Additionally, original shipping fees are non-refundable if the return reason is based on personal preference.",
+          "citations": [
+            {
+              "source_type": "document",
+              "document_id": "POL-REFUND-001",
+              "version": "1.0",
+              "content_hash": null,
+              "is_verified": true,
+              "verification_error": null
+            }
+          ],
+          "source_snapshots": {
+            "POL-REFUND-001:1.0": {
+              "doc_id": "POL-REFUND-001",
+              "document_id": "POL-REFUND-001",
+              "version": "1.0",
+              "is_verified": true,
+              "verification_error": null,
+              "title": "Safe Refund Reconciliation Rules and Principles on Tiki",
+              "category": "return_refund",
+              "policy_key": null,
+              "content_hash": "e925c3cbfe7ad12063e1fbd2499b8867f29160a8ad53c5c42155b9d74be0776c",
+              "recomputed_content_hash": "e925c3cbfe7ad12063e1fbd2499b8867f29160a8ad53c5c42155b9d74be0776c",
+              "content": "Refund requests are only processed once an order has been successfully canceled prior to dispatch, or after the Tiki warehouse receives and inspects the returned product to standard. All refund decisions must undergo reconciliation by authorized customer service personnel; AI is prohibited from autonomously approving monetary transactions. Original shipping fees are non-refundable if the return reason is based on personal preference.",
+              "valid_from": "2026-01-01T00:00:00Z",
+              "valid_to": "2026-12-31T23:59:59Z",
+              "status": "approved",
+              "approved_by": "lead_compliance_officer",
+              "approved_at": "2026-01-01T00:00:00Z",
+              "allowed_roles": [
+                "agent",
+                "staff",
+                "manager",
+                "admin",
+                "customer"
+              ]
+            },
+            "POL-ORD-002:1.0": {
+              "doc_id": "POL-ORD-002",
+              "document_id": "POL-ORD-002",
+              "version": "1.0",
+              "is_verified": true,
+              "verification_error": null,
+              "title": "Order Cancellation Rules and Conditions on Tiki",
+              "category": "orders",
+              "policy_key": null,
+              "content_hash": "b1cf02ac170e19895e5f685fec15a6a8e6ade325a43640fb2d001be551cfd380",
+              "recomputed_content_hash": "b1cf02ac170e19895e5f685fec15a6a8e6ade325a43640fb2d001be551cfd380",
+              "content": "Customers can click 'Cancel Order' directly on the Tiki app if the order is in 'Processing' or 'Awaiting Packing' status and has not yet been handed over to the shipping carrier. Once the order transitions to 'In Transit', the direct cancellation button is disabled; customers should reject the package upon courier contact. For canceled prepaid orders, refunds will be issued automatically according to Tiki refund policies.",
+              "valid_from": "2026-01-01T00:00:00Z",
+              "valid_to": "2026-12-31T23:59:59Z",
+              "status": "approved",
+              "approved_by": "lead_compliance_officer",
+              "approved_at": "2026-01-01T00:00:00Z",
+              "allowed_roles": [
+                "agent",
+                "staff",
+                "manager",
+                "admin",
+                "customer"
+              ]
+            },
+            "POL-RET-003:2.0": {
+              "doc_id": "POL-RET-003",
+              "document_id": "POL-RET-003",
+              "version": "2.0",
+              "is_verified": true,
+              "verification_error": null,
+              "title": "Restricted Return Categories and Non-Returnable Change-of-Mind Items on Tiki",
+              "category": "return_refund",
+              "policy_key": null,
+              "content_hash": "94bdfee5529f268548ee30c7537c47403b8a2a6f5fd2622dd2a877c797ee6bc5",
+              "recomputed_content_hash": "94bdfee5529f268548ee30c7537c47403b8a2a6f5fd2622dd2a877c797ee6bc5",
+              "content": "Product categories that do not support returns due to change of mind or personal preference include: Underwear, swimwear, cosmetics and chemicals with unsealed protective packaging, Tiki Ngon fresh groceries, dietary supplements, mobile top-up scratch cards, electronic service vouchers, and clearance outlet items marked as non-returnable. These items are only eligible for return or exchange if Tiki delivered an incorrect item or if there is a verified manufacturer defect.",
+              "valid_from": "2026-01-01T00:00:00Z",
+              "valid_to": "2026-12-31T23:59:59Z",
+              "status": "approved",
+              "approved_by": "lead_compliance_officer",
+              "approved_at": "2026-01-01T00:00:00Z",
+              "allowed_roles": [
+                "agent",
+                "staff",
+                "manager",
+                "admin",
+                "customer"
+              ]
+            }
+          },
+          "staff_note": "Review every claim against its cited source. AI output is supporting information; a person decides what to send.",
+          "raw_model_routing": {
+            "intent": {
+              "label": "refund_policy",
+              "probability": 0.9052128791809082,
+              "confidence_band": "high",
+              "source": "model",
+              "score_kind": "calibrated_probability",
+              "model_mode": "trained",
+              "verified": true
+            },
+            "routing": {
+              "recommendation": "draft",
+              "reason_codes": []
+            },
+            "alternatives": [
+              {
+                "label": "request_refund",
+                "probability": 0.012892456725239754,
+                "confidence_band": "low"
+              },
+              {
+                "label": "refund_status",
+                "probability": 0.006978844292461872,
+                "confidence_band": "low"
+              }
+            ],
+            "warnings": []
+          },
+          "collection_success": true,
+          "action_matches_expected": true,
+          "reasons_match_expected": true,
+          "authority_check_passed": true,
+          "source_verification_passed": true,
+          "is_success": true,
+          "arm": "fit2_f695b1fe",
+          "ticket_owner": "demo-customer",
+          "retrieved_documents": [
+            {
+              "document_id": "POL-REFUND-001",
+              "version": "1.0",
+              "title": "Safe Refund Reconciliation Rules and Principles on Tiki",
+              "snippet": "Safe Refund Reconciliation Rules and Principles on Tiki\nRefund requests are only processed once an order has been successfully canceled prior to dispatch, or after the Tiki warehouse receives and inspects the returned product to standard. All refund decisions must undergo reconciliation by authorized customer service personnel; AI is prohibited from autonomously approving monetary transactions. Original shipping fees are non-refundable if the return reason is based on personal preference.",
+              "score": 0.8955,
+              "rank": 1,
+              "validity": "valid",
+              "effective_from": "2026-01-01T00:00:00Z",
+              "effective_to": "2026-12-31T23:59:59Z"
+            },
+            {
+              "document_id": "POL-ORD-002",
+              "version": "1.0",
+              "title": "Order Cancellation Rules and Conditions on Tiki",
+              "snippet": "Order Cancellation Rules and Conditions on Tiki\nCustomers can click 'Cancel Order' directly on the Tiki app if the order is in 'Processing' or 'Awaiting Packing' status and has not yet been handed over to the shipping carrier. Once the order transitions to 'In Transit', the direct cancellation button is disabled; customers should reject the package upon courier contact. For canceled prepaid orders, refunds will be issued automatically according to Tiki refund policies.",
+              "score": 0.6656,
+              "rank": 2,
+              "validity": "valid",
+              "effective_from": "2026-01-01T00:00:00Z",
+              "effective_to": "2026-12-31T23:59:59Z"
+            },
+            {
+              "document_id": "POL-RET-003",
+              "version": "2.0",
+              "title": "Restricted Return Categories and Non-Returnable Change-of-Mind Items on Tiki",
+              "snippet": "Restricted Return Categories and Non-Returnable Change-of-Mind Items on Tiki\nProduct categories that do not support returns due to change of mind or personal preference include: Underwear, swimwear, cosmetics and chemicals with unsealed protective packaging, Tiki Ngon fresh groceries, dietary supplements, mobile top-up scratch cards, electronic service vouchers, and clearance outlet items marked as non-returnable. These items are only eligible for return or exchange if Tiki delivered an incorrect item or if there is a verified manufacturer defect.",
+              "score": 0.6502,
+              "rank": 3,
+              "validity": "valid",
+              "effective_from": "2026-01-01T00:00:00Z",
+              "effective_to": "2026-12-31T23:59:59Z"
+            }
+          ],
+          "routing_recommendation": "draft",
+          "eligible_for_llm": true
+        },
+        {
+          "phase": "classifier_vs_serving_live",
+          "case_id": "final-case-10",
+          "slice": "product_12_answerable",
+          "category": "product_intent",
+          "fixture_boundary": "active_kb",
+          "component_evidence": "application_postgresql_gateway",
+          "query": "The app shows my order was delivered but I never received the package from the courier.",
+          "expected_intent": "delivery_issue",
+          "expected_action": "draft",
+          "expected_docs": [
+            "POL-SHIP-004:1.0"
+          ],
+          "expected_reasons": [],
+          "order_id": "ORD-1005",
+          "actual_executed_order_context": {
+            "order_status": "shipped",
+            "order_total": {
+              "amount_minor": 1802000,
+              "currency": "VND"
+            },
+            "shipping_cost": {
+              "amount_minor": 22000,
+              "currency": "VND"
+            },
+            "shipment_status": "delayed"
+          },
+          "actual_executed_as_of": "2026-06-15T10:00:00Z",
+          "ticket_id": "TCK-1003",
+          "suggestion_id": "2d03d842-b504-41e1-bacd-9f5f3004fd4b",
+          "intent_source": "model",
+          "predicted_intent": "delivery_issue",
+          "intent_confidence": 0.8911102414131165,
+          "intent_score_kind": "calibrated_probability",
+          "correct_intent": true,
+          "submit_to_terminal_latency_ms": 1997.29,
+          "terminal_status": "draft_ready",
+          "analysis_status": "ready",
+          "draft_status": "draft_ready",
+          "failure_code": null,
+          "reason_codes": [],
+          "customer_no_auto_send_observed": true,
+          "customer_reply_is_none": true,
+          "customer_http_status": 200,
+          "response_versions": {
+            "release_id": "local-29dd89bef453380d",
+            "model_version": "fit2-supcon-energy-boundary-v1",
+            "model_mode": "trained",
+            "verified": true,
+            "kb_version": "sha256:e9194b2be7dd08913bda69ddd02ecf3447494d5db3dc3ae7cf24bcc030ebb960",
+            "mapping_version": "embedded:e9194b2be7dd08913bda69ddd02ecf3447494d5db3dc3ae7cf24bcc030ebb960",
+            "prompt_version": "grounded-v3",
+            "engine_version": "sha256:9c18500c9dc25b10fb13d9fe89b8e2858f532ab900ed47d76cb2d174ed5ee16d",
+            "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+            "index_version": "bge-small-en-v1.5:e9194b2be7dd08913bda69ddd02ecf3447494d5db3dc3ae7cf24bcc030ebb960"
+          },
+          "llm_metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.5-flash-lite",
+            "model_version": "gemini-3.5-flash-lite",
+            "prompt_version": "grounded-v3",
+            "attempts": [
+              {
+                "attempt_index": 0,
+                "status": "success",
+                "latency_seconds": 1.7479,
+                "stage": "complete",
+                "http_status": 200,
+                "exception_category": null,
+                "usage": {
+                  "promptTokenCount": 1743,
+                  "candidatesTokenCount": 142,
+                  "totalTokenCount": 1885
+                },
+                "metadata": {
+                  "provider": "google_ai_studio",
+                  "model": "gemini-3.5-flash-lite",
+                  "model_version": "gemini-3.5-flash-lite",
+                  "prompt_version": "grounded-v3"
+                }
+              }
+            ]
+          },
+          "reported_llm_model": "gemini-3.5-flash-lite",
+          "reported_llm_model_version": "gemini-3.5-flash-lite",
+          "usage_metadata": {
+            "input_tokens": 1743,
+            "output_tokens": 142,
+            "total_tokens": 1885
+          },
+          "attempts": [
+            {
+              "attempt_index": 0,
+              "status": "success",
+              "latency_seconds": 1.7479,
+              "stage": "complete",
+              "http_status": 200,
+              "exception_category": null,
+              "usage": {
+                "promptTokenCount": 1743,
+                "candidatesTokenCount": 142,
+                "totalTokenCount": 1885
+              },
+              "metadata": {
+                "provider": "google_ai_studio",
+                "model": "gemini-3.5-flash-lite",
+                "model_version": "gemini-3.5-flash-lite",
+                "prompt_version": "grounded-v3"
+              }
+            }
+          ],
+          "attempt_count": 1,
+          "step_latencies_ms": {
+            "analysis": 49,
+            "draft": 1819,
+            "llm": 1748
+          },
+          "full_draft_text": "If a courier marks an order as 'Successfully Delivered' when you have not received the parcel, you must contact Tiki Customer Support within 24-48 hours via hotline 1900 6035. Tiki's dispatch team will then verify courier GPS logs, coordinate with the delivery hub, and resolve your complaint. If an order is confirmed lost, Tiki will dispatch a replacement or issue a 100% refund.",
+          "citations": [
+            {
+              "source_type": "document",
+              "document_id": "POL-SHIP-004",
+              "version": "1.0",
+              "content_hash": null,
+              "is_verified": true,
+              "verification_error": null
+            }
+          ],
+          "source_snapshots": {
+            "POL-SHIP-004:1.0": {
+              "doc_id": "POL-SHIP-004",
+              "document_id": "POL-SHIP-004",
+              "version": "1.0",
+              "is_verified": true,
+              "verification_error": null,
+              "title": "Handling Delayed, Lost, or Discrepant Delivery Statuses",
+              "category": "shipping_delivery",
+              "policy_key": null,
+              "content_hash": "ea5d0d68a1c2e927cfc5aba386bacbc3a3e2ed14cfa9cf132fd46bfff0370bbe",
+              "recomputed_content_hash": "ea5d0d68a1c2e927cfc5aba386bacbc3a3e2ed14cfa9cf132fd46bfff0370bbe",
+              "content": "In the event a Tiki order exceeds its estimated delivery date without arrival, or if a courier marks an order as 'Successfully Delivered' when the customer has not received the parcel, the customer must contact Tiki Customer Support within 24-48 hours via hotline 1900 6035. Tiki's dispatch team will verify courier GPS logs, coordinate with the delivery hub, and resolve the complaint. If an order is lost, Tiki will dispatch a replacement or issue a 100% refund.",
+              "valid_from": "2026-01-01T00:00:00Z",
+              "valid_to": "2026-12-31T23:59:59Z",
+              "status": "approved",
+              "approved_by": "lead_compliance_officer",
+              "approved_at": "2026-01-01T00:00:00Z",
+              "allowed_roles": [
+                "agent",
+                "staff",
+                "manager",
+                "admin",
+                "customer"
+              ]
+            },
+            "POL-ORD-001:1.0": {
+              "doc_id": "POL-ORD-001",
+              "document_id": "POL-ORD-001",
+              "version": "1.0",
+              "is_verified": true,
+              "verification_error": null,
+              "title": "Instructions for Tracking Order Journey and Status on Tiki",
+              "category": "orders",
+              "policy_key": null,
+              "content_hash": "cfecb27c7546ff35f2b47b0803b86fea6cd8d866c96096733cb412e9aae2c679",
+              "recomputed_content_hash": "cfecb27c7546ff35f2b47b0803b86fea6cd8d866c96096733cb412e9aae2c679",
+              "content": "Customers can check order status by navigating to 'My Orders' on the Tiki app. Order statuses include: 'Pending Confirmation' (seller preparing), 'Pick Up in Progress' (packed, awaiting courier), 'In Transit' (courier delivering, real-time tracking code provided), 'Delivered' (completed), and 'Canceled'. Customers tap the tracking code to view details of each transit hub the parcel has passed through.",
+              "valid_from": "2026-01-01T00:00:00Z",
+              "valid_to": "2026-12-31T23:59:59Z",
+              "status": "approved",
+              "approved_by": "lead_compliance_officer",
+              "approved_at": "2026-01-01T00:00:00Z",
+              "allowed_roles": [
+                "agent",
+                "staff",
+                "manager",
+                "admin",
+                "customer"
+              ]
+            },
+            "POL-ORD-003:1.0": {
+              "doc_id": "POL-ORD-003",
+              "document_id": "POL-ORD-003",
+              "version": "1.0",
+              "is_verified": true,
+              "verification_error": null,
+              "title": "Instructions for Changing Delivery Address or Phone Number After Placing Order",
+              "category": "orders",
+              "policy_key": null,
+              "content_hash": "96a3d87bc7a88dd4f52f2a46cabf1e1e177bb86ae8385c0e2db6378e36c885db",
+              "recomputed_content_hash": "96a3d87bc7a88dd4f52f2a46cabf1e1e177bb86ae8385c0e2db6378e36c885db",
+              "content": "Customers may change the delivery address or phone number only once per order, provided the order remains in 'Pending Processing' status. When an order advances to 'Preparing Items' or 'Handed Over to Courier', modification features are locked to prevent parcel misrouting. Customers should contact the courier upon phone contact to arrange delivery at a nearby location.",
+              "valid_from": "2026-01-01T00:00:00Z",
+              "valid_to": "2026-12-31T23:59:59Z",
+              "status": "approved",
+              "approved_by": "lead_compliance_officer",
+              "approved_at": "2026-01-01T00:00:00Z",
+              "allowed_roles": [
+                "agent",
+                "staff",
+                "manager",
+                "admin",
+                "customer"
+              ]
+            }
+          },
+          "staff_note": "Review every claim against its cited source. AI output is supporting information; a person decides what to send.",
+          "raw_model_routing": {
+            "intent": {
+              "label": "delivery_issue",
+              "probability": 0.8911102414131165,
+              "confidence_band": "medium",
+              "source": "model",
+              "score_kind": "calibrated_probability",
+              "model_mode": "trained",
+              "verified": true
+            },
+            "routing": {
+              "recommendation": "draft",
+              "reason_codes": []
+            },
+            "alternatives": [
+              {
+                "label": "missing_item",
+                "probability": 0.03887774422764778,
+                "confidence_band": "low"
+              },
+              {
+                "label": "track_order",
+                "probability": 0.026680009439587593,
+                "confidence_band": "low"
+              }
+            ],
+            "warnings": []
+          },
+          "collection_success": true,
+          "action_matches_expected": true,
+          "reasons_match_expected": true,
+          "authority_check_passed": true,
+          "source_verification_passed": true,
+          "is_success": true,
+          "arm": "fit2_f695b1fe",
+          "ticket_owner": "demo-customer",
+          "retrieved_documents": [
+            {
+              "document_id": "POL-SHIP-004",
+              "version": "1.0",
+              "title": "Handling Delayed, Lost, or Discrepant Delivery Statuses",
+              "snippet": "Handling Delayed, Lost, or Discrepant Delivery Statuses\nIn the event a Tiki order exceeds its estimated delivery date without arrival, or if a courier marks an order as 'Successfully Delivered' when the customer has not received the parcel, the customer must contact Tiki Customer Support within 24-48 hours via hotline 1900 6035. Tiki's dispatch team will verify courier GPS logs, coordinate with the delivery hub, and resolve the complaint. If an order is lost, Tiki will dispatch a replacement or issue a 100% refund.",
+              "score": 0.8283,
+              "rank": 1,
+              "validity": "valid",
+              "effective_from": "2026-01-01T00:00:00Z",
+              "effective_to": "2026-12-31T23:59:59Z"
+            },
+            {
+              "document_id": "POL-ORD-001",
+              "version": "1.0",
+              "title": "Instructions for Tracking Order Journey and Status on Tiki",
+              "snippet": "Instructions for Tracking Order Journey and Status on Tiki\nCustomers can check order status by navigating to 'My Orders' on the Tiki app. Order statuses include: 'Pending Confirmation' (seller preparing), 'Pick Up in Progress' (packed, awaiting courier), 'In Transit' (courier delivering, real-time tracking code provided), 'Delivered' (completed), and 'Canceled'. Customers tap the tracking code to view details of each transit hub the parcel has passed through.",
+              "score": 0.6589,
+              "rank": 2,
+              "validity": "valid",
+              "effective_from": "2026-01-01T00:00:00Z",
+              "effective_to": "2026-12-31T23:59:59Z"
+            },
+            {
+              "document_id": "POL-ORD-003",
+              "version": "1.0",
+              "title": "Instructions for Changing Delivery Address or Phone Number After Placing Order",
+              "snippet": "Instructions for Changing Delivery Address or Phone Number After Placing Order\nCustomers may change the delivery address or phone number only once per order, provided the order remains in 'Pending Processing' status. When an order advances to 'Preparing Items' or 'Handed Over to Courier', modification features are locked to prevent parcel misrouting. Customers should contact the courier upon phone contact to arrange delivery at a nearby location.",
+              "score": 0.6297,
+              "rank": 3,
+              "validity": "valid",
+              "effective_from": "2026-01-01T00:00:00Z",
+              "effective_to": "2026-12-31T23:59:59Z"
+            }
+          ],
+          "routing_recommendation": "draft",
+          "eligible_for_llm": true
+        }
+      ]
+    }
+  }
+}

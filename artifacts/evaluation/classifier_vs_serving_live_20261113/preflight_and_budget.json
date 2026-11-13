@@ -1,0 +1,64 @@
+{
+  "generated_at": "2026-11-13T13:05:08.979214+00:00",
+  "configured_provider": {
+    "provider": "google_ai_studio",
+    "model": "gemini-3.5-flash-lite",
+    "env_gemini_model_value": "gemini-3.5-flash-lite",
+    "api_key_loaded_in_memory": true,
+    "configured_timeout_env": "15"
+  },
+  "budget_contract": {
+    "previous_global_used": 18,
+    "global_authorized_total": 24,
+    "remaining_global_cap": 6,
+    "requested_max_requests": 6,
+    "hidden_retries_disabled": true,
+    "budgeted_draft_client_max_attempts": 1,
+    "transport_retries": 0,
+    "allowed_egress_host": "generativelanguage.googleapis.com"
+  },
+  "target_cases": [
+    {
+      "case_id": "final-case-02",
+      "expected_intent": "return_product",
+      "expected_action": "draft",
+      "order_id": "ORD-1091",
+      "as_of": "2026-06-15T10:00:00Z"
+    },
+    {
+      "case_id": "final-case-03",
+      "expected_intent": "refund_policy",
+      "expected_action": "draft",
+      "order_id": "ORD-1051",
+      "as_of": "2026-06-15T10:00:00Z"
+    },
+    {
+      "case_id": "final-case-10",
+      "expected_intent": "delivery_issue",
+      "expected_action": "draft",
+      "order_id": "ORD-1005",
+      "as_of": "2026-06-15T10:00:00Z"
+    }
+  ],
+  "serving_model": {
+    "model_dir": "F:\\Năm 3\\SD\\project\\SupportIQ\\artifacts\\models\\trained\\distilbert-supportiq",
+    "model_version": "v1.0.0",
+    "weights_sha256": "dc7af8cffb19fe7711ed5a5d0137ffff3d7d1a1f43bad5a35edff8c8de4c1302",
+    "tokenizer_sha256": "5f218e0ea9eaa9f154815cc067351fb941bea26da81bfd12af3ded3cc66fa3ff",
+    "config_sha256": "6fa1fa9cc6a94063a977b0adaf2c9c3b296cf296d4ad9dcc6f2c52ca3bac9cb2",
+    "matches_pinned_expected_manifest": true
+  },
+  "candidate_fit2_model": {
+    "model_dir": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-routing\\artifacts\\evaluation\\task_a_boundary_20261113\\candidate_model_fit2",
+    "model_version": "fit2-supcon-energy-boundary-v1",
+    "weights_sha256": "f695b1fe514aba81aafc968823047d496b03474a0b47199c65eaac6bd93c6dfa",
+    "tokenizer_sha256": "41b9d12a4c559e4098f30173bc0f76d092c43d7b1f873e7027da45a256f30f87",
+    "config_sha256": "6fa1fa9cc6a94063a977b0adaf2c9c3b296cf296d4ad9dcc6f2c52ca3bac9cb2",
+    "calibration_manifest_sha256": "782c88db3fcd80615c3dceabbdb96ea2be7aa769119201f94229535becc7ae39",
+    "matches_manifest_weights": true
+  },
+  "postgres_connectivity": {
+    "connected": true,
+    "server_version_prefix": "PostgreSQL 18.6 on x86_64-windows, compiled by msvc-19.44.35"
+  }
+}

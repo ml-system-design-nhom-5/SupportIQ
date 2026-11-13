@@ -1,0 +1,3064 @@
+{
+  "probes": {
+    "oos-other_domain-16": {
+      "suite": "ml_oos",
+      "true_intent": "other_domain",
+      "text": "My phone carrier charged me for roaming.",
+      "orig_f695": {
+        "metrics": {
+          "pred": "delivery_issue",
+          "conf": 0.49723,
+          "margin": 0.457388,
+          "max_logit": 3.0783,
+          "energy": -3.777,
+          "entropy_46": 2.45,
+          "norm_entropy_top5": 0.5118,
+          "top5": [
+            {
+              "intent": "delivery_issue",
+              "prob": 0.49723
+            },
+            {
+              "intent": "recover_password",
+              "prob": 0.03984
+            },
+            {
+              "intent": "damaged_delivery",
+              "prob": 0.03505
+            },
+            {
+              "intent": "customer_service",
+              "prob": 0.0318
+            },
+            {
+              "intent": "payment_issue",
+              "prob": 0.03135
+            }
+          ]
+        },
+        "bare": {
+          "action": "clarify",
+          "reasons": [
+            "low_confidence"
+          ]
+        },
+        "engine": {
+          "action": "manual_fallback",
+          "reasons": [
+            "low_confidence"
+          ]
+        },
+        "runner": {
+          "action": "clarify",
+          "reasons": [
+            "low_confidence"
+          ]
+        }
+      },
+      "v3_c2e4": {
+        "metrics": {
+          "pred": "delivery_issue",
+          "conf": 0.759266,
+          "margin": 0.733125,
+          "max_logit": 4.1344,
+          "energy": -4.4098,
+          "entropy_46": 1.3798,
+          "norm_entropy_top5": 0.2713,
+          "top5": [
+            {
+              "intent": "delivery_issue",
+              "prob": 0.75927
+            },
+            {
+              "intent": "damaged_delivery",
+              "prob": 0.02614
+            },
+            {
+              "intent": "recover_password",
+              "prob": 0.0218
+            },
+            {
+              "intent": "track_delivery",
+              "prob": 0.01796
+            },
+            {
+              "intent": "payment_issue",
+              "prob": 0.01235
+            }
+          ]
+        },
+        "bare": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "engine": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "runner": {
+          "action": "retrieve_draft",
+          "reasons": []
+        }
+      }
+    },
+    "uns-track_delivery-01": {
+      "suite": "system_acceptance",
+      "true_intent": "track_delivery",
+      "text": "Can you check the delivery vehicle live GPS tracking?",
+      "orig_f695": {
+        "metrics": {
+          "pred": "track_order",
+          "conf": 0.152683,
+          "margin": 0.051282,
+          "max_logit": 1.4841,
+          "energy": -3.3635,
+          "entropy_46": 3.3073,
+          "norm_entropy_top5": 0.9434,
+          "top5": [
+            {
+              "intent": "track_order",
+              "prob": 0.15268
+            },
+            {
+              "intent": "availability_online",
+              "prob": 0.1014
+            },
+            {
+              "intent": "use_app",
+              "prob": 0.06582
+            },
+            {
+              "intent": "product_information",
+              "prob": 0.05777
+            },
+            {
+              "intent": "shipping_costs",
+              "prob": 0.05003
+            }
+          ]
+        },
+        "bare": {
+          "action": "clarify",
+          "reasons": [
+            "low_confidence",
+            "low_margin"
+          ]
+        },
+        "engine": {
+          "action": "manual_fallback",
+          "reasons": [
+            "low_confidence",
+            "out_of_scope_intent"
+          ]
+        },
+        "runner": {
+          "action": "clarify",
+          "reasons": [
+            "low_confidence",
+            "low_margin"
+          ]
+        }
+      },
+      "v3_c2e4": {
+        "metrics": {
+          "pred": "track_order",
+          "conf": 0.676838,
+          "margin": 0.477298,
+          "max_logit": 4.3688,
+          "energy": -4.7591,
+          "entropy_46": 1.2756,
+          "norm_entropy_top5": 0.4337,
+          "top5": [
+            {
+              "intent": "track_order",
+              "prob": 0.67684
+            },
+            {
+              "intent": "track_delivery",
+              "prob": 0.19954
+            },
+            {
+              "intent": "delivery_issue",
+              "prob": 0.01745
+            },
+            {
+              "intent": "delivery_time",
+              "prob": 0.00706
+            },
+            {
+              "intent": "shipping_costs",
+              "prob": 0.0059
+            }
+          ]
+        },
+        "bare": {
+          "action": "clarify",
+          "reasons": [
+            "missing_order_id"
+          ]
+        },
+        "engine": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "runner": {
+          "action": "clarify",
+          "reasons": [
+            "missing_order_id"
+          ]
+        }
+      }
+    },
+    "uns-order_history-01": {
+      "suite": "system_acceptance",
+      "true_intent": "order_history",
+      "text": "Where can I view the complete list of all my past orders from last year?",
+      "orig_f695": {
+        "metrics": {
+          "pred": "track_order",
+          "conf": 0.663858,
+          "margin": 0.544156,
+          "max_logit": 4.043,
+          "energy": -4.4527,
+          "entropy_46": 1.625,
+          "norm_entropy_top5": 0.4228,
+          "top5": [
+            {
+              "intent": "track_order",
+              "prob": 0.66386
+            },
+            {
+              "intent": "order_history",
+              "prob": 0.1197
+            },
+            {
+              "intent": "availability_online",
+              "prob": 0.0166
+            },
+            {
+              "intent": "refund_status",
+              "prob": 0.01501
+            },
+            {
+              "intent": "change_order",
+              "prob": 0.0148
+            }
+          ]
+        },
+        "bare": {
+          "action": "clarify",
+          "reasons": [
+            "missing_order_id"
+          ]
+        },
+        "engine": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "runner": {
+          "action": "clarify",
+          "reasons": [
+            "missing_order_id"
+          ]
+        }
+      },
+      "v3_c2e4": {
+        "metrics": {
+          "pred": "order_history",
+          "conf": 0.978454,
+          "margin": 0.97625,
+          "max_logit": 6.6462,
+          "energy": -6.668,
+          "entropy_46": 0.1832,
+          "norm_entropy_top5": 0.0218,
+          "top5": [
+            {
+              "intent": "order_history",
+              "prob": 0.97845
+            },
+            {
+              "intent": "track_order",
+              "prob": 0.0022
+            },
+            {
+              "intent": "sales_period",
+              "prob": 0.00081
+            },
+            {
+              "intent": "return_product_in_store",
+              "prob": 0.00077
+            },
+            {
+              "intent": "request_right_to_rectification",
+              "prob": 0.00073
+            }
+          ]
+        },
+        "bare": {
+          "action": "escalate",
+          "reasons": [
+            "recognized_outside_product_scope"
+          ]
+        },
+        "engine": {
+          "action": "escalate",
+          "reasons": [
+            "out_of_scope_intent"
+          ]
+        },
+        "runner": {
+          "action": "escalate",
+          "reasons": [
+            "recognized_outside_product_scope"
+          ]
+        }
+      }
+    },
+    "uns-return_product_in_store-01": {
+      "suite": "system_acceptance",
+      "true_intent": "return_product_in_store",
+      "text": "Can I drop off my online return at a local physical shop branch?",
+      "orig_f695": {
+        "metrics": {
+          "pred": "return_policy",
+          "conf": 0.682784,
+          "margin": 0.593861,
+          "max_logit": 3.8476,
+          "energy": -4.2291,
+          "entropy_46": 1.5854,
+          "norm_entropy_top5": 0.4335,
+          "top5": [
+            {
+              "intent": "return_policy",
+              "prob": 0.68278
+            },
+            {
+              "intent": "track_order",
+              "prob": 0.08892
+            },
+            {
+              "intent": "return_product",
+              "prob": 0.04122
+            },
+            {
+              "intent": "return_product_in_store",
+              "prob": 0.01832
+            },
+            {
+              "intent": "recover_password",
+              "prob": 0.0116
+            }
+          ]
+        },
+        "bare": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "engine": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "runner": {
+          "action": "retrieve_draft",
+          "reasons": []
+        }
+      },
+      "v3_c2e4": {
+        "metrics": {
+          "pred": "return_product_in_store",
+          "conf": 0.963542,
+          "margin": 0.96055,
+          "max_logit": 6.1231,
+          "energy": -6.1603,
+          "entropy_46": 0.2909,
+          "norm_entropy_top5": 0.0348,
+          "top5": [
+            {
+              "intent": "return_product_in_store",
+              "prob": 0.96354
+            },
+            {
+              "intent": "order_history",
+              "prob": 0.00299
+            },
+            {
+              "intent": "return_product_online",
+              "prob": 0.00166
+            },
+            {
+              "intent": "close_account",
+              "prob": 0.0016
+            },
+            {
+              "intent": "missing_item",
+              "prob": 0.0013
+            }
+          ]
+        },
+        "bare": {
+          "action": "escalate",
+          "reasons": [
+            "recognized_outside_product_scope"
+          ]
+        },
+        "engine": {
+          "action": "escalate",
+          "reasons": [
+            "out_of_scope_intent"
+          ]
+        },
+        "runner": {
+          "action": "escalate",
+          "reasons": [
+            "recognized_outside_product_scope"
+          ]
+        }
+      }
+    },
+    "contrast_auth_pos_eval_136": {
+      "suite": "v3_eval_pos",
+      "true_intent": "return_product_in_store",
+      "text": "Is returning an item at a brick-and-mortar branch allowed?",
+      "orig_f695": {
+        "metrics": {
+          "pred": "return_policy",
+          "conf": 0.978602,
+          "margin": 0.977082,
+          "max_logit": 6.4358,
+          "energy": -6.4574,
+          "entropy_46": 0.1815,
+          "norm_entropy_top5": 0.0221,
+          "top5": [
+            {
+              "intent": "return_policy",
+              "prob": 0.9786
+            },
+            {
+              "intent": "return_product",
+              "prob": 0.00152
+            },
+            {
+              "intent": "product_issue",
+              "prob": 0.00101
+            },
+            {
+              "intent": "availability",
+              "prob": 0.00101
+            },
+            {
+              "intent": "return_product_in_store",
+              "prob": 0.00098
+            }
+          ]
+        },
+        "bare": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "engine": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "runner": {
+          "action": "retrieve_draft",
+          "reasons": []
+        }
+      },
+      "v3_c2e4": {
+        "metrics": {
+          "pred": "return_policy",
+          "conf": 0.96989,
+          "margin": 0.962929,
+          "max_logit": 6.2094,
+          "energy": -6.2399,
+          "entropy_46": 0.2366,
+          "norm_entropy_top5": 0.0429,
+          "top5": [
+            {
+              "intent": "return_policy",
+              "prob": 0.96989
+            },
+            {
+              "intent": "return_product_in_store",
+              "prob": 0.00696
+            },
+            {
+              "intent": "product_issue",
+              "prob": 0.00137
+            },
+            {
+              "intent": "return_product",
+              "prob": 0.00115
+            },
+            {
+              "intent": "missing_item",
+              "prob": 0.00089
+            }
+          ]
+        },
+        "bare": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "engine": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "runner": {
+          "action": "retrieve_draft",
+          "reasons": []
+        }
+      }
+    },
+    "final-case-01": {
+      "suite": "final_acceptance_ans12",
+      "true_intent": "return_policy",
+      "text": "What is the return window for products directly distributed by Tiki Trading compared to marketplace partner sellers?",
+      "orig_f695": {
+        "metrics": {
+          "pred": "return_policy",
+          "conf": 0.921332,
+          "margin": 0.915195,
+          "max_logit": 5.3695,
+          "energy": -5.4514,
+          "entropy_46": 0.561,
+          "norm_entropy_top5": 0.0754,
+          "top5": [
+            {
+              "intent": "return_policy",
+              "prob": 0.92133
+            },
+            {
+              "intent": "refund_policy",
+              "prob": 0.00614
+            },
+            {
+              "intent": "shipping_costs",
+              "prob": 0.00439
+            },
+            {
+              "intent": "delivery_time",
+              "prob": 0.00399
+            },
+            {
+              "intent": "sales_period",
+              "prob": 0.00357
+            }
+          ]
+        },
+        "bare": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "engine": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "runner": {
+          "action": "retrieve_draft",
+          "reasons": []
+        }
+      },
+      "v3_c2e4": {
+        "metrics": {
+          "pred": "return_policy",
+          "conf": 0.940293,
+          "margin": 0.935563,
+          "max_logit": 5.59,
+          "energy": -5.6515,
+          "entropy_46": 0.4449,
+          "norm_entropy_top5": 0.0534,
+          "top5": [
+            {
+              "intent": "return_policy",
+              "prob": 0.94029
+            },
+            {
+              "intent": "refund_policy",
+              "prob": 0.00473
+            },
+            {
+              "intent": "shipping_costs",
+              "prob": 0.00274
+            },
+            {
+              "intent": "return_product_in_store",
+              "prob": 0.00244
+            },
+            {
+              "intent": "availability",
+              "prob": 0.00232
+            }
+          ]
+        },
+        "bare": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "engine": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "runner": {
+          "action": "retrieve_draft",
+          "reasons": []
+        }
+      }
+    },
+    "final-case-02": {
+      "suite": "final_acceptance_ans12",
+      "true_intent": "return_product",
+      "text": "How do I submit a return request on the Tiki app and schedule the free courier pickup?",
+      "orig_f695": {
+        "metrics": {
+          "pred": "return_product",
+          "conf": 0.13192,
+          "margin": 0.015041,
+          "max_logit": 1.5537,
+          "energy": -3.5792,
+          "entropy_46": 3.4371,
+          "norm_entropy_top5": 0.9172,
+          "top5": [
+            {
+              "intent": "return_product",
+              "prob": 0.13192
+            },
+            {
+              "intent": "return_policy",
+              "prob": 0.11688
+            },
+            {
+              "intent": "return_product_online",
+              "prob": 0.09422
+            },
+            {
+              "intent": "shipping_costs",
+              "prob": 0.03944
+            },
+            {
+              "intent": "exchange_product",
+              "prob": 0.03071
+            }
+          ]
+        },
+        "bare": {
+          "action": "clarify",
+          "reasons": [
+            "low_confidence",
+            "low_margin"
+          ]
+        },
+        "engine": {
+          "action": "manual_fallback",
+          "reasons": [
+            "low_confidence",
+            "out_of_scope_intent",
+            "requires_authority"
+          ]
+        },
+        "runner": {
+          "action": "clarify",
+          "reasons": [
+            "low_confidence",
+            "low_margin"
+          ]
+        }
+      },
+      "v3_c2e4": {
+        "metrics": {
+          "pred": "return_product_online",
+          "conf": 0.026405,
+          "margin": 0.001058,
+          "max_logit": 0.1395,
+          "energy": -3.7737,
+          "entropy_46": 3.8234,
+          "norm_entropy_top5": 0.9995,
+          "top5": [
+            {
+              "intent": "return_product_online",
+              "prob": 0.02641
+            },
+            {
+              "intent": "exchange_product",
+              "prob": 0.02535
+            },
+            {
+              "intent": "request_invoice",
+              "prob": 0.02455
+            },
+            {
+              "intent": "change_order",
+              "prob": 0.02404
+            },
+            {
+              "intent": "wrong_item",
+              "prob": 0.02361
+            }
+          ]
+        },
+        "bare": {
+          "action": "escalate",
+          "reasons": [
+            "recognized_outside_product_scope"
+          ]
+        },
+        "engine": {
+          "action": "escalate",
+          "reasons": [
+            "low_confidence",
+            "out_of_scope_intent"
+          ]
+        },
+        "runner": {
+          "action": "escalate",
+          "reasons": [
+            "recognized_outside_product_scope"
+          ]
+        }
+      }
+    },
+    "final-case-03": {
+      "suite": "final_acceptance_ans12",
+      "true_intent": "refund_policy",
+      "text": "What are the requirements for refund approval and are shipping fees refunded if I return due to personal preference?",
+      "orig_f695": {
+        "metrics": {
+          "pred": "refund_policy",
+          "conf": 0.905213,
+          "margin": 0.89232,
+          "max_logit": 5.219,
+          "energy": -5.3186,
+          "entropy_46": 0.6508,
+          "norm_entropy_top5": 0.1065,
+          "top5": [
+            {
+              "intent": "refund_policy",
+              "prob": 0.90521
+            },
+            {
+              "intent": "request_refund",
+              "prob": 0.01289
+            },
+            {
+              "intent": "refund_status",
+              "prob": 0.00698
+            },
+            {
+              "intent": "shipping_costs",
+              "prob": 0.00549
+            },
+            {
+              "intent": "wrong_item",
+              "prob": 0.00252
+            }
+          ]
+        },
+        "bare": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "engine": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "runner": {
+          "action": "retrieve_draft",
+          "reasons": []
+        }
+      },
+      "v3_c2e4": {
+        "metrics": {
+          "pred": "refund_policy",
+          "conf": 0.867481,
+          "margin": 0.858523,
+          "max_logit": 4.8592,
+          "energy": -5.0013,
+          "entropy_46": 0.8835,
+          "norm_entropy_top5": 0.107,
+          "top5": [
+            {
+              "intent": "refund_policy",
+              "prob": 0.86748
+            },
+            {
+              "intent": "request_refund",
+              "prob": 0.00896
+            },
+            {
+              "intent": "shipping_costs",
+              "prob": 0.00704
+            },
+            {
+              "intent": "refund_status",
+              "prob": 0.00611
+            },
+            {
+              "intent": "exchange_product",
+              "prob": 0.00416
+            }
+          ]
+        },
+        "bare": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "engine": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "runner": {
+          "action": "retrieve_draft",
+          "reasons": []
+        }
+      }
+    },
+    "final-case-04": {
+      "suite": "final_acceptance_ans12",
+      "true_intent": "request_refund",
+      "text": "How many business days does it take to receive a refund back to my linked e-wallet or bank card?",
+      "orig_f695": {
+        "metrics": {
+          "pred": "request_refund",
+          "conf": 0.918566,
+          "margin": 0.887674,
+          "max_logit": 5.5759,
+          "energy": -5.6608,
+          "entropy_46": 0.5135,
+          "norm_entropy_top5": 0.1373,
+          "top5": [
+            {
+              "intent": "request_refund",
+              "prob": 0.91857
+            },
+            {
+              "intent": "refund_policy",
+              "prob": 0.03089
+            },
+            {
+              "intent": "refund_status",
+              "prob": 0.009
+            },
+            {
+              "intent": "delivery_time",
+              "prob": 0.00178
+            },
+            {
+              "intent": "wrong_item",
+              "prob": 0.00168
+            }
+          ]
+        },
+        "bare": {
+          "action": "retrieve_draft",
+          "reasons": [
+            "requires_authority"
+          ]
+        },
+        "engine": {
+          "action": "retrieve_draft",
+          "reasons": [
+            "requires_authority"
+          ]
+        },
+        "runner": {
+          "action": "retrieve_draft",
+          "reasons": [
+            "requires_authority"
+          ]
+        }
+      },
+      "v3_c2e4": {
+        "metrics": {
+          "pred": "request_refund",
+          "conf": 0.851967,
+          "margin": 0.782378,
+          "max_logit": 5.0345,
+          "energy": -5.1947,
+          "entropy_46": 0.7967,
+          "norm_entropy_top5": 0.2361,
+          "top5": [
+            {
+              "intent": "request_refund",
+              "prob": 0.85197
+            },
+            {
+              "intent": "refund_policy",
+              "prob": 0.06959
+            },
+            {
+              "intent": "refund_status",
+              "prob": 0.01423
+            },
+            {
+              "intent": "delivery_time",
+              "prob": 0.00292
+            },
+            {
+              "intent": "wrong_item",
+              "prob": 0.00252
+            }
+          ]
+        },
+        "bare": {
+          "action": "retrieve_draft",
+          "reasons": [
+            "requires_authority"
+          ]
+        },
+        "engine": {
+          "action": "retrieve_draft",
+          "reasons": [
+            "requires_authority"
+          ]
+        },
+        "runner": {
+          "action": "retrieve_draft",
+          "reasons": [
+            "requires_authority"
+          ]
+        }
+      }
+    },
+    "final-case-05": {
+      "suite": "final_acceptance_ans12",
+      "true_intent": "refund_status",
+      "text": "Where can I check my refund tracking status and transaction tracing code on Tiki?",
+      "orig_f695": {
+        "metrics": {
+          "pred": "refund_status",
+          "conf": 0.805626,
+          "margin": 0.789106,
+          "max_logit": 4.5794,
+          "energy": -4.7955,
+          "entropy_46": 1.1977,
+          "norm_entropy_top5": 0.1912,
+          "top5": [
+            {
+              "intent": "refund_status",
+              "prob": 0.80563
+            },
+            {
+              "intent": "payment_methods",
+              "prob": 0.01652
+            },
+            {
+              "intent": "payment_issue",
+              "prob": 0.01274
+            },
+            {
+              "intent": "refund_policy",
+              "prob": 0.01206
+            },
+            {
+              "intent": "track_order",
+              "prob": 0.00979
+            }
+          ]
+        },
+        "bare": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "engine": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "runner": {
+          "action": "retrieve_draft",
+          "reasons": []
+        }
+      },
+      "v3_c2e4": {
+        "metrics": {
+          "pred": "refund_status",
+          "conf": 0.724106,
+          "margin": 0.700082,
+          "max_logit": 4.1543,
+          "energy": -4.4771,
+          "entropy_46": 1.5848,
+          "norm_entropy_top5": 0.2777,
+          "top5": [
+            {
+              "intent": "refund_status",
+              "prob": 0.72411
+            },
+            {
+              "intent": "payment_methods",
+              "prob": 0.02402
+            },
+            {
+              "intent": "payment_issue",
+              "prob": 0.02084
+            },
+            {
+              "intent": "track_order",
+              "prob": 0.02029
+            },
+            {
+              "intent": "refund_policy",
+              "prob": 0.01185
+            }
+          ]
+        },
+        "bare": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "engine": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "runner": {
+          "action": "retrieve_draft",
+          "reasons": []
+        }
+      }
+    },
+    "final-case-06": {
+      "suite": "final_acceptance_ans12",
+      "true_intent": "cancel_order",
+      "text": "Can I cancel my order directly on the app while it is still in Awaiting Packing status?",
+      "orig_f695": {
+        "metrics": {
+          "pred": "cancel_order",
+          "conf": 0.834313,
+          "margin": 0.783985,
+          "max_logit": 4.6763,
+          "energy": -4.8575,
+          "entropy_46": 0.9642,
+          "norm_entropy_top5": 0.2273,
+          "top5": [
+            {
+              "intent": "cancel_order",
+              "prob": 0.83431
+            },
+            {
+              "intent": "close_account",
+              "prob": 0.05033
+            },
+            {
+              "intent": "change_order",
+              "prob": 0.00971
+            },
+            {
+              "intent": "delivery_issue",
+              "prob": 0.00904
+            },
+            {
+              "intent": "availability_online",
+              "prob": 0.00583
+            }
+          ]
+        },
+        "bare": {
+          "action": "retrieve_draft",
+          "reasons": [
+            "requires_authority"
+          ]
+        },
+        "engine": {
+          "action": "retrieve_draft",
+          "reasons": [
+            "requires_authority"
+          ]
+        },
+        "runner": {
+          "action": "retrieve_draft",
+          "reasons": [
+            "requires_authority"
+          ]
+        }
+      },
+      "v3_c2e4": {
+        "metrics": {
+          "pred": "cancel_order",
+          "conf": 0.812322,
+          "margin": 0.762304,
+          "max_logit": 4.4683,
+          "energy": -4.6762,
+          "entropy_46": 1.0773,
+          "norm_entropy_top5": 0.2537,
+          "top5": [
+            {
+              "intent": "cancel_order",
+              "prob": 0.81232
+            },
+            {
+              "intent": "close_account",
+              "prob": 0.05002
+            },
+            {
+              "intent": "delivery_issue",
+              "prob": 0.01233
+            },
+            {
+              "intent": "change_order",
+              "prob": 0.01202
+            },
+            {
+              "intent": "return_product_in_store",
+              "prob": 0.00805
+            }
+          ]
+        },
+        "bare": {
+          "action": "retrieve_draft",
+          "reasons": [
+            "requires_authority"
+          ]
+        },
+        "engine": {
+          "action": "retrieve_draft",
+          "reasons": [
+            "requires_authority"
+          ]
+        },
+        "runner": {
+          "action": "retrieve_draft",
+          "reasons": [
+            "requires_authority"
+          ]
+        }
+      }
+    },
+    "final-case-07": {
+      "suite": "final_acceptance_ans12",
+      "true_intent": "track_order",
+      "text": "How do I track the transit hubs my parcel has passed through using the tracking code?",
+      "orig_f695": {
+        "metrics": {
+          "pred": "track_order",
+          "conf": 0.671559,
+          "margin": 0.529378,
+          "max_logit": 4.3607,
+          "energy": -4.7589,
+          "entropy_46": 1.3345,
+          "norm_entropy_top5": 0.522,
+          "top5": [
+            {
+              "intent": "track_order",
+              "prob": 0.67156
+            },
+            {
+              "intent": "delivery_time",
+              "prob": 0.14218
+            },
+            {
+              "intent": "track_delivery",
+              "prob": 0.08548
+            },
+            {
+              "intent": "store_location",
+              "prob": 0.01226
+            },
+            {
+              "intent": "delivery_issue",
+              "prob": 0.00855
+            }
+          ]
+        },
+        "bare": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "engine": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "runner": {
+          "action": "retrieve_draft",
+          "reasons": []
+        }
+      },
+      "v3_c2e4": {
+        "metrics": {
+          "pred": "track_order",
+          "conf": 0.869987,
+          "margin": 0.802047,
+          "max_logit": 5.2976,
+          "energy": -5.4368,
+          "entropy_46": 0.6876,
+          "norm_entropy_top5": 0.2337,
+          "top5": [
+            {
+              "intent": "track_order",
+              "prob": 0.86999
+            },
+            {
+              "intent": "track_delivery",
+              "prob": 0.06794
+            },
+            {
+              "intent": "delivery_time",
+              "prob": 0.01081
+            },
+            {
+              "intent": "store_location",
+              "prob": 0.00661
+            },
+            {
+              "intent": "delivery_issue",
+              "prob": 0.00259
+            }
+          ]
+        },
+        "bare": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "engine": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "runner": {
+          "action": "retrieve_draft",
+          "reasons": []
+        }
+      }
+    },
+    "final-case-08": {
+      "suite": "final_acceptance_ans12",
+      "true_intent": "shipping_costs",
+      "text": "What are the base shipping fees for intra-city versus inter-provincial orders and how does Freeship apply?",
+      "orig_f695": {
+        "metrics": {
+          "pred": "shipping_costs",
+          "conf": 0.316988,
+          "margin": 0.281545,
+          "max_logit": 2.5634,
+          "energy": -3.7123,
+          "entropy_46": 3.1959,
+          "norm_entropy_top5": 0.5438,
+          "top5": [
+            {
+              "intent": "shipping_costs",
+              "prob": 0.31699
+            },
+            {
+              "intent": "payment_methods",
+              "prob": 0.03544
+            },
+            {
+              "intent": "exchange_product",
+              "prob": 0.0222
+            },
+            {
+              "intent": "availability_online",
+              "prob": 0.02149
+            },
+            {
+              "intent": "track_delivery",
+              "prob": 0.02056
+            }
+          ]
+        },
+        "bare": {
+          "action": "clarify",
+          "reasons": [
+            "low_confidence"
+          ]
+        },
+        "engine": {
+          "action": "manual_fallback",
+          "reasons": [
+            "low_confidence"
+          ]
+        },
+        "runner": {
+          "action": "clarify",
+          "reasons": [
+            "low_confidence"
+          ]
+        }
+      },
+      "v3_c2e4": {
+        "metrics": {
+          "pred": "shipping_costs",
+          "conf": 0.157904,
+          "margin": 0.113883,
+          "max_logit": 1.7795,
+          "energy": -3.6253,
+          "entropy_46": 3.6127,
+          "norm_entropy_top5": 0.7872,
+          "top5": [
+            {
+              "intent": "shipping_costs",
+              "prob": 0.1579
+            },
+            {
+              "intent": "payment_methods",
+              "prob": 0.04402
+            },
+            {
+              "intent": "track_delivery",
+              "prob": 0.02718
+            },
+            {
+              "intent": "exchange_product_in_store",
+              "prob": 0.02497
+            },
+            {
+              "intent": "availability_online",
+              "prob": 0.02367
+            }
+          ]
+        },
+        "bare": {
+          "action": "clarify",
+          "reasons": [
+            "low_confidence"
+          ]
+        },
+        "engine": {
+          "action": "manual_fallback",
+          "reasons": [
+            "low_confidence",
+            "out_of_scope_intent"
+          ]
+        },
+        "runner": {
+          "action": "clarify",
+          "reasons": [
+            "low_confidence"
+          ]
+        }
+      }
+    },
+    "final-case-09": {
+      "suite": "final_acceptance_ans12",
+      "true_intent": "delivery_time",
+      "text": "What is the delivery timeline for TikiNOW 2-hour express delivery in inner Ho Chi Minh City?",
+      "orig_f695": {
+        "metrics": {
+          "pred": "delivery_time",
+          "conf": 0.98209,
+          "margin": 0.980389,
+          "max_logit": 6.763,
+          "energy": -6.7811,
+          "entropy_46": 0.1547,
+          "norm_entropy_top5": 0.0207,
+          "top5": [
+            {
+              "intent": "delivery_time",
+              "prob": 0.98209
+            },
+            {
+              "intent": "track_order",
+              "prob": 0.0017
+            },
+            {
+              "intent": "store_opening_hours",
+              "prob": 0.00104
+            },
+            {
+              "intent": "shipping_costs",
+              "prob": 0.00079
+            },
+            {
+              "intent": "track_delivery",
+              "prob": 0.00068
+            }
+          ]
+        },
+        "bare": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "engine": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "runner": {
+          "action": "retrieve_draft",
+          "reasons": []
+        }
+      },
+      "v3_c2e4": {
+        "metrics": {
+          "pred": "delivery_time",
+          "conf": 0.962867,
+          "margin": 0.953419,
+          "max_logit": 6.3418,
+          "energy": -6.3796,
+          "entropy_46": 0.2654,
+          "norm_entropy_top5": 0.0752,
+          "top5": [
+            {
+              "intent": "delivery_time",
+              "prob": 0.96287
+            },
+            {
+              "intent": "track_delivery",
+              "prob": 0.00945
+            },
+            {
+              "intent": "track_order",
+              "prob": 0.00924
+            },
+            {
+              "intent": "shipping_costs",
+              "prob": 0.00084
+            },
+            {
+              "intent": "submit_product_idea",
+              "prob": 0.00082
+            }
+          ]
+        },
+        "bare": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "engine": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "runner": {
+          "action": "retrieve_draft",
+          "reasons": []
+        }
+      }
+    },
+    "final-case-10": {
+      "suite": "final_acceptance_ans12",
+      "true_intent": "delivery_issue",
+      "text": "The app shows my order was delivered but I never received the package from the courier.",
+      "orig_f695": {
+        "metrics": {
+          "pred": "delivery_issue",
+          "conf": 0.89111,
+          "margin": 0.852233,
+          "max_logit": 5.6626,
+          "energy": -5.7779,
+          "entropy_46": 0.6085,
+          "norm_entropy_top5": 0.2207,
+          "top5": [
+            {
+              "intent": "delivery_issue",
+              "prob": 0.89111
+            },
+            {
+              "intent": "missing_item",
+              "prob": 0.03888
+            },
+            {
+              "intent": "track_order",
+              "prob": 0.02668
+            },
+            {
+              "intent": "request_invoice",
+              "prob": 0.00617
+            },
+            {
+              "intent": "track_delivery",
+              "prob": 0.00341
+            }
+          ]
+        },
+        "bare": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "engine": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "runner": {
+          "action": "retrieve_draft",
+          "reasons": []
+        }
+      },
+      "v3_c2e4": {
+        "metrics": {
+          "pred": "delivery_issue",
+          "conf": 0.509651,
+          "margin": 0.170195,
+          "max_logit": 4.3319,
+          "energy": -5.0059,
+          "entropy_46": 1.4206,
+          "norm_entropy_top5": 0.6018,
+          "top5": [
+            {
+              "intent": "delivery_issue",
+              "prob": 0.50965
+            },
+            {
+              "intent": "track_order",
+              "prob": 0.33946
+            },
+            {
+              "intent": "missing_item",
+              "prob": 0.05639
+            },
+            {
+              "intent": "track_delivery",
+              "prob": 0.01423
+            },
+            {
+              "intent": "request_invoice",
+              "prob": 0.00712
+            }
+          ]
+        },
+        "bare": {
+          "action": "clarify",
+          "reasons": [
+            "low_confidence"
+          ]
+        },
+        "engine": {
+          "action": "manual_fallback",
+          "reasons": [
+            "low_confidence"
+          ]
+        },
+        "runner": {
+          "action": "clarify",
+          "reasons": [
+            "low_confidence"
+          ]
+        }
+      }
+    },
+    "final-case-11": {
+      "suite": "final_acceptance_ans12",
+      "true_intent": "return_policy",
+      "text": "Can I return opened or unsealed cosmetics if I simply changed my mind after delivery?",
+      "orig_f695": {
+        "metrics": {
+          "pred": "return_policy",
+          "conf": 0.861722,
+          "margin": 0.783128,
+          "max_logit": 5.1701,
+          "energy": -5.3189,
+          "entropy_46": 0.707,
+          "norm_entropy_top5": 0.2347,
+          "top5": [
+            {
+              "intent": "return_policy",
+              "prob": 0.86172
+            },
+            {
+              "intent": "return_product",
+              "prob": 0.07859
+            },
+            {
+              "intent": "return_product_online",
+              "prob": 0.00637
+            },
+            {
+              "intent": "damaged_delivery",
+              "prob": 0.00428
+            },
+            {
+              "intent": "return_product_in_store",
+              "prob": 0.0038
+            }
+          ]
+        },
+        "bare": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "engine": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "runner": {
+          "action": "retrieve_draft",
+          "reasons": []
+        }
+      },
+      "v3_c2e4": {
+        "metrics": {
+          "pred": "return_policy",
+          "conf": 0.763575,
+          "margin": 0.644641,
+          "max_logit": 4.7481,
+          "energy": -5.0179,
+          "entropy_46": 1.0198,
+          "norm_entropy_top5": 0.4072,
+          "top5": [
+            {
+              "intent": "return_policy",
+              "prob": 0.76357
+            },
+            {
+              "intent": "return_product",
+              "prob": 0.11893
+            },
+            {
+              "intent": "return_product_in_store",
+              "prob": 0.05342
+            },
+            {
+              "intent": "return_product_online",
+              "prob": 0.00718
+            },
+            {
+              "intent": "damaged_delivery",
+              "prob": 0.00376
+            }
+          ]
+        },
+        "bare": {
+          "action": "retrieve_draft",
+          "reasons": []
+        },
+        "engine": {
+          "action": "retrieve_draft",
+          "reasons": [
+            "requires_authority"
+          ]
+        },
+        "runner": {
+          "action": "retrieve_draft",
+          "reasons": []
+        }
+      }
+    },
+    "final-case-12": {
+      "suite": "final_acceptance_ans12",
+      "true_intent": "payment_issue",
+      "text": "My bank account was debited but my order status on Tiki still shows Awaiting Payment.",
+      "orig_f695": {
+        "metrics": {
+          "pred": "payment_issue",
+          "conf": 0.916078,
+          "margin": 0.89628,
+          "max_logit": 5.752,
+          "energy": -5.8396,
+          "entropy_46": 0.5252,
+          "norm_entropy_top5": 0.1705,
+          "top5": [
+            {
+              "intent": "payment_issue",
+              "prob": 0.91608
+            },
+            {
+              "intent": "track_order",
+              "prob": 0.0198
+            },
+            {
+              "intent": "delivery_issue",
+              "prob": 0.01542
+            },
+            {
+              "intent": "refund_status",
+              "prob": 0.01231
+            },
+            {
+              "intent": "recover_password",
+              "prob": 0.00379
+            }
+          ]
+        },
+        "bare": {
+          "action": "retrieve_draft",
+          "reasons": [
+            "requires_authority"
+          ]
+        },
+        "engine": {
+          "action": "retrieve_draft",
+          "reasons": [
+            "requires_authority"
+          ]
+        },
+        "runner": {
+          "action": "retrieve_draft",
+          "reasons": [
+            "requires_authority"
+          ]
+        }
+      },
+      "v3_c2e4": {
+        "metrics": {
+          "pred": "payment_issue",
+          "conf": 0.701458,
+          "margin": 0.539358,
+          "max_logit": 4.7159,
+          "energy": -5.0705,
+          "entropy_46": 1.2198,
+          "norm_entropy_top5": 0.48,
+          "top5": [
+            {
+              "intent": "payment_issue",
+              "prob": 0.70146
+            },
+            {
+              "intent": "track_order",
+              "prob": 0.1621
+            },
+            {
+              "intent": "delivery_issue",
+              "prob": 0.04136
+            },
+            {
+              "intent": "refund_status",
+              "prob": 0.01853
+            },
+            {
+              "intent": "recover_password",
+              "prob": 0.00743
+            }
+          ]
+        },
+        "bare": {
+          "action": "clarify",
+          "reasons": [
+            "low_confidence"
+          ]
+        },
+        "engine": {
+          "action": "manual_fallback",
+          "reasons": [
+            "low_confidence",
+            "requires_authority"
+          ]
+        },
+        "runner": {
+          "action": "clarify",
+          "reasons": [
+            "low_confidence"
+          ]
+        }
+      }
+    }
+  },
+  "nearest_examples": {
+    "oos-other_domain-16": {
+      "nearest_train_all": [
+        {
+          "jaccard": 0.231,
+          "intent": "order_history",
+          "id": "bitext_trn_sample_016947",
+          "source": "bitext_train_partition_clean",
+          "text": "I'm looking for my order histlry help me"
+        },
+        {
+          "jaccard": 0.231,
+          "intent": "order_history",
+          "id": "bitext_trn_aug_sample_016947_62",
+          "source": "bitext_train_partition_noise_aug",
+          "text": "I'm looking for my order histrly help me"
+        },
+        {
+          "jaccard": 0.214,
+          "intent": "return_product",
+          "id": "contrast_auth_pos_train_047",
+          "source": "authored_contrast_pos_train",
+          "text": "Please help me generate a return authorization for my order."
+        },
+        {
+          "jaccard": 0.214,
+          "intent": "order_history",
+          "id": "bitext_trn_sample_016671",
+          "source": "bitext_train_partition_clean",
+          "text": "im looking for my order history can ya help me"
+        }
+      ],
+      "nearest_cal_all": [
+        {
+          "jaccard": 0.214,
+          "intent": "track_order",
+          "id": "contrast_auth_pos_cal_099",
+          "source": "authored_contrast_pos_cal",
+          "text": "What is the latest carrier scan for my incoming order?"
+        },
+        {
+          "jaccard": 0.167,
+          "intent": "track_order",
+          "id": "cls_trk_sms_alerts_0_e1d883e8c64a",
+          "source": "closure_positive_20261113",
+          "text": "Will push alerts notify me the moment my parcel reaches out-for-delivery status?"
+        },
+        {
+          "jaccard": 0.167,
+          "intent": "delivery_time",
+          "id": "bitext_cal_sample_010668",
+          "source": "bitext_train_partition_cal",
+          "text": "im looking for information about the delivery time of my order can uhelp me"
+        },
+        {
+          "jaccard": 0.167,
+          "intent": "request_right_to_rectification",
+          "id": "bitext_cal_sample_028813",
+          "source": "bitext_train_partition_cal",
+          "text": "could uhelp me modify my personal information"
+        }
+      ],
+      "nearest_neg_train": [
+        {
+          "jaccard": 0.15,
+          "intent": "out_of_scope",
+          "id": "cls_neg_cmi_trn_chg_rqr_0_a5dc151b1250",
+          "source": "closure_negative_20261113",
+          "text": "Update my delivery phone number on order A and file a money-back claim for cancelled order B."
+        },
+        {
+          "jaccard": 0.143,
+          "intent": "out_of_scope",
+          "id": "cls_neg_und_trn_3_0_a2de860b7fb7",
+          "source": "closure_negative_20261113",
+          "text": "Fix this for me quickly before tonight if possible."
+        },
+        {
+          "jaccard": 0.125,
+          "intent": "out_of_scope",
+          "id": "bnd_neg_vague_trn_0_4b408ea80ad9",
+          "source": "boundary_negative_20261113",
+          "text": "assist me"
+        },
+        {
+          "jaccard": 0.105,
+          "intent": "multi_intent",
+          "id": "compound_auth_train_000",
+          "source": "authored_compound_train",
+          "text": "Cancel my pending order now and also show me my past order history from last year."
+        }
+      ],
+      "nearest_neg_cal": [
+        {
+          "jaccard": 0.1,
+          "intent": "multi_intent",
+          "id": "compound_auth_cal_021",
+          "source": "authored_compound_cal",
+          "text": "Check where my shipment is today and also help me recover access to my old account."
+        },
+        {
+          "jaccard": 0.091,
+          "intent": "multi_intent",
+          "id": "compound_auth_cal_019",
+          "source": "authored_compound_cal",
+          "text": "I need a refund for a defective product and want to modify the items in my second order."
+        },
+        {
+          "jaccard": 0.087,
+          "intent": "out_of_scope",
+          "id": "cls_neg_cmi_cal_can_rqr_pmth_1_e84a3760e441",
+          "source": "closure_negative_20261113",
+          "text": "Please abort my unpacked purchase, file the money-back request, and tell me which e-wallets you accept."
+        }
+      ]
+    },
+    "uns-track_delivery-01": {
+      "nearest_train_all": [
+        {
+          "jaccard": 0.286,
+          "intent": "shipping_costs",
+          "id": "bitext_trn_sample_034447",
+          "source": "bitext_train_partition_clean",
+          "text": "can you tell me about the fucking delivery costs?"
+        },
+        {
+          "jaccard": 0.286,
+          "intent": "shipping_costs",
+          "id": "bitext_trn_aug_sample_034447_73",
+          "source": "bitext_train_partition_noise_aug",
+          "text": "can you tell me abuot the fucking delivery costs?"
+        },
+        {
+          "jaccard": 0.267,
+          "intent": "track_order",
+          "id": "contrast_auth_pos_train_070",
+          "source": "authored_contrast_pos_train",
+          "text": "Can you check the shipment progress of my recent order?"
+        },
+        {
+          "jaccard": 0.267,
+          "intent": "track_order",
+          "id": "contrast_auth_pos_train_086",
+          "source": "authored_contrast_pos_train",
+          "text": "Can you pull up the tracking number for order #8821?"
+        }
+      ],
+      "nearest_cal_all": [
+        {
+          "jaccard": 0.429,
+          "intent": "track_order",
+          "id": "contrast_auth_pos_cal_091",
+          "source": "authored_contrast_pos_cal",
+          "text": "Can you check the live delivery progress of my current parcel?"
+        },
+        {
+          "jaccard": 0.286,
+          "intent": "delivery_time",
+          "id": "bitext_cal_sample_010667",
+          "source": "bitext_train_partition_cal",
+          "text": "can I check the delivery date of my purchase?"
+        },
+        {
+          "jaccard": 0.231,
+          "intent": "shipping_costs",
+          "id": "bitext_cal_sample_034258",
+          "source": "bitext_train_partition_cal",
+          "text": "how can I see the delivery costs?"
+        },
+        {
+          "jaccard": 0.188,
+          "intent": "track_order",
+          "id": "contrast_auth_pos_cal_114",
+          "source": "authored_contrast_pos_cal",
+          "text": "Can you verify the shipping status of my open order?"
+        }
+      ],
+      "nearest_neg_train": [
+        {
+          "jaccard": 0.217,
+          "intent": "out_of_scope",
+          "id": "cls_neg_cmi_trn_track_cancel_1_b919045d0127",
+          "source": "closure_negative_20261113",
+          "text": "Can you look up live courier tracking for order TK-104 and simultaneously stop delivery if it is delayed?"
+        },
+        {
+          "jaccard": 0.143,
+          "intent": "out_of_scope",
+          "id": "bnd_neg_multi_trn_1_25f7a51c44aa",
+          "source": "boundary_negative_20261113",
+          "text": "What is the return policy on electronics and can you also reset my login password?"
+        },
+        {
+          "jaccard": 0.118,
+          "intent": "out_of_scope",
+          "id": "cls_neg_und_trn_1_0_7d12b79f8739",
+          "source": "closure_negative_20261113",
+          "text": "Can somebody check that thing I asked about yesterday afternoon?"
+        },
+        {
+          "jaccard": 0.118,
+          "intent": "out_of_scope",
+          "id": "cls_neg_und_trn_5_0_669934202c4c",
+          "source": "closure_negative_20261113",
+          "text": "Check the previous message I left and follow up soon."
+        }
+      ],
+      "nearest_neg_cal": [
+        {
+          "jaccard": 0.118,
+          "intent": "out_of_scope",
+          "id": "cls_neg_und_cal_3_0_da2272be0716",
+          "source": "closure_negative_20261113",
+          "text": "Looks incomplete from here\u2014can you clarify what happens now?"
+        },
+        {
+          "jaccard": 0.105,
+          "intent": "out_of_scope",
+          "id": "cls_neg_und_cal_1_1_cde2cb6d6dce",
+          "source": "closure_negative_20261113",
+          "text": "Do you happen to see the same prompt showing on your end?"
+        },
+        {
+          "jaccard": 0.083,
+          "intent": "out_of_scope",
+          "id": "cls_neg_cmi_cal_dtm_avail_rfs_1_c9d28c264b99",
+          "source": "closure_negative_20261113",
+          "text": "Check stock availability on the desk lamp, estimate weekend courier speed, and trace my bank ARN payout."
+        }
+      ]
+    },
+    "contrast_auth_pos_eval_136": {
+      "nearest_train_all": [
+        {
+          "jaccard": 0.261,
+          "intent": "multi_intent",
+          "id": "compound_auth_train_008",
+          "source": "authored_compound_train",
+          "text": "Explain your 30-day return rules and also let me exchange an item at a local retail branch."
+        },
+        {
+          "jaccard": 0.235,
+          "intent": "request_invoice",
+          "id": "bitext_trn_sample_026091",
+          "source": "bitext_train_partition_clean",
+          "text": "I ordedred an item and I did not receive a bill"
+        },
+        {
+          "jaccard": 0.235,
+          "intent": "request_invoice",
+          "id": "bitext_trn_aug_sample_026091_26",
+          "source": "bitext_train_partition_noise_aug",
+          "text": "i ordedred an item and i did not receive a bill"
+        },
+        {
+          "jaccard": 0.217,
+          "intent": "return_product_in_store",
+          "id": "contrast_auth_pos_train_032",
+          "source": "authored_contrast_pos_train",
+          "text": "Can I bring this item back to a local brick-and-mortar store instead of mailing it?"
+        }
+      ],
+      "nearest_cal_all": [
+        {
+          "jaccard": 0.19,
+          "intent": "request_invoice",
+          "id": "bitext_cal_sample_026665",
+          "source": "bitext_train_partition_cal",
+          "text": "i purcahsed an item and i didnt get a bill will uhelp me downloading it"
+        },
+        {
+          "jaccard": 0.188,
+          "intent": "damaged_delivery",
+          "id": "bitext_cal_sample_008597",
+          "source": "bitext_train_partition_cal",
+          "text": "an item is fuckingcrushed help me report it"
+        },
+        {
+          "jaccard": 0.188,
+          "intent": "wrong_item",
+          "id": "bitext_cal_sample_043783",
+          "source": "bitext_train_partition_cal",
+          "text": "an item is wrong is it possible to report it"
+        },
+        {
+          "jaccard": 0.182,
+          "intent": "missing_item",
+          "id": "cls_e34_miss_cal_2_0e78119b7e0e",
+          "source": "closure_positive_20261113",
+          "text": "I opened the sealed carton and noticed an ordered item was left out at packing."
+        }
+      ],
+      "nearest_neg_train": [
+        {
+          "jaccard": 0.261,
+          "intent": "multi_intent",
+          "id": "compound_auth_train_008",
+          "source": "authored_compound_train",
+          "text": "Explain your 30-day return rules and also let me exchange an item at a local retail branch."
+        },
+        {
+          "jaccard": 0.167,
+          "intent": "multi_intent",
+          "id": "compound_auth_train_002",
+          "source": "authored_compound_train",
+          "text": "What is your return policy for electronics and can I also return a damaged item in store today?"
+        },
+        {
+          "jaccard": 0.13,
+          "intent": "out_of_scope",
+          "id": "bnd_neg_multi_trn_8_96567effdc76",
+          "source": "boundary_negative_20261113",
+          "text": "Find where my courier parcel is right now and tell me Sunday mall branch hours."
+        },
+        {
+          "jaccard": 0.13,
+          "intent": "multi_intent",
+          "id": "compound_auth_train_007",
+          "source": "authored_compound_train",
+          "text": "I need to cancel an unshipped order and ask a billing agent about an unrecognized fee."
+        }
+      ],
+      "nearest_neg_cal": [
+        {
+          "jaccard": 0.16,
+          "intent": "multi_intent",
+          "id": "compound_auth_cal_017",
+          "source": "authored_compound_cal",
+          "text": "What is your return policy window and can I bring an online purchase to a physical store counter?"
+        },
+        {
+          "jaccard": 0.091,
+          "intent": "out_of_scope",
+          "id": "bnd_neg_multi_cal_1_1c4d9a709f6d",
+          "source": "boundary_negative_20261113",
+          "text": "Stop order ORD-9102 before dispatch and tell me weekend flagship branch hours."
+        },
+        {
+          "jaccard": 0.087,
+          "intent": "multi_intent",
+          "id": "compound_auth_cal_018",
+          "source": "authored_compound_cal",
+          "text": "Cancel my recent order right away and also fix a billing overcharge on my statement."
+        }
+      ]
+    },
+    "uns-order_history-01": {
+      "nearest_train_all": [
+        {
+          "jaccard": 0.318,
+          "intent": "order_history",
+          "id": "contrast_auth_pos_train_001",
+          "source": "authored_contrast_pos_train",
+          "text": "I want to view the full list of orders I previously placed on my account."
+        },
+        {
+          "jaccard": 0.3,
+          "intent": "order_history",
+          "id": "contrast_auth_pos_train_000",
+          "source": "authored_contrast_pos_train",
+          "text": "Can you pull up my past orders from earlier this year?"
+        },
+        {
+          "jaccard": 0.3,
+          "intent": "track_order",
+          "id": "contrast_auth_pos_train_075",
+          "source": "authored_contrast_pos_train",
+          "text": "Where can I view the order tracking summary for my purchase?"
+        },
+        {
+          "jaccard": 0.3,
+          "intent": "refund_status",
+          "id": "bitext_trn_sample_024610",
+          "source": "bitext_train_partition_clean",
+          "text": "where can i get information about the status of my reimbursement"
+        }
+      ],
+      "nearest_cal_all": [
+        {
+          "jaccard": 0.263,
+          "intent": "delivery_time",
+          "id": "bitext_cal_sample_010667",
+          "source": "bitext_train_partition_cal",
+          "text": "can I check the delivery date of my purchase?"
+        },
+        {
+          "jaccard": 0.261,
+          "intent": "multi_intent",
+          "id": "compound_auth_cal_016",
+          "source": "authored_compound_cal",
+          "text": "Track my incoming parcel and also list all previous orders I placed last quarter."
+        },
+        {
+          "jaccard": 0.261,
+          "intent": "refund_status",
+          "id": "bitext_cal_sample_024377",
+          "source": "bitext_train_partition_cal",
+          "text": "wanna know about the status of my refund where can i find more information"
+        },
+        {
+          "jaccard": 0.25,
+          "intent": "availability_online",
+          "id": "bitext_cal_sample_003235",
+          "source": "bitext_train_partition_cal",
+          "text": "where can i check the availability of an item online"
+        }
+      ],
+      "nearest_neg_train": [
+        {
+          "jaccard": 0.208,
+          "intent": "multi_intent",
+          "id": "compound_auth_train_000",
+          "source": "authored_compound_train",
+          "text": "Cancel my pending order now and also show me my past order history from last year."
+        },
+        {
+          "jaccard": 0.154,
+          "intent": "multi_intent",
+          "id": "compound_auth_train_011",
+          "source": "authored_compound_train",
+          "text": "Where is my courier package right now and can you merge two separate past invoices?"
+        },
+        {
+          "jaccard": 0.133,
+          "intent": "multi_intent",
+          "id": "compound_auth_train_012",
+          "source": "authored_compound_train",
+          "text": "I want to cancel my order before dispatch and also report a missing item from last month's box."
+        },
+        {
+          "jaccard": 0.12,
+          "intent": "out_of_scope",
+          "id": "cls_neg_upm_trn_loyalty_tiers_2_31052645797a",
+          "source": "closure_negative_20261113",
+          "text": "Why did my accumulated member coins expire prior to the calendar year end?"
+        }
+      ],
+      "nearest_neg_cal": [
+        {
+          "jaccard": 0.261,
+          "intent": "multi_intent",
+          "id": "compound_auth_cal_016",
+          "source": "authored_compound_cal",
+          "text": "Track my incoming parcel and also list all previous orders I placed last quarter."
+        },
+        {
+          "jaccard": 0.125,
+          "intent": "out_of_scope",
+          "id": "cls_neg_und_cal_3_2_777ba87cddc0",
+          "source": "closure_negative_20261113",
+          "text": "Can we undo what just occurred on my view a second ago?"
+        },
+        {
+          "jaccard": 0.103,
+          "intent": "multi_intent",
+          "id": "compound_auth_cal_019",
+          "source": "authored_compound_cal",
+          "text": "I need a refund for a defective product and want to modify the items in my second order."
+        }
+      ]
+    },
+    "uns-return_product_in_store-01": {
+      "nearest_train_all": [
+        {
+          "jaccard": 0.421,
+          "intent": "return_product_in_store",
+          "id": "contrast_auth_pos_train_036",
+          "source": "authored_contrast_pos_train",
+          "text": "If I bought something online, can I drop it off at your physical shop counter?"
+        },
+        {
+          "jaccard": 0.368,
+          "intent": "return_product_in_store",
+          "id": "contrast_auth_pos_train_057",
+          "source": "authored_contrast_pos_train",
+          "text": "Can I drop off my return at one of your retail stores today?"
+        },
+        {
+          "jaccard": 0.357,
+          "intent": "return_product_online",
+          "id": "bitext_trn_sample_032165",
+          "source": "bitext_train_partition_clean",
+          "text": "can i return a order online"
+        },
+        {
+          "jaccard": 0.35,
+          "intent": "return_product_in_store",
+          "id": "contrast_auth_pos_train_044",
+          "source": "authored_contrast_pos_train",
+          "text": "Can I hand my return package directly to a cashier at the nearest branch?"
+        }
+      ],
+      "nearest_cal_all": [
+        {
+          "jaccard": 0.444,
+          "intent": "return_product_in_store",
+          "id": "contrast_auth_pos_cal_100",
+          "source": "authored_contrast_pos_cal",
+          "text": "Can I bring my online order to a physical store branch to return it?"
+        },
+        {
+          "jaccard": 0.353,
+          "intent": "return_product_in_store",
+          "id": "contrast_auth_pos_cal_105",
+          "source": "authored_contrast_pos_cal",
+          "text": "Can I drop off returned merchandise at a nearby storefront?"
+        },
+        {
+          "jaccard": 0.263,
+          "intent": "return_product_online",
+          "id": "bitext_cal_sample_032073",
+          "source": "bitext_train_partition_cal",
+          "text": "I want to return a order online, where can I do it?"
+        },
+        {
+          "jaccard": 0.25,
+          "intent": "return_product_online",
+          "id": "bitext_cal_sample_032728",
+          "source": "bitext_train_partition_cal",
+          "text": "i have to return a fucking itdm online can i get some help"
+        }
+      ],
+      "nearest_neg_train": [
+        {
+          "jaccard": 0.192,
+          "intent": "multi_intent",
+          "id": "compound_auth_train_008",
+          "source": "authored_compound_train",
+          "text": "Explain your 30-day return rules and also let me exchange an item at a local retail branch."
+        },
+        {
+          "jaccard": 0.154,
+          "intent": "out_of_scope",
+          "id": "cls_neg_cmi_trn_hum_inv_rpr_2_dd9a3e2ab847",
+          "source": "closure_negative_20261113",
+          "text": "I want a live representative immediately to handle both my missing VAT receipt and a damaged-goods return."
+        },
+        {
+          "jaccard": 0.154,
+          "intent": "multi_intent",
+          "id": "compound_auth_train_002",
+          "source": "authored_compound_train",
+          "text": "What is your return policy for electronics and can I also return a damaged item in store today?"
+        },
+        {
+          "jaccard": 0.154,
+          "intent": "multi_intent",
+          "id": "compound_auth_train_004",
+          "source": "authored_compound_train",
+          "text": "How do I start a mail-in return and also dispute a duplicate charge on my credit card?"
+        }
+      ],
+      "nearest_neg_cal": [
+        {
+          "jaccard": 0.24,
+          "intent": "multi_intent",
+          "id": "compound_auth_cal_017",
+          "source": "authored_compound_cal",
+          "text": "What is your return policy window and can I bring an online purchase to a physical store counter?"
+        },
+        {
+          "jaccard": 0.136,
+          "intent": "out_of_scope",
+          "id": "cls_neg_und_cal_3_2_777ba87cddc0",
+          "source": "closure_negative_20261113",
+          "text": "Can we undo what just occurred on my view a second ago?"
+        },
+        {
+          "jaccard": 0.115,
+          "intent": "multi_intent",
+          "id": "compound_auth_cal_020",
+          "source": "authored_compound_cal",
+          "text": "How do I mail back a product for return and also escalate a complaint about courier damage?"
+        }
+      ]
+    }
+  },
+  "train_sources_selected_intents": {
+    "track_delivery": {
+      "bitext_train_esc34_pos_train": 20,
+      "authored_contrast_pos_train": 12,
+      "bitext_train_partition_clean": 160,
+      "bitext_train_partition_noise_aug": 80
+    },
+    "track_order": {
+      "closure_positive_20261113": 9,
+      "boundary_positive_20261113": 2,
+      "authored_contrast_pos_train": 28,
+      "bitext_train_partition_clean": 160,
+      "bitext_train_partition_noise_aug": 80
+    },
+    "return_product_in_store": {
+      "bitext_train_esc34_pos_train": 20,
+      "authored_contrast_pos_train": 16,
+      "bitext_train_partition_clean": 160,
+      "bitext_train_partition_noise_aug": 80
+    },
+    "return_policy": {
+      "closure_positive_20261113": 9,
+      "boundary_positive_20261113": 2,
+      "authored_contrast_pos_train": 8,
+      "bitext_train_partition_clean": 160,
+      "bitext_train_partition_noise_aug": 80
+    },
+    "order_history": {
+      "bitext_train_esc34_pos_train": 20,
+      "authored_contrast_pos_train": 16,
+      "bitext_train_partition_clean": 160,
+      "bitext_train_partition_noise_aug": 80
+    },
+    "delivery_issue": {
+      "closure_positive_20261113": 9,
+      "boundary_positive_20261113": 2,
+      "bitext_train_partition_clean": 160,
+      "bitext_train_partition_noise_aug": 80
+    },
+    "delivery_time": {
+      "closure_positive_20261113": 9,
+      "boundary_positive_20261113": 2,
+      "bitext_train_partition_clean": 160,
+      "bitext_train_partition_noise_aug": 80
+    },
+    "payment_issue": {
+      "closure_positive_20261113": 9,
+      "boundary_positive_20261113": 2,
+      "bitext_train_partition_clean": 160,
+      "bitext_train_partition_noise_aug": 80
+    },
+    "request_refund": {
+      "closure_positive_20261113": 9,
+      "boundary_positive_20261113": 2,
+      "bitext_train_partition_clean": 160,
+      "bitext_train_partition_noise_aug": 80
+    }
+  },
+  "neg_train_categories": {
+    "out_of_scope:compound_multi_intent": 37,
+    "out_of_scope:unsupported_product_or_merchant": 18,
+    "out_of_scope:underspecified_ambiguous": 19,
+    "out_of_scope:off_domain_unrelated": 15,
+    "out_of_scope:off_domain_homonym": 10,
+    "multi_intent:compound_multi_intent": 16
+  },
+  "neg_train_samples": [
+    {
+      "id": "cls_neg_cmi_trn_track_cancel_0_c686c43d522a",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "First tell me where my shipment currently sits, and if it hasn't left the hub yet cancel the whole thing."
+    },
+    {
+      "id": "cls_neg_cmi_trn_track_cancel_1_b919045d0127",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "Can you look up live courier tracking for order TK-104 and simultaneously stop delivery if it is delayed?"
+    },
+    {
+      "id": "cls_neg_cmi_trn_track_cancel_2_9c32bf4fcf32",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "I want two things: trace my active parcel right now, and abort it immediately if warehouse packing is still pending."
+    },
+    {
+      "id": "cls_neg_cmi_trn_ret_rfs_0_ef5f178d20e9",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "Explain your seven-day electronics return rule and also check why my previous refund hasn't hit Visa yet."
+    },
+    {
+      "id": "cls_neg_cmi_trn_ret_rfs_1_c8c54bab4cfe",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "Before I send back these headphones, walk me through return eligibility plus tell me where my old reimbursement is."
+    },
+    {
+      "id": "cls_neg_cmi_trn_ret_rfs_2_85dfc85c91e8",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "Two separate questions: are opened headphones returnable, and when will last month's pending refund finish settling?"
+    },
+    {
+      "id": "cls_neg_cmi_trn_dis_pay_0_d5548eb96184",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "My parcel says delivered when nothing showed up, AND my credit card was billed twice during checkout."
+    },
+    {
+      "id": "cls_neg_cmi_trn_dis_pay_1_97b55de71dfe",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "Fix both problems on my account: courier lost the package at reception and MoMo deducted double money."
+    },
+    {
+      "id": "cls_neg_cmi_trn_dis_pay_2_e25338c83828",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "I need help with two failures\u2014shipping rider faked an attempt plus bank card threw duplicate billing."
+    },
+    {
+      "id": "cls_neg_cmi_trn_shp_dtm_can_0_f79343e968d8",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "How much is regional express postage, how many days does Da Nang transit take, and how do I void an order if too slow?"
+    },
+    {
+      "id": "cls_neg_cmi_trn_shp_dtm_can_1_0cf4699fe57a",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "Tell me province shipping fees alongside delivery days, plus show me where to abort checkout before dispatch."
+    },
+    {
+      "id": "cls_neg_cmi_trn_shp_dtm_can_2_d6991271f717",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "Compare standard courier charges and arrival windows, and let me cancel my pending cart right after."
+    },
+    {
+      "id": "cls_neg_cmi_trn_chg_rqr_0_a5dc151b1250",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "Update my delivery phone number on order A and file a money-back claim for cancelled order B."
+    },
+    {
+      "id": "cls_neg_cmi_trn_chg_rqr_1_952f5194c305",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "While changing the street address on my upcoming parcel, also trigger reimbursement for last week's failed order."
+    },
+    {
+      "id": "cls_neg_cmi_trn_chg_rqr_2_02149c0c1af4",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "I need you to amend the shipping details on one purchase while submitting a refund request for a separate checkout."
+    },
+    {
+      "id": "cls_neg_cmi_trn_pinfo_shp_0_4395a40432e8",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "Does this blender include a glass jar, and how much does Freeship+ knock off bulky shipping rates?"
+    },
+    {
+      "id": "cls_neg_cmi_trn_pinfo_shp_1_741c558aa71d",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "Confirm the wattage on that appliance listing and also calculate whether oversized delivery costs extra."
+    },
+    {
+      "id": "cls_neg_cmi_trn_pinfo_shp_2_27cfba883e21",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "Tell me the battery capacity of this speaker while explaining how regional courier fees apply."
+    },
+    {
+      "id": "cls_neg_cmi_trn_hum_inv_rpr_0_984784e2720b",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "Connect me to a human advisor, email my corporate VAT invoice, and schedule a return courier pickup."
+    },
+    {
+      "id": "cls_neg_cmi_trn_hum_inv_rpr_1_f4e96edd76fd",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "Put a supervisor on chat so they can reissue our tax invoice and register a return for two broken bowls."
+    },
+    {
+      "id": "cls_neg_cmi_trn_hum_inv_rpr_2_dd9a3e2ab847",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "I want a live representative immediately to handle both my missing VAT receipt and a damaged-goods return."
+    },
+    {
+      "id": "cls_neg_cmi_trn_wrng_miss_pay_0_559e51bf685d",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "You shipped the wrong keyboard color, omitted the mouse pad, and blocked my debit card on my next cart."
+    },
+    {
+      "id": "cls_neg_cmi_trn_wrng_miss_pay_1_510e14c36928",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "Three issues in one ticket: missing bonus item, incorrect SKU packed, and payment gateway decline today."
+    },
+    {
+      "id": "cls_neg_cmi_trn_wrng_miss_pay_2_26317f8f1835",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "Resolve my mis-picked parcel, send the omitted charger cable, and unblock my credit-card OTP failure."
+    },
+    {
+      "id": "cls_neg_cmi_trn_avail_chg_rfp_0_fc272194352c",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "Check if size XL restocked online, switch my pending order to that variant, and verify your bank refund policy."
+    },
+    {
+      "id": "cls_neg_cmi_trn_avail_chg_rfp_1_26d13e45d4e7",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "Let me know online inventory status, edit my active order quantity, plus clarify how e-wallet reversals work."
+    },
+    {
+      "id": "cls_neg_cmi_trn_avail_chg_rfp_2_8f062bcc5d20",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "Is the navy coat back in stock? Also amend my checkout variant and explain COD reimbursement rules."
+    },
+    {
+      "id": "cls_neg_upm_trn_b2b_0_114d20d9e6ce",
+      "intent": "out_of_scope",
+      "cat": "unsupported_product_or_merchant",
+      "text": "How do wholesale distributors apply for bulk net-60 corporate purchasing contracts?"
+    },
+    {
+      "id": "cls_neg_upm_trn_b2b_1_162edbe46e1e",
+      "intent": "out_of_scope",
+      "cat": "unsupported_product_or_merchant",
+      "text": "Can procurement teams negotiate tiered volume rebates for 500 office monitors?"
+    },
+    {
+      "id": "cls_neg_upm_trn_b2b_2_1e93f0cda5e1",
+      "intent": "out_of_scope",
+      "cat": "unsupported_product_or_merchant",
+      "text": "What vendor vetting documents are required to open a wholesale B2B buyer account?"
+    },
+    {
+      "id": "cls_neg_upm_trn_seller_fees_0_44cacf415a55",
+      "intent": "out_of_scope",
+      "cat": "unsupported_product_or_merchant",
+      "text": "What commission percentage does the marketplace deduct from electronics third-party storefronts?"
+    },
+    {
+      "id": "cls_neg_upm_trn_seller_fees_1_002a71f17747",
+      "intent": "out_of_scope",
+      "cat": "unsupported_product_or_merchant",
+      "text": "How do independent merchants appeal a storefront suspension due to late dispatch penalties?"
+    },
+    {
+      "id": "cls_neg_upm_trn_seller_fees_2_3cea9595c7ab",
+      "intent": "out_of_scope",
+      "cat": "unsupported_product_or_merchant",
+      "text": "Where can a seller configure automated flash-deal campaign bids in Seller Center?"
+    },
+    {
+      "id": "cls_neg_upm_trn_price_match_0_a1558a4d7682",
+      "intent": "out_of_scope",
+      "cat": "unsupported_product_or_merchant",
+      "text": "Will your platform match a lower weekend price advertised by a competing retail chain?"
+    },
+    {
+      "id": "cls_neg_upm_trn_price_match_1_eb0e9ea12a68",
+      "intent": "out_of_scope",
+      "cat": "unsupported_product_or_merchant",
+      "text": "If an identical blender drops on a rival site tomorrow, can I claim the price difference?"
+    },
+    {
+      "id": "cls_neg_upm_trn_price_match_2_5e53788cf622",
+      "intent": "out_of_scope",
+      "cat": "unsupported_product_or_merchant",
+      "text": "Do you offer retroactive price-drop protection rebates within seven days of purchase?"
+    },
+    {
+      "id": "cls_neg_upm_trn_loyalty_tiers_0_08e13351269a",
+      "intent": "out_of_scope",
+      "cat": "unsupported_product_or_merchant",
+      "text": "How many annual points are required to unlock Platinum VIP birthday bonus perks?"
+    },
+    {
+      "id": "cls_neg_upm_trn_loyalty_tiers_1_2ccd8cc9079a",
+      "intent": "out_of_scope",
+      "cat": "unsupported_product_or_merchant",
+      "text": "Can unused reward points be gifted directly to a family member's account?"
+    },
+    {
+      "id": "cls_neg_upm_trn_loyalty_tiers_2_31052645797a",
+      "intent": "out_of_scope",
+      "cat": "unsupported_product_or_merchant",
+      "text": "Why did my accumulated member coins expire prior to the calendar year end?"
+    },
+    {
+      "id": "cls_neg_upm_trn_giftcard_corp_0_75fe7d3fa45e",
+      "intent": "out_of_scope",
+      "cat": "unsupported_product_or_merchant",
+      "text": "How do HR teams purchase 200 branded digital gift cards for employee holiday bonuses?"
+    },
+    {
+      "id": "cls_neg_upm_trn_giftcard_corp_1_10d8f7d62669",
+      "intent": "out_of_scope",
+      "cat": "unsupported_product_or_merchant",
+      "text": "Can expired promotional physical gift vouchers be reactivated manually by billing?"
+    },
+    {
+      "id": "cls_neg_upm_trn_giftcard_corp_2_5ec0d6e4991c",
+      "intent": "out_of_scope",
+      "cat": "unsupported_product_or_merchant",
+      "text": "Where do recipients redeem third-party corporate reward codes for store balance?"
+    },
+    {
+      "id": "cls_neg_upm_trn_ext_warranty_0_b5a6e190553d",
+      "intent": "out_of_scope",
+      "cat": "unsupported_product_or_merchant",
+      "text": "How can I transfer a purchased third-party accidental-damage insurance plan to a new owner?"
+    },
+    {
+      "id": "cls_neg_upm_trn_ext_warranty_1_4ccb58c5e407",
+      "intent": "out_of_scope",
+      "cat": "unsupported_product_or_merchant",
+      "text": "Does extended screen-cracking coverage cover water immersion at coastal beaches?"
+    },
+    {
+      "id": "cls_neg_upm_trn_ext_warranty_2_8233d7b23e64",
+      "intent": "out_of_scope",
+      "cat": "unsupported_product_or_merchant",
+      "text": "Who underwrites the optional two-year appliance breakdown protection plan?"
+    },
+    {
+      "id": "cls_neg_und_trn_1_0_7d12b79f8739",
+      "intent": "out_of_scope",
+      "cat": "underspecified_ambiguous",
+      "text": "Can somebody check that thing I asked about yesterday afternoon?"
+    },
+    {
+      "id": "cls_neg_und_trn_1_1_9f9c6a7ce3d6",
+      "intent": "out_of_scope",
+      "cat": "underspecified_ambiguous",
+      "text": "Please take another look because nothing changed since Tuesday."
+    },
+    {
+      "id": "cls_neg_und_trn_1_2_b10a4e0883a6",
+      "intent": "out_of_scope",
+      "cat": "underspecified_ambiguous",
+      "text": "Still waiting over here\u2014any progress yet on my side?"
+    },
+    {
+      "id": "cls_neg_und_trn_2_0_5c0fca64e2af",
+      "intent": "out_of_scope",
+      "cat": "underspecified_ambiguous",
+      "text": "Something looks wrong with the numbers showing up on screen."
+    },
+    {
+      "id": "cls_neg_und_trn_2_1_56ea88d06f15",
+      "intent": "out_of_scope",
+      "cat": "underspecified_ambiguous",
+      "text": "That option turned gray earlier and I do not know why."
+    },
+    {
+      "id": "cls_neg_und_trn_2_2_638de4c8db7f",
+      "intent": "out_of_scope",
+      "cat": "underspecified_ambiguous",
+      "text": "Why did it suddenly change like that without warning?"
+    },
+    {
+      "id": "cls_neg_und_trn_3_0_a2de860b7fb7",
+      "intent": "out_of_scope",
+      "cat": "underspecified_ambiguous",
+      "text": "Fix this for me quickly before tonight if possible."
+    },
+    {
+      "id": "cls_neg_und_trn_3_1_5f40c2632574",
+      "intent": "out_of_scope",
+      "cat": "underspecified_ambiguous",
+      "text": "Hello, I need assistance with my situation right now."
+    },
+    {
+      "id": "cls_neg_und_trn_3_2_e66d749d7877",
+      "intent": "out_of_scope",
+      "cat": "underspecified_ambiguous",
+      "text": "Can you sort out what went wrong a few minutes ago?"
+    },
+    {
+      "id": "cls_neg_und_trn_4_0_588ca866a999",
+      "intent": "out_of_scope",
+      "cat": "underspecified_ambiguous",
+      "text": "Wait, did that actually go through properly or not?"
+    },
+    {
+      "id": "cls_neg_und_trn_4_1_4fa22d247ece",
+      "intent": "out_of_scope",
+      "cat": "underspecified_ambiguous",
+      "text": "I got an unclear alert just now\u2014what am I supposed to do next?"
+    },
+    {
+      "id": "cls_neg_und_trn_4_2_cc5e100930f3",
+      "intent": "out_of_scope",
+      "cat": "underspecified_ambiguous",
+      "text": "Could someone verify whether everything looks right on there?"
+    },
+    {
+      "id": "cls_neg_und_trn_5_0_669934202c4c",
+      "intent": "out_of_scope",
+      "cat": "underspecified_ambiguous",
+      "text": "Check the previous message I left and follow up soon."
+    },
+    {
+      "id": "cls_neg_und_trn_5_1_5c597a9edec2",
+      "intent": "out_of_scope",
+      "cat": "underspecified_ambiguous",
+      "text": "Never mind the earlier detail, just handle the main issue."
+    },
+    {
+      "id": "cls_neg_und_trn_5_2_7408ec1da9ca",
+      "intent": "out_of_scope",
+      "cat": "underspecified_ambiguous",
+      "text": "Everything feels stuck today\u2014help me move forward somehow."
+    },
+    {
+      "id": "cls_neg_off_trn_code_0_cedff6b65ec7",
+      "intent": "out_of_scope",
+      "cat": "off_domain_unrelated",
+      "text": "How do I debug a circular import deadlock between two FastAPI routers in Python?"
+    },
+    {
+      "id": "cls_neg_off_trn_code_1_1d21018afe19",
+      "intent": "out_of_scope",
+      "cat": "off_domain_unrelated",
+      "text": "Write a PostgreSQL window query that ranks monthly sales per region without subqueries."
+    },
+    {
+      "id": "cls_neg_off_trn_code_2_a7e3c347cc36",
+      "intent": "out_of_scope",
+      "cat": "off_domain_unrelated",
+      "text": "Why does Docker Desktop consume high RAM when mounting large WSL2 bind volumes?"
+    },
+    {
+      "id": "cls_neg_off_trn_cook_0_fa08062154ff",
+      "intent": "out_of_scope",
+      "cat": "off_domain_unrelated",
+      "text": "What internal roast temperature keeps smoked pork shoulder tender without drying out?"
+    },
+    {
+      "id": "cls_neg_off_trn_cook_1_ef6864d3a72a",
+      "intent": "out_of_scope",
+      "cat": "off_domain_unrelated",
+      "text": "How long should sourdough starter ferment before shaping rustic loaves at room heat?"
+    },
+    {
+      "id": "cls_neg_off_trn_cook_2_bbc31dba2e6d",
+      "intent": "out_of_scope",
+      "cat": "off_domain_unrelated",
+      "text": "Substitute ingredients for buttermilk when baking fluffy blueberry pancakes at home?"
+    },
+    {
+      "id": "cls_neg_off_trn_travel_0_adb062f55cd5",
+      "intent": "out_of_scope",
+      "cat": "off_domain_unrelated",
+      "text": "Which scenic train route crosses the Swiss Alps between Zermatt and St. Moritz?"
+    },
+    {
+      "id": "cls_neg_off_trn_travel_1_c8513d96e5aa",
+      "intent": "out_of_scope",
+      "cat": "off_domain_unrelated",
+      "text": "How many days before departure do Schengen tourist visas typically get stamped?"
+    },
+    {
+      "id": "cls_neg_off_trn_travel_2_dfdf62731de9",
+      "intent": "out_of_scope",
+      "cat": "off_domain_unrelated",
+      "text": "Suggest a four-day coastal driving itinerary along central Vietnam during April."
+    },
+    {
+      "id": "cls_neg_off_trn_health_0_163e15de711d",
+      "intent": "out_of_scope",
+      "cat": "off_domain_unrelated",
+      "text": "Design a beginner half-marathon interval running schedule across twelve weeks."
+    },
+    {
+      "id": "cls_neg_off_trn_health_1_4ceaa4365231",
+      "intent": "out_of_scope",
+      "cat": "off_domain_unrelated",
+      "text": "What stretching routine relieves lower-back stiffness after eight hours at a desk?"
+    },
+    {
+      "id": "cls_neg_off_trn_health_2_680a69cb35f6",
+      "intent": "out_of_scope",
+      "cat": "off_domain_unrelated",
+      "text": "Compare daily magnesium glycinate versus citrate absorption in sports nutrition."
+    },
+    {
+      "id": "cls_neg_off_trn_science_0_c1e9202b2097",
+      "intent": "out_of_scope",
+      "cat": "off_domain_unrelated",
+      "text": "Explain why Bayesian ridge regression shrinks correlated predictors smoothly."
+    },
+    {
+      "id": "cls_neg_off_trn_science_1_936875b5f41b",
+      "intent": "out_of_scope",
+      "cat": "off_domain_unrelated",
+      "text": "How do tidal forces gradually lengthen Earth's rotational day over geological eons?"
+    },
+    {
+      "id": "cls_neg_off_trn_science_2_c503aa5a85be",
+      "intent": "out_of_scope",
+      "cat": "off_domain_unrelated",
+      "text": "Summarize the treaty differences between the Kyoto Protocol and the Paris Agreement."
+    },
+    {
+      "id": "bnd_neg_multi_trn_0_b10922e5d4d7",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "Check my shipping costs to Da Nang and simultaneously delete my saved credit card."
+    },
+    {
+      "id": "bnd_neg_multi_trn_1_25f7a51c44aa",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "What is the return policy on electronics and can you also reset my login password?"
+    },
+    {
+      "id": "bnd_neg_multi_trn_2_40f4c3a344e9",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "Void order ORD-8812 and generate a VAT company invoice for last month's order."
+    },
+    {
+      "id": "bnd_neg_multi_trn_3_e10daadb390f",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "Tell me the delivery lead time plus explain how to open a seller merchant account."
+    },
+    {
+      "id": "bnd_neg_multi_trn_4_917abf286c46",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "My refund has not landed yet and the mobile app keeps freezing at checkout."
+    },
+    {
+      "id": "bnd_neg_multi_trn_5_1e91eaecca45",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "Track order ORD-3310 and also swap the blue shirt in my other parcel to size M."
+    },
+    {
+      "id": "bnd_neg_multi_trn_6_3e5f332a106e",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "I want to claim a reimbursement on my damaged kettle and connect with a human supervisor."
+    },
+    {
+      "id": "bnd_neg_multi_trn_7_f9edefbefba6",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "How many days for standard returns, and can I switch payment from COD to Mastercard?"
+    },
+    {
+      "id": "bnd_neg_multi_trn_8_96567effdc76",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "Find where my courier parcel is right now and tell me Sunday mall branch hours."
+    },
+    {
+      "id": "bnd_neg_multi_trn_9_7a37fae431ab",
+      "intent": "out_of_scope",
+      "cat": "compound_multi_intent",
+      "text": "Explain your money-back eligibility rules and transfer me to billing support to fix a double charge."
+    },
+    {
+      "id": "bnd_neg_homonym_trn_0_a2badd0549c3",
+      "intent": "out_of_scope",
+      "cat": "off_domain_homonym",
+      "text": "Where do taxpayers file annual federal income tax returns online this spring?"
+    },
+    {
+      "id": "bnd_neg_homonym_trn_1_f23ca7fde01e",
+      "intent": "out_of_scope",
+      "cat": "off_domain_homonym",
+      "text": "Can passengers exchange an economy airline ticket for business class at the gate?"
+    },
+    {
+      "id": "bnd_neg_homonym_trn_2_a84a415bf234",
+      "intent": "out_of_scope",
+      "cat": "off_domain_homonym",
+      "text": "How do I cancel a municipal water utility autopay and gym contract?"
+    },
+    {
+      "id": "bnd_neg_homonym_trn_3_6f3bc260dc25",
+      "intent": "out_of_scope",
+      "cat": "off_domain_homonym",
+      "text": "Do commercial landlords refund security deposits within two weeks of lease end?"
+    },
+    {
+      "id": "bnd_neg_homonym_trn_4_1d5df9ef94c8",
+      "intent": "out_of_scope",
+      "cat": "off_domain_homonym",
+      "text": "Steps to change my home wireless modem admin passphrase?"
+    },
+    {
+      "id": "bnd_neg_homonym_trn_5_b553631bfded",
+      "intent": "out_of_scope",
+      "cat": "off_domain_homonym",
+      "text": "Explain compound interest differences between treasury notes and high-yield index funds."
+    },
+    {
+      "id": "bnd_neg_homonym_trn_6_86a98115ddc1",
+      "intent": "out_of_scope",
+      "cat": "off_domain_homonym",
+      "text": "Which hiking boots handle muddy granite switchbacks in northern national parks?"
+    },
+    {
+      "id": "bnd_neg_homonym_trn_7_3fc9aac2f802",
+      "intent": "out_of_scope",
+      "cat": "off_domain_homonym",
+      "text": "What vaccination certificate rules apply when flying into Singapore next quarter?"
+    },
+    {
+      "id": "bnd_neg_homonym_trn_8_45c8b7ae28d3",
+      "intent": "out_of_scope",
+      "cat": "off_domain_homonym",
+      "text": "Compare Python asyncio event loops against Go goroutine scheduling overhead."
+    },
+    {
+      "id": "bnd_neg_homonym_trn_9_40ebce6fb6c9",
+      "intent": "out_of_scope",
+      "cat": "off_domain_homonym",
+      "text": "How many grams of protein per kilogram support marathon endurance recovery?"
+    },
+    {
+      "id": "bnd_neg_vague_trn_0_4b408ea80ad9",
+      "intent": "out_of_scope",
+      "cat": "underspecified_ambiguous",
+      "text": "assist me"
+    },
+    {
+      "id": "bnd_neg_vague_trn_1_a35e8033e9af",
+      "intent": "out_of_scope",
+      "cat": "underspecified_ambiguous",
+      "text": "good afternoon"
+    },
+    {
+      "id": "bnd_neg_vague_trn_2_d8c890d24588",
+      "intent": "out_of_scope",
+      "cat": "underspecified_ambiguous",
+      "text": "checking status"
+    },
+    {
+      "id": "bnd_neg_vague_trn_3_6fd93b5d6595",
+      "intent": "out_of_scope",
+      "cat": "underspecified_ambiguous",
+      "text": "problem here"
+    },
+    {
+      "id": "compound_auth_train_000",
+      "intent": "multi_intent",
+      "cat": "compound_multi_intent",
+      "text": "Cancel my pending order now and also show me my past order history from last year."
+    },
+    {
+      "id": "compound_auth_train_001",
+      "intent": "multi_intent",
+      "cat": "compound_multi_intent",
+      "text": "Please track where my current parcel is and tell me why my previous refund failed to post."
+    },
+    {
+      "id": "compound_auth_train_002",
+      "intent": "multi_intent",
+      "cat": "compound_multi_intent",
+      "text": "What is your return policy for electronics and can I also return a damaged item in store today?"
+    },
+    {
+      "id": "compound_auth_train_003",
+      "intent": "multi_intent",
+      "cat": "compound_multi_intent",
+      "text": "I want to request a refund for my broken item and update the delivery address on my other order."
+    },
+    {
+      "id": "compound_auth_train_004",
+      "intent": "multi_intent",
+      "cat": "compound_multi_intent",
+      "text": "How do I start a mail-in return and also dispute a duplicate charge on my credit card?"
+    },
+    {
+      "id": "compound_auth_train_005",
+      "intent": "multi_intent",
+      "cat": "compound_multi_intent",
+      "text": "Check the shipping status of my package and help me change the shipping method on an older order."
+    },
+    {
+      "id": "compound_auth_train_006",
+      "intent": "multi_intent",
+      "cat": "compound_multi_intent",
+      "text": "Tell me when my delivery arrives and also review my previous purchases under this account."
+    },
+    {
+      "id": "compound_auth_train_007",
+      "intent": "multi_intent",
+      "cat": "compound_multi_intent",
+      "text": "I need to cancel an unshipped order and ask a billing agent about an unrecognized fee."
+    },
+    {
+      "id": "compound_auth_train_008",
+      "intent": "multi_intent",
+      "cat": "compound_multi_intent",
+      "text": "Explain your 30-day return rules and also let me exchange an item at a local retail branch."
+    },
+    {
+      "id": "compound_auth_train_009",
+      "intent": "multi_intent",
+      "cat": "compound_multi_intent",
+      "text": "Can you track my active shipment and also reset my locked account password?"
+    },
+    {
+      "id": "compound_auth_train_010",
+      "intent": "multi_intent",
+      "cat": "compound_multi_intent",
+      "text": "Start a return for my wrong-size shoes and also check my loyalty points balance."
+    },
+    {
+      "id": "compound_auth_train_011",
+      "intent": "multi_intent",
+      "cat": "compound_multi_intent",
+      "text": "Where is my courier package right now and can you merge two separate past invoices?"
+    },
+    {
+      "id": "compound_auth_train_012",
+      "intent": "multi_intent",
+      "cat": "compound_multi_intent",
+      "text": "I want to cancel my order before dispatch and also report a missing item from last month's box."
+    },
+    {
+      "id": "compound_auth_train_013",
+      "intent": "multi_intent",
+      "cat": "compound_multi_intent",
+      "text": "How do I request a refund and also change the payment card on my recurring subscription?"
+    },
+    {
+      "id": "compound_auth_train_014",
+      "intent": "multi_intent",
+      "cat": "compound_multi_intent",
+      "text": "Check my return policy eligibility and also tell me which retail store takes walk-in returns."
+    },
+    {
+      "id": "compound_auth_train_015",
+      "intent": "multi_intent",
+      "cat": "compound_multi_intent",
+      "text": "Track my current order delivery and also pull up my archived order receipts from winter."
+    }
+  ]
+}

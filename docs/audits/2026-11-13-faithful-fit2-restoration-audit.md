@@ -1,0 +1,21 @@
+# Faithful Fit2 Restoration Audit (`reconstructed-fit2-supcon-20261113`)
+
+- **Restoration Verdict:** **`RESTORATION_PASS`** (bit-identical reconstruction of Stage-1 `95a940b6` and Stage-2 `f695b1fe` with verified canonical prep -> 2-fit -> MAIN archive lineage and reload).
+- **Promotion Verdict:** **`PROMOTION_REJECT`** (unchanged; fails `mandatory_escalation_unsafe_draft_leak` on `uns-order_history-01` and `uns-return_product_in_store-01`).
+- **Scope & Constraints:** `0` new fits, `0` live LLM calls, `0` edits to Serving (`dc7af8cf`), MAIN archives, or B's tests. C36 (`fit2_independent_gate_20261113`) was run **only** on rejected NEW sibling `d7ac47d0`, **not** on `f695b1fe`; C36 results are not attributed to `f695b1fe`.
+
+## 1. Archive, Calibration, Metadata & Reload Verification
+- **Serving (`distilbert-supportiq`):** `model.safetensors` SHA-256 `dc7af8cffb19fe7711ed5a5d0137ffff3d7d1a1f43bad5a35edff8c8de4c1302` (unchanged).
+- **Stage 1 (`MAIN/artifacts/models/candidates/reconstructed-closure-fit1-20261113`, 7 files):** `archive_sha_inventory.json` (`0` mismatches); `model.safetensors` `95a940b630f44bf8d11882a26062c857839baa2d80d188f5451d52cecc2158a6` (bit-identical to historical Old Closure); `calibration_manifest.json` `32dba6d8796e503a...` (`T=1.0429`, `calibrated=true`, `selective_rejector.enabled=true`); reloads cleanly (`num_labels=46`, `vocab=30522`).
+- **Stage 2 (`MAIN/artifacts/models/candidates/reconstructed-fit2-supcon-20261113`, 7 files):** `archive_sha_inventory.json` (`0` mismatches); `model.safetensors` `f695b1fe514aba81aafc968823047d496b03474a0b47199c65eaac6bd93c6dfa` (bit-identical to historical Fit2); `calibration_manifest.json` `782c88db3fcd8061...` (`T=1.0`, `calibrated=true`, `calibration_sample_count=776`, `selective_rejector.enabled=false`), `config.json` `6fa1fa9cc6a94063...`, `tokenizer.json` `41b9d12a4c559e40...` — all match historical `docs/audits/2026-11-13-closure-round-acceptance.md` hashes; reloads cleanly (`num_labels=46`, `vocab=30522`).
+- **Metadata/Provenance Note:** `candidate_provenance_manifest.json` records `git_commit=4939970b27ca93bff68196021119a038828cbc23` and `base_model.init_weights_sha256=95a940b6...` (Stage 1).
+
+## 2. Canonical Prep -> 2-Fit -> MAIN Archive Dataflow
+- **Run Records (`MAIN/artifacts/models/candidates/run-records-faithful-fit2-20261113`):** `38` files (`37` entries in `sidecar_sha_inventory.json`, `0` mismatches, plus inventory itself), including `run_config.json`, `environment.json`, `stage1_inputs_sha256_inventory.json` (`15` input files), `stage2_inputs/` (`14` files), `stage1_fit1.log`, `stage2_fit2.log`, and `acceptance_gate_report.json`.
+- **Verified Flow:** Canonical prep `13-11-2026-00` (`cleaned=8bc10cfa...`, `splits=1d366e89...`) + Serving `dc7af8cf` -> `stage1_cli` (`pos_train=3692`, `46` labels, `rej_train=1589`, `bitext_cal=230`) -> `reconstructed-closure-fit1-20261113` (`95a940b6`) -> `stage2_cli` (`fit2_supcon_energy`, `T=1.0`, `108.07s`) -> `reconstructed-fit2-supcon-20261113` (`f695b1fe`).
+
+## 3. Gate Reconciliation (`acceptance_gate_report.json` vs `gate_report_fit2.json` & B `3ebff38`)
+- `acceptance_gate_report.json` matches historical `artifacts/evaluation/closure_candidate_audit_20261113/gate_report_fit2.json` metric-for-metric: `gate_decision="REJECT"`, `failure_reasons=["mandatory_escalation_unsafe_draft_leak"]` (`uns-order_history-01`, `uns-return_product_in_store-01`), `ml_oos_80=0/80`, `ml_noise_420` (`acc_12=0.8571`, `macro_f1_12=0.8573`, `safe_routing=0.9381`), `system_acceptance_156` `mand63` `57/63`, `final_acceptance_24` `ans12` `10/12`, `independent_holdout` (`n=122`, `supported_12` `32/39` vs Serving `21/33`).
+- Under B's updated gate (`3ebff38`), utility non-regression (`10 >= 4`, `32 >= 21`, `25 >= 17`) and `selective_rejector.enabled=false` hold, while `mandatory_escalation_unsafe_draft_leak` remains blocking, yielding **`REJECT`** and **`promotion_eligible=false`**. No full benchmark rerun was needed.
+
+**Omitted checks & risks:** No C36 (`cases.jsonl`) or `old_sealed72` rerun was executed on `reconstructed-fit2-supcon-20261113` (`f695b1fe`); `f695b1fe` remains unsafe for promotion due to the two `mandatory_63` boundary leaks until a targeted boundary fix is trained and verified.

@@ -1,0 +1,10 @@
+﻿{
+  "verdict": "REJECT",
+  "failures": [
+    "R1_new_holdout_draft_leak",
+    "R2_supported_coverage_below_serving_or_all_abstain"
+  ],
+  "candidate": "fit2-sibling-boundary-v2",
+  "weights_sha256": "d7ac47d002fcdc38c11290b22c6e2f1fedd015bfdedc64b49a9929b02dfd625b",
+  "serving_sha256": "dc7af8cffb19fe7711ed5a5d0137ffff3d7d1a1f43bad5a35edff8c8de4c1302"
+}

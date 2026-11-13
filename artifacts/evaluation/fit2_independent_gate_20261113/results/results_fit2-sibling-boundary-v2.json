@@ -1,0 +1,1083 @@
+{
+  "name": "fit2-sibling-boundary-v2",
+  "model_dir": "F:\\N\u0103m 3\\SD\\project\\SupportIQ\\artifacts\\models\\candidates\\fit2-sibling-boundary-v2",
+  "weights_sha256": "d7ac47d002fcdc38c11290b22c6e2f1fedd015bfdedc64b49a9929b02dfd625b",
+  "calibration": {
+    "temperature": 1.29,
+    "calibrated": true,
+    "rejector_enabled": true
+  },
+  "cases_sha256": "19a56d87299fd28c177f38cce87691598b47c1ed35143ce29194d5215daecc2f",
+  "git_head": "2dd5b79b3d7840d6553eca49e31a62561e59cba3",
+  "new_holdout": {
+    "bare": {
+      "answerable_n": 11,
+      "answerable_correct_draft": [
+        "g2-sup-10",
+        "g2-sup-11"
+      ],
+      "answerable_wrong_draft": [
+        "g2-sup-09"
+      ],
+      "answerable_not_drafted": [
+        "g2-sup-01",
+        "g2-sup-02",
+        "g2-sup-03",
+        "g2-sup-04",
+        "g2-sup-05",
+        "g2-sup-06",
+        "g2-sup-07",
+        "g2-sup-08"
+      ],
+      "no_draft_leaks": [
+        "g2-esc-02",
+        "g2-esc-05",
+        "g2-esc-06"
+      ],
+      "leak_count": 3,
+      "human_agent_escalated": [
+        "g2-sup-12"
+      ],
+      "ood_actions": {
+        "escalate": 10,
+        "clarify": 2
+      },
+      "mandatory_actions": {
+        "clarify": 5,
+        "retrieve_draft": 3,
+        "escalate": 4
+      },
+      "mandatory_strict_escalate": 4
+    },
+    "engine": {
+      "answerable_n": 11,
+      "answerable_correct_draft": [
+        "g2-sup-10",
+        "g2-sup-11"
+      ],
+      "answerable_wrong_draft": [
+        "g2-sup-09"
+      ],
+      "answerable_not_drafted": [
+        "g2-sup-01",
+        "g2-sup-02",
+        "g2-sup-03",
+        "g2-sup-04",
+        "g2-sup-05",
+        "g2-sup-06",
+        "g2-sup-07",
+        "g2-sup-08"
+      ],
+      "no_draft_leaks": [
+        "g2-esc-05",
+        "g2-esc-06"
+      ],
+      "leak_count": 2,
+      "human_agent_escalated": [
+        "g2-sup-12"
+      ],
+      "ood_actions": {
+        "escalate": 10,
+        "manual_fallback": 2
+      },
+      "mandatory_actions": {
+        "manual_fallback": 5,
+        "escalate": 5,
+        "retrieve_draft": 2
+      },
+      "mandatory_strict_escalate": 5
+    },
+    "runner": {
+      "answerable_n": 11,
+      "answerable_correct_draft": [
+        "g2-sup-10",
+        "g2-sup-11"
+      ],
+      "answerable_wrong_draft": [
+        "g2-sup-09"
+      ],
+      "answerable_not_drafted": [
+        "g2-sup-01",
+        "g2-sup-02",
+        "g2-sup-03",
+        "g2-sup-04",
+        "g2-sup-05",
+        "g2-sup-06",
+        "g2-sup-07",
+        "g2-sup-08"
+      ],
+      "no_draft_leaks": [
+        "g2-esc-05",
+        "g2-esc-06"
+      ],
+      "leak_count": 2,
+      "human_agent_escalated": [
+        "g2-sup-12"
+      ],
+      "ood_actions": {
+        "escalate": 10,
+        "clarify": 2
+      },
+      "mandatory_actions": {
+        "clarify": 4,
+        "escalate": 6,
+        "retrieve_draft": 2
+      },
+      "mandatory_strict_escalate": 6
+    }
+  },
+  "old_sealed72": {
+    "supported_answerable": {
+      "bare": {
+        "leaks": [],
+        "draft": 3
+      },
+      "engine": {
+        "leaks": [],
+        "draft": 3
+      },
+      "runner": {
+        "leaks": [],
+        "draft": 3
+      }
+    },
+    "novel_ood": {
+      "bare": {
+        "leaks": [],
+        "draft": 0
+      },
+      "engine": {
+        "leaks": [],
+        "draft": 0
+      },
+      "runner": {
+        "leaks": [],
+        "draft": 0
+      }
+    },
+    "mandatory_escalation_compound": {
+      "bare": {
+        "leaks": [
+          {
+            "id": "sh-esc-22",
+            "pred_intent": "payment_issue",
+            "conf": 0.9616
+          }
+        ],
+        "draft": 1
+      },
+      "engine": {
+        "leaks": [],
+        "draft": 0
+      },
+      "runner": {
+        "leaks": [],
+        "draft": 0
+      }
+    }
+  },
+  "live_provider_calls": 0,
+  "suites": {
+    "model_name": "fit2-sibling-boundary-v2",
+    "score_path": {
+      "score_kind": "calibrated_probability",
+      "temperature": 1.29,
+      "calibrated": true,
+      "experimental_rejector_active": true
+    },
+    "independent_holdout": null,
+    "ml_oos_80": {
+      "n_total": 80,
+      "flagged_safe_count": 80,
+      "false_draft_eligible_count": 0,
+      "false_draft_case_ids": [],
+      "adapter_vetoes_count": 0
+    },
+    "ml_noise_420": {
+      "n_total": 420,
+      "accuracy_12": 0.7642857142857142,
+      "macro_f1_12": 0.7710399048950393,
+      "safe_routing_rate": 0.9523809523809523,
+      "ece_10bin": 0.09068497275667532,
+      "binary_top_label_brier": 0.18200017618735767,
+      "adapter_vetoes_count": 0,
+      "selective_metrics": {
+        "denominator": 420,
+        "raw_draft_eligible_count": 218,
+        "raw_draft_eligible_rate": 0.519048,
+        "correct_intent_draft_eligible_count": 198,
+        "correct_intent_draft_eligible_rate": 0.471429,
+        "wrong_intent_draft_eligible_count": 20,
+        "precision_numerator_correct_intent_draft_eligible": 198,
+        "precision_denominator_raw_draft_eligible": 218,
+        "precision_among_draft_eligible": 0.908257,
+        "abstain_count": 147,
+        "escalate_count": 55,
+        "abstention_and_escalation_count": 202,
+        "abstention_coverage": 0.480952,
+        "no_invented_accuracy_from_abstentions": true
+      }
+    },
+    "known_acceptance_regression_not_unseen_holdout": {
+      "suite_role": "known_acceptance_regression_not_unseen_holdout",
+      "system_acceptance_156": {
+        "labeled_153_accuracy": 0.7189542483660131,
+        "labeled_153_macro_f1_46": 0.7115372864900273,
+        "escalated_34_n": 39,
+        "escalated_34_accuracy": 0.7948717948717948,
+        "escalated_34_macro_f1": 0.7990196078431373,
+        "draft_expected_34_raw_draft": 22,
+        "draft_expected_34_correct_intent_draft": 21,
+        "draft_expected_34_selective_metrics": {
+          "denominator": 34,
+          "raw_draft_eligible_count": 22,
+          "raw_draft_eligible_rate": 0.647059,
+          "correct_intent_draft_eligible_count": 21,
+          "correct_intent_draft_eligible_rate": 0.617647,
+          "wrong_intent_draft_eligible_count": 1,
+          "precision_numerator_correct_intent_draft_eligible": 21,
+          "precision_denominator_raw_draft_eligible": 22,
+          "precision_among_draft_eligible": 0.954545,
+          "abstain_count": 11,
+          "escalate_count": 1,
+          "abstention_and_escalation_count": 12,
+          "abstention_coverage": 0.352941,
+          "no_invented_accuracy_from_abstentions": true
+        },
+        "mandatory_63_n": 63,
+        "mandatory_63_strict_match": 61,
+        "mandatory_63_strict_match_rate": 0.968254,
+        "mandatory_63_escalate": 61,
+        "mandatory_63_abstain_manual_fallback": 1,
+        "mandatory_63_real_unsafe_draft_leaks": [],
+        "mandatory_63_uninjected_fault_fixtures": [
+          {
+            "case_id": "unc-return_policy-04",
+            "observed_action_without_fault_injection": "retrieve_draft",
+            "status": "NOT_EXECUTED_FAULT_INJECTION",
+            "does_not_count_as_passing_fault_coverage": true
+          }
+        ]
+      },
+      "final_acceptance_24": {
+        "answerable_12_raw_draft": 2,
+        "answerable_12_correct_intent_draft": 2,
+        "answerable_12_wrong_intent_draft_cases": [],
+        "answerable_12_selective_metrics": {
+          "denominator": 12,
+          "raw_draft_eligible_count": 2,
+          "raw_draft_eligible_rate": 0.166667,
+          "correct_intent_draft_eligible_count": 2,
+          "correct_intent_draft_eligible_rate": 0.166667,
+          "wrong_intent_draft_eligible_count": 0,
+          "precision_numerator_correct_intent_draft_eligible": 2,
+          "precision_denominator_raw_draft_eligible": 2,
+          "precision_among_draft_eligible": 1.0,
+          "abstain_count": 8,
+          "escalate_count": 2,
+          "abstention_and_escalation_count": 10,
+          "abstention_coverage": 0.833333,
+          "no_invented_accuracy_from_abstentions": true
+        },
+        "unanswerable_active_kb_n": 8,
+        "unanswerable_active_kb_draft_leaks": [],
+        "unanswerable_injected_synthetic_fault_n": 4,
+        "unanswerable_injected_synthetic_uninjected_drafted_cases": [
+          "final-case-21"
+        ],
+        "injected_fault_note": "fixture_boundary=='injected_synthetic' cases (final-case-21..24) run uninjected here and NEVER count as passing fault coverage."
+      }
+    }
+  },
+  "fixed_gate": {
+    "generated_at": "2026-11-13T15:23:41.766536+00:00",
+    "report_type": "task_c_classifier_acceptance_gate",
+    "gate_decision": "PASS",
+    "failure_reasons": [],
+    "suite_classification_note": "system_acceptance_156 and final_acceptance_24 are explicitly labeled known_acceptance_regression_not_unseen_holdout.",
+    "provenance_audit": {
+      "candidate_dir": "F:\\N\u0103m 3\\SD\\project\\SupportIQ\\artifacts\\models\\candidates\\fit2-sibling-boundary-v2",
+      "manifest_path": "F:\\N\u0103m 3\\SD\\project\\SupportIQ\\artifacts\\models\\candidates\\fit2-sibling-boundary-v2\\candidate_provenance_manifest.json",
+      "files": {
+        "weights": {
+          "path": "F:\\N\u0103m 3\\SD\\project\\SupportIQ\\artifacts\\models\\candidates\\fit2-sibling-boundary-v2\\model.safetensors",
+          "exists": true,
+          "sha256": "d7ac47d002fcdc38c11290b22c6e2f1fedd015bfdedc64b49a9929b02dfd625b",
+          "size_bytes": 267967920
+        },
+        "tokenizer": {
+          "path": "F:\\N\u0103m 3\\SD\\project\\SupportIQ\\artifacts\\models\\candidates\\fit2-sibling-boundary-v2\\tokenizer.json",
+          "exists": true,
+          "sha256": "41b9d12a4c559e4098f30173bc0f76d092c43d7b1f873e7027da45a256f30f87",
+          "size_bytes": 711659
+        },
+        "config": {
+          "path": "F:\\N\u0103m 3\\SD\\project\\SupportIQ\\artifacts\\models\\candidates\\fit2-sibling-boundary-v2\\config.json",
+          "exists": true,
+          "sha256": "6fa1fa9cc6a94063a977b0adaf2c9c3b296cf296d4ad9dcc6f2c52ca3bac9cb2",
+          "size_bytes": 3349
+        }
+      },
+      "valid_46_label_bijection": true,
+      "num_labels": 46,
+      "provenance_passed": true,
+      "failure_reasons": [],
+      "manifest": {
+        "schema_version": "candidate_provenance.v1",
+        "provenance_status": "verified",
+        "candidate_name": "fit2-sibling-boundary-v2",
+        "git_commit": "HEAD",
+        "created_at": "2026-11-13T15:12:55.264696+00:00",
+        "base_model": {
+          "init_checkpoint": "F:\\N\u0103m 3\\SD\\project\\SupportIQ\\artifacts\\models\\trained\\distilbert-supportiq",
+          "init_weights_sha256": "dc7af8cffb19fe7711ed5a5d0137ffff3d7d1a1f43bad5a35edff8c8de4c1302",
+          "original_backbone": "distilbert-base-uncased",
+          "unfrozen_transformer_layers": 6
+        },
+        "training_lineage": {
+          "run_id": "fit2-sibling-boundary-v2",
+          "epochs": 3,
+          "batch_size": 32,
+          "lr": 2.5e-05,
+          "max_length": 64,
+          "seed": 42,
+          "device": "cuda",
+          "train_seconds": 111.44,
+          "train_total_examples": 14793,
+          "sibling_hinge_w": 1.5,
+          "sibling_hinge_thr": 0.3,
+          "neg_repeat": 14,
+          "neg_kl_w": 1.0,
+          "neg_sup_w": 4.0,
+          "neg_sup_thr": 0.12,
+          "epoch_stats": [
+            {
+              "epoch": 1,
+              "mean_loss": 0.26434,
+              "pos_ce_sum": 22.1304,
+              "sib_hinge_sum": 0.183,
+              "neg_loss_sum": 99.9824
+            },
+            {
+              "epoch": 2,
+              "mean_loss": 0.04023,
+              "pos_ce_sum": 6.7941,
+              "sib_hinge_sum": 0.047,
+              "neg_loss_sum": 11.7606
+            },
+            {
+              "epoch": 3,
+              "mean_loss": 0.03197,
+              "pos_ce_sum": 3.5504,
+              "sib_hinge_sum": 0.0327,
+              "neg_loss_sum": 11.2049
+            }
+          ],
+          "calibration_temperature": 1.29
+        },
+        "dataset_hashes": {
+          "train.jsonl": "e2629bc596e12d425eedf3069f18a6575678e8e1f4b0539e3f08f8f0c6313a73",
+          "cal.jsonl": "40bdd680c5c7093e9e8f5a7cfe4f69571f5770dbf98b517a075a2360bf625850",
+          "eval.jsonl": "1e53af2c43f9d20c7fa3395df8cdda8b53af81f51930b086edf964d26357378b",
+          "neg_train.jsonl": "88cb936aeb075dcca76fab7d11824241dba10bae15678fd07fe2fa97fa778bd3",
+          "neg_cal.jsonl": "79c81e6b776b61de90905d9959031197fbadf47e9ce5a880bdf3b6f0bc0944fa",
+          "neg_eval.jsonl": "6bef919d59f2b2a7ed31791aa380a0fccb538685f76b1b3b241c9e1467c039a9"
+        },
+        "dataset_lineage": {
+          "schema_version": "fit2_improve_data.v1",
+          "canonical_prep_run_id": "13-11-2026-00",
+          "canonical_prep_hashes": {
+            "raw_sha256": "13a988266fed4e2b2c1ff947a89ef220ce09b5b13ac83c4a1496c0d7b81e8127",
+            "cleaned_sha256": "8bc10cfa056371bdecb3394bfd4c75eee7e10022ace5071833ecd140b2d75846",
+            "splits_sha256": "1d366e898f6ba68be46c5ca0f9059e9862fad1d7bafe350d9cdd310dd3e0a04c"
+          },
+          "counts": {
+            "train_pos": 14233,
+            "cal_pos": 704,
+            "eval_pos": 2,
+            "train_neg": 40,
+            "cal_neg": 5,
+            "eval_neg": 2
+          },
+          "hashes": {
+            "train.jsonl": "e2629bc596e12d425eedf3069f18a6575678e8e1f4b0539e3f08f8f0c6313a73",
+            "cal.jsonl": "40bdd680c5c7093e9e8f5a7cfe4f69571f5770dbf98b517a075a2360bf625850",
+            "eval.jsonl": "1e53af2c43f9d20c7fa3395df8cdda8b53af81f51930b086edf964d26357378b",
+            "neg_train.jsonl": "88cb936aeb075dcca76fab7d11824241dba10bae15678fd07fe2fa97fa778bd3",
+            "neg_cal.jsonl": "79c81e6b776b61de90905d9959031197fbadf47e9ce5a880bdf3b6f0bc0944fa",
+            "neg_eval.jsonl": "6bef919d59f2b2a7ed31791aa380a0fccb538685f76b1b3b241c9e1467c039a9"
+          },
+          "seed": 42
+        },
+        "artifact_hashes": {
+          "model.safetensors": "d7ac47d002fcdc38c11290b22c6e2f1fedd015bfdedc64b49a9929b02dfd625b",
+          "tokenizer.json": "41b9d12a4c559e4098f30173bc0f76d092c43d7b1f873e7027da45a256f30f87",
+          "config.json": "6fa1fa9cc6a94063a977b0adaf2c9c3b296cf296d4ad9dcc6f2c52ca3bac9cb2",
+          "calibration_manifest.json": "71dffc1f20bf0f363cf26de1c4d7cdda63697bbdaea570e62fdaf77bd461a79f"
+        }
+      }
+    },
+    "calibration_manifest_audit": {
+      "present": true,
+      "path": "F:\\N\u0103m 3\\SD\\project\\SupportIQ\\artifacts\\models\\candidates\\fit2-sibling-boundary-v2\\calibration_manifest.json",
+      "valid": true,
+      "failure_reasons": [],
+      "temperature": 1.29,
+      "calibrated": true,
+      "rejector": {
+        "enabled": false,
+        "type": "logistic_regression_v1",
+        "feature_spec": "logit_geometry_v1",
+        "feature_dim": 8,
+        "scaler_mean": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scaler_scale": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "weights": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "bias": 0.0,
+        "threshold": 0.0,
+        "reject_when": "below",
+        "positive_label": "in_scope"
+      },
+      "manifest": {
+        "schema_version": "selective_calibration.v1",
+        "model_version": "fit2-sibling-boundary-v2",
+        "weights_sha256": "d7ac47d002fcdc38c11290b22c6e2f1fedd015bfdedc64b49a9929b02dfd625b",
+        "tokenizer_sha256": "41b9d12a4c559e4098f30173bc0f76d092c43d7b1f873e7027da45a256f30f87",
+        "config_sha256": "6fa1fa9cc6a94063a977b0adaf2c9c3b296cf296d4ad9dcc6f2c52ca3bac9cb2",
+        "artifact_hashes": {
+          "model.safetensors": "d7ac47d002fcdc38c11290b22c6e2f1fedd015bfdedc64b49a9929b02dfd625b",
+          "tokenizer.json": "41b9d12a4c559e4098f30173bc0f76d092c43d7b1f873e7027da45a256f30f87",
+          "config.json": "6fa1fa9cc6a94063a977b0adaf2c9c3b296cf296d4ad9dcc6f2c52ca3bac9cb2"
+        },
+        "tokenization": {
+          "max_length": 64,
+          "padding": "max_length",
+          "truncation": true
+        },
+        "label_space": {
+          "num_labels": 46,
+          "valid_46_label_bijection": true,
+          "id2label": {
+            "0": "add_product",
+            "1": "availability",
+            "2": "availability_in_store",
+            "3": "availability_online",
+            "4": "cancel_order",
+            "5": "change_account",
+            "6": "change_order",
+            "7": "close_account",
+            "8": "customer_service",
+            "9": "damaged_delivery",
+            "10": "delivery_issue",
+            "11": "delivery_time",
+            "12": "exchange_product",
+            "13": "exchange_product_in_store",
+            "14": "human_agent",
+            "15": "missing_item",
+            "16": "open_account",
+            "17": "order_history",
+            "18": "pay",
+            "19": "payment_issue",
+            "20": "payment_methods",
+            "21": "product_information",
+            "22": "product_issue",
+            "23": "recover_password",
+            "24": "refund_policy",
+            "25": "refund_status",
+            "26": "remove_product",
+            "27": "request_invoice",
+            "28": "request_refund",
+            "29": "request_right_to_rectification",
+            "30": "return_policy",
+            "31": "return_product",
+            "32": "return_product_in_store",
+            "33": "return_product_online",
+            "34": "sales_period",
+            "35": "shipping_costs",
+            "36": "store_location",
+            "37": "store_opening_hours",
+            "38": "submit_feedback",
+            "39": "submit_product_feedback",
+            "40": "submit_product_idea",
+            "41": "technical_issue",
+            "42": "track_delivery",
+            "43": "track_order",
+            "44": "use_app",
+            "45": "wrong_item"
+          }
+        },
+        "calibration": {
+          "method": "temperature_scaling_joint_nll_kl",
+          "temperature": 1.29,
+          "min_temperature": 1.0,
+          "calibrated": true,
+          "calibration_sample_count": 709
+        },
+        "selective_rejector": {
+          "enabled": false,
+          "type": "logistic_regression_v1",
+          "feature_spec": "logit_geometry_v1",
+          "feature_dim": 8,
+          "scaler_mean": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scaler_scale": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "weights": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "bias": 0.0,
+          "threshold": 0.0,
+          "reject_when": "below",
+          "positive_label": "in_scope"
+        }
+      }
+    },
+    "runtime_parity_audit": {
+      "checked": true,
+      "passed": true,
+      "probe_count": 4,
+      "probe_temperature": 1.29,
+      "tokenization_mismatches": 0,
+      "label_mismatches": 0,
+      "score_kind_mismatches": 0,
+      "max_raw_confidence_abs_diff": 0.0,
+      "max_raw_margin_abs_diff": 0.0,
+      "max_calibrated_confidence_abs_diff": 0.0,
+      "max_calibrated_margin_abs_diff": 0.0,
+      "fail_closed_non_serving_checksum": true,
+      "engine_rejection_enforcement": {
+        "checked": true,
+        "raw_engine_recommendation_on_rejected_spy": "abstain",
+        "raw_engine_action_on_rejected_spy": "manual_fallback",
+        "engine_enforces_experimental_rejection": true,
+        "harness_guarded_action_on_rejected_spy": "manual_fallback",
+        "harness_guard_vetoed": false,
+        "distinction_note": "ModelContainer parity verifies tokenization, 46-label bijection, temperature scaling, and score_kind. Engine._analyse enforcement of rejected_by_experimental_adapter/selective_accepted is measured separately from score parity; when False, experimental rejector vetoes occur only in Task C's _apply_adapter_routing_guard."
+      }
+    },
+    "split_isolation_and_contamination": {
+      "passed": true,
+      "failure_reasons": [],
+      "counts": {
+        "train": 14233,
+        "calibration": 704,
+        "eval": 2
+      },
+      "group_counts": {
+        "train": 10087,
+        "calibration": 702,
+        "eval": 2
+      },
+      "group_overlaps": {
+        "train_vs_calibration": [],
+        "train_vs_eval": [],
+        "calibration_vs_eval": []
+      },
+      "text_overlaps": {
+        "train_vs_calibration": 0,
+        "train_vs_eval": 0,
+        "calibration_vs_eval": 0
+      },
+      "gold_exact_matches": [],
+      "gold_high_jaccard_matches": []
+    },
+    "serving_baseline_evaluation": {
+      "model_name": "distilbert-supportiq",
+      "score_path": {
+        "score_kind": "uncalibrated_softmax",
+        "temperature": 1.0,
+        "calibrated": false,
+        "experimental_rejector_active": false
+      },
+      "independent_holdout": {
+        "suite_role": "independent_group_isolated_holdout",
+        "n_total": 2,
+        "accuracy_46": 1.0,
+        "macro_f1_46": 0.043478260869565216,
+        "ece_10bin": 0.6049951463937759,
+        "binary_top_label_brier": 0.3661674204114225,
+        "rejected_by_experimental_adapter_count": 0,
+        "escalated_34": {
+          "n": 2,
+          "accuracy": 1.0,
+          "macro_f1": 0.058823529411764705,
+          "unsafe_draft_eligible_count": 0
+        },
+        "supported_12": {
+          "n": 0,
+          "accuracy": 0.0,
+          "macro_f1": 0.0,
+          "raw_draft_eligible_count": 0,
+          "correct_intent_draft_eligible_count": 0,
+          "selective_metrics": {
+            "denominator": 0,
+            "raw_draft_eligible_count": 0,
+            "raw_draft_eligible_rate": 0.0,
+            "correct_intent_draft_eligible_count": 0,
+            "correct_intent_draft_eligible_rate": 0.0,
+            "wrong_intent_draft_eligible_count": 0,
+            "precision_numerator_correct_intent_draft_eligible": 0,
+            "precision_denominator_raw_draft_eligible": 0,
+            "precision_among_draft_eligible": null,
+            "abstain_count": 0,
+            "escalate_count": 0,
+            "abstention_and_escalation_count": 0,
+            "abstention_coverage": 0.0,
+            "no_invented_accuracy_from_abstentions": true
+          }
+        }
+      },
+      "ml_oos_80": {
+        "n_total": 80,
+        "flagged_safe_count": 80,
+        "false_draft_eligible_count": 0,
+        "false_draft_case_ids": [],
+        "adapter_vetoes_count": 0
+      },
+      "ml_noise_420": {
+        "n_total": 420,
+        "accuracy_12": 0.6547619047619048,
+        "macro_f1_12": 0.681716063566692,
+        "safe_routing_rate": 0.9214285714285714,
+        "ece_10bin": 0.09200162912408515,
+        "binary_top_label_brier": 0.18279472822996587,
+        "adapter_vetoes_count": 0,
+        "selective_metrics": {
+          "denominator": 420,
+          "raw_draft_eligible_count": 210,
+          "raw_draft_eligible_rate": 0.5,
+          "correct_intent_draft_eligible_count": 177,
+          "correct_intent_draft_eligible_rate": 0.421429,
+          "wrong_intent_draft_eligible_count": 33,
+          "precision_numerator_correct_intent_draft_eligible": 177,
+          "precision_denominator_raw_draft_eligible": 210,
+          "precision_among_draft_eligible": 0.842857,
+          "abstain_count": 140,
+          "escalate_count": 70,
+          "abstention_and_escalation_count": 210,
+          "abstention_coverage": 0.5,
+          "no_invented_accuracy_from_abstentions": true
+        }
+      },
+      "known_acceptance_regression_not_unseen_holdout": {
+        "suite_role": "known_acceptance_regression_not_unseen_holdout",
+        "system_acceptance_156": {
+          "labeled_153_accuracy": 0.6666666666666666,
+          "labeled_153_macro_f1_46": 0.6119864194256491,
+          "escalated_34_n": 39,
+          "escalated_34_accuracy": 0.6153846153846154,
+          "escalated_34_macro_f1": 0.6470588235294118,
+          "draft_expected_34_raw_draft": 21,
+          "draft_expected_34_correct_intent_draft": 17,
+          "draft_expected_34_selective_metrics": {
+            "denominator": 34,
+            "raw_draft_eligible_count": 21,
+            "raw_draft_eligible_rate": 0.617647,
+            "correct_intent_draft_eligible_count": 17,
+            "correct_intent_draft_eligible_rate": 0.5,
+            "wrong_intent_draft_eligible_count": 4,
+            "precision_numerator_correct_intent_draft_eligible": 17,
+            "precision_denominator_raw_draft_eligible": 21,
+            "precision_among_draft_eligible": 0.809524,
+            "abstain_count": 12,
+            "escalate_count": 1,
+            "abstention_and_escalation_count": 13,
+            "abstention_coverage": 0.382353,
+            "no_invented_accuracy_from_abstentions": true
+          },
+          "mandatory_63_n": 63,
+          "mandatory_63_strict_match": 55,
+          "mandatory_63_strict_match_rate": 0.873016,
+          "mandatory_63_escalate": 55,
+          "mandatory_63_abstain_manual_fallback": 7,
+          "mandatory_63_real_unsafe_draft_leaks": [],
+          "mandatory_63_uninjected_fault_fixtures": [
+            {
+              "case_id": "unc-return_policy-04",
+              "observed_action_without_fault_injection": "retrieve_draft",
+              "status": "NOT_EXECUTED_FAULT_INJECTION",
+              "does_not_count_as_passing_fault_coverage": true
+            }
+          ]
+        },
+        "final_acceptance_24": {
+          "answerable_12_raw_draft": 5,
+          "answerable_12_correct_intent_draft": 4,
+          "answerable_12_wrong_intent_draft_cases": [
+            "final-case-02"
+          ],
+          "answerable_12_selective_metrics": {
+            "denominator": 12,
+            "raw_draft_eligible_count": 5,
+            "raw_draft_eligible_rate": 0.416667,
+            "correct_intent_draft_eligible_count": 4,
+            "correct_intent_draft_eligible_rate": 0.333333,
+            "wrong_intent_draft_eligible_count": 1,
+            "precision_numerator_correct_intent_draft_eligible": 4,
+            "precision_denominator_raw_draft_eligible": 5,
+            "precision_among_draft_eligible": 0.8,
+            "abstain_count": 6,
+            "escalate_count": 1,
+            "abstention_and_escalation_count": 7,
+            "abstention_coverage": 0.583333,
+            "no_invented_accuracy_from_abstentions": true
+          },
+          "unanswerable_active_kb_n": 8,
+          "unanswerable_active_kb_draft_leaks": [],
+          "unanswerable_injected_synthetic_fault_n": 4,
+          "unanswerable_injected_synthetic_uninjected_drafted_cases": [
+            "final-case-21"
+          ],
+          "injected_fault_note": "fixture_boundary=='injected_synthetic' cases (final-case-21..24) run uninjected here and NEVER count as passing fault coverage."
+        }
+      }
+    },
+    "candidate_evaluation": {
+      "model_name": "fit2-sibling-boundary-v2",
+      "score_path": {
+        "score_kind": "uncalibrated_softmax",
+        "temperature": 1.0,
+        "calibrated": false,
+        "experimental_rejector_active": false
+      },
+      "independent_holdout": {
+        "suite_role": "independent_group_isolated_holdout",
+        "n_total": 2,
+        "accuracy_46": 1.0,
+        "macro_f1_46": 0.043478260869565216,
+        "ece_10bin": 0.044570982456207275,
+        "binary_top_label_brier": 0.0030753005509964737,
+        "rejected_by_experimental_adapter_count": 0,
+        "escalated_34": {
+          "n": 2,
+          "accuracy": 1.0,
+          "macro_f1": 0.058823529411764705,
+          "unsafe_draft_eligible_count": 0
+        },
+        "supported_12": {
+          "n": 0,
+          "accuracy": 0.0,
+          "macro_f1": 0.0,
+          "raw_draft_eligible_count": 0,
+          "correct_intent_draft_eligible_count": 0,
+          "selective_metrics": {
+            "denominator": 0,
+            "raw_draft_eligible_count": 0,
+            "raw_draft_eligible_rate": 0.0,
+            "correct_intent_draft_eligible_count": 0,
+            "correct_intent_draft_eligible_rate": 0.0,
+            "wrong_intent_draft_eligible_count": 0,
+            "precision_numerator_correct_intent_draft_eligible": 0,
+            "precision_denominator_raw_draft_eligible": 0,
+            "precision_among_draft_eligible": null,
+            "abstain_count": 0,
+            "escalate_count": 0,
+            "abstention_and_escalation_count": 0,
+            "abstention_coverage": 0.0,
+            "no_invented_accuracy_from_abstentions": true
+          }
+        }
+      },
+      "ml_oos_80": {
+        "n_total": 80,
+        "flagged_safe_count": 80,
+        "false_draft_eligible_count": 0,
+        "false_draft_case_ids": [],
+        "adapter_vetoes_count": 0
+      },
+      "ml_noise_420": {
+        "n_total": 420,
+        "accuracy_12": 0.7642857142857142,
+        "macro_f1_12": 0.7710399048950393,
+        "safe_routing_rate": 0.9071428571428571,
+        "ece_10bin": 0.12133713540221969,
+        "binary_top_label_brier": 0.17794969565776197,
+        "adapter_vetoes_count": 0,
+        "selective_metrics": {
+          "denominator": 420,
+          "raw_draft_eligible_count": 267,
+          "raw_draft_eligible_rate": 0.635714,
+          "correct_intent_draft_eligible_count": 228,
+          "correct_intent_draft_eligible_rate": 0.542857,
+          "wrong_intent_draft_eligible_count": 39,
+          "precision_numerator_correct_intent_draft_eligible": 228,
+          "precision_denominator_raw_draft_eligible": 267,
+          "precision_among_draft_eligible": 0.853933,
+          "abstain_count": 98,
+          "escalate_count": 55,
+          "abstention_and_escalation_count": 153,
+          "abstention_coverage": 0.364286,
+          "no_invented_accuracy_from_abstentions": true
+        }
+      },
+      "known_acceptance_regression_not_unseen_holdout": {
+        "suite_role": "known_acceptance_regression_not_unseen_holdout",
+        "system_acceptance_156": {
+          "labeled_153_accuracy": 0.7189542483660131,
+          "labeled_153_macro_f1_46": 0.7115372864900273,
+          "escalated_34_n": 39,
+          "escalated_34_accuracy": 0.7948717948717948,
+          "escalated_34_macro_f1": 0.7990196078431373,
+          "draft_expected_34_raw_draft": 29,
+          "draft_expected_34_correct_intent_draft": 23,
+          "draft_expected_34_selective_metrics": {
+            "denominator": 34,
+            "raw_draft_eligible_count": 29,
+            "raw_draft_eligible_rate": 0.852941,
+            "correct_intent_draft_eligible_count": 23,
+            "correct_intent_draft_eligible_rate": 0.676471,
+            "wrong_intent_draft_eligible_count": 6,
+            "precision_numerator_correct_intent_draft_eligible": 23,
+            "precision_denominator_raw_draft_eligible": 29,
+            "precision_among_draft_eligible": 0.793103,
+            "abstain_count": 4,
+            "escalate_count": 1,
+            "abstention_and_escalation_count": 5,
+            "abstention_coverage": 0.147059,
+            "no_invented_accuracy_from_abstentions": true
+          },
+          "mandatory_63_n": 63,
+          "mandatory_63_strict_match": 61,
+          "mandatory_63_strict_match_rate": 0.968254,
+          "mandatory_63_escalate": 61,
+          "mandatory_63_abstain_manual_fallback": 1,
+          "mandatory_63_real_unsafe_draft_leaks": [],
+          "mandatory_63_uninjected_fault_fixtures": [
+            {
+              "case_id": "unc-return_policy-04",
+              "observed_action_without_fault_injection": "retrieve_draft",
+              "status": "NOT_EXECUTED_FAULT_INJECTION",
+              "does_not_count_as_passing_fault_coverage": true
+            }
+          ]
+        },
+        "final_acceptance_24": {
+          "answerable_12_raw_draft": 4,
+          "answerable_12_correct_intent_draft": 4,
+          "answerable_12_wrong_intent_draft_cases": [],
+          "answerable_12_selective_metrics": {
+            "denominator": 12,
+            "raw_draft_eligible_count": 4,
+            "raw_draft_eligible_rate": 0.333333,
+            "correct_intent_draft_eligible_count": 4,
+            "correct_intent_draft_eligible_rate": 0.333333,
+            "wrong_intent_draft_eligible_count": 0,
+            "precision_numerator_correct_intent_draft_eligible": 4,
+            "precision_denominator_raw_draft_eligible": 4,
+            "precision_among_draft_eligible": 1.0,
+            "abstain_count": 6,
+            "escalate_count": 2,
+            "abstention_and_escalation_count": 8,
+            "abstention_coverage": 0.666667,
+            "no_invented_accuracy_from_abstentions": true
+          },
+          "unanswerable_active_kb_n": 8,
+          "unanswerable_active_kb_draft_leaks": [],
+          "unanswerable_injected_synthetic_fault_n": 4,
+          "unanswerable_injected_synthetic_uninjected_drafted_cases": [
+            "final-case-21"
+          ],
+          "injected_fault_note": "fixture_boundary=='injected_synthetic' cases (final-case-21..24) run uninjected here and NEVER count as passing fault coverage."
+        }
+      }
+    },
+    "candidate_calibrated_evaluation": {
+      "model_name": "fit2-sibling-boundary-v2",
+      "score_path": {
+        "score_kind": "calibrated_probability",
+        "temperature": 1.29,
+        "calibrated": true,
+        "experimental_rejector_active": true
+      },
+      "independent_holdout": {
+        "suite_role": "independent_group_isolated_holdout",
+        "n_total": 2,
+        "accuracy_46": 1.0,
+        "macro_f1_46": 0.043478260869565216,
+        "ece_10bin": 0.13815274834632874,
+        "binary_top_label_brier": 0.025480653856918778,
+        "rejected_by_experimental_adapter_count": 0,
+        "escalated_34": {
+          "n": 2,
+          "accuracy": 1.0,
+          "macro_f1": 0.058823529411764705,
+          "unsafe_draft_eligible_count": 0
+        },
+        "supported_12": {
+          "n": 0,
+          "accuracy": 0.0,
+          "macro_f1": 0.0,
+          "raw_draft_eligible_count": 0,
+          "correct_intent_draft_eligible_count": 0,
+          "selective_metrics": {
+            "denominator": 0,
+            "raw_draft_eligible_count": 0,
+            "raw_draft_eligible_rate": 0.0,
+            "correct_intent_draft_eligible_count": 0,
+            "correct_intent_draft_eligible_rate": 0.0,
+            "wrong_intent_draft_eligible_count": 0,
+            "precision_numerator_correct_intent_draft_eligible": 0,
+            "precision_denominator_raw_draft_eligible": 0,
+            "precision_among_draft_eligible": null,
+            "abstain_count": 0,
+            "escalate_count": 0,
+            "abstention_and_escalation_count": 0,
+            "abstention_coverage": 0.0,
+            "no_invented_accuracy_from_abstentions": true
+          }
+        }
+      },
+      "ml_oos_80": {
+        "n_total": 80,
+        "flagged_safe_count": 80,
+        "false_draft_eligible_count": 0,
+        "false_draft_case_ids": [],
+        "adapter_vetoes_count": 0
+      },
+      "ml_noise_420": {
+        "n_total": 420,
+        "accuracy_12": 0.7642857142857142,
+        "macro_f1_12": 0.7710399048950393,
+        "safe_routing_rate": 0.9523809523809523,
+        "ece_10bin": 0.09068497275667532,
+        "binary_top_label_brier": 0.18200017618735767,
+        "adapter_vetoes_count": 0,
+        "selective_metrics": {
+          "denominator": 420,
+          "raw_draft_eligible_count": 218,
+          "raw_draft_eligible_rate": 0.519048,
+          "correct_intent_draft_eligible_count": 198,
+          "correct_intent_draft_eligible_rate": 0.471429,
+          "wrong_intent_draft_eligible_count": 20,
+          "precision_numerator_correct_intent_draft_eligible": 198,
+          "precision_denominator_raw_draft_eligible": 218,
+          "precision_among_draft_eligible": 0.908257,
+          "abstain_count": 147,
+          "escalate_count": 55,
+          "abstention_and_escalation_count": 202,
+          "abstention_coverage": 0.480952,
+          "no_invented_accuracy_from_abstentions": true
+        }
+      },
+      "known_acceptance_regression_not_unseen_holdout": {
+        "suite_role": "known_acceptance_regression_not_unseen_holdout",
+        "system_acceptance_156": {
+          "labeled_153_accuracy": 0.7189542483660131,
+          "labeled_153_macro_f1_46": 0.7115372864900273,
+          "escalated_34_n": 39,
+          "escalated_34_accuracy": 0.7948717948717948,
+          "escalated_34_macro_f1": 0.7990196078431373,
+          "draft_expected_34_raw_draft": 22,
+          "draft_expected_34_correct_intent_draft": 21,
+          "draft_expected_34_selective_metrics": {
+            "denominator": 34,
+            "raw_draft_eligible_count": 22,
+            "raw_draft_eligible_rate": 0.647059,
+            "correct_intent_draft_eligible_count": 21,
+            "correct_intent_draft_eligible_rate": 0.617647,
+            "wrong_intent_draft_eligible_count": 1,
+            "precision_numerator_correct_intent_draft_eligible": 21,
+            "precision_denominator_raw_draft_eligible": 22,
+            "precision_among_draft_eligible": 0.954545,
+            "abstain_count": 11,
+            "escalate_count": 1,
+            "abstention_and_escalation_count": 12,
+            "abstention_coverage": 0.352941,
+            "no_invented_accuracy_from_abstentions": true
+          },
+          "mandatory_63_n": 63,
+          "mandatory_63_strict_match": 61,
+          "mandatory_63_strict_match_rate": 0.968254,
+          "mandatory_63_escalate": 61,
+          "mandatory_63_abstain_manual_fallback": 1,
+          "mandatory_63_real_unsafe_draft_leaks": [],
+          "mandatory_63_uninjected_fault_fixtures": [
+            {
+              "case_id": "unc-return_policy-04",
+              "observed_action_without_fault_injection": "retrieve_draft",
+              "status": "NOT_EXECUTED_FAULT_INJECTION",
+              "does_not_count_as_passing_fault_coverage": true
+            }
+          ]
+        },
+        "final_acceptance_24": {
+          "answerable_12_raw_draft": 2,
+          "answerable_12_correct_intent_draft": 2,
+          "answerable_12_wrong_intent_draft_cases": [],
+          "answerable_12_selective_metrics": {
+            "denominator": 12,
+            "raw_draft_eligible_count": 2,
+            "raw_draft_eligible_rate": 0.166667,
+            "correct_intent_draft_eligible_count": 2,
+            "correct_intent_draft_eligible_rate": 0.166667,
+            "wrong_intent_draft_eligible_count": 0,
+            "precision_numerator_correct_intent_draft_eligible": 2,
+            "precision_denominator_raw_draft_eligible": 2,
+            "precision_among_draft_eligible": 1.0,
+            "abstain_count": 8,
+            "escalate_count": 2,
+            "abstention_and_escalation_count": 10,
+            "abstention_coverage": 0.833333,
+            "no_invented_accuracy_from_abstentions": true
+          },
+          "unanswerable_active_kb_n": 8,
+          "unanswerable_active_kb_draft_leaks": [],
+          "unanswerable_injected_synthetic_fault_n": 4,
+          "unanswerable_injected_synthetic_uninjected_drafted_cases": [
+            "final-case-21"
+          ],
+          "injected_fault_note": "fixture_boundary=='injected_synthetic' cases (final-case-21..24) run uninjected here and NEVER count as passing fault coverage."
+        }
+      }
+    }
+  }
+}
