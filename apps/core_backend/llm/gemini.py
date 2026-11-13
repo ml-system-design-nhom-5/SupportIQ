@@ -206,14 +206,6 @@ _PINNED_VERIFIED_POLICIES: dict[tuple[str, str], dict[str, Any]] = {
     },
 }
 
-VERIFIED_POLICY_PUBLIC_CONTACTS: dict[tuple[str, str], tuple[str, ...]] = {
-    key: spec["public_contacts"] for key, spec in _PINNED_VERIFIED_POLICIES.items()
-}
-
-VERIFIED_POLICY_CONTENT_HASHES: dict[tuple[str, str], str] = {
-    key: spec["content_hash"] for key, spec in _PINNED_VERIFIED_POLICIES.items()
-}
-
 
 def _sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()

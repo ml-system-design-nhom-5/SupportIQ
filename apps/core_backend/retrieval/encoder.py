@@ -8,12 +8,6 @@ from apps.core_backend.retrieval.importer import PolicyVersion
 BGE_MODEL_NAME = "BAAI/bge-small-en-v1.5"
 QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
 
-def count_tokens(text: str, tokenizer: Optional[Any] = None) -> int:
-    """Accurately count tokens using BGE tokenizer or fallback approximation."""
-    if tokenizer:
-        return len(tokenizer.encode(text, add_special_tokens=False))
-    return int(len(text.split()) * 1.3)
-
 def chunk_policy(
     policy: PolicyVersion,
     tokenizer: Optional[Any] = None,

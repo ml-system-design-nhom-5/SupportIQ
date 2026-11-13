@@ -1,6 +1,5 @@
 """Leased PostgreSQL jobs; late results never replace a newer suggestion."""
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import timedelta
 import threading
 import time
@@ -11,7 +10,7 @@ from sqlalchemy import or_, select
 
 from apps.backend.platform.database import audit, utcnow, ensure_utc
 from apps.backend.platform.models import Suggestion, SuggestionJob, Ticket
-from apps.backend.platform.observability import metrics, logger
+from apps.backend.platform.observability import metrics
 
 _BOUNDED_REMOTE_FAULT_CODES = frozenset({
     "ai_service_unavailable",

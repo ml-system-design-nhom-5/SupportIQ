@@ -9,7 +9,7 @@ import uuid
 
 from argon2 import PasswordHasher
 import httpx
-from fastapi import FastAPI, Request, Response, Query
+from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -23,7 +23,7 @@ from .commerce import order_view, require_order, page, page_query
 from .platform.config import Settings
 from .platform.database import Database, Problem, idempotent, utcnow
 from .platform.models import Account, Order, Product, SessionRecord, Ticket
-from .platform.observability import metrics, logger, error_tracker, trace_stage
+from .platform.observability import metrics, logger, error_tracker
 from .tickets.jobs import SuggestionWorker
 from .tickets.reports import report
 from .tickets.service import act, create_ticket, require_ticket, shop_ticket, summary, workspace

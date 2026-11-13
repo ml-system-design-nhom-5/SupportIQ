@@ -8,7 +8,7 @@ from sqlalchemy import select, text
 from apps.backend.commerce import order_view, require_order
 from apps.backend.platform.database import Problem, audit, utcnow, ensure_utc
 from apps.backend.platform.models import Account, CustomerMessage, Order, Suggestion, SuggestionJob, Ticket
-from apps.backend.platform.observability import metrics, logger
+from apps.backend.platform.observability import metrics
 from .privacy import PLACEHOLDER, pseudonymize, restore
 
 STAFF_REASONS = {"wrong_intent", "wrong_source", "unsupported_claim", "kb_gap", "missing_case_info", "tone_or_clarity", "case_exception", "other"}

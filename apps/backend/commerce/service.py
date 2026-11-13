@@ -1,5 +1,4 @@
 import base64
-from sqlalchemy import select
 
 from apps.backend.platform.database import Problem
 from apps.backend.platform.models import Order
