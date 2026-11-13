@@ -1,0 +1,36 @@
+{
+  "generated_at": "2026-11-13T11:39:12.200848+00:00",
+  "holdout_id": "sealed_holdout_20261113",
+  "status": "LOCKED_PRE_CANDIDATE",
+  "cases_file": "artifacts/evaluation/sealed_holdout_20261113/sealed_holdout_cases.jsonl",
+  "cases_sha256": "c874a2b829fa1dad645ca4d0684a9b9d558895e002564a56edae0865c81ab78d",
+  "total_cases": 72,
+  "slice_counts": {
+    "supported_answerable": 24,
+    "novel_ood": 24,
+    "mandatory_escalation_compound": 24
+  },
+  "supported_answerable_intent_counts": {
+    "track_order": 2,
+    "cancel_order": 2,
+    "delivery_time": 2,
+    "delivery_issue": 2,
+    "shipping_costs": 2,
+    "return_policy": 2,
+    "return_product": 2,
+    "refund_policy": 2,
+    "request_refund": 2,
+    "refund_status": 2,
+    "payment_issue": 2,
+    "human_agent": 2
+  },
+  "human_agent_escalate_count": 2,
+  "active_kb_release_sha256": "33cf05b50c25384fbb208cd0c0c5cae71991d29a0f754cb1b20a1d6d7285cdaa",
+  "approved_kb_sha256": "aaa924c4b48dcd53a14269045b278b66f6e5e8ae9d1b614cd59b757102b78594",
+  "intent_policy_sha256": "8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+  "active_kb_doc_count": 14,
+  "historical_prompt_entries_checked": 4013,
+  "exact_overlap_count": 0,
+  "high_jaccard_ge_0_70_overlap_count": 0,
+  "visibility_rule": "Holdout prompt texts withheld from Task A until candidate lock; SHA-256 and counts published only."
+}

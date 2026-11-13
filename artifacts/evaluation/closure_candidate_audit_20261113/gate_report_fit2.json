@@ -1,0 +1,806 @@
+{
+  "generated_at": "2026-11-13T12:07:21.686729+00:00",
+  "report_type": "task_c_classifier_acceptance_gate",
+  "gate_decision": "REJECT",
+  "failure_reasons": [
+    "mandatory_escalation_unsafe_draft_leak"
+  ],
+  "suite_classification_note": "system_acceptance_156 and final_acceptance_24 are explicitly labeled known_acceptance_regression_not_unseen_holdout.",
+  "provenance_audit": {
+    "candidate_dir": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-routing\\artifacts\\evaluation\\task_a_boundary_20261113\\candidate_model_fit2",
+    "manifest_path": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-routing\\artifacts\\evaluation\\task_a_boundary_20261113\\candidate_model_fit2\\candidate_provenance_manifest.json",
+    "files": {
+      "weights": {
+        "path": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-routing\\artifacts\\evaluation\\task_a_boundary_20261113\\candidate_model_fit2\\model.safetensors",
+        "exists": true,
+        "sha256": "f695b1fe514aba81aafc968823047d496b03474a0b47199c65eaac6bd93c6dfa",
+        "size_bytes": 267967920
+      },
+      "tokenizer": {
+        "path": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-routing\\artifacts\\evaluation\\task_a_boundary_20261113\\candidate_model_fit2\\tokenizer.json",
+        "exists": true,
+        "sha256": "41b9d12a4c559e4098f30173bc0f76d092c43d7b1f873e7027da45a256f30f87",
+        "size_bytes": 711659
+      },
+      "config": {
+        "path": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-routing\\artifacts\\evaluation\\task_a_boundary_20261113\\candidate_model_fit2\\config.json",
+        "exists": true,
+        "sha256": "6fa1fa9cc6a94063a977b0adaf2c9c3b296cf296d4ad9dcc6f2c52ca3bac9cb2",
+        "size_bytes": 3349
+      }
+    },
+    "valid_46_label_bijection": true,
+    "num_labels": 46,
+    "provenance_passed": true,
+    "failure_reasons": [],
+    "manifest": {
+      "schema_version": "candidate_provenance.v1",
+      "provenance_status": "verified",
+      "candidate_name": "fit2-supcon-energy-boundary-v1",
+      "git_commit": "1dc25ffb5a192893e7b8a08a64d5ddbec2b6f5d8",
+      "base_model": {
+        "init_checkpoint": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-routing\\artifacts\\evaluation\\task_a_closure_20261113\\candidate_model",
+        "init_weights_sha256": "95a940b630f44bf8d11882a26062c857839baa2d80d188f5451d52cecc2158a6",
+        "original_backbone": "distilbert-base-uncased",
+        "unfrozen_transformer_layers": 6
+      },
+      "training_lineage": {
+        "fit_id": "fit2_supcon_energy",
+        "epochs": 3,
+        "batch_size": 32,
+        "lr": 2e-05,
+        "max_length": 64,
+        "seed": 42,
+        "device": "cuda",
+        "train_seconds": 104.31,
+        "train_total_examples": 13000,
+        "epoch_stats": [
+          {
+            "epoch": 1,
+            "mean_loss": 0.88022,
+            "pos_loss_sum": 0.31068,
+            "neg_loss_sum": 0.42278,
+            "supcon_loss_sum": 0.14676
+          },
+          {
+            "epoch": 2,
+            "mean_loss": 0.37035,
+            "pos_loss_sum": 0.2631,
+            "neg_loss_sum": 0.00916,
+            "supcon_loss_sum": 0.09809
+          },
+          {
+            "epoch": 3,
+            "mean_loss": 0.35608,
+            "pos_loss_sum": 0.256,
+            "neg_loss_sum": 0.00893,
+            "supcon_loss_sum": 0.09115
+          }
+        ],
+        "calibration_temperature": 1.0,
+        "max_neg_cal_supported12_prob": 0.557692
+      },
+      "dataset_hashes": {
+        "boundary_split_manifest": "44eebb254c3b6d472dfda68d07c0d36efe5390113b04802890d5155033318387",
+        "full_train_split": "c0012ccb4b1eb695470966b1e17c2cd0f5f92cf538782ba132410ebfbf5660bc",
+        "full_cal_split": "dc8c7773db46a1bbebcdf67b83c640b9635a4724f0c262dd9fa61ede3c139672",
+        "bitext_train_clean": "36f6e74f7dd009459e0a79710197dc44437ca5539d3b5a46b1e014f5b3bafea0",
+        "bitext_train_noisy": "5233abffaf4c6dbf78c548f3af06cb14aa96f2063611d1b61eb4a6be59573261",
+        "bitext_cal": "54e9e86ae6ae076a9245fb5d3af60d1ce28c345fe492200824fe26078a83a3a9",
+        "bitext_test_6690": "c2279c30a6e7a9fde7488ea78d80a05fa560eb4ea9c02c746ffd87f6767c50b8"
+      },
+      "artifact_hashes": {
+        "model.safetensors": "f695b1fe514aba81aafc968823047d496b03474a0b47199c65eaac6bd93c6dfa",
+        "tokenizer.json": "41b9d12a4c559e4098f30173bc0f76d092c43d7b1f873e7027da45a256f30f87",
+        "config.json": "6fa1fa9cc6a94063a977b0adaf2c9c3b296cf296d4ad9dcc6f2c52ca3bac9cb2"
+      },
+      "token_truncation_audit": {
+        "max_length": 64,
+        "train_all": {
+          "count": 11320,
+          "truncated_count": 0,
+          "truncation_rate": 0.0,
+          "max_tokens": 30
+        },
+        "cal_all": {
+          "count": 824,
+          "truncated_count": 0,
+          "truncation_rate": 0.0,
+          "max_tokens": 30
+        },
+        "eval_pos": {
+          "count": 122,
+          "truncated_count": 0,
+          "truncation_rate": 0.0,
+          "max_tokens": 24
+        },
+        "eval_neg": {
+          "count": 39,
+          "truncated_count": 0,
+          "truncation_rate": 0.0,
+          "max_tokens": 30
+        },
+        "ml_oos_80": {
+          "count": 80,
+          "truncated_count": 0,
+          "truncation_rate": 0.0,
+          "max_tokens": 18
+        },
+        "system_acceptance_156": {
+          "count": 156,
+          "truncated_count": 0,
+          "truncation_rate": 0.0,
+          "max_tokens": 24
+        }
+      }
+    }
+  },
+  "calibration_manifest_audit": {
+    "present": true,
+    "path": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-routing\\artifacts\\evaluation\\task_a_boundary_20261113\\candidate_model_fit2\\calibration_manifest.json",
+    "valid": true,
+    "failure_reasons": [],
+    "temperature": 1.0,
+    "calibrated": true,
+    "rejector": {
+      "enabled": false,
+      "type": "logistic_regression_v1",
+      "feature_spec": "logit_geometry_v1",
+      "feature_dim": 8,
+      "scaler_mean": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scaler_scale": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "weights": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "bias": 0.0,
+      "threshold": 0.0,
+      "reject_when": "below",
+      "positive_label": "in_scope"
+    },
+    "manifest": {
+      "schema_version": "selective_calibration.v1",
+      "model_version": "fit2-supcon-energy-boundary-v1",
+      "weights_sha256": "f695b1fe514aba81aafc968823047d496b03474a0b47199c65eaac6bd93c6dfa",
+      "tokenizer_sha256": "41b9d12a4c559e4098f30173bc0f76d092c43d7b1f873e7027da45a256f30f87",
+      "config_sha256": "6fa1fa9cc6a94063a977b0adaf2c9c3b296cf296d4ad9dcc6f2c52ca3bac9cb2",
+      "artifact_hashes": {
+        "model.safetensors": "f695b1fe514aba81aafc968823047d496b03474a0b47199c65eaac6bd93c6dfa",
+        "tokenizer.json": "41b9d12a4c559e4098f30173bc0f76d092c43d7b1f873e7027da45a256f30f87",
+        "config.json": "6fa1fa9cc6a94063a977b0adaf2c9c3b296cf296d4ad9dcc6f2c52ca3bac9cb2"
+      },
+      "tokenization": {
+        "max_length": 64,
+        "padding": "max_length",
+        "truncation": true
+      },
+      "label_space": {
+        "num_labels": 46,
+        "valid_46_label_bijection": true,
+        "id2label": {
+          "0": "add_product",
+          "1": "availability",
+          "2": "availability_in_store",
+          "3": "availability_online",
+          "4": "cancel_order",
+          "5": "change_account",
+          "6": "change_order",
+          "7": "close_account",
+          "8": "customer_service",
+          "9": "damaged_delivery",
+          "10": "delivery_issue",
+          "11": "delivery_time",
+          "12": "exchange_product",
+          "13": "exchange_product_in_store",
+          "14": "human_agent",
+          "15": "missing_item",
+          "16": "open_account",
+          "17": "order_history",
+          "18": "pay",
+          "19": "payment_issue",
+          "20": "payment_methods",
+          "21": "product_information",
+          "22": "product_issue",
+          "23": "recover_password",
+          "24": "refund_policy",
+          "25": "refund_status",
+          "26": "remove_product",
+          "27": "request_invoice",
+          "28": "request_refund",
+          "29": "request_right_to_rectification",
+          "30": "return_policy",
+          "31": "return_product",
+          "32": "return_product_in_store",
+          "33": "return_product_online",
+          "34": "sales_period",
+          "35": "shipping_costs",
+          "36": "store_location",
+          "37": "store_opening_hours",
+          "38": "submit_feedback",
+          "39": "submit_product_feedback",
+          "40": "submit_product_idea",
+          "41": "technical_issue",
+          "42": "track_delivery",
+          "43": "track_order",
+          "44": "use_app",
+          "45": "wrong_item"
+        }
+      },
+      "calibration": {
+        "method": "temperature_scaling_nll",
+        "temperature": 1.0,
+        "min_temperature": 1.0,
+        "calibrated": true,
+        "calibration_sample_count": 776
+      },
+      "selective_rejector": {
+        "enabled": false,
+        "type": "logistic_regression_v1",
+        "feature_spec": "logit_geometry_v1",
+        "feature_dim": 8,
+        "scaler_mean": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "scaler_scale": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "weights": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "bias": 0.0,
+        "threshold": 0.0,
+        "reject_when": "below",
+        "positive_label": "in_scope"
+      }
+    }
+  },
+  "runtime_parity_audit": {
+    "checked": true,
+    "passed": true,
+    "probe_count": 4,
+    "probe_temperature": 1.0,
+    "tokenization_mismatches": 0,
+    "label_mismatches": 0,
+    "score_kind_mismatches": 0,
+    "max_raw_confidence_abs_diff": 0.0,
+    "max_raw_margin_abs_diff": 0.0,
+    "max_calibrated_confidence_abs_diff": 0.0,
+    "max_calibrated_margin_abs_diff": 0.0,
+    "fail_closed_non_serving_checksum": true,
+    "engine_rejection_enforcement": {
+      "checked": true,
+      "raw_engine_recommendation_on_rejected_spy": "abstain",
+      "raw_engine_action_on_rejected_spy": "manual_fallback",
+      "engine_enforces_experimental_rejection": true,
+      "harness_guarded_action_on_rejected_spy": "manual_fallback",
+      "harness_guard_vetoed": false,
+      "distinction_note": "ModelContainer parity verifies tokenization, 46-label bijection, temperature scaling, and score_kind. Engine._analyse enforcement of rejected_by_experimental_adapter/selective_accepted is measured separately from score parity; when False, experimental rejector vetoes occur only in Task C's _apply_adapter_routing_guard."
+    }
+  },
+  "split_isolation_and_contamination": {
+    "passed": true,
+    "failure_reasons": [],
+    "counts": {
+      "train": 11320,
+      "calibration": 824,
+      "eval": 122
+    },
+    "group_counts": {
+      "train": 7453,
+      "calibration": 748,
+      "eval": 53
+    },
+    "group_overlaps": {
+      "train_vs_calibration": [],
+      "train_vs_eval": [],
+      "calibration_vs_eval": []
+    },
+    "text_overlaps": {
+      "train_vs_calibration": 0,
+      "train_vs_eval": 0,
+      "calibration_vs_eval": 0
+    },
+    "gold_exact_matches": [],
+    "gold_high_jaccard_matches": []
+  },
+  "serving_baseline_evaluation": {
+    "model_name": "distilbert-supportiq",
+    "score_path": {
+      "score_kind": "uncalibrated_softmax",
+      "temperature": 1.0,
+      "calibrated": false,
+      "experimental_rejector_active": false
+    },
+    "independent_holdout": {
+      "suite_role": "independent_group_isolated_holdout",
+      "n_total": 122,
+      "accuracy_46": 0.4180327868852459,
+      "macro_f1_46": 0.19900590552764463,
+      "ece_10bin": 0.2001791295335918,
+      "binary_top_label_brier": 0.24804566533023573,
+      "rejected_by_experimental_adapter_count": 0,
+      "escalated_34": {
+        "n": 38,
+        "accuracy": 0.4473684210526316,
+        "macro_f1": 0.14749515190691664,
+        "unsafe_draft_eligible_count": 1
+      },
+      "supported_12": {
+        "n": 84,
+        "accuracy": 0.40476190476190477,
+        "macro_f1": 0.4027605240763135,
+        "raw_draft_eligible_count": 33,
+        "correct_intent_draft_eligible_count": 21,
+        "selective_metrics": {
+          "denominator": 84,
+          "raw_draft_eligible_count": 33,
+          "raw_draft_eligible_rate": 0.392857,
+          "correct_intent_draft_eligible_count": 21,
+          "correct_intent_draft_eligible_rate": 0.25,
+          "wrong_intent_draft_eligible_count": 12,
+          "precision_numerator_correct_intent_draft_eligible": 21,
+          "precision_denominator_raw_draft_eligible": 33,
+          "precision_among_draft_eligible": 0.636364,
+          "abstain_count": 32,
+          "escalate_count": 19,
+          "abstention_and_escalation_count": 51,
+          "abstention_coverage": 0.607143,
+          "no_invented_accuracy_from_abstentions": true
+        }
+      }
+    },
+    "ml_oos_80": {
+      "n_total": 80,
+      "flagged_safe_count": 80,
+      "false_draft_eligible_count": 0,
+      "false_draft_case_ids": [],
+      "adapter_vetoes_count": 0
+    },
+    "ml_noise_420": {
+      "n_total": 420,
+      "accuracy_12": 0.6547619047619048,
+      "macro_f1_12": 0.681716063566692,
+      "safe_routing_rate": 0.9214285714285714,
+      "ece_10bin": 0.09200162912408515,
+      "binary_top_label_brier": 0.18279472822996587,
+      "adapter_vetoes_count": 0,
+      "selective_metrics": {
+        "denominator": 420,
+        "raw_draft_eligible_count": 210,
+        "raw_draft_eligible_rate": 0.5,
+        "correct_intent_draft_eligible_count": 177,
+        "correct_intent_draft_eligible_rate": 0.421429,
+        "wrong_intent_draft_eligible_count": 33,
+        "precision_numerator_correct_intent_draft_eligible": 177,
+        "precision_denominator_raw_draft_eligible": 210,
+        "precision_among_draft_eligible": 0.842857,
+        "abstain_count": 140,
+        "escalate_count": 70,
+        "abstention_and_escalation_count": 210,
+        "abstention_coverage": 0.5,
+        "no_invented_accuracy_from_abstentions": true
+      }
+    },
+    "known_acceptance_regression_not_unseen_holdout": {
+      "suite_role": "known_acceptance_regression_not_unseen_holdout",
+      "system_acceptance_156": {
+        "labeled_153_accuracy": 0.6666666666666666,
+        "labeled_153_macro_f1_46": 0.6119864194256491,
+        "escalated_34_n": 39,
+        "escalated_34_accuracy": 0.6153846153846154,
+        "escalated_34_macro_f1": 0.6470588235294118,
+        "draft_expected_34_raw_draft": 21,
+        "draft_expected_34_correct_intent_draft": 17,
+        "draft_expected_34_selective_metrics": {
+          "denominator": 34,
+          "raw_draft_eligible_count": 21,
+          "raw_draft_eligible_rate": 0.617647,
+          "correct_intent_draft_eligible_count": 17,
+          "correct_intent_draft_eligible_rate": 0.5,
+          "wrong_intent_draft_eligible_count": 4,
+          "precision_numerator_correct_intent_draft_eligible": 17,
+          "precision_denominator_raw_draft_eligible": 21,
+          "precision_among_draft_eligible": 0.809524,
+          "abstain_count": 12,
+          "escalate_count": 1,
+          "abstention_and_escalation_count": 13,
+          "abstention_coverage": 0.382353,
+          "no_invented_accuracy_from_abstentions": true
+        },
+        "mandatory_63_n": 63,
+        "mandatory_63_strict_match": 55,
+        "mandatory_63_strict_match_rate": 0.873016,
+        "mandatory_63_escalate": 55,
+        "mandatory_63_abstain_manual_fallback": 7,
+        "mandatory_63_real_unsafe_draft_leaks": [],
+        "mandatory_63_uninjected_fault_fixtures": [
+          {
+            "case_id": "unc-return_policy-04",
+            "observed_action_without_fault_injection": "retrieve_draft",
+            "status": "NOT_EXECUTED_FAULT_INJECTION",
+            "does_not_count_as_passing_fault_coverage": true
+          }
+        ]
+      },
+      "final_acceptance_24": {
+        "answerable_12_raw_draft": 5,
+        "answerable_12_correct_intent_draft": 4,
+        "answerable_12_wrong_intent_draft_cases": [
+          "final-case-02"
+        ],
+        "answerable_12_selective_metrics": {
+          "denominator": 12,
+          "raw_draft_eligible_count": 5,
+          "raw_draft_eligible_rate": 0.416667,
+          "correct_intent_draft_eligible_count": 4,
+          "correct_intent_draft_eligible_rate": 0.333333,
+          "wrong_intent_draft_eligible_count": 1,
+          "precision_numerator_correct_intent_draft_eligible": 4,
+          "precision_denominator_raw_draft_eligible": 5,
+          "precision_among_draft_eligible": 0.8,
+          "abstain_count": 6,
+          "escalate_count": 1,
+          "abstention_and_escalation_count": 7,
+          "abstention_coverage": 0.583333,
+          "no_invented_accuracy_from_abstentions": true
+        },
+        "unanswerable_active_kb_n": 8,
+        "unanswerable_active_kb_draft_leaks": [],
+        "unanswerable_injected_synthetic_fault_n": 4,
+        "unanswerable_injected_synthetic_uninjected_drafted_cases": [
+          "final-case-21"
+        ],
+        "injected_fault_note": "fixture_boundary=='injected_synthetic' cases (final-case-21..24) run uninjected here and NEVER count as passing fault coverage."
+      }
+    }
+  },
+  "candidate_evaluation": {
+    "model_name": "fit2-supcon-energy-boundary-v1",
+    "score_path": {
+      "score_kind": "uncalibrated_softmax",
+      "temperature": 1.0,
+      "calibrated": false,
+      "experimental_rejector_active": false
+    },
+    "independent_holdout": {
+      "suite_role": "independent_group_isolated_holdout",
+      "n_total": 122,
+      "accuracy_46": 0.7786885245901639,
+      "macro_f1_46": 0.39105713127452263,
+      "ece_10bin": 0.13509166474286155,
+      "binary_top_label_brier": 0.19625710901325383,
+      "rejected_by_experimental_adapter_count": 0,
+      "escalated_34": {
+        "n": 38,
+        "accuracy": 0.9210526315789473,
+        "macro_f1": 0.27320261437908494,
+        "unsafe_draft_eligible_count": 0
+      },
+      "supported_12": {
+        "n": 84,
+        "accuracy": 0.7142857142857143,
+        "macro_f1": 0.7472846597846599,
+        "raw_draft_eligible_count": 39,
+        "correct_intent_draft_eligible_count": 32,
+        "selective_metrics": {
+          "denominator": 84,
+          "raw_draft_eligible_count": 39,
+          "raw_draft_eligible_rate": 0.464286,
+          "correct_intent_draft_eligible_count": 32,
+          "correct_intent_draft_eligible_rate": 0.380952,
+          "wrong_intent_draft_eligible_count": 7,
+          "precision_numerator_correct_intent_draft_eligible": 32,
+          "precision_denominator_raw_draft_eligible": 39,
+          "precision_among_draft_eligible": 0.820513,
+          "abstain_count": 31,
+          "escalate_count": 14,
+          "abstention_and_escalation_count": 45,
+          "abstention_coverage": 0.535714,
+          "no_invented_accuracy_from_abstentions": true
+        }
+      }
+    },
+    "ml_oos_80": {
+      "n_total": 80,
+      "flagged_safe_count": 80,
+      "false_draft_eligible_count": 0,
+      "false_draft_case_ids": [],
+      "adapter_vetoes_count": 0
+    },
+    "ml_noise_420": {
+      "n_total": 420,
+      "accuracy_12": 0.8571428571428571,
+      "macro_f1_12": 0.8573069021452216,
+      "safe_routing_rate": 0.9380952380952381,
+      "ece_10bin": 0.06305978534122313,
+      "binary_top_label_brier": 0.11355614506861432,
+      "adapter_vetoes_count": 0,
+      "selective_metrics": {
+        "denominator": 420,
+        "raw_draft_eligible_count": 293,
+        "raw_draft_eligible_rate": 0.697619,
+        "correct_intent_draft_eligible_count": 267,
+        "correct_intent_draft_eligible_rate": 0.635714,
+        "wrong_intent_draft_eligible_count": 26,
+        "precision_numerator_correct_intent_draft_eligible": 267,
+        "precision_denominator_raw_draft_eligible": 293,
+        "precision_among_draft_eligible": 0.911263,
+        "abstain_count": 94,
+        "escalate_count": 33,
+        "abstention_and_escalation_count": 127,
+        "abstention_coverage": 0.302381,
+        "no_invented_accuracy_from_abstentions": true
+      }
+    },
+    "known_acceptance_regression_not_unseen_holdout": {
+      "suite_role": "known_acceptance_regression_not_unseen_holdout",
+      "system_acceptance_156": {
+        "labeled_153_accuracy": 0.7973856209150327,
+        "labeled_153_macro_f1_46": 0.7325727693512551,
+        "escalated_34_n": 39,
+        "escalated_34_accuracy": 0.6923076923076923,
+        "escalated_34_macro_f1": 0.7352941176470589,
+        "draft_expected_34_raw_draft": 28,
+        "draft_expected_34_correct_intent_draft": 25,
+        "draft_expected_34_selective_metrics": {
+          "denominator": 34,
+          "raw_draft_eligible_count": 28,
+          "raw_draft_eligible_rate": 0.823529,
+          "correct_intent_draft_eligible_count": 25,
+          "correct_intent_draft_eligible_rate": 0.735294,
+          "wrong_intent_draft_eligible_count": 3,
+          "precision_numerator_correct_intent_draft_eligible": 25,
+          "precision_denominator_raw_draft_eligible": 28,
+          "precision_among_draft_eligible": 0.892857,
+          "abstain_count": 6,
+          "escalate_count": 0,
+          "abstention_and_escalation_count": 6,
+          "abstention_coverage": 0.176471,
+          "no_invented_accuracy_from_abstentions": true
+        },
+        "mandatory_63_n": 63,
+        "mandatory_63_strict_match": 57,
+        "mandatory_63_strict_match_rate": 0.904762,
+        "mandatory_63_escalate": 57,
+        "mandatory_63_abstain_manual_fallback": 3,
+        "mandatory_63_real_unsafe_draft_leaks": [
+          "uns-order_history-01",
+          "uns-return_product_in_store-01"
+        ],
+        "mandatory_63_uninjected_fault_fixtures": [
+          {
+            "case_id": "unc-return_policy-04",
+            "observed_action_without_fault_injection": "retrieve_draft",
+            "status": "NOT_EXECUTED_FAULT_INJECTION",
+            "does_not_count_as_passing_fault_coverage": true
+          }
+        ]
+      },
+      "final_acceptance_24": {
+        "answerable_12_raw_draft": 10,
+        "answerable_12_correct_intent_draft": 10,
+        "answerable_12_wrong_intent_draft_cases": [],
+        "answerable_12_selective_metrics": {
+          "denominator": 12,
+          "raw_draft_eligible_count": 10,
+          "raw_draft_eligible_rate": 0.833333,
+          "correct_intent_draft_eligible_count": 10,
+          "correct_intent_draft_eligible_rate": 0.833333,
+          "wrong_intent_draft_eligible_count": 0,
+          "precision_numerator_correct_intent_draft_eligible": 10,
+          "precision_denominator_raw_draft_eligible": 10,
+          "precision_among_draft_eligible": 1.0,
+          "abstain_count": 2,
+          "escalate_count": 0,
+          "abstention_and_escalation_count": 2,
+          "abstention_coverage": 0.166667,
+          "no_invented_accuracy_from_abstentions": true
+        },
+        "unanswerable_active_kb_n": 8,
+        "unanswerable_active_kb_draft_leaks": [],
+        "unanswerable_injected_synthetic_fault_n": 4,
+        "unanswerable_injected_synthetic_uninjected_drafted_cases": [
+          "final-case-21"
+        ],
+        "injected_fault_note": "fixture_boundary=='injected_synthetic' cases (final-case-21..24) run uninjected here and NEVER count as passing fault coverage."
+      }
+    }
+  },
+  "candidate_calibrated_evaluation": {
+    "model_name": "fit2-supcon-energy-boundary-v1",
+    "score_path": {
+      "score_kind": "calibrated_probability",
+      "temperature": 1.0,
+      "calibrated": true,
+      "experimental_rejector_active": true
+    },
+    "independent_holdout": {
+      "suite_role": "independent_group_isolated_holdout",
+      "n_total": 122,
+      "accuracy_46": 0.7786885245901639,
+      "macro_f1_46": 0.39105713127452263,
+      "ece_10bin": 0.13509166474286155,
+      "binary_top_label_brier": 0.19625710901325383,
+      "rejected_by_experimental_adapter_count": 0,
+      "escalated_34": {
+        "n": 38,
+        "accuracy": 0.9210526315789473,
+        "macro_f1": 0.27320261437908494,
+        "unsafe_draft_eligible_count": 0
+      },
+      "supported_12": {
+        "n": 84,
+        "accuracy": 0.7142857142857143,
+        "macro_f1": 0.7472846597846599,
+        "raw_draft_eligible_count": 39,
+        "correct_intent_draft_eligible_count": 32,
+        "selective_metrics": {
+          "denominator": 84,
+          "raw_draft_eligible_count": 39,
+          "raw_draft_eligible_rate": 0.464286,
+          "correct_intent_draft_eligible_count": 32,
+          "correct_intent_draft_eligible_rate": 0.380952,
+          "wrong_intent_draft_eligible_count": 7,
+          "precision_numerator_correct_intent_draft_eligible": 32,
+          "precision_denominator_raw_draft_eligible": 39,
+          "precision_among_draft_eligible": 0.820513,
+          "abstain_count": 31,
+          "escalate_count": 14,
+          "abstention_and_escalation_count": 45,
+          "abstention_coverage": 0.535714,
+          "no_invented_accuracy_from_abstentions": true
+        }
+      }
+    },
+    "ml_oos_80": {
+      "n_total": 80,
+      "flagged_safe_count": 80,
+      "false_draft_eligible_count": 0,
+      "false_draft_case_ids": [],
+      "adapter_vetoes_count": 0
+    },
+    "ml_noise_420": {
+      "n_total": 420,
+      "accuracy_12": 0.8571428571428571,
+      "macro_f1_12": 0.8573069021452216,
+      "safe_routing_rate": 0.9380952380952381,
+      "ece_10bin": 0.06305978534122313,
+      "binary_top_label_brier": 0.11355614506861432,
+      "adapter_vetoes_count": 0,
+      "selective_metrics": {
+        "denominator": 420,
+        "raw_draft_eligible_count": 293,
+        "raw_draft_eligible_rate": 0.697619,
+        "correct_intent_draft_eligible_count": 267,
+        "correct_intent_draft_eligible_rate": 0.635714,
+        "wrong_intent_draft_eligible_count": 26,
+        "precision_numerator_correct_intent_draft_eligible": 267,
+        "precision_denominator_raw_draft_eligible": 293,
+        "precision_among_draft_eligible": 0.911263,
+        "abstain_count": 94,
+        "escalate_count": 33,
+        "abstention_and_escalation_count": 127,
+        "abstention_coverage": 0.302381,
+        "no_invented_accuracy_from_abstentions": true
+      }
+    },
+    "known_acceptance_regression_not_unseen_holdout": {
+      "suite_role": "known_acceptance_regression_not_unseen_holdout",
+      "system_acceptance_156": {
+        "labeled_153_accuracy": 0.7973856209150327,
+        "labeled_153_macro_f1_46": 0.7325727693512551,
+        "escalated_34_n": 39,
+        "escalated_34_accuracy": 0.6923076923076923,
+        "escalated_34_macro_f1": 0.7352941176470589,
+        "draft_expected_34_raw_draft": 28,
+        "draft_expected_34_correct_intent_draft": 25,
+        "draft_expected_34_selective_metrics": {
+          "denominator": 34,
+          "raw_draft_eligible_count": 28,
+          "raw_draft_eligible_rate": 0.823529,
+          "correct_intent_draft_eligible_count": 25,
+          "correct_intent_draft_eligible_rate": 0.735294,
+          "wrong_intent_draft_eligible_count": 3,
+          "precision_numerator_correct_intent_draft_eligible": 25,
+          "precision_denominator_raw_draft_eligible": 28,
+          "precision_among_draft_eligible": 0.892857,
+          "abstain_count": 6,
+          "escalate_count": 0,
+          "abstention_and_escalation_count": 6,
+          "abstention_coverage": 0.176471,
+          "no_invented_accuracy_from_abstentions": true
+        },
+        "mandatory_63_n": 63,
+        "mandatory_63_strict_match": 57,
+        "mandatory_63_strict_match_rate": 0.904762,
+        "mandatory_63_escalate": 57,
+        "mandatory_63_abstain_manual_fallback": 3,
+        "mandatory_63_real_unsafe_draft_leaks": [
+          "uns-order_history-01",
+          "uns-return_product_in_store-01"
+        ],
+        "mandatory_63_uninjected_fault_fixtures": [
+          {
+            "case_id": "unc-return_policy-04",
+            "observed_action_without_fault_injection": "retrieve_draft",
+            "status": "NOT_EXECUTED_FAULT_INJECTION",
+            "does_not_count_as_passing_fault_coverage": true
+          }
+        ]
+      },
+      "final_acceptance_24": {
+        "answerable_12_raw_draft": 10,
+        "answerable_12_correct_intent_draft": 10,
+        "answerable_12_wrong_intent_draft_cases": [],
+        "answerable_12_selective_metrics": {
+          "denominator": 12,
+          "raw_draft_eligible_count": 10,
+          "raw_draft_eligible_rate": 0.833333,
+          "correct_intent_draft_eligible_count": 10,
+          "correct_intent_draft_eligible_rate": 0.833333,
+          "wrong_intent_draft_eligible_count": 0,
+          "precision_numerator_correct_intent_draft_eligible": 10,
+          "precision_denominator_raw_draft_eligible": 10,
+          "precision_among_draft_eligible": 1.0,
+          "abstain_count": 2,
+          "escalate_count": 0,
+          "abstention_and_escalation_count": 2,
+          "abstention_coverage": 0.166667,
+          "no_invented_accuracy_from_abstentions": true
+        },
+        "unanswerable_active_kb_n": 8,
+        "unanswerable_active_kb_draft_leaks": [],
+        "unanswerable_injected_synthetic_fault_n": 4,
+        "unanswerable_injected_synthetic_uninjected_drafted_cases": [
+          "final-case-21"
+        ],
+        "injected_fault_note": "fixture_boundary=='injected_synthetic' cases (final-case-21..24) run uninjected here and NEVER count as passing fault coverage."
+      }
+    }
+  }
+}
