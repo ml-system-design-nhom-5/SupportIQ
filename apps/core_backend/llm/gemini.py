@@ -6,7 +6,7 @@ import os
 import re
 import time
 import math
-from datetime import date, timezone
+from datetime import date, datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any
 
@@ -187,6 +187,10 @@ RESPONSE_SCHEMA = {
 RE_EMAIL = re.compile(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}")
 RE_IDENTIFIER = re.compile(r"\b(?:ORD|cust|TIKI-TXN)-[\w-]+\b", re.IGNORECASE)
 RE_DATE_FORMAT = re.compile(r"\d{4}-\d{2}-\d{2}")
+RE_DATETIME_FORMAT = re.compile(r"(?<!\d)\d{4}-\d{2}-\d{2}(?:[T\s]+\d{2}:\d{2}(?::\d{2})?)?(?!\d)")
+RE_DOTTED_OR_GROUPED_MONEY = re.compile(r"[1-9]\d{0,2}(?:\.\d{3}|,\d{3})+(?:[.,]\d{1,2})?")
+RE_CURRENCY_SUFFIX = re.compile(r"^\s*(?:(?:VND|VNĐ|USD|EUR|SGD|JPY|GBP|dong)\b|[đ₫$€£¥])", re.IGNORECASE)
+RE_CURRENCY_PREFIX = re.compile(r"(?:(?:VND|VNĐ|USD|EUR|SGD|JPY|GBP)\b|[đ₫$€£¥])\s*$", re.IGNORECASE)
 RE_PHONE_NUMBER = re.compile(r"(?<!\w)\+?\d[\d .()-]{7,}\d(?!\w)")
 RE_REDACTED_TOKEN = re.compile(r"\b[A-Za-z0-9_-]{32,}\b")
 
@@ -363,14 +367,33 @@ def redact_contacts(
     text = RE_IDENTIFIER.sub("[IDENTIFIER]", text)
     allowed_digits = {re.sub(r"\D", "", n) for n in allowed_numbers} if allowed_numbers else set()
 
+    iso_spans: list[tuple[int, int]] = []
+    for dt_match in RE_DATETIME_FORMAT.finditer(text):
+        candidate = dt_match.group()
+        try:
+            if len(candidate) == 10:
+                date.fromisoformat(candidate)
+            else:
+                datetime.fromisoformat(re.sub(r"\s+", "T", candidate, count=1))
+            iso_spans.append((dt_match.start(), dt_match.end()))
+        except ValueError:
+            pass
+
     def mask_number(match: re.Match) -> str:
         value = match.group()
+        start, end = match.start(), match.end()
+        if any(s <= start and end <= e for s, e in iso_spans):
+            return value
         if RE_DATE_FORMAT.fullmatch(value):
             try:
                 date.fromisoformat(value)
                 return value
             except ValueError:
                 pass
+        if RE_DOTTED_OR_GROUPED_MONEY.fullmatch(value) and (
+            RE_CURRENCY_SUFFIX.match(text[end:]) or RE_CURRENCY_PREFIX.search(text[:start])
+        ):
+            return value
         digits = re.sub(r"\D", "", value)
         if allowed_digits and digits in allowed_digits:
             return value
@@ -381,13 +404,43 @@ def redact_contacts(
     return text
 
 
+_CONTEXT_SECRET_KEYS = (
+    "order_id",
+    "tracking_code",
+    "customer_id",
+    "transaction_id",
+    "customer_name",
+)
+
+
+def _redact_known_context_identifiers(text: str, business_context: dict | None) -> str:
+    """Mask explicit customer/order identifier literals from business_context without blanket number redaction."""
+    if not text or not isinstance(business_context, dict):
+        return text
+    out = text
+    for key in _CONTEXT_SECRET_KEYS:
+        raw = business_context.get(key)
+        if not isinstance(raw, str):
+            continue
+        val = raw.strip()
+        if len(val) < 4:
+            continue
+        prefix = r"(?<!\w)" if val[0].isalnum() else ""
+        suffix = r"(?!\w)" if val[-1].isalnum() else ""
+        out = re.sub(prefix + re.escape(val) + suffix, "[IDENTIFIER]", out, flags=re.IGNORECASE)
+    return out
+
+
 def build_grounded_sources(
     policy_evidence: list[dict],
     authorized_facts: dict | None,
-    provenance: dict | None = None
+    provenance: dict | None = None,
+    *,
+    include_order_identifiers: bool = True,
 ) -> list[dict]:
     """Construct unified, sanitized grounded sources S1..Sn covering both policy and order facts.
-    Strictly excludes sensitive customer identifiers (phone, email, secret tokens).
+    Strictly excludes sensitive customer identifiers (phone, email, secret tokens), and omits raw
+    order_id/tracking_code when include_order_identifiers=False for external LLM prompt egress.
     Assigns sequential source_id, document_id, version, excerpt, and SHA-256 digest.
     """
     sources: list[dict] = []
@@ -406,7 +459,11 @@ def build_grounded_sources(
         title = str(item.get("title", "") or "")
         rendered_excerpt = _extract_rendered_policy_text(item)
         allowed_contacts = _get_verified_policy_contacts(doc_key, item, rendered_excerpt)
+        sanitized_title = redact_contacts(title)
         sanitized_excerpt = redact_contacts(rendered_excerpt, allowed_numbers=allowed_contacts)
+        if not include_order_identifiers and authorized_facts:
+            sanitized_title = _redact_known_context_identifiers(sanitized_title, authorized_facts)
+            sanitized_excerpt = _redact_known_context_identifiers(sanitized_excerpt, authorized_facts)
         sha256 = _sha256_text(sanitized_excerpt)
         sources.append({
             "source_id": f"S{idx}",
@@ -414,7 +471,7 @@ def build_grounded_sources(
             "source_type": "policy",
             "document_id": doc_id,
             "version": ver,
-            "title": redact_contacts(title),
+            "title": sanitized_title,
             "excerpt": sanitized_excerpt,
             "text": sanitized_excerpt,
             "sha256": sha256,
@@ -424,7 +481,6 @@ def build_grounded_sources(
     # 2. Format authorized order facts source if present
     if authorized_facts:
         allowed_fields = {
-            "order_id",
             "order_status",
             "payment_status",
             "refund_status",
@@ -434,26 +490,33 @@ def build_grounded_sources(
             "can_cancel",
             "eligible_for_return",
             "carrier",
-            "tracking_code",
         }
+        if include_order_identifiers:
+            allowed_fields.update({"order_id", "tracking_code"})
         order_lines = []
-        order_id = str(authorized_facts.get("order_id", "ORDER-FACTS"))
+        raw_order_id = str(authorized_facts.get("order_id", "ORDER-FACTS"))
+        source_doc_id = raw_order_id if include_order_identifiers else "ORDER-FACTS"
+        source_title = f"Verified Order {raw_order_id} Details" if include_order_identifiers else "Verified Order Details"
         for k in sorted(allowed_fields):
             if k in authorized_facts and k != "order_id":
                 val = authorized_facts[k]
                 sanitized_val = redact_contacts(str(val))
+                if not include_order_identifiers:
+                    sanitized_val = _redact_known_context_identifiers(sanitized_val, authorized_facts)
                 order_lines.append(f"{k}: {sanitized_val}")
+        if not order_lines and not include_order_identifiers and "tracking_code" in authorized_facts:
+            order_lines.append("tracking: [IDENTIFIER]")
 
         if order_lines:
-            facts_text = f"Verified Order {order_id} Details:\n" + "\n".join(order_lines)
+            facts_text = f"{source_title}:\n" + "\n".join(order_lines)
             sha256 = hashlib.sha256(facts_text.encode("utf-8")).hexdigest()
             sources.append({
                 "source_id": f"S{idx}",
                 "id": f"S{idx}",
                 "source_type": "order_facts",
-                "document_id": order_id,
+                "document_id": source_doc_id,
                 "version": "facts",
-                "title": f"Verified Order {order_id} Details",
+                "title": source_title,
                 "excerpt": facts_text,
                 "text": facts_text,
                 "sha256": sha256,
@@ -465,14 +528,23 @@ def build_grounded_sources(
 
 def prepare_llm_input(question: str, intent: str, evidence: list[dict], business_context=None) -> dict:
     import hashlib
-    sources = build_grounded_sources(evidence, business_context)
+    internal_sources = build_grounded_sources(evidence, business_context, include_order_identifiers=True)
+    prompt_sources = build_grounded_sources(evidence, business_context, include_order_identifiers=False)
     allowed = {'order_status', 'payment_status', 'refund_status', 'delivery_date',
                'estimated_delivery', 'expected_refund_time', 'can_cancel', 'eligible_for_return'}
-    facts = {k: redact_contacts(v) if isinstance(v, str) else v
-             for k, v in (business_context or {}).items() if k in allowed}
-    prompt = json.dumps({'question': redact_contacts(question), 'intent': intent,
-                         'sources': sources, 'order_facts': facts}, ensure_ascii=False)
-    return {'prompt': prompt, 'sources': sources, 'sha256': hashlib.sha256(prompt.encode()).hexdigest()}
+    facts = {
+        k: (
+            _redact_known_context_identifiers(redact_contacts(v), business_context)
+            if isinstance(v, str)
+            else v
+        )
+        for k, v in (business_context or {}).items()
+        if k in allowed
+    }
+    redacted_q = _redact_known_context_identifiers(redact_contacts(question), business_context)
+    prompt = json.dumps({'question': redacted_q, 'intent': intent,
+                         'sources': prompt_sources, 'order_facts': facts}, ensure_ascii=False)
+    return {'prompt': prompt, 'sources': internal_sources, 'sha256': hashlib.sha256(prompt.encode()).hexdigest()}
 
 
 class GeminiDraftClient:
