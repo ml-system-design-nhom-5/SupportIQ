@@ -127,16 +127,9 @@ class Engine:
         evidence = retrieved.get("evidence", [])
         warnings = []
         retrieval_fault_codes = classify_retrieval_fault(retrieved)
-        is_encoder_failure = bool(retrieval_fault_codes and "encoder_failure" in retrieval_fault_codes)
-        is_encoder_unavailable = bool(retrieval_fault_codes and "encoder_unavailable" in retrieval_fault_codes)
-        if is_encoder_failure:
+        is_retrieval_fault = bool(retrieval_fault_codes)
+        if retrieval_fault_codes:
             for fault_code in retrieval_fault_codes:
-                if fault_code not in codes:
-                    codes.append(fault_code)
-            scope_review = self._policy_scope_requires_review(request["message"], evidence)
-        elif is_encoder_unavailable:
-            # Preserve legacy abstained/no_valid_document contract (test_escalation_12) while tagging encoder_unavailable.
-            for fault_code in ["no_valid_document", *retrieval_fault_codes]:
                 if fault_code not in codes:
                     codes.append(fault_code)
             scope_review = self._policy_scope_requires_review(request["message"], evidence)
@@ -172,7 +165,7 @@ class Engine:
                 "human_agent_requested" in codes
                 or explicit_authority
                 or scope_review
-                or is_encoder_failure
+                or is_retrieval_fault
                 or recognized_outside_scope
                 or explicit_outside_scope_action
             )

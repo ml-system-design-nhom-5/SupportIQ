@@ -633,19 +633,17 @@ def test_typed_fault_propagation_encoder_and_ml_timeout_parity(tmp_path: Path, m
         def generate(self, *args, **kwargs):
             raise AssertionError("LLM must not be called")
 
-    for payload, expected_code, expected_engine_status in [
-        ({"status": "encoder_unavailable", "evidence": [], "reason_codes": ["encoder_unavailable"], "has_conflict": False}, "encoder_unavailable", "abstained"),
-        ({"status": "encoder_failure", "evidence": [], "reason_codes": ["encoder_failure", "encoder_failed"], "has_conflict": False}, "encoder_failure", "escalation_recommended"),
+    for payload, expected_code, forbidden_code in [
+        ({"status": "encoder_unavailable", "evidence": [], "reason_codes": ["encoder_unavailable"], "has_conflict": False}, "encoder_unavailable", "encoder_failure"),
+        ({"status": "encoder_failure", "evidence": [], "reason_codes": ["encoder_failure", "encoder_failed"], "has_conflict": False}, "encoder_failure", "encoder_unavailable"),
     ]:
         eng = Engine(OkModel(), FaultRetriever(payload), ForbiddenLLM(), {"release_id": "test"}, policy={"supported_12_intents": ["return_policy"], "sensitive_action_intents": ["request_refund"], "all_46_labels": ["return_policy"], "default_confidence_threshold": 0.7, "default_margin_threshold": 0.1})
         draft_res = eng.draft({"message": "What is your return policy?", "as_of": "2026-11-13T00:00:00+00:00"})
-        assert draft_res["status"] == expected_engine_status
+        assert draft_res["status"] == "escalation_recommended"
         assert "insufficient_evidence" in draft_res["reason_codes"]
         assert expected_code in draft_res["reason_codes"]
-        if expected_code == "encoder_failure":
-            assert "no_valid_document" not in draft_res["reason_codes"]
-        else:
-            assert "no_valid_document" in draft_res["reason_codes"]
+        assert forbidden_code not in draft_res["reason_codes"]
+        assert "no_valid_document" not in draft_res["reason_codes"]
 
         r_run, spy, _, c_run = _make_runner(tmp_path / expected_code, monkeypatch, {}, retriever=FaultRetriever(payload))
         try:
@@ -653,9 +651,24 @@ def test_typed_fault_propagation_encoder_and_ml_timeout_parity(tmp_path: Path, m
             assert rr["action"] == "escalate"
             assert "insufficient_evidence" in rr["reason_codes"]
             assert expected_code in rr["reason_codes"]
+            assert forbidden_code not in rr["reason_codes"]
+            assert "no_valid_document" not in rr["reason_codes"]
             assert spy.calls == []
         finally:
             c_run.close()
+
+    # Preserve missing/expired evidence abstention behavior (distinct from encoder faults)
+    for missing_payload, expected_reason in [
+        ({"status": "empty_kb", "evidence": [], "reason_codes": [], "has_conflict": False}, "no_valid_document"),
+        ({"status": "ok", "evidence": [], "reason_codes": ["only_expired_documents"], "has_conflict": False}, "only_expired_documents"),
+    ]:
+        eng_missing = Engine(OkModel(), FaultRetriever(missing_payload), ForbiddenLLM(), {"release_id": "test"}, policy={"supported_12_intents": ["return_policy"], "sensitive_action_intents": ["request_refund"], "all_46_labels": ["return_policy"], "default_confidence_threshold": 0.7, "default_margin_threshold": 0.1})
+        missing_res = eng_missing.draft({"message": "What is your return policy?", "as_of": "2026-11-13T00:00:00+00:00"})
+        assert missing_res["status"] == "abstained"
+        assert "no_valid_document" in missing_res["reason_codes"]
+        assert expected_reason in missing_res["reason_codes"]
+        assert "encoder_unavailable" not in missing_res["reason_codes"]
+        assert "encoder_failure" not in missing_res["reason_codes"]
 
     # Actual IntentClient -> IntentPrediction -> decide_route -> PipelineRunner MockTransport round-trip regressions
     def run_http_fault_case(case_id: str, handler):

@@ -444,12 +444,16 @@ def test_escalation_11_llm_unavailable(ai_engine):
 
 
 def test_escalation_12_retrieval_unavailable(ai_engine):
-    """Escalation 12: Retrieval adapter failure triggers no_valid_document abstention."""
+    """Escalation 12: Retrieval encoder_unavailable escalates with typed insufficient_evidence+encoder_unavailable."""
     engine, _, adapter, _ = ai_engine
     with patch.object(adapter, "retrieve", return_value={"status": "encoder_unavailable", "evidence": []}):
         res = engine.draft({"message": "What is your return policy?", "as_of": utcnow().isoformat()})
-        assert res["status"] == "abstained"
-        assert "no_valid_document" in res["reason_codes"]
+        assert res["status"] == "escalation_recommended"
+        assert "insufficient_evidence" in res["reason_codes"]
+        assert "encoder_unavailable" in res["reason_codes"]
+        assert "no_valid_document" not in res["reason_codes"]
+        assert "encoder_failure" not in res["reason_codes"]
+        assert "encoder_failed" not in res["reason_codes"]
 
 
 def test_escalation_13_invalid_model_output(ai_engine):
