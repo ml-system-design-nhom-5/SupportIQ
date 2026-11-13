@@ -8,5 +8,3 @@ a0ac1ee61e7d5f1832bcf8019af7947b7e44792a:tests/unit/test_completion_grounding.py
 5189f191b7f070dd27891c691469b82a88d3aabc:tests/conftest.py:generic-api-key:15
 5189f191b7f070dd27891c691469b82a88d3aabc:tests/conftest.py:generic-api-key:16
 86676ae4c637fe0e359f386c0cd2909332b0b1d5:docs/superpowers/specs/2026-10-27-core-backend-design.md:generic-api-key:280
-# Temporary: the same findings in main's current tree, scanned by the commit-stage hook during the merge.
-tests/unit/test_completion_grounding.py:generic-api-key:32
