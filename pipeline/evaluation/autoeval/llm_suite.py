@@ -149,8 +149,11 @@ def redaction_probes() -> dict[str, Any]:
 
 # =========================================================================== offline: validator probes
 class _Resp:
-    def __init__(self, status: int, payload: Any):
+    def __init__(self, status: int, payload: Any, headers=None):
+        import httpx
+
         self.status_code, self._payload = status, payload
+        self.headers = httpx.Headers(headers or {})
 
     def json(self):
         if isinstance(self._payload, Exception):

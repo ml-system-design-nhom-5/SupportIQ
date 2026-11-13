@@ -184,6 +184,13 @@ RESPONSE_SCHEMA = {
 }
 
 
+RE_EMAIL = re.compile(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}")
+RE_IDENTIFIER = re.compile(r"\b(?:ORD|cust|TIKI-TXN)-[\w-]+\b", re.IGNORECASE)
+RE_DATE_FORMAT = re.compile(r"\d{4}-\d{2}-\d{2}")
+RE_PHONE_NUMBER = re.compile(r"(?<!\w)\+?\d[\d .()-]{7,}\d(?!\w)")
+RE_REDACTED_TOKEN = re.compile(r"\b[A-Za-z0-9_-]{32,}\b")
+
+
 _PINNED_VERIFIED_POLICIES: dict[tuple[str, str], dict[str, Any]] = {
     ("POL-SHIP-004", "1.0"): {
         "title": "Handling Delayed, Lost, or Discrepant Delivery Statuses",
@@ -360,13 +367,13 @@ def redact_contacts(
       preserving only authorized public support contacts while redacting private numbers,
       customer identifiers, and emails.
     """
-    text = re.sub(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", "[EMAIL]", text)
-    text = re.sub(r"\b(?:ORD|cust|TIKI-TXN)-[\w-]+\b", "[IDENTIFIER]", text, flags=re.I)
+    text = RE_EMAIL.sub("[EMAIL]", text)
+    text = RE_IDENTIFIER.sub("[IDENTIFIER]", text)
     allowed_digits = {re.sub(r"\D", "", n) for n in allowed_numbers} if allowed_numbers else set()
 
     def mask_number(match: re.Match) -> str:
         value = match.group()
-        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+        if RE_DATE_FORMAT.fullmatch(value):
             try:
                 date.fromisoformat(value)
                 return value
@@ -377,8 +384,8 @@ def redact_contacts(
             return value
         return "[PHONE_OR_NUMBER]"
 
-    text = re.sub(r"(?<!\w)\+?\d[\d .()-]{7,}\d(?!\w)", mask_number, text)
-    text = re.sub(r"\b[A-Za-z0-9_-]{32,}\b", "[REDACTED_TOKEN]", text)
+    text = RE_PHONE_NUMBER.sub(mask_number, text)
+    text = RE_REDACTED_TOKEN.sub("[REDACTED_TOKEN]", text)
     return text
 
 
