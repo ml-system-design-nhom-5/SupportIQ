@@ -13,6 +13,8 @@ from typing import Any
 import httpx
 from pydantic import BaseModel, ConfigDict, StrictBool, StrictStr, ValidationError
 
+from apps.core_backend.safety import find_draft_grounding_violation
+
 
 class LLMError(Exception):
     def __init__(
@@ -813,19 +815,24 @@ class GeminiDraftClient:
                                stage="answerability_check", http_status=response.status_code, exception_category="unanswerable") from None
             known = {s["id"] for s in sources}
             inline = set(re.findall(r"\[(S\d+)\]", draft.answer))
+            violation: str | None = None
             if not draft.answer.strip() or not draft.citations or set(draft.citations) != inline or not inline.issubset(known):
+                violation = "invalid_citations"
+            else:
+                violation = find_draft_grounding_violation(question, draft.answer, sources)
+            if violation is not None:
                 att = [{
                     "attempt_index": 0,
                     "status": "llm_invalid_citations",
                     "stage": "citation_validation",
                     "http_status": response.status_code,
-                    "exception_category": "invalid_citations",
+                    "exception_category": violation,
                     "latency_seconds": latency_sec,
                     "usage": usage,
                     "metadata": metadata,
                 }]
                 raise LLMError("llm_invalid_citations", usage=usage, metadata=metadata, latency_seconds=latency_sec, attempts=att,
-                               stage="citation_validation", http_status=response.status_code, exception_category="invalid_citations") from None
+                               stage="citation_validation", http_status=response.status_code, exception_category=violation) from None
         except LLMError:
             raise
         except (KeyError, IndexError, AttributeError, TypeError, ValueError, ValidationError):

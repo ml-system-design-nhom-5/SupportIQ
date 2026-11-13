@@ -27,17 +27,28 @@ def _module_is_from_root(mod: Any, resolved: Path) -> bool:
     if locs is None:
         spec = getattr(mod, "__spec__", None)
         locs = getattr(spec, "submodule_search_locations", None)
-    loc_list = list(locs) if locs is not None else []
+    try:
+        loc_list = list(locs) if locs is not None else []
+    except KeyError:
+        return False
     return bool(loc_list) and all(Path(loc).resolve().is_relative_to(resolved) for loc in loc_list)
 
 
 def _bootstrap_target_repo(main_root: Path) -> Path:
     """Ensure target main_root is first on sys.path and evict stale apps/pipeline modules from other roots."""
     resolved = main_root.resolve()
-    for mod_name in list(sys.modules):
-        if mod_name == "apps" or mod_name.startswith("apps.") or mod_name == "pipeline" or mod_name.startswith("pipeline."):
-            if not _module_is_from_root(sys.modules[mod_name], resolved):
-                del sys.modules[mod_name]
+    candidates = [
+        mod_name
+        for mod_name in list(sys.modules)
+        if mod_name == "apps" or mod_name.startswith("apps.") or mod_name == "pipeline" or mod_name.startswith("pipeline.")
+    ]
+    to_evict = [
+        mod_name
+        for mod_name in candidates
+        if not _module_is_from_root(sys.modules[mod_name], resolved)
+    ]
+    for mod_name in sorted(to_evict, key=lambda name: name.count("."), reverse=True):
+        sys.modules.pop(mod_name, None)
     sys.path = [p for p in sys.path if p != str(resolved)]
     sys.path.insert(0, str(resolved))
     importlib.invalidate_caches()

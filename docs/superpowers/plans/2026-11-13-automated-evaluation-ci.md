@@ -60,9 +60,19 @@
 - [ ] Review B's completed online experiment separately; preserve raw outputs and remaining global budget (21/24 already used, 3 remain). No extra calls for CI setup.
 - [ ] Integrate selective owned commits, check conflicting assumptions between workflow, evaluator and docs, and run the final default Python suite with PostgreSQL plus frontend tests/build and actual offline evaluator. Each failure gets fixed by its owner or reported honestly.
 - [ ] Run workflow validation and inspect dependencies from clean-runner perspective. Do not claim Linux/hosted CI passed based only on Windows tests.
-- [ ] Commit and push reviewed changes to main under existing authorization. Inspect the resulting GitHub Actions runs when authenticated tooling permits; report remote pass/fail or exact access/billing/environment blocker.
+- [ ] Commit and push reviewed changes to `minh` under the user's latest branch instruction. Inspect the resulting GitHub Actions runs when authenticated tooling permits; report remote pass/fail or exact access/billing/environment blocker.
 - [ ] Update existing cleanup log and plan status. Required-check branch-protection settings are a separate repository setting: inspect available access and report any configuration not applied. No invented production deployment target.
 
 ## Acceptance
 
 Required local verification succeeds; CI executes meaningful backend/PG and frontend checks plus offline evaluation with failure propagation and retained evidence; no automatic paid calls or secret artifacts; docs accurately state unmeasured model/live/browser scope. Hosted execution is recorded separately and no full product acceptance is implied.
+
+## Integration status, 2026-11-13
+
+- Workflow and operating guide integrated at `5c5be81`; evaluator failure handling and corrected fault probes at `667f54f`; source-egress privacy at `4f194f2` on `minh`.
+- Independent review required follow-up fixes for policy-text egress, source mapping, numeric token matching, sentence boundaries and transaction statements. Current combined verification includes those fixes; no thresholds or frozen benchmark labels were relaxed.
+- Combined offline LLM evaluation: exit 0, four blocking gates passed, zero blocking failures, two warnings (validator probe pass rate 15/18; redaction probe pass rate 8/11), twenty metrics not run. This does not evaluate real-model ML or semantic entailment.
+- Frontend: 18 tests passed across four files; production build passed. First combined Python verification exposed six failures. After A's namespace bootstrap fix, C's source-backed privacy controls and coordinator corrections to stale mock responses, final default Python verification passed: **1,067 passed, 2 skipped, 3 deselected in 265.48 seconds**. The coordinator handled the final two fixture failures after both B and C hit provider quota; no safety assertion or validator was weakened.
+- Push triggers cover `main` and the user's requested `minh` branch. Workflow YAML and trigger/permission checks pass locally; no hosted-run result is asserted.
+- Hosted inspection is currently limited: `gh` is unavailable on PATH, and unauthenticated GitHub Actions API inspection returned HTTP 404. This does not prove the repository or workflows are missing.
+- Test cleanup first batch retained all 29 reviewed historical probes because no safe duplicate pair was established. Wider test restructuring and real-model CI provisioning remain separate unfinished tasks.

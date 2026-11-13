@@ -107,6 +107,51 @@ def test_closure_audit_bootstrap_evicts_pipeline_namespace_package_across_two_ro
         assert new_probe.ORIGIN == "from_new_root"
 
 
+def test_closure_audit_bootstrap_handles_nested_namespace_packages_after_parent_imports(tmp_path: Path) -> None:
+    root_old = tmp_path / "root_old"
+    root_new = tmp_path / "root_new"
+    for root, label in ((root_old, "old_nested"), (root_new, "new_nested")):
+        apps_pkg = root / "apps"
+        core_pkg = apps_pkg / "core_backend"
+        nested_ns = core_pkg / "retrieval"  # intentionally omit __init__.py -> nested _NamespacePath
+        nested_ns.mkdir(parents=True)
+        (apps_pkg / "__init__.py").write_text("", encoding="utf-8")
+        (core_pkg / "__init__.py").write_text(f'PARENT_TAG = "{label}"\n', encoding="utf-8")
+        (nested_ns / "probe.py").write_text(f'NESTED_TAG = "{label}"\n', encoding="utf-8")
+
+    with _preserve_target_import_state():
+        for k in list(sys.modules):
+            if k == "apps" or k.startswith("apps."):
+                del sys.modules[k]
+        sys.path.insert(0, str(root_old))
+        importlib.invalidate_caches()
+
+        # Import parent package then nested namespace package so parent precedes child in sys.modules.
+        import apps.core_backend as old_core
+        import apps.core_backend.retrieval as old_retrieval
+        import apps.core_backend.retrieval.probe as old_probe
+
+        assert old_core.PARENT_TAG == "old_nested"
+        assert getattr(old_retrieval, "__file__", None) is None
+        assert old_probe.NESTED_TAG == "old_nested"
+
+        # Preserves already-loaded nested namespace hierarchy when target root already matches.
+        audit_mod._bootstrap_target_repo(root_old)
+        assert sys.modules["apps.core_backend"] is old_core
+        assert sys.modules["apps.core_backend.retrieval"] is old_retrieval
+
+        audit_mod._bootstrap_target_repo(root_new)
+
+        import apps.core_backend as new_core
+        import apps.core_backend.retrieval as new_retrieval
+        import apps.core_backend.retrieval.probe as new_probe
+
+        assert new_core.PARENT_TAG == "new_nested"
+        assert Path(new_core.__file__).resolve().is_relative_to(root_new.resolve())
+        assert all(Path(p).resolve().is_relative_to(root_new.resolve()) for p in list(new_retrieval.__path__))
+        assert new_probe.NESTED_TAG == "new_nested"
+
+
 def test_collector_secrets_resolution_uses_env_explicit_or_repo_relative_only(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

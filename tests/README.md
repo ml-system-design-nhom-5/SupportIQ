@@ -1,5 +1,7 @@
 # Hướng dẫn Kiểm thử (Testing Guide) — SupportIQ
 
+Kết quả tích hợp mới nhất ngày 2026-11-13 trên nhánh `minh`: **1.067 passed, 2 skipped, 3 deselected** (265,48 giây), frontend **18 passed** và production build đạt. Các số collection trong bảng bên dưới là snapshot trước lượt bổ sung test privacy/validator, không phải tổng hiện tại. Kết quả local này không xác nhận GitHub Actions đã chạy thành công.
+
 ## 1. Profiles Kiểm thử
 
 Hệ thống kiểm thử SupportIQ được cấu hình phân tách theo các profile tài nguyên trong `pytest.ini` (`addopts = --strict-markers -m "not real_model and not cuda and not live"`). Xem thêm tài liệu CI và xác minh tại [tài liệu autoeval](../docs/autoeval.md) và [hướng dẫn xác minh ứng dụng](../docs/guides/application-verification.md).

@@ -127,9 +127,18 @@ def offline_retrieval():
 @pytest.fixture
 def fake_llm():
     def handler(request):
+        from apps.core_backend.safety import split_draft_sentences
+
+        prompt = json.loads(json.loads(request.content)["contents"][0]["parts"][0]["text"])
+        source = prompt["sources"][0]
+        source_id = source["source_id"]
+        answer = f"{source['title']} [{source_id}] " + " ".join(
+            f"{sentence} [{source_id}]"
+            for sentence in split_draft_sentences(source["text"])
+        )
         return httpx.Response(200, json={"modelVersion": "gemini-2.5-flash", "candidates": [{
             "finishReason": "STOP", "content": {"parts": [{"text": json.dumps({
-                "answerable": True, "answer": "Standard Return Policy: Return within 30 days. [S1]",
-                "citations": ["S1"]})}]}}]})
+                "answerable": True, "answer": answer,
+                "citations": [source_id]})}]}}]})
     with httpx.Client(transport=httpx.MockTransport(handler)) as transport:
         yield GeminiDraftClient(api_key="offline-test-key", model="gemini-2.5-flash", http_client=transport)

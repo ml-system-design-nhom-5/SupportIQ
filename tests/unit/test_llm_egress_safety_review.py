@@ -13,7 +13,7 @@ import httpx
 import pytest
 
 from apps.core_backend.intent.schemas import IntentPrediction, RoutingContext
-from apps.core_backend.llm.gemini import GeminiDraftClient
+from apps.core_backend.llm.gemini import GeminiDraftClient, LLMError
 from apps.core_backend.orchestration.pipeline_runner import PipelineRunner
 from apps.core_backend.orchestration.store import PersistentStore
 
@@ -266,17 +266,25 @@ def test_snapshot_sources_citations_and_prompt_sha256_contract_coherence(tmp_pat
 
 
 @pytest.mark.parametrize(
-    ("content_hash", "expect_hotline_preserved"),
+    ("content_hash", "expect_hotline_preserved", "answer"),
     [
-        (_POL_SHIP_004_HASH, True),
-        ("0" * 64, False),
+        (
+            _POL_SHIP_004_HASH,
+            True,
+            "Call hotline 1900 6035 within 24-48 hours [S1] regarding order delivered on 2026-11-05 [S2].",
+        ),
+        (
+            "0" * 64,
+            False,
+            "Please check your delayed delivery details for 2026-11-05 [S2] and contact support [S1].",
+        ),
     ],
 )
 def test_positive_controls_preserve_iso_date_and_verified_hotline_only_with_valid_provenance(
-    content_hash, expect_hotline_preserved
+    content_hash, expect_hotline_preserved, answer
 ):
     captured: list[str] = []
-    client = _make_client(captured, answer="Call hotline 1900 6035 regarding 2026-11-05 [S1].", citations=["S1"])
+    client = _make_client(captured, answer=answer, citations=["S1", "S2"])
     evidence = [
         {
             "source_type": "policy",
@@ -290,7 +298,7 @@ def test_positive_controls_preserve_iso_date_and_verified_hotline_only_with_vali
     ]
 
     try:
-        client.generate(
+        res = client.generate(
             "Delayed delivery since 2026-11-05",
             "delivery_issue",
             evidence,
@@ -299,7 +307,62 @@ def test_positive_controls_preserve_iso_date_and_verified_hotline_only_with_vali
     finally:
         client.close()
 
+    assert res["body"] == answer
     wire = captured[0]
     assert "ORD-5555" not in wire
     assert "2026-11-05" in wire
     assert ("1900 6035" in wire) is expect_hotline_preserved
+
+
+def test_negative_controls_reject_unsupported_date_citation_and_tampered_hotline():
+    # 1. Valid provenance, but draft cites [S1] alone for a date only present in [S2] -> fail closed
+    captured_date: list[str] = []
+    client_date = _make_client(
+        captured_date,
+        answer="Call hotline 1900 6035 regarding 2026-11-05 [S1].",
+        citations=["S1"],
+    )
+    ev_valid = [
+        {
+            "source_type": "policy",
+            "document_id": "POL-SHIP-004",
+            "version": "1.0",
+            "title": "Handling Delayed, Lost, or Discrepant Delivery Statuses",
+            "status": "approved",
+            "content_hash": _POL_SHIP_004_HASH,
+            "excerpt": _POL_SHIP_004_CONTENT,
+        }
+    ]
+    ctx = {"order_id": "ORD-5555", "delivery_date": "2026-11-05", "order_status": "Delayed"}
+
+    try:
+        with pytest.raises(LLMError) as exc_date:
+            client_date.generate("Delayed delivery since 2026-11-05", "delivery_issue", ev_valid, business_context=ctx)
+        assert exc_date.value.code == "llm_invalid_citations"
+    finally:
+        client_date.close()
+
+    assert "ORD-5555" not in captured_date[0]
+    assert "1900 6035" in captured_date[0]
+    assert "2026-11-05" in captured_date[0]
+
+    # 2. Tampered content_hash masks hotline in wire AND fail-closes if draft outputs 1900 6035
+    captured_tampered: list[str] = []
+    client_tampered = _make_client(
+        captured_tampered,
+        answer="Call hotline 1900 6035 within 24-48 hours [S1].",
+        citations=["S1"],
+    )
+    ev_tampered = [{**ev_valid[0], "content_hash": "0" * 64}]
+    try:
+        with pytest.raises(LLMError) as exc_tampered:
+            client_tampered.generate(
+                "Delayed delivery since 2026-11-05", "delivery_issue", ev_tampered, business_context=ctx
+            )
+        assert exc_tampered.value.code == "llm_invalid_citations"
+    finally:
+        client_tampered.close()
+
+    assert "ORD-5555" not in captured_tampered[0]
+    assert "1900 6035" not in captured_tampered[0]
+    assert "2026-11-05" in captured_tampered[0]

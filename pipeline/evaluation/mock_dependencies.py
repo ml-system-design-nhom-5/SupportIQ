@@ -9,6 +9,7 @@ import numpy as np
 
 from apps.core_backend.intent.schemas import IntentPrediction
 from apps.core_backend.llm.gemini import LLMError
+from apps.core_backend.safety import split_draft_sentences
 
 
 _STOPWORDS = frozenset([
@@ -80,7 +81,7 @@ class MockLLMClient:
                 "version": ver,
             })
             excerpt = ev.get("excerpt") or ev.get("title") or "policy information"
-            body_parts.append(f"{excerpt.strip()} [{s_id}]")
+            body_parts.extend(f"{sentence} [{s_id}]" for sentence in split_draft_sentences(excerpt.strip()))
         body = " ".join(body_parts) if body_parts else "Support information."
         return {
             "body": body,

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+from decimal import Decimal, InvalidOperation
 import re
 from typing import Any, Dict, Optional, Sequence
 
@@ -361,6 +363,342 @@ def has_unauthorized_duplicate_advice(
     return False
 
 
+_CITATION_TAG = re.compile(r"\[(S\d+)\]")
+_SENTENCE_BOUNDARY = re.compile(r"([.!?])((?:\s*\[S\d+\])*)(?=\s+(?=[A-Za-z0-9\"'(\[])|\s*$)")
+_ABBREVIATION_PREFIX = re.compile(
+    r"(?:^|[\s(,])(?:e\.g|i\.e|approx|etc|vs|no|mr|mrs|ms|dr|prof|inc|ltd|dept|est|min|max|avg)$",
+    re.I,
+)
+_NUMBER_TOKEN = re.compile(r"\d+(?:[.,]\d+)*")
+_DIGIT_GROUP_RUN = re.compile(r"\d(?:[ .,-]?\d){5,}")
+_VND_CURRENCY = re.compile(r"\b(?:VND|vnđ|đ|dong)\b", re.I)
+
+_MONTH_MAP = {
+    "jan": 1, "january": 1, "feb": 2, "february": 2, "mar": 3, "march": 3,
+    "apr": 4, "april": 4, "may": 5, "jun": 6, "june": 6, "jul": 7, "july": 7,
+    "aug": 8, "august": 8, "sep": 9, "sept": 9, "september": 9,
+    "oct": 10, "october": 10, "nov": 11, "november": 11, "dec": 12, "december": 12,
+}
+_ISO_DATE = re.compile(r"\b((?:19|20)\d{2})-(\d{2})-(\d{2})\b")
+_MDY_DATE = re.compile(
+    r"\b(January|February|March|April|May|June|July|August|September|October|November|December|"
+    r"Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\.?\s+(\d{1,2}),?\s+((?:19|20)\d{2})\b",
+    re.I,
+)
+_DMY_DATE = re.compile(
+    r"\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December|"
+    r"Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\.?,?\s+((?:19|20)\d{2})\b",
+    re.I,
+)
+
+_POLITE_NON_CLAIM = re.compile(
+    r"^(?:"
+    r"(?:hi|hello|dear|good\s+(?:morning|afternoon|evening))(?:\s+[^.!?]{0,40})?[!,.]?"
+    r"|(?:thank\s+you|thanks)(?:\s+(?:for|so\s+much))?[^.!?]{0,60}[.!]?"
+    r"|please\s+(?:let\s+us\s+know|reach\s+out|feel\s+free|share|provide|confirm)[^.!?]{0,80}[.!?]?"
+    r"|we(?:'re|\s+are)\s+happy\s+to\s+help[^.!?]{0,40}[.!]?"
+    r"|(?:best\s+regards|kind\s+regards|warm\s+regards|sincerely)[,.!]?"
+    r"|i\s+understand(?:\s+your\s+concern)?[^.!?]{0,50}[.!]?"
+    r")$",
+    re.I,
+)
+
+_UNCITED_CLAIM_TERMS = re.compile(
+    r"\b(?:eligible|ineligible|always|never|guarantee[ds]?|free|price|cost|fee|fees|"
+    r"warranty|discount|voucher|hotline|within|arrivals?|arrive[ds]?|credit(?:ed)?|"
+    r"process(?:ed|es|ing)?|approv(?:ed?|als?)|cancell?(?:ed|ation)?|refund(?:s|ed|ing)?|"
+    r"ship(?:s|ped|ping)?|deliver(?:s|ed|y)?|return(?:s|ed|able)?|replace(?:ment)?|"
+    r"order(?:s)?|policy|policies)\b",
+    re.I,
+)
+
+_DOUBLE_QUOTED_SPAN = re.compile(r'"[^"\n]{1,240}"')
+_SINGLE_QUOTED_SPAN = re.compile(r"(?<!\w)'(?:[^'\n]|(?<=\w)'(?=\w)){1,240}'(?!\w)")
+_CUSTOMER_ATTRIBUTION = re.compile(
+    r"\byou\s+(?:mentioned|said|wrote|stated|noted|reported)\s+(?:that\s+)?"
+    r"(?!(?:i|we|our\s+team|support)\b)[^.,;?!\n]{1,120}?"
+    r"(?=[.,;?!\n]|\b(?:and|but|so|however)\b|$)",
+    re.I,
+)
+
+_COMMIT_ACTION = r"(?:cancell?ed|refunded|approved|processed|issued|credited|reimbursed|reversed|executed|completed)"
+_COMMIT_SUBJECT = (
+    r"(?:order|refund|return(?:\s+request)?|cancellation(?:\s+request)?|"
+    r"payment|charge|transaction|replacement|credit|reimbursement|claim|request)"
+)
+_FIRST_PERSON_COMMIT = re.compile(
+    rf"\b(?:I(?:'ve|\s+have)?|we(?:'ve|\s+have)?|our\s+team\s+has|support\s+has|the\s+system\s+has)\s+"
+    rf"(?:(?:just|now|already|successfully)\s+)*{_COMMIT_ACTION}\b",
+    re.I,
+)
+_FIRST_PERSON_IMMEDIATE_COMMIT = re.compile(
+    rf"\b(?:I(?:'m|\s+am|'ll|\s+will)|we(?:'re|\s+are|'ll|\s+will))\s+"
+    rf"(?:(?:now|just|currently|immediately|right\s+now)\s+)*"
+    rf"(?:cancell?ing|cancel|refunding|refund|issuing|issue|approving|approve|processing|process)\s+"
+    rf"(?:your|the|this)\s+{_COMMIT_SUBJECT}\b",
+    re.I,
+)
+_PASSIVE_COMMIT = re.compile(
+    rf"\b(?:your|the|this|a|an)\s+(?:full\s+|partial\s+)?{_COMMIT_SUBJECT}\s+"
+    rf"(?:has\s+(?:(?:just|now|already|successfully)\s+)*been|was(?:\s+(?:just|already|successfully))?|is\s+(?:now|already))\s+"
+    rf"(?:(?:[a-z]+\s+and|successfully)\s+)*{_COMMIT_ACTION}\b",
+    re.I,
+)
+_COMMIT_NEG_PREFIX = re.compile(
+    r"\b(?:not|never|no|unable\s+to|failed\s+to|cannot|can't|won't|will\s+not|"
+    r"did\s+not|didn't|has\s+not|hasn't|have\s+not|haven't|without)\s+$",
+    re.I,
+)
+_CONDITIONAL_CLAUSE_PREFIX = re.compile(
+    r"\b(?:if|once|when|whenever|unless|until|provided(?:\s+that)?|"
+    r"assuming|supposing|in\s+the\s+event(?:\s+that)?|in\s+case|after|before)\s+(?:that\s+)?$",
+    re.I,
+)
+_SENTENCE_START_BREAK = re.compile(r"[.;?!\n]")
+_LEADING_CONDITIONAL_CLAUSE = re.compile(
+    r"^\s*(?:in\s+the\s+event(?:\s+that)?|if|once|when|whenever|unless|until|provided(?:\s+that)?|in\s+case)\b[^.;?!\n]*,\s*",
+    re.I,
+)
+
+
+def split_draft_sentences(text: str) -> list[str]:
+    """Split draft into sentences while preserving abbreviations and trailing [S1] citations."""
+    sentences: list[str] = []
+    for raw_line in re.split(r"\n+", text.strip()):
+        line = raw_line.strip()
+        if not line:
+            continue
+        start = 0
+        for m in _SENTENCE_BOUNDARY.finditer(line):
+            punct, attached_cites = m.group(1), m.group(2)
+            if punct == "." and not attached_cites.strip() and _ABBREVIATION_PREFIX.search(line[:m.start()]):
+                continue
+            part = line[start:m.end()].strip()
+            if part:
+                sentences.append(part)
+            start = m.end()
+        tail = line[start:].strip()
+        if tail:
+            sentences.append(tail)
+    return sentences
+
+
+def _strip_citations_and_placeholders(text: str) -> str:
+    cleaned = _CITATION_TAG.sub(" ", text)
+    return PLACEHOLDER.sub(" ", cleaned)
+
+
+def _is_safe_uncited_sentence(sentence: str) -> bool:
+    stripped = sentence.strip()
+    if not stripped:
+        return True
+    cleaned = _strip_citations_and_placeholders(stripped).strip()
+    if not cleaned:
+        return True
+    if len(cleaned) > 100:
+        return False
+    if re.search(r"\d", cleaned) or FACTUAL_COMMITMENT.search(cleaned) or _UNCITED_CLAIM_TERMS.search(cleaned):
+        return False
+    if has_ungrounded_transaction_commitment(cleaned):
+        return False
+    return bool(_POLITE_NON_CLAIM.match(cleaned))
+
+
+def _extract_dates_and_strip(text: str) -> tuple[set[str], str]:
+    """Extract canonical YYYY-MM-DD dates and remove them so month/day components cannot justify durations."""
+    dates: set[str] = set()
+    spans: list[tuple[int, int]] = []
+
+    def _try_add(year_s: str, month: int, day_s: str, span: tuple[int, int]) -> None:
+        try:
+            iso = date(int(year_s), month, int(day_s)).isoformat()
+            dates.add(iso)
+            spans.append(span)
+        except ValueError:
+            pass
+
+    for m in _ISO_DATE.finditer(text):
+        _try_add(m.group(1), int(m.group(2)), m.group(3), m.span())
+    for m in _MDY_DATE.finditer(text):
+        month = _MONTH_MAP.get(m.group(1).lower())
+        if month:
+            _try_add(m.group(3), month, m.group(2), m.span())
+    for m in _DMY_DATE.finditer(text):
+        month = _MONTH_MAP.get(m.group(2).lower())
+        if month:
+            _try_add(m.group(3), month, m.group(1), m.span())
+
+    if not spans:
+        return dates, text
+    chars = list(text)
+    for start, end in spans:
+        for i in range(start, end):
+            chars[i] = " "
+    return dates, "".join(chars)
+
+
+def _canonical_number_value(raw: str, is_vnd_context: bool) -> str:
+    """Normalize numeric tokens across decimal, thousands-grouped, currency, and zero-padded forms."""
+    if re.fullmatch(r"\d{1,3}(?:\.\d{3}){2,}", raw) or re.fullmatch(r"\d{1,3}(?:,\d{3})+", raw):
+        return str(int(re.sub(r"[.,]", "", raw)))
+    if re.fullmatch(r"[1-9]\d{0,2}\.\d{3}", raw) and is_vnd_context:
+        return str(int(raw.replace(".", "")))
+    if "," in raw and "." in raw:
+        candidate = raw.replace(",", "")
+        try:
+            rendered = format(Decimal(candidate), "f")
+            return rendered.rstrip("0").rstrip(".") if "." in rendered else rendered
+        except InvalidOperation:
+            return raw
+    if "," not in raw:
+        try:
+            rendered = format(Decimal(raw), "f")
+            return rendered.rstrip("0").rstrip(".") if "." in rendered else rendered
+        except InvalidOperation:
+            return raw
+    return raw
+
+
+def _extract_numeric_tokens(text: str) -> tuple[set[str], set[str], set[str], str]:
+    """Return canonical numeric tokens, compact digit runs, ISO dates, and date-stripped text."""
+    cleaned = _strip_citations_and_placeholders(text)
+    dates, non_date_text = _extract_dates_and_strip(cleaned)
+    is_vnd = bool(_VND_CURRENCY.search(non_date_text))
+    numbers: set[str] = set()
+    for m in _NUMBER_TOKEN.finditer(non_date_text):
+        raw = m.group(0)
+        numbers.add(raw)
+        numbers.add(_canonical_number_value(raw, is_vnd))
+    compact_runs = {
+        digits
+        for run in _DIGIT_GROUP_RUN.findall(non_date_text)
+        if len(digits := re.sub(r"\D", "", run)) >= 6
+    }
+    return numbers, compact_runs, dates, non_date_text
+
+
+def _sentence_has_unsupported_numbers(
+    sentence: str,
+    cited_sources: Sequence[Dict[str, Any]],
+) -> bool:
+    """Return True if any date or complete numeric claim in sentence lacks support in its cited sources."""
+    sent_nums, sent_runs, sent_dates, sent_non_date = _extract_numeric_tokens(sentence)
+    if not sent_nums and not sent_runs and not sent_dates:
+        return False
+    source_text = "\n".join(str(s.get("text") or s.get("excerpt") or "") for s in cited_sources)
+    src_nums, src_runs, src_dates, _ = _extract_numeric_tokens(source_text)
+    if not sent_dates.issubset(src_dates):
+        return True
+    is_vnd = bool(_VND_CURRENCY.search(sent_non_date))
+    for m in _NUMBER_TOKEN.finditer(sent_non_date):
+        raw = m.group(0)
+        canon = _canonical_number_value(raw, is_vnd)
+        if raw in src_nums or canon in src_nums or raw in src_runs or canon in src_runs:
+            continue
+        return True
+    for run in sent_runs:
+        if run not in src_runs and run not in src_nums:
+            return True
+    return False
+
+
+def _sentence_prefix(text: str, pos: int) -> str:
+    last = 0
+    for m in _SENTENCE_START_BREAK.finditer(text, 0, pos):
+        last = m.end()
+    return text[last:pos]
+
+
+def _is_verified_recorded_order_status(
+    matched_phrase: str,
+    cited_order_sources: Sequence[Dict[str, Any]],
+) -> bool:
+    """Return True when passive status phrasing strictly reflects cited order_facts values."""
+    if not cited_order_sources:
+        return False
+    fields: dict[str, str] = {}
+    for src in cited_order_sources:
+        text = str(src.get("text") or src.get("excerpt") or "")
+        for line in text.splitlines():
+            if ":" in line:
+                key, val = line.split(":", 1)
+                fields[key.strip().lower()] = val.strip().lower()
+    phrase = matched_phrase.lower()
+    order_st = fields.get("order_status", "")
+    refund_st = fields.get("refund_status", "")
+    payment_st = fields.get("payment_status", "")
+    combined_refund = f"{refund_st} {payment_st}"
+    if re.search(r"\bcancell?ed\b", phrase):
+        return bool(re.search(r"\bcancell?ed\b", order_st))
+    if re.search(r"\b(?:refunded|credited|reimbursed)\b", phrase):
+        return bool(re.search(r"\b(?:refunded|refund\s+succeeded|credited|reimbursed)\b", combined_refund))
+    return False
+
+
+def has_ungrounded_transaction_commitment(
+    draft_text: str,
+    cited_order_sources: Sequence[Dict[str, Any]] = (),
+) -> bool:
+    """Detect assistant transaction-execution claims while preserving quotes, conditionals, and verified order status."""
+    masked = _DOUBLE_QUOTED_SPAN.sub(' "QUOTED" ', draft_text)
+    masked = _SINGLE_QUOTED_SPAN.sub(" 'QUOTED' ", masked)
+    masked = _CUSTOMER_ATTRIBUTION.sub(" ", masked)
+
+    for pattern in (_FIRST_PERSON_COMMIT, _FIRST_PERSON_IMMEDIATE_COMMIT, _PASSIVE_COMMIT):
+        for m in pattern.finditer(masked):
+            clause_prefix = _local_clause_prefix(masked, m.start())
+            if _COMMIT_NEG_PREFIX.search(clause_prefix) or _CONDITIONAL_CLAUSE_PREFIX.search(clause_prefix):
+                continue
+            if pattern is _FIRST_PERSON_IMMEDIATE_COMMIT and re.search(r"\bwill\b|'ll\b", m.group(0), re.I):
+                if _LEADING_CONDITIONAL_CLAUSE.match(_sentence_prefix(masked, m.start())):
+                    continue
+            if pattern is _PASSIVE_COMMIT and _is_verified_recorded_order_status(m.group(0), cited_order_sources):
+                continue
+            return True
+    return False
+
+
+def find_draft_grounding_violation(
+    customer_text: str,
+    draft_body: str,
+    snapshot_sources: Sequence[Dict[str, Any]],
+) -> Optional[str]:
+    """Validate sentence-level citations, evidence-constrained numbers, and transaction commitments."""
+    sources_by_id: Dict[str, Dict[str, Any]] = {
+        str(s.get("source_id") or s.get("id")): s
+        for s in snapshot_sources
+        if isinstance(s, dict) and (s.get("source_id") or s.get("id"))
+    }
+    sentences = split_draft_sentences(draft_body)
+    if not sentences:
+        return "invalid_citations"
+
+    has_cited_sentence = False
+    for sentence in sentences:
+        sent_ids = _CITATION_TAG.findall(sentence)
+        if not sent_ids:
+            if not _is_safe_uncited_sentence(sentence):
+                return "uncited_claim"
+            continue
+        if any(sid not in sources_by_id for sid in sent_ids):
+            return "invalid_citations"
+        has_cited_sentence = True
+        sent_sources = [sources_by_id[sid] for sid in sent_ids]
+        if _sentence_has_unsupported_numbers(sentence, sent_sources):
+            return "unsupported_number"
+        order_sources = [s for s in sent_sources if s.get("source_type") == "order_facts"]
+        if has_ungrounded_transaction_commitment(sentence, cited_order_sources=order_sources):
+            return "transaction_commitment"
+
+    if not has_cited_sentence:
+        return "invalid_citations"
+    if has_unqualified_cosmetics_refusal(draft_body) or has_unauthorized_duplicate_advice(
+        customer_text, draft_body, snapshot_sources
+    ):
+        return "grounding_guardrail_failed"
+    return None
+
+
 def validate_generated_draft(
     customer_text: str,
     llm_result: Any,
@@ -431,22 +769,11 @@ def validate_generated_draft(
         else:
             return (False, ["grounding_failed"], {})
 
-    all_inline: set[str] = set()
-    for paragraph in re.split(r"\n\s*\n", body.strip()):
-        para_ids = re.findall(r"\[(S\d+)\]", paragraph)
-        if not para_ids and (len(paragraph) > 40 or FACTUAL_COMMITMENT.search(paragraph)):
-            return (False, ["grounding_failed"], {})
-        for sid in para_ids:
-            if sid not in known_by_id:
-                return (False, ["grounding_failed"], {})
-            all_inline.add(sid)
-
-    if not all_inline or cited_ids != all_inline:
+    all_inline = set(_CITATION_TAG.findall(body))
+    if not all_inline or not all_inline.issubset(known_by_id) or cited_ids != all_inline:
         return (False, ["grounding_failed"], {})
 
-    if has_unqualified_cosmetics_refusal(body) or has_unauthorized_duplicate_advice(
-        customer_text, body, snapshot_sources
-    ):
+    if find_draft_grounding_violation(customer_text, body, snapshot_sources) is not None:
         return (False, ["grounding_failed"], {})
 
     provenance = {

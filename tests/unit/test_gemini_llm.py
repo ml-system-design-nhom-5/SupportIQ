@@ -260,3 +260,94 @@ def test_explicit_legacy_gemini25_thinking_budget_and_gemini3_minimal_preserved(
     assert seen['gemini-2.5-flash']['temperature'] == 0.1
     assert seen['gemini-3.1-flash-lite']['thinkingConfig'] == {'thinkingLevel': 'minimal'}
     assert 'temperature' not in seen['gemini-3.1-flash-lite']
+
+
+@pytest.mark.parametrize('answer', [
+    'Returns are accepted within 30 days [S1]. Refunds always arrive within 2 hours of approval.',
+    'Returns are accepted within 30 days [S1]. Shipping is free.',
+    'Returns are accepted within 45 days of receipt [S1].',
+    'Good news: your order has been cancelled and refunded [S1].',
+    'I have approved and issued your refund [S1].',
+    'We will cancel your order right now [S1].',
+])
+def test_validator_rejects_uncited_claims_unsupported_numbers_and_commitments(answer):
+    from apps.core_backend.safety import validate_generated_draft
+
+    sources = [{'source_id': 'S1', 'source_type': 'policy', 'document_id': 'returns', 'version': '1',
+                'excerpt': 'Products may be returned within 30 days in original packaging.'}]
+    with pytest.raises(LLMError) as caught:
+        client_for(lambda r: httpx.Response(200, json=response_payload(answer=answer, citations=['S1']))).generate(
+            'What is your return policy?', 'return_policy', EVIDENCE
+        )
+    assert caught.value.code == 'llm_invalid_citations'
+
+    ok, codes, _ = validate_generated_draft(
+        'What is your return policy?',
+        {'body': answer, 'citations': ['S1'], 'input_snapshot': {'sources': sources}},
+        sources,
+    )
+    assert (ok, codes) == (False, ['grounding_failed'])
+
+
+def test_validator_allows_safe_positive_controls_formats_and_quotations():
+    import hashlib
+    from apps.core_backend.safety import validate_generated_draft
+
+    pol_hotline_content = (
+        "In the event a Tiki order exceeds its estimated delivery date without arrival, "
+        "or if a courier marks an order as 'Successfully Delivered' when the customer has not received the parcel, "
+        "the customer must contact Tiki Customer Support within 24-48 hours via hotline 1900 6035. "
+        "Tiki's dispatch team will verify courier GPS logs, coordinate with the delivery hub, and resolve the complaint. "
+        "If an order is lost, Tiki will dispatch a replacement or issue a 100% refund."
+    )
+    rich_evidence = [
+        {
+            'source_type': 'policy',
+            'document_id': 'POL-SHIP-004',
+            'version': '1.0',
+            'title': 'Handling Delayed, Lost, or Discrepant Delivery Statuses',
+            'excerpt': pol_hotline_content,
+            'content_hash': hashlib.sha256(pol_hotline_content.encode('utf-8')).hexdigest(),
+        },
+        {
+            'source_type': 'policy',
+            'document_id': 'POL-REFUND',
+            'version': '1.0',
+            'title': 'Refund Window & Currency',
+            'excerpt': (
+                'Approved refunds are credited within 5 to 7 business days once an order has been canceled. '
+                'Orders from 18,000 VND to 1,000,000 VND ship under fee $5.00.'
+            ),
+        },
+    ]
+    ctx = {'order_id': 'ORD-1001', 'order_status': 'Shipping', 'delivery_date': '2026-11-04'}
+    valid_answers = [
+        'Hello!\n\nPlease contact support within 24-48 hours via hotline 1900 6035. [S1]\n\nThank you for contacting support.',
+        (
+            'Approved refunds are credited within 5-7 business days once an order has been canceled [S2]. '
+            'Orders from 18.000 to 1.000.000 VND have fee $5 [S2].'
+        ),
+        'Your delivery date is 2026-11-04 (November 4, 2026) [S3].',
+        (
+            'You mentioned that "your order has been cancelled and refunded", '
+            'and we have not cancelled your order yet [S1]. '
+            'Please call hotline 1900 6035 within 24-48 hours [S1].'
+        ),
+    ]
+    expected_cites = [['S1'], ['S2'], ['S3'], ['S1']]
+    for ans, cites in zip(valid_answers, expected_cites):
+        res = client_for(lambda r, a=ans, c=cites: httpx.Response(200, json=response_payload(answer=a, citations=c))).generate(
+            'Help with my order and refund', 'refund_policy', rich_evidence, business_context=ctx
+        )
+        ok, codes, _ = validate_generated_draft('Help with my order and refund', res, res['input_snapshot']['sources'])
+        assert (ok, codes) == (True, [])
+
+    # Direct validator check when source itself carries dot-grouped Vietnamese currency (1.000.000 VND)
+    dot_sources = [{'source_id': 'S1', 'source_type': 'policy', 'document_id': 'POL-SHIP-002', 'version': '1.0',
+                    'excerpt': 'Orders above 1.000.000 VND ship free.'}]
+    ok_dot, codes_dot, _ = validate_generated_draft(
+        'Shipping fee threshold?',
+        {'body': 'Orders above 1,000,000 VND ship free [S1].', 'citations': ['S1'], 'input_snapshot': {'sources': dot_sources}},
+        dot_sources,
+    )
+    assert (ok_dot, codes_dot) == (True, [])
