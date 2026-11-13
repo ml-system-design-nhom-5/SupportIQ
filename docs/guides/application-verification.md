@@ -1,8 +1,8 @@
 # Application verification
 
-> **Status:** Active · **Owner:** application · **Last reviewed:** 2026-11-12
+> **Status:** Active · **Owner:** application · **Last reviewed:** 2026-11-13
 
-Evidence and review scope for the native Windows application. Commands are in the component READMEs. The default test suite excludes external LLM calls. The explicit live integration check below uses the configured Gemini LLM.
+Evidence and review scope for the native Windows application and planned offline CI gates. Testing profiles are documented in [tests/README.md](../../tests/README.md) and evaluation gates in [docs/autoeval.md](../autoeval.md). The default test suite excludes external LLM calls (`--run-live -m live`), `real_model`, and `cuda` tests; no paid calls are authorized for CI, and any future live checks are manual local CLI runs with a separately approved budget.
 
 ## Functional evidence
 
@@ -24,9 +24,9 @@ Test Fixture Scope Note:
 The integration harness in `tests/application/test_application.py` connects with owner privileges to provision and tear down ephemeral schemas (`test_<uuid>`). This isolates integration state, but does not substitute for dedicated testing of runtime-role (`supportiq_app`) permissions or database-level trigger installation.
 
 Evaluation and Grading Scope:
-Automated AI grading or agent-driven timing simulations are distinct from human evaluations; they do not represent real human graders or live CS staff trials, and no claim of measured human productivity improvement is made.
+Structural citation/contract checks in offline autoeval do not verify semantic grounding. Under delegated stakeholder authority, automated `--judge` checks or coordinator AI grading/timing exercises can count only as explicitly labeled **AI review** (`human_participants = 0`); they must never be labeled as a human study, real human graders, or live CS staff trials, and no claim of measured human productivity improvement is made.
 
-Frontend checks run via Vitest with `pool: 'threads'` configured in `vite.config.ts`, passing all 11 component and reply-rule unit tests without timing out on Windows child processes.
+Frontend checks run via Vitest (`apps/frontend/src/components/reply-rules.test.ts`, `apps/frontend/src/features/*.test.tsx`) with `pool: 'threads'` configured in `apps/frontend/vite.config.ts`, verifying component and reply-rule unit tests on Windows without child-process timeouts (`pnpm.cmd --dir apps/frontend test` and `build`).
 
 Playwright drives the production build on Microsoft Edge at 1440, 768, 390 and 360px. The flows cover sign-in, catalog, orders, sending a support request, staff reply confirmation, customer receipt, admin confirmation dialogs, versions and manager reports. Every captured state also runs axe WCAG checks and an overflow assertion. Screenshots are local under `.impeccable/review/`.
 
@@ -46,7 +46,10 @@ The browser inspector recorded zero failures for sign-in, order detail, accounts
 
 ## Release limits
 
-The source model exposes raw scores. The application applies the existing per-intent score and margin thresholds, retaining explicit low-confidence abstention. Semantic claim entailment, unknown-name/address PII recall, load targets and production security require their separate evaluation. Storybook, CI automation, telemetry deployment and production TLS are not claimed by these checks. See [the Windows guide](application-windows.md#verification-and-limits).
+The source model exposes raw scores. The application applies the existing per-intent score and margin thresholds, retaining explicit low-confidence abstention.
+
+- **Planned CI offline vs native Windows parity:** Planned Linux CI (pending Worker B workflow integration and hosted GitHub Actions verification; local checks do not imply hosted CI is green) is scoped to Python tests with a disposable PostgreSQL service, frontend Vitest + production build, and deterministic `--suite llm --llm-mode offline` autoeval gates, with 0 paid calls authorized for CI. ML suite evaluation remains unprovisioned/not evaluated in ordinary offline CI (no `SUPPORTIQ_MODEL_URL` download or live CI job is planned). Native Windows application runs (`scripts/start-app.ps1`, Edge Playwright via `apps/frontend/e2e/application.spec.ts`, pure-Python `PSYCOPG_IMPL=python` with `F:\PostgreSQL\bin`) and real-model runtime checks require separate Windows verification.
+- **Evaluation boundaries:** Semantic claim entailment, unknown-name/address PII recall, load targets (NFR-08), independent two-human rubric grading / human studies (`NFR-04` beyond explicitly labeled delegated AI review), Storybook, telemetry deployment and production TLS are not claimed by automated offline checks. See [the Windows guide](application-windows.md#verification-and-limits), [tests/README.md](../../tests/README.md), and [docs/autoeval.md](../autoeval.md).
 
 ## Live application integration, 2026-11-05
 

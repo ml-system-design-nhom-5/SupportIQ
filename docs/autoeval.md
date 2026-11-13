@@ -4,17 +4,22 @@ Một lệnh chạy lại toàn bộ đánh giá trên **bộ dữ liệu cố �
 `pipeline/configs/autoeval.json`, ghi báo cáo và trả mã thoát để CI chặn thay đổi làm hệ thống xấu đi.
 
 ```powershell
-# ML + LLM offline (không tốn phí API), ~2–3 phút
+# LLM offline (0 chi phí API, dùng probe giả lập cục bộ + exit code thật)
+.venv\Scripts\python.exe -m pipeline.evaluation.autoeval run --suite llm --llm-mode offline
+
+# ML + LLM offline (yêu cầu thư mục model release cục bộ nếu chạy suite ML)
 .venv\Scripts\python.exe -m pipeline.evaluation.autoeval run
 
-# Chỉ ML, ép dùng backend numpy (không cần torch)
+# Chỉ ML, ép dùng backend numpy (yêu cầu model release cục bộ; không dùng torch)
 .venv\Scripts\python.exe -m pipeline.evaluation.autoeval run --suite ml --backend numpy
 
-# LLM live: gọi Gemini thật (cần GEMINI_API_KEY trong .env), giới hạn 80 lượt / 0,5 USD
-.venv\Scripts\python.exe -m pipeline.evaluation.autoeval run --suite llm --llm-mode live
+# LLM live: chỉ chạy thủ công cục bộ (tốn phí; cần GEMINI_API_KEY và ngân sách được duyệt riêng).
+# Giới hạn trong config (`max_calls=80`, `max_cost_usd=0.5`) là vòng lặp chặn mềm/ước lượng, không phải
+# hard cap HTTP/USD tuyệt đối; ngân sách còn lại của vòng hiện tại (3/24) không đủ phép chạy 80 calls.
+.venv\Scripts\python.exe -m pipeline.evaluation.autoeval run --suite llm --llm-mode live --max-llm-calls <N_duoc_duyet>
 
-# So với lần chạy nền để phát hiện tụt lùi
-.venv\Scripts\python.exe -m pipeline.evaluation.autoeval run --compare pipeline/configs/autoeval_baseline.json
+# So sánh với lần chạy nền để phát hiện tụt lùi (chỉ trả exit 1 khi truyền thêm --fail-on-regression)
+.venv\Scripts\python.exe -m pipeline.evaluation.autoeval run --suite llm --llm-mode offline --compare pipeline/configs/autoeval_baseline.json --fail-on-regression
 ```
 
 Kết quả nằm ở `artifacts/evaluation/autoeval/<run-id>/` (`report.md` để đọc, `report.json` cho máy);
@@ -22,9 +27,9 @@ Kết quả nằm ở `artifacts/evaluation/autoeval/<run-id>/` (`report.md` đ�
 
 | Mã thoát | Ý nghĩa |
 |---|---|
-| 0 | Mọi gate mức `block` đạt |
-| 1 | Có gate `block` không đạt (hoặc tụt lùi khi dùng `--fail-on-regression`) |
-| 2 | Không chạy được (thiếu file, dữ liệu bị sửa mà không cập nhật manifest, lỗi môi trường) |
+| `0` | Mọi gate mức `block` đạt (truyền `--compare` đơn lẻ chỉ ghi diff vào báo cáo chứ không làm fail exit code nếu không bật `--fail-on-regression`) |
+| `1` | Có gate `block` không đạt, hoặc phát hiện tụt lùi khi truyền kèm `--fail-on-regression` |
+| `2` | Không chạy được đánh giá (manifest sai/chưa cập nhật, lỗi môi trường, hoặc theo hợp đồng CLI của Worker A: đối số/suite không hợp lệ hay thiếu/lỗi file `--compare` được yêu cầu đều fail-closed với mã `2`) |
 
 ## Đo những gì
 
@@ -53,7 +58,7 @@ Latency trong báo cáo chỉ là thời gian tính của backend, không phải
 | Nhóm | Cách làm | Bắt được |
 |---|---|---|
 | Payload gửi Gemini | Dựng đúng prompt của `prepare_llm_input` cho 21 case có đơn hàng, quét tên/điện thoại/email/mã đơn/mã vận đơn | LLM-01 (FR-10) |
-| Probe validator | 18 phản hồi Gemini giả qua HTTP client giả vào `GeminiDraftClient.generate()`; so với hành vi **mong muốn** | LLM-03, 04, 05, 09 và giữ các hành vi đúng hiện có |
+| Probe validator | 18 phản hồi Gemini giả qua HTTP client giả vào `GeminiDraftClient.generate()`; so với hành vi **mong muốn** | LLM-03, 04, 05, 09 (**kiểm tra cấu trúc/contract citation & ràng buộc**, không kiểm tra semantic grounding) |
 | Probe che dữ liệu | 11 chuỗi vào `redact_contacts()` | LLM-06 |
 | Probe pipeline | `PipelineRunner` với thành phần giả: LLM/ML lỗi có vào `escalation_queue` không, có ghi `llm_ms` không | LLM-02, LLM-10 (cần đủ requirements, gồm torch, để import) |
 
@@ -65,14 +70,13 @@ Latency trong báo cáo chỉ là thời gian tính của backend, không phải
 - Chỉ số: tỷ lệ có bản nháp khi nên có, tỷ lệ từ chối khi nên từ chối, tỷ lệ citation sai,
   tỷ lệ câu có citation, số liệu không có trong nguồn, câu khẳng định đã giao dịch, có trích nguồn đúng,
   có nhắc dữ kiện bắt buộc, vi phạm khi bị chèn lệnh, latency p50/p95, token và chi phí.
-- Ngân sách: `llm.max_calls` và `llm.max_cost_usd` trong config; `--max-llm-calls` để giảm thêm.
-  Kiểm tra lại bảng giá trong config so với Google AI Studio trước khi tin con số chi phí.
+- Ngân sách: `llm.max_calls` (`80`) và `llm.max_cost_usd` (`0.5` USD) trong `pipeline/configs/autoeval.json` (cùng `--max-llm-calls` để giảm thêm) chỉ là bộ đếm/ước lượng chi phí theo vòng lặp case, **không phải hard cap tuyệt đối cho từng HTTP retry hay hóa đơn USD phía provider**. Chưa có paid LLM call nào được cấp phép cho CI; ngân sách còn lại của vòng hiện tại (`3/24` calls) **không** đủ để chạy 80 calls, nên mọi lần chạy live thủ công trong tương lai phải được cấp ngân sách riêng biệt.
 - `--judge`: thêm một LLM làm giám khảo, tách từng khẳng định và chấm SUPPORTED/UNSUPPORTED.
   Kết quả xuất ra `judge_claims.jsonl`.
 
-**Grounding (NFR-04) vẫn cần người chấm.** Quy trình:
-1. Chạy live với `--judge`.
-2. Mở `judge_claims.jsonl`, điền `human_label` (SUPPORTED / UNSUPPORTED / NOT_A_CLAIM) cho ít nhất 50–100 khẳng định.
+**Grounding ngữ nghĩa (NFR-04), AI review được ủy quyền và người chấm.** Kiểm tra validator offline chỉ xác nhận cấu trúc citation/contract chứ không chứng minh suy luận ngữ nghĩa (semantic grounding). `--judge` hoặc đánh giá ngữ nghĩa do AI coordinator thực hiện dưới ủy quyền stakeholder (`delegated AI stakeholder grading`) **có thể được tính là bài đánh giá AI khi gắn nhãn tường minh là AI review (`human_participants = 0`)**, nhưng **không được gắn nhãn là human study hay thử nghiệm nhân viên CS thật** (những kiểm chứng dùng người chấm độc lập cho NFR-04 phải được ghi nhận tách biệt). Quy trình kiểm chứng/hậu kiểm thủ công với nhãn người chấm:
+1. Chỉ chạy live `--judge` cục bộ khi được cấp ngân sách thủ công riêng và có `GEMINI_API_KEY` hợp lệ.
+2. Mở `judge_claims.jsonl`, điền `human_label` (`SUPPORTED / UNSUPPORTED / NOT_A_CLAIM`) cho ít nhất 50–100 khẳng định.
 3. Chạy lại với `--human-labels <đường dẫn file đã điền>` để có tỷ lệ grounding theo người chấm và
    độ đồng thuận giám khảo–người. Chỉ dùng giám khảo để sàng lọc khi độ đồng thuận đủ cao.
 
@@ -93,22 +97,17 @@ Lệnh `run` từ chối chạy nếu dữ liệu, benchmark, KB hoặc mock ord
 - Không chỉnh model, ngưỡng hoặc prompt dựa trên từng câu của các bộ này; nếu cần dữ liệu để tinh chỉnh,
   tách một bộ dev riêng.
 
-## CI (`.github/workflows/autoeval.yml`)
+## CI Dự kiến và Phạm vi Cục bộ
 
-- **offline**: chạy khi PR đổi intent/llm/orchestration/policy/model/dữ liệu/evaluator, và mỗi đêm.
-  Cài torch CPU, chạy unit test của evaluator rồi `run --compare pipeline/configs/autoeval_baseline.json`,
-  đưa `report.md` vào Job Summary và lưu thư mục kết quả làm artifact.
-- **live**: chạy theo lịch hoặc thủ công (`workflow_dispatch`, chọn `llm_mode=live`, tùy chọn `judge`).
+Kiến trúc CI (theo kế hoạch tại [2026-11-13-automated-evaluation-ci.md](superpowers/plans/2026-11-13-automated-evaluation-ci.md), đồng bộ cùng [tests/README.md](../tests/README.md) và [hướng dẫn xác minh ứng dụng](guides/application-verification.md)) hiện ở trạng thái **kế hoạch CI dự kiến** (chờ Worker B tích hợp workflow và chạy kiểm chứng trên hosted GitHub Actions; các lần chạy cục bộ không ngụ ý hosted CI đã xanh):
 
-Cấu hình trong Settings → Secrets and variables → Actions:
+- **Không có paid call / không có workflow live hay tải model qua URL trong CI của B:** Worker B không thiết lập `workflow_dispatch` live job hay cơ chế biến `SUPPORTIQ_MODEL_URL` để tải weight trên runner. Mọi job CI dự kiến đều chạy **100% offline, 0 paid calls, 0 secret provider**.
+- **PR / push lên `main` — Python + PostgreSQL (offline, dự kiến):** chạy bộ kiểm thử mặc định với dịch vụ PostgreSQL disposable và cấu hình tạm, lưu JUnit XML / báo cáo kết quả và không đóng gói secret làm artifact.
+- **PR / push lên `main` — Frontend (dự kiến):** chạy Vitest và build production của `apps/frontend`, lưu log/build summary.
+- **Offline Autoeval (bắt buộc không tốn phí, dự kiến):** chạy `python -m pipeline.evaluation.autoeval run --suite llm --llm-mode offline` với exit code thật (`0`/`1`/`2`) làm gate, giữ lại báo cáo Markdown/JSON làm bằng chứng. Suite **ML** trong CI offline thông thường được xem là **chưa cấp model / chưa đánh giá** (pending model provisioning / not evaluated), tránh ngầm hiểu skip thành pass.
+- **Live LLM trả phí (ngoài CI, thủ công cục bộ):** chỉ chạy khi kích hoạt thủ công trên máy cục bộ qua CLI (`--suite llm --llm-mode live --max-llm-calls <N>`) với ngân sách được phê duyệt riêng ngoài CI.
 
-| Tên | Loại | Dùng để |
-|---|---|---|
-| `SUPPORTIQ_MODEL_URL` | Variable | Link tải file zip chứa thư mục `distilbert-supportiq` (ví dụ asset của GitHub Release). Không có thì suite ML bị bỏ qua |
-| `GEMINI_API_KEY` | Secret | Job live |
-| `AUTOEVAL_ENFORCE` | Variable | `true` để gate `block` không đạt làm job đỏ. Để `false` cho tới khi các lỗi đã biết được sửa |
-
-## Kết quả nền (commit 159f9e6, model `dc7af8cf…`, backend numpy)
+## Kết quả nền lịch sử (historical: commit 159f9e6, model `dc7af8cf…`, backend numpy)
 
 Lưu tại `pipeline/configs/autoeval_baseline.json`. **7 gate chặn không đạt**, tất cả trùng với lỗi đã
 ghi trong bản đánh giá module:
@@ -124,12 +123,12 @@ ghi trong bản đánh giá module:
 | llm_pipeline_failures_queued (LLM-02) | 2 probe | không có |
 
 Đạt: toàn vẹn model; gắn cờ câu ngoài phạm vi 97,5%; không có tên/điện thoại/email trong payload.
-Khi sửa một lỗi, chạy lại với `--compare`, rồi cập nhật file baseline trong cùng PR.
+Khi sửa một lỗi, chạy lại với `--compare pipeline/configs/autoeval_baseline.json --fail-on-regression`, rồi cập nhật file baseline trong cùng PR.
 
 ## Giới hạn
 
 - Benchmark 156 câu có một số nhãn gây tranh cãi giữa các intent gần nghĩa của Bitext; nên rà lại.
 - Bộ nhiễu và bộ ngoài phạm vi còn nhỏ, chỉ dùng để định hướng; mở rộng dần.
-- Chỉ số grounding live là heuristic hoặc LLM-giám khảo, không thay được người chấm cho NFR-04.
+- Chỉ số grounding offline là kiểm tra cấu trúc/contract; chỉ số grounding live (`--judge`) hoặc đánh giá được ủy quyền bởi AI coordinator phải được gắn nhãn tường minh là AI review (`human_participants = 0`) và không được xem hay gắn nhãn như human study cho NFR-04.
 - Không đo latency dịch vụ thật; NFR-08 cần load test riêng.
-- Chưa so với baseline TF-IDF vì repo chưa có model baseline đã train.
+- Baseline TF-IDF đã có bản tái lập huấn luyện riêng trong repo nhưng pipeline `autoeval` hiện đánh giá cho model DistilBERT + Gemini, nên không so sánh trực tiếp trong cùng một gate.

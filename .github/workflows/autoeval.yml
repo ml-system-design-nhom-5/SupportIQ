@@ -1,140 +1,89 @@
-name: autoeval
-
-# Automatic evaluation of the ML (intent + routing) and LLM (draft generation) modules.
-# See docs/autoeval.md for configuration (model download URL, Gemini secret, enforcement).
+name: Offline Autoeval
 
 on:
   pull_request:
-    paths:
-      - "apps/core_backend/intent/**"
-      - "apps/core_backend/llm/**"
-      - "apps/core_backend/orchestration/**"
-      - "apps/core_backend/config/policies/**"
-      - "apps/ml_inference/**"
-      - "data/benchmarks/**"
-      - "data/knowledge/**"
-      - "pipeline/evaluation/autoeval/**"
-      - "pipeline/configs/autoeval*.json"
-  schedule:
-    - cron: "17 19 * * *"   # 02:17 Asia/Bangkok, daily
+  push:
+    branches:
+      - main
   workflow_dispatch:
-    inputs:
-      llm_mode:
-        description: "LLM suite mode"
-        type: choice
-        options: [offline, live]
-        default: offline
-      judge:
-        description: "Live mode: also run the LLM-as-judge grounding check"
-        type: boolean
-        default: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: autoeval-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  # Repository variables (Settings > Secrets and variables > Actions > Variables)
-  MODEL_URL: ${{ vars.SUPPORTIQ_MODEL_URL }}         # zip containing distilbert-supportiq/ (model.safetensors, tokenizer.json, config.json)
-  ENFORCE: ${{ vars.AUTOEVAL_ENFORCE || 'false' }}    # 'true' = failing blocking gates fail the job
-
 jobs:
-  offline:
-    name: ML + LLM offline (no API cost)
+  offline-autoeval:
+    name: Offline LLM Autoeval
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 15
+    env:
+      PSYCOPG_IMPL: binary
+      AUTOEVAL_OUT: artifacts/evaluation/autoeval-ci
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v6
         with:
-          python-version: "3.11"
-          cache: pip
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: |
+            apps/backend/requirements.txt
+            apps/demo/requirements.txt
+            pipeline/requirements.txt
+            pipeline/requirements-transformers.txt
 
-      - name: Install dependencies (CPU torch)
+      - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pip install -r apps/demo/requirements.txt -r pipeline/requirements.txt -r pipeline/requirements-transformers.txt pytest pytest-asyncio
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install \
+            -r apps/backend/requirements.txt \
+            -r apps/demo/requirements.txt \
+            -r pipeline/requirements.txt \
+            -r pipeline/requirements-transformers.txt \
+            pytest \
+            pytest-asyncio
 
-      - name: Fetch released model
-        if: env.MODEL_URL != ''
-        run: |
-          mkdir -p artifacts/models/trained
-          curl -fsSL "$MODEL_URL" -o /tmp/model.zip
-          unzip -q /tmp/model.zip -d /tmp/model
-          src=$(dirname "$(find /tmp/model -name model.safetensors | head -1)")
-          rm -rf artifacts/models/trained/distilbert-supportiq
-          cp -r "$src" artifacts/models/trained/distilbert-supportiq
-
-      - name: Unit tests for the evaluator
+      - name: Run autoeval unit tests
         run: python -m pytest tests/unit/test_autoeval.py -q
 
-      - name: Run autoeval
-        id: run
+      - name: Run offline LLM evaluation gates
+        shell: bash
         run: |
-          suites=llm
-          if [ -f artifacts/models/trained/distilbert-supportiq/model.safetensors ]; then suites=ml,llm; else echo "::warning::Model not available (set vars.SUPPORTIQ_MODEL_URL); ML suite skipped"; fi
+          rm -rf "$AUTOEVAL_OUT"
           set +e
-          python -m pipeline.evaluation.autoeval run --suite "$suites" --backend torch \
-            --compare pipeline/configs/autoeval_baseline.json --tag "ci-${{ github.run_number }}"
+          python -m pipeline.evaluation.autoeval run \
+            --suite llm \
+            --llm-mode offline \
+            --compare pipeline/configs/autoeval_baseline.json \
+            --tag "ci-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}" \
+            --out "$AUTOEVAL_OUT"
           code=$?
           set -e
-          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
-          cat "$(cat artifacts/evaluation/autoeval/latest.txt)/report.md" >> "$GITHUB_STEP_SUMMARY"
-          if [ "$code" = "2" ]; then exit 2; fi
 
-      - uses: actions/upload-artifact@v4
+          if [ -f "$AUTOEVAL_OUT/latest.txt" ]; then
+            run_dir="$(cat "$AUTOEVAL_OUT/latest.txt")"
+            if [ -f "$run_dir/report.md" ]; then
+              cat "$run_dir/report.md" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          else
+            echo "Offline autoeval exited $code before producing a fresh report; stale tracked latest.txt was ignored." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          {
+            echo ""
+            echo "_Scope: offline LLM evaluation suite only (--suite llm --llm-mode offline). Real ML classifier evaluation is pending verified model provisioning and is not claimed by this check._"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$code"
+
+      - name: Upload fresh autoeval report
         if: always()
+        uses: actions/upload-artifact@v7
         with:
-          name: autoeval-offline-${{ github.run_number }}
-          path: artifacts/evaluation/autoeval/
-          retention-days: 30
-
-      - name: Enforce gates
-        if: env.ENFORCE == 'true' && steps.run.outputs.exit_code != '0'
-        run: |
-          echo "Blocking autoeval gates failed (see job summary)."
-          exit 1
-
-  live:
-    name: LLM live (Gemini, costs API calls)
-    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.llm_mode == 'live')
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-      - name: Install dependencies (CPU torch)
-        run: |
-          python -m pip install --upgrade pip
-          pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pip install -r apps/demo/requirements.txt -r pipeline/requirements.txt -r pipeline/requirements-transformers.txt
-      - name: Run live LLM evaluation
-        if: env.GEMINI_API_KEY != ''
-        run: |
-          judge=""
-          if [ "${{ inputs.judge }}" = "true" ]; then judge="--judge"; fi
-          set +e
-          python -m pipeline.evaluation.autoeval run --suite llm --llm-mode live $judge --tag "live-${{ github.run_number }}"
-          code=$?
-          set -e
-          cat "$(cat artifacts/evaluation/autoeval/latest.txt)/report.md" >> "$GITHUB_STEP_SUMMARY"
-          if [ "$code" = "2" ] || { [ "$ENFORCE" = "true" ] && [ "$code" != "0" ]; }; then exit 1; fi
-      - name: Missing secret
-        if: env.GEMINI_API_KEY == ''
-        run: echo "::warning::secrets.GEMINI_API_KEY is not set; live LLM evaluation skipped"
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: autoeval-live-${{ github.run_number }}
-          path: artifacts/evaluation/autoeval/
-          retention-days: 30
+          name: autoeval-offline-report
+          path: artifacts/evaluation/autoeval-ci
+          if-no-files-found: warn
