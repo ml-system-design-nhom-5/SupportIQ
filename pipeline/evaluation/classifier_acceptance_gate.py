@@ -142,6 +142,9 @@ def audit_candidate_provenance(
             val = manifest_data.get(req_field)
             if not val:
                 reasons.append(f"missing_provenance_field:{req_field}")
+        git_commit = str(manifest_data.get("git_commit") or "").strip()
+        if git_commit and not re.fullmatch(r"[0-9a-fA-F]{7,40}", git_commit):
+            reasons.append("invalid_provenance_git_commit")
         declared_hashes = manifest_data.get("artifact_hashes")
         if not isinstance(declared_hashes, dict) or not declared_hashes:
             reasons.append("missing_provenance_artifact_hashes")
@@ -1201,7 +1204,9 @@ def evaluate_model_on_suites(
             "score_kind": "calibrated_probability" if calibrated else "uncalibrated_softmax",
             "temperature": temperature if calibrated else 1.0,
             "calibrated": calibrated,
-            "experimental_rejector_active": bool(rejector or rejector_fn),
+            "experimental_rejector_active": bool(
+                (rejector and rejector.get("enabled", True) is not False) or rejector_fn
+            ),
         },
         "independent_holdout": _run_holdout(holdout_rows) if holdout_rows else None,
         "ml_oos_80": {
@@ -1235,6 +1240,7 @@ def evaluate_model_on_suites(
                 "escalated_34_n": len(sa_esc34_true),
                 "escalated_34_accuracy": M.accuracy(sa_esc34_true, sa_esc34_pred) if sa_esc34_true else 0.0,
                 "escalated_34_macro_f1": M.macro_f1(sa_esc34_true, sa_esc34_pred, labels=ESCALATED_34_INTENTS) if sa_esc34_true else 0.0,
+                "draft_expected_34_surface": "engine._analyse",
                 "draft_expected_34_raw_draft": sa_34_raw,
                 "draft_expected_34_correct_intent_draft": sa_34_correct,
                 "draft_expected_34_selective_metrics": compute_selective_coverage_metrics(
@@ -1253,6 +1259,7 @@ def evaluate_model_on_suites(
                 "mandatory_63_uninjected_fault_fixtures": sa_mand_uninjected_faults,
             },
             "final_acceptance_24": {
+                "answerable_12_surface": "runner_decide_route",
                 "answerable_12_raw_draft": fa12_raw,
                 "answerable_12_correct_intent_draft": fa12_correct,
                 "answerable_12_wrong_intent_draft_cases": fa12_wrong_cases,
@@ -1285,6 +1292,7 @@ def run_classifier_acceptance_gate(
     calibration_split_path: Path | None = None,
     eval_split_path: Path | None = None,
     verify_parity: bool = True,
+    require_independent_holdout: bool = False,
 ) -> dict[str, Any]:
     provenance = audit_candidate_provenance(candidate_dir, candidate_manifest_path)
     calibration_audit = validate_calibration_manifest(candidate_dir, calibration_manifest_path)
@@ -1352,11 +1360,19 @@ def run_classifier_acceptance_gate(
             failure_reasons.append("runtime_score_parity_mismatch")
 
     active_eval = candidate_calibrated_eval if candidate_calibrated_eval is not None else candidate_eval
-    if active_eval is not None:
+    warnings: list[str] = []
+    if active_eval is None:
+        failure_reasons.append("missing_candidate_evaluation")
+    else:
         if active_eval["ml_oos_80"]["false_draft_eligible_count"] > 0:
             failure_reasons.append("oos_draft_leak")
         if active_eval["ml_noise_420"]["safe_routing_rate"] < serving_eval["ml_noise_420"]["safe_routing_rate"] - 1e-6:
             failure_reasons.append("noise_safe_routing_regression")
+        if (
+            active_eval["ml_noise_420"]["selective_metrics"]["correct_intent_draft_eligible_count"]
+            < serving_eval["ml_noise_420"]["selective_metrics"]["correct_intent_draft_eligible_count"]
+        ):
+            failure_reasons.append("noise_correct_intent_draft_coverage_regression")
 
         if eval_rows and active_eval["independent_holdout"] and serving_eval["independent_holdout"]:
             ch = active_eval["independent_holdout"]
@@ -1365,6 +1381,20 @@ def run_classifier_acceptance_gate(
                 failure_reasons.append("holdout_34_label_unsafe_draft_leak")
             if sh["escalated_34"]["n"] > 0 and ch["escalated_34"]["macro_f1"] < sh["escalated_34"]["macro_f1"] - 0.02:
                 failure_reasons.append("34_label_regression_holdout")
+            if ch["supported_12"]["n"] == 0 or ch["n_total"] < 10:
+                failure_reasons.append("holdout_insufficient_supported_12_coverage")
+            elif (
+                sh["supported_12"]["n"] > 0
+                and ch["supported_12"]["correct_intent_draft_eligible_count"]
+                < sh["supported_12"]["correct_intent_draft_eligible_count"]
+            ):
+                failure_reasons.append("holdout_supported_12_coverage_regression")
+        elif eval_split_path is not None:
+            failure_reasons.append("missing_independent_holdout_evaluation")
+        elif require_independent_holdout:
+            failure_reasons.append("missing_independent_holdout_split")
+        else:
+            warnings.append("no_independent_holdout_split_provided")
 
         creg = active_eval["known_acceptance_regression_not_unseen_holdout"]
         sreg = serving_eval["known_acceptance_regression_not_unseen_holdout"]
@@ -1374,8 +1404,23 @@ def run_classifier_acceptance_gate(
             failure_reasons.append("mandatory_escalation_unsafe_draft_leak")
         if creg["system_acceptance_156"]["mandatory_63_strict_match"] < sreg["system_acceptance_156"]["mandatory_63_strict_match"]:
             failure_reasons.append("mandatory_strict_action_regression")
+        if (
+            creg["system_acceptance_156"]["draft_expected_34_correct_intent_draft"]
+            < sreg["system_acceptance_156"]["draft_expected_34_correct_intent_draft"]
+        ):
+            failure_reasons.append("system_acceptance_draft_coverage_regression")
         if creg["final_acceptance_24"]["unanswerable_active_kb_draft_leaks"]:
             failure_reasons.append("final_acceptance_unanswerable_draft_leak")
+        if (
+            creg["final_acceptance_24"]["answerable_12_selective_metrics"]["denominator"] == 0
+            or sreg["final_acceptance_24"]["answerable_12_selective_metrics"]["denominator"] == 0
+        ):
+            failure_reasons.append("missing_utility_evidence")
+        elif (
+            creg["final_acceptance_24"]["answerable_12_correct_intent_draft"]
+            < sreg["final_acceptance_24"]["answerable_12_correct_intent_draft"]
+        ):
+            failure_reasons.append("final_acceptance_answerable_coverage_regression")
         if (
             len(creg["final_acceptance_24"]["answerable_12_wrong_intent_draft_cases"])
             > len(sreg["final_acceptance_24"]["answerable_12_wrong_intent_draft_cases"])
@@ -1383,11 +1428,25 @@ def run_classifier_acceptance_gate(
             failure_reasons.append("wrong_intent_draft_regression")
 
     unique_reasons = sorted(set(failure_reasons))
+    has_valid_holdout = bool(
+        eval_rows
+        and active_eval
+        and active_eval.get("independent_holdout")
+        and active_eval["independent_holdout"]["supported_12"]["n"] > 0
+        and active_eval["independent_holdout"]["n_total"] >= 10
+    )
     return {
         "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "report_type": "task_c_classifier_acceptance_gate",
         "gate_decision": "PASS" if not unique_reasons else "REJECT",
+        "promotion_eligible": (not unique_reasons) and has_valid_holdout,
+        "acceptance_scope": "full_with_independent_holdout" if has_valid_holdout else "regression_only_not_promotion_eligible",
         "failure_reasons": unique_reasons,
+        "warnings": sorted(set(warnings)),
+        "utility_non_regression_policy": (
+            "Coordinator-selected paired baseline non-regression policy: no supported correct-intent "
+            "draft coverage regression vs unchanged Serving on the same frozen suites, plus no safety regression."
+        ),
         "suite_classification_note": (
             "system_acceptance_156 and final_acceptance_24 are explicitly labeled "
             "known_acceptance_regression_not_unseen_holdout."
