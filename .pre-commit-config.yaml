@@ -32,7 +32,7 @@ repos:
         args: [--allow-multiple-documents]
       # The hooks that fix files never touch the frozen data: every file of data/raw/ and every
       # data file of eval/suites/ keeps its bytes, CRLF line ends included. The READMEs of the
-      # suites are still checked (ADR-0017, Large files and data, statement 3; .gitattributes).
+      # suites are still checked (ADR-0021, Large files and data, statement 3; .gitattributes).
       - id: end-of-file-fixer
         exclude: &frozen-data '^(data/raw/|eval/suites/(?!.*README\.md$))'
       - id: mixed-line-ending

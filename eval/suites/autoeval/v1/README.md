@@ -11,11 +11,11 @@ Do not edit `ml_noise.jsonl` or `llm_cases.jsonl` by hand. On `main`, after a ch
 
 ## After the join
 
-The autoeval and its `build-data` command do not run after the join, because the autoeval suites import modules that the join deleted ([ADR-0017, CI](../../../../docs/decisions/0017-repository-layout-and-ai-ml-migration.md#ci), statement 6). How the autoeval worked on `main` is described in `eval/README.md`.
+The autoeval and its `build-data` command do not run after the join, because the autoeval suites import modules that the join deleted ([ADR-0021, CI](../../../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#ci), statement 6). How the autoeval worked on `main` is described in `eval/README.md`.
 
 ## Paths in the manifest
 
-`manifest.json` is not edited, so its paths, and the paths in this README, are the paths on `main` before the join ([ADR-0017, Large files and data](../../../../docs/decisions/0017-repository-layout-and-ai-ml-migration.md#large-files-and-data), statement 4). Its SHA-256 values are lowercase hashes of the content with CRLF line ends replaced by LF (`sha256_text_file` in `eval/src/supportiq_eval/autoeval/datasets.py`), so they differ from the raw-byte hashes of the system suites. Each still matches the file at its current path:
+`manifest.json` is not edited, so its paths, and the paths in this README, are the paths on `main` before the join ([ADR-0021, Large files and data](../../../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#large-files-and-data), statement 4). Its SHA-256 values are lowercase hashes of the content with CRLF line ends replaced by LF (`sha256_text_file` in `eval/src/supportiq_eval/autoeval/datasets.py`), so they differ from the raw-byte hashes of the system suites. Each still matches the file at its current path:
 
 | Path in the manifest | Current path |
 |---|---|

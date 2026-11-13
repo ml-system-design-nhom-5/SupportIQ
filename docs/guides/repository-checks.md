@@ -94,7 +94,7 @@ Run every command in the repository root.
 Every file in `.github/workflows/` follows these rules, including the `backend.yml` and `frontend.yml` files that the component owners add ([WF-19](../rules/workflow.md#continuous-integration)). actionlint checks the syntax of every workflow, the `workflow-*` hooks of `.pre-commit-config.yaml` check every rule that a pattern can check, and reviewers check the rest ([Who checks each rule](#who-checks-each-rule)).
 
 1. **One workflow per area.** The file is `.github/workflows/<area>.yml` with `name: <area>`: `repository`, `contracts`, `backend`, `frontend`.
-2. **Triggers.** Exactly these, and nothing else ([ADR-0017, CI](../decisions/0017-repository-layout-and-ai-ml-migration.md#ci), statement 3):
+2. **Triggers.** Exactly these, and nothing else ([ADR-0021, CI](../decisions/0021-repository-layout-and-ai-ml-migration.md#ci), statement 3):
 
    ```yaml
    on:
@@ -149,7 +149,7 @@ The `workflow-*` hooks are pygrep hooks, which come with pre-commit. Each one fa
 
 ## Branch protection
 
-Set these on GitHub for `chore/fe-be-supportiq-ecom` (Settings → Branches, or a ruleset):
+Set these on GitHub for `main` (Settings → Branches, or a ruleset), right after the join PR is merged ([ADR-0021, Merge procedure](../decisions/0021-repository-layout-and-ai-ml-migration.md#merge-procedure), statement 10):
 
 - Require a pull request before merging, with at least one approval ([WF-15](../rules/workflow.md#reviews)).
 - Require status checks to pass, with the branch up to date before merging. Required checks: `repository-checks`, `contract-checks`, `backend-checks`, `backend-tests`, `backend-image`, and `frontend-checks`.

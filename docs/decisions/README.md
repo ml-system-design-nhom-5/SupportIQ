@@ -24,8 +24,8 @@ An architecture decision record (ADR) captures one significant decision: its con
 | [0014](0014-citations-to-order-context.md) | Citations to the order context | Accepted | 2026-11-12 |
 | [0015](0015-account-creation-and-password-changes.md) | Account creation, password changes, and password resets | Accepted | 2026-11-11 |
 | [0016](0016-hosting-on-free-tiers.md) | Hosting of the demo on free tiers | Accepted | 2026-11-12 |
-| [0017](0017-repository-layout-and-ai-ml-migration.md) | Repository layout and migration of the AI and ML code | Accepted | 2026-11-12 |
 | [0018](0018-hosting-of-ai-service-on-modal.md) | Hosting of `ai-service` on Modal | Accepted | 2026-11-12 |
+| [0021](0021-repository-layout-and-ai-ml-migration.md) | Repository layout and migration of the AI and ML code | Accepted | 2026-11-12 |
 
 Notes on the index:
 
@@ -33,8 +33,9 @@ Notes on the index:
 - [ADR-0013](0013-shop-demo-with-read-only-catalog.md) was accepted on 2026-11-05 and supersedes [ADR-0002](0002-shop-demo-scope.md).
 - [ADR-0015](0015-account-creation-and-password-changes.md) was accepted on 2026-11-11 by the project lead and replaces part of statement 1 of ADR-0009 and admin limit 9 of ADR-0012, extends the `admin` row of ADR-0012's role table, and adds the own password change to the `/shop` list of ADR-0013. The rest of those ADRs still holds.
 - [ADR-0016](0016-hosting-on-free-tiers.md) was accepted on 2026-11-12 by the project lead and replaces one part of [ADR-0007](0007-observability-stack.md): the telemetry of the deployed demo goes to a hosted service, Grafana Cloud. Local development keeps the local Grafana stack, and the rest of ADR-0007 still holds.
-- [ADR-0017](0017-repository-layout-and-ai-ml-migration.md) was accepted on 2026-11-12 by the project lead. For the join with `main` only, until the join PR is merged, it replaces the two approvals that statement 2 of the egress control of [ADR-0010](0010-pseudonymization-and-egress-control.md#egress-control) requires for a change of the egress allow-list: the project lead's approval stands in for them. The rest of ADR-0010 still holds.
 - [ADR-0018](0018-hosting-of-ai-service-on-modal.md) was accepted on 2026-11-12 by the project lead and decides what [ADR-0016](0016-hosting-on-free-tiers.md) left open: `ai-service` runs on Modal, which receives its pseudonymized text, no host outside the system other than the Gemini host receives text from `ai-service`, and its egress allow-list is enforced in code. This replaces the `ai-service` row of the platform table, statement 2 of the outbound connections, and the matching open question of ADR-0016, and it settles the open part of statement 1 of the egress control of [ADR-0010](0010-pseudonymization-and-egress-control.md#egress-control). It also decides the artifact store that [ADR-0003](0003-tech-stack.md) deferred. The rest of those ADRs still holds.
+- [ADR-0021](0021-repository-layout-and-ai-ml-migration.md) was accepted on 2026-11-12 by the project lead. For the join with `main` only, until the join PR is merged, it replaces the two approvals that statement 2 of the egress control of [ADR-0010](0010-pseudonymization-and-egress-control.md#egress-control) requires for a change of the egress allow-list: the project lead's approval stands in for them. The rest of ADR-0010 still holds.
+- ADR-0021 was numbered ADR-0017 on the branch `build/join-main` until 2026-11-13. The branch `build/ticket-workflow` had already given 0017 to "ADR-0017: The named-entity model from its release URL", so the project lead renumbered this ADR without changing its content. Commit messages before the renumbering still say ADR-0017, because the history is not rewritten.
 
 ## Lifecycle
 

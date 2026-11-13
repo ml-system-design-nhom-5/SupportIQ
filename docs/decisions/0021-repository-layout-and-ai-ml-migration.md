@@ -1,4 +1,4 @@
-# ADR-0017: Repository layout and migration of the AI and ML code
+# ADR-0021: Repository layout and migration of the AI and ML code
 
 - **Status:** Accepted
 - **Date:** 2026-11-12

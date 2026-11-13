@@ -49,7 +49,7 @@ Every input file that `suite_manifest.json` references is checked strictly by it
 
 ## 5. Paths in the manifest
 
-`suite_manifest.json` is not edited, so its paths, and the paths in this README, are the paths on `main` before the join ([ADR-0017, Large files and data](../../../../docs/decisions/0017-repository-layout-and-ai-ml-migration.md#large-files-and-data), statement 4). Each pinned SHA-256 is the uppercase hash of the raw bytes, CRLF line ends included, and still matches the file at its current path:
+`suite_manifest.json` is not edited, so its paths, and the paths in this README, are the paths on `main` before the join ([ADR-0021, Large files and data](../../../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#large-files-and-data), statement 4). Each pinned SHA-256 is the uppercase hash of the raw bytes, CRLF line ends included, and still matches the file at its current path:
 
 | Path in the manifest | Current path |
 |---|---|
