@@ -1,10 +1,10 @@
 # Documentation handbook
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-12
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-13
 
 This handbook tells you where each document lives and how to write it. It applies to every contributor, human or AI agent. A change is not done until its documentation is correct.
 
-Current Topic 1 work: [initial review](audits/2026-11-12-topic-1-review.md), [specification](superpowers/specs/2026-11-12-topic-1-improvements-design.md), [plan and status](superpowers/plans/2026-11-12-topic-1-improvements.md), and [integration evidence and limits](audits/2026-11-12-topic-1-integration.md).
+Current canonical navigation: [requirements](product/requirements.md), [current limitations](CURRENT_LIMITATIONS.md), [requirements evidence matrix](REQUIREMENTS_EVIDENCE_MATRIX.md), [closure acceptance audit](audits/2026-11-13-closure-round-acceptance.md), [cleanup design](design/codebase-cleanup-and-refactoring.md), [cleanup plan](superpowers/plans/2026-11-13-codebase-cleanup.md), and [cleanup log](codebase-cleanup-log.md). Topic 1 history: [initial review](audits/2026-11-12-topic-1-review.md), [specification](superpowers/specs/2026-11-12-topic-1-improvements-design.md), [plan and status](superpowers/plans/2026-11-12-topic-1-improvements.md), and [integration evidence and limits](audits/2026-11-12-topic-1-integration.md).
 
 ## Principles
 
@@ -22,14 +22,14 @@ Current Topic 1 work: [initial review](audits/2026-11-12-topic-1-review.md), [sp
 | [`docs/product/`](product/requirements.md) | Requirements and scope | team |
 | [`docs/decisions/`](decisions/README.md) | Architecture decision records (ADRs): why we chose what we chose | team |
 | [`docs/design/`](design/contracts-v1.md) | Design docs: how a feature will work, written before code | feature owner |
-| `docs/architecture/` | Living description of the system as it is today: components, flows, data | team |
-| `docs/guides/` | How-to guides: set up, run, evaluate | component owner |
+| [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) | Living architecture and functional/NFR summary of the system | team |
+| [`docs/guides/`](guides/application-windows.md) | How-to guides: [Windows setup](guides/application-windows.md), [verification](guides/application-verification.md), [evaluation evidence](guides/evaluation-evidence.md) | component owner |
 | [`docs/rules/`](rules/README.md) | Engineering rules every contributor follows | team |
 | [`docs/templates/`](templates/adr.md) | Templates for ADRs and design docs | team |
 | [`docs/glossary.md`](glossary.md) | Canonical domain terms | team |
-| `contracts/` | API and data contracts, with examples and a changelog | contracts gatekeeper |
+| [`contracts/`](../contracts/backend.openapi.json) | API and data contracts ([backend OpenAPI](../contracts/backend.openapi.json), [core-backend OpenAPI](api/core-backend.openapi.yaml)) | contracts gatekeeper |
 | `<component>/README.md` | How to run, test, and navigate one component | component owner |
-| [`AGENTS.md`](../AGENTS.md) | Instructions for AI coding agents, whatever the tool. It links to these docs and never restates them. Personal agent configuration (for example `CLAUDE.md`, `.claude/`) is not committed | team |
+| `AGENTS.md` | Instructions for AI coding agents, whatever the tool (if present, links to these docs and never restates them). Personal agent configuration (for example `CLAUDE.md`, `.claude/`) is not committed | team |
 
 Locations without a link do not exist yet. Create them when the first document of that type is written.
 

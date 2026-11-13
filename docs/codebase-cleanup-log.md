@@ -68,3 +68,23 @@ Chưa hoàn thành toàn bộ kế hoạch gốc. Lượt sửa review giữ c�
 - Review bổ sung không tìm thấy regression cleanup/ownership; khoảng trống native DNS được phát hiện và đã sửa trước lượt full suite cuối.
 - Hai manifest lịch sử `05-11-2026-system-live-experimental-00` và `05-11-2026-system-http-assessment-00`: **19/19 checksum khớp**; không viết lại artifact.
 - Không chạy live/API trả phí, không `-Apply` vào repository thật, không commit/push. Các Task 1/3/4/5/6 còn thiếu được giữ nguyên trạng thái ở bảng trên.
+
+## 6. Code & Documentation Cleanup Consolidation (2026-11-13)
+
+- **Code cleanup (`a1f522a`, integrated at `315eb5e`):** Removed 11 unused imports across 7 app modules (`apps/backend/main.py`, `apps/backend/commerce/service.py`, `apps/backend/platform/observability.py`, `apps/backend/tickets/jobs.py`, `apps/backend/tickets/service.py`, `apps/ai_service/main.py`, `apps/demo/app.py`), removed unused `count_tokens` from `apps/core_backend/retrieval/encoder.py`, and removed zero-caller derived `VERIFIED_POLICY_PUBLIC_CONTACTS` / `VERIFIED_POLICY_CONTENT_HASHES` exports from `apps/core_backend/llm/gemini.py` while retaining `SENSITIVE_AUTHORITY_PATTERN` in `apps/ai_service/engine.py` (dynamically asserted by `tests/unit/test_pipeline_runner_safety_b.py`), `_PINNED_VERIFIED_POLICIES`, provenance validation, contact allowlists, `record_db`, HTTP client ownership, and the `PersistentStore.save_input_snapshot` commit fix.
+- **Documentation cleanup:**
+  - Deleted root `design_draft.md` (exact Draft copy of [codebase-cleanup-and-refactoring.md](design/codebase-cleanup-and-refactoring.md), differing only in `Status: Draft` vs `Approved / Ready for Implementation`).
+  - Consolidated and deleted root `concepts_brief.md` (scope already covered by [codebase-cleanup-and-refactoring.md](design/codebase-cleanup-and-refactoring.md); retained deferred hygiene notes: keeping `apps/ai_service/engine.py` aligned with `apps/core_backend/intent/schemas.py` and `pipeline_runner.py` without collapsing the HTTP boundary between `apps/core_backend` and `apps/ai_service`, and keeping `tests/unit/test_demo_lifespan.py` / test fixture hygiene scoped cleanly).
+  - Consolidated and deleted root `TODO` (scratch architecture-refinement proposal for explicit RAG, Agent Adapter, Multimodal Guardrails, Human Reflection visibility, and a future `Agent Evaluator` stage returning `PASS`/`FLAG`/`FAIL`/`INSUFFICIENT`; explicitly **deferred and not implemented** per [the cleanup plan](superpowers/plans/2026-11-13-codebase-cleanup.md)).
+  - Updated [docs/README.md](README.md) canonical navigation links (`docs/guides/`, `docs/ARCHITECTURE.md`, `contracts/`, cleanup/closure docs) and removed the broken `../AGENTS.md` relative link. Preserved `docs/CHỦ ĐỀ 1.md`, requirements, runbooks, ADRs, `DESIGN.md`, `PRODUCT.md`, and historical acceptance/audit artifacts.
+- **Note:** Cleanup removes proven dead code and redundant root scratch docs only; it does not constitute system acceptance (see [the closure acceptance audit](audits/2026-11-13-closure-round-acceptance.md)).
+
+### Deferred Architecture Refinement Proposal (Consolidated from Deleted Root `TODO`)
+
+> **Status:** Deferred proposal only — not existing functionality and not implemented in cleanup (per [the cleanup plan](superpowers/plans/2026-11-13-codebase-cleanup.md)).
+
+1. **RAG visibility:** Keep intent as a ranking signal rather than a retrieval gate; explicitly separate retrieval, ranking, evidence validation, and context construction, and expose retrieved sources alongside relevance and source validity.
+2. **Agent Adapter boundary:** Explicitly define interfaces between the LLM and retrieval/business-data services, ensuring the LLM never accesses the database directly.
+3. **Multimodal Guardrails separation:** Explicitly surface input validation, output validation, grounding checks, and safety constraints, keeping deterministic safety checks separate from LLM evaluation.
+4. **Agent Evaluator stage (proposed):** Automatically evaluate every generated draft for factual correctness, evidence grounding, relevance, completeness, citations, and policy compliance; return `PASS`, `FLAG`, `FAIL`, or `INSUFFICIENT` with reasons, log evaluation results for analysis, and route failed or flagged drafts for appropriate handling (never auto-approving or auto-sending).
+5. **Human Reflection visibility:** Present the draft, retrieved evidence, and evaluator results together to staff, preserving approve, edit, reject, and escalate actions with mandatory human approval.
