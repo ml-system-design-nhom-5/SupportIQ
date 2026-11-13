@@ -56,6 +56,7 @@ class IntentPrediction(BaseModel):
     rejected_by_experimental_adapter: Optional[StrictBool] = None
     rejector_decision: Optional[str] = None
     error: Optional[str] = None
+    failure_code: Optional[Literal["ml_timeout", "ml_error", "ml_unavailable", "invalid_model_output"]] = None
 
     @field_validator("confidence", mode="before")
     @classmethod

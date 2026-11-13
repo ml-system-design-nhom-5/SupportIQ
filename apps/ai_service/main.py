@@ -64,6 +64,55 @@ class AllowListedTransport(httpx.BaseTransport):
         self.transport.close()
 
 
+_BOUNDED_GATEWAY_CODES = frozenset({
+    "ml_timeout",
+    "ml_error",
+    "ml_unavailable",
+    "encoder_unavailable",
+    "encoder_failure",
+    "encoder_failed",
+    "ai_service_unavailable",
+})
+
+
+def _gateway_http_error(
+    status_code: int,
+    error_code: str,
+    message: str,
+    reason_codes: list[str] | None = None,
+) -> HTTPException:
+    codes = reason_codes or (
+        [error_code] if error_code == "ai_service_unavailable" else [error_code, "ai_service_unavailable"]
+    )
+    return HTTPException(
+        status_code=status_code,
+        detail={"error_code": error_code, "reason_codes": codes, "message": message},
+        headers={"X-SupportIQ-Error-Code": error_code},
+    )
+
+
+def _execute_gateway_call(call, *, unavailability_message: str):
+    try:
+        return call()
+    except HTTPException:
+        raise
+    except TimeoutError:
+        raise _gateway_http_error(504, "ml_timeout", "Inference timed out") from None
+    except Exception as exc:
+        explicit_code = getattr(exc, "code", None)
+        if explicit_code == "ml_timeout":
+            raise _gateway_http_error(504, "ml_timeout", "Inference timed out") from None
+        if isinstance(explicit_code, str) and explicit_code in _BOUNDED_GATEWAY_CODES:
+            reason_codes = (
+                ["encoder_failure", "encoder_failed", "ai_service_unavailable"]
+                if explicit_code in ("encoder_failure", "encoder_failed")
+                else [explicit_code, "ai_service_unavailable"]
+            )
+            canonical = "encoder_failure" if explicit_code == "encoder_failed" else explicit_code
+            raise _gateway_http_error(503, canonical, unavailability_message, reason_codes=reason_codes) from None
+        raise _gateway_http_error(503, "ml_error", unavailability_message) from None
+
+
 def create_app():
     settings = AiSettings()
     resources = {}
@@ -105,7 +154,7 @@ def create_app():
 
     def engine():
         if not resources.get("model") or not resources["model"].is_ready():
-            raise HTTPException(503, "The verified model is not available")
+            raise _gateway_http_error(503, "ml_unavailable", "The verified model is not available")
         return resources["engine"]
 
     @app.get("/health/live")
@@ -126,17 +175,17 @@ def create_app():
 
     @app.post("/v1/analyses")
     def analyse(request: SuggestionRequest):
-        try:
-            return engine().analyse(request.model_dump())
-        except (ValueError, RuntimeError, KeyError):
-            raise HTTPException(503, "Analysis is temporarily unavailable") from None
+        return _execute_gateway_call(
+            lambda: engine().analyse(request.model_dump()),
+            unavailability_message="Analysis is temporarily unavailable",
+        )
 
     @app.post("/v1/drafts")
     def draft(request: SuggestionRequest):
-        try:
-            return engine().draft(request.model_dump())
-        except (ValueError, RuntimeError, KeyError):
-            raise HTTPException(503, "Draft generation is temporarily unavailable") from None
+        return _execute_gateway_call(
+            lambda: engine().draft(request.model_dump()),
+            unavailability_message="Draft generation is temporarily unavailable",
+        )
 
     @app.get("/v1/asset-versions")
     def versions():

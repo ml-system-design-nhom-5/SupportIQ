@@ -13,8 +13,67 @@ from apps.backend.platform.database import audit, utcnow, ensure_utc
 from apps.backend.platform.models import Suggestion, SuggestionJob, Ticket
 from apps.backend.platform.observability import metrics, logger
 
-AI_REASONS = {"low_confidence", "signal_disagreement", "out_of_scope_intent", "human_agent_requested", "requires_authority", "no_valid_document", "only_expired_documents", "conflicting_sources", "missing_information", "insufficient_evidence", "source_review_overdue", "grounding_failed", "llm_unavailable", "llm_invalid_output", "budget_exceeded"}
+_BOUNDED_REMOTE_FAULT_CODES = frozenset({
+    "ai_service_unavailable",
+    "ml_timeout",
+    "ml_error",
+    "ml_unavailable",
+    "encoder_unavailable",
+    "encoder_failure",
+    "encoder_failed",
+})
+
+AI_REASONS = {
+    "low_confidence", "signal_disagreement", "out_of_scope_intent", "human_agent_requested",
+    "requires_authority", "no_valid_document", "only_expired_documents", "conflicting_sources",
+    "missing_information", "insufficient_evidence", "source_review_overdue", "grounding_failed",
+    "llm_unavailable", "llm_invalid_output", "budget_exceeded",
+    "ai_service_unavailable", "ml_timeout", "ml_error", "ml_unavailable",
+    "encoder_unavailable", "encoder_failure", "encoder_failed",
+    "llm_timeout", "llm_rate_limited", "llm_insufficient_evidence",
+    "selective_rejected", "low_margin", "invalid_model_output", "explicit_human_request",
+}
 DRAFT_STATES = {"draft_ready", "abstained", "escalation_recommended", "llm_unavailable"}
+
+
+def _classify_http_failure(exc: Exception) -> dict:
+    """Map transport/HTTP errors strictly to bounded fault codes without exposing raw text."""
+    if isinstance(exc, httpx.TimeoutException):
+        return {"failure_code": "ml_timeout", "reason_codes": ["ml_timeout", "ai_service_unavailable"]}
+
+    if isinstance(exc, httpx.HTTPStatusError) and exc.response is not None:
+        header_code = exc.response.headers.get("X-SupportIQ-Error-Code")
+        body_code = None
+        body_codes: list[str] = []
+        try:
+            payload = exc.response.json()
+            detail = payload.get("detail") if isinstance(payload, dict) else None
+            if isinstance(detail, dict):
+                raw_code = detail.get("error_code") or detail.get("code")
+                if isinstance(raw_code, str) and raw_code in _BOUNDED_REMOTE_FAULT_CODES:
+                    body_code = raw_code
+                raw_list = detail.get("reason_codes")
+                if isinstance(raw_list, list):
+                    body_codes = [c for c in raw_list if isinstance(c, str) and c in _BOUNDED_REMOTE_FAULT_CODES]
+        except Exception:
+            pass
+
+        chosen = None
+        if isinstance(header_code, str) and header_code in _BOUNDED_REMOTE_FAULT_CODES:
+            chosen = header_code
+        elif body_code:
+            chosen = body_code
+        elif exc.response.status_code == 504:
+            chosen = "ml_timeout"
+
+        if chosen == "ml_timeout":
+            return {"failure_code": "ml_timeout", "reason_codes": list(dict.fromkeys(["ml_timeout", *body_codes, "ai_service_unavailable"]))}
+        if chosen in ("encoder_failure", "encoder_failed"):
+            return {"failure_code": "encoder_failure", "reason_codes": list(dict.fromkeys(["encoder_failure", "encoder_failed", *body_codes, "ai_service_unavailable"]))}
+        if chosen in ("ml_error", "ml_unavailable", "encoder_unavailable"):
+            return {"failure_code": chosen, "reason_codes": list(dict.fromkeys([chosen, *body_codes, "ai_service_unavailable"]))}
+
+    return {"failure_code": "ai_service_unavailable", "reason_codes": ["ai_service_unavailable"]}
 
 
 def validate_analysis(data):
@@ -117,18 +176,26 @@ class SuggestionWorker:
                         for citation in result["draft"]["citations"]:
                             if citation["source_type"] == "order_context":
                                 citation["value"] = payload["order_context"][citation["field"]]
-                return part, result, round((time.perf_counter() - started) * 1000)
-            except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError):
-                return part, None, round((time.perf_counter() - started) * 1000)
+                return part, result, round((time.perf_counter() - started) * 1000), None
+            except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError) as exc:
+                return part, None, round((time.perf_counter() - started) * 1000), _classify_http_failure(exc)
         # 1. Fetch analysis first
-        part, analysis_res, latency = fetch("analysis")
+        part, analysis_res, latency, failure_info = fetch("analysis")
         if analysis_res is None:
             # AI service failed on analysis: fail closed to manual fallback immediately without waiting for draft timeout
-            self.store(identifier, token, "analysis", None, latency)
+            self.store(identifier, token, "analysis", None, latency, failure_info=failure_info)
+            failure_code = (failure_info or {}).get("failure_code", "ai_service_unavailable")
+            reason_codes = list((failure_info or {}).get("reason_codes") or ["ai_service_unavailable"])
+            staff_note = (
+                "The AI request timed out. Review the customer message and order records to write a reply manually."
+                if failure_code == "ml_timeout"
+                else "The AI service is unavailable. Review the customer message and order records to write a reply manually."
+            )
             synthesized_draft = {
                 "status": "unavailable",
-                "reason_codes": ["ai_service_unavailable"],
-                "staff_note": "The AI service is unavailable. Review the customer message and order records to write a reply manually.",
+                "failure_code": failure_code,
+                "reason_codes": reason_codes,
+                "staff_note": staff_note,
                 "versions": {},
                 "step_latency_ms": {},
                 "mask_count_by_type": {}
@@ -158,12 +225,15 @@ class SuggestionWorker:
             return
 
         # 3. Otherwise execute draft
-        part, draft_res, latency = fetch("draft")
+        part, draft_res, latency, failure_info = fetch("draft")
         if draft_res is None:
+            failure_code = (failure_info or {}).get("failure_code", "ai_service_unavailable")
+            reason_codes = list((failure_info or {}).get("reason_codes") or ["ai_service_unavailable"])
             synthesized_draft = {
                 "analysis": analysis_res,
                 "status": "unavailable",
-                "reason_codes": ["ai_service_unavailable"],
+                "failure_code": failure_code,
+                "reason_codes": reason_codes,
                 "staff_note": "Draft generation is unavailable. Review the retrieved sources and write a reply manually.",
                 "versions": analysis_res.get("versions", {}),
                 "step_latency_ms": {},
@@ -174,7 +244,7 @@ class SuggestionWorker:
 
         self.store(identifier, token, part, draft_res, latency)
 
-    def store(self, identifier, token, part, result, latency_ms):
+    def store(self, identifier, token, part, result, latency_ms, failure_info=None):
         with self.database.transaction() as session:
             # Match the workflow's ticket→suggestion locking order to avoid deadlocks.
             snapshot = session.get(Suggestion, identifier)
@@ -188,8 +258,11 @@ class SuggestionWorker:
             if result is None:
                 if part == "analysis" and data.get("analysis_status") == "ready":
                     return
+                fail_codes = (failure_info or {}).get("reason_codes") or ["ai_service_unavailable"]
+                fail_code = (failure_info or {}).get("failure_code") or data.get("failure_code") or "ai_service_unavailable"
                 data["analysis_status" if part == "analysis" else "draft_status"] = "unavailable"
-                data["reason_codes"] = list(set(data.get("reason_codes", [])) | {"ai_service_unavailable"})
+                data["reason_codes"] = list(dict.fromkeys([*data.get("reason_codes", []), *fail_codes]))
+                data["failure_code"] = fail_code
                 if "staff_note" not in data or not data["staff_note"]:
                     data["staff_note"] = "The AI service is unavailable. Review the customer message and order records to write a reply manually."
             else:

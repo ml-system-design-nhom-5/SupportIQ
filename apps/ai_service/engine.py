@@ -5,25 +5,16 @@ import math
 import re
 import time
 
-PLACEHOLDER = re.compile(r"\[(NAME|EMAIL|PHONE|CARD|ADDRESS|ORDER_ID|TRACKING_ID|TRANSACTION_ID|LITERAL)(_[1-9][0-9]{0,2})?\]")
-# Structural heuristic for detecting uncited financial, duration, or policy commitments in short segments.
-# NOTE: This regex is a heuristic safety gate only; it does not establish semantic entailment or comprehensive
-# factual detection. Human review remains mandatory for all outgoing replies.
-FACTUAL_COMMITMENT = re.compile(r"(\$\s*\d+|\b\d+\s*(days?|business days?|hours?|weeks?|months?)\b|\b(refund|refunded|refunds|return window|fee|fees|warranty)\b)", re.I)
-
-# Regulatory, dispute, financial, and policy exception keywords requiring manager authority
-SENSITIVE_AUTHORITY_PATTERN = re.compile(
-    r"\b("
-    r"fraud(?:ulent)?|defraud(?:ed)?"
-    r"|lawsuit|legal\s+(?:action|dispute|claim)|attorney|lawyer|court"
-    r"|chargeback|dispute[ds]?"
-    r"|unauthorized(?:\s+(?:transaction|payment|charge|debit|deduction|activity|use|withdrawal))?"
-    r"|not\s+authorized"
-    r"|(?:policy|refund|return|order|warranty|manager|supervisor)\s+exception"
-    r"|(?:make|request|grant|approve|demand|ask\s+for|need|want|seek)\s+(?:an?\s+)?exception"
-    r"|exception\s+(?:request|to|clause)"
-    r")\b",
-    re.I,
+from apps.core_backend.safety import (
+    FACTUAL_COMMITMENT,
+    PLACEHOLDER,
+    SENSITIVE_AUTHORITY_PATTERN,
+    classify_retrieval_fault,
+    evaluate_text_safety,
+    has_unauthorized_duplicate_advice,
+    has_uncovered_cross_border_shipping,
+    has_unqualified_cosmetics_refusal,
+    policy_scope_requires_review,
 )
 
 
@@ -32,50 +23,8 @@ class Engine:
         self.model, self.retriever, self.llm, self.versions, self.policy = model, retriever, llm, versions, policy
 
     def _policy_scope_requires_review(self, message, evidence):
-        """Reject adjacent policy evidence for explicitly unsupported policy scopes.
-
-        These conservative English-language rules supplement retrieval; they are
-        not a general semantic entailment or contradiction detector.
-        """
-        policy_topic = re.search(
-            r'\b(polic(?:y|ies)|rules?|terms?|refund|returns?|shipping|cancellation|guidelines?|procedures?|manuals?|compensation|shipments?)\b',
-            message,
-            re.I,
-        )
-        if re.search(
-            r'\b(?:internal|confidential|secret|restricted)\s+(?:staff\s+|audit\s+|company\s+)?(?:manual|procedures?|guidelines?|polic(?:y|ies)|rules?)\b',
-            message,
-            re.I,
-        ):
-            return True
-        if policy_topic and re.search(r'\b(unratified|unapproved|proposed|draft|archived|discontinued|expired|legacy)\b', message, re.I):
-            return True
-        if policy_topic and (
-            re.search(r'\b(conflict|contradict\w*|inconsistent)\b', message, re.I)
-            or re.search(r'\bstates?\s+both\b.+\bfor\s+the\s+same\b', message, re.I)
-            or re.search(
-                r'\bone\s+(?:section|clause|part|rule|policy)\s+says?\b.+\b(?:and\s+)?another\s+(?:section|clause|part|rule|policy)?\s*says?\b',
-                message,
-                re.I,
-            )
-        ):
-            return True
-        if re.search(r'\b(customs|import\s+dut(?:y|ies))\b', message, re.I):
-            if not any(re.search(r'\b(customs|import\s+dut(?:y|ies))\b', item.get('excerpt', ''), re.I) for item in evidence):
-                return True
-        # A four-digit price or order number is not a request for a historical policy.
-        years = [int(year) for year in re.findall(
-            r'\b(?:in|during|from|since|year|old|before|after)\s+(?:the\s+)?(?:old\s+)?'
-            r'((?:19|20)\d{2})\b(?!\s*(?:VND|USD|EUR|GBP)\b)', message, re.I)]
-        if policy_topic and years:
-            matching_docs = [doc for doc in self.retriever.eligible_versions
-                             if any(doc.doc_id == item['document_id'] and str(doc.version) == str(item['version']) for item in evidence)]
-            for year in years:
-                if not any(int(str(doc.metadata.valid_from)[:4]) <= year <=
-                           (int(str(doc.metadata.valid_to)[:4]) if doc.metadata.valid_to else 9999)
-                           for doc in matching_docs):
-                    return True
-        return False
+        """Reject adjacent policy evidence for explicitly unsupported policy scopes."""
+        return policy_scope_requires_review(message, evidence, self.retriever.eligible_versions)
 
     @staticmethod
     def _extract_llm_usage_and_metadata(raw_source: dict) -> tuple[dict, dict]:
@@ -136,30 +85,14 @@ class Engine:
         if label not in self.policy["supported_12_intents"]:
             if "out_of_scope_intent" not in codes:
                 codes.append("out_of_scope_intent")
-        if label == "human_agent" or re.search(
-            r"\b(?:(?:human|real|live)\s+(?:(?:customer|support)\s+){0,2}(?:agent|person|operator|representative|staff)|talk\s+to\s+(?:a\s+)?human)\b",
-            request["message"],
-            re.I,
-        ):
+        text_safety = evaluate_text_safety(request["message"])
+        if label == "human_agent" or text_safety["human_agent_requested"]:
             if "human_agent_requested" not in codes:
                 codes.append("human_agent_requested")
 
         # Escalated intents outside product scope explicitly requested in customer message
-        explicit_outside_scope_action = False
-        if re.search(r"\b(close\s+(?:my\s+)?account|delete\s+(?:my\s+)?account)\b", request["message"], re.I):
-            explicit_outside_scope_action = True
-            if "out_of_scope_intent" not in codes:
-                codes.append("out_of_scope_intent")
-
-        # External postal pickup scheduling is an escalated intent (return_product_online) outside product scope.
-        # Note: In-app Tiki courier pickup (POL-RET-002) is fully supported and must NOT be blocked.
-        if re.search(r"\b(?:schedule|book|arrange)\s+(?:a\s+)?postal\s+pickup\b|\bpostal\s+pickup\b", request["message"], re.I):
-            explicit_outside_scope_action = True
-            if "out_of_scope_intent" not in codes:
-                codes.append("out_of_scope_intent")
-
-        # Out-of-domain false positives on tax returns (vs retail product return policy)
-        if re.search(r"\b(?:tax\s+return|income\s+tax|corporate\s+tax)\b", request["message"], re.I):
+        explicit_outside_scope_action = text_safety["outside_product_scope"]
+        if explicit_outside_scope_action or text_safety["tax_ood"]:
             if "out_of_scope_intent" not in codes:
                 codes.append("out_of_scope_intent")
 
@@ -176,10 +109,7 @@ class Engine:
                         codes.append("low_confidence")
                     if "out_of_scope_intent" not in codes:
                         codes.append("out_of_scope_intent")
-        explicit_authority = bool(
-            SENSITIVE_AUTHORITY_PATTERN.search(request["message"])
-            or re.search(r'\b(?:human\s+manager|(?:speak|talk|connect|escalate).{0,30}\bmanager)\b', request['message'], re.I)
-        )
+        explicit_authority = bool(text_safety["requires_authority"])
         sensitive = (
             label in self.policy.get("sensitive_action_intents", [])
             or prediction.get("intent") in self.policy.get("sensitive_action_intents", [])
@@ -196,23 +126,39 @@ class Engine:
         retrieved = self.retriever.retrieve(request["message"], label, role="agent", current_time=datetime.fromisoformat(request["as_of"].replace("Z", "+00:00")))
         evidence = retrieved.get("evidence", [])
         warnings = []
-        if retrieved.get("has_conflict"):
-            codes.append("conflicting_sources")
-            warnings.append("Retrieved knowledge base sources contain conflicting policy terms. Staff review required.")
-        # Knowledge evidence validation: rely on retriever's configured relevance threshold (0.55 default),
-        # avoiding dual hidden thresholds or artificial safe-by-refusal.
-        retrieval_threshold = getattr(self.retriever, "relevance_threshold", 0.55)
-        cross_border = r'\b(?:international|overseas|cross-border)\b.{0,35}\b(?:delivery|shipping)\b'
-        uncovered_delivery = re.search(cross_border, request['message'], re.I) and not any(
-            re.search(cross_border, item.get('excerpt', ''), re.I) for item in evidence)
-        has_scores = any(item.get("score") is not None for item in evidence)
-        max_evidence_score = max((item.get("score") or 0.0) for item in evidence if item.get("score") is not None) if has_scores else 1.0
-        if not evidence or uncovered_delivery or (has_scores and max_evidence_score < retrieval_threshold) or "below_relevance_threshold" in retrieved.get("reason_codes", []):
-            if "no_valid_document" not in codes:
-                codes.append("no_valid_document")
-        scope_review = self._policy_scope_requires_review(request["message"], evidence)
-        if scope_review:
-            codes.append("insufficient_evidence")
+        retrieval_fault_codes = classify_retrieval_fault(retrieved)
+        is_encoder_failure = bool(retrieval_fault_codes and "encoder_failure" in retrieval_fault_codes)
+        is_encoder_unavailable = bool(retrieval_fault_codes and "encoder_unavailable" in retrieval_fault_codes)
+        if is_encoder_failure:
+            for fault_code in retrieval_fault_codes:
+                if fault_code not in codes:
+                    codes.append(fault_code)
+            scope_review = self._policy_scope_requires_review(request["message"], evidence)
+        elif is_encoder_unavailable:
+            # Preserve legacy abstained/no_valid_document contract (test_escalation_12) while tagging encoder_unavailable.
+            for fault_code in ["no_valid_document", *retrieval_fault_codes]:
+                if fault_code not in codes:
+                    codes.append(fault_code)
+            scope_review = self._policy_scope_requires_review(request["message"], evidence)
+        else:
+            if retrieved.get("has_conflict"):
+                codes.append("conflicting_sources")
+                warnings.append("Retrieved knowledge base sources contain conflicting policy terms. Staff review required.")
+            # Knowledge evidence validation: rely on retriever's configured relevance threshold (0.55 default),
+            # avoiding dual hidden thresholds or artificial safe-by-refusal.
+            retrieval_threshold = getattr(self.retriever, "relevance_threshold", 0.55)
+            uncovered_delivery = has_uncovered_cross_border_shipping(request["message"], evidence)
+            has_scores = any(item.get("score") is not None for item in evidence)
+            max_evidence_score = max((item.get("score") or 0.0) for item in evidence if item.get("score") is not None) if has_scores else 1.0
+            ret_reasons = set(retrieved.get("reason_codes", []))
+            if "only_expired_documents" in ret_reasons and "only_expired_documents" not in codes:
+                codes.append("only_expired_documents")
+            if not evidence or uncovered_delivery or (has_scores and max_evidence_score < retrieval_threshold) or "below_relevance_threshold" in ret_reasons:
+                if "no_valid_document" not in codes:
+                    codes.append("no_valid_document")
+            scope_review = self._policy_scope_requires_review(request["message"], evidence)
+            if scope_review and "insufficient_evidence" not in codes:
+                codes.append("insufficient_evidence")
         documents = []
         for index, item in enumerate(evidence, 1):
             original = next((document for document in self.retriever.eligible_versions if document.doc_id == item["document_id"] and str(document.version) == str(item["version"])), None)
@@ -226,6 +172,7 @@ class Engine:
                 "human_agent_requested" in codes
                 or explicit_authority
                 or scope_review
+                or is_encoder_failure
                 or recognized_outside_scope
                 or explicit_outside_scope_action
             )
@@ -311,14 +258,16 @@ class Engine:
 
         # Grounding Guardrail 1: Cosmetics / restricted categories must not overgeneralize.
         # POL-RET-003 excludes cosmetics and chemicals only when protective packaging/seal is unsealed or opened.
-        if re.search(r"\b(cosmetics?|chemicals?)\b", text, re.I) and re.search(r"\b(cannot|can't|not eligible|non-returnable|not support returns?|no returns?|do not accept returns?)\b", text, re.I):
-            if not re.search(r"\b(unsealed|opened|open package|broken seal)\b", text, re.I):
-                return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
+        if has_unqualified_cosmetics_refusal(text):
+            return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
 
         # Grounding Guardrail 2: Chargeback / unauthorized payment must NOT receive generic duplicate-charge advice.
-        if re.search(r"\b(chargeback|unauthorized\s+(?:transaction|payment|charge)|fraud)\b", request["message"], re.I):
-            if re.search(r"\b(duplicate charge|double deduction|charged twice|duplicate deduction)\b", text, re.I) or any(s.get("document_id") == "POL-PAY-004" for s in generated.get("input_snapshot", {}).get("sources", [])):
-                return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
+        if has_unauthorized_duplicate_advice(
+            request["message"],
+            text,
+            generated.get("input_snapshot", {}).get("sources", []),
+        ):
+            return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
 
         sources = {source["source_id"]: source for source in generated["input_snapshot"]["sources"]}
         citations, segments = {}, []
