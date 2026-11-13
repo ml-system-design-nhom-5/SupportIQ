@@ -45,6 +45,12 @@ Files: unused imports identified in backend/AI/demo modules; `apps/core_backend/
 
 ## Coordinator review and completion
 
+### Documentation scope added by the user
+
+- [ ] C reviews root drafts and `docs/` for duplicate or superseded content, retaining unique material at a canonical path before deleting redundant files.
+- [ ] Update references, `docs/README.md` navigation and the existing cleanup log; check links in changed documents.
+- [ ] Preserve the assignment, active requirements/runbooks/ADRs, historical acceptance evidence and all user PPTX files. No blanket documentation purge.
+
 - [ ] Review both diffs independently; confirm model/KB/evidence hashes untouched.
 - [ ] Run default pytest and frontend checks appropriate to integrated changes; fix any meaningful failures.
 - [ ] Commit, push reviewed cleanup, reload owned services if application code changed and verify readiness.
