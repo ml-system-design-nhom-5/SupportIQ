@@ -8,7 +8,7 @@ Giao diện web cục bộ phục vụ trải nghiệm và kiểm chứng hệ t
 
 ## 1. Cấu hình Gemini và khởi động 2 dịch vụ
 
-Luồng mới dùng **Google AI Studio / Gemini Developer API**, mặc định `gemini-3.1-flash-lite`. API key chỉ nằm trên backend. Cài dependency demo nếu môi trường chưa đủ:
+Luồng mới dùng **Google AI Studio / Gemini Developer API**, mặc định `gemini-4-hydrogen`. API key chỉ nằm trên backend. Cài dependency demo nếu môi trường chưa đủ:
 
 ```powershell
 .venv\Scripts\python.exe -m pip install -r apps/demo/requirements.txt
@@ -18,7 +18,7 @@ Nếu chưa có `.env`, sao chép `.env.example` vào `.env` tại gốc reposit
 
 ```dotenv
 GEMINI_API_KEY=<key-local-cua-ban>
-GEMINI_MODEL=gemini-3.1-flash-lite
+GEMINI_MODEL=gemini-4-hydrogen
 GEMINI_TIMEOUT_SECONDS=7
 ```
 
@@ -96,7 +96,7 @@ Mỗi phản hồi từ pipeline điều phối được phân loại theo 4 hà
 ## 5. Quy trình kiểm duyệt bản nháp của nhân viên
 
 Khi có bản nháp gợi ý:
-- Bản nháp hiển thị nhãn **Sinh bởi gemini-3.1-flash-lite** và mã băm toàn vẹn (`draft_hash`).
+- Bản nháp hiển thị nhãn **Sinh bởi gemini-4-hydrogen** và mã băm toàn vẹn (`draft_hash`).
 - Nhân viên có thể nhấn **Duyệt bản nháp** để xác nhận bản nháp hiện tại.
 - Nhân viên có thể sửa trực tiếp nội dung trong ô soạn thảo và nhấn **Lưu chỉnh sửa**. Hệ thống tính toán mã băm mới và cập nhật trạng thái; phiên bản cũ không thể duyệt tiếp nếu chưa xác nhận bản mới.
 - Nhân viên có thể nhấn **Từ chối** hoặc **Chuyển cấp** nếu nhận thấy bản nháp không phù hợp.

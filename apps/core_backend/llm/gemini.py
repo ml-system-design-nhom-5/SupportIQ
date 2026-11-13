@@ -480,7 +480,7 @@ class GeminiDraftClient:
     def __init__(self, api_key: str | None = None, model: str | None = None,
                  http_client: httpx.Client | None = None):
         self._api_key = (api_key if api_key is not None else os.getenv("GEMINI_API_KEY", "")).strip()
-        self.model = model or os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
+        self.model = model or os.getenv("GEMINI_MODEL", "gemini-4-hydrogen")
         self._http = http_client
         self._owns_http = http_client is None
 
@@ -536,9 +536,12 @@ class GeminiDraftClient:
                                  "responseMimeType": "application/json", "responseSchema": RESPONSE_SCHEMA,
                                  "thinkingConfig": {"thinkingBudget": 0}},
         }
-        if not self.model.startswith("gemini-2.5-"):
+        if self.model.startswith("gemini-3"):
             payload["generationConfig"].pop("temperature")
             payload["generationConfig"]["thinkingConfig"] = {"thinkingLevel": "minimal"}
+        elif not self.model.startswith("gemini-2.5-"):
+            payload["generationConfig"].pop("temperature")
+            payload["generationConfig"]["thinkingConfig"] = {"thinkingLevel": "low"}
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
         started = time.perf_counter()
         metadata = {

@@ -23,7 +23,7 @@ class AiSettings(BaseSettings):
         extra="ignore"
     )
     gemini_api_key: SecretStr = SecretStr("")
-    gemini_model: str = "gemini-3.1-flash-lite"
+    gemini_model: str = "gemini-4-hydrogen"
     supportiq_enable_llm: bool = True
 
 

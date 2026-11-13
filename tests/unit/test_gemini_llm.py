@@ -157,3 +157,104 @@ def test_runner_never_falls_back_to_template_on_llm_failure(tmp_path, no_evidenc
     assert result['draft_body'] is None and result['draft_kind'] is None
     assert result['action'] in {'escalate','manual_fallback'}
     assert len(calls)==(0 if no_evidence else 1)
+
+
+def test_hydrogen_is_default_and_sends_low_thinking_without_budget_or_sampling(monkeypatch):
+    from pathlib import Path
+    from apps.ai_service.main import AiSettings
+
+    monkeypatch.delenv('GEMINI_MODEL', raising=False)
+    monkeypatch.setenv('GEMINI_API_KEY', 'hydrogen-test-key')
+
+    env_example = (Path(__file__).resolve().parents[2] / '.env.example').read_text(encoding='utf-8')
+    assert 'GEMINI_MODEL=gemini-4-hydrogen' in env_example.splitlines()
+    assert AiSettings(_env_file=None).gemini_model == 'gemini-4-hydrogen'
+
+    captured = {}
+
+    def handler(request):
+        captured['url'] = str(request.url)
+        captured['headers'] = dict(request.headers)
+        captured['body'] = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={
+                'modelVersion': 'gemini-4-hydrogen',
+                'usageMetadata': {
+                    'promptTokenCount': 120,
+                    'candidatesTokenCount': 24,
+                    'thoughtsTokenCount': 9,
+                    'totalTokenCount': 153,
+                },
+                'candidates': [
+                    {
+                        'finishReason': 'STOP',
+                        'content': {
+                            'parts': [
+                                {'thought': True, 'text': 'internal reasoning should be stripped'},
+                                {
+                                    'text': json.dumps(
+                                        {
+                                            'answerable': True,
+                                            'is_clarification': False,
+                                            'answer': 'Products may be returned within 30 days. [S1]',
+                                            'citations': ['S1'],
+                                        }
+                                    )
+                                },
+                            ]
+                        },
+                    }
+                ],
+            },
+        )
+
+    client = GeminiDraftClient(
+        http_client=httpx.Client(transport=httpx.MockTransport(handler))
+    )
+    assert client.model == 'gemini-4-hydrogen'
+
+    result = client.generate(
+        'Return policy for user@example.com or 0912345678',
+        'return_policy',
+        EVIDENCE,
+        timeout_seconds=7.0,
+    )
+
+    assert captured['url'].endswith('/v1beta/models/gemini-4-hydrogen:generateContent')
+    assert 'key=' not in captured['url']
+    assert captured['headers']['x-goog-api-key'] == 'hydrogen-test-key'
+
+    gen_cfg = captured['body']['generationConfig']
+    assert gen_cfg['thinkingConfig'] == {'thinkingLevel': 'low'}
+    assert 'thinkingBudget' not in gen_cfg['thinkingConfig']
+    for sampling_key in ('temperature', 'topP', 'topK', 'top_p', 'top_k'):
+        assert sampling_key not in gen_cfg
+    assert gen_cfg['maxOutputTokens'] == 1024
+    assert gen_cfg['responseMimeType'] == 'application/json'
+    assert 'responseSchema' in gen_cfg
+
+    prompt_text = captured['body']['contents'][0]['parts'][0]['text']
+    assert 'user@example.com' not in prompt_text and '0912345678' not in prompt_text
+    assert 'internal reasoning should be stripped' not in result['body']
+    assert result['model'] == 'gemini-4-hydrogen'
+    assert result['citations'][0]['document_id'] == 'returns'
+    assert result['usage']['thoughtsTokenCount'] == 9
+
+
+def test_explicit_legacy_gemini25_thinking_budget_and_gemini3_minimal_preserved():
+    seen = {}
+
+    def handler(request):
+        model_seg = request.url.path.split('/')[-1].split(':')[0]
+        seen[model_seg] = json.loads(request.content)['generationConfig']
+        return httpx.Response(200, json=response_payload())
+
+    http = httpx.Client(transport=httpx.MockTransport(handler))
+    GeminiDraftClient(api_key='k', model='gemini-2.5-flash', http_client=http).generate('q', 'return_policy', EVIDENCE)
+    GeminiDraftClient(api_key='k', model='gemini-3.1-flash-lite', http_client=http).generate('q', 'return_policy', EVIDENCE)
+
+    assert seen['gemini-2.5-flash']['thinkingConfig'] == {'thinkingBudget': 0}
+    assert seen['gemini-2.5-flash']['temperature'] == 0.1
+    assert seen['gemini-3.1-flash-lite']['thinkingConfig'] == {'thinkingLevel': 'minimal'}
+    assert 'temperature' not in seen['gemini-3.1-flash-lite']
