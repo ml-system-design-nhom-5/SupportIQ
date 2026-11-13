@@ -117,7 +117,6 @@ def resolve_database_url(secrets_path: Optional[str] = None) -> Tuple[str, Dict[
         candidates.append(Path(secrets_path))
 
     candidates.append(REPO_ROOT / ".local" / "application.json")
-    candidates.append(Path("F:/Năm 3/SD/project/SupportIQ/.local/application.json"))
 
     for cand in candidates:
         if cand.exists():
