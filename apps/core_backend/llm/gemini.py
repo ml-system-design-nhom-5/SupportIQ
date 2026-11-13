@@ -1,5 +1,6 @@
 """Google AI Studio generateContent client. Never sends the API key to the browser."""
 
+import hashlib
 import json
 import os
 import re
@@ -76,10 +77,186 @@ RESPONSE_SCHEMA = {
 }
 
 
-def redact_contacts(text: str) -> str:
-    """Minimize common identifiers before sending the demo query to a provider."""
+_PINNED_VERIFIED_POLICIES: dict[tuple[str, str], dict[str, Any]] = {
+    ("POL-SHIP-004", "1.0"): {
+        "title": "Handling Delayed, Lost, or Discrepant Delivery Statuses",
+        "content": (
+            "In the event a Tiki order exceeds its estimated delivery date without arrival, "
+            "or if a courier marks an order as 'Successfully Delivered' when the customer has not received the parcel, "
+            "the customer must contact Tiki Customer Support within 24-48 hours via hotline 1900 6035. "
+            "Tiki's dispatch team will verify courier GPS logs, coordinate with the delivery hub, and resolve the complaint. "
+            "If an order is lost, Tiki will dispatch a replacement or issue a 100% refund."
+        ),
+        "content_hash": "ea5d0d68a1c2e927cfc5aba386bacbc3a3e2ed14cfa9cf132fd46bfff0370bbe",
+        "public_contacts": ("1900 6035",),
+    },
+}
+
+VERIFIED_POLICY_PUBLIC_CONTACTS: dict[tuple[str, str], tuple[str, ...]] = {
+    key: spec["public_contacts"] for key, spec in _PINNED_VERIFIED_POLICIES.items()
+}
+
+VERIFIED_POLICY_CONTENT_HASHES: dict[tuple[str, str], str] = {
+    key: spec["content_hash"] for key, spec in _PINNED_VERIFIED_POLICIES.items()
+}
+
+
+def _sha256_text(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _resolve_policy_key(doc_id: str | None, ver: str | None) -> tuple[str, str] | None:
+    """Resolve (document_id, version) key, rejecting missing or conflicting embedded/explicit versions."""
+    if doc_id is None:
+        return None
+    clean_doc = str(doc_id).strip()
+    if not clean_doc:
+        return None
+    has_explicit_ver = ver is not None
+    clean_ver = str(ver).strip() if has_explicit_ver else ""
+    if ":" in clean_doc:
+        parts = clean_doc.split(":", 1)
+        embedded_doc = parts[0].strip()
+        embedded_ver = parts[1].strip()
+        if not embedded_doc or not embedded_ver:
+            return None
+        if has_explicit_ver and clean_ver != embedded_ver:
+            return None
+        return (embedded_doc, embedded_ver)
+    if not clean_ver:
+        return None
+    return (clean_doc, clean_ver)
+
+
+def _resolve_item_policy_key(item: dict) -> tuple[str, str] | None:
+    """Resolve policy key from item identifiers, failing closed on missing or conflicting IDs/versions."""
+    raw_document_id = item.get("document_id")
+    raw_doc_id = item.get("doc_id")
+    raw_ver = item.get("version")
+
+    if raw_document_id is not None and raw_doc_id is not None:
+        key_primary = _resolve_policy_key(raw_document_id, raw_ver)
+        key_alias = _resolve_policy_key(raw_doc_id, raw_ver)
+        if key_primary is None or key_alias is None or key_primary != key_alias:
+            return None
+        return key_primary
+
+    present_id = raw_document_id if raw_document_id is not None else raw_doc_id
+    return _resolve_policy_key(present_id, raw_ver)
+
+
+def _extract_rendered_policy_text(item: dict) -> str:
+    chunks = item.get("chunks") or []
+    chunk_text = "\n".join(c.get("text", "") for c in chunks if isinstance(c, dict))
+    raw_text = item.get("excerpt") or item.get("content") or chunk_text
+    return str(raw_text).strip()
+
+
+def _get_verified_policy_contacts(
+    doc_key: tuple[str, str] | None,
+    item: dict,
+    rendered_text: str | None = None,
+) -> tuple[str, ...] | None:
+    """Return pinned public contacts ONLY when provenance and recomputed content digests match."""
+    if not doc_key or not isinstance(item, dict):
+        return None
+    spec = _PINNED_VERIFIED_POLICIES.get(doc_key)
+    if not spec:
+        return None
+
+    # Reject inconsistent source_type, approval status, or title provenance if supplied
+    if "source_type" in item and item["source_type"] is not None:
+        if str(item["source_type"]).strip() != "policy":
+            return None
+    if "status" in item and item["status"] is not None:
+        if str(item["status"]).strip() != "approved":
+            return None
+
+    pinned_title = spec["title"].strip()
+    pinned_content = spec["content"].strip()
+    pinned_content_digest = _sha256_text(pinned_content)
+    if pinned_content_digest != spec["content_hash"]:
+        return None
+    pinned_excerpt_digest = _sha256_text(f"{pinned_title}\n{pinned_content}")
+
+    if "title" in item and item["title"] is not None and str(item["title"]).strip():
+        if str(item["title"]).strip() != pinned_title:
+            return None
+
+    # Require caller-supplied content_hash, but never accept hash alone without recomputing content digest
+    supplied_hash = item.get("content_hash")
+    if not isinstance(supplied_hash, str) or not supplied_hash.strip():
+        return None
+    if supplied_hash.strip().lower() != pinned_content_digest:
+        return None
+
+    # Validate retrieval chunk provenance if present
+    if "chunk_ids" in item and item["chunk_ids"] is not None:
+        chunk_ids = item["chunk_ids"]
+        expected_prefix = f"{doc_key[0]}:{doc_key[1]}:"
+        if not isinstance(chunk_ids, (list, tuple)) or not chunk_ids:
+            return None
+        if not all(isinstance(cid, str) and cid.startswith(expected_prefix) for cid in chunk_ids):
+            return None
+
+    if "chunks" in item and item["chunks"] is not None:
+        chunks = item["chunks"]
+        if not isinstance(chunks, (list, tuple)) or not chunks:
+            return None
+        for chunk in chunks:
+            if not isinstance(chunk, dict):
+                return None
+            if chunk.get("doc_id") is not None and str(chunk["doc_id"]).strip() != doc_key[0]:
+                return None
+            if chunk.get("document_id") is not None and str(chunk["document_id"]).strip() != doc_key[0]:
+                return None
+            if chunk.get("version") is not None and str(chunk["version"]).strip() != doc_key[1]:
+                return None
+            if chunk.get("content_hash") is not None and str(chunk["content_hash"]).strip().lower() != pinned_content_digest:
+                return None
+        joined_chunks = "\n".join(str(c.get("text", "")) for c in chunks).strip()
+        if _sha256_text(joined_chunks) not in (pinned_content_digest, pinned_excerpt_digest):
+            return None
+
+    # Explicitly verify full document content if provided
+    if "content" in item and item["content"] is not None:
+        raw_content = str(item["content"]).strip()
+        if not raw_content or _sha256_text(raw_content) != pinned_content_digest:
+            return None
+
+    # Explicitly verify excerpt if provided (must not be empty or diverge from pinned full/chunk text)
+    if "excerpt" in item and item["excerpt"] is not None:
+        raw_excerpt = str(item["excerpt"]).strip()
+        if not raw_excerpt or _sha256_text(raw_excerpt) not in (pinned_content_digest, pinned_excerpt_digest):
+            return None
+
+    # Verify the exact rendered text that will be forwarded to redaction/LLM
+    actual_text = _extract_rendered_policy_text(item) if rendered_text is None else str(rendered_text).strip()
+    if not actual_text:
+        return None
+    if _sha256_text(actual_text) not in (pinned_content_digest, pinned_excerpt_digest):
+        return None
+
+    return spec["public_contacts"]
+
+
+def redact_contacts(
+    text: str,
+    allowed_numbers: tuple[str, ...] | set[str] | list[str] | None = None
+) -> str:
+    """Minimize common identifiers before sending the demo query to a provider.
+
+    Origin-aware contact redaction:
+    - Customer inputs (question, customer order context) pass allowed_numbers=None (default),
+      ensuring strict redaction of all private phone numbers, emails, cards, IDs, and tokens.
+    - Verified policy sources pass explicitly verified public business contacts (e.g. hotline),
+      preserving only authorized public support contacts while redacting private numbers,
+      customer identifiers, and emails.
+    """
     text = re.sub(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", "[EMAIL]", text)
     text = re.sub(r"\b(?:ORD|cust|TIKI-TXN)-[\w-]+\b", "[IDENTIFIER]", text, flags=re.I)
+    allowed_digits = {re.sub(r"\D", "", n) for n in allowed_numbers} if allowed_numbers else set()
+
     def mask_number(match: re.Match) -> str:
         value = match.group()
         if re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
@@ -88,7 +265,11 @@ def redact_contacts(text: str) -> str:
                 return value
             except ValueError:
                 pass
+        digits = re.sub(r"\D", "", value)
+        if allowed_digits and digits in allowed_digits:
+            return value
         return "[PHONE_OR_NUMBER]"
+
     text = re.sub(r"(?<!\w)\+?\d[\d .()-]{7,}\d(?!\w)", mask_number, text)
     text = re.sub(r"\b[A-Za-z0-9_-]{32,}\b", "[REDACTED_TOKEN]", text)
     return text
@@ -103,18 +284,24 @@ def build_grounded_sources(
     Strictly excludes sensitive customer identifiers (phone, email, secret tokens).
     Assigns sequential source_id, document_id, version, excerpt, and SHA-256 digest.
     """
-    import hashlib
     sources: list[dict] = []
     idx = 1
 
     # 1. Format policy sources S1..Sk
     for item in (policy_evidence or [])[:3]:
         doc_id = str(item.get("document_id") or item.get("doc_id", "DOC"))
-        ver = str(item.get("version", "1.0"))
-        title = item.get("title", "")
-        excerpt = item.get("excerpt") or "\n".join(c.get("text", "") for c in item.get("chunks", []))
-        sanitized_excerpt = redact_contacts(excerpt.strip())
-        sha256 = hashlib.sha256(sanitized_excerpt.encode("utf-8")).hexdigest()
+        doc_key = _resolve_item_policy_key(item)
+        if item.get("version") is not None:
+            ver = str(item["version"])
+        elif doc_key is not None:
+            ver = doc_key[1]
+        else:
+            ver = "1.0"
+        title = str(item.get("title", "") or "")
+        rendered_excerpt = _extract_rendered_policy_text(item)
+        allowed_contacts = _get_verified_policy_contacts(doc_key, item, rendered_excerpt)
+        sanitized_excerpt = redact_contacts(rendered_excerpt, allowed_numbers=allowed_contacts)
+        sha256 = _sha256_text(sanitized_excerpt)
         sources.append({
             "source_id": f"S{idx}",
             "id": f"S{idx}",

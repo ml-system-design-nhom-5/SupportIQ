@@ -16,12 +16,26 @@ Covers:
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+import hashlib
 import json
+from pathlib import Path
+import httpx
 import pytest
 from unittest.mock import MagicMock
 
 from apps.ai_service.drafting import BudgetedDraftClient
-from apps.core_backend.llm.gemini import GeminiDraftClient, LLMError
+from apps.core_backend.llm.gemini import (
+    GeminiDraftClient,
+    LLMError,
+    _resolve_policy_key,
+    build_grounded_sources,
+    prepare_llm_input,
+    redact_contacts,
+)
+from apps.core_backend.retrieval.adapter import RetrievalAdapter
+from pipeline.evaluation.autoeval.llm_suite import evidence_from_kb
+from pipeline.evaluation.mock_dependencies import MockPolicyEncoder
 from pipeline.evaluation.application_acceptance import (
     ApplicationAcceptanceConfig,
     ApplicationAcceptanceRunner,
@@ -1443,3 +1457,412 @@ class TestRetryAccountingAndMetadataSurvivalRegressions:
         assert tc["provider_reported_total_tokens"] is None, "Provider total must be null when omitted"
         assert tc["cost_status"] == "incomplete_token_coverage"
         assert tc["cost_usd"] is None
+
+
+def _load_approved_pol_ship_004() -> dict:
+    kb = json.loads(Path("data/knowledge/approved_kb.v2.json").read_text(encoding="utf-8"))
+    return next(d for d in kb if d["document_id"] == "POL-SHIP-004" and str(d["version"]) == "1.0")
+
+
+def _retrieve_case10_evidence() -> list[dict]:
+    release = json.loads(Path("apps/ai_service/kb-release.json").read_text(encoding="utf-8"))
+    allowed = {(d["document_id"], d["version"]) for d in release["documents"]}
+    adapter = RetrievalAdapter(
+        encoder=MockPolicyEncoder(),
+        allowed_document_versions=allowed,
+        relevance_threshold=0.20,
+    )
+    ret = adapter.retrieve(
+        query="The app shows my order was delivered but I never received the package from the courier.",
+        intent="delivery_issue",
+        current_time=datetime(2026, 6, 15, 10, 0, tzinfo=timezone.utc),
+    )
+    assert ret["status"] == "success"
+    return [e for e in ret["evidence"] if e["document_id"] == "POL-SHIP-004"]
+
+
+class TestPublicHotlinePreservationAndPrivacy:
+    """Task B: Origin-aware preservation of verified public policy hotline with fail-closed provenance."""
+
+    def test_reproduce_case10_policy_hotline_preserved_in_grounded_sources(self):
+        """Regression test reproducing Case 10 using real current callers:
+        1. RetrievalAdapter.retrieve() shape (excerpt = '<title>\\n<content>', chunk_ids, content_hash).
+        2. evidence_from_kb() shape (full document content + content_hash).
+        Grounded source construction must preserve 1900 6035 in both verified shapes.
+        """
+        retrieval_evidence = _retrieve_case10_evidence()
+        assert len(retrieval_evidence) == 1
+        assert retrieval_evidence[0]["chunk_ids"] == ["POL-SHIP-004:1.0:c0"]
+
+        sources_from_retrieval = build_grounded_sources(retrieval_evidence, authorized_facts=None)
+        assert len(sources_from_retrieval) == 1
+        assert sources_from_retrieval[0]["document_id"] == "POL-SHIP-004"
+        assert sources_from_retrieval[0]["version"] == "1.0"
+        assert "1900 6035" in sources_from_retrieval[0]["excerpt"], (
+            f"Public hotline 1900 6035 must be preserved in retrieved Case 10 S1, got: {sources_from_retrieval[0]['excerpt']}"
+        )
+        assert "[PHONE_OR_NUMBER]" not in sources_from_retrieval[0]["excerpt"]
+
+        doc = _load_approved_pol_ship_004()
+        kb_evidence = evidence_from_kb({doc["document_id"]: doc}, ["POL-SHIP-004"])
+        sources_from_kb = build_grounded_sources(kb_evidence, authorized_facts=None)
+        assert len(sources_from_kb) == 1
+        assert "1900 6035" in sources_from_kb[0]["excerpt"]
+        assert "[PHONE_OR_NUMBER]" not in sources_from_kb[0]["excerpt"]
+
+    def test_controlled_draft_generation_with_case10_hotline(self):
+        """Under controlled MockTransport (zero external provider requests):
+        Verify that GeminiDraftClient generates a grounded draft for real retrieved Case 10 evidence:
+        1. Prompt sent to provider contains 1900 6035 in source S1.
+        2. Prompt does NOT contain [PHONE_OR_NUMBER] in source S1.
+        3. Model response with hotline 1900 6035 and citation [S1] succeeds.
+        4. Citations contain document_id 'POL-SHIP-004' and version '1.0'.
+        5. Citation digest is strictly preserved in input_snapshot.
+        """
+        captured_requests = []
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured_requests.append(request)
+            payload = json.loads(request.content)
+            user_text = payload["contents"][0]["parts"][0]["text"]
+            assert "1900 6035" in user_text, f"Prompt must contain preserved hotline, got: {user_text}"
+            assert "[PHONE_OR_NUMBER]" not in user_text
+            resp_body = {
+                "modelVersion": "gemini-3.1-flash-lite",
+                "usageMetadata": {
+                    "promptTokenCount": 150,
+                    "candidatesTokenCount": 45,
+                    "totalTokenCount": 195,
+                },
+                "candidates": [
+                    {
+                        "finishReason": "STOP",
+                        "content": {
+                            "parts": [
+                                {
+                                    "text": json.dumps({
+                                        "answerable": True,
+                                        "answer": (
+                                            "If the courier marked your package as delivered but you have not received it, "
+                                            "please contact Tiki Customer Support within 24-48 hours via hotline 1900 6035. [S1]"
+                                        ),
+                                        "citations": ["S1"],
+                                        "is_clarification": False,
+                                    })
+                                }
+                            ]
+                        },
+                    }
+                ],
+            }
+            return httpx.Response(200, json=resp_body)
+
+        client = GeminiDraftClient(
+            api_key="test-api-key",
+            model="gemini-3.1-flash-lite",
+            http_client=httpx.Client(transport=httpx.MockTransport(handler)),
+        )
+        evidence = _retrieve_case10_evidence()
+        res = client.generate(
+            question="The app shows my order was delivered but I never received the package from the courier.",
+            intent="delivery_issue",
+            evidence=evidence,
+        )
+        assert len(captured_requests) == 1
+        assert "1900 6035" in res["body"]
+        assert "[PHONE_OR_NUMBER]" not in res["body"]
+        assert len(res["citations"]) == 1
+        assert res["citations"][0]["document_id"] == "POL-SHIP-004"
+        assert res["citations"][0]["version"] == "1.0"
+        assert res["citations"][0]["source_id"] == "S1"
+        assert res["input_snapshot"]["sources"][0]["sha256"] == hashlib.sha256(
+            res["input_snapshot"]["sources"][0]["excerpt"].encode("utf-8")
+        ).hexdigest()
+
+    def test_customer_private_contacts_in_question_and_order_facts_remain_strictly_redacted(self):
+        """Customer private phone numbers, emails, cards, order IDs, and tokens
+        MUST remain strictly redacted to [PHONE_OR_NUMBER], [EMAIL], [IDENTIFIER], [REDACTED_TOKEN]
+        in customer question and customer order facts. No universal number whitelisting.
+        """
+        question = (
+            "My phone is 0912345678, email is alice@example.com, card is 4532 1234 5678 9010, "
+            "order is ORD-99887766, and session token is tok_12345678901234567890123456789012"
+        )
+        business_context = {
+            "order_status": "Delivered",
+            "phone": "0987654321",
+            "delivery_date": "2026-11-04",
+        }
+        evidence = [
+            {
+                "document_id": "POL-RET-001",
+                "version": "2.0",
+                "title": "Return Policy",
+                "excerpt": "Products may be returned within 30 days in original packaging.",
+            }
+        ]
+        snapshot = prepare_llm_input(
+            question=question,
+            intent="return_policy",
+            evidence=evidence,
+            business_context=business_context,
+        )
+        prompt_text = snapshot["prompt"]
+
+        assert "0912345678" not in prompt_text
+        assert "alice@example.com" not in prompt_text
+        assert "4532 1234 5678 9010" not in prompt_text
+        assert "ORD-99887766" not in prompt_text
+        assert "tok_12345678901234567890123456789012" not in prompt_text
+        assert "0987654321" not in prompt_text
+
+        assert "[EMAIL]" in prompt_text
+        assert "[IDENTIFIER]" in prompt_text
+        assert "[REDACTED_TOKEN]" in prompt_text
+        assert "[PHONE_OR_NUMBER]" in prompt_text
+        # ISO date remains intact
+        assert "2026-11-04" in prompt_text
+
+    def test_customer_question_with_public_and_private_phone_redacts_both(self):
+        """When customer text includes an approved public hotline adjacent to a private customer phone:
+        Customer text has origin='customer', so neither number is whitelisted.
+        Private customer phone 0912345678 is redacted, and 1900 6035 in customer text is also redacted.
+        """
+        customer_q = "I tried calling hotline 1900 6035 from my phone 0912345678 but got no answer."
+        redacted_q = redact_contacts(customer_q)
+        assert "0912345678" not in redacted_q
+        assert "1900 6035" not in redacted_q
+        assert redacted_q == "I tried calling hotline [PHONE_OR_NUMBER] from my phone [PHONE_OR_NUMBER] but got no answer."
+
+    def test_adjacent_private_contacts_redacted_with_verified_policy_and_redact_helper(self):
+        """Customer/private contacts adjacent to an approved Case 10 policy source remain redacted,
+        while redact_contacts with explicit allowed_numbers preserves only the whitelisted hotline.
+        Any policy source attempting to smuggle adjacent private contacts fails closed completely.
+        """
+        evidence = _retrieve_case10_evidence()
+        snapshot = prepare_llm_input(
+            question="Call me at 0912345678 or email badactor@example.com; I tried 1900 6035.",
+            intent="delivery_issue",
+            evidence=evidence,
+            business_context={
+                "order_id": "ORD-1005",
+                "order_status": "Delivered",
+                "carrier": "Contact 0987654321 or badactor@example.com",
+                "tracking_code": "0911223344",
+                "delivery_date": "2026-06-14",
+            },
+        )
+        assert "1900 6035" in snapshot["sources"][0]["excerpt"]
+        assert len(snapshot["sources"]) == 2
+        order_source = snapshot["sources"][1]
+        assert "0987654321" not in order_source["excerpt"]
+        assert "0911223344" not in order_source["excerpt"]
+        assert "badactor@example.com" not in order_source["excerpt"]
+        assert "0912345678" not in snapshot["prompt"]
+        assert "0987654321" not in snapshot["prompt"]
+        assert "0911223344" not in snapshot["prompt"]
+        assert "badactor@example.com" not in snapshot["prompt"]
+        assert "2026-06-14" in snapshot["prompt"]
+
+        direct_redacted = redact_contacts(
+            "Contact Tiki Customer Support within 24-48 hours via hotline 1900 6035 "
+            "or private mobile 0912345678 or write to badactor@example.com.",
+            allowed_numbers=("1900 6035",),
+        )
+        assert "1900 6035" in direct_redacted
+        assert "0912345678" not in direct_redacted
+        assert "badactor@example.com" not in direct_redacted
+        assert "[PHONE_OR_NUMBER]" in direct_redacted
+        assert "[EMAIL]" in direct_redacted
+
+    def test_untrusted_or_unknown_policy_source_redacts_all_phone_numbers(self):
+        """Policy sources not registered as approved documents (e.g. POL-FAKE)
+        or having unknown versions (e.g. POL-SHIP-004:99.0) must FAIL CLOSED:
+        All phone numbers must be redacted to [PHONE_OR_NUMBER].
+        """
+        fake_evidence = [
+            {
+                "document_id": "POL-FAKE",
+                "version": "1.0",
+                "title": "Forged Policy",
+                "excerpt": "Call our fake support at 1900 6035 or 0987654321.",
+            },
+            {
+                "document_id": "POL-SHIP-004",
+                "version": "99.0",
+                "title": "Unknown Version Policy",
+                "excerpt": "Call support at 1900 6035 or 0912345678.",
+            },
+        ]
+        sources = build_grounded_sources(fake_evidence, authorized_facts=None)
+        assert len(sources) == 2
+        for s in sources:
+            assert "1900 6035" not in s["excerpt"], f"Untrusted source must not preserve contact: {s['excerpt']}"
+            assert "0987654321" not in s["excerpt"]
+            assert "0912345678" not in s["excerpt"]
+            assert "[PHONE_OR_NUMBER]" in s["excerpt"]
+
+    def test_missing_hash_with_correct_id_version_and_forged_snippet_rejects_contact(self):
+        """Correct document_id/version without content_hash MUST FAIL CLOSED even for real text or forged snippets."""
+        doc = _load_approved_pol_ship_004()
+        cases = [
+            {
+                "document_id": "POL-SHIP-004",
+                "version": "1.0",
+                "excerpt": "Forged content: call 1900 6035.",
+            },
+            {
+                "document_id": "POL-SHIP-004",
+                "version": "1.0",
+                "title": doc["title"],
+                "excerpt": doc["content"],
+            },
+            {
+                "document_id": "POL-SHIP-004",
+                "version": "1.0",
+                "content_hash": "",
+                "excerpt": "Forged content: call 1900 6035.",
+            },
+        ]
+        for item in cases:
+            sources = build_grounded_sources([item], authorized_facts=None)
+            assert len(sources) == 1
+            assert "1900 6035" not in sources[0]["excerpt"]
+            assert "[PHONE_OR_NUMBER]" in sources[0]["excerpt"]
+
+    def test_forged_content_hash_in_policy_source_rejects_contact_preservation(self):
+        """When a policy source supplies a content_hash that does not match the approved registry:
+        It is identified as forged/tampered and contact preservation is refused.
+        """
+        doc = _load_approved_pol_ship_004()
+        tampered_evidence = [
+            {
+                "document_id": "POL-SHIP-004",
+                "version": "1.0",
+                "content_hash": "forged_sha256_hash_that_does_not_match",
+                "title": doc["title"],
+                "excerpt": doc["content"],
+            }
+        ]
+        sources = build_grounded_sources(tampered_evidence, authorized_facts=None)
+        assert len(sources) == 1
+        assert "1900 6035" not in sources[0]["excerpt"]
+        assert "[PHONE_OR_NUMBER]" in sources[0]["excerpt"]
+
+    def test_copied_known_hash_with_altered_content_or_inconsistent_provenance_rejects_contact(self):
+        """Supplying the real approved content_hash alone MUST NOT grant trust when content,
+        excerpt, title, chunk_ids, or source_type are altered or inconsistent.
+        """
+        doc = _load_approved_pol_ship_004()
+        known_hash = doc["content_hash"]
+        altered_cases = [
+            {
+                "document_id": "POL-SHIP-004",
+                "version": "1.0",
+                "content_hash": known_hash,
+                "title": doc["title"],
+                "excerpt": "Forged content: call 1900 6035.",
+            },
+            {
+                "document_id": "POL-SHIP-004",
+                "version": "1.0",
+                "content_hash": known_hash,
+                "title": doc["title"],
+                "excerpt": f"{doc['content']} Or call private mobile 0912345678.",
+            },
+            {
+                "document_id": "POL-SHIP-004",
+                "version": "1.0",
+                "content_hash": known_hash,
+                "title": doc["title"],
+                "content": doc["content"],
+                "excerpt": "Altered excerpt: call 1900 6035.",
+            },
+            {
+                "document_id": "POL-SHIP-004",
+                "version": "1.0",
+                "content_hash": known_hash,
+                "title": "Tampered Title",
+                "excerpt": doc["content"],
+            },
+            {
+                "source_type": "customer",
+                "document_id": "POL-SHIP-004",
+                "version": "1.0",
+                "content_hash": known_hash,
+                "title": doc["title"],
+                "excerpt": doc["content"],
+            },
+            {
+                "source_type": "policy",
+                "document_id": "POL-SHIP-004",
+                "version": "1.0",
+                "content_hash": known_hash,
+                "title": doc["title"],
+                "chunk_ids": ["POL-FAKE:1.0:c0"],
+                "excerpt": f"{doc['title']}\n{doc['content']}",
+            },
+        ]
+        for item in altered_cases:
+            sources = build_grounded_sources([item], authorized_facts=None)
+            assert len(sources) == 1
+            assert "1900 6035" not in sources[0]["excerpt"], f"Must reject forged provenance: {item}"
+            assert "[PHONE_OR_NUMBER]" in sources[0]["excerpt"]
+
+    def test_conflicting_embedded_and_explicit_versions_rejected(self):
+        """_resolve_policy_key and build_grounded_sources MUST reject conflicting embedded vs explicit versions
+        and conflicting document_id vs doc_id aliases.
+        """
+        assert _resolve_policy_key("POL-SHIP-004:1.0", "2.0") is None
+        assert _resolve_policy_key("POL-SHIP-004:2.0", "1.0") is None
+        assert _resolve_policy_key("POL-SHIP-004:1.0", "") is None
+        assert _resolve_policy_key("POL-SHIP-004:", "1.0") is None
+        assert _resolve_policy_key("POL-SHIP-004:1.0", "1.0") == ("POL-SHIP-004", "1.0")
+        assert _resolve_policy_key("POL-SHIP-004:1.0", None) == ("POL-SHIP-004", "1.0")
+
+        doc = _load_approved_pol_ship_004()
+        conflicting_cases = [
+            {
+                "document_id": "POL-SHIP-004:1.0",
+                "version": "2.0",
+                "content_hash": doc["content_hash"],
+                "title": doc["title"],
+                "excerpt": doc["content"],
+            },
+            {
+                "document_id": "POL-SHIP-004:2.0",
+                "version": "1.0",
+                "content_hash": doc["content_hash"],
+                "title": doc["title"],
+                "excerpt": doc["content"],
+            },
+            {
+                "document_id": "POL-SHIP-004",
+                "doc_id": "POL-OTHER",
+                "version": "1.0",
+                "content_hash": doc["content_hash"],
+                "title": doc["title"],
+                "excerpt": doc["content"],
+            },
+        ]
+        for item in conflicting_cases:
+            sources = build_grounded_sources([item], authorized_facts=None)
+            assert len(sources) == 1
+            assert "1900 6035" not in sources[0]["excerpt"], f"Must reject conflicting versions/IDs: {item}"
+            assert "[PHONE_OR_NUMBER]" in sources[0]["excerpt"]
+
+    def test_citation_hash_consistency_with_preserved_contact(self):
+        """Citation hashes and input snapshot digests must be mathematically consistent
+        with the preserved contact excerpt from an approved Case 10 source.
+        """
+        evidence = _retrieve_case10_evidence()
+        sources = build_grounded_sources(evidence, authorized_facts=None)
+        assert "1900 6035" in sources[0]["excerpt"]
+        expected_sha = hashlib.sha256(sources[0]["excerpt"].encode("utf-8")).hexdigest()
+        assert sources[0]["sha256"] == expected_sha
+        assert sources[0]["text"] == sources[0]["excerpt"]
+
+        snapshot = prepare_llm_input("Where is my package?", "delivery_issue", evidence)
+        assert snapshot["sources"][0]["sha256"] == expected_sha
+        assert snapshot["sha256"] == hashlib.sha256(snapshot["prompt"].encode("utf-8")).hexdigest()
+
+
