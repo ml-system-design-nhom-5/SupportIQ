@@ -266,3 +266,245 @@ def test_live_ff0e147_accounting_recomputation_and_followup_gate_artifacts():
     assert followup_supp["independent_held_out_domain_negatives_27_eval"]["followup_candidate_32e9781"]["false_draft_count"] == 0
     assert followup_supp["candidate_provenance_sha256_verification"]["worker_a_promotion_approved"] is False
 
+
+def test_selective_metrics_calibration_manifest_and_runtime_parity(tmp_path: Path):
+    import pytest
+    import torch
+    from pipeline.evaluation.classifier_acceptance_gate import (
+        _apply_adapter_routing_guard,
+        _evaluate_experimental_rejector,
+        compute_file_sha256,
+        compute_selective_coverage_metrics,
+        validate_calibration_manifest,
+        verify_runtime_score_parity,
+    )
+
+    m = compute_selective_coverage_metrics(
+        raw_draft=20,
+        correct_draft=18,
+        abstain_count=12,
+        escalate_count=2,
+        total=34,
+    )
+    assert m["denominator"] == 34
+    assert m["precision_among_draft_eligible"] == pytest.approx(0.9)
+    assert m["abstention_and_escalation_count"] == 14
+    assert m["abstention_coverage"] == pytest.approx(14 / 34, rel=1e-4)
+
+    empty_m = compute_selective_coverage_metrics(raw_draft=0, correct_draft=0, abstain_count=10, escalate_count=0, total=10)
+    assert empty_m["precision_among_draft_eligible"] is None
+
+    # Rejector keeps probabilities distinct and vetoes draft -> manual_fallback
+    logits = torch.tensor([4.0, 1.0, 0.2, 0.1])
+    raw_p = torch.softmax(logits, dim=-1).tolist()
+    cal_p = torch.softmax(logits / 1.5, dim=-1).tolist()
+    rejected, score = _evaluate_experimental_rejector(
+        {"type": "threshold", "metric": "max_logit", "threshold": 5.0, "reject_when": "below"},
+        logits,
+        raw_p,
+        cal_p,
+    )
+    assert rejected is True
+    assert score == pytest.approx(4.0)
+    eff_act, vetoed = _apply_adapter_routing_guard("retrieve_draft", {"rejected_by_experimental_adapter": True})
+    assert eff_act == "manual_fallback" and vetoed is True
+    keep_esc, vetoed_esc = _apply_adapter_routing_guard("escalate", {"rejected_by_experimental_adapter": True})
+    assert keep_esc == "escalate" and vetoed_esc is False
+
+    # Fail-closed calibration_manifest validation
+    cdir = tmp_path / "cand"
+    cdir.mkdir()
+    (cdir / "model.safetensors").write_bytes(b"weights-bytes")
+    (cdir / "tokenizer.json").write_text("{}", encoding="utf-8")
+    (cdir / "config.json").write_text(
+        json.dumps({"id2label": {str(i): lbl for i, lbl in enumerate(STANDARD_INTENTS_46)}}),
+        encoding="utf-8",
+    )
+    cal_path = cdir / "calibration_manifest.json"
+    cal_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "task_a_calibration.v1",
+                "temperature": -0.5,
+                "weights_sha256": compute_file_sha256(cdir / "model.safetensors"),
+            }
+        ),
+        encoding="utf-8",
+    )
+    bad_cal = validate_calibration_manifest(cdir, cal_path)
+    assert bad_cal["valid"] is False
+    assert "invalid_non_positive_or_non_finite_temperature" in bad_cal["failure_reasons"]
+
+    cal_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "task_a_calibration.v1",
+                "temperature": 1.25,
+                "calibrated": True,
+                "weights_sha256": compute_file_sha256(cdir / "model.safetensors"),
+                "tokenizer_sha256": compute_file_sha256(cdir / "tokenizer.json"),
+                "config_sha256": compute_file_sha256(cdir / "config.json"),
+            }
+        ),
+        encoding="utf-8",
+    )
+    ok_cal = validate_calibration_manifest(cdir, cal_path)
+    assert ok_cal["valid"] is True
+    assert ok_cal["temperature"] == pytest.approx(1.25)
+
+    # Provenance manifest missing artifact_hashes fails closed
+    no_hash_manifest = tmp_path / "manifest_no_hashes.json"
+    no_hash_manifest.write_text(
+        json.dumps(
+            {
+                "provenance_status": "verified",
+                "training_lineage": "lin",
+                "dataset_hashes": {"train": "abc"},
+                "base_model": "distilbert-base-uncased",
+                "git_commit": "deadbeef",
+            }
+        ),
+        encoding="utf-8",
+    )
+    prov_no_hash = audit_candidate_provenance(cdir, manifest_path=no_hash_manifest)
+    assert prov_no_hash["provenance_passed"] is False
+    assert "missing_provenance_artifact_hashes" in prov_no_hash["failure_reasons"]
+
+    # selective_calibration.v1 schema + logistic_regression_v1 validation & execution
+    geom_rejector = {
+        "enabled": True,
+        "type": "logistic_regression_v1",
+        "feature_spec": "logit_geometry_v1",
+        "feature_dim": 8,
+        "scaler_mean": [0.0] * 8,
+        "scaler_scale": [1.0] * 8,
+        "weights": [0.0] * 6 + [1.0, 0.0],
+        "bias": 0.0,
+        "threshold": 0.99,
+    }
+    sel_cal_payload = {
+        "schema_version": "selective_calibration.v1",
+        "label_space": {
+            "num_labels": 46,
+            "valid_46_label_bijection": True,
+            "id2label": {str(i): lbl for i, lbl in enumerate(STANDARD_INTENTS_46)},
+        },
+        "calibration": {
+            "method": "temperature_scaling",
+            "temperature": 1.35,
+            "min_temperature": 1.0,
+            "calibrated": True,
+        },
+        "selective_rejector": geom_rejector,
+        "artifact_hashes": {
+            "model.safetensors": compute_file_sha256(cdir / "model.safetensors"),
+            "tokenizer.json": compute_file_sha256(cdir / "tokenizer.json"),
+            "config.json": compute_file_sha256(cdir / "config.json"),
+        },
+    }
+    cal_path.write_text(json.dumps(sel_cal_payload), encoding="utf-8")
+    ok_sel = validate_calibration_manifest(cdir, cal_path)
+    assert ok_sel["valid"] is True
+    assert ok_sel["temperature"] == pytest.approx(1.35)
+    assert ok_sel["calibrated"] is True
+    assert ok_sel["rejector"]["feature_dim"] == 8
+
+    # logistic_regression_v1 math check (logit_max=4.0 -> sigmoid(4.0)=0.982014 < 0.99 -> rejected)
+    rej_geom, score_geom = _evaluate_experimental_rejector(geom_rejector, logits, raw_p, cal_p)
+    assert rej_geom is True
+    assert score_geom == pytest.approx(0.982014, abs=1e-5)
+
+    # cls_l2_plus_logit_geometry_v1 (dim=776) check with unit CLS vector
+    cls_vec = torch.zeros(768)
+    cls_vec[0] = 3.0
+    cls_rejector = {
+        "enabled": True,
+        "type": "logistic_regression_v1",
+        "feature_spec": "cls_l2_plus_logit_geometry_v1",
+        "feature_dim": 776,
+        "scaler_mean": [0.0] * 776,
+        "scaler_scale": [1.0] * 776,
+        "weights": [2.0] + [0.0] * 775,
+        "bias": 0.0,
+        "threshold": 0.80,
+    }
+    rej_cls, score_cls = _evaluate_experimental_rejector(cls_rejector, logits, raw_p, cal_p, cls_embedding=cls_vec)
+    assert rej_cls is False
+    assert score_cls == pytest.approx(1.0 / (1.0 + __import__("math").exp(-2.0)), abs=1e-5)
+
+    # Invalid rejector scale <= 0 fails closed at validation
+    bad_sel = json.loads(json.dumps(sel_cal_payload))
+    bad_sel["selective_rejector"]["scaler_scale"][0] = 0.0
+    cal_path.write_text(json.dumps(bad_sel), encoding="utf-8")
+    bad_rej_audit = validate_calibration_manifest(cdir, cal_path)
+    assert bad_rej_audit["valid"] is False
+    assert "invalid_rejector_non_positive_scaler_scale" in bad_rej_audit["failure_reasons"]
+
+    # Engine runtime vs harness experimental-rejector enforcement distinction
+    from pipeline.evaluation.classifier_acceptance_gate import verify_engine_rejection_enforcement
+
+    enf = verify_engine_rejection_enforcement(REPO_ROOT)
+    assert enf["checked"] is True
+    assert enf["raw_engine_action_on_rejected_spy"] == "manual_fallback"
+    assert enf["engine_enforces_experimental_rejection"] is True
+    assert enf["harness_guarded_action_on_rejected_spy"] == "manual_fallback"
+    assert enf["harness_guard_vetoed"] is False
+
+
+@__import__("pytest").mark.real_model
+def test_real_serving_model_container_parity_real_model(tmp_path: Path):
+    import pytest
+    from pipeline.evaluation.classifier_acceptance_gate import verify_runtime_score_parity
+
+    serving_dir = Path(r"F:\Năm 3\SD\project\SupportIQ\artifacts\models\trained\distilbert-supportiq")
+    if not (serving_dir / "model.safetensors").exists():
+        pytest.skip("Serving weights unavailable")
+    cdir = tmp_path / "cand"
+    cdir.mkdir()
+    (cdir / "model.safetensors").write_bytes(b"weights-bytes")
+    (cdir / "tokenizer.json").write_text("{}", encoding="utf-8")
+    (cdir / "config.json").write_text(
+        json.dumps({"id2label": {str(i): lbl for i, lbl in enumerate(STANDARD_INTENTS_46)}}),
+        encoding="utf-8",
+    )
+    parity = verify_runtime_score_parity(serving_dir, probe_temperature=1.25, unpinned_dir=cdir, repo_root=REPO_ROOT)
+    assert parity["passed"] is True
+    assert parity["tokenization_mismatches"] == 0
+    assert parity["label_mismatches"] == 0
+    assert parity["score_kind_mismatches"] == 0
+    assert parity["engine_rejection_enforcement"]["engine_enforces_experimental_rejection"] is True
+    assert parity["fail_closed_non_serving_checksum"] is True
+
+
+def test_selective_gate_028ed76_artifacts_hashes_and_boundary_audits():
+    import hashlib
+    import pytest
+
+    sel_dir = REPO_ROOT / "artifacts/evaluation/classifier_gate_task_a_selective_20261113"
+    hashes = json.loads((sel_dir / "report_hashes.json").read_text(encoding="utf-8"))
+    for fname, expected in hashes.items():
+        assert hashlib.sha256((sel_dir / fname).read_bytes()).hexdigest() == expected
+
+    gate = json.loads((sel_dir / "gate_report.json").read_text(encoding="utf-8"))
+    supp = json.loads((sel_dir / "selective_supplement.json").read_text(encoding="utf-8"))
+    assert gate["gate_decision"] == "REJECT"
+    assert gate["failure_reasons"] == ["mandatory_escalation_unsafe_draft_leak", "oos_draft_leak"]
+    assert gate["calibration_manifest_audit"]["valid"] is True
+    assert gate["runtime_parity_audit"]["engine_rejection_enforcement"]["engine_enforces_experimental_rejection"] is False
+
+    cal_eval = gate["candidate_calibrated_evaluation"]
+    assert cal_eval["ml_oos_80"]["false_draft_eligible_count"] == 3
+    sa = cal_eval["known_acceptance_regression_not_unseen_holdout"]["system_acceptance_156"]
+    fa = cal_eval["known_acceptance_regression_not_unseen_holdout"]["final_acceptance_24"]
+    assert sa["mandatory_63_real_unsafe_draft_leaks"] == ["una-product_information-01"]
+    assert [x["case_id"] for x in sa["mandatory_63_uninjected_fault_fixtures"]] == ["unc-return_policy-04"]
+    assert fa["unanswerable_active_kb_draft_leaks"] == []
+    assert fa["unanswerable_injected_synthetic_uninjected_drafted_cases"] == ["final-case-21"]
+
+    assert supp["held_out_domain_negatives_27"]["candidate_raw_no_rejector"]["effective_false_draft_count"] == 1
+    assert supp["held_out_domain_negatives_27"]["candidate_calibrated_with_rejector"]["effective_false_draft_count"] == 0
+    assert supp["bitext_46_test_retention"]["candidate_028ed76_calibrated"]["other_34_accuracy"] == pytest.approx(0.994927)
+    assert supp["worker_b_ce98424_runtime_parity"]["candidate_028ed76_calibrated_plus_rejector_parity"]["passed"] is True
+    assert supp["worker_b_23767a7_engine_enforcement_audit"]["engine_enforces_experimental_rejection"] is True
+    assert supp["core_backend_metadata_gap_audit"]["backend_route_promotion_blocker"] is True
+

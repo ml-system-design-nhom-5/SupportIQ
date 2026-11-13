@@ -103,8 +103,22 @@ class Engine:
         codes = []
         if low:
             codes.append("low_confidence")
+        selective_accepted = prediction.get("selective_accepted")
+        rejected_flag = prediction.get("rejected_by_experimental_adapter")
+        rejector_decision = prediction.get("rejector_decision")
+        selective_rejected = (
+            (selective_accepted is False)
+            or (rejected_flag is True)
+            or (isinstance(rejector_decision, str) and rejector_decision.lower() == "reject")
+        )
+        if not override and selective_rejected:
+            if "low_confidence" not in codes:
+                codes.append("low_confidence")
+            if "out_of_scope_intent" not in codes:
+                codes.append("out_of_scope_intent")
         if label not in self.policy["supported_12_intents"]:
-            codes.append("out_of_scope_intent")
+            if "out_of_scope_intent" not in codes:
+                codes.append("out_of_scope_intent")
         if label == "human_agent" or re.search(r"\b(human\s+agent|real\s+person|live\s+agent|human\s+operator|talk\s+to\s+a\s+human)\b", request["message"], re.I):
             if "human_agent_requested" not in codes:
                 codes.append("human_agent_requested")
@@ -183,10 +197,20 @@ class Engine:
                               "effective_from": str(original.metadata.valid_from) if original else None,
                               "effective_to": str(original.metadata.valid_to) if original and original.metadata.valid_to else None})
         recommendation = "escalate" if ("human_agent_requested" in codes or explicit_authority or scope_review) else "abstain" if set(codes) & {"low_confidence", "out_of_scope_intent", "no_valid_document", "conflicting_sources"} else "draft"
+        routing_payload = {"recommendation": recommendation, "reason_codes": codes}
+        for rej_key in (
+            "selective_accepted",
+            "selective_score",
+            "selective_threshold",
+            "rejected_by_experimental_adapter",
+            "rejector_decision",
+        ):
+            if rej_key in prediction and prediction[rej_key] is not None:
+                routing_payload[rej_key] = prediction[rej_key]
         analysis = {"intent": {"label": label, "probability": probability, "confidence_band": "low" if (low or "low_confidence" in codes) else "high" if probability >= .9 else "medium", "source": "staff" if override else "model", "score_kind": "staff_choice" if override else prediction.get("score_kind", "unknown"), "model_mode": "override" if override else prediction.get("model_mode", "unknown"), "verified": False if override else bool(prediction.get("verified", False))},
                     "alternatives": [{"label": item["intent"], "probability": item["probability"], "confidence_band": "low"} for item in candidates if item["intent"] != label][:4],
                     "is_in_scope": label in self.policy["supported_12_intents"], "documents": documents,
-                    "routing": {"recommendation": recommendation, "reason_codes": codes}, "warnings": warnings, "versions": self.versions,
+                    "routing": routing_payload, "warnings": warnings, "versions": self.versions,
                     "step_latency_ms": {"analysis": round((time.perf_counter() - started) * 1000)}}
         return analysis, evidence
 
