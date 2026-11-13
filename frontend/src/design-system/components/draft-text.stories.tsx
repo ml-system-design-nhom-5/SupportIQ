@@ -3,6 +3,7 @@ import { expect, fn, screen, userEvent, within } from "storybook/test";
 
 import { CitationMarker } from "@/design-system/components/citation-marker";
 import { DraftText } from "@/design-system/components/draft-text";
+import { MarkedText } from "@/design-system/components/marked-text";
 import { OrderCitationMarker } from "@/design-system/components/order-citation-marker";
 import { presentationByDocumentValidity } from "@/design-system/components/status-presentations";
 
@@ -78,6 +79,33 @@ export const OrderMarkerFocused: Story = {
     await userEvent.tab();
 
     await expect(await screen.findAllByText("From order records, not AI")).not.toHaveLength(0);
+  },
+};
+export const RejectedOrOutdated: Story = { args: { tone: "muted" } };
+export const WithPlaceholder: Story = {
+  args: {
+    paragraphs: [
+      {
+        paragraphId: "p0",
+        segments: [
+          {
+            segmentId: "s1",
+            text: (
+              <MarkedText
+                parts={[
+                  { text: "We have sent the return label to ", isMarked: false },
+                  { text: "[EMAIL]", isMarked: true },
+                  { text: ".", isMarked: false },
+                ]}
+              />
+            ),
+          },
+        ],
+      },
+    ],
+  },
+  play: async ({ canvasElement }) => {
+    await expect(within(canvasElement).getByText("[EMAIL]").tagName).toBe("MARK");
   },
 };
 export const KbSourceWithoutAnalysis: Story = {

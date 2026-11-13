@@ -24,6 +24,7 @@ export { collectPageItems } from "@/features/backend-requests/model/collect-page
 export type { MoneyContract } from "@/features/backend-requests/model/contract-values";
 export {
   countContractCharacters,
+  MESSAGE_MAX_LENGTH,
   requireMembers,
   toMoney,
 } from "@/features/backend-requests/model/contract-values";

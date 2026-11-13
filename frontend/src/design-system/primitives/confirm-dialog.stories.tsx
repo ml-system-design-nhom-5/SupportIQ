@@ -39,5 +39,16 @@ export const Danger: Story = {
     tone: "danger",
   },
 };
+export const CancelLabel: Story = {
+  args: {
+    text: {
+      title: "Send this reply to Linh Tran?",
+      description: "The customer sees it in the shop right away. A sent reply cannot be changed.",
+      confirmLabel: "Send reply",
+      pendingLabel: "Sending…",
+      cancelLabel: "Keep editing",
+    },
+  },
+};
 export const Pending: Story = { args: { isPending: true } };
 export const Closed: Story = { args: { isOpen: false } };

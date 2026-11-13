@@ -1,7 +1,10 @@
 /**
  * The ticket header (console UI design, Workspace regions): the ticket ID as the page heading, the
  * status, the handling mode, the order chip, the customer, and the time received. It spans the
- * middle and right columns of the workspace.
+ * middle and right columns of the workspace. The order chip never shrinks, so every order status
+ * stays visible (placement rule 8); when the row is full, the customer and the time received
+ * shrink and are cut first. Their full text stays in the page for assistive technology, and the
+ * customer message shows both again.
  */
 import { User } from "lucide-react";
 import type { ReactNode } from "react";
@@ -54,14 +57,16 @@ export function TicketHeader({
       <StatusBadge presentation={status} />
       <StatusBadge presentation={handlingMode} />
       <span aria-hidden="true" className="h-6 border-l border-border" />
-      <div className="flex min-w-0">{order}</div>
-      <p className="ml-auto flex shrink-0 items-center gap-4 text-sm whitespace-nowrap text-text-muted">
-        <span className="flex items-center gap-1">
+      <div className="flex shrink-0">{order}</div>
+      <p className="ml-auto flex min-w-0 items-center gap-4 text-sm whitespace-nowrap text-text-muted">
+        <span className="flex min-w-0 items-center gap-1">
           <Icon icon={User} />
-          <VisuallyHidden>Customer: </VisuallyHidden>
-          {customerName}
+          <span className="truncate">
+            <VisuallyHidden>Customer: </VisuallyHidden>
+            {customerName}
+          </span>
         </span>
-        <span>
+        <span className="min-w-0 truncate">
           Received <RelativeTime timestamp={receivedAt} />
         </span>
       </p>

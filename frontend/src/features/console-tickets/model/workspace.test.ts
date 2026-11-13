@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { toTicketWorkspace } from "@/features/console-tickets/model/workspace";
+import { toSuggestion, toTicketWorkspace } from "@/features/console-tickets/model/workspace";
 import { readOperationExample, withoutMembers } from "@/test/contract-examples";
 
 describe("toTicketWorkspace", () => {
@@ -44,11 +44,36 @@ describe("toTicketWorkspace", () => {
   });
 });
 
+describe("toSuggestion", () => {
+  it("maps the intent that staff chose", () => {
+    expect(
+      toSuggestion(readOperationExample("createSuggestion", 202, "intent-override")),
+    ).toMatchObject({
+      intentOverride: { label: "request_refund", name: "Request refund" },
+      analysis: { status: "pending" },
+      draft: { status: "pending" },
+    });
+  });
+});
+
+describe("toTicketWorkspace of the allowed actions", () => {
+  it("maps the actions that the caller may take", () => {
+    const workspace = toTicketWorkspace(
+      readOperationExample("getConsoleTicket", 200, "authority-required"),
+    );
+
+    expect(workspace.allowedActions).toEqual(
+      new Set(["submit_reply_proposal", "escalate", "correct_intent"]),
+    );
+  });
+});
+
 describe("toTicketWorkspace of a closed ticket", () => {
   it("maps the reply of a closed ticket", () => {
     const workspace = toTicketWorkspace(readOperationExample("getConsoleTicket", 200, "closed"));
 
     expect(workspace.status).toBe("closed");
+    expect(workspace.allowedActions).toEqual(new Set());
     expect(workspace.reply).toEqual({
       body: "Thank you for writing. Your refund request for the headphones is under review. We will write to you again when it is decided.",
       sentByName: "Mai Nguyen",

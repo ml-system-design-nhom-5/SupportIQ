@@ -3,6 +3,8 @@
  */
 export type { AccountMenuProps, AccountMenuVariant } from "@/design-system/components/account-menu";
 export { AccountMenu } from "@/design-system/components/account-menu";
+export type { ActionBarProps, ActionMenuItem } from "@/design-system/components/action-bar";
+export { ActionBar } from "@/design-system/components/action-bar";
 export type {
   AiReasonCodeName,
   RecommendationName,
@@ -42,6 +44,7 @@ export type {
   DraftTextParagraph,
   DraftTextProps,
   DraftTextSegment,
+  DraftTextTone,
 } from "@/design-system/components/draft-text";
 export { DraftText } from "@/design-system/components/draft-text";
 export type { FormFieldProps } from "@/design-system/components/form-field";
@@ -63,10 +66,13 @@ export { InlineMessage } from "@/design-system/components/inline-message";
 export type {
   IntentChoiceCandidate,
   IntentChoiceProps,
+  IntentUse,
 } from "@/design-system/components/intent-choice";
 export { IntentChoice } from "@/design-system/components/intent-choice";
 export type {
   IntentConfidence,
+  IntentCorrection,
+  IntentOption,
   IntentStripCandidate,
   IntentStripProps,
 } from "@/design-system/components/intent-strip";
@@ -75,6 +81,12 @@ export type { KbDocumentTextProps } from "@/design-system/components/kb-document
 export { KbDocumentText } from "@/design-system/components/kb-document-text";
 export type { LoadMoreButtonProps } from "@/design-system/components/load-more-button";
 export { LoadMoreButton } from "@/design-system/components/load-more-button";
+export type {
+  MarkedTextLayer,
+  MarkedTextPart,
+  MarkedTextProps,
+} from "@/design-system/components/marked-text";
+export { MarkedText } from "@/design-system/components/marked-text";
 export type {
   MessageBoxLimit,
   MessageBoxProps,
@@ -119,6 +131,10 @@ export type { RelativeTimeProps } from "@/design-system/components/relative-time
 export { RelativeTime } from "@/design-system/components/relative-time";
 export type { RelativeTimeTextProps } from "@/design-system/components/relative-time-text";
 export { RelativeTimeText } from "@/design-system/components/relative-time-text";
+export type { ReplyEditorProps } from "@/design-system/components/reply-editor";
+export { ReplyEditor } from "@/design-system/components/reply-editor";
+export type { ReplyPreviewProps } from "@/design-system/components/reply-preview";
+export { ReplyPreview } from "@/design-system/components/reply-preview";
 export type { RowListProps } from "@/design-system/components/row-list";
 export { RowList } from "@/design-system/components/row-list";
 export type {
@@ -170,6 +186,11 @@ export { TicketHeader } from "@/design-system/components/ticket-header";
 export { TicketHeaderSkeleton } from "@/design-system/components/ticket-header-skeleton";
 export type { TicketItemProps, TicketItemReply } from "@/design-system/components/ticket-item";
 export { TicketItem } from "@/design-system/components/ticket-item";
+export type {
+  ToggleChipGroupProps,
+  ToggleChipOption,
+} from "@/design-system/components/toggle-chip-group";
+export { ToggleChipGroup } from "@/design-system/components/toggle-chip-group";
 export type { TraceIdProps } from "@/design-system/components/trace-id";
 export { TraceId } from "@/design-system/components/trace-id";
 export type { WarningListItem, WarningListProps } from "@/design-system/components/warning-list";

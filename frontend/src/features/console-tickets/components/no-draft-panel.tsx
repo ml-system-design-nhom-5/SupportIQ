@@ -5,6 +5,7 @@
  * no draft and no filler text.
  */
 import { PenLine, Sparkles } from "lucide-react";
+import type { ReactNode } from "react";
 
 import {
   Cluster,
@@ -21,15 +22,17 @@ import type { NoDraftReplyState } from "@/features/console-tickets/model/workspa
 /** Props of {@link NoDraftPanel}. */
 type NoDraftPanelProps = {
   readonly outcome: NoDraftReplyState;
+  /** The editor, when staff may write, and the action bar of the reply. */
+  readonly children?: ReactNode;
 };
 
 /**
  * Render the reply area without a draft.
  *
- * @param props - The outcome.
+ * @param props - The outcome, and the editor with the action bar.
  * @returns The panel.
  */
-export function NoDraftPanel({ outcome }: NoDraftPanelProps) {
+export function NoDraftPanel({ outcome, children }: NoDraftPanelProps) {
   if (outcome.kind === "choose_intent") {
     return (
       <Panel density="compact" as="section" label="AI draft">
@@ -37,6 +40,7 @@ export function NoDraftPanel({ outcome }: NoDraftPanelProps) {
         <PanelSection layout="centered">
           <Text tone="muted">No draft is created until you choose an intent.</Text>
         </PanelSection>
+        {children}
       </Panel>
     );
   }
@@ -61,6 +65,7 @@ export function NoDraftPanel({ outcome }: NoDraftPanelProps) {
           ))}
         </Cluster>
       </PanelSection>
+      {children}
     </Panel>
   );
 }

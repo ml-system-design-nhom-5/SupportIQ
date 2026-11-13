@@ -3,20 +3,26 @@
  * States): the header with the order chip, the banners, the customer message, the intent, the
  * reply area, and the AI sidebar. Every region derives its state from the ticket during render
  * (TS-21). The order popover and the KB side sheet open from the header, the sources, and the
- * citation markers.
+ * citation markers. Staff correct the intent from the strip; the reply area keeps the draft that
+ * the correction made outdated while the new one generates (UI-22). Send reply opens the
+ * confirmation, and only its Send reply sends the reply (UI-17, FR-04).
  */
 import { useState } from "react";
 
 import { WorkspaceLayout } from "@/design-system";
 import type { RequestFailure } from "@/features/backend-requests";
+import { useCreateSuggestion } from "@/features/console-tickets/api/use-create-suggestion";
 import { AiSidebar } from "@/features/console-tickets/components/ai-sidebar";
+import { ConfirmSendDialog } from "@/features/console-tickets/components/confirm-send-dialog";
 import { CustomerMessagePanel } from "@/features/console-tickets/components/customer-message-panel";
 import { IntentSection } from "@/features/console-tickets/components/intent-section";
 import { KbDocumentSheet } from "@/features/console-tickets/components/kb-document-sheet";
 import { ReplyArea } from "@/features/console-tickets/components/reply-area";
 import type { OrderPopoverState } from "@/features/console-tickets/components/ticket-order-chip";
+import { useReplyComposer } from "@/features/console-tickets/components/use-reply-composer";
 import { WorkspaceBanners } from "@/features/console-tickets/components/workspace-banners";
 import { WorkspaceHeader } from "@/features/console-tickets/components/workspace-header";
+import { toComposerTicket } from "@/features/console-tickets/model/reply-request";
 import { type SourceSelection, toSourceSelection } from "@/features/console-tickets/model/sources";
 import type { TicketWorkspace } from "@/features/console-tickets/model/workspace";
 import { buildWorkspaceRegions } from "@/features/console-tickets/model/workspace-regions";
@@ -32,6 +38,8 @@ type OpenedSource = {
 
 /** Props of {@link TicketWorkspaceView}. */
 type TicketWorkspaceViewProps = {
+  /** The ticket of the address: the key of its workspace query, and the ticket of every write. */
+  readonly ticketId: string;
   readonly workspace: TicketWorkspace;
   /** The failure of `recordTicketView`, after its automatic retries. */
   readonly viewFailure?: RequestFailure;
@@ -42,10 +50,12 @@ type TicketWorkspaceViewProps = {
 /**
  * Render the workspace.
  *
- * @param props - The ticket and the failures of its view and of its last reload.
+ * @param props - The ticket of the address, the ticket, and the failures of its view and of its
+ *   last reload.
  * @returns The workspace and, while a source is open, its side sheet.
  */
 export function TicketWorkspaceView({
+  ticketId,
   workspace,
   viewFailure,
   refreshFailure,
@@ -53,6 +63,8 @@ export function TicketWorkspaceView({
   const [orderPopover, setOrderPopover] = useState<OrderPopoverState>({ isOpen: false });
   const [openedSource, setOpenedSource] = useState<OpenedSource | undefined>(undefined);
   const regions = buildWorkspaceRegions(workspace);
+  const suggestionRequests = useCreateSuggestion(ticketId, workspace);
+  const composer = useReplyComposer(ticketId, toComposerTicket(workspace, regions));
   const hasBanners =
     workspace.isAuthorityRequired || viewFailure !== undefined || refreshFailure !== undefined;
   const openSource = (selection: SourceSelection, opener: HTMLElement) => {
@@ -90,21 +102,33 @@ export function TicketWorkspaceView({
               body={workspace.message.body}
               sentAt={workspace.message.createdAt}
             />
-            <IntentSection state={regions.intent} />
+            <IntentSection
+              state={regions.intent}
+              isSending={suggestionRequests.isSending}
+              correctionFailure={suggestionRequests.correctionFailure}
+              onCorrectIntent={suggestionRequests.correctIntent}
+            />
             <ReplyArea
               state={regions.reply}
+              composer={composer}
+              aiRequests={{
+                ...suggestionRequests,
+                canRetry: workspace.allowedActions.has("retry_suggestion"),
+              }}
               draftContext={{
                 warnings: regions.warnings,
                 generatedAt: regions.generatedAt,
-                numberByKey: regions.numberByKey,
-                sourceByKey: new Map(regions.sources.map((source) => [source.key, source])),
-                orderId: workspace.order?.orderId,
-                onOpenSource: openSource,
-                onOpenOrder: (opener) => {
-                  setOrderPopover({
-                    isOpen: true,
-                    returnFocus: { opener, fallbackId: WORKSPACE_HEADING_ID },
-                  });
+                citations: {
+                  numberByKey: regions.numberByKey,
+                  sourceByKey: new Map(regions.sources.map((source) => [source.key, source])),
+                  orderId: workspace.order?.orderId,
+                  onOpenSource: openSource,
+                  onOpenOrder: (opener) => {
+                    setOrderPopover({
+                      isOpen: true,
+                      returnFocus: { opener, fallbackId: WORKSPACE_HEADING_ID },
+                    });
+                  },
                 },
               }}
             />
@@ -120,6 +144,16 @@ export function TicketWorkspaceView({
           />
         }
       />
+      {composer.confirmationOpener === undefined ? null : (
+        <ConfirmSendDialog
+          customerName={workspace.customerName}
+          body={composer.body}
+          returnFocus={{ opener: composer.confirmationOpener, fallbackId: WORKSPACE_HEADING_ID }}
+          isSending={composer.isSending}
+          onConfirm={composer.confirmSend}
+          onCancel={composer.cancelSend}
+        />
+      )}
       {openedSource === undefined ? null : (
         <KbDocumentSheet
           selection={openedSource.selection}

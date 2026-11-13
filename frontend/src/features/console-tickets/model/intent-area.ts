@@ -1,14 +1,52 @@
 /**
  * What the intent strip shows (console UI design, Workspace regions and States; FR-01, UI-22,
- * UI-42). The intent sits directly under the customer message, so staff check it first.
+ * UI-42), and what a failed correction says. The intent sits directly under the customer message,
+ * so staff check it first. Staff can correct it whenever `backend` allows it (`correct_intent`),
+ * also while a draft is generating; the UI never decides that itself (UI-40).
  */
+import {
+  describeFailure,
+  type FailureCategory,
+  isWriteOutcomeUnknown,
+  type RequestFailure,
+} from "@/features/backend-requests";
 import type { AnalysisIntent, IntentCandidate } from "@/features/console-tickets/model/analysis";
 import type { DraftPart } from "@/features/console-tickets/model/draft";
+import {
+  type Intent,
+  type IntentLabel,
+  intentLabels,
+  toIntent,
+} from "@/features/console-tickets/model/intent";
 import type { TicketWorkspace } from "@/features/console-tickets/model/workspace";
 import { isLowConfidence } from "@/features/console-tickets/model/workspace-state";
 
 /** How many alternatives the strip shows next to the intent: the next two (FR-01). */
 const SHOWN_ALTERNATIVE_COUNT = 2;
+
+/**
+ * What a correction from an old screen says. The workspace reloads after it, so staff see the
+ * ticket as it is now (console UI design, Flow step 4, Errors and guardrails).
+ */
+const OLD_SCREEN_MESSAGE = "This ticket changed in the meantime. It now shows its current state.";
+
+/**
+ * The refusals of an old screen that {@link OLD_SCREEN_MESSAGE} explains: no intent is known any
+ * more (`422`), or the ticket is no longer open in `assisted` mode (`409 invalid-ticket-state`).
+ */
+const oldScreenCategories: ReadonlySet<FailureCategory> = new Set([
+  "invalid_request",
+  "invalid_state",
+]);
+
+/** An intent label that staff can choose: one of the 46 labels of the contract. */
+export type ChoosableIntentLabel = Exclude<IntentLabel, "unknown">;
+
+/** An intent that staff can choose, with its name. */
+export type ChoosableIntent = {
+  readonly label: ChoosableIntentLabel;
+  readonly name: string;
+};
 
 /** The intent strip. */
 export type IntentAreaState =
@@ -19,12 +57,32 @@ export type IntentAreaState =
       readonly kind: "intent";
       readonly intent: AnalysisIntent;
       readonly alternatives: readonly IntentCandidate[];
+      /** True when `backend` allows a correction (`correct_intent`). */
+      readonly canCorrect: boolean;
     }
   | {
       readonly kind: "choose";
       readonly intent: Extract<AnalysisIntent, { readonly source: "model" }>;
       readonly alternatives: readonly IntentCandidate[];
+      /** True when `backend` allows a correction (`correct_intent`). */
+      readonly canCorrect: boolean;
     };
+
+/** A failed correction as the intent section says it (UI-25). */
+export type CorrectionFailureView = {
+  /** What happened to the intent. */
+  readonly lead: string;
+  /** Why, and what to do next, in plain language. */
+  readonly message: string;
+  /** The copyable trace ID, when `backend` sent one. */
+  readonly traceId?: string;
+};
+
+/** Every intent that staff can choose, in the order of the contract, which is also by name. */
+const choosableIntents: readonly ChoosableIntent[] = intentLabels.map((label) => ({
+  label,
+  name: toIntent(label).name,
+}));
 
 /**
  * Choose what the intent strip shows.
@@ -32,7 +90,7 @@ export type IntentAreaState =
  * @param workspace - The ticket.
  * @returns Nothing without an analysis; a skeleton while it is pending; the top three candidates
  *   to choose from after an abstention for low confidence (ESC-01); otherwise the intent with the
- *   next two candidates.
+ *   next two candidates. The last two say whether staff can correct the intent.
  */
 export function getIntentAreaState(workspace: TicketWorkspace): IntentAreaState {
   const suggestion = workspace.suggestion;
@@ -40,8 +98,9 @@ export function getIntentAreaState(workspace: TicketWorkspace): IntentAreaState 
     return { kind: "none" };
   }
   const analysis = suggestion.analysis;
+  const canCorrect = workspace.allowedActions.has("correct_intent");
   if (analysis.status === "pending") {
-    return { kind: "loading" };
+    return getPendingAnalysisState(suggestion.intentOverride, canCorrect);
   }
   if (analysis.status === "unavailable") {
     return { kind: "none" };
@@ -52,9 +111,74 @@ export function getIntentAreaState(workspace: TicketWorkspace): IntentAreaState 
   const intent = analysis.intent;
   const alternatives = analysis.alternatives.slice(0, SHOWN_ALTERNATIVE_COUNT);
   if (intent.source === "model" && isAbstainedForLowConfidence(suggestion.draft)) {
-    return { kind: "choose", intent, alternatives };
+    return { kind: "choose", intent, alternatives, canCorrect };
   }
-  return { kind: "intent", intent, alternatives };
+  return { kind: "intent", intent, alternatives, canCorrect };
+}
+
+/**
+ * List the intents that Other intent offers: every intent but the one on the strip.
+ *
+ * @param intent - The intent on the strip.
+ * @returns The other intents, in the order of the contract.
+ */
+export function listOtherIntents(intent: Intent): readonly ChoosableIntent[] {
+  return choosableIntents.filter((choosable) => choosable.label !== intent.label);
+}
+
+/**
+ * Read the label that staff would choose for an intent.
+ *
+ * @param intent - An intent of the analysis.
+ * @returns The label, or undefined for an intent that this version does not know, which staff can
+ *   never choose (CON-22).
+ */
+export function getChoosableLabel(intent: Intent): ChoosableIntentLabel | undefined {
+  return intent.label === "unknown" ? undefined : intent.label;
+}
+
+/**
+ * Describe a failed correction. A refusal of an old screen says that the ticket changed, because
+ * the workspace reloads after it; every other failure uses the shared message (TS-26).
+ *
+ * @param failure - The failure of `createSuggestion` with an intent.
+ * @returns The lead, the message, and the trace ID when there is one. After an unknown outcome,
+ *   the lead never says that the intent did not change (ERR-07).
+ */
+export function describeCorrectionFailure(failure: RequestFailure): CorrectionFailureView {
+  const description = describeFailure(failure);
+  return {
+    lead: isWriteOutcomeUnknown(failure)
+      ? "The intent may have been changed."
+      : "The intent was not changed.",
+    message: oldScreenCategories.has(description.category)
+      ? OLD_SCREEN_MESSAGE
+      : description.message,
+    ...(description.traceId === undefined ? {} : { traceId: description.traceId }),
+  };
+}
+
+/**
+ * Choose the strip while the analysis is pending: the intent that staff chose stays on the strip
+ * after a correction, and they can change it again (UI-22; console UI design, Flow step 4).
+ *
+ * @param intentOverride - The intent that staff chose for the suggestion, when they chose one.
+ * @param canCorrect - True when `backend` allows a correction.
+ * @returns The chosen intent, or the skeleton without one.
+ */
+function getPendingAnalysisState(
+  intentOverride: Intent | undefined,
+  canCorrect: boolean,
+): IntentAreaState {
+  if (intentOverride === undefined) {
+    return { kind: "loading" };
+  }
+  return {
+    kind: "intent",
+    intent: { source: "staff", intent: intentOverride },
+    alternatives: [],
+    canCorrect,
+  };
 }
 
 /**

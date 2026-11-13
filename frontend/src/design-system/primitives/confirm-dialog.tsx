@@ -25,6 +25,8 @@ export type ConfirmDialogText = {
   readonly confirmLabel: string;
   /** Shown on the confirm button while the change is sent. */
   readonly pendingLabel: string;
+  /** The button that closes without the change, such as "Keep editing"; "Cancel" by default. */
+  readonly cancelLabel?: string;
 };
 
 /** Props of {@link ConfirmDialog}. */
@@ -80,7 +82,7 @@ export function ConfirmDialog({
           <div className="flex justify-end gap-2">
             <AlertDialogPrimitive.Cancel asChild>
               <Button variant="secondary" disabled={isPending}>
-                Cancel
+                {text.cancelLabel ?? "Cancel"}
               </Button>
             </AlertDialogPrimitive.Cancel>
             <Button

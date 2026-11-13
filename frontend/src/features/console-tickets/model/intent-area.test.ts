@@ -1,11 +1,24 @@
 import { describe, expect, it } from "vitest";
 
-import { getIntentAreaState } from "@/features/console-tickets/model/intent-area";
+import type { RequestFailure } from "@/features/backend-requests";
+import {
+  describeCorrectionFailure,
+  getChoosableLabel,
+  getIntentAreaState,
+  listOtherIntents,
+} from "@/features/console-tickets/model/intent-area";
 import {
   type TicketWorkspace,
+  toSuggestion,
   toTicketWorkspace,
 } from "@/features/console-tickets/model/workspace";
 import { readOperationExample, withoutMembers } from "@/test/contract-examples";
+
+/** A trace ID in the format of the contract. */
+const TRACE_ID = "e929d0e0e4736bf92f3577b34da6a3c2";
+
+/** How many intents the contract lists. */
+const INTENT_COUNT = 46;
 
 /**
  * Show the intent strip of a workspace example.
@@ -35,8 +48,22 @@ function readWorkspaceWithoutIntent(): TicketWorkspace {
   };
 }
 
+/**
+ * Read the draft-ready workspace with its draft still generating (the partial state), which keeps
+ * `correct_intent` among its actions.
+ *
+ * @returns The workspace.
+ */
+function readWorkspaceWithPendingDraft(): TicketWorkspace {
+  const workspace = toTicketWorkspace(readOperationExample("getConsoleTicket", 200, "draft-ready"));
+  if (workspace.suggestion === undefined) {
+    throw new Error("The draft-ready example has no suggestion.");
+  }
+  return { ...workspace, suggestion: { ...workspace.suggestion, draft: { status: "pending" } } };
+}
+
 describe("getIntentAreaState", () => {
-  it("shows the predicted intent with the next two candidates (FR-01)", () => {
+  it("shows the predicted intent with the next two candidates, correctable (FR-01, UI-22)", () => {
     expect(readIntentArea("draft-ready")).toEqual({
       kind: "intent",
       intent: {
@@ -49,14 +76,7 @@ describe("getIntentAreaState", () => {
         { intent: { label: "request_refund", name: "Request refund" }, probability: 0.07 },
         { intent: { label: "track_order", name: "Track order" }, probability: 0.02 },
       ],
-    });
-  });
-
-  it("shows the intent that staff chose, without candidates", () => {
-    expect(readIntentArea("intent-corrected")).toEqual({
-      kind: "intent",
-      intent: { source: "staff", intent: { label: "refund_status", name: "Refund status" } },
-      alternatives: [],
+      canCorrect: true,
     });
   });
 
@@ -64,6 +84,7 @@ describe("getIntentAreaState", () => {
     expect(readIntentArea("abstained-low-confidence")).toMatchObject({
       kind: "choose",
       intent: { band: "low", probability: 0.41 },
+      canCorrect: true,
     });
   });
 
@@ -77,5 +98,116 @@ describe("getIntentAreaState", () => {
 
   it("says that the intent is unknown when the analysis has no known intent", () => {
     expect(getIntentAreaState(readWorkspaceWithoutIntent()).kind).toBe("unknown");
+  });
+});
+
+describe("getIntentAreaState and correct_intent", () => {
+  it("shows the intent that staff chose, without candidates, and lets staff change it again", () => {
+    expect(readIntentArea("intent-corrected")).toEqual({
+      kind: "intent",
+      intent: { source: "staff", intent: { label: "refund_status", name: "Refund status" } },
+      alternatives: [],
+      canCorrect: true,
+    });
+  });
+
+  it("offers a correction while the draft is generating, as backend allows (UI-22)", () => {
+    expect(getIntentAreaState(readWorkspaceWithPendingDraft())).toMatchObject({
+      kind: "intent",
+      canCorrect: true,
+    });
+  });
+
+  it.each(["read-only-for-staff", "awaiting-approval"])(
+    "offers no correction in the %s example, whose actions lack correct_intent (UI-40)",
+    (name) => {
+      expect(readIntentArea(name)).toMatchObject({ kind: "intent", canCorrect: false });
+    },
+  );
+});
+
+describe("getIntentAreaState while the analysis is pending", () => {
+  it("keeps the intent that staff chose on the strip after a correction (UI-22)", () => {
+    const workspace = toTicketWorkspace(
+      readOperationExample("getConsoleTicket", 200, "draft-ready"),
+    );
+    const correction = toSuggestion(
+      readOperationExample("createSuggestion", 202, "intent-override"),
+    );
+
+    expect(getIntentAreaState({ ...workspace, suggestion: correction })).toEqual({
+      kind: "intent",
+      intent: { source: "staff", intent: { label: "request_refund", name: "Request refund" } },
+      alternatives: [],
+      canCorrect: true,
+    });
+  });
+
+  it("shows the skeleton when staff chose no intent", () => {
+    expect(readIntentArea("suggestion-pending")).toEqual({ kind: "loading" });
+  });
+});
+
+describe("listOtherIntents", () => {
+  it("lists every intent but the one on the strip, by name", () => {
+    const otherIntents = listOtherIntents({ label: "refund_status", name: "Refund status" });
+
+    expect(otherIntents).toHaveLength(INTENT_COUNT - 1);
+    expect(otherIntents.slice(0, 2)).toEqual([
+      { label: "add_product", name: "Add product" },
+      { label: "availability", name: "Availability" },
+    ]);
+    expect(otherIntents.map((intent) => intent.label)).not.toContain("refund_status");
+  });
+
+  it("lists every intent next to an intent that this version does not know", () => {
+    expect(listOtherIntents({ label: "unknown", name: "Unspecified intent" })).toHaveLength(
+      INTENT_COUNT,
+    );
+  });
+});
+
+describe("getChoosableLabel", () => {
+  it.each([
+    [{ label: "track_order", name: "Track order" }, "track_order"],
+    [{ label: "unknown", name: "Unspecified intent" }, undefined],
+  ] as const)("reads the label of %j as %s (CON-22)", (intent, label) => {
+    expect(getChoosableLabel(intent)).toBe(label);
+  });
+});
+
+describe("describeCorrectionFailure", () => {
+  it.each<[string, RequestFailure, string]>([
+    [
+      "409 suggestion-pending",
+      { kind: "problem", status: 409, problemType: "suggestion_pending", traceId: TRACE_ID },
+      "The AI is still working on this ticket. Wait until it is done, then try again.",
+    ],
+    [
+      "422 invalid-request",
+      { kind: "problem", status: 422, problemType: "invalid_request", traceId: TRACE_ID },
+      "This ticket changed in the meantime. It now shows its current state.",
+    ],
+    [
+      "409 invalid-ticket-state",
+      { kind: "problem", status: 409, problemType: "invalid_ticket_state", traceId: TRACE_ID },
+      "This ticket changed in the meantime. It now shows its current state.",
+    ],
+  ])(
+    "says that the intent was not changed after %s, with the trace ID",
+    (_case, failure, message) => {
+      expect(describeCorrectionFailure(failure)).toEqual({
+        lead: "The intent was not changed.",
+        message,
+        traceId: TRACE_ID,
+      });
+    },
+  );
+
+  it("never says that the intent did not change after an unknown outcome (ERR-07)", () => {
+    expect(describeCorrectionFailure({ kind: "network" })).toEqual({
+      lead: "The intent may have been changed.",
+      message: "The server could not be reached. Check your connection and try again.",
+    });
   });
 });

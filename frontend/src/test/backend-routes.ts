@@ -50,3 +50,11 @@ export const getConsoleKbDocumentVersionRoute: FakeRoute = {
   method: "GET",
   path: /^\/v1\/console\/kb-documents\/[^/]+\/versions\/[^/]+$/,
 };
+export const createSuggestionRoute: FakeRoute = {
+  method: "POST",
+  path: /^\/v1\/console\/tickets\/[^/]+\/suggestions$/,
+};
+export const sendReplyRoute: FakeRoute = {
+  method: "POST",
+  path: /^\/v1\/console\/tickets\/[^/]+\/replies$/,
+};

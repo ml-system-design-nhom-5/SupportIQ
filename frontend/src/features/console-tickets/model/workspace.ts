@@ -12,18 +12,25 @@ import type {
 } from "@/features/console-tickets/api/contract-types";
 import { type AnalysisPart, toAnalysisPart } from "@/features/console-tickets/model/analysis";
 import { type DraftPart, toDraftPart } from "@/features/console-tickets/model/draft";
+import { type Intent, toIntent } from "@/features/console-tickets/model/intent";
 import {
   type Order,
   type TicketOrder,
   toOrder,
   toTicketOrder,
 } from "@/features/console-tickets/model/order";
+import {
+  type TicketAction,
+  toTicketActions,
+} from "@/features/console-tickets/model/ticket-actions";
 import { toHandlingMode, toTicketStatus } from "@/features/console-tickets/model/ticket-status";
 
 /** One run of the AI for the ticket. */
 export type Suggestion = {
   readonly suggestionId: string;
   readonly createdAt: string;
+  /** The intent that staff confirmed or chose for this suggestion; absent when they chose none. */
+  readonly intentOverride?: Intent;
   readonly analysis: AnalysisPart;
   readonly draft: DraftPart;
 };
@@ -52,6 +59,8 @@ export type TicketWorkspace = {
   readonly suggestion?: Suggestion;
   /** Present exactly when the ticket is `closed`. */
   readonly reply?: SentReply;
+  /** What the caller may do now; empty for staff on a ticket that is not `open`. */
+  readonly allowedActions: ReadonlySet<TicketAction>;
 };
 
 /**
@@ -69,6 +78,7 @@ export function toTicketWorkspace(workspace: TicketWorkspaceContract): TicketWor
     "created_at",
     "customer",
     "message",
+    "allowed_actions",
   ]);
   return {
     ticketId: workspace.ticket_id,
@@ -84,20 +94,24 @@ export function toTicketWorkspace(workspace: TicketWorkspaceContract): TicketWor
       ? {}
       : { suggestion: toSuggestion(workspace.suggestion) }),
     ...(workspace.reply === undefined ? {} : { reply: toSentReply(workspace.reply) }),
+    allowedActions: toTicketActions(workspace.allowed_actions),
   };
 }
 
 /**
- * Map the current suggestion.
+ * Map a suggestion: the current one of a ticket, or the one that `createSuggestion` started.
  *
  * @param suggestion - A `SuggestionView`.
  * @returns The view model.
  */
-function toSuggestion(suggestion: SuggestionContract): Suggestion {
+export function toSuggestion(suggestion: SuggestionContract): Suggestion {
   requireMembers(suggestion, ["suggestion_id", "created_at", "analysis", "draft"]);
   return {
     suggestionId: suggestion.suggestion_id,
     createdAt: suggestion.created_at,
+    ...(suggestion.intent_override === undefined
+      ? {}
+      : { intentOverride: toIntent(suggestion.intent_override) }),
     analysis: toAnalysisPart(suggestion.analysis),
     draft: toDraftPart(suggestion.draft),
   };

@@ -138,7 +138,11 @@ describe("The workspace without a draft", () => {
       within(getPanel(main, "Choose an intent"))
         .getAllByRole("listitem")
         .map((item) => item.textContent),
-    ).toEqual(["Refund statusConfidence Low · 41%", "Request refund33%", "Track order12%"]);
+    ).toEqual([
+      "Refund statusConfidence Low · 41%Use this intent",
+      "Request refund33%Use this intent",
+      "Track order12%Use this intent",
+    ]);
     expect(getPanel(main, "AI draft")).toHaveTextContent(
       "No draft is created until you choose an intent.",
     );

@@ -55,3 +55,9 @@ export type ConsoleReplyContract = Schemas["ConsoleReplyView"];
 
 /** `KbDocumentVersion`: the body of `getConsoleKbDocumentVersion`. */
 export type KbDocumentVersionContract = Schemas["KbDocumentVersion"];
+
+/** `SendReplyRequest`: the body of `sendReply`, discriminated by `basis`. */
+export type SendReplyRequestContract = Schemas["SendReplyRequest"];
+
+/** `StaffReasonCode`: why staff edited, rejected, or escalated a draft (ADR-0006). */
+export type StaffReasonCodeContract = Schemas["StaffReasonCode"];

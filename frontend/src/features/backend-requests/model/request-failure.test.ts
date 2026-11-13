@@ -22,12 +22,16 @@ describe("toProblemType", () => {
     ["urn:supportiq:problem:login-name-taken", "login_name_taken"],
     ["urn:supportiq:problem:not-ready", "not_ready"],
     ["urn:supportiq:problem:internal-error", "internal_error"],
+    ["urn:supportiq:problem:authority-required", "authority_required"],
+    ["urn:supportiq:problem:invalid-ticket-state", "invalid_ticket_state"],
+    ["urn:supportiq:problem:suggestion-pending", "suggestion_pending"],
+    ["urn:supportiq:problem:suggestion-superseded", "suggestion_superseded"],
   ])("maps %s to %s", (urn, problemType) => {
     expect(toProblemType(urn)).toBe(problemType);
   });
 
   it("maps a problem type that the contract does not list to unknown (CON-22)", () => {
-    expect(toProblemType("urn:supportiq:problem:authority-required")).toBe("unknown");
+    expect(toProblemType("urn:supportiq:problem:a-later-problem")).toBe("unknown");
   });
 });
 
@@ -114,6 +118,10 @@ describe("isRefusedByBackend", () => {
     [{ kind: "problem", status: 403, problemType: "forbidden" }, false],
     [{ kind: "problem", status: 409, problemType: "idempotency_key_reused" }, false],
     [{ kind: "problem", status: 409, problemType: "login_name_taken" }, true],
+    [{ kind: "problem", status: 403, problemType: "authority_required" }, true],
+    [{ kind: "problem", status: 409, problemType: "invalid_ticket_state" }, true],
+    [{ kind: "problem", status: 409, problemType: "suggestion_pending" }, true],
+    [{ kind: "problem", status: 409, problemType: "suggestion_superseded" }, true],
     [{ kind: "problem", status: 500, problemType: "internal_error" }, false],
     [{ kind: "problem", status: 503, problemType: "not_ready" }, false],
     [{ kind: "ingress", status: 429 }, false],

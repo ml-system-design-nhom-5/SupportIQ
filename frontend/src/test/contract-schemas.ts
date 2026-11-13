@@ -85,3 +85,18 @@ export function readEnumValues(schema: string): readonly string[] {
   }
   return values;
 }
+
+/**
+ * Read the `pattern` of a schema.
+ *
+ * @param schema - The text of a schema, from {@link readContractSchema}.
+ * @returns The regular expression, without the YAML quotes.
+ * @throws Error when the schema has no single-quoted `pattern`.
+ */
+export function readPattern(schema: string): string {
+  const match = /^pattern: '(.+)'$/m.exec(schema);
+  if (match?.[1] === undefined) {
+    throw new Error("The schema has no single-quoted pattern.");
+  }
+  return match[1];
+}

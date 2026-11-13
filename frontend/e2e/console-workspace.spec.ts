@@ -4,7 +4,7 @@
  * error, and a role without the console (console UI design). The mock is stateless and answers with
  * the example files, so each flow chooses its examples with the `Prefer` header.
  */
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 import { preferOutcome } from "./support/mock-outcomes.ts";
 import { expectNoAccessibilityViolations } from "./support/page-checks.ts";
@@ -28,6 +28,52 @@ async function prepareConsole(
   await preferOutcome(page, listTicketsRequest, examples.queue ?? "example=open-queue");
   await preferOutcome(page, getTicketRequest, examples.ticket ?? "example=draft-ready");
   await createSessionCookie(page);
+}
+
+/**
+ * Replace members of the ticket's order and of its shipment in a `TicketWorkspace` body.
+ *
+ * @param workspace - The body of an example.
+ * @param order - The members of `order` to replace.
+ * @param shipment - The members of `order.shipment` to replace.
+ * @returns The body with the replaced members.
+ */
+function withOrder(
+  workspace: unknown,
+  order: Readonly<Record<string, unknown>>,
+  shipment: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> {
+  const ticketOrder = isRecord(workspace) ? workspace["order"] : undefined;
+  const ticketShipment = isRecord(ticketOrder) ? ticketOrder["shipment"] : undefined;
+  if (!isRecord(workspace) || !isRecord(ticketOrder) || !isRecord(ticketShipment)) {
+    throw new Error("The example has no order with a shipment.");
+  }
+  return {
+    ...workspace,
+    order: { ...ticketOrder, ...order, shipment: { ...ticketShipment, ...shipment } },
+  };
+}
+
+/**
+ * Tell whether a value is a JSON object.
+ *
+ * @param value - A parsed JSON value.
+ * @returns True for an object that is not an array.
+ */
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Tell whether any of the elements cuts its text off.
+ *
+ * @param elements - The elements.
+ * @returns True when one of them is narrower than its text.
+ */
+function isCutOff(elements: Locator): Promise<boolean> {
+  return elements.evaluateAll((all) =>
+    all.some((element) => element.scrollWidth > element.clientWidth),
+  );
 }
 
 test("staff open a ticket from the inbox and check its draft against its sources", async ({
@@ -71,6 +117,34 @@ test("staff open a ticket from the inbox and check its draft against its sources
   const orders = page.getByRole("dialog", { name: "Orders of this customer" });
   await expect(orders).toContainText("From order records, not AI");
   await expectNoAccessibilityViolations(page);
+});
+
+test("the order chip keeps every status at 1280 px; the customer and the time shrink first", async ({
+  page,
+}) => {
+  await prepareConsole(page);
+  // The draft-ready example with the longest summary: shipped, in transit, refund under review.
+  await page.route("**/v1/console/tickets/TCK-1042", async (route) => {
+    const response = await route.fetch({
+      headers: { ...route.request().headers(), prefer: "example=draft-ready" },
+    });
+    const workspace: unknown = await response.json();
+    await route.fulfill({
+      response,
+      json: withOrder(workspace, { order_status: "shipped" }, { shipment_status: "in_transit" }),
+    });
+  });
+  await page.goto("/console/tickets/TCK-1042");
+
+  const chip = page.getByRole("button", {
+    name: /^ORD-20931 Shipped · In transit · Refund under review \+1 order$/,
+  });
+  await expect(chip).toBeVisible();
+  expect(await isCutOff(chip.locator("span"))).toBe(false);
+  const customerAndTime = page.getByRole("main").locator("p", { hasText: "Customer:" });
+  await expect(customerAndTime).toContainText("Lan Tran");
+  await expect(customerAndTime).toContainText("Received");
+  expect(await isCutOff(customerAndTime.locator(":scope > span"))).toBe(true);
 });
 
 test("a ticket whose AI failed is handled manually, with the reminder", async ({ page }) => {

@@ -1,62 +1,168 @@
 /**
- * The reply area of the workspace in its state (console UI design, States). The editor and the
- * action bar come with the reply actions.
+ * The reply area of the workspace in its state (console UI design, States and Actions): the panel
+ * of the state, with the editor when staff may write and the action bar at its bottom (UI-16).
+ * Send reply opens the confirmation, which the workspace shows (UI-17).
  */
-import { assertNever } from "@/features/backend-requests";
-import { CitedDraft, type MarkerContext } from "@/features/console-tickets/components/cited-draft";
-import { DraftPanel } from "@/features/console-tickets/components/draft-panel";
+import { RotateCcw } from "lucide-react";
+
+import { Button, PanelSection, StatusBanner } from "@/design-system";
+import { assertNever, describeFailure, type RequestFailure } from "@/features/backend-requests";
+import type { SuggestionRequests } from "@/features/console-tickets/api/use-create-suggestion";
+import { DraftModeActions } from "@/features/console-tickets/components/draft-mode-actions";
+import {
+  type DraftContext,
+  DraftReplyPanel,
+} from "@/features/console-tickets/components/draft-reply-panel";
 import { ManualHandlingPanel } from "@/features/console-tickets/components/manual-handling-panel";
 import { NoDraftPanel } from "@/features/console-tickets/components/no-draft-panel";
 import { PendingDraftPanel } from "@/features/console-tickets/components/pending-draft-panel";
+import { ReplyActionBar } from "@/features/console-tickets/components/reply-action-bar";
+import { ReplyEditorSection } from "@/features/console-tickets/components/reply-editor-section";
 import { SentReplyPanel } from "@/features/console-tickets/components/sent-reply-panel";
+import type { ReplyComposer } from "@/features/console-tickets/components/use-reply-composer";
 import { describeAiUnavailable } from "@/features/console-tickets/model/manual-handling";
-import type { SuggestionWarning } from "@/features/console-tickets/model/reason-codes";
 import type { ReplyAreaState } from "@/features/console-tickets/model/workspace-state";
+
+/** What the reply area needs of the requests to the AI: Try AI again and the outdated draft. */
+export type AiRequests = Pick<
+  SuggestionRequests,
+  "retry" | "isSending" | "retryFailure" | "outdatedDraft"
+> & {
+  /** True when `backend` allows Try AI again (`retry_suggestion`). */
+  readonly canRetry: boolean;
+};
 
 /** Props of {@link ReplyArea}. */
 type ReplyAreaProps = {
   readonly state: ReplyAreaState;
-  /** What a draft needs: its warnings, its time, its citation numbers, and its markers. */
-  readonly draftContext: MarkerContext & {
-    readonly warnings: readonly SuggestionWarning[];
-    readonly generatedAt: string;
-    readonly numberByKey: ReadonlyMap<string, number>;
-  };
+  readonly draftContext: DraftContext;
+  readonly composer: ReplyComposer;
+  readonly aiRequests: AiRequests;
 };
 
 /**
  * Render the reply area.
  *
- * @param props - The state and what a draft needs.
+ * @param props - The state, what a draft needs, the composer, and the requests to the AI.
  * @returns The panel of the state.
  */
-export function ReplyArea({ state, draftContext }: ReplyAreaProps) {
+export function ReplyArea({ state, draftContext, composer, aiRequests }: ReplyAreaProps) {
   switch (state.kind) {
     case "sent":
       return <SentReplyPanel reply={state.reply} />;
     case "manual_mode":
-      return <ManualHandlingPanel aiStatus="manual" />;
+      return (
+        <ManualHandlingPanel aiStatus="manual">
+          <WritingTools composer={composer} />
+        </ManualHandlingPanel>
+      );
     case "ai_unavailable":
       return (
         <ManualHandlingPanel
           aiStatus="unavailable"
           reason={describeAiUnavailable(state.reasonCode)}
-        />
+        >
+          <WritingTools composer={composer} aiRequests={aiRequests} />
+        </ManualHandlingPanel>
       );
     case "pending":
-      return <PendingDraftPanel />;
-    case "draft": {
-      const { warnings, generatedAt, ...citedDraftContext } = draftContext;
       return (
-        <DraftPanel warnings={warnings} generatedAt={generatedAt}>
-          <CitedDraft draft={state.draft} {...citedDraftContext} />
-        </DraftPanel>
+        <PendingDraftPanel
+          outdatedDraft={aiRequests.outdatedDraft}
+          markerContext={draftContext.citations}
+        >
+          <ReplyActionBar composer={composer} actions={<UnavailableDraftActions />} />
+        </PendingDraftPanel>
       );
-    }
+    case "draft":
+      return <DraftReplyPanel composer={composer} draft={state.draft} context={draftContext} />;
     case "choose_intent":
+      return (
+        <NoDraftPanel outcome={state}>
+          <ReplyActionBar composer={composer} actions={<UnavailableDraftActions />} />
+        </NoDraftPanel>
+      );
     case "no_draft":
-      return <NoDraftPanel outcome={state} />;
+      return (
+        <NoDraftPanel outcome={state}>
+          <WritingTools composer={composer} />
+        </NoDraftPanel>
+      );
     default:
       assertNever(state);
   }
+}
+
+/**
+ * Render the editor and the action bar of a reply without a draft. After an AI failure, Try AI
+ * again sits on the left when `backend` allows it (UI-26).
+ *
+ * @param props - The composer, and the requests to the AI after a failure.
+ * @returns The editor, the failure of the last retry, and the action bar.
+ */
+function WritingTools({
+  composer,
+  aiRequests,
+}: {
+  readonly composer: ReplyComposer;
+  readonly aiRequests?: AiRequests;
+}) {
+  return (
+    <>
+      <ReplyEditorSection
+        value={composer.state.body}
+        onChange={(body) => {
+          composer.change((current) => ({ ...current, body }));
+        }}
+      />
+      {aiRequests?.retryFailure === undefined ? null : (
+        <RetryFailureBanner failure={aiRequests.retryFailure} />
+      )}
+      <ReplyActionBar
+        composer={composer}
+        actions={
+          aiRequests?.canRetry === true ? (
+            <Button
+              leadingIcon={RotateCcw}
+              isPending={aiRequests.isSending}
+              onClick={aiRequests.retry}
+            >
+              Try AI again
+            </Button>
+          ) : null
+        }
+      />
+    </>
+  );
+}
+
+/**
+ * Render Edit draft and Reject draft, disabled, while no draft is ready: the AI still works, or
+ * staff choose an intent first.
+ *
+ * @returns The disabled buttons.
+ */
+function UnavailableDraftActions() {
+  return <DraftModeActions mode="viewing" canChange={false} />;
+}
+
+/**
+ * Say that Try AI again failed (UI-25).
+ *
+ * @param props - The failure of the retry.
+ * @returns The banner, announced as an alert.
+ */
+function RetryFailureBanner({ failure }: { readonly failure: RequestFailure }) {
+  const { message, traceId } = describeFailure(failure);
+  return (
+    <PanelSection>
+      <StatusBanner
+        tone="danger"
+        lead="The AI did not start again."
+        {...(traceId === undefined ? {} : { traceId })}
+      >
+        {message}
+      </StatusBanner>
+    </PanelSection>
+  );
 }

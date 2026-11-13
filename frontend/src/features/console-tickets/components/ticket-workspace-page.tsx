@@ -30,6 +30,7 @@ export function TicketWorkspacePage({ ticketId }: TicketWorkspacePageProps) {
   if (workspaceQuery.data !== undefined) {
     return (
       <TicketWorkspaceView
+        ticketId={ticketId}
         workspace={workspaceQuery.data}
         {...(view.failure === undefined ? {} : { viewFailure: view.failure })}
         {...(workspaceQuery.isRefetchError && failure !== undefined

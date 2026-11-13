@@ -2,14 +2,21 @@
  * The text of an AI draft with its citation markers (console UI design, Draft editing and
  * citations; UI-20): after each segment, its KB markers in the `ai` tone, then one neutral order
  * marker when the segment states order facts. A KB marker opens its document version; the order
- * marker opens the order chip popover.
+ * marker opens the order chip popover. AI text is shown exactly as `backend` returns it; a
+ * placeholder in it is highlighted and named under the draft (UI-43).
  */
+import { Info } from "lucide-react";
+
 import {
   CitationMarker,
   type CitationSource,
   DraftText,
+  type DraftTextTone,
+  InlineMessage,
+  MarkedText,
   OrderCitationMarker,
   presentationByDocumentValidity,
+  Stack,
 } from "@/design-system";
 import type { ReadyDraft } from "@/features/console-tickets/model/draft";
 import {
@@ -17,6 +24,11 @@ import {
   type DraftViewSegment,
   type KbMarker,
 } from "@/features/console-tickets/model/draft-view";
+import {
+  hasPlaceholder,
+  PLACEHOLDER_LABEL,
+  splitPlaceholders,
+} from "@/features/console-tickets/model/placeholders";
 import {
   type Source,
   type SourceSelection,
@@ -33,30 +45,49 @@ export type MarkerContext = {
   readonly onOpenOrder: (opener: HTMLElement) => void;
 };
 
-/** Props of {@link CitedDraft}. */
-type CitedDraftProps = MarkerContext & {
-  readonly draft: ReadyDraft;
+/** What the citations of a draft need: the number of each cited document version and the markers. */
+export type CitationContext = MarkerContext & {
   readonly numberByKey: ReadonlyMap<string, number>;
+};
+
+/** Props of {@link CitedDraft}. */
+type CitedDraftProps = CitationContext & {
+  readonly draft: ReadyDraft;
+  /** `muted` for a rejected or an outdated draft. */
+  readonly tone?: DraftTextTone;
 };
 
 /**
  * Render the draft with its markers.
  *
- * @param props - The draft, the citation numbers, and what the markers need.
- * @returns The draft text.
+ * @param props - The draft, the citation numbers, the tone, and what the markers need.
+ * @returns The draft text and, when it holds a placeholder, the line that names it.
  */
-export function CitedDraft({ draft, numberByKey, ...markerContext }: CitedDraftProps) {
+export function CitedDraft({
+  draft,
+  numberByKey,
+  tone = "default",
+  ...markerContext
+}: CitedDraftProps) {
   return (
-    <DraftText
-      paragraphs={buildDraftParagraphs(draft, numberByKey).map((paragraph) => ({
-        paragraphId: paragraph.paragraphId,
-        segments: paragraph.segments.map((segment) => ({
-          segmentId: segment.segmentId,
-          text: segment.text,
-          markers: <SegmentMarkers segment={segment} context={markerContext} />,
-        })),
-      }))}
-    />
+    <Stack gap="3">
+      <DraftText
+        tone={tone}
+        paragraphs={buildDraftParagraphs(draft, numberByKey).map((paragraph) => ({
+          paragraphId: paragraph.paragraphId,
+          segments: paragraph.segments.map((segment) => ({
+            segmentId: segment.segmentId,
+            text: <MarkedText parts={splitPlaceholders(segment.text)} />,
+            markers: <SegmentMarkers segment={segment} context={markerContext} />,
+          })),
+        }))}
+      />
+      {hasPlaceholder(draft.text) ? (
+        <InlineMessage tone="muted" icon={Info}>
+          {`${PLACEHOLDER_LABEL}.`}
+        </InlineMessage>
+      ) : null}
+    </Stack>
   );
 }
 

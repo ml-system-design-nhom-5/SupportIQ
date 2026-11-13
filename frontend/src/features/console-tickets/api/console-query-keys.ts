@@ -12,4 +12,9 @@ export const consoleQueryKeys = {
   workspace: (ticketId: string) => [...consoleQueryKeys.all, "workspaces", ticketId] as const,
   kbDocumentVersion: (documentId: string, version: string) =>
     [...consoleQueryKeys.all, "kb-document-versions", documentId, version] as const,
+  /**
+   * The mutation of Send reply. It is not an idempotent write of the composition root, so it never
+   * retries (TS-29).
+   */
+  sendReply: (ticketId: string) => [...consoleQueryKeys.all, "send-reply", ticketId] as const,
 };

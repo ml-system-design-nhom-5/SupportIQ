@@ -2,14 +2,15 @@
  * A panel on the page background: the card of the shop and admin designs, with the `surface`
  * role, a border, the large radius, and the first elevation level (UI-09). A console panel is
  * `compact`, and one that holds AI output has the `ai` tone, a border tinted with the `ai` role
- * (console UI design, mockups).
+ * (console UI design, mockups). It clips its content to its rounded border without becoming a
+ * scroll container, so a sticky child, such as an action bar, sticks to the scrolling column.
  */
 import { cva } from "class-variance-authority";
 import type { ReactNode } from "react";
 
 import { type PanelDensity, PanelDensityContext } from "@/design-system/primitives/panel-density";
 
-const panelVariants = cva("flex flex-col overflow-hidden rounded-lg border bg-surface shadow-sm", {
+const panelVariants = cva("flex flex-col overflow-clip rounded-lg border bg-surface shadow-sm", {
   variants: { tone: { default: "border-border", ai: "border-ai/35" } },
 });
 

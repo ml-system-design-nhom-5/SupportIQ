@@ -4,11 +4,13 @@
  * example that no example covers yet, such as an analysis that is ready while the draft is pending.
  */
 import {
+  createSuggestionRoute,
   getConsoleKbDocumentVersionRoute,
   getConsoleTicketRoute,
   getCurrentSessionRoute,
   listConsoleTicketsRoute,
   recordTicketViewRoute,
+  sendReplyRoute,
 } from "@/test/backend-routes";
 import { readExample } from "@/test/contract-examples";
 import {
@@ -31,6 +33,10 @@ export type ConsoleAnswers = {
   readonly view?: readonly FakeAnswer[];
   readonly workspace?: readonly FakeAnswer[];
   readonly kbDocument?: readonly FakeAnswer[];
+  /** The answers of `createSuggestion`; the `intent-override` example by default. */
+  readonly suggestion?: readonly FakeAnswer[];
+  /** The answers of `sendReply`; the `from-ai-draft` example by default. */
+  readonly reply?: readonly FakeAnswer[];
   readonly settings?: typeof testSettings;
 };
 
@@ -90,28 +96,39 @@ export function workspaceWith(
  *
  * @param backend - The fake backend.
  * @param answers - The answers that differ from the defaults: a staff session, the open queue, a
- *   recorded view, the draft-ready workspace, and the sample KB document version.
+ *   recorded view, the draft-ready workspace, the sample KB document version, a pending suggestion
+ *   after an intent override, and a sent reply.
  */
 export function answerConsole(backend: FakeBackend, answers: ConsoleAnswers = {}): void {
+  const { session, ...writtenAnswers } = answers;
+  const all = { ...readDefaultAnswers(), ...writtenAnswers };
   backend.answer(
     getCurrentSessionRoute,
-    exampleAnswer(200, "getCurrentSession", answers.session ?? "staff"),
+    exampleAnswer(200, "getCurrentSession", session ?? "staff"),
   );
-  backend.answer(
-    listConsoleTicketsRoute,
-    ...(answers.queue ?? [exampleAnswer(200, "listConsoleTickets", "open-queue")]),
-  );
-  backend.answer(recordTicketViewRoute, ...(answers.view ?? [noContentAnswer]));
-  backend.answer(
-    getConsoleTicketRoute,
-    ...(answers.workspace ?? [workspaceExample("draft-ready")]),
-  );
-  backend.answer(
-    getConsoleKbDocumentVersionRoute,
-    ...(answers.kbDocument ?? [
-      exampleAnswer(200, "getConsoleKbDocumentVersion", "document-version"),
-    ]),
-  );
+  backend.answer(listConsoleTicketsRoute, ...all.queue);
+  backend.answer(recordTicketViewRoute, ...all.view);
+  backend.answer(getConsoleTicketRoute, ...all.workspace);
+  backend.answer(getConsoleKbDocumentVersionRoute, ...all.kbDocument);
+  backend.answer(createSuggestionRoute, ...all.suggestion);
+  backend.answer(sendReplyRoute, ...all.reply);
+}
+
+/**
+ * List the default answers of the console.
+ *
+ * @returns The open queue, a recorded view, the draft-ready workspace, the sample KB document
+ *   version, a pending suggestion after an intent override, and a sent reply.
+ */
+function readDefaultAnswers() {
+  return {
+    queue: [exampleAnswer(200, "listConsoleTickets", "open-queue")],
+    view: [noContentAnswer],
+    workspace: [workspaceExample("draft-ready")],
+    kbDocument: [exampleAnswer(200, "getConsoleKbDocumentVersion", "document-version")],
+    suggestion: [exampleAnswer(202, "createSuggestion", "intent-override")],
+    reply: [exampleAnswer(201, "sendReply", "from-ai-draft")],
+  } satisfies Required<Omit<ConsoleAnswers, "session" | "settings">>;
 }
 
 /**
@@ -176,4 +193,19 @@ export function readSuggestionPart(
     throw new Error(`contracts/examples/getConsoleTicket/${name}.json has no ${part}.`);
   }
   return Object.fromEntries(Object.entries(value));
+}
+
+/**
+ * Read the canonical `text` of the ready draft of a workspace example, which Send reply sends as
+ * is.
+ *
+ * @param name - The example of `getConsoleTicket`.
+ * @returns The text.
+ */
+export function readDraftText(name: string): string {
+  const text = readSuggestionPart(name, "draft")["text"];
+  if (typeof text !== "string") {
+    throw new Error(`contracts/examples/getConsoleTicket/${name}.json has no draft text.`);
+  }
+  return text;
 }

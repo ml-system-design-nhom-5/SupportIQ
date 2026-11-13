@@ -23,3 +23,13 @@ describe("consoleQueryKeys", () => {
     ]);
   });
 });
+
+describe("consoleQueryKeys.sendReply", () => {
+  it("is a mutation key outside the idempotent writes, so Send reply never retries (TS-29)", () => {
+    expect(consoleQueryKeys.sendReply("TCK-1042")).toEqual([
+      "console-tickets",
+      "send-reply",
+      "TCK-1042",
+    ]);
+  });
+});

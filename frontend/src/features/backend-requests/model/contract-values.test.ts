@@ -2,10 +2,20 @@ import { describe, expect, it } from "vitest";
 
 import {
   countContractCharacters,
+  MESSAGE_MAX_LENGTH,
   requireMembers,
   toMoney,
 } from "@/features/backend-requests/model/contract-values";
 import { readOperationExample } from "@/test/contract-examples";
+import { readContractSchema } from "@/test/contract-schemas";
+
+describe("MESSAGE_MAX_LENGTH", () => {
+  it("is the maxLength of MessageText in the contract", () => {
+    expect(readContractSchema("MessageText")).toContain(
+      `maxLength: ${String(MESSAGE_MAX_LENGTH)}\n`,
+    );
+  });
+});
 
 describe("requireMembers", () => {
   it("accepts members with a falsy value, which are present", () => {

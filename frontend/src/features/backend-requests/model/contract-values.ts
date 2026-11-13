@@ -4,6 +4,15 @@
  */
 import type { Money } from "@/design-system";
 
+/**
+ * The `maxLength` of `MessageText` (contracts/schemas/MessageText.yaml). The rule of `MessageText`
+ * in the contract: from 1 to 2 000 characters, counted in Unicode code points as JSON Schema counts
+ * string length ({@link countContractCharacters}). frontend checks it before sending as a
+ * convenience; `backend` enforces it with `422` (shop UI design, Components and responsibilities;
+ * console UI design, Actions).
+ */
+export const MESSAGE_MAX_LENGTH = 2000;
+
 /** The shape of the contract's shared `Money` schema (CON-16). */
 export type MoneyContract = {
   readonly amount_minor: number;

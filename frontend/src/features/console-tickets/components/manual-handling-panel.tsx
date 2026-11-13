@@ -4,6 +4,7 @@
  * manager. Every non-AI tool keeps working.
  */
 import { User } from "lucide-react";
+import type { ReactNode } from "react";
 
 import {
   type AiStatusName,
@@ -27,15 +28,17 @@ type ManualHandlingPanelProps = {
   readonly aiStatus: Extract<AiStatusName, "unavailable" | "manual">;
   /** Why the AI did not help, after an AI failure. */
   readonly reason?: string;
+  /** The editor and the action bar of the reply. */
+  readonly children?: ReactNode;
 };
 
 /**
  * Render the manual-handling panel.
  *
- * @param props - The AI status and the reason.
+ * @param props - The AI status, the reason, and the editor with the action bar.
  * @returns The panel.
  */
-export function ManualHandlingPanel({ aiStatus, reason }: ManualHandlingPanelProps) {
+export function ManualHandlingPanel({ aiStatus, reason, children }: ManualHandlingPanelProps) {
   return (
     <Panel density="compact" as="section" label="Manual handling">
       <PanelHeader
@@ -51,6 +54,7 @@ export function ManualHandlingPanel({ aiStatus, reason }: ManualHandlingPanelPro
           {MANUAL_REMINDER_TEXT}
         </StatusBanner>
       </PanelSection>
+      {children}
     </Panel>
   );
 }
