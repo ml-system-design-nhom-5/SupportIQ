@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
+from apps.backend.tickets.privacy import pseudonymize
 from pipeline.evaluation.classifier_acceptance_gate import (
     ESCALATED_34_INTENTS,
     STANDARD_INTENTS_46,
@@ -31,7 +32,7 @@ from pipeline.training.train_boundary_candidate import (
     validate_boundary_split_taxonomy,
 )
 
-EXTENSION_VERSION = "orig_fit2_return_channel_contrast_v1"
+EXTENSION_VERSION = "orig_fit2_return_channel_contrast_v2"
 KB_VERSION = "approved_kb.v2.json"
 POLICY_VERSION = "intent_policy.v2.json"
 KB_RATIONALE = (
@@ -128,13 +129,13 @@ ORIG_FIT2_RETURN_CONTRAST_ROWS: Tuple[ReturnContrastRowSpec, ...] = (
         policy_source="POL-RET-002_vs_physical_store",
         text="Do you operate local brick-and-mortar storefronts where buyers can turn in unwanted orders?",
     ),
-    # Group 2: Packaging, media evidence & change-of-mind freight vs walk-in store counter
+    # Group 2: Packaging, media evidence & condition eligibility vs walk-in store counter
     ReturnContrastRowSpec(
         sample_id="orig_ret_ch_g02_rp_00",
         group_id="orig_ret_ch_g02",
         intent="return_policy",
         policy_source="POL-RET-001",
-        text="Must original promotional gifts and factory seals stay unbroken to qualify for a return refund?",
+        text="Must original promotional gifts and factory seals stay unbroken to qualify for a return or exchange?",
     ),
     ReturnContrastRowSpec(
         sample_id="orig_ret_ch_g02_rp_01",
@@ -147,8 +148,8 @@ ORIG_FIT2_RETURN_CONTRAST_ROWS: Tuple[ReturnContrastRowSpec, ...] = (
         sample_id="orig_ret_ch_g02_rp_02",
         group_id="orig_ret_ch_g02",
         intent="return_policy",
-        policy_source="POL-RET-002",
-        text="Who covers return freight when a buyer sends back an item strictly for change of mind?",
+        policy_source="POL-RET-001",
+        text="Must a returned product stay unwashed and unused with its original boxes, accessories, and invoices included?",
     ),
     ReturnContrastRowSpec(
         sample_id="orig_ret_ch_g02_ris_00",
@@ -177,7 +178,7 @@ ORIG_FIT2_RETURN_CONTRAST_ROWS: Tuple[ReturnContrastRowSpec, ...] = (
         group_id="orig_ret_ch_g03",
         intent="return_policy",
         policy_source="POL-RET-003",
-        text="When do restricted intimate wear or custom-made goods qualify for return despite final-sale rules?",
+        text="When do restricted swimwear or non-returnable clearance outlet items still qualify for a return or exchange?",
     ),
     ReturnContrastRowSpec(
         sample_id="orig_ret_ch_g03_ris_00",
@@ -193,13 +194,13 @@ ORIG_FIT2_RETURN_CONTRAST_ROWS: Tuple[ReturnContrastRowSpec, ...] = (
         policy_source="POL-RET-002_vs_physical_store",
         text="Are any brick-and-mortar outlet counters authorized to inspect and take back web purchases on site?",
     ),
-    # Group 4: Refund timing & partner post office workflow vs physical branch receipt
+    # Group 4: Order Management status, pickup window & partner post office vs physical branch receipt
     ReturnContrastRowSpec(
         sample_id="orig_ret_ch_g04_rp_00",
         group_id="orig_ret_ch_g04",
         intent="return_policy",
         policy_source="POL-RET-002",
-        text="How long after parcel inspection at the warehouse does Tiki issue a refund for an approved return?",
+        text="Which order status enables Request Return/Exchange in Order Management, and within how many business days does courier pickup occur?",
     ),
     ReturnContrastRowSpec(
         sample_id="orig_ret_ch_g04_rp_01",
@@ -483,27 +484,54 @@ def audit_extension_isolation(
     suites["baseline_cal_all"] = [(str(r.get("sample_id")), _extract_row_text(r)) for r in baseline_cal_rows]
     suites["baseline_eval_all"] = [(str(r.get("sample_id")), _extract_row_text(r)) for r in baseline_eval_rows]
 
-    ext_tokens = [
-        (str(r["sample_id"]), r["text"], _token_set(r["text"]), _normalize_text(r["text"]))
-        for r in extension_rows
-    ]
+    ext_tokens = []
+    pseudonymize_changed_rows: List[str] = []
+    for r in extension_rows:
+        raw_txt = str(r["text"])
+        priv_txt, _ = pseudonymize(raw_txt, {})
+        if priv_txt != raw_txt:
+            pseudonymize_changed_rows.append(str(r["sample_id"]))
+        ext_tokens.append(
+            (
+                str(r["sample_id"]),
+                raw_txt,
+                _token_set(raw_txt),
+                _normalize_text(raw_txt),
+                priv_txt,
+                _token_set(priv_txt),
+                _normalize_text(priv_txt),
+            )
+        )
+
     suite_reports: Dict[str, Any] = {}
     overall_max_jaccard = 0.0
     overall_max_f1 = 0.0
+    overall_post_privacy_max_jaccard = 0.0
+    overall_post_privacy_max_f1 = 0.0
 
     for suite_name, entries in suites.items():
         exact_hits = 0
+        post_privacy_exact_hits = 0
         max_jac = 0.0
         max_f1 = 0.0
+        priv_max_jac = 0.0
+        priv_max_f1 = 0.0
         top_pair: Dict[str, Any] | None = None
         for cid, ctxt in entries:
             cnorm = _normalize_text(ctxt)
             ctoks = _token_set(ctxt)
-            for ext_id, eraw, etoks, enorm in ext_tokens:
+            cpriv, _ = pseudonymize(ctxt, {})
+            cpriv_norm = _normalize_text(cpriv)
+            cpriv_toks = _token_set(cpriv)
+            for ext_id, eraw, etoks, enorm, epriv, epriv_toks, epriv_norm in ext_tokens:
                 if enorm == cnorm:
                     exact_hits += 1
+                if epriv_norm == cpriv_norm:
+                    post_privacy_exact_hits += 1
                 jac = _jaccard(etoks, ctoks) if (etoks and ctoks) else 0.0
                 f1 = _token_f1(eraw, ctxt) if (etoks and ctoks) else 0.0
+                pjac = _jaccard(epriv_toks, cpriv_toks) if (epriv_toks and cpriv_toks) else 0.0
+                pf1 = _token_f1(epriv, cpriv) if (epriv_toks and cpriv_toks) else 0.0
                 if jac > max_jac or f1 > max_f1:
                     if f1 >= max_f1:
                         max_f1 = f1
@@ -515,18 +543,35 @@ def audit_extension_isolation(
                         "jaccard": round(jac, 4),
                         "token_f1": round(f1, 4),
                     }
+                priv_max_jac = max(priv_max_jac, pjac)
+                priv_max_f1 = max(priv_max_f1, pf1)
         overall_max_jaccard = max(overall_max_jaccard, max_jac)
         overall_max_f1 = max(overall_max_f1, max_f1)
-        if exact_hits > 0 or max_jac >= max_allowed_jaccard or max_f1 >= max_allowed_token_f1:
+        overall_post_privacy_max_jaccard = max(overall_post_privacy_max_jaccard, priv_max_jac)
+        overall_post_privacy_max_f1 = max(overall_post_privacy_max_f1, priv_max_f1)
+        if (
+            exact_hits > 0
+            or post_privacy_exact_hits > 0
+            or max_jac >= max_allowed_jaccard
+            or max_f1 >= max_allowed_token_f1
+            or priv_max_jac >= max_allowed_jaccard
+            or priv_max_f1 >= max_allowed_token_f1
+        ):
             raise ValueError(
                 f"Benchmark/holdout contamination or near-duplicate detected in {suite_name}: "
-                f"exact={exact_hits}, max_jaccard={max_jac:.4f}, max_token_f1={max_f1:.4f}, top_pair={top_pair}"
+                f"exact={exact_hits}, post_privacy_exact={post_privacy_exact_hits}, "
+                f"max_jaccard={max_jac:.4f}, max_token_f1={max_f1:.4f}, "
+                f"post_privacy_max_jaccard={priv_max_jac:.4f}, post_privacy_max_token_f1={priv_max_f1:.4f}, "
+                f"top_pair={top_pair}"
             )
         suite_reports[suite_name] = {
             "reference_rows": len(entries),
             "exact_norm_overlap": exact_hits,
+            "post_privacy_exact_norm_overlap": post_privacy_exact_hits,
             "max_jaccard": round(max_jac, 4),
             "max_token_f1": round(max_f1, 4),
+            "post_privacy_max_jaccard": round(priv_max_jac, 4),
+            "post_privacy_max_token_f1": round(priv_max_f1, 4),
             "closest_pair": top_pair,
         }
 
@@ -534,10 +579,13 @@ def audit_extension_isolation(
         "isolation_passed": True,
         "extension_rows_count": len(extension_rows),
         "extension_groups": sorted(ext_groups),
+        "pseudonymize_changed_extension_rows": pseudonymize_changed_rows,
         "prior_split_overlaps": split_overlap_summary,
         "extension_gate_split_isolation": extension_gate_audit,
         "max_jaccard_across_all_frozen_suites": round(overall_max_jaccard, 4),
         "max_token_f1_across_all_frozen_suites": round(overall_max_f1, 4),
+        "post_privacy_max_jaccard_across_all_frozen_suites": round(overall_post_privacy_max_jaccard, 4),
+        "post_privacy_max_token_f1_across_all_frozen_suites": round(overall_post_privacy_max_f1, 4),
         "thresholds": {
             "max_allowed_jaccard": max_allowed_jaccard,
             "max_allowed_token_f1": max_allowed_token_f1,

@@ -41,7 +41,7 @@ from scripts.run_boundary_contrast_fit import (
     verify_fit2_starting_checkpoint,
 )
 
-DEFAULT_PREP_RUN_ID = "fit2-orig-ret-channel-v1"
+DEFAULT_PREP_RUN_ID = "fit2-orig-ret-channel-v2"
 DEFAULT_PLANNED_FIT_RUN_ID = "fit2-orig-ret-channel-fit-v1"
 LOCAL_ORIG_CONTRAST_ROOT = Path(__file__).resolve().parents[1] / "artifacts/evaluation/fit2_orig_ret_channel_20261114"
 FIT1_CHECKPOINT_REL = "artifacts/models/candidates/reconstructed-closure-fit1-20261113"
@@ -50,6 +50,7 @@ ORIG_FAITHFUL_RECORDS_REL = "artifacts/models/candidates/run-records-faithful-fi
 
 RELEVANT_SOURCE_PATHS: Tuple[str, ...] = (
     "scripts/run_orig_fit2_return_contrast_prep.py",
+    "scripts/run_orig_fit2_return_contrast_fit.py",
     "scripts/run_boundary_contrast_fit.py",
     "pipeline/training/orig_fit2_return_contrast_data.py",
     "pipeline/training/train_boundary_candidate.py",
@@ -175,62 +176,54 @@ def run_orig_fit2_preflight(repo_root: Path, dryrun_root: Path) -> Dict[str, Any
     }
 
 
-def _build_hyperparameter_reconciliation(
+def _build_planned_option_a_plan(
     *,
     prep_records_dir: Path,
     planned_fit_run_id: str,
     planned_future_paths: Dict[str, str],
 ) -> Dict[str, Any]:
-    """Document original vs continuation options without silently selecting fit hyperparams."""
-    def _cmd(epochs: int, lr: str) -> list[str]:
-        work_root = planned_future_paths["local_dir"]
-        py_body = (
-            "import shutil; from pathlib import Path; "
-            "from pipeline.training.train_boundary_candidate import run_fit_and_lock_candidate; "
-            f"prep = Path(r'{prep_records_dir}'); "
-            f"work = Path(r'{work_root}'); "
-            "shutil.copytree(prep / 'datasets', work / 'datasets', dirs_exist_ok=False); "
-            "run_fit_and_lock_candidate("
-            "worktree_root=Path('.').resolve(), "
-            "data_repo_root=Path('.').resolve(), "
-            "init_model_dir=Path('artifacts/models/candidates/reconstructed-fit2-supcon-20261113'), "
-            "artifact_root=work, "
-            "fit_mode='fit2_supcon_energy', "
-            f"epochs={epochs}, batch_size=32, lr={lr}, seed=42, "
-            "enable_selective_rejector=False, "
-            f"candidate_name='{planned_fit_run_id}')"
-        )
-        return [".venv/Scripts/python.exe", "-c", py_body]
-
+    """Document the sole authorized Option A runner CLI, locked hyperparameters, and causal caveat."""
+    planned_cli = [
+        ".venv/Scripts/python.exe",
+        "-m",
+        "scripts.run_orig_fit2_return_contrast_fit",
+        "--prep-dir",
+        str(prep_records_dir),
+        "--run-id",
+        planned_fit_run_id,
+        "--epochs",
+        "3",
+        "--lr",
+        "2e-5",
+        "--batch-size",
+        "32",
+        "--seed",
+        "42",
+        "--fit-mode",
+        "fit2_supcon_energy",
+        "--run-option-a-fit",
+    ]
     return {
-        "selected_by_worker_a": None,
-        "signoff_required_before_fit": True,
-        "causal_control_caveat": (
-            "Original Fit2 (f695b1fe...) was trained from Fit1 (95a940b6...) for epochs=3, lr=2e-5. "
-            "Any warm-start continuation run initialized from converged Fit2 adds extra gradient epochs "
-            "and additional full-dataset passes on top of f695b1fe..., so direct comparison against "
-            "untouched Original Fit2 is NOT a perfectly matched causal control (it conflates the 18-row "
-            "return-channel TRAIN contrast delta with extra continuation optimization steps). A matched "
-            "causal control would require two fits from Fit1 (not authorized here)."
-        ),
-        "options": {
-            "option_a_original_fit2_hyperparams": {
-                "epochs": 3,
-                "lr": 2e-5,
-                "rationale": "Exact match to Original Fit2 Stage-2 Fit1->Fit2 hyperparameters (epochs=3, lr=2e-5).",
-                "risk": "Higher total continuation step budget when warm-starting from already-converged Fit2.",
-                "planned_cli": _cmd(3, "2e-5"),
-            },
-            "option_b_historical_continuation_helper_hyperparams": {
-                "epochs": 2,
-                "lr": 1e-5,
-                "rationale": "Matches bounded warm-start continuation budget used in historical Fit2 continuation runners.",
-                "risk": "Differs from Original Fit2 Stage-2 training schedule (epochs=3, lr=2e-5); requires explicit coordinator/B approval.",
-                "planned_cli": _cmd(2, "1e-5"),
-            },
-        },
+        "selected_recipe": "option_a_original_fit2_hyperparams",
+        "epochs": 3,
+        "lr": 2e-5,
+        "batch_size": 32,
+        "seed": 42,
+        "fit_mode": "fit2_supcon_energy",
+        "min_temperature": 1.0,
+        "enable_selective_rejector": False,
+        "init_weights_sha256": EXPECTED_FIT2_SHA256,
+        "planned_cli": planned_cli,
         "planned_future_paths": planned_future_paths,
         "authorized_to_train_now": False,
+        "requires_worker_b_re_review_pass_and_coordinator_release": True,
+        "causal_control_caveat": (
+            "Original Fit2 (f695b1fe...) was trained from Fit1 (95a940b6...) for epochs=3, lr=2e-5. "
+            "Warm-starting Option A continuation from converged Fit2 applies 3 additional full epochs "
+            "over 13,080 effective rows on top of f695b1fe...; direct comparison against untouched "
+            "Original Fit2 is a comparative candidate evaluation, NOT a matched causal control (no "
+            "matched no-added-data continuation fit is authorized)."
+        ),
     }
 
 
@@ -283,13 +276,13 @@ def _archive_orig_fit2_prep_bundle(
 
         orig_prov_path = FIT2_BASELINE_DIR / "candidate_provenance_manifest.json"
         orig_cal_path = FIT2_BASELINE_DIR / "calibration_manifest.json"
-        reconciliation = _build_hyperparameter_reconciliation(
+        option_a_plan = _build_planned_option_a_plan(
             prep_records_dir=dest_dir,
             planned_fit_run_id=planned_fit_run_id,
             planned_future_paths=planned_future_paths,
         )
         manifest = {
-            "schema_version": "orig_fit2_return_contrast_prep.v1",
+            "schema_version": "orig_fit2_return_contrast_prep.v2",
             "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
             "git_commit": source_prov["git_commit"],
             "source_hashes": source_prov["source_hashes"],
@@ -309,7 +302,7 @@ def _archive_orig_fit2_prep_bundle(
                 "selective_rejector_enabled": False,
             },
             "unchanged_original_recipe_parameters": UNCHANGED_ORIGINAL_RECIPE_PARAMETERS,
-            "hyperparameter_reconciliation": reconciliation,
+            "option_a_execution_plan": option_a_plan,
             "preflight": preflight,
         }
         (dest_dir / "prep_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
