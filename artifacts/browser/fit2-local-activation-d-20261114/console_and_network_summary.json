@@ -1,0 +1,104 @@
+{
+  "consoleEvents": [
+    {
+      "step": "signIn:admin-1",
+      "type": "error",
+      "text": "Loading the font 'data:font/woff2;base64,d09GMgABAAAAAAfsABQAAAAAEAwAAAeCAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGhwbHhwoP0hWQVJbBmA/U1RBVIFiJyYAdC9qEQgKhGSEAAsgADCGCAE2AiQDOgQgBYlMB4EUDAcbLQ4onoexrSC/2ZyLAa8p8VHB8/x3Vue+V0hVJalMJg2nx/TCrQXxBeqLjQG7FyM1WEa/X1tEXN7cFz9EJEMmMUz3RihWSSKeQCbcIou0izz/C8v+fq3VfajEa9gDD11CImXS7qL/RJFVzC1qiB6KmKeD6TZdQ6IRGv78dL6uSVVCfgni5mzu7kcgQBgAEAQTQRCoL++STTYybkJxNfQxAAIAGu8"
+    },
+    {
+      "step": "signIn:admin-1",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+    },
+    {
+      "step": "signIn:customer-1",
+      "type": "error",
+      "text": "Loading the font 'data:font/woff2;base64,d09GMgABAAAAAAfsABQAAAAAEAwAAAeCAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGhwbHhwoP0hWQVJbBmA/U1RBVIFiJyYAdC9qEQgKhGSEAAsgADCGCAE2AiQDOgQgBYlMB4EUDAcbLQ4onoexrSC/2ZyLAa8p8VHB8/x3Vue+V0hVJalMJg2nx/TCrQXxBeqLjQG7FyM1WEa/X1tEXN7cFz9EJEMmMUz3RihWSSKeQCbcIou0izz/C8v+fq3VfajEa9gDD11CImXS7qL/RJFVzC1qiB6KmKeD6TZdQ6IRGv78dL6uSVVCfgni5mzu7kcgQBgAEAQTQRCoL++STTYybkJxNfQxAAIAGu8"
+    },
+    {
+      "step": "signIn:customer-1",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+    },
+    {
+      "step": "signIn:staff-1",
+      "type": "error",
+      "text": "Loading the font 'data:font/woff2;base64,d09GMgABAAAAAAfsABQAAAAAEAwAAAeCAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGhwbHhwoP0hWQVJbBmA/U1RBVIFiJyYAdC9qEQgKhGSEAAsgADCGCAE2AiQDOgQgBYlMB4EUDAcbLQ4onoexrSC/2ZyLAa8p8VHB8/x3Vue+V0hVJalMJg2nx/TCrQXxBeqLjQG7FyM1WEa/X1tEXN7cFz9EJEMmMUz3RihWSSKeQCbcIou0izz/C8v+fq3VfajEa9gDD11CImXS7qL/RJFVzC1qiB6KmKeD6TZdQ6IRGv78dL6uSVVCfgni5mzu7kcgQBgAEAQTQRCoL++STTYybkJxNfQxAAIAGu8"
+    },
+    {
+      "step": "signIn:staff-1",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+    },
+    {
+      "step": "signIn:customer-1",
+      "type": "error",
+      "text": "Loading the font 'data:font/woff2;base64,d09GMgABAAAAAAfsABQAAAAAEAwAAAeCAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGhwbHhwoP0hWQVJbBmA/U1RBVIFiJyYAdC9qEQgKhGSEAAsgADCGCAE2AiQDOgQgBYlMB4EUDAcbLQ4onoexrSC/2ZyLAa8p8VHB8/x3Vue+V0hVJalMJg2nx/TCrQXxBeqLjQG7FyM1WEa/X1tEXN7cFz9EJEMmMUz3RihWSSKeQCbcIou0izz/C8v+fq3VfajEa9gDD11CImXS7qL/RJFVzC1qiB6KmKeD6TZdQ6IRGv78dL6uSVVCfgni5mzu7kcgQBgAEAQTQRCoL++STTYybkJxNfQxAAIAGu8"
+    },
+    {
+      "step": "signIn:customer-1",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+    },
+    {
+      "step": "signIn:staff-1",
+      "type": "error",
+      "text": "Loading the font 'data:font/woff2;base64,d09GMgABAAAAAAfsABQAAAAAEAwAAAeCAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGhwbHhwoP0hWQVJbBmA/U1RBVIFiJyYAdC9qEQgKhGSEAAsgADCGCAE2AiQDOgQgBYlMB4EUDAcbLQ4onoexrSC/2ZyLAa8p8VHB8/x3Vue+V0hVJalMJg2nx/TCrQXxBeqLjQG7FyM1WEa/X1tEXN7cFz9EJEMmMUz3RihWSSKeQCbcIou0izz/C8v+fq3VfajEa9gDD11CImXS7qL/RJFVzC1qiB6KmKeD6TZdQ6IRGv78dL6uSVVCfgni5mzu7kcgQBgAEAQTQRCoL++STTYybkJxNfQxAAIAGu8"
+    },
+    {
+      "step": "signIn:staff-1",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+    },
+    {
+      "step": "signIn:manager-1",
+      "type": "error",
+      "text": "Loading the font 'data:font/woff2;base64,d09GMgABAAAAAAfsABQAAAAAEAwAAAeCAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGhwbHhwoP0hWQVJbBmA/U1RBVIFiJyYAdC9qEQgKhGSEAAsgADCGCAE2AiQDOgQgBYlMB4EUDAcbLQ4onoexrSC/2ZyLAa8p8VHB8/x3Vue+V0hVJalMJg2nx/TCrQXxBeqLjQG7FyM1WEa/X1tEXN7cFz9EJEMmMUz3RihWSSKeQCbcIou0izz/C8v+fq3VfajEa9gDD11CImXS7qL/RJFVzC1qiB6KmKeD6TZdQ6IRGv78dL6uSVVCfgni5mzu7kcgQBgAEAQTQRCoL++STTYybkJxNfQxAAIAGu8"
+    },
+    {
+      "step": "signIn:manager-1",
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+    }
+  ],
+  "pageErrors": [],
+  "requestFailures": [],
+  "httpErrorResponses": [
+    {
+      "step": "signIn:admin-1",
+      "method": "GET",
+      "path": "/v1/sessions/current",
+      "status": 401
+    },
+    {
+      "step": "signIn:customer-1",
+      "method": "GET",
+      "path": "/v1/sessions/current",
+      "status": 401
+    },
+    {
+      "step": "signIn:staff-1",
+      "method": "GET",
+      "path": "/v1/sessions/current",
+      "status": 401
+    },
+    {
+      "step": "signIn:customer-1",
+      "method": "GET",
+      "path": "/v1/sessions/current",
+      "status": 401
+    },
+    {
+      "step": "signIn:staff-1",
+      "method": "GET",
+      "path": "/v1/sessions/current",
+      "status": 401
+    },
+    {
+      "step": "signIn:manager-1",
+      "method": "GET",
+      "path": "/v1/sessions/current",
+      "status": 401
+    }
+  ]
+}

@@ -3,7 +3,9 @@
 from contextlib import asynccontextmanager
 import hashlib
 import json
+import logging
 from pathlib import Path
+import threading
 
 import httpx
 from fastapi import FastAPI, HTTPException
@@ -16,16 +18,28 @@ from .drafting import BudgetedDraftClient
 
 
 _ROOT = Path(__file__).resolve().parents[2]
+_LOGGER = logging.getLogger("uvicorn.error")
 
 
 class AiSettings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=(str(_ROOT / ".env"), ".env"),
+        env_file=(str(_ROOT / ".env"), ".env", str(_ROOT / ".local" / "ai.env"), ".local/ai.env"),
         extra="ignore"
     )
     gemini_api_key: SecretStr = SecretStr("")
     gemini_model: str = "gemini-3.5-flash-lite"
     supportiq_enable_llm: bool = True
+    supportiq_model_dir: str | None = None
+    supportiq_calibration_manifest_path: str | None = None
+    supportiq_max_live_llm_requests: int | None = None
+    supportiq_llm_max_attempts: int | None = None
+
+
+def _resolve_optional_path(value: str | None) -> Path | None:
+    if not value or not value.strip():
+        return None
+    path = Path(value.strip())
+    return path if path.is_absolute() else _ROOT / path
 
 
 class SuggestionRequest(BaseModel):
@@ -53,12 +67,19 @@ class SuggestionRequest(BaseModel):
 
 
 class AllowListedTransport(httpx.BaseTransport):
-    def __init__(self):
+    def __init__(self, max_requests: int | None = None):
         self.transport = httpx.HTTPTransport()
+        self.max_requests = max_requests
+        self.request_count = 0
+        self._lock = threading.Lock()
 
     def handle_request(self, request):
         if request.url.scheme != "https" or request.url.host != "generativelanguage.googleapis.com":
             raise httpx.RequestError("Egress host is not allowed")
+        with self._lock:
+            if self.max_requests is not None and self.request_count >= self.max_requests:
+                raise httpx.RequestError("Live LLM budget exhausted")
+            self.request_count += 1
         return self.transport.handle_request(request)
 
     def close(self):
@@ -127,13 +148,26 @@ def create_app():
 
         torch.set_num_threads(2)
         model = ModelContainer()
-        model.load()
+        model_dir_override = _resolve_optional_path(getattr(settings, "supportiq_model_dir", None))
+        cal_manifest_override = _resolve_optional_path(getattr(settings, "supportiq_calibration_manifest_path", None))
+        if model_dir_override is not None or cal_manifest_override is not None:
+            from apps.ml_inference.app import MODEL_DIR
+            model.load(
+                model_dir=model_dir_override or MODEL_DIR,
+                calibration_manifest_path=cal_manifest_override,
+            )
+        else:
+            model.load()
         release_path = Path(__file__).parent / "kb-release.json"
         release = json.loads(release_path.read_text(encoding="utf-8"))
         allowed = {(document["document_id"], document["version"]) for document in release["documents"]}
         retriever = RetrievalAdapter(allowed_document_versions=allowed)
-        client = httpx.Client(transport=AllowListedTransport(), trust_env=False)
+        max_live_requests = getattr(settings, "supportiq_max_live_llm_requests", None)
+        max_attempts = getattr(settings, "supportiq_llm_max_attempts", None)
+        transport = AllowListedTransport(max_requests=max_live_requests)
+        client = httpx.Client(transport=transport, trust_env=False)
         llm = GeminiDraftClient(api_key=settings.gemini_api_key.get_secret_value() if settings.supportiq_enable_llm else "", model=settings.gemini_model, http_client=client)
+        draft_client = BudgetedDraftClient(llm) if max_attempts is None else BudgetedDraftClient(llm, max_attempts=max_attempts)
         root = Path(__file__).resolve().parents[2]
         kb = root / "data/knowledge/approved_kb.v2.json"
         policy_path = root / "apps/core_backend/config/policies/intent_policy.v2.json"
@@ -142,12 +176,30 @@ def create_app():
         engine_hash = hashlib.sha256(Path(__file__).with_name('engine.py').read_bytes()).hexdigest()
         versions = {"release_id": "local-" + hashlib.sha256(((model.model_checksum or "unavailable") + kb_hash + policy_hash + engine_hash + PROMPT_VERSION).encode()).hexdigest()[:16],
                     "model_version": model.verified_model_version or getattr(model, "model_version", None) or "Unknown",
+                    "model_checksum": getattr(model, "model_checksum", None),
+                    "calibration_checksum": getattr(model, "calibration_checksum", None),
                     "model_mode": getattr(model, "model_mode", "unavailable"),
                     "verified": getattr(model, "verified", False),
                     "kb_version": "sha256:" + kb_hash, "mapping_version": "embedded:" + kb_hash,
                     "prompt_version": PROMPT_VERSION, "engine_version": "sha256:" + engine_hash,
                     "routing_version": "sha256:" + policy_hash, "index_version": "bge-small-en-v1.5:" + kb_hash}
-        resources.update(engine=Engine(model,retriever,BudgetedDraftClient(llm),versions,json.loads(policy_path.read_text())), model=model, retriever=retriever, versions=versions)
+        _LOGGER.info(
+            "AI gateway model loaded: version=%s mode=%s verified=%s model_sha256=%s calibration_sha256=%s release_id=%s max_live_llm_requests=%s",
+            versions["model_version"],
+            versions["model_mode"],
+            versions["verified"],
+            versions["model_checksum"],
+            versions["calibration_checksum"],
+            versions["release_id"],
+            max_live_requests,
+        )
+        resources.update(
+            engine=Engine(model, retriever, draft_client, versions, json.loads(policy_path.read_text())),
+            model=model,
+            retriever=retriever,
+            versions=versions,
+            llm_transport=transport,
+        )
         yield
         client.close()
 
@@ -165,13 +217,19 @@ def create_app():
     @app.get("/health/ready")
     def ready():
         engine()
+        llm_transport = resources.get("llm_transport")
         return {
             "status": "ready",
             "llm_enabled": settings.supportiq_enable_llm,
             "llm_configured": bool(settings.gemini_api_key.get_secret_value()),
             "retrieval_ready": resources["retriever"].index is not None,
+            "model_version": resources["versions"].get("model_version", "Unknown"),
+            "model_checksum": resources["versions"].get("model_checksum"),
+            "calibration_checksum": resources["versions"].get("calibration_checksum"),
             "model_mode": resources["versions"].get("model_mode", "unavailable"),
             "model_verified": resources["versions"].get("verified", False),
+            "live_llm_requests_made": getattr(llm_transport, "request_count", 0),
+            "max_live_llm_requests": getattr(llm_transport, "max_requests", None),
         }
 
     @app.post("/v1/analyses")

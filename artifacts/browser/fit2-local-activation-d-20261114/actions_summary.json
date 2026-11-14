@@ -1,0 +1,78 @@
+{
+  "baseUrl": "http://127.0.0.1:8080",
+  "startedAt": "2026-11-14T08:15:01.075Z",
+  "flows": {
+    "adminVersions": {
+      "passed": true,
+      "versionEntries": {
+        "Backend build": "application-v1",
+        "Release ID": "local-b1c61e8977e69230",
+        "Model artifact": "fit2-supcon-energy-boundary-v1",
+        "Knowledge base": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "Document-to-intent mapping": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "Prompts": "grounded-v3",
+        "Routing configuration": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+        "Retrieval index": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+      }
+    },
+    "customerCreateReturnTicket": {
+      "passed": true,
+      "ticketId": "TCK-1076",
+      "reused": true
+    },
+    "staffTicket1Workflow": {
+      "passed": true,
+      "intentText": "Intent Return policy High · 0.932 Predicted Not right? Use: Refund policy 0.004 Return product 0.003 Other intent",
+      "replyPanelStatus": "Draft ready",
+      "usedAiDraft": true,
+      "sourcesCount": 3,
+      "inlineCitationCount": 1,
+      "citationPopoverOpened": true,
+      "sourceSheetTitle": "Tiki Standard Product Return and Exchange Policy and Conditions",
+      "sourceSheetHasBody": true
+    },
+    "customerVerifyReplyAndCreateEscalation": {
+      "passed": true,
+      "ticket2Id": "TCK-1077"
+    },
+    "staffEscalateTicket2": {
+      "passed": true,
+      "initialReplyStatus": "Escalation recommended"
+    },
+    "managerReportsAndTicket2": {
+      "passed": true,
+      "managerCanSeeEscalation": true,
+      "managerSendBtnVisible": true
+    }
+  },
+  "screenshots": [
+    "artifacts/browser/fit2-local-activation-d-20261114/01-admin-versions.png",
+    "artifacts/browser/fit2-local-activation-d-20261114/02-customer-ticket1-created.png",
+    "artifacts/browser/fit2-local-activation-d-20261114/03-staff-ticket1-analysis-draft.png",
+    "artifacts/browser/fit2-local-activation-d-20261114/04-staff-citation-popover.png",
+    "artifacts/browser/fit2-local-activation-d-20261114/05-staff-source-document-modal.png",
+    "artifacts/browser/fit2-local-activation-d-20261114/06-staff-ticket1-reply-sent.png",
+    "artifacts/browser/fit2-local-activation-d-20261114/07-customer-ticket1-reply.png",
+    "artifacts/browser/fit2-local-activation-d-20261114/08-staff-ticket2-escalated.png",
+    "artifacts/browser/fit2-local-activation-d-20261114/09-manager-reports.png",
+    "artifacts/browser/fit2-local-activation-d-20261114/10-manager-ticket2-escalated.png"
+  ],
+  "ticketIds": {
+    "returnPolicyTicketId": "TCK-1076",
+    "escalationTicketId": "TCK-1077"
+  },
+  "aiReadyAfterBrowserRun": {
+    "status": "ready",
+    "llm_enabled": true,
+    "llm_configured": true,
+    "retrieval_ready": true,
+    "model_version": "fit2-supcon-energy-boundary-v1",
+    "model_checksum": "f695b1fe514aba81aafc968823047d496b03474a0b47199c65eaac6bd93c6dfa",
+    "calibration_checksum": "782c88db3fcd80615c3dceabbdb96ea2be7aa769119201f94229535becc7ae39",
+    "model_mode": "trained",
+    "model_verified": true,
+    "live_llm_requests_made": 1,
+    "max_live_llm_requests": 2
+  },
+  "finishedAt": "2026-11-14T08:15:15.922Z"
+}
