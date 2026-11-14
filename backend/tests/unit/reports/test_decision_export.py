@@ -42,6 +42,17 @@ async def test_export_without_the_database_writes_nothing() -> None:
     assert harness.events.names() == ()
 
 
+async def test_export_whose_read_fails_in_the_transaction_rolls_back_and_writes_nothing() -> None:
+    harness = build_export_harness(load_failure=DatabaseUnavailableError())
+
+    with pytest.raises(DatabaseUnavailableError):
+        await harness.use_case.execute(PERIOD)
+
+    assert (harness.transactions.commit_count, harness.transactions.rollback_count) == (0, 1)
+    assert harness.destination.saved == []
+    assert harness.events.names() == ()
+
+
 async def test_export_whose_file_cannot_be_written_records_no_export() -> None:
     destination = RecordingDecisionRecordFile(failure=ExportWriteFailedError())
     harness = build_export_harness(destination=destination)

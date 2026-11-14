@@ -74,69 +74,77 @@ RECORD = DecisionRecord(
 
 
 @dataclass(slots=True)
-class FakeTicketFigures:
-    """Return fixed ticket figures and keep the periods asked for."""
+class _RecordingLoads:
+    """Keep the periods asked for, and raise a chosen failure on every load."""
 
     periods: list[ReportPeriod] = field(default_factory=list[ReportPeriod])
+    load_failure: BackendError | None = None
+
+    def _load(self, period: ReportPeriod) -> None:
+        self.periods.append(period)
+        if self.load_failure is not None:
+            raise self.load_failure
+
+
+@dataclass(slots=True)
+class FakeTicketFigures(_RecordingLoads):
+    """Return fixed ticket figures, or raise `load_failure`."""
 
     async def load_ticket_counts(self, period: ReportPeriod) -> TicketCounts:
         """Return `CREATED` and `CLOSED`."""
-        self.periods.append(period)
+        self._load(period)
         return TicketCounts(created=CREATED, closed=CLOSED)
 
     async def load_handling_time(self, period: ReportPeriod) -> HandlingTime:
         """Return `HANDLING_TIME`."""
-        self.periods.append(period)
+        self._load(period)
         return HANDLING_TIME
 
     async def load_draft_decisions(self, period: ReportPeriod) -> DraftDecisions:
         """Return `DRAFT_DECISIONS`."""
-        self.periods.append(period)
+        self._load(period)
         return DRAFT_DECISIONS
 
     async def load_escalations(self, period: ReportPeriod) -> Escalations:
         """Return `ESCALATIONS`."""
-        self.periods.append(period)
+        self._load(period)
         return ESCALATIONS
 
 
 @dataclass(slots=True)
-class FakeAiFigures:
-    """Return fixed AI figures and keep the periods asked for."""
-
-    periods: list[ReportPeriod] = field(default_factory=list[ReportPeriod])
+class FakeAiFigures(_RecordingLoads):
+    """Return fixed AI figures, or raise `load_failure`."""
 
     async def load_ai_outcomes(self, period: ReportPeriod) -> AiOutcomes:
         """Return `AI_OUTCOMES`."""
-        self.periods.append(period)
+        self._load(period)
         return AI_OUTCOMES
 
     async def load_end_to_end_latency(self, period: ReportPeriod) -> EndToEndLatency:
         """Return `LATENCY`."""
-        self.periods.append(period)
+        self._load(period)
         return LATENCY
 
     async def load_ai_error_rate(self, period: ReportPeriod) -> AiErrorRate:
         """Return `ERROR_RATE`."""
-        self.periods.append(period)
+        self._load(period)
         return ERROR_RATE
 
     async def load_llm_cost(self, period: ReportPeriod) -> LlmCost:
         """Return `LLM_COST`."""
-        self.periods.append(period)
+        self._load(period)
         return LLM_COST
 
 
 @dataclass(slots=True)
-class FakeDecisionRecordSource:
-    """Return fixed decision records and keep the periods asked for."""
+class FakeDecisionRecordSource(_RecordingLoads):
+    """Return fixed decision records, or raise `load_failure`."""
 
     records: tuple[DecisionRecord, ...] = (RECORD,)
-    periods: list[ReportPeriod] = field(default_factory=list[ReportPeriod])
 
     async def load_decision_records(self, period: ReportPeriod) -> tuple[DecisionRecord, ...]:
         """Return `records`."""
-        self.periods.append(period)
+        self._load(period)
         return self.records
 
 
@@ -179,9 +187,14 @@ class ExportHarness:
     events: RecordingEventRecorder
 
 
-def build_report_harness(*, begin_failure: BackendError | None = None) -> ReportHarness:
-    tickets = FakeTicketFigures()
-    ai = FakeAiFigures()
+def build_report_harness(
+    *,
+    begin_failure: BackendError | None = None,
+    tickets_failure: BackendError | None = None,
+    ai_failure: BackendError | None = None,
+) -> ReportHarness:
+    tickets = FakeTicketFigures(load_failure=tickets_failure)
+    ai = FakeAiFigures(load_failure=ai_failure)
     events = RecordingEventRecorder()
     steps = RecordingStepTracer()
     transactions = FakeTransactionRunner(
@@ -196,9 +209,10 @@ def build_report_harness(*, begin_failure: BackendError | None = None) -> Report
 def build_export_harness(
     *,
     begin_failure: BackendError | None = None,
+    load_failure: BackendError | None = None,
     destination: RecordingDecisionRecordFile | None = None,
 ) -> ExportHarness:
-    source = FakeDecisionRecordSource()
+    source = FakeDecisionRecordSource(load_failure=load_failure)
     file = destination or RecordingDecisionRecordFile()
     events = RecordingEventRecorder()
     transactions = FakeTransactionRunner(ExportStores(records=source), begin_failure=begin_failure)

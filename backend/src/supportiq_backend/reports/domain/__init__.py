@@ -20,10 +20,8 @@ from supportiq_backend.reports.domain.ports import (
     TicketFigures,
 )
 from supportiq_backend.reports.domain.report import (
-    COMPLETED_DRAFT_STATUSES,
     AiErrorRate,
     AiOutcomes,
-    CodeCount,
     ConsoleReport,
     DraftDecisions,
     EndToEndLatency,
@@ -33,8 +31,11 @@ from supportiq_backend.reports.domain.report import (
     LlmCost,
     ModeCounts,
     ModeHandlingTime,
-    ReportPeriod,
     TicketCounts,
+)
+from supportiq_backend.reports.domain.report_rules import (
+    CodeCount,
+    ReportPeriod,
     build_report_period,
     compute_rounded_average,
     compute_share,
@@ -42,7 +43,6 @@ from supportiq_backend.reports.domain.report import (
 )
 
 __all__ = [
-    "COMPLETED_DRAFT_STATUSES",
     "EXPORTS_FOLDER_NAME",
     "AiErrorRate",
     "AiFigures",

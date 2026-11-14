@@ -1,10 +1,10 @@
 """The `DecisionRecordSource` port: the records of `backend export-decisions` (SEC-33).
 
-Three queries per export, whatever the number of tickets: the tickets closed or escalated in the
-period, their current suggestions with both parts, and their staff decisions. Text comes only
-from the stored AI exchange, which holds placeholders: `request ->> 'message'`, the message as
-sent, and the allow-listed fields of each part's result. No query reads a reply, a note, a
-customer message, or the pseudonym map; `tables` does not even declare them (SEC-37).
+Four queries per export, whatever the number of tickets: the tickets closed or escalated in the
+period, the parts of their current suggestions, those suggestions, and their staff decisions.
+Text comes only from the stored AI exchange, which holds placeholders: `request ->> 'message'`,
+the message as sent, and the allow-listed fields of each part's result. No query reads a reply, a
+note, a customer message, or the pseudonym map; `tables` does not even declare them (SEC-37).
 """
 
 from collections.abc import Mapping
@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from supportiq_backend.platform import UnexpectedFailureError
 from supportiq_backend.reports.adapters.sql_periods import (
+    handling_duration,
     in_period,
     to_optional_milliseconds,
     to_whole_milliseconds,
@@ -74,8 +75,9 @@ type _TicketColumns = tuple[
     datetime | None,
     datetime | None,
     UUID | None,
-    # The handling time is NULL for a ticket that is not closed or was never viewed; the types
-    # of SQL expressions do not carry nullability, so `to_optional_milliseconds` handles it.
+    # The handling time is NULL for a ticket that is not closed, was never viewed, or was first
+    # viewed after its reply; the types of SQL expressions do not carry nullability, so
+    # `to_optional_milliseconds` handles it.
     Decimal,
 ]
 type _SuggestionColumns = tuple[UUID, str, str | None, datetime, str | None]
@@ -143,7 +145,7 @@ class PostgresDecisionRecordSource:
 
 
 def _select_tickets(period: ReportPeriod) -> Select[_TicketColumns]:
-    handling_time = to_whole_milliseconds(TICKETS.c.closed_at - TICKETS.c.handling_started_at)
+    handling_time = to_whole_milliseconds(handling_duration())
     is_closed_or_escalated = or_(
         in_period(TICKETS.c.closed_at, period), in_period(ESCALATIONS.c.escalated_at, period)
     )

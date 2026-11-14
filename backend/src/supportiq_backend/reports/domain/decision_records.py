@@ -104,7 +104,7 @@ class DecisionRecord:
         escalated_at: When the ticket was escalated, when it was.
         closed_at: When the reply was sent, when it was.
         handling_time_ms: From the first view to the reply, in whole milliseconds; None for a
-            ticket that is not closed or was never viewed.
+            ticket that is not closed, was never viewed, or was first viewed after its reply.
         suggestion: The current suggestion; None for a ticket without one, such as a ticket in
             manual mode.
         decisions: The staff decisions, oldest first.

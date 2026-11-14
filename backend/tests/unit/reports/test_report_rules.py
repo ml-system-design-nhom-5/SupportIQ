@@ -29,6 +29,8 @@ ONE_MICROSECOND = timedelta(microseconds=1)
 NO_DECISIONS = DraftDecisions(0, 0, 0, {}, {})
 COUNTS = st.integers(min_value=0, max_value=10_000)
 AI_REASON_CODES = tuple(AiReasonCode)
+# Every code counted 0: the items that `order_code_counts` leaves out.
+ZERO_COUNTS = frozenset((code, 0) for code in AI_REASON_CODES)
 ONE_QUARTER = 0.25
 HALF = 0.5
 
@@ -231,7 +233,7 @@ def test_ordered_code_counts_keep_the_enum_order_and_only_positive_counts(
     codes = [item.code for item in items]
 
     assert codes == sorted(codes, key=AI_REASON_CODES.index)
-    assert min((item.count for item in items), default=1) >= 1
+    assert {(item.code, item.count) for item in items} == set(count_by_code.items()) - ZERO_COUNTS
 
 
 @given(total=COUNTS, count=st.integers(min_value=1, max_value=10_000))

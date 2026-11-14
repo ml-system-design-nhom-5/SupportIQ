@@ -1,15 +1,17 @@
-"""SQL expressions over a report period: the period filter and durations in whole milliseconds.
+"""SQL expressions over a report period: the period filter, the handling time, and durations.
 
 Every figure and every export record uses these, so a record at exactly `start_at` is always
-counted and one at exactly `end_at` never is, and every duration is rounded the same way.
+counted and one at exactly `end_at` never is, the report and the export measure the same
+handling time, and every duration is rounded to whole milliseconds the same way.
 """
 
 from datetime import datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import ColumnElement, Numeric, and_, cast, extract, func
+from sqlalchemy import ColumnElement, Numeric, and_, case, cast, extract, func
 
 from supportiq_backend.platform import MILLISECONDS_PER_SECOND
+from supportiq_backend.reports.adapters.tables import TICKETS
 from supportiq_backend.reports.domain import ReportPeriod
 
 _MEDIAN = 0.5
@@ -28,6 +30,22 @@ def in_period(moment: ColumnElement[datetime], period: ReportPeriod) -> ColumnEl
         The condition.
     """
     return and_(moment >= period.start_at, moment < period.end_at)
+
+
+def handling_duration() -> ColumnElement[timedelta]:
+    """Return the handling time of a ticket, from its first view to its reply (NFR-11).
+
+    The first view starts the clock in every state of a ticket, so a ticket can be first viewed
+    after its reply, for example by a manager who opens it once it is closed. Such a ticket has
+    no handling time, so no duration is negative (contract `ModeHandlingTime.ticket_count`).
+
+    Returns:
+        `closed_at - handling_started_at`, an `interval`, when the first view is no later than
+        the reply; NULL for any other ticket, including one never viewed or not closed.
+    """
+    tickets = TICKETS.c
+    is_viewed_no_later_than_reply = tickets.handling_started_at <= tickets.closed_at
+    return case((is_viewed_no_later_than_reply, tickets.closed_at - tickets.handling_started_at))
 
 
 def to_whole_milliseconds(duration: ColumnElement[timedelta]) -> ColumnElement[Decimal]:

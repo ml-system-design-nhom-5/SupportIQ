@@ -1,7 +1,6 @@
-"""The decision-record export against PostgreSQL, as `supportiq_app`, into `exports/` (SEC-33).
+"""The decision-record export of the shared scenario against PostgreSQL, into `exports/` (SEC-33).
 
-Each test runs the composition root's `export_decisions` with a temporary working directory, so
-the file lands in that directory's `exports/` folder and nowhere else.
+Each test exports the records of `export_scenario` as `supportiq_app` and reads the file back.
 """
 
 import json
@@ -9,58 +8,27 @@ from pathlib import Path
 
 import pytest
 
-from supportiq_backend.composition_root.report_commands import (
-    ExportDecisionsArguments,
-    export_decisions,
-)
 from supportiq_backend.platform import EventName
-from supportiq_backend.reports import build_report_period
-from tests.integration.application import build_settings
 from tests.integration.database import WorkerDatabase
 from tests.integration.reports.export_scenario import (
-    AI_STAFF_NOTE,
-    ESCALATION_NOTE,
-    MAP_VALUE,
+    OUTPUT,
     PSEUDONYMIZED_MESSAGE,
-    REPLY_BODY,
-    REPLY_NOTE,
     STUDY_BATCH,
     STUDY_PAIR_ID,
     ExportTickets,
     exported_analysis,
     insert_export_scenario,
+    read_records,
+    run_export,
 )
-from tests.integration.reports.report_rows import END_AT, START_AT, ReportRows
+from tests.integration.reports.report_rows import ReportRows
 from tests.integration.tickets.console_requests import (
     PREDICTED_INTENT,
     asset_versions,
     draft_ready_outcome,
 )
-from tests.unit.platform.fakes import RecordingEventRecorder
 
 pytestmark = pytest.mark.anyio
-
-OUTPUT = Path("exports/decisions.jsonl")
-PERIOD = build_report_period(START_AT, END_AT)
-
-
-async def run_export(
-    worker_database: WorkerDatabase, working_directory: Path, output: Path = OUTPUT
-) -> RecordingEventRecorder:
-    events = RecordingEventRecorder()
-    await export_decisions(
-        build_settings(worker_database),
-        events,
-        ExportDecisionsArguments(period=PERIOD, output=output),
-        working_directory=working_directory,
-    )
-    return events
-
-
-def read_records(working_directory: Path) -> dict[str, dict[str, object]]:
-    lines = (working_directory / OUTPUT).read_text(encoding="utf-8").splitlines()
-    records = [json.loads(line) for line in lines]
-    return {record["ticket_id"]: record for record in records}
 
 
 @pytest.fixture
@@ -164,21 +132,6 @@ async def test_export_records_an_escalated_ticket_without_a_draft_or_a_handling_
             }
         ],
     }
-
-
-async def test_export_holds_no_reply_body_note_staff_note_message_or_map_value(
-    worker_database: WorkerDatabase, tmp_path: Path, tickets: ExportTickets
-) -> None:
-    await run_export(worker_database, tmp_path)
-
-    text = (tmp_path / OUTPUT).read_text(encoding="utf-8")
-    assert tickets.closed in text
-    assert PSEUDONYMIZED_MESSAGE in text
-    assert MAP_VALUE not in text
-    assert REPLY_BODY not in text
-    assert REPLY_NOTE not in text
-    assert ESCALATION_NOTE not in text
-    assert AI_STAFF_NOTE not in text
 
 
 async def test_export_records_a_manual_ticket_without_any_text(

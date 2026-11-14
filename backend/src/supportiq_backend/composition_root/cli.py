@@ -11,21 +11,19 @@ import argparse
 import asyncio
 import sys
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
-from enum import StrEnum
 from functools import partial
 from pathlib import Path
 from typing import assert_never
 
 import uvicorn
 
-from supportiq_backend.commerce import (
-    ORDER_ID_PATTERN,
-    PHONE_PATTERN,
-    TRACKING_CODE_PATTERN,
-    TRANSACTION_ID_PATTERN,
+from supportiq_backend.composition_root.command_arguments import (
+    OneOffArguments,
+    OneOffCommand,
+    ServeArguments,
 )
 from supportiq_backend.composition_root.database_commands import create_app_role, migrate
+from supportiq_backend.composition_root.process_logging import build_event_recorder
 from supportiq_backend.composition_root.report_commands import (
     EXPORT_DECISIONS_COMMAND,
     EXPORT_DECISIONS_HELP,
@@ -34,7 +32,6 @@ from supportiq_backend.composition_root.report_commands import (
     export_decisions,
     to_export_decisions_arguments,
 )
-from supportiq_backend.composition_root.runtime import build_tracer_provider
 from supportiq_backend.composition_root.seed_commands import reset, seed
 from supportiq_backend.composition_root.settings_loading import (
     SettingRequiredError,
@@ -44,12 +41,6 @@ from supportiq_backend.composition_root.settings_loading import (
 from supportiq_backend.composition_root.web_application import create_app
 from supportiq_backend.platform import BackendError, EventName, EventRecorder
 from supportiq_backend.platform.adapters.database_roles import AppRoleUrlError
-from supportiq_backend.platform.adapters.logging_setup import (
-    GENERIC_REDACTION_PATTERNS,
-    Redactor,
-    StandardLibraryEventRecorder,
-    configure_logging,
-)
 from supportiq_backend.platform.adapters.system_clock import SystemClock
 from supportiq_backend.platform.adapters.telemetry import (
     OpenTelemetryTraceContext,
@@ -66,41 +57,6 @@ LOAD_SETTINGS_SPAN = "load_settings"
 SERVE_COMMAND = "serve"
 _RESET_QUESTION = "Every backend table will be emptied and seeded again. Type yes to go on: "
 _RESET_ANSWER = "yes"
-
-
-class OneOffCommand(StrEnum):
-    """The one-off database commands of `backend`, run as the database owner."""
-
-    CREATE_APP_ROLE = "create-app-role"
-    MIGRATE = "migrate"
-    SEED = "seed"
-    RESET = "reset"
-
-
-@dataclass(frozen=True, slots=True)
-class ServeArguments:
-    """The arguments of `backend serve`.
-
-    Attributes:
-        host: The interface to listen on.
-        port: The TCP port to listen on.
-    """
-
-    host: str
-    port: int
-
-
-@dataclass(frozen=True, slots=True)
-class OneOffArguments:
-    """The arguments of a one-off database command.
-
-    Attributes:
-        command: The command to run.
-        is_confirmed: Whether `--yes` confirmed a reset in advance.
-    """
-
-    command: OneOffCommand
-    is_confirmed: bool = False
 
 
 type CommandArguments = ServeArguments | OneOffArguments | ExportDecisionsArguments
@@ -127,6 +83,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def report_failure(error: BackendError, events: EventRecorder) -> int:
     """Log a failure of a command once and turn it into an exit status (PY-21, ERR-05).
+
+    A refused export path is also written to standard error, because the person needs it to
+    correct the command, and standard output holds only JSON lines (LOG-02).
 
     Args:
         error: The failure.
@@ -178,38 +137,12 @@ def run_command(arguments: CommandArguments, settings: Settings, events: EventRe
             return EXIT_SUCCESS
         case OneOffArguments():
             work = partial(_run_database_command, arguments, settings, events)
-            return _run_one_off(arguments.command.value, settings, events, work)
+            return _run_one_off(arguments.command.value, events, work)
         case ExportDecisionsArguments():
             work = partial(_export_decisions, arguments, settings, events)
-            return _run_one_off(EXPORT_DECISIONS_COMMAND, settings, events, work)
+            return _run_one_off(EXPORT_DECISIONS_COMMAND, events, work)
         case _:
             assert_never(arguments)
-
-
-def build_event_recorder() -> EventRecorder:
-    """Send every log record of the process to standard output as JSON lines (LOG-02).
-
-    Returns:
-        The event recorder of the process.
-    """
-    return StandardLibraryEventRecorder(configure_logging(sys.stdout, build_redactor()))
-
-
-def build_redactor() -> Redactor:
-    """Combine the generic patterns with the documented ID formats of commerce (LOG-30).
-
-    Returns:
-        The redactor of every log line.
-    """
-    return Redactor(
-        (
-            *GENERIC_REDACTION_PATTERNS,
-            ORDER_ID_PATTERN,
-            TRACKING_CODE_PATTERN,
-            TRANSACTION_ID_PATTERN,
-            PHONE_PATTERN,
-        )
-    )
 
 
 def parse_arguments(argv: Sequence[str]) -> CommandArguments:
@@ -265,12 +198,11 @@ def _load_settings_in_a_span(events: EventRecorder) -> Settings:
         return load_settings(events)
 
 
-def _run_one_off(
-    command_name: str, settings: Settings, events: EventRecorder, work: Callable[[], None]
-) -> int:
+def _run_one_off(command_name: str, events: EventRecorder, work: Callable[[], None]) -> int:
     # Work outside a request starts its own span, so all its log lines, a failure included,
-    # carry a trace ID (LOG-06).
-    tracer_provider = build_tracer_provider(settings)
+    # carry a trace ID (LOG-06). The span never leaves the process: a one-off command connects
+    # only to the database (ADR-0010, Egress control, item 3; SEC-40).
+    tracer_provider = create_tracer_provider(None)
     span_name = command_name.replace("-", "_")
     try:
         with tracer_provider.get_tracer(TRACER_NAME).start_as_current_span(span_name):

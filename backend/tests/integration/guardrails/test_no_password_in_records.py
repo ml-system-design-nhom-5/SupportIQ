@@ -12,7 +12,7 @@ import pytest
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from supportiq_backend.accounts import PasswordHash
-from supportiq_backend.composition_root.cli import build_redactor
+from supportiq_backend.composition_root.process_logging import build_redactor
 from supportiq_backend.platform.adapters.logging_setup import (
     StandardLibraryEventRecorder,
     configure_logging,

@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from itertools import count
 from uuid import UUID
 
-from sqlalchemy import insert, text, update
+from sqlalchemy import insert, null, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.sql import Executable
 
@@ -129,6 +129,11 @@ class TicketSpec:
         source: `shop` or `import`.
         is_authority_required: The authority flag.
         created_at: When it was created; the next time of the builder when None.
+        handling_mode: `assisted` or `manual`.
+        handling_started_at: Its first view, if any.
+        closed_at: When its reply was sent, if it was.
+        study_pair_id: Its study pair, if any.
+        study_batch: Its study batch, if any.
     """
 
     message: str = "Where is my parcel?"
@@ -136,6 +141,30 @@ class TicketSpec:
     source: str = "shop"
     is_authority_required: bool = False
     created_at: datetime | None = None
+    handling_mode: str = "assisted"
+    handling_started_at: datetime | None = None
+    closed_at: datetime | None = None
+    study_pair_id: str | None = None
+    study_batch: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SuggestionPartSpec:
+    """One part of a suggestion with a state of its own, as stored.
+
+    Attributes:
+        status: The status.
+        completed_at: When it left `pending`; None exactly for a pending part.
+        reason_codes: The AI reason codes.
+        llm_cost_micro_usd: The LLM cost, if the LLM answered.
+        result: The ai-service response, if the part has one.
+    """
+
+    status: str = "pending"
+    completed_at: datetime | None = None
+    reason_codes: tuple[str, ...] = ()
+    llm_cost_micro_usd: int | None = None
+    result: dict[str, object] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,11 +175,26 @@ class SuggestionSpec:
         part_status: The status of both parts: `pending`, or `unavailable` with a reason.
         reason_code: The reason code of both parts; set exactly when they are not pending.
         job_state: The state of its job.
+        created_at: When it was created; the next time of the builder when None.
+        trigger: Why it was created.
+        intent_override: The intent that staff chose, for the trigger `intent_override`.
+        requested_by_account_id: The staff account that asked for it; set exactly when the
+            trigger is not `ticket_created`.
+        request: The `SuggestionRequest` as sent; None before pseudonymization succeeded.
+        analysis: The analysis part with a state of its own, in place of the shared one.
+        draft: The draft part with a state of its own, in place of the shared one.
     """
 
     part_status: str = "pending"
     reason_code: str | None = None
     job_state: str = "queued"
+    created_at: datetime | None = None
+    trigger: str = "ticket_created"
+    intent_override: str | None = None
+    requested_by_account_id: UUID | None = None
+    request: dict[str, object] | None = None
+    analysis: SuggestionPartSpec | None = None
+    draft: SuggestionPartSpec | None = None
 
 
 # A suggestion whose calls to ai-service failed, so a retry is valid (contract
@@ -287,10 +331,14 @@ class DatabaseBuilder:
                     customer_id=customer_id,
                     order_id=order_id,
                     status=ticket.status,
-                    handling_mode="assisted",
+                    handling_mode=ticket.handling_mode,
                     is_authority_required=ticket.is_authority_required,
                     source=ticket.source,
                     created_at=moment,
+                    handling_started_at=ticket.handling_started_at,
+                    closed_at=ticket.closed_at,
+                    study_pair_id=ticket.study_pair_id,
+                    study_batch=ticket.study_batch,
                 )
                 .returning(TicketRow.ticket_id)
             )
@@ -309,36 +357,30 @@ class DatabaseBuilder:
 
         Args:
             ticket_id: The ticket.
-            spec: The state of the parts and the job; pending parts and a queued job when None.
+            spec: The suggestion, its parts, and its job; pending parts and a queued job when
+                None.
 
         Returns:
             The suggestion ID.
         """
         suggestion = spec or SuggestionSpec()
         suggestion_id = self.next_uuid()
-        moment = self.next_time()
-        is_pending = suggestion.part_status == "pending"
+        moment = suggestion.created_at or self.next_time()
+        shared = _shared_part(suggestion, moment)
+        parts = {"analysis": suggestion.analysis or shared, "draft": suggestion.draft or shared}
         await self._insert(
             insert(SuggestionRow).values(
                 suggestion_id=suggestion_id,
                 ticket_id=ticket_id,
-                trigger="ticket_created",
+                trigger=suggestion.trigger,
+                intent_override=suggestion.intent_override,
+                requested_by_account_id=suggestion.requested_by_account_id,
                 created_at=moment,
                 trace_id=SUGGESTION_TRACE_ID,
+                request=null() if suggestion.request is None else suggestion.request,
             ),
             insert(SuggestionPartRow).values(
-                [
-                    {
-                        "suggestion_id": suggestion_id,
-                        "part": part,
-                        "status": suggestion.part_status,
-                        "reason_codes": []
-                        if suggestion.reason_code is None
-                        else [suggestion.reason_code],
-                        "completed_at": None if is_pending else moment,
-                    }
-                    for part in ("analysis", "draft")
-                ]
+                [_part_values(suggestion_id, name, part) for name, part in parts.items()]
             ),
             insert(SuggestionJobRow).values(
                 suggestion_id=suggestion_id,
@@ -374,6 +416,10 @@ class DatabaseBuilder:
             )
         )
         return token
+
+    async def execute(self, *statements: Executable) -> None:
+        """Run write statements as the owner in one transaction, for rows no method builds."""
+        await self._insert(*statements)
 
     async def scalar(self, statement: str, **parameters: object) -> object:
         """Run one read statement as the owner and return its first value.
@@ -421,3 +467,24 @@ class DatabaseBuilder:
         async with self._engine.begin() as connection:
             for statement in statements:
                 await connection.execute(statement)
+
+
+def _shared_part(spec: SuggestionSpec, moment: datetime) -> SuggestionPartSpec:
+    # The state of both parts, unless the spec gives a part a state of its own.
+    return SuggestionPartSpec(
+        status=spec.part_status,
+        completed_at=None if spec.part_status == "pending" else moment,
+        reason_codes=() if spec.reason_code is None else (spec.reason_code,),
+    )
+
+
+def _part_values(suggestion_id: UUID, part: str, spec: SuggestionPartSpec) -> dict[str, object]:
+    return {
+        "suggestion_id": suggestion_id,
+        "part": part,
+        "status": spec.status,
+        "reason_codes": list(spec.reason_codes),
+        "llm_cost_micro_usd": spec.llm_cost_micro_usd,
+        "completed_at": spec.completed_at,
+        "result": null() if spec.result is None else spec.result,
+    }

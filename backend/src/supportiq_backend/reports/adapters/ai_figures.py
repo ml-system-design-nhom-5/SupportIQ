@@ -83,9 +83,10 @@ class PostgresAiFigures:
 
         The first suggestion of a ticket is its oldest; the latency runs from the ticket's
         `created_at` to the `completed_at` of that suggestion's draft part (NFR-08). A ticket
-        whose first draft was `cancelled` gave staff no result, so it is left out, as the
-        project lead decided on 2026-11-14; an `unavailable` or `llm_unavailable` first draft
-        is a result, so it counts. A draft that replaced a cancelled one is never a first draft.
+        whose first draft was `cancelled` gave staff no result, so it is left out; an
+        `unavailable` or `llm_unavailable` first draft is a result, so it counts (contract
+        `ConsoleReport.end_to_end_latency`). A draft that replaced a cancelled one is never a
+        first draft.
 
         Args:
             period: The period.

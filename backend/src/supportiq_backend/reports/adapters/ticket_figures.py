@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from supportiq_backend.reports.adapters.code_arrays import CODE_COLUMN, expand_codes, join_codes
 from supportiq_backend.reports.adapters.sql_periods import (
+    handling_duration,
     in_period,
     median_ms,
     to_optional_milliseconds,
@@ -80,7 +81,8 @@ class PostgresTicketFigures:
     async def load_handling_time(self, period: ReportPeriod) -> HandlingTime:
         """Measure the median handling time of the tickets closed in the period, by mode.
 
-        Only tickets with a first view count: the handling clock starts there (NFR-11).
+        Only a ticket first viewed no later than its reply counts: the handling clock starts at
+        the first view (NFR-11), and `handling_duration` is NULL for every other ticket.
 
         Args:
             period: The period.
@@ -88,13 +90,11 @@ class PostgresTicketFigures:
         Returns:
             The handling time of each mode.
         """
-        duration = TICKETS.c.closed_at - TICKETS.c.handling_started_at
+        duration = handling_duration()
+        # `count` of the duration counts the tickets that have one; the median ignores NULL.
         rows = await self._session.execute(
-            select(TICKETS.c.handling_mode, func.count(), median_ms(duration))
-            .where(
-                in_period(TICKETS.c.closed_at, period),
-                TICKETS.c.handling_started_at.is_not(None),
-            )
+            select(TICKETS.c.handling_mode, func.count(duration), median_ms(duration))
+            .where(in_period(TICKETS.c.closed_at, period))
             .group_by(TICKETS.c.handling_mode)
         )
         time_by_mode = {

@@ -429,11 +429,13 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
-name = "reports reaches other features only through their public API, never their adapters (ARCH-17)"
+name = "reports reaches other features only through their public API, never their adapters, and never pseudonymization (ARCH-17, SEC-37)"
 type = "forbidden"
 allow_indirect_imports = true
 source_modules = ["supportiq_backend.reports"]
 forbidden_modules = [
+    # Not even its public API: the export must never restore a pseudonym (SEC-33).
+    "supportiq_backend.pseudonymization",
     "supportiq_backend.tickets.domain",
     "supportiq_backend.tickets.application",
     "supportiq_backend.tickets.adapters",

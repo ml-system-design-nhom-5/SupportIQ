@@ -1,23 +1,27 @@
-"""The report of a period for managers (FR-10): its figures and the rules that derive them.
+"""The figures of the report of a period for managers (FR-10, NFR-11), and the report itself.
 
-Every figure counts the records whose time falls in the period [`start_at`, `end_at`). The
-adapters count in PostgreSQL; this module decides the order of the items, the shares, the
-average, and which values are absent because nothing was counted (contracts v1 design,
-Reports; contract `ConsoleReport`). A report holds aggregates only: no text and no ticket ID.
+Each figure holds what the adapters counted in PostgreSQL over the period; `report_rules` decides
+the order of its items, its shares, its average, and which values are absent because nothing was
+counted (contracts v1 design, Reports; contract `ConsoleReport`). A report holds aggregates only:
+no text and no ticket ID.
 """
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime
-from enum import StrEnum
 
-from supportiq_backend.reports.domain.errors import InvalidReportPeriodError
+from supportiq_backend.reports.domain.report_rules import (
+    CodeCount,
+    ReportPeriod,
+    compute_rounded_average,
+    compute_share,
+    order_code_counts,
+)
 from supportiq_backend.suggestions import AiReasonCode, PartStatus
 from supportiq_backend.tickets import StaffReasonCode
 
 # The statuses of a draft part that left `pending`, without `cancelled`, in the order of the
 # contract's `CompletedDraftStatus`.
-COMPLETED_DRAFT_STATUSES = (
+_COMPLETED_DRAFT_STATUSES = (
     PartStatus.DRAFT_READY,
     PartStatus.ABSTAINED,
     PartStatus.ESCALATION_RECOMMENDED,
@@ -27,34 +31,6 @@ COMPLETED_DRAFT_STATUSES = (
 # The contract orders reason-code items as its enums list the codes, as these enums do.
 _STAFF_REASON_CODES = tuple(StaffReasonCode)
 _AI_REASON_CODES = tuple(AiReasonCode)
-
-
-@dataclass(frozen=True, slots=True)
-class ReportPeriod:
-    """The period of a report: `start_at` included, `end_at` excluded.
-
-    Only `build_report_period` creates one, so `start_at` is always earlier than `end_at`.
-
-    Attributes:
-        start_at: The start, included; timezone-aware.
-        end_at: The end, excluded: a record at exactly `end_at` belongs to the next period.
-    """
-
-    start_at: datetime
-    end_at: datetime
-
-
-@dataclass(frozen=True, slots=True)
-class CodeCount[CodeT: StrEnum]:
-    """The number of records that carry one code or have one status.
-
-    Attributes:
-        code: The code or the status.
-        count: The records, at least one.
-    """
-
-    code: CodeT
-    count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -171,7 +147,7 @@ class AiOutcomes:
 
         A status outside that list, such as `cancelled`, never appears.
         """
-        return order_code_counts(self.count_by_draft_status, COMPLETED_DRAFT_STATUSES)
+        return order_code_counts(self.count_by_draft_status, _COMPLETED_DRAFT_STATUSES)
 
     @property
     def by_reason_code(self) -> tuple[CodeCount[AiReasonCode], ...]:
@@ -246,7 +222,7 @@ class ModeHandlingTime:
     """The handling time of the tickets of one mode closed in the period (NFR-11).
 
     Attributes:
-        ticket_count: The closed tickets of the mode that have a first view.
+        ticket_count: The closed tickets of the mode first viewed no later than their reply.
         p50_ms: The median from the first view to the reply; None when `ticket_count` is 0.
     """
 
@@ -292,71 +268,3 @@ class ConsoleReport:
     ai_error_rate: AiErrorRate
     llm_cost: LlmCost
     handling_time: HandlingTime
-
-
-def build_report_period(start_at: datetime, end_at: datetime) -> ReportPeriod:
-    """Check that a period has a start earlier than its end.
-
-    Args:
-        start_at: The start, included.
-        end_at: The end, excluded.
-
-    Returns:
-        The period.
-
-    Raises:
-        InvalidReportPeriodError: `start_at` is not earlier than `end_at`.
-    """
-    if start_at >= end_at:
-        raise InvalidReportPeriodError
-    return ReportPeriod(start_at, end_at)
-
-
-def order_code_counts[CodeT: StrEnum](
-    count_by_code: Mapping[CodeT, int], codes_in_order: Iterable[CodeT]
-) -> tuple[CodeCount[CodeT], ...]:
-    """List one item per code that occurs, in the order of the contract's enum.
-
-    Args:
-        count_by_code: The records by code; a code that is missing or counted 0 is left out.
-        codes_in_order: Every code, in the order of the contract.
-
-    Returns:
-        The items, each with a count of at least one.
-    """
-    return tuple(
-        CodeCount(code, count_by_code[code])
-        for code in codes_in_order
-        if count_by_code.get(code, 0) > 0
-    )
-
-
-def compute_share(count: int, total: int) -> float | None:
-    """Divide a count by the total it belongs to.
-
-    Args:
-        count: The part, from 0 to `total`.
-        total: The whole.
-
-    Returns:
-        A number from 0 to 1, or None when `total` is 0, because nothing was counted.
-    """
-    if total == 0:
-        return None
-    return count / total
-
-
-def compute_rounded_average(total: int, count: int) -> int | None:
-    """Divide a total by a count and round to the nearest integer, halves upward.
-
-    Args:
-        total: The sum of the values, at least 0.
-        count: The number of values, at least 0.
-
-    Returns:
-        The rounded average, or None when `count` is 0.
-    """
-    if count == 0:
-        return None
-    # Integer arithmetic, so no float rounding: floor((2 * total + count) / (2 * count)).
-    return (2 * total + count) // (2 * count)

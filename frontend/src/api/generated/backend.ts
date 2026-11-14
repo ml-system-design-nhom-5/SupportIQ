@@ -1423,7 +1423,7 @@ export interface components {
         };
         /** @description The handling time of the tickets of one mode closed in the period: from the first view to the reply (NFR-11). Data class: Internal. */
         ModeHandlingTime: {
-            /** @description The closed tickets of the mode that have a first view. Data class: Internal. */
+            /** @description The closed tickets of the mode whose first view came no later than their reply. A ticket first viewed after its reply is left out, because its handling time would be negative. Data class: Internal. */
             ticket_count: number;
             /** @description The median handling time, in milliseconds. Absent when `ticket_count` is 0. Data class: Internal. */
             p50_ms?: number;
@@ -1499,7 +1499,7 @@ export interface components {
                     suggestion_count: number;
                 }[];
             };
-            /** @description From ticket creation until the draft part of the ticket's first suggestion left `pending`, for those drafts completed in the period (NFR-08: p95 at most 12 s). Data class: Internal. */
+            /** @description From ticket creation until the draft part of the ticket's first suggestion left `pending`, for those drafts completed in the period (NFR-08: p95 at most 12 s). A ticket whose first draft part was `cancelled`, for example by an intent correction, is left out, because staff got no result from it; a first draft that ended `unavailable` or `llm_unavailable` counts. Data class: Internal. */
             end_to_end_latency: {
                 /** @description The tickets measured. Data class: Internal. */
                 ticket_count: number;

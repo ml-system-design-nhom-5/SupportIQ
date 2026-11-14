@@ -13,7 +13,6 @@ from supportiq_backend.reports.application import (
     ReportStores,
 )
 from supportiq_backend.reports.domain import (
-    COMPLETED_DRAFT_STATUSES,
     EXPORTS_FOLDER_NAME,
     AiErrorRate,
     AiFigures,
@@ -48,7 +47,6 @@ from supportiq_backend.reports.domain import (
 )
 
 __all__ = [
-    "COMPLETED_DRAFT_STATUSES",
     "EXPORTS_FOLDER_NAME",
     "AiErrorRate",
     "AiFigures",

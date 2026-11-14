@@ -3,7 +3,7 @@
 import pytest
 
 from supportiq_backend.accounts import ForbiddenRoleError, Principal
-from supportiq_backend.platform import DatabaseUnavailableError, EventName, SpanName
+from supportiq_backend.platform import BackendError, DatabaseUnavailableError, EventName, SpanName
 from supportiq_backend.reports import ConsoleReport, TicketCounts
 from tests.unit.reports.fakes import (
     AI_OUTCOMES,
@@ -102,4 +102,21 @@ async def test_report_without_the_database_fails_and_records_no_success() -> Non
     with pytest.raises(DatabaseUnavailableError):
         await harness.use_case.execute(MANAGER, PERIOD)
 
+    assert harness.events.names() == ()
+
+
+@pytest.mark.parametrize(
+    ("tickets_failure", "ai_failure"),
+    [(DatabaseUnavailableError(), None), (None, DatabaseUnavailableError())],
+    ids=["ticket-figures", "ai-figures"],
+)
+async def test_report_whose_read_fails_in_the_transaction_rolls_back_and_records_no_success(
+    tickets_failure: BackendError | None, ai_failure: BackendError | None
+) -> None:
+    harness = build_report_harness(tickets_failure=tickets_failure, ai_failure=ai_failure)
+
+    with pytest.raises(DatabaseUnavailableError):
+        await harness.use_case.execute(MANAGER, PERIOD)
+
+    assert (harness.transactions.commit_count, harness.transactions.rollback_count) == (0, 1)
     assert harness.events.names() == ()

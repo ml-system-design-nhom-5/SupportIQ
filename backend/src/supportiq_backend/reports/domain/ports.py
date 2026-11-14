@@ -16,9 +16,9 @@ from supportiq_backend.reports.domain.report import (
     Escalations,
     HandlingTime,
     LlmCost,
-    ReportPeriod,
     TicketCounts,
 )
+from supportiq_backend.reports.domain.report_rules import ReportPeriod
 
 
 class TicketFigures(Protocol):
@@ -37,6 +37,8 @@ class TicketFigures(Protocol):
 
     async def load_handling_time(self, period: ReportPeriod) -> HandlingTime:
         """Measure the median handling time of the tickets closed in the period, by mode.
+
+        Only a ticket first viewed no later than its reply has a handling time.
 
         Args:
             period: The period.

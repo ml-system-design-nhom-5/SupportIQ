@@ -12,17 +12,16 @@ from supportiq_backend.composition_root.report_commands import (
     ExportDecisionsArguments,
     export_decisions,
 )
-from supportiq_backend.reports import ExportPathRefusedError, build_report_period
+from supportiq_backend.reports import ExportPathRefusedError
 from supportiq_backend.reports.adapters.export_file import resolve_export_path
 from tests.integration.application import build_settings
 from tests.integration.database import WorkerDatabase
 from tests.integration.reports.export_scenario import insert_export_scenario
-from tests.integration.reports.report_rows import END_AT, START_AT, ReportRows
+from tests.integration.reports.report_rows import REPORT_PERIOD, ReportRows
 from tests.unit.platform.fakes import RecordingEventRecorder
 
 pytestmark = pytest.mark.anyio
 
-PERIOD = build_report_period(START_AT, END_AT)
 WORK = "work"
 OUTSIDE = "outside"
 FILE_NAME = "decisions.jsonl"
@@ -114,7 +113,7 @@ async def test_refused_export_writes_nothing_and_records_nothing(
         await export_decisions(
             build_settings(worker_database),
             events,
-            ExportDecisionsArguments(period=PERIOD, output=output),
+            ExportDecisionsArguments(period=REPORT_PERIOD, output=output),
             working_directory=working_directory,
         )
 

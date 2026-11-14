@@ -4,6 +4,16 @@ All notable changes to the contracts in this folder. The format follows [Keep a 
 
 ## `backend.openapi.yaml`
 
+### [1.2.1] - 2026-11-15
+
+Clarifies two descriptions of the report, as the project lead decided on 2026-11-14 for the report of the [backend ticket workflow design](../docs/design/backend-ticket-workflow.md#reports). The change is compatible (CON-19): no schema, operation, or example changes.
+
+#### Changed
+
+- `ConsoleReport.end_to_end_latency`: a ticket whose first draft part was `cancelled`, for example by an intent correction, is left out, because staff got no result from it; a first draft that ended `unavailable` or `llm_unavailable` still counts. Before, the description did not say how a cancelled first draft counts.
+- `ModeHandlingTime.ticket_count`: a ticket counts only when its first view came no later than its reply. A ticket first viewed after its reply, for example when the view failed while the reply was sent, is left out, because its handling time would be negative. Before, the description counted every closed ticket that had a first view.
+- `info.description` names version 1.2.1.
+
 ### [1.2.0] - 2026-11-12
 
 Adds the review console of staff and managers and the versions page of the admin area, the operations that the project lead approved on 2026-11-12 from the [contracts v1 design](../docs/design/contracts-v1.md#rollout), as the [backend ticket workflow design](../docs/design/backend-ticket-workflow.md) implements them. Every change is compatible (CON-19): new operations, new schemas, and new problem types in responses. Consumers regenerate their code and map the new problem types to a safe default (CON-22). The provider tests of `backend` run over every operation, so they pass again only with the implementation of these operations (CON-01, step 5).
