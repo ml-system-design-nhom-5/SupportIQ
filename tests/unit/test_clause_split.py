@@ -81,3 +81,22 @@ def test_is_request_clause():
     assert is_request_clause("Please check my refund")
     assert is_request_clause("my refund status", ended_with_question=True)
     assert not is_request_clause("I sent the item back on the 3rd")
+
+
+def test_ensemble_backend_averages_logits_and_checks_labels():
+    np = pytest.importorskip("numpy")
+    from pipeline.evaluation.autoeval.backends import EnsembleBackend
+
+    class B:
+        name = "fake"
+
+        def __init__(self, z, labels=None):
+            self.z, self.id2label = np.array(z), labels or {0: "a", 1: "b"}
+
+        def logits(self, text):
+            return self.z
+
+    ens = EnsembleBackend([B([1.0, 3.0]), B([3.0, 1.0])])
+    assert ens.logits("x").tolist() == [2.0, 2.0]
+    with pytest.raises(ValueError):
+        EnsembleBackend([B([0, 0]), B([0, 0], {0: "b", 1: "a"})])

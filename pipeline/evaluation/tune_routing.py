@@ -28,20 +28,38 @@ from pathlib import Path
 from apps.core_backend.intent.channels import names_return_channel
 from apps.core_backend.intent.routing import SUPPORTED_12_INTENTS, decide_route, load_policy_v2
 from apps.core_backend.intent.schemas import ClausePrediction, IntentPrediction, MultiRequestPolicy, RoutingContext
-from pipeline.evaluation.autoeval.backends import IntentModel, load_backend
-from pipeline.preparation.intent_extra import load_dev_set, load_escalation_dev, load_multi_dev, load_oos_dev
+from pipeline.evaluation.autoeval.backends import IntentModel, load_model_dirs
+from pipeline.evaluation.autoeval import metrics as M
+from pipeline.preparation.intent_extra import (load_dev_set, load_escalation_dev, load_independent_dev, load_multi_dev,
+                                               load_oos_dev)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BASE_POLICY = REPO_ROOT / "apps/core_backend/config/policies/intent_policy.v2.json"
 NEW_POLICY = REPO_ROOT / "apps/core_backend/config/policies/intent_policy.v3.json"
 
-GRID = {
-    "min_clause_confidence": [0.5, 0.6, 0.7, 0.8, 0.9],
-    "min_words": [2, 3, 4],
-    "tau_shift": [-0.10, -0.05, 0.0, 0.05, 0.10],
-    "delta": [0.05, 0.10, 0.15, 0.20],
-    "request_clauses_only": [False, True],
+GRIDS = {
+    # Policy v3 for v1.1.0 (docs/design/multi-request-detection.md).
+    "v3": {
+        "min_clause_confidence": [0.5, 0.6, 0.7, 0.8, 0.9],
+        "min_words": [2, 3, 4],
+        "tau_shift": [-0.10, -0.05, 0.0, 0.05, 0.10],
+        "delta": [0.05, 0.10, 0.15, 0.20],
+        "request_clauses_only": [False, True],
+        "min_scope_probability": [None],
+    },
+    # Policy v4 for v1.2.0 (docs/design/intent-model-v1.2.md): adds gate 2f.
+    "v4": {
+        "min_clause_confidence": [0.5, 0.6, 0.7, 0.8, 0.9],
+        "min_words": [3],
+        "tau_shift": [-0.10, -0.05, 0.0, 0.05, 0.10],
+        "delta": [0.05, 0.10, 0.15],
+        "request_clauses_only": [True],
+        "min_scope_probability": [None, 0.5, 0.6, 0.7, 0.8, 0.9],
+    },
 }
+# Round 1 of v1.2 retunes without gate 2f, so each round's change is measured on its own.
+GRIDS["v4-noscope"] = {**GRIDS["v4"], "min_scope_probability": [None]}
+GRID = GRIDS["v3"]
 BASE = {"min_words": 3, "tau_shift": 0.0, "delta": 0.10}
 CONSTRAINTS = {  # metric: (op, bound)
     "multi_flag_rate": (">=", 0.90),
@@ -60,7 +78,8 @@ def _context(text: str) -> RoutingContext:
     return RoutingContext(ticket_customer_id="dev", return_channel_named=channel)
 
 
-def _policy(base, tau_shift: float, delta: float, min_conf: float, min_words: int, requests_only: bool = False):
+def _policy(base, tau_shift: float, delta: float, min_conf: float, min_words: int, requests_only: bool = False,
+            min_scope: float | None = None):
     # Thresholds of sensitive-action intents and their stricter per-intent margins are never lowered (guardrail).
     p = base.model_copy(deep=True)
     sensitive = set(base.sensitive_action_intents)
@@ -74,6 +93,7 @@ def _policy(base, tau_shift: float, delta: float, min_conf: float, min_words: in
     p.multi_request = MultiRequestPolicy(min_clause_confidence=min_conf, min_words=min_words, max_clauses=MAX_CLAUSES,
                                          request_clauses_only=requests_only)
     p.return_channel_guard = True  # docs/design/return-channel-guard.md; not a tuned setting
+    p.min_scope_probability = min_scope
     return p
 
 
@@ -87,13 +107,14 @@ def evaluate(items: list[dict], policy) -> dict:
     out = {"multi": [], "single": [], "dev": [], "oos": []}
     for it in items:
         p = it["pred"]
-        clauses = it["clauses"][mw]
+        clauses = it["clauses"][mw] if policy.multi_request.enabled else None
         pred = IntentPrediction(intent=p["intent"], confidence=p["confidence"], margin=p["margin"], model_version="dev",
-                                clauses=[ClausePrediction(**c) for c in clauses] if clauses else None)
+                                clauses=[ClausePrediction(**c) for c in clauses] if clauses else None,
+                                scope_probability=p.get("scope_probability"))
         d = decide_route(pred, _context(it["text"]), policy)
         low = p["confidence"] < policy.confidence_thresholds.get(p["intent"], policy.default_confidence_threshold)
-        out[it["group"]].append({"gold": it["gold"], "pred": p["intent"], "action": d.action, "reasons": d.reason_codes,
-                                 "flagged": low or d.action != "retrieve_draft"})
+        out[it["group"]].append({"gold": it["gold"], "pred": p["intent"], "conf": p["confidence"], "action": d.action,
+                                 "reasons": d.reason_codes, "flagged": low or d.action != "retrieve_draft"})
     draftable = [r for r in out["dev"] if r["gold"] in SUPPORTED_12_INTENTS and r["gold"] != "human_agent"]
     must_escalate = [r for r in out["dev"] if r["gold"] not in SUPPORTED_12_INTENTS or r["gold"] == "human_agent"]
     return {
@@ -106,6 +127,8 @@ def evaluate(items: list[dict], policy) -> dict:
         "dev_wrong_intent_drafts": sum(r["action"] == "retrieve_draft" and r["pred"] != r["gold"] for r in out["dev"]),
         "dev_must_escalate_drafted": sum(r["action"] == "retrieve_draft" for r in must_escalate),
         "oos_flag_rate": _rate(sum(r["flagged"] for r in out["oos"]), len(out["oos"])),
+        "dev_macro_f1": round(M.macro_f1([r["gold"] for r in out["dev"]], [r["pred"] for r in out["dev"]]), 4) if out["dev"] else None,
+        "dev_confident_error_rate": _rate(sum(r["pred"] != r["gold"] and r["conf"] >= 0.8 for r in out["dev"]), len(out["dev"])),
         "n": {k: len(v) for k, v in out.items()} | {"draftable": len(draftable)},
     }
 
@@ -133,16 +156,21 @@ def select(results: list[dict]) -> dict:
     return {**best, "feasible": bool(feasible), "n_feasible": len(feasible)}
 
 
-def load_items(model: IntentModel) -> list[dict]:
-    rows = [("dev", r.intent, r.instruction) for r in load_dev_set().itertuples()]
-    rows += [("dev", r.intent, r.instruction) for r in load_escalation_dev().itertuples()]
-    rows += [("oos", None, r.instruction) for r in load_oos_dev().itertuples()]
-    rows += [(r.kind, None, r.instruction) for r in load_multi_dev().itertuples()]
+def load_items(model: IntentModel, grid: dict = GRID, independent: bool = False) -> list[dict]:
+    """Dev messages with predictions. ``independent`` adds data/intent/dev_independent (source ``independent``)."""
+    rows = [("own", "dev", r.intent, r.instruction) for r in load_dev_set().itertuples()]
+    rows += [("own", "dev", r.intent, r.instruction) for r in load_escalation_dev().itertuples()]
+    rows += [("own", "oos", None, r.instruction) for r in load_oos_dev().itertuples()]
+    rows += [("own", r.kind, None, r.instruction) for r in load_multi_dev().itertuples()]
+    if independent:
+        group = {"labelled": "dev", "oos": "oos", "multi": "multi"}
+        rows += [("independent", group[r["kind"]], r["true_intent"] if r["kind"] == "labelled" else None, r["text"])
+                 for r in load_independent_dev()]
     items = []
-    for group, gold, text in rows:
-        items.append({"group": group, "gold": gold, "text": text, "pred": model.predict(text),
+    for source, group, gold, text in rows:
+        items.append({"source": source, "group": group, "gold": gold, "text": text, "pred": model.predict(text),
                       "clauses": {(mw, ro): model.predict_clauses(text, mw, MAX_CLAUSES, ro)
-                                  for mw in GRID["min_words"] for ro in GRID["request_clauses_only"]}})
+                                  for mw in grid["min_words"] for ro in grid["request_clauses_only"]}})
     return items
 
 
@@ -155,22 +183,36 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", required=True, help="JSON report path")
     ap.add_argument("--write-policy", action="store_true", help=f"write {NEW_POLICY.relative_to(REPO_ROOT).as_posix()}")
     ap.add_argument("--model-version", default="v1.1.0")
+    ap.add_argument("--grid", default="v3", choices=sorted(GRIDS))
+    ap.add_argument("--policy-version", default="v3.0.0")
+    ap.add_argument("--policy-out", default=str(NEW_POLICY.relative_to(REPO_ROOT)))
+    ap.add_argument("--independent", action="store_true", help="also use data/intent/dev_independent")
     args = ap.parse_args(argv)
 
-    model = IntentModel(load_backend(REPO_ROOT / args.model_dir, args.backend))
+    grid = GRIDS[args.grid]
+    model = IntentModel(load_model_dirs(args.model_dir, REPO_ROOT, args.backend))
     base = load_policy_v2(str(BASE_POLICY))
-    items = load_items(model)
+    items = load_items(model, grid, args.independent)
     results = []
-    for mc, mw, ts, dl, ro in itertools.product(*GRID.values()):
-        settings = {"min_clause_confidence": mc, "min_words": mw, "tau_shift": ts, "delta": dl, "request_clauses_only": ro}
-        m = evaluate(items, _policy(base, ts, dl, mc, mw, ro))
-        results.append({"settings": settings, "metrics": m, "violation": violation(m)})
+    for values in itertools.product(*grid.values()):
+        st = dict(zip(grid, values))
+        policy = _policy(base, st["tau_shift"], st["delta"], st["min_clause_confidence"], st["min_words"],
+                         st["request_clauses_only"], st["min_scope_probability"])
+        m = evaluate(items, policy)
+        results.append({"settings": st, "metrics": m, "violation": violation(m)})
     best = select(results)
+    s = best["settings"]
+    chosen = _policy(base, s["tau_shift"], s["delta"], s["min_clause_confidence"], s["min_words"],
+                     s["request_clauses_only"], s["min_scope_probability"])
+    by_source = {src: evaluate([it for it in items if it["source"] == src], chosen)
+                 for src in sorted({it["source"] for it in items})}
     no_gate = base.model_copy(deep=True)
     report = {
         "model_dir": args.model_dir, "backend": model.backend.name, "base_policy": base.version,
-        "data": "data/intent/manifest.json (dev_cases, oos_dev, multi_dev); data/benchmarks/ not read",
-        "grid": GRID, "constraints": {k: list(v) for k, v in CONSTRAINTS.items()},
+        "data": "data/intent/manifest.json (dev_cases, oos_dev, multi_dev, escalation_dev"
+                + (", dev_independent" if args.independent else "") + "); data/benchmarks/ not read",
+        "grid": grid, "constraints": {k: list(v) for k, v in CONSTRAINTS.items()},
+        "selected_by_source": by_source,
         "base_policy_without_gate": evaluate(items, _with_disabled_gate(no_gate)),
         "selected": best,
         "top10": sorted(results, key=lambda r: (r["violation"], -r["metrics"]["dev_correct_draft_rate"]))[:10],
@@ -182,14 +224,14 @@ def main(argv: list[str] | None = None) -> int:
     print("base policy v2 without gate:", json.dumps({k: v for k, v in report['base_policy_without_gate'].items() if k != 'n'}))
     print("selected:", json.dumps(best["settings"]), "violation", best["violation"])
     print("metrics:", json.dumps({k: v for k, v in best["metrics"].items() if k != "n"}))
+    for src, m in by_source.items():
+        print(f"  {src}:", json.dumps({k: v for k, v in m.items() if k != "n"}))
     print(f"wrote {out.relative_to(REPO_ROOT).as_posix()}")
     if args.write_policy:
-        s = best["settings"]
-        policy = _policy(base, s["tau_shift"], s["delta"], s["min_clause_confidence"], s["min_words"],
-                         s["request_clauses_only"])
+        policy = chosen
         data = json.loads(BASE_POLICY.read_text(encoding="utf-8"))
         data.update({
-            "version": "v3.0.0",
+            "version": args.policy_version,
             "approved": False, "approved_by": None, "approval_date": None,
             "model_version": args.model_version,
             "tuning_report": args.out.replace("\\", "/"),
@@ -200,8 +242,11 @@ def main(argv: list[str] | None = None) -> int:
             "multi_request": policy.multi_request.model_dump(),
             "return_channel_guard": policy.return_channel_guard,
         })
-        NEW_POLICY.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-        print(f"wrote {NEW_POLICY.relative_to(REPO_ROOT).as_posix()} (approved: false; approval is the team's)")
+        if policy.min_scope_probability is not None:
+            data["min_scope_probability"] = policy.min_scope_probability
+        target = REPO_ROOT / args.policy_out
+        target.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        print(f"wrote {target.relative_to(REPO_ROOT).as_posix()} (approved: false; approval is the team's)")
     return 0
 
 

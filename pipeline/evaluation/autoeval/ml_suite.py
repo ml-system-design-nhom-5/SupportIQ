@@ -10,7 +10,7 @@ from apps.core_backend.intent.channels import names_return_channel
 from apps.core_backend.intent.schemas import ClausePrediction, IntentPrediction, RoutingContext
 
 from . import metrics as M
-from .backends import IntentModel, load_backend, verify_model
+from .backends import IntentModel, load_model_dirs, verify_model
 from .build_intent_set import verify_manifest as verify_intent_set
 from .datasets import REPO_ROOT, load_jsonl
 
@@ -24,7 +24,8 @@ def _route(policy, pred: dict | None, context: dict, model_version: str, fault: 
     else:
         clauses = [ClausePrediction(**c) for c in pred["clauses"]] if pred.get("clauses") else None
         p = IntentPrediction(intent=pred["intent"], confidence=pred["confidence"], margin=pred["margin"],
-                             model_version=model_version, clauses=clauses)
+                             model_version=model_version, clauses=clauses,
+                             scope_probability=pred.get("scope_probability"))
     # Same flag as PipelineRunner sets from the message (docs/design/return-channel-guard.md).
     context = {**context, "return_channel_named": bool(policy.return_channel_guard and names_return_channel(text))}
     return decide_route(p, RoutingContext(**context), policy)
@@ -45,13 +46,17 @@ def _threshold(policy, intent: str) -> float:
 
 def run(config: dict, backend: str = "auto", log=print) -> dict[str, Any]:
     cfg = config["ml"]
-    model_dir = REPO_ROOT / cfg["model_dir"]
-    check = verify_model(model_dir)
+    # A comma-separated model_dir is a seed ensemble (docs/design/intent-model-v1.2.md): logits are averaged.
+    dirs = [d.strip() for d in cfg["model_dir"].split(",") if d.strip()]
+    checks = [verify_model(REPO_ROOT / d) for d in dirs]
+    check = checks[0] if len(checks) == 1 else {
+        **checks[0], "members": checks, "ok": all(c.get("ok") for c in checks),
+        "checksum_match": all(c.get("checksum_match") for c in checks)}
     out: dict[str, Any] = {"model": check}
-    if "weights_sha256" not in check:
-        out["error"] = check.get("error", "model not found")
+    if any("weights_sha256" not in c for c in checks):
+        out["error"] = next((c.get("error") for c in checks if "weights_sha256" not in c), "model not found")
         return out
-    model = IntentModel(load_backend(model_dir, backend))
+    model = IntentModel(load_model_dirs(cfg["model_dir"], REPO_ROOT, backend))
     out["backend"] = model.backend.name
     if getattr(model.backend, "fallback_reason", None):
         out["backend_fallback_reason"] = model.backend.fallback_reason
