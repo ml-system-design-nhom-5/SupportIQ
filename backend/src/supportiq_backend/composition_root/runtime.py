@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from supportiq_backend.composition_root.accounts_wiring import wire_accounts
 from supportiq_backend.composition_root.commerce_wiring import wire_commerce
+from supportiq_backend.composition_root.reports_wiring import wire_reports
 from supportiq_backend.composition_root.shared_ports import build_shared_ports
 from supportiq_backend.composition_root.suggestions_wiring import wire_suggestions
 from supportiq_backend.composition_root.tickets_wiring import wire_tickets
@@ -118,6 +119,7 @@ def build_runtime(
             wire_commerce(session_factory, accounts),
             *wire_tickets(settings, session_factory, shared, accounts, suggestions),
             *suggestions.routers,
+            wire_reports(session_factory, shared, accounts),
         ),
         ai_client=suggestions.ai_client,
         claim_loop=suggestions.claim_loop,

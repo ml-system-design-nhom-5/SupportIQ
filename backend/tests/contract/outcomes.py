@@ -13,8 +13,10 @@ from tests.contract.call_changes import (
     after_the_reply,
     as_admin,
     as_customer,
+    as_staff,
     as_staff_on_the_closed_queue,
     on_a_ticket_that_requires_authority,
+    with_an_empty_period,
     with_invalid_body,
     with_invalid_limit,
     with_key_reused_on_another_ticket,
@@ -90,6 +92,7 @@ CONSOLE_OPERATIONS = (
     "sendReply",
     "createEscalation",
     "getConsoleKbDocumentVersion",
+    "getConsoleReport",
 )
 ADMIN_OPERATIONS = (
     "listAdminAccounts",
@@ -128,6 +131,7 @@ OK_STATUSES = {
     "sendReply": HTTPStatus.CREATED,
     "createEscalation": HTTPStatus.CREATED,
     "getConsoleKbDocumentVersion": HTTPStatus.OK,
+    "getConsoleReport": HTTPStatus.OK,
     "listAdminAccounts": HTTPStatus.OK,
     "getAdminVersions": HTTPStatus.OK,
     "createAdminAccount": HTTPStatus.CREATED,
@@ -301,6 +305,8 @@ OUTCOMES: tuple[Outcome, ...] = (
         for operation in ("createReplyProposal", "sendReply")
     ),
     Outcome("createEscalation", UNPROCESSABLE, change=with_other_without_a_note, label="-note"),
+    Outcome("getConsoleReport", UNPROCESSABLE, change=with_an_empty_period, label="-period"),
+    Outcome("getConsoleReport", HTTPStatus.FORBIDDEN, change=as_staff, label="-staff"),
     Outcome(
         "getConsoleKbDocumentVersion",
         HTTPStatus.SERVICE_UNAVAILABLE,

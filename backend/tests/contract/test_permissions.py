@@ -34,6 +34,7 @@ OPERATIONS_WITH_ROLES = (
     "sendReply",
     "createEscalation",
     "getConsoleKbDocumentVersion",
+    "getConsoleReport",
     "listAdminAccounts",
     "createAdminAccount",
     "changeAccountRole",
@@ -48,6 +49,8 @@ ADMIN_OPERATIONS = (
 )
 # The console operations of staff alone: a manager sends replies instead (FR-06).
 STAFF_OPERATIONS = ("createReplyProposal", "createEscalation")
+# The console operations of managers alone (ADR-0012).
+MANAGER_OPERATIONS = ("getConsoleReport",)
 # The console operations that both support roles call (contracts v1 design, permission table).
 SUPPORT_OPERATIONS = (
     "listConsoleTickets",
@@ -110,6 +113,11 @@ def test_only_an_admin_calls_an_admin_operation(contract: BaseSchema, operation_
 @pytest.mark.parametrize("operation_id", STAFF_OPERATIONS)
 def test_only_staff_call_a_staff_operation(contract: BaseSchema, operation_id: str) -> None:
     assert roles_of(contract, operation_id) == ("staff",)
+
+
+@pytest.mark.parametrize("operation_id", MANAGER_OPERATIONS)
+def test_only_a_manager_calls_a_manager_operation(contract: BaseSchema, operation_id: str) -> None:
+    assert roles_of(contract, operation_id) == ("manager",)
 
 
 @pytest.mark.parametrize("operation_id", SUPPORT_OPERATIONS)

@@ -61,6 +61,7 @@ ROLE_OF_OPERATION = {
     "sendReply": "staff",
     "createEscalation": "staff",
     "getConsoleKbDocumentVersion": "staff",
+    "getConsoleReport": "manager",
     "listAdminAccounts": "admin",
     "createAdminAccount": "admin",
     "changeAccountRole": "admin",
@@ -77,9 +78,10 @@ TRACEPARENT_REFERENCE = {"$ref": "#/components/parameters/Traceparent"}
 # with `violated_rule`; a wrong current password returns `422` with
 # `current_password_incorrect`; a retry with nothing to retry, or an intent correction while no
 # intent is known, returns `422`; a reply or a reply proposal that breaks a rule of its basis,
-# or holds a placeholder, returns `422`; and an escalation with `other` and no note returns
-# `422`. So on these operations a request can match the schema and still
-# get `422`. Every other operation keeps the strict default of the check.
+# or holds a placeholder, returns `422`; an escalation with `other` and no note returns `422`;
+# and a report period whose start is not earlier than its end returns `422`. So on these
+# operations a request can match the schema and still get `422`. Every other operation keeps
+# the strict default of the check.
 OPERATIONS_WITH_A_DOCUMENTED_422_FOR_VALID_DATA = [
     "listShopProducts",
     "listShopOrders",
@@ -89,6 +91,7 @@ OPERATIONS_WITH_A_DOCUMENTED_422_FOR_VALID_DATA = [
     "createReplyProposal",
     "sendReply",
     "createEscalation",
+    "getConsoleReport",
     "listAdminAccounts",
     "changeAccountRole",
     "changeAccountStatus",

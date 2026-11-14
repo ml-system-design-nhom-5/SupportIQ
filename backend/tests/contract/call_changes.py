@@ -9,6 +9,7 @@ from dataclasses import replace
 from tests.contract.calls import (
     NEW_PASSWORD,
     REPLY_WITHOUT_A_DRAFT,
+    REPORT_PERIOD,
     Call,
     World,
     valid_calls,
@@ -31,6 +32,10 @@ def without_origin(call: Call, _world: World) -> Call:
 
 def as_admin(call: Call, _world: World) -> Call:
     return replace(call, role="admin")
+
+
+def as_staff(call: Call, _world: World) -> Call:
+    return replace(call, role="staff")
 
 
 def as_customer(call: Call, _world: World) -> Call:
@@ -128,6 +133,13 @@ def with_taken_login_name(call: Call, _world: World) -> Call:
 
 def with_other_without_a_note(call: Call, _world: World) -> Call:
     return replace(call, body={"staff_reason_codes": ["other"]})
+
+
+def with_an_empty_period(call: Call, _world: World) -> Call:
+    # `start_at` must be earlier than `end_at` (contract `InvalidReportPeriod`).
+    return replace(
+        call, params={"start_at": REPORT_PERIOD["start_at"], "end_at": REPORT_PERIOD["start_at"]}
+    )
 
 
 def with_reused_key(new_body: object) -> ChangeCall:

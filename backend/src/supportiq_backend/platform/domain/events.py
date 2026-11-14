@@ -55,6 +55,8 @@ class EventName(StrEnum):
     DECISION_RECORDED = "decision.recorded"
     REPLY_SENT = "reply.sent"
     TICKET_ESCALATED = "ticket.escalated"
+    REPORT_BUILT = "report.built"
+    DECISIONS_EXPORTED = "decisions.exported"
     ACCOUNT_ROLE_CHANGED = "account.role_changed"
     ACCOUNT_STATUS_CHANGED = "account.status_changed"
     ACCOUNT_CREATED = "account.created"
@@ -185,6 +187,12 @@ EVENT_DESCRIPTIONS: Mapping[EventName, EventDescription] = MappingProxyType(
         EventName.REPLY_SENT: EventDescription(EventLevel.INFO, "Reply sent to the customer"),
         EventName.TICKET_ESCALATED: EventDescription(
             EventLevel.INFO, "Ticket escalated to the manager queue"
+        ),
+        EventName.REPORT_BUILT: EventDescription(
+            EventLevel.INFO, "Report of a period built for a manager"
+        ),
+        EventName.DECISIONS_EXPORTED: EventDescription(
+            EventLevel.INFO, "Decision records of a period written to the export file"
         ),
         EventName.ACCOUNT_ROLE_CHANGED: EventDescription(EventLevel.INFO, "Account role changed"),
         EventName.ACCOUNT_STATUS_CHANGED: EventDescription(

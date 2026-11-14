@@ -21,6 +21,9 @@ CONSOLE_TICKETS = "/v1/console/tickets"
 # The KB document version of the `getKbDocumentVersion` example of `ai-service` contract 1.0.0.
 KB_DOCUMENT_VERSION = "/v1/console/kb-documents/SAMPLE-REFUND-001/versions/1.0"
 ADMIN_VERSIONS = "/v1/admin/versions"
+CONSOLE_REPORTS = "/v1/console/reports"
+# A period of the report: the start is included and the end excluded (contract `ReportStartAt`).
+REPORT_PERIOD = {"start_at": "2026-11-01T00:00:00Z", "end_at": "2026-12-01T00:00:00Z"}
 ACCOUNTS = "/v1/admin/accounts"
 KEY = "00000000-0000-4000-8000-000000000001"
 LOGIN_NAME = "staff-contract"
@@ -228,6 +231,7 @@ def _console_calls(world: World) -> Mapping[str, Call]:
             "POST", f"{console_ticket}/escalations", role="staff", key=KEY, body=ESCALATION
         ),
         "getConsoleKbDocumentVersion": Call("GET", KB_DOCUMENT_VERSION, role="staff"),
+        "getConsoleReport": Call("GET", CONSOLE_REPORTS, role="manager", params=REPORT_PERIOD),
     }
 
 

@@ -19,6 +19,7 @@ class SpanName(StrEnum):
     CALL_AI_SERVICE = "call_ai_service"
     SAVE_DECISION = "save_decision"
     SEND_REPLY = "send_reply"
+    BUILD_REPORT = "build_report"
 
 
 class IdGenerator(Protocol):

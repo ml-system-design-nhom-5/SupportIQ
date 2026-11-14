@@ -26,6 +26,7 @@ class OperationId(StrEnum):
     SEND_REPLY = "sendReply"
     CREATE_ESCALATION = "createEscalation"
     GET_CONSOLE_KB_DOCUMENT_VERSION = "getConsoleKbDocumentVersion"
+    GET_CONSOLE_REPORT = "getConsoleReport"
     LIST_ADMIN_ACCOUNTS = "listAdminAccounts"
     CHANGE_ACCOUNT_ROLE = "changeAccountRole"
     CHANGE_ACCOUNT_STATUS = "changeAccountStatus"
