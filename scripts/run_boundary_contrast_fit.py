@@ -193,6 +193,35 @@ def run_preflight_validation(repo_root: Path, dryrun_root: Path) -> Dict[str, An
     if missing_46:
         raise RuntimeError(f"Missing labels in Bitext replay after audit: {sorted(missing_46)}")
 
+    sem_audit = lock.get("semantic_audit") or {}
+    sem_summaries = {s.get("split"): s for s in (sem_audit.get("split_summaries") or [])}
+    expected_kept = {
+        "contrast_pos_train": len(pos_train_rows),
+        "contrast_pos_calibration": len(pos_cal_rows),
+        "contrast_pos_evaluation": len(pos_eval_rows),
+        "bitext_train_clean": len(bitext_clean_rows),
+        "bitext_train_noisy": len(bitext_noisy_rows),
+        "bitext_cal": len(bitext_cal_rows),
+    }
+    for split_k, exp_len in expected_kept.items():
+        if split_k not in sem_summaries:
+            raise ValueError(f"Missing semantic_audit split_summary for {split_k}")
+        s = sem_summaries[split_k]
+        if int(s.get("kept_rows", -1)) != exp_len:
+            raise ValueError(f"Semantic audit kept_rows mismatch for {split_k}: {s.get('kept_rows')} != {exp_len}")
+        if int(s.get("input_rows", -1)) != int(s.get("kept_rows", 0)) + int(s.get("quarantined_rows", 0)):
+            raise ValueError(f"Semantic audit input != kept+quarantined for {split_k}")
+    active_q_sum = sum(
+        int(s.get("quarantined_rows", 0))
+        for k, s in sem_summaries.items()
+        if not str(k).endswith("_readonly")
+    )
+    if active_q_sum != int(sem_audit.get("quarantined_total", -1)) or active_q_sum != len(quarantine_rows):
+        raise ValueError(
+            f"Semantic audit quarantine reconciliation mismatch: active_sum={active_q_sum}, "
+            f"manifest_total={sem_audit.get('quarantined_total')}, records={len(quarantine_rows)}"
+        )
+
     for r in pos_train_rows + pos_cal_rows + pos_eval_rows:
         if "neg_repeat" in r:
             raise ValueError(f"Positive 46-class row must not carry neg_repeat: {r.get('sample_id')}")
@@ -280,6 +309,33 @@ def _snapshot_relevant_sources(repo_root: Path, dest_root: Path, expected_hashes
             raise ValueError(f"Archived source snapshot SHA mismatch for {rel}")
 
 
+def validate_zero_fit_prep_namespace(
+    *,
+    prep_run_id: str,
+    fit_run_id: str,
+    main_candidates_dir: Path,
+    local_contrast_root: Path,
+) -> Dict[str, Path]:
+    """Ensure --archive-prep path (-prep) and future --run-contrast-fit paths are disjoint and unused."""
+    prep_records_dir = main_candidates_dir / f"run-records-{prep_run_id}-prep"
+    fit_archive_dir = main_candidates_dir / fit_run_id
+    fit_records_dir = main_candidates_dir / f"run-records-{fit_run_id}"
+    fit_local_dir = local_contrast_root / fit_run_id
+    if prep_records_dir in (fit_archive_dir, fit_records_dir, fit_local_dir):
+        raise ValueError(f"Prep records path collides with planned future fit path: {prep_records_dir}")
+    if prep_records_dir.exists():
+        raise FileExistsError(f"MAIN prep records already exist: {prep_records_dir}")
+    for future_path in (fit_archive_dir, fit_records_dir, fit_local_dir):
+        if future_path.exists():
+            raise FileExistsError(f"Planned future fit path already exists (choose unused --fit-run-id): {future_path}")
+    return {
+        "prep_records_dir": prep_records_dir,
+        "fit_archive_dir": fit_archive_dir,
+        "fit_records_dir": fit_records_dir,
+        "fit_local_dir": fit_local_dir,
+    }
+
+
 def _archive_zero_fit_records(
     *,
     dest_dir: Path,
@@ -290,66 +346,83 @@ def _archive_zero_fit_records(
     source_prov: Dict[str, Any],
     c_grid: Tuple[float, ...],
     run_id: str,
+    planned_future_run_id: str,
+    planned_future_paths: Dict[str, str] | None = None,
 ) -> None:
-    """Write immutable zero-fit preparation/dryrun bundle with verified SHA inventory."""
+    """Write immutable zero-fit preparation/dryrun bundle with verified SHA inventory and status tracking."""
     dest_dir.mkdir(parents=True, exist_ok=False)
-    shutil.copytree(dryrun_root / "datasets", dest_dir / "datasets")
-    _verify_dir_matches_lock_hashes(dest_dir / "datasets", preflight["dataset_hashes"])
-    for root_copy in ("quarantine_records.jsonl", "semantic_audit_manifest.json", "dataset_lock_manifest.json"):
-        src_p = dest_dir / "datasets" / root_copy
-        if src_p.exists():
-            shutil.copy2(src_p, dest_dir / root_copy)
-    _snapshot_relevant_sources(repo_root, dest_dir, source_prov["source_hashes"])
-    (dest_dir / "environment.json").write_text(
-        json.dumps(
-            {
-                "python": sys.version,
-                "platform": platform.platform(),
-                "torch": torch.__version__,
-                "cuda_available": torch.cuda.is_available(),
-                "cuda_device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
-                "transformers": transformers.__version__,
-            },
-            indent=2,
+    (dest_dir / "status.json").write_text(json.dumps({"status": "preparing", "fits_executed": 0}, indent=2) + "\n", encoding="utf-8")
+    try:
+        shutil.copytree(dryrun_root / "datasets", dest_dir / "datasets")
+        _verify_dir_matches_lock_hashes(dest_dir / "datasets", preflight["dataset_hashes"])
+        for root_copy in ("quarantine_records.jsonl", "semantic_audit_manifest.json", "dataset_lock_manifest.json"):
+            src_p = dest_dir / "datasets" / root_copy
+            if src_p.exists():
+                shutil.copy2(src_p, dest_dir / root_copy)
+        _snapshot_relevant_sources(repo_root, dest_dir, source_prov["source_hashes"])
+        (dest_dir / "environment.json").write_text(
+            json.dumps(
+                {
+                    "python": sys.version,
+                    "platform": platform.platform(),
+                    "torch": torch.__version__,
+                    "cuda_available": torch.cuda.is_available(),
+                    "cuda_device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
+                    "transformers": transformers.__version__,
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
         )
-        + "\n",
-        encoding="utf-8",
-    )
-    (dest_dir / manifest_filename).write_text(
-        json.dumps(
-            {
-                "git_commit": source_prov["git_commit"],
-                "source_hashes": source_prov["source_hashes"],
-                "cli_argv": list(sys.argv),
-                "planned_run_id": run_id,
-                "planned_future_cli": [
-                    "python",
-                    "-m",
-                    "scripts.run_boundary_contrast_fit",
-                    "--run-contrast-fit",
-                    "--run-id",
-                    run_id,
-                    "--enable-selective-rejector",
-                ],
-                "planned_rejector_c_grid": list(c_grid),
-                "preflight": preflight,
-                "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
-            },
-            indent=2,
+        (dest_dir / manifest_filename).write_text(
+            json.dumps(
+                {
+                    "git_commit": source_prov["git_commit"],
+                    "source_hashes": source_prov["source_hashes"],
+                    "cli_argv": list(sys.argv),
+                    "planned_run_id": run_id,
+                    "planned_future_run_id": planned_future_run_id,
+                    "planned_future_paths": planned_future_paths or {},
+                    "planned_future_cli": [
+                        "python",
+                        "-m",
+                        "scripts.run_boundary_contrast_fit",
+                        "--run-contrast-fit",
+                        "--run-id",
+                        planned_future_run_id,
+                        "--enable-selective-rejector",
+                    ],
+                    "planned_rejector_c_grid": list(c_grid),
+                    "preflight": preflight,
+                    "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
         )
-        + "\n",
-        encoding="utf-8",
-    )
-    _write_and_verify_sha_inventory(dest_dir, "sidecar_sha_inventory.json")
+        (dest_dir / "status.json").write_text(
+            json.dumps({"status": "complete", "fits_executed": 0, "prep_archive": True}, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        _write_and_verify_sha_inventory(dest_dir, "sidecar_sha_inventory.json")
+    except Exception as exc:
+        (dest_dir / "status.json").write_text(
+            json.dumps({"status": "incomplete", "fits_executed": 0, "error": str(exc)}, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        raise
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Bounded confusable-boundary contrast continuation runner")
     ap.add_argument("--dry-run", action="store_true", help="Run fail-closed preflight without training")
     ap.add_argument("--archive-dryrun", action="store_true", help="Archive immutable dryrun datasets/manifest/env in MAIN")
-    ap.add_argument("--archive-prep", action="store_true", help="Archive immutable zero-fit prep record at run-records-<run-id>")
+    ap.add_argument("--archive-prep", action="store_true", help="Archive immutable zero-fit prep record at run-records-<run-id>-prep")
     ap.add_argument("--run-contrast-fit", action="store_true", help="Run 1 bounded continuation fit (requires budget)")
     ap.add_argument("--run-id", default="fit2-boundary-contrast-v4p1")
+    ap.add_argument("--fit-run-id", default=None, help="Optional unused future fit --run-id recorded in --archive-prep manifest")
     ap.add_argument("--enable-selective-rejector", action="store_true", help="Fit existing 776d CLS+logit rejector on TRAIN/CAL")
     ap.add_argument("--c-grid", default=",".join(str(x) for x in DEFAULT_REJECTOR_C_GRID))
     args = ap.parse_args()
@@ -364,6 +437,8 @@ def main() -> None:
     records_dir = MAIN_CANDIDATES_DIR / f"run-records-{args.run_id}"
     dryrun_records_dir = MAIN_CANDIDATES_DIR / f"run-records-{args.run_id}-dryrun"
     local_root = LOCAL_CONTRAST_ROOT / args.run_id
+    fit_run_id = args.fit_run_id or args.run_id
+    prep_ns: Dict[str, Path] | None = None
 
     if args.run_contrast_fit:
         if archive_dir.exists():
@@ -374,8 +449,13 @@ def main() -> None:
             raise FileExistsError(f"Local output dir already exists: {local_root}")
     if args.archive_dryrun and dryrun_records_dir.exists():
         raise FileExistsError(f"MAIN dryrun records already exist: {dryrun_records_dir}")
-    if args.archive_prep and records_dir.exists():
-        raise FileExistsError(f"MAIN prep records already exist: {records_dir}")
+    if args.archive_prep:
+        prep_ns = validate_zero_fit_prep_namespace(
+            prep_run_id=args.run_id,
+            fit_run_id=fit_run_id,
+            main_candidates_dir=MAIN_CANDIDATES_DIR,
+            local_contrast_root=LOCAL_CONTRAST_ROOT,
+        )
 
     need_prov = args.archive_dryrun or args.archive_prep or args.run_contrast_fit
     source_prov = verify_relevant_source_provenance(repo_root) if need_prov else None
@@ -391,12 +471,18 @@ def main() -> None:
             source_prov=source_prov,
             c_grid=c_grid,
             run_id=args.run_id,
+            planned_future_run_id=fit_run_id,
+            planned_future_paths={
+                "archive_dir": str(archive_dir),
+                "records_dir": str(records_dir),
+                "local_dir": str(local_root),
+            },
         )
         preflight["dryrun_records_dir"] = str(dryrun_records_dir)
     if args.archive_prep:
-        assert source_prov is not None
+        assert source_prov is not None and prep_ns is not None
         _archive_zero_fit_records(
-            dest_dir=records_dir,
+            dest_dir=prep_ns["prep_records_dir"],
             manifest_filename="prep_manifest.json",
             repo_root=repo_root,
             dryrun_root=dryrun_root,
@@ -404,8 +490,15 @@ def main() -> None:
             source_prov=source_prov,
             c_grid=c_grid,
             run_id=args.run_id,
+            planned_future_run_id=fit_run_id,
+            planned_future_paths={
+                "archive_dir": str(prep_ns["fit_archive_dir"]),
+                "records_dir": str(prep_ns["fit_records_dir"]),
+                "local_dir": str(prep_ns["fit_local_dir"]),
+            },
         )
-        preflight["prep_records_dir"] = str(records_dir)
+        preflight["prep_records_dir"] = str(prep_ns["prep_records_dir"])
+        preflight["planned_future_run_id"] = fit_run_id
 
     if args.dry_run or not args.run_contrast_fit:
         print(json.dumps(preflight, indent=2))

@@ -263,15 +263,60 @@ def audit_rows_against_active_kb(
     return kept, quarantined_records, summary
 
 
+def merge_split_audit_summaries(
+    split_name: str,
+    base_summary: Dict[str, Any],
+    extra_summary: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Combine pre-filter base audit counts with incremental contrast-row audit counts without zeroing history."""
+    status_counts = Counter(base_summary.get("status_counts") or {})
+    status_counts.update(extra_summary.get("status_counts") or {})
+    reason_counts = Counter(base_summary.get("reason_counts") or {})
+    reason_counts.update(extra_summary.get("reason_counts") or {})
+    q_by_intent = Counter(base_summary.get("quarantined_by_intent") or {})
+    q_by_intent.update(extra_summary.get("quarantined_by_intent") or {})
+    ambig_by_intent = Counter(base_summary.get("ambiguous_retained_by_intent") or {})
+    ambig_by_intent.update(extra_summary.get("ambiguous_retained_by_intent") or {})
+    return {
+        "split": split_name,
+        "input_rows": int(base_summary.get("input_rows", 0)) + int(extra_summary.get("input_rows", 0)),
+        "kept_rows": int(base_summary.get("kept_rows", 0)) + int(extra_summary.get("kept_rows", 0)),
+        "quarantined_rows": int(base_summary.get("quarantined_rows", 0)) + int(extra_summary.get("quarantined_rows", 0)),
+        "status_counts": {k: int(v) for k, v in sorted(status_counts.items())},
+        "reason_counts": {k: int(v) for k, v in sorted(reason_counts.items())},
+        "quarantined_by_intent": {k: int(v) for k, v in sorted(q_by_intent.items())},
+        "ambiguous_retained_by_intent": {k: int(v) for k, v in sorted(ambig_by_intent.items())},
+    }
+
+
 def build_semantic_audit_manifest(
     *,
     split_summaries: Sequence[Dict[str, Any]],
     quarantine_records: Sequence[Dict[str, Any]],
     extra_notes: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Assemble and validate the canonical active-KB semantic audit manifest."""
+    """Assemble and fail-closed reconcile the canonical active-KB semantic audit manifest."""
     for rec in quarantine_records:
         validate_semantic_status(str(rec.get("status", "")), context=f"quarantine:{rec.get('sample_id')}")
+
+    active_quarantined_sum = 0
+    for s in split_summaries:
+        inp = int(s.get("input_rows", 0))
+        kept = int(s.get("kept_rows", 0))
+        q_cnt = int(s.get("quarantined_rows", 0))
+        if inp != kept + q_cnt:
+            raise ValueError(f"Audit summary mismatch for {s.get('split')}: input={inp} != kept={kept} + quarantined={q_cnt}")
+        q_intents_sum = sum(int(v) for v in (s.get("quarantined_by_intent") or {}).values())
+        if q_intents_sum != q_cnt:
+            raise ValueError(f"Audit intent sum mismatch for {s.get('split')}: {q_intents_sum} != {q_cnt}")
+        if not str(s.get("split", "")).endswith("_readonly"):
+            active_quarantined_sum += q_cnt
+
+    if active_quarantined_sum != len(quarantine_records):
+        raise ValueError(
+            f"Active split_summaries quarantined sum ({active_quarantined_sum}) != quarantine_records ({len(quarantine_records)})"
+        )
+
     return {
         "schema_version": "active_kb_semantic_audit.v1",
         "kb_sources": [
@@ -281,6 +326,12 @@ def build_semantic_audit_manifest(
         ],
         "allowed_statuses": sorted(SEMANTIC_AUDIT_STATUSES),
         "quarantined_total": len(quarantine_records),
+        "active_quarantined_sum": active_quarantined_sum,
+        "exposure_denominator_note": (
+            "split_summaries report deduplicated row counts (raw JSONL rows); "
+            "trainer weighted exposure counts (4x SUP12, 5x ESC34 domain/contrast, 1x Bitext, 12x neg) "
+            "are recorded in effective_exposure_counts."
+        ),
         "split_summaries": list(split_summaries),
         **(extra_notes or {}),
     }
@@ -626,6 +677,8 @@ def prepare_and_lock_splits(
     noise_aug_per_class: int = 80,
     bitext_cal_per_class: int = 15,
     seed: int = 20261113,
+    apply_active_kb_audit: bool = False,
+    exclude_noisy_test_overlap: bool = True,
 ) -> Dict[str, Any]:
     """Audit and lock all train/cal/eval JSONLs and augmentation-parent provenance BEFORE training."""
     weights_path = init_model_dir / "model.safetensors"
@@ -725,7 +778,11 @@ def prepare_and_lock_splits(
         for a_i, (sid, txt) in enumerate(trn_slice[:noise_aug_per_class]):
             noisy_txt = apply_realistic_noise(txt, rng)
             noisy_norm = _normalize_text(noisy_txt)
-            if not noisy_norm or noisy_norm in cal_norms_all or noisy_norm in test_norms or _has_gold_conflict(noisy_txt, gold_norms, gold_toks):
+            if exclude_noisy_test_overlap:
+                skip_noisy = (not noisy_norm) or (noisy_norm in cal_norms_all) or (noisy_norm in test_norms)
+            else:
+                skip_noisy = noisy_norm in cal_norms_all
+            if skip_noisy or _has_gold_conflict(noisy_txt, gold_norms, gold_toks):
                 continue
             bitext_train_noisy_rows.append(
                 {
@@ -742,29 +799,34 @@ def prepare_and_lock_splits(
             )
 
     test_ids = set(lineage.test_df["sample_id"].astype(str).tolist())
+    quarantine_records: List[Dict[str, Any]] = []
+    q_dtrn: List[Dict[str, Any]] = []
+    q_dcal: List[Dict[str, Any]] = []
+    q_devl: List[Dict[str, Any]] = []
+    semantic_manifest: Optional[Dict[str, Any]] = None
 
-    # Apply the same active-KB semantic audit across Bitext clean/noisy/cal AND domain splits.
-    # Noisy children inherit parent quarantine even when typos mask surface phrasing (e.g. "at the stoe").
-    bitext_cal_rows, q_cal, sum_bcal = audit_rows_against_active_kb(bitext_cal_rows, "bitext_cal")
-    bitext_train_clean_rows, q_bclean, sum_bclean = audit_rows_against_active_kb(
-        bitext_train_clean_rows, "bitext_train_clean"
-    )
-    quarantined_bitext_parents = {
-        str(rec["parent_sample_id"]): str(rec["reason"]) for rec in (q_cal + q_bclean)
-    }
-    bitext_train_noisy_rows, q_bnoisy, sum_bnoisy = audit_rows_against_active_kb(
-        bitext_train_noisy_rows,
-        "bitext_train_noisy",
-        quarantined_parent_reasons=quarantined_bitext_parents,
-    )
-    pos_train, q_dtrn, sum_dtrn = audit_rows_against_active_kb(pos_train, "domain_pos_train")
-    pos_cal, q_dcal, sum_dcal = audit_rows_against_active_kb(pos_cal, "domain_pos_calibration")
-    pos_eval, q_devl, sum_devl = audit_rows_against_active_kb(pos_eval, "domain_pos_evaluation")
-
-    train_parent_ids = {str(r["parent_sample_id"]) for r in bitext_train_clean_rows if r.get("parent_sample_id")} | {
-        str(r["parent_sample_id"]) for r in bitext_train_noisy_rows if r.get("parent_sample_id")
-    }
-    cal_parent_ids = {str(r["parent_sample_id"]) for r in bitext_cal_rows if r.get("parent_sample_id")}
+    if apply_active_kb_audit:
+        # Opt-in active-KB semantic audit across Bitext clean/noisy/cal AND domain splits.
+        # Noisy children inherit parent quarantine even when typos mask surface phrasing (e.g. "at the stoe").
+        bitext_cal_rows, q_cal, sum_bcal = audit_rows_against_active_kb(bitext_cal_rows, "bitext_cal")
+        bitext_train_clean_rows, q_bclean, sum_bclean = audit_rows_against_active_kb(
+            bitext_train_clean_rows, "bitext_train_clean"
+        )
+        quarantined_bitext_parents = {
+            str(rec["parent_sample_id"]): str(rec["reason"]) for rec in (q_cal + q_bclean)
+        }
+        bitext_train_noisy_rows, q_bnoisy, sum_bnoisy = audit_rows_against_active_kb(
+            bitext_train_noisy_rows,
+            "bitext_train_noisy",
+            quarantined_parent_reasons=quarantined_bitext_parents,
+        )
+        pos_train, q_dtrn, sum_dtrn = audit_rows_against_active_kb(pos_train, "domain_pos_train")
+        pos_cal, q_dcal, sum_dcal = audit_rows_against_active_kb(pos_cal, "domain_pos_calibration")
+        pos_eval, q_devl, sum_devl = audit_rows_against_active_kb(pos_eval, "domain_pos_evaluation")
+        train_parent_ids = {str(r["parent_sample_id"]) for r in bitext_train_clean_rows if r.get("parent_sample_id")} | {
+            str(r["parent_sample_id"]) for r in bitext_train_noisy_rows if r.get("parent_sample_id")
+        }
+        cal_parent_ids = {str(r["parent_sample_id"]) for r in bitext_cal_rows if r.get("parent_sample_id")}
 
     assert train_parent_ids.isdisjoint(cal_parent_ids), "Bitext train/cal parent overlap!"
     assert train_parent_ids.isdisjoint(test_ids), "Bitext train/test overlap!"
@@ -781,34 +843,38 @@ def prepare_and_lock_splits(
         }
         for r in lineage.test_df.itertuples(index=False)
     ]
-    # Read-only audit of held-out bitext_test_6690 (test rows remain 100% untouched).
-    _, _, sum_btst_ro = audit_rows_against_active_kb(bitext_test_rows, "bitext_test_6690_readonly")
-
-    quarantine_records = q_dtrn + q_dcal + q_devl + q_bclean + q_bnoisy + q_cal
-    semantic_manifest = build_semantic_audit_manifest(
-        split_summaries=[sum_dtrn, sum_dcal, sum_devl, sum_bclean, sum_bnoisy, sum_bcal, sum_btst_ro],
-        quarantine_records=quarantine_records,
-    )
-    sem_manifest_path = datasets_dir / "semantic_audit_manifest.json"
-    sem_manifest_path.write_text(json.dumps(semantic_manifest, indent=2) + "\n", encoding="utf-8")
 
     full_train_dedup = pos_train + neg_train + bitext_train_clean_rows + bitext_train_noisy_rows
     full_cal_dedup = pos_cal + neg_cal + bitext_cal_rows
 
     hashes = {
         "boundary_split_manifest": _sha256_file(datasets_dir / "split_manifest.json"),
-        "boundary_pos_train": _write_jsonl(datasets_dir / "boundary_pos_train.jsonl", pos_train),
-        "boundary_pos_calibration": _write_jsonl(datasets_dir / "boundary_pos_calibration.jsonl", pos_cal),
-        "boundary_pos_evaluation": _write_jsonl(datasets_dir / "boundary_pos_evaluation.jsonl", pos_eval),
         "full_train_split": _write_jsonl(datasets_dir / "full_train_split.jsonl", full_train_dedup),
         "full_cal_split": _write_jsonl(datasets_dir / "full_cal_split.jsonl", full_cal_dedup),
         "bitext_train_clean": _write_jsonl(datasets_dir / "bitext_train_clean.jsonl", bitext_train_clean_rows),
         "bitext_train_noisy": _write_jsonl(datasets_dir / "bitext_train_noisy.jsonl", bitext_train_noisy_rows),
         "bitext_cal": _write_jsonl(datasets_dir / "bitext_cal.jsonl", bitext_cal_rows),
         "bitext_test_6690": _write_jsonl(datasets_dir / "bitext_test_6690.jsonl", bitext_test_rows),
-        "quarantine_records": _write_jsonl(datasets_dir / "quarantine_records.jsonl", quarantine_records),
-        "semantic_audit_manifest": _sha256_file(sem_manifest_path),
     }
+    if apply_active_kb_audit:
+        # Read-only audit of held-out bitext_test_6690 (test rows remain 100% untouched).
+        _, _, sum_btst_ro = audit_rows_against_active_kb(bitext_test_rows, "bitext_test_6690_readonly")
+        quarantine_records = q_dtrn + q_dcal + q_devl + q_bclean + q_bnoisy + q_cal
+        semantic_manifest = build_semantic_audit_manifest(
+            split_summaries=[sum_dtrn, sum_dcal, sum_devl, sum_bclean, sum_bnoisy, sum_bcal, sum_btst_ro],
+            quarantine_records=quarantine_records,
+        )
+        sem_manifest_path = datasets_dir / "semantic_audit_manifest.json"
+        sem_manifest_path.write_text(json.dumps(semantic_manifest, indent=2) + "\n", encoding="utf-8")
+        hashes.update(
+            {
+                "boundary_pos_train": _write_jsonl(datasets_dir / "boundary_pos_train.jsonl", pos_train),
+                "boundary_pos_calibration": _write_jsonl(datasets_dir / "boundary_pos_calibration.jsonl", pos_cal),
+                "boundary_pos_evaluation": _write_jsonl(datasets_dir / "boundary_pos_evaluation.jsonl", pos_eval),
+                "quarantine_records": _write_jsonl(datasets_dir / "quarantine_records.jsonl", quarantine_records),
+                "semantic_audit_manifest": _sha256_file(sem_manifest_path),
+            }
+        )
 
     tokenizer = AutoTokenizer.from_pretrained(str(init_model_dir))
     oos_texts = [str(r.get("text") or "") for r in _read_jsonl(data_repo_root / "data/benchmarks/autoeval/v1/ml_oos.jsonl")]
@@ -853,8 +919,14 @@ def prepare_and_lock_splits(
         },
         "dataset_hashes": hashes,
         "boundary_audit_summary": boundary_audit["overlap_audit"],
-        "semantic_audit": semantic_manifest,
-        "quarantined_domain_base_ids": [str(r["sample_id"]) for r in (q_dtrn + q_dcal + q_devl)],
+        **(
+            {
+                "semantic_audit": semantic_manifest,
+                "quarantined_domain_base_ids": [str(r["sample_id"]) for r in (q_dtrn + q_dcal + q_devl)],
+            }
+            if apply_active_kb_audit and semantic_manifest is not None
+            else {}
+        ),
         "token_truncation_audit_max_length_64": trunc_stats,
     }
     lock_path = datasets_dir / "dataset_lock_manifest.json"

@@ -100,13 +100,32 @@ def test_contrast_splits_group_isolation_semantic_and_balanced_targets(tmp_path:
 
     # All 46 labels preserved in replay while Bitext return_policy physical-store parents + noisy typo children are quarantined
     assert {r["intent"] for r in (clean_rows + noisy_rows)} == s46
-    assert ext["quarantined_total"] >= 22
-    assert len(ext["quarantined_bitext_ids"]) >= 19
+    assert ext["quarantined_total"] == 25
+    assert len(ext["quarantined_bitext_ids"]) == 20
     assert "bitext_trn_aug_sample_029457_32" in set(ext["quarantined_bitext_ids"])
     td_audit = exp["track_delivery_exposure"]
     assert td_audit["total_train_raw"] == 270
     assert td_audit["total_train_effective"] == 390
-    assert td_audit["ambiguous_retained_train_raw"] > 0
+    assert td_audit["ambiguous_retained_train_raw"] == 263
+
+    # Finding 3 reconciliation: per-split split_summaries preserve pre-filter counts and sum to total (25, incl. 8 noisy aug children)
+    sem = lock["semantic_audit"]
+    by_split = {s["split"]: s for s in sem["split_summaries"]}
+    assert by_split["bitext_train_clean"]["input_rows"] == 7360
+    assert by_split["bitext_train_clean"]["kept_rows"] == len(clean_rows) == 7348
+    assert by_split["bitext_train_clean"]["quarantined_rows"] == 12
+    assert by_split["bitext_train_noisy"]["input_rows"] == 3677
+    assert by_split["bitext_train_noisy"]["kept_rows"] == len(noisy_rows) == 3669
+    assert by_split["bitext_train_noisy"]["quarantined_rows"] == 8
+    assert by_split["bitext_cal"]["kept_rows"] == 690
+    assert by_split["bitext_cal"]["quarantined_rows"] == 0
+    assert by_split["contrast_pos_train"]["kept_rows"] == lock["counts"]["domain_pos_train"] == 300
+    assert by_split["contrast_pos_train"]["quarantined_rows"] == 3
+    assert by_split["contrast_pos_calibration"]["kept_rows"] == lock["counts"]["domain_pos_cal"] == 135
+    assert by_split["contrast_pos_calibration"]["quarantined_rows"] == 2
+    assert by_split["contrast_pos_evaluation"]["quarantined_rows"] == 0
+    active_q_sum = sum(s["quarantined_rows"] for k, s in by_split.items() if not k.endswith("_readonly"))
+    assert active_q_sum == sem["quarantined_total"] == sem["active_quarantined_sum"] == 25
 
 
 def test_contrast_semantic_validator_rejects_contradictions() -> None:
@@ -767,6 +786,22 @@ def test_prepare_splits_quarantines_parent_and_typo_noisy_child(tmp_path: Path) 
         patch.object(tbc.AutoTokenizer, "from_pretrained", return_value=_StubTok()),
         patch.object(pd.DataFrame, "sample", lambda self, **kw: self),
     ):
+        # Default apply_active_kb_audit=False leaves faithful d7ddaf2 preparation untouched
+        faithful_lock = tbc.prepare_and_lock_splits(
+            worktree_root=REPO_ROOT,
+            data_repo_root=REPO_ROOT,
+            init_model_dir=init_dir,
+            artifact_root=tmp_path / "art_faithful",
+            replay_per_class=2,
+            noise_aug_per_class=2,
+            bitext_cal_per_class=1,
+        )
+        assert "quarantine_records" not in faithful_lock["dataset_hashes"]
+        assert "bitext_trn_rp_bad_parent" in {
+            r["sample_id"] for r in tbc._read_jsonl(tmp_path / "art_faithful" / "datasets" / "bitext_train_clean.jsonl")
+        }
+
+        # Opt-in apply_active_kb_audit=True quarantines both parent and typo noisy child
         tbc.prepare_and_lock_splits(
             worktree_root=REPO_ROOT,
             data_repo_root=REPO_ROOT,
@@ -775,6 +810,7 @@ def test_prepare_splits_quarantines_parent_and_typo_noisy_child(tmp_path: Path) 
             replay_per_class=2,
             noise_aug_per_class=2,
             bitext_cal_per_class=1,
+            apply_active_kb_audit=True,
         )
 
     clean_ids = {r["sample_id"] for r in tbc._read_jsonl(art / "datasets" / "bitext_train_clean.jsonl")}
@@ -787,18 +823,120 @@ def test_prepare_splits_quarantines_parent_and_typo_noisy_child(tmp_path: Path) 
     assert any(r["parent_sample_id"] == "rp_bad_parent" and r["split"] == "bitext_train_noisy" and r["reason"].startswith("parent_quarantined:") for r in q_recs)
 
 
-def test_archive_prep_refuses_overwrite_and_disallows_fit(tmp_path: Path) -> None:
-    """--archive-prep is strictly zero-fit and fails closed when destination run-records dir already exists."""
+def test_archive_prep_refuses_overwrite_collision_and_disallows_fit(tmp_path: Path) -> None:
+    """--archive-prep uses distinct -prep path, emits non-colliding planned_future_cli, and fails closed on reuse/fit."""
     main_cand = tmp_path / "main_cand"
-    existing = main_cand / "run-records-v5-prep-test"
-    existing.mkdir(parents=True)
+    local_root = tmp_path / "local_root"
+    existing_prep = main_cand / "run-records-v5-prep-test-prep"
+    existing_prep.mkdir(parents=True)
     with (
         patch.object(contrast_mod, "MAIN_CANDIDATES_DIR", main_cand),
+        patch.object(contrast_mod, "LOCAL_CONTRAST_ROOT", local_root),
         patch.object(sys, "argv", ["prog", "--archive-prep", "--run-id", "v5-prep-test"]),
     ):
         with pytest.raises(FileExistsError, match="MAIN prep records already exist"):
             contrast_mod.main()
 
+    # Pre-existing target fit path also blocks --archive-prep upfront before any write
+    (main_cand / "run-records-fit-taken").mkdir(parents=True)
+    with (
+        patch.object(contrast_mod, "MAIN_CANDIDATES_DIR", main_cand),
+        patch.object(contrast_mod, "LOCAL_CONTRAST_ROOT", local_root),
+        patch.object(sys, "argv", ["prog", "--archive-prep", "--run-id", "fit-taken"]),
+    ):
+        with pytest.raises(FileExistsError, match="Planned future fit path already exists"):
+            contrast_mod.main()
+
     with patch.object(sys, "argv", ["prog", "--archive-prep", "--run-contrast-fit", "--run-id", "v5-prep-test"]):
         with pytest.raises(ValueError, match="strictly zero-fit"):
             contrast_mod.main()
+
+
+def test_archive_prep_zero_fit_and_planned_future_cli_noncolliding(tmp_path: Path) -> None:
+    """Running --archive-prep creates -prep archive whose planned_future_cli targets unused fit paths."""
+    main_cand = tmp_path / "main_cand"
+    main_cand.mkdir(parents=True)
+    local_root = tmp_path / "local_root"
+    ds_dir = local_root / "dryrun" / "datasets"
+    ds_dir.mkdir(parents=True)
+    pos_bytes = b'{"sample_id":"p0","text":"where is order","intent":"track_order","selective_label":1,"is_negative":0}\n'
+    pos_sha = hashlib.sha256(pos_bytes).hexdigest()
+    (ds_dir / "boundary_pos_train.jsonl").write_bytes(pos_bytes)
+    (ds_dir / "quarantine_records.jsonl").write_bytes(b"")
+    (ds_dir / "semantic_audit_manifest.json").write_text('{"quarantined_total":0,"split_summaries":[]}\n', encoding="utf-8")
+    (ds_dir / "dataset_lock_manifest.json").write_text("{}\n", encoding="utf-8")
+
+    src_rel = "scripts/run_boundary_contrast_fit.py"
+    src_sha = hashlib.sha256((REPO_ROOT / src_rel).read_bytes()).hexdigest()
+    prov_stub = {"git_commit": "b" * 40, "source_hashes": {src_rel: src_sha}}
+    preflight_stub = {
+        "dry_run": True,
+        "fits_executed": 0,
+        "canonical_prep": {"cleaned_sha256": "8bc10cfa", "splits_sha256": "1d366e89"},
+        "dataset_hashes": {"boundary_pos_train": pos_sha},
+        "effective_exposure_counts": {},
+    }
+
+    with (
+        patch.object(contrast_mod, "MAIN_CANDIDATES_DIR", main_cand),
+        patch.object(contrast_mod, "LOCAL_CONTRAST_ROOT", local_root),
+        patch.object(contrast_mod, "verify_relevant_source_provenance", return_value=prov_stub),
+        patch.object(contrast_mod, "run_preflight_validation", return_value=dict(preflight_stub)),
+        patch.object(sys, "argv", ["prog", "--archive-prep", "--run-id", "v5-clean-r2"]),
+    ):
+        contrast_mod.main()
+
+    prep_dir = main_cand / "run-records-v5-clean-r2-prep"
+    assert prep_dir.is_dir()
+    assert not (main_cand / "run-records-v5-clean-r2").exists()
+    assert not (main_cand / "v5-clean-r2").exists()
+    pm = json.loads((prep_dir / "prep_manifest.json").read_text(encoding="utf-8"))
+    assert pm["planned_future_cli"][-3:] == ["--run-id", "v5-clean-r2", "--enable-selective-rejector"]
+    assert pm["planned_future_paths"]["records_dir"] == str(main_cand / "run-records-v5-clean-r2")
+    assert json.loads((prep_dir / "status.json").read_text(encoding="utf-8"))["status"] == "complete"
+
+
+def test_semantic_audit_manifest_fails_closed_on_mismatched_split_sums() -> None:
+    """build_semantic_audit_manifest rejects lossy second-pass summaries (0 vs 25) matching Finding 3."""
+    lossy_summary = {
+        "split": "bitext_train_clean",
+        "input_rows": 7348,
+        "kept_rows": 7348,
+        "quarantined_rows": 0,
+        "status_counts": {"valid": 7348},
+        "reason_counts": {},
+        "quarantined_by_intent": {},
+        "ambiguous_retained_by_intent": {},
+    }
+    q_rec = {
+        "sample_id": "bitext_trn_sample_029467",
+        "parent_sample_id": "sample_029467",
+        "text_sha256": "0" * 64,
+        "intent": "return_policy",
+        "source": "bitext_train_partition_clean",
+        "reason": "kb_pol_ret_001_physical_instore_channel_contradiction",
+        "status": "quarantined_kb_contradiction",
+        "split": "bitext_train_clean",
+    }
+    with pytest.raises(ValueError, match="quarantined sum"):
+        tbc.build_semantic_audit_manifest(split_summaries=[lossy_summary], quarantine_records=[q_rec])
+
+
+def test_faithful_fit2_restore_real_preflight_hashes_unaffected(tmp_path: Path) -> None:
+    """Real zero-fit check: scripts/run_faithful_fit2_restore.py matches exact 8/8 Closure + 7/7 Boundary hashes."""
+    import scripts.run_faithful_fit2_restore as restore_mod
+
+    class _StubTok:
+        def encode(self, text, truncation=False, add_special_tokens=True):
+            return [1] * len(text.split())
+
+        def __call__(self, texts, truncation=False, max_length=64):
+            return {"input_ids": [[1] * min(len(t.split()), max_length) for t in texts]}
+
+    with patch("pipeline.training.train_boundary_candidate.AutoTokenizer.from_pretrained", return_value=_StubTok()):
+        res = restore_mod.run_preflight_validation(REPO_ROOT, tmp_path / "restore_scratch")
+    assert res["fits_executed"] == 0
+    s1_hashes = res["stage1_c6cae7a_dataset_hashes_match"]
+    s2_hashes = res["stage2_d7ddaf2_dataset_hashes_match"]
+    assert len(s1_hashes) == 8 and all(s1_hashes.values()), s1_hashes
+    assert len(s2_hashes) == 7 and all(s2_hashes.values()), s2_hashes

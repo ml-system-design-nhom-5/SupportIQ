@@ -182,6 +182,7 @@ def run_preflight_validation(repo_root: Path, dryrun_root: Path) -> Dict[str, An
         data_repo_root=Path(r"F:\Năm 3\SD\project\SupportIQ"),
         init_model_dir=SERVING_DIR,
         artifact_root=dryrun_root,
+        exclude_noisy_test_overlap=False,
     )
     d7_hashes_ok = {k: (new_lock["dataset_hashes"].get(k) == v) for k, v in d7_lock["dataset_hashes"].items()}
     if not d7_hashes_ok or not all(d7_hashes_ok.values()):
@@ -351,6 +352,7 @@ def main() -> None:
             data_repo_root=Path(r"F:\Năm 3\SD\project\SupportIQ"),
             init_model_dir=resolved_stage1_dir,
             artifact_root=art_root,
+            exclude_noisy_test_overlap=False,
         )
         res = run_fit_and_lock_candidate(
             worktree_root=repo_root,

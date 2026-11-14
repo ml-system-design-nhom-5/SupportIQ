@@ -25,6 +25,7 @@ from pipeline.training.train_boundary_candidate import (
     audit_rows_against_active_kb,
     build_semantic_audit_manifest,
     classify_row_kb_semantics,
+    merge_split_audit_summaries,
     prepare_and_lock_splits,
     resolve_neg_repeat,
     validate_boundary_split_taxonomy,
@@ -292,41 +293,36 @@ def prepare_and_lock_contrast_splits(
     bitext_contrast_per_intent: Tuple[int, int, int] = (20, 8, 8),
     seed: int = 20261114,
 ) -> Dict[str, Any]:
-    """Build base d7ddaf2 splits, clean semantic contradictions, add balanced contrasts + non-retail OOD, and lock."""
+    """Build base d7ddaf2 splits with opt-in active-KB semantic audit, add balanced contrasts + non-retail OOD, and lock."""
     base_lock = prepare_and_lock_splits(
         worktree_root=worktree_root,
         data_repo_root=data_repo_root,
         init_model_dir=init_model_dir,
         artifact_root=artifact_root,
+        apply_active_kb_audit=True,
     )
     datasets_dir = artifact_root / "datasets"
     lock_path = datasets_dir / "dataset_lock_manifest.json"
     lock = json.loads(lock_path.read_text(encoding="utf-8"))
 
-    pos_train_raw = _read_jsonl(datasets_dir / "boundary_pos_train.jsonl")
+    pos_train = _read_jsonl(datasets_dir / "boundary_pos_train.jsonl")
     neg_train = _read_jsonl(datasets_dir / "boundary_neg_train.jsonl")
-    pos_cal_raw = _read_jsonl(datasets_dir / "boundary_pos_calibration.jsonl")
+    pos_cal = _read_jsonl(datasets_dir / "boundary_pos_calibration.jsonl")
     neg_cal = _read_jsonl(datasets_dir / "boundary_neg_calibration.jsonl")
-    pos_eval_raw = _read_jsonl(datasets_dir / "boundary_pos_evaluation.jsonl")
+    pos_eval = _read_jsonl(datasets_dir / "boundary_pos_evaluation.jsonl")
     neg_eval = _read_jsonl(datasets_dir / "boundary_neg_evaluation.jsonl")
     bitext_clean = _read_jsonl(datasets_dir / "bitext_train_clean.jsonl")
     bitext_noisy = _read_jsonl(datasets_dir / "bitext_train_noisy.jsonl")
     bitext_cal = _read_jsonl(datasets_dir / "bitext_cal.jsonl")
     bitext_test = _read_jsonl(datasets_dir / "bitext_test_6690.jsonl")
 
-    validate_boundary_split_taxonomy(pos_train_raw, neg_train, "base_train")
-    validate_boundary_split_taxonomy(pos_cal_raw, neg_cal, "base_cal")
-    validate_boundary_split_taxonomy(pos_eval_raw, neg_eval, "base_eval")
+    validate_boundary_split_taxonomy(pos_train, neg_train, "base_train")
+    validate_boundary_split_taxonomy(pos_cal, neg_cal, "base_cal")
+    validate_boundary_split_taxonomy(pos_eval, neg_eval, "base_eval")
 
     base_quarantine = _read_jsonl(datasets_dir / "quarantine_records.jsonl")
     removed_base_ids: List[str] = list(base_lock.get("quarantined_domain_base_ids") or [])
-    for split_list, dest in ((pos_train_raw, "pos_train"), (pos_cal_raw, "pos_cal"), (pos_eval_raw, "pos_eval")):
-        for r in split_list:
-            if _is_contradictory_base_row(r):
-                removed_base_ids.append(str(r.get("sample_id")))
-    pos_train = [r for r in pos_train_raw if not _is_contradictory_base_row(r)]
-    pos_cal = [r for r in pos_cal_raw if not _is_contradictory_base_row(r)]
-    pos_eval = [r for r in pos_eval_raw if not _is_contradictory_base_row(r)]
+    n_base_pos_train, n_base_pos_cal, n_base_pos_eval = len(pos_train), len(pos_cal), len(pos_eval)
 
     used_parent_ids = {
         str(r.get("parent_sample_id"))
@@ -476,23 +472,32 @@ def prepare_and_lock_contrast_splits(
         else:
             neg_eval.append(row)
 
-    # Apply shared active-KB audit across final positive contrast splits & Bitext replay splits
-    pos_train, q_pos_trn, sum_pos_trn = audit_rows_against_active_kb(pos_train, "contrast_pos_train")
-    pos_cal, q_pos_cal, sum_pos_cal = audit_rows_against_active_kb(pos_cal, "contrast_pos_calibration")
-    pos_eval, q_pos_evl, sum_pos_evl = audit_rows_against_active_kb(pos_eval, "contrast_pos_evaluation")
-    _, q_chk_bclean, sum_bclean = audit_rows_against_active_kb(bitext_clean, "bitext_train_clean")
-    _, q_chk_bnoisy, sum_bnoisy = audit_rows_against_active_kb(bitext_noisy, "bitext_train_noisy")
-    _, q_chk_bcal, sum_bcal = audit_rows_against_active_kb(bitext_cal, "bitext_cal")
-    if q_chk_bclean or q_chk_bnoisy or q_chk_bcal:
-        raise RuntimeError(
-            f"Bitext split contains unexpected unquarantined KB contradictions after base prep: "
-            f"clean={len(q_chk_bclean)}, noisy={len(q_chk_bnoisy)}, cal={len(q_chk_bcal)}"
-        )
+    # Audit ONLY newly appended contrast rows and merge with base_lock summaries (never overwrite prior quarantine counts)
+    base_summaries = {s["split"]: s for s in (base_lock.get("semantic_audit", {}).get("split_summaries") or [])}
+    kept_add_trn, q_add_trn, sum_add_trn = audit_rows_against_active_kb(
+        pos_train[n_base_pos_train:], "contrast_added_pos_train"
+    )
+    kept_add_cal, q_add_cal, sum_add_cal = audit_rows_against_active_kb(
+        pos_cal[n_base_pos_cal:], "contrast_added_pos_calibration"
+    )
+    kept_add_evl, q_add_evl, sum_add_evl = audit_rows_against_active_kb(
+        pos_eval[n_base_pos_eval:], "contrast_added_pos_evaluation"
+    )
+    pos_train = pos_train[:n_base_pos_train] + kept_add_trn
+    pos_cal = pos_cal[:n_base_pos_cal] + kept_add_cal
+    pos_eval = pos_eval[:n_base_pos_eval] + kept_add_evl
+
+    sum_pos_trn = merge_split_audit_summaries("contrast_pos_train", base_summaries["domain_pos_train"], sum_add_trn)
+    sum_pos_cal = merge_split_audit_summaries("contrast_pos_calibration", base_summaries["domain_pos_calibration"], sum_add_cal)
+    sum_pos_evl = merge_split_audit_summaries("contrast_pos_evaluation", base_summaries["domain_pos_evaluation"], sum_add_evl)
+    sum_bclean = base_summaries["bitext_train_clean"]
+    sum_bnoisy = base_summaries["bitext_train_noisy"]
+    sum_bcal = base_summaries["bitext_cal"]
 
     # Deduplicate combined quarantine records (base Bitext/domain + any contrast additions) preserving insertion order
     seen_q: set[Tuple[str, str]] = set()
     quarantine_records: List[Dict[str, Any]] = []
-    for rec in base_quarantine + q_pos_trn + q_pos_cal + q_pos_evl:
+    for rec in base_quarantine + q_add_trn + q_add_cal + q_add_evl:
         key = (str(rec.get("split")), str(rec.get("sample_id")))
         if key not in seen_q:
             seen_q.add(key)
@@ -607,7 +612,7 @@ def prepare_and_lock_contrast_splits(
         "note": "Generic track_delivery queries lacking vehicle/GPS keywords are retained for 46-class replay and flagged ambiguous_retained rather than blanket-dropped.",
     }
 
-    ro_test_summary = [s for s in (base_lock.get("semantic_audit", {}).get("split_summaries") or []) if s.get("split") == "bitext_test_6690_readonly"]
+    ro_test_summary = [base_summaries["bitext_test_6690_readonly"]] if "bitext_test_6690_readonly" in base_summaries else []
     semantic_manifest = build_semantic_audit_manifest(
         split_summaries=[sum_pos_trn, sum_pos_cal, sum_pos_evl, sum_bclean, sum_bnoisy, sum_bcal, *ro_test_summary],
         quarantine_records=quarantine_records,
