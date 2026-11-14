@@ -27,6 +27,7 @@ An architecture decision record (ADR) captures one significant decision: its con
 | [0017](0017-named-entity-model-from-its-release-url.md) | The named-entity model from its release URL | Accepted | 2026-11-12 |
 | [0019](0019-one-label-for-text-in-the-placeholder-syntax.md) | One label for text in the placeholder syntax | Proposed | 2026-11-13 |
 | [0020](0020-storage-errors-of-the-pseudonym-map.md) | Storage errors of the pseudonym map | Proposed | 2026-11-13 |
+| [0022](0022-server-sent-events-for-suggestion-progress.md) | Server-sent events for the suggestion progress of an open ticket | Accepted | 2026-11-13 |
 
 Notes on the index:
 
@@ -36,6 +37,7 @@ Notes on the index:
 - [ADR-0016](0016-hosting-on-free-tiers.md) was accepted on 2026-11-12 by the project lead and replaces one part of [ADR-0007](0007-observability-stack.md): the telemetry of the deployed demo goes to a hosted service, Grafana Cloud. Local development keeps the local Grafana stack, and the rest of ADR-0007 still holds.
 - [ADR-0019](0019-one-label-for-text-in-the-placeholder-syntax.md) was proposed on 2026-11-13 by the project lead. Once accepted, it replaces one passage of [ADR-0010](0010-pseudonymization-and-egress-control.md): the separate label of a restored `LITERAL` in Restoring and sending, item 3. The rest of ADR-0010 still holds.
 - [ADR-0020](0020-storage-errors-of-the-pseudonym-map.md) was proposed on 2026-11-13 by the project lead. Once accepted, it replaces two passages of [ADR-0010](0010-pseudonymization-and-egress-control.md): the words "or the map cannot be stored" in the first row of Failure handling, and the words "storage error" in the first branch of the Overview sequence diagram. The rest of ADR-0010 still holds.
+- [ADR-0022](0022-server-sent-events-for-suggestion-progress.md) was accepted on 2026-11-14 by the project lead, who chose its recommended option, and changes statement 4 of [ADR-0016, `frontend` and the ingress](0016-hosting-on-free-tiers.md#frontend-and-the-ingress-on-cloudflare-pages) for one route. The project lead gave the number 0021 to the ADR on the repository layout and the AI and ML migration of the branch `build/join-main`, so this branch does not use it.
 
 ## Lifecycle
 
