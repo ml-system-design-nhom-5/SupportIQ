@@ -1429,6 +1429,7 @@ dependencies = [
     { name = "opentelemetry-api" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "starlette" },
     { name = "transformers" },
     { name = "uvicorn" },
 ]
@@ -1462,6 +1463,7 @@ requires-dist = [
     { name = "opentelemetry-api", specifier = "==1.45.2" },
     { name = "pydantic", specifier = "==2.14.3" },
     { name = "pydantic-settings", specifier = "==2.16.2" },
+    { name = "starlette", specifier = "==1.10.0" },
     { name = "transformers", specifier = "==5.22.1" },
     { name = "uvicorn", specifier = "==0.54.0" },
 ]
@@ -1490,7 +1492,7 @@ name = "sympy"
 version = "1.14.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "mpmath" },
+    { name = "mpmath", marker = "sys_platform != 'darwin'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/83/d3/803453b36afefb7c2bb238361cd4ae6125a569b4db67cd9e79846ba2d68c/sympy-1.14.0.tar.gz", hash = "sha256:d3d3fe8df1e5a0b42f0e7bdf50541697dbe7d23746e894990c030e2b05e72517", size = 7793921, upload-time = "2025-04-27T18:05:01.611Z" }
 wheels = [

@@ -33,3 +33,4 @@ ENV PATH="/opt/venv/bin:${PATH}" \
 WORKDIR /srv/ai-service
 USER ai-service
 EXPOSE 8000
+CMD ["ai-service", "serve", "--host", "0.0.0.0", "--port", "8000"]

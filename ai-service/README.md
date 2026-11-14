@@ -7,6 +7,10 @@
 Run every command in `ai-service/`, after [Set up](#set-up).
 
 ```bash
+uv run --env-file .env ai-service serve --host 127.0.0.1 --port 8001
+```
+
+```bash
 uv run pytest
 ```
 
@@ -33,6 +37,14 @@ These steps work from a fresh clone, on Linux, macOS, and Windows. Only Linux ge
    ```
 
    torch is locked for Linux only, so this group installs nothing on macOS or Windows ([ADR-0021, Python and dependencies](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#python-and-dependencies), statement 2).
+
+4. Create your settings. `.env` is ignored by git, and its values never leave your machine. Replace every placeholder; `SERVICE_TOKEN` is the same value as the `backend` setting `AI_SERVICE_TOKEN`.
+
+   ```bash
+   cp .env.example .env
+   ```
+
+`ai-service serve` validates the settings first. A missing or invalid setting stops it with exit status 2 and a `settings.invalid` line that names the setting, never its value ([ARCH-34](../docs/rules/architecture.md)).
 
 Docker is not part of local development. CI builds the [`Dockerfile`](Dockerfile), which installs the `torch` group.
 
@@ -64,7 +76,7 @@ uv run datamodel-codegen
 ```text
 ai-service/
 ├── src/supportiq_ai_service/
-│   ├── platform/           # Settings, errors as Problem Details, the service token, trace context, logging, web
+│   ├── platform/           # Clock, errors, events, settings, logging, trace context, the service token, web
 │   ├── release/            # The release manifest: loading, checksums, the asset versions, readiness
 │   ├── intent/             # For now only the adapters of the intent model
 │   ├── retrieval/          # For now only the adapters of the encoder, the index, and the KB
@@ -91,7 +103,7 @@ Each feature has the layers of [ARCH-16](../docs/rules/architecture.md):
 | `adapters/` | Implementations of the ports, such as the intent model, the encoder, the index, and the LLM client | `domain/` of the feature, and public APIs |
 | `api/` | Routes and the mapping between contract models and domain types | `application/`, `domain/`, and `generated/` |
 
-Features depend on each other in one direction and only through the `__init__.py` of the feature, its public API (ARCH-17, ARCH-18). `ml/` and `eval/` use only the HTTP contract of `ai-service`, the public interface of `supportiq_ai_service`, and the formats of the model artifact and the release manifest; they never import its internals ([ADR-0021, Where the code of `main` goes](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#where-the-code-of-main-goes), statement 1).
+Features depend on each other in one direction and only through the `__init__.py` of the feature, its public API (ARCH-17, ARCH-18). `uv run lint-imports` enforces this with the contracts in [`pyproject.toml`](pyproject.toml). `platform` has a second public entry point, `platform.web`, for the interface layers and the composition root. `ml/` and `eval/` use only the HTTP contract of `ai-service`, the public interface of `supportiq_ai_service`, and the formats of the model artifact and the release manifest; they never import its internals ([ADR-0021, Where the code of `main` goes](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#where-the-code-of-main-goes), statement 1).
 
 ## Egress and secrets
 
@@ -99,6 +111,22 @@ Features depend on each other in one direction and only through the `__init__.py
 - The intent model and the BGE encoder ship with each release, and Hugging Face runs offline, so `ai-service` downloads nothing when it starts.
 - Every operation except `/health/live` and `/health/ready` checks the service token ([ADR-0018, Access](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#access)).
 - Provider responses, prompts, and keys are never logged ([LOG-29](../docs/rules/logging-and-observability.md#privacy-in-telemetry)). The Gemini API key and the service token are Modal Secrets ([ADR-0018, Secrets](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#secrets)).
+
+## Events
+
+Every log line is one JSON object on standard output, with the attributes of an allow-list; every string in it is redacted for email addresses and long tokens. The catalog is [`platform/domain/events.py`](src/supportiq_ai_service/platform/domain/events.py) ([LOG-12](../docs/rules/logging-and-observability.md)).
+
+| Event | When |
+|---|---|
+| `startup.completed`, `shutdown.started` | A replica starts or stops |
+| `settings.loaded`, `settings.invalid` | The settings are read; `settings.invalid` names the settings, never a value |
+| `request.completed` | Every request ends, with the route template, the method, the status, and the duration |
+| `request.failed` | A request fails unexpectedly, with the error type |
+| `request.refused` | A request answers `503 not-ready`, because no verified release is loaded |
+| `service_token.rejected` | A request has no valid service token and answers `401` |
+| `log.forwarded` | A library logs at `warning` or above; the message is redacted |
+
+Every request continues the trace of a valid `traceparent` or starts a new one, and its log lines and error bodies carry that trace ID ([LOG-04](../docs/rules/logging-and-observability.md), LOG-05). `ai-service` uses only the OpenTelemetry API: no span leaves the process, because a telemetry destination needs a change of ADR-0010 first ([ADR-0018, Follow-ups](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#follow-ups)).
 
 ## Tests
 
@@ -109,7 +137,7 @@ Features depend on each other in one direction and only through the `__init__.py
 | Guardrails | `tests/integration/guardrails/` | The cases of [TEST-26](../docs/rules/testing.md#guardrail-tests) that apply here, such as egress only to the allow-listed host ([SEC-40](../docs/rules/security-and-privacy.md#transport-and-runtime)) |
 | Contract | `tests/contract/` | Schemathesis over the six operations of contract 1.0.0, and one test for each documented status |
 
-- Every test runs with `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1`, so no test downloads from Hugging Face.
+- Every test runs with `HF_HUB_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1`, and an empty `HF_HOME`, so no test downloads a model or reads a cached one.
 - Unit tests have no network. Integration tests may open only loopback connections.
 - No test reads `.env` or uses an API key from the environment, and no test calls an LLM: a fake LLM adapter replaces Gemini ([ADR-0021, CI](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#ci), statement 2).
 - Tests that load real model weights carry the marker `real_model`. They are skipped by default and in CI, and run only with `-m real_model` on a machine that holds the release assets. The real model is otherwise tested on the Modal deployment ([ADR-0021, Python and dependencies](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#python-and-dependencies), statement 3).
@@ -117,6 +145,7 @@ Features depend on each other in one direction and only through the `__init__.py
 
 ## Known limits
 
+- `ai-service` loads no release manifest yet, so every instance answers `503 not-ready` on readiness and on every operation that needs the release, and `backend` uses manual handling.
 - The model weights and the encoder are not in git. They are assets of GitHub Releases, named with their checksums in the release manifest ([ADR-0018, Artifact store](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#artifact-store)). `ai-service` has no fallback model: without a valid release it is not ready and answers `503`, and `backend` falls back to manual handling.
 - The intent model of `main` reports uncalibrated softmax scores. Calibrated probabilities (FR-01) wait for the pipeline design and a calibration on validation data ([contracts v1 design, Work for the join](../docs/design/contracts-v1.md#work-for-the-join-with-the-ai-and-ml-code)).
 - The first release serves no KB document, so every policy question leads to abstention (ESC-04) until a new KB version arrives ([ADR-0021, KB ingestion](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#kb-ingestion)).
@@ -136,6 +165,7 @@ Each direct dependency, with why it is here ([WF-27](../docs/rules/workflow.md#d
 | fastapi | 0.162.0 | MIT | The web framework ([ADR-0003](../docs/decisions/0003-tech-stack.md)) |
 | pydantic | 2.14.3 | MIT | Contract models and validation (ADR-0003) |
 | pydantic-settings | 2.16.2 | MIT | Typed settings, validated at startup (ADR-0003, ARCH-34) |
+| starlette | 1.10.0 | BSD-3-Clause | The ASGI types and routing classes under FastAPI, imported directly by the middleware and the exception handler, as in `backend` |
 | uvicorn | 0.54.0 | BSD-3-Clause | The ASGI server that runs a replica, as in `backend`. The standard library has none |
 | httpx | 0.28.1 | BSD-3-Clause | The HTTP client of the LLM call, whose transport enforces the egress allow-list (ADR-0003, [ADR-0018, Egress](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#egress)) |
 | opentelemetry-api | 1.45.2 | Apache-2.0 | Reads and propagates `traceparent` ([ADR-0007](../docs/decisions/0007-observability-stack.md), LOG-05). No SDK and no exporter: a telemetry destination needs a change of ADR-0010 first ([ADR-0018, Follow-ups](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#follow-ups)) |

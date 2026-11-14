@@ -15,9 +15,13 @@ dependencies = [
     "opentelemetry-api==1.45.2",
     "pydantic==2.14.3",
     "pydantic-settings==2.16.2",
+    "starlette==1.10.0",
     "transformers==5.22.1",
     "uvicorn==0.54.0",
 ]
+
+[project.scripts]
+ai-service = "supportiq_ai_service.composition_root:main"
 
 [dependency-groups]
 # Development dependencies, separate from the runtime ones (PY-46).

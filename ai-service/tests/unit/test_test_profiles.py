@@ -1,44 +1,35 @@
-"""Resource boundaries must fail before accessing network, keys or weights."""
+"""The test setup keeps every test offline, away from cached weights, and without keys."""
+
+import os
 import socket
+from pathlib import Path
 
 import pytest
-from transformers import AutoTokenizer
+from pytest_socket import SocketBlockedError
+
+from tests.conftest import HUGGING_FACE_HOME_VARIABLE, OFFLINE_ENVIRONMENT, PROVIDER_KEY_VARIABLES
 
 
-def test_default_profile_blocks_network_before_connect():
-    with socket.socket() as client:
-        with pytest.raises(RuntimeError, match="offline"):
-            client.connect(("127.0.0.1", 9))
+def test_a_unit_test_cannot_open_a_network_socket() -> None:
+    with pytest.warns(UserWarning, match="socket"), pytest.raises(SocketBlockedError):
+        socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 
-def test_default_profile_blocks_cached_and_remote_weights(tmp_path):
-    with pytest.raises(RuntimeError, match="real_model"):
-        AutoTokenizer.from_pretrained(str(tmp_path))
+def test_hugging_face_runs_offline() -> None:
+    for name, value in OFFLINE_ENVIRONMENT.items():
+        assert os.environ[name] == value
 
 
-def test_default_profile_blocks_udp():
-    with socket.socket(type=socket.SOCK_DGRAM) as client:
-        with pytest.raises(RuntimeError, match="offline"):
-            client.sendto(b"test", ("127.0.0.1", 9))
+def test_the_hugging_face_home_holds_no_cached_model() -> None:
+    home = Path(os.environ[HUGGING_FACE_HOME_VARIABLE])
+
+    assert home.is_dir()
+    assert not any(home.iterdir())
 
 
-@pytest.mark.parametrize("method,host", [
-    ("gethostbyname", "localhost"),
-    ("gethostbyname_ex", "localhost"),
-    ("gethostbyaddr", "127.0.0.1"),
-])
-def test_default_profile_blocks_native_dns(method, host):
-    with pytest.raises(RuntimeError, match="offline"):
-        getattr(socket, method)(host)
+def test_no_key_of_the_llm_provider_reaches_a_test() -> None:
+    assert not any(name in os.environ for name in PROVIDER_KEY_VARIABLES)
 
 
-def test_live_preflight_requires_explicit_credentials(monkeypatch):
-    from tests.conftest import pytest_collection_modifyitems
-    from types import SimpleNamespace
-
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
-    config = SimpleNamespace(getoption=lambda name: True)
-    item = SimpleNamespace(keywords={"live": True})
-    with pytest.raises(pytest.UsageError, match="GEMINI_API_KEY"):
-        pytest_collection_modifyitems(config, [item])
+def test_tests_with_real_weights_are_deselected_by_default(pytestconfig: pytest.Config) -> None:
+    assert pytestconfig.getoption("markexpr") == "not real_model"
