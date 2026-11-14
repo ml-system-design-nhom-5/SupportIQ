@@ -767,6 +767,28 @@ def build_teacher_anchor_mask(
     }
 
 
+VALID_TEACHER_STUDENT_ANCHOR_MODES: Tuple[str, ...] = (
+    "train_stochastic",
+    "eval_no_dropout_autograd_enabled",
+)
+
+
+def _forward_student_logits_eval_mode(
+    model: Any,
+    input_ids: torch.Tensor,
+    attention_mask: torch.Tensor,
+) -> torch.Tensor:
+    """Run dropout-free student forward in eval() with autograd enabled and restore all nested .training flags."""
+    saved_modes = {mod: mod.training for mod in model.modules()}
+    try:
+        model.eval()
+        with torch.enable_grad():
+            return model(input_ids=input_ids, attention_mask=attention_mask, output_hidden_states=False).logits
+    finally:
+        for mod, was_training in saved_modes.items():
+            mod.train(was_training)
+
+
 def compute_masked_teacher_kl_loss(
     student_logits: torch.Tensor,
     teacher_logits: torch.Tensor,
@@ -1139,12 +1161,18 @@ def run_fit_and_lock_candidate(
     teacher_temperature: float = 1.0,
     teacher_model_dir: Optional[Path] = None,
     expected_teacher_weights_sha256: Optional[str] = None,
+    teacher_student_anchor_mode: str = "train_stochastic",
 ) -> Dict[str, Any]:
     """Run Fit 1 or Fit 2 from locked splits, fit T>=1.0 on cal (+ optional 776d rejector), and lock manifests."""
     if not np.isfinite(float(teacher_kl_weight)) or float(teacher_kl_weight) < 0.0:
         raise ValueError(f"teacher_kl_weight must be >= 0.0, got {teacher_kl_weight}")
     if not np.isfinite(float(teacher_temperature)) or float(teacher_temperature) <= 0.0:
         raise ValueError(f"teacher_temperature must be > 0.0, got {teacher_temperature}")
+    if str(teacher_student_anchor_mode) not in VALID_TEACHER_STUDENT_ANCHOR_MODES:
+        raise ValueError(
+            f"Unsupported teacher_student_anchor_mode {teacher_student_anchor_mode!r}; "
+            f"expected one of {VALID_TEACHER_STUDENT_ANCHOR_MODES}"
+        )
     use_teacher_kl = float(teacher_kl_weight) > 0.0
 
     datasets_dir = artifact_root / "datasets"
@@ -1297,14 +1325,30 @@ def run_fit_and_lock_candidate(
                 neg_sum += float(l_neg.item())
 
             if teacher_model is not None:
-                with torch.no_grad():
-                    teacher_logits = teacher_model(input_ids=input_ids, attention_mask=attention_mask).logits
-                l_tkl_raw, active_tkl_count = compute_masked_teacher_kl_loss(
-                    logits,
-                    teacher_logits,
-                    batch["teacher_anchor_mask"],
-                    teacher_temperature=teacher_temperature,
-                )
+                anchor_mask_t = batch["teacher_anchor_mask"]
+                if teacher_student_anchor_mode == "eval_no_dropout_autograd_enabled":
+                    if bool((anchor_mask_t > 0).any().item()):
+                        with torch.no_grad():
+                            teacher_logits = teacher_model(input_ids=input_ids, attention_mask=attention_mask).logits
+                        det_student_logits = _forward_student_logits_eval_mode(model, input_ids, attention_mask)
+                        l_tkl_raw, active_tkl_count = compute_masked_teacher_kl_loss(
+                            det_student_logits,
+                            teacher_logits,
+                            anchor_mask_t,
+                            teacher_temperature=teacher_temperature,
+                        )
+                    else:
+                        l_tkl_raw = logits.new_zeros((), dtype=logits.dtype)
+                        active_tkl_count = 0
+                else:
+                    with torch.no_grad():
+                        teacher_logits = teacher_model(input_ids=input_ids, attention_mask=attention_mask).logits
+                    l_tkl_raw, active_tkl_count = compute_masked_teacher_kl_loss(
+                        logits,
+                        teacher_logits,
+                        anchor_mask_t,
+                        teacher_temperature=teacher_temperature,
+                    )
                 loss = loss + float(teacher_kl_weight) * l_tkl_raw
                 teacher_kl_sum += float(l_tkl_raw.item())
                 anchor_rows_seen += int(active_tkl_count)
@@ -1481,6 +1525,7 @@ def run_fit_and_lock_candidate(
                 "teacher_weights_sha256": teacher_weights_sha,
                 "teacher_kl_weight": float(teacher_kl_weight),
                 "teacher_temperature": float(teacher_temperature),
+                "teacher_student_anchor_mode": str(teacher_student_anchor_mode),
                 "teacher_anchor_mask_source": "orig_fit2_return_contrast_extension.jsonl:sample_id",
                 "teacher_anchor_summary": teacher_mask_summary,
             }
@@ -1522,6 +1567,7 @@ def run_fit_and_lock_candidate(
             "teacher_weights_sha256": teacher_weights_sha,
             "teacher_kl_weight": float(teacher_kl_weight),
             "teacher_temperature": float(teacher_temperature),
+            "teacher_student_anchor_mode": str(teacher_student_anchor_mode),
             "teacher_anchor_summary": teacher_mask_summary,
         }
     return result

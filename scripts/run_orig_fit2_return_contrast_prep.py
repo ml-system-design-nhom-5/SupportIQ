@@ -97,6 +97,22 @@ AUTHORIZED_FIT_PROFILES: Dict[str, Dict[str, Any]] = {
         "teacher_kl_weight": 1.0,
         "teacher_temperature": 1.0,
     },
+    "option_a_teacher_kl_deterministic": {
+        "profile": "option_a_teacher_kl_deterministic",
+        "selected_recipe": "option_a_masked_deterministic_teacher_kl_v1",
+        "lr": 2e-5,
+        "epochs": 3,
+        "batch_size": 32,
+        "seed": 42,
+        "fit_mode": "fit2_supcon_energy",
+        "min_temperature": 1.0,
+        "enable_selective_rejector": False,
+        "init_weights_sha256": EXPECTED_FIT2_SHA256,
+        "teacher_weights_sha256": EXPECTED_FIT2_SHA256,
+        "teacher_kl_weight": 1.0,
+        "teacher_temperature": 1.0,
+        "teacher_student_anchor_mode": "eval_no_dropout_autograd_enabled",
+    },
 }
 
 CAL_GUARD_FLOAT_TOLERANCE = 3e-6
@@ -803,7 +819,8 @@ def _build_planned_execution_plan(
         raise ValueError(f"zero_delta_control requires profile_name='option_a'; got {profile_name!r}")
 
     cfg = AUTHORIZED_FIT_PROFILES[profile_name]
-    is_teacher_kl = profile_name == "option_a_teacher_kl"
+    is_teacher_kl = profile_name in ("option_a_teacher_kl", "option_a_teacher_kl_deterministic")
+    is_det_teacher_kl = profile_name == "option_a_teacher_kl_deterministic"
     run_flag = (
         "--run-authorized-fit"
         if (experiment_mode == "zero_delta_control" or profile_name != "option_a")
@@ -841,6 +858,13 @@ def _build_planned_execution_plan(
                 str(cfg["teacher_weights_sha256"]),
             ]
         )
+        if is_det_teacher_kl:
+            planned_cli.extend(
+                [
+                    "--teacher-student-anchor-mode",
+                    str(cfg["teacher_student_anchor_mode"]),
+                ]
+            )
     planned_cli.append(run_flag)
     is_control = experiment_mode == "zero_delta_control"
     if is_control:
@@ -849,6 +873,15 @@ def _build_planned_execution_plan(
             "(f695b1fe...) for epochs=3, lr=2e-5 on bit-identical 13 original stage2_inputs (11,320 full_train rows, "
             "181 boundary_pos_train rows, 13,000 effective rows; 0 added return-contrast rows) to isolate continuation "
             "optimization drift from the +18-row data delta. NOT a promotion candidate."
+        )
+    elif is_det_teacher_kl:
+        caveat = (
+            "Original Fit2 (f695b1fe...) was trained from Fit1 (95a940b6...) for epochs=3, lr=2e-5. "
+            "option_a_teacher_kl_deterministic warm-starts from Original Fit2 at lr=2e-5, epochs=3 over 13,080 "
+            "effective TRAIN rows with base pos_ce+supcon+neg on stochastic model.train() and masked teacher-KL "
+            "(alpha_kl=1.0, T_teacher=1.0, 13,000 canonical anchored / 80 added orig_ret_ch_* masked off) evaluated on "
+            "a separate deterministic model.eval() student forward (autograd ON, no dropout). Addresses step-0 dropout "
+            "noise only under an n=1 exploratory alpha_kl=1.0 budget; does not guarantee CAL or holdout pass."
         )
     elif is_teacher_kl:
         caveat = (
@@ -890,6 +923,8 @@ def _build_planned_execution_plan(
         plan["teacher_kl_weight"] = cfg["teacher_kl_weight"]
         plan["teacher_temperature"] = cfg["teacher_temperature"]
         plan["teacher_weights_sha256"] = cfg["teacher_weights_sha256"]
+        if is_det_teacher_kl:
+            plan["teacher_student_anchor_mode"] = cfg["teacher_student_anchor_mode"]
     return plan
 
 
@@ -1064,9 +1099,9 @@ def _archive_orig_fit2_prep_bundle(
             )
         if profile_name == "option_a":
             manifest["option_a_execution_plan"] = execution_plan
-        elif profile_name == "option_a_teacher_kl":
+        elif profile_name in ("option_a_teacher_kl", "option_a_teacher_kl_deterministic"):
             cfg_tkl = AUTHORIZED_FIT_PROFILES[profile_name]
-            manifest["teacher_anchor_config"] = {
+            tkl_manifest_block: Dict[str, Any] = {
                 "enabled": True,
                 "teacher_checkpoint_dir": str(FIT2_BASELINE_DIR),
                 "teacher_weights_sha256": cfg_tkl["teacher_weights_sha256"],
@@ -1083,6 +1118,13 @@ def _archive_orig_fit2_prep_bundle(
                     "base teacher accuracy on the 80 effective added rows is 40.0%."
                 ),
             }
+            if profile_name == "option_a_teacher_kl_deterministic":
+                tkl_manifest_block["teacher_student_anchor_mode"] = cfg_tkl["teacher_student_anchor_mode"]
+                tkl_manifest_block["loss_formula"] = (
+                    "1.0 * KL(p_teacher || p_student_eval_det), deterministic dropout-disabled student forward "
+                    "(autograd ON) normalized by sum(m_i) on active batch anchors (0.0 if sum(m_i)==0)"
+                )
+            manifest["teacher_anchor_config"] = tkl_manifest_block
         (dest_dir / "prep_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         (dest_dir / "status.json").write_text(
             json.dumps({"status": "complete", "fits_executed": 0, "prep_archive": True}, indent=2) + "\n",

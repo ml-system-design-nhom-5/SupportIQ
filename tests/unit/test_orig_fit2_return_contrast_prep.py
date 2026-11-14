@@ -1845,3 +1845,470 @@ def test_teacher_kl_prep_plan_and_runner_forwarding_closure(tmp_path: Path, monk
     cal_report = json.loads((Path(fit_res["records_dir"]) / "cal_guard_report.json").read_text(encoding="utf-8"))
     assert cal_report["cal_guard_mode"] == "candidate_12_checks"
     assert fit_res["cal_guard_passed"] is True
+
+
+def _make_synthetic_dropout_classifier(seed: int = 13):
+    from types import SimpleNamespace
+
+    class _ToyClassifier(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.emb = torch.nn.Embedding(32, 16)
+            self.drop_outer = torch.nn.Dropout(0.35)
+            self.proj = torch.nn.Sequential(torch.nn.Linear(16, 16), torch.nn.Dropout(0.35), torch.nn.GELU())
+            self.head = torch.nn.Linear(16, len(STANDARD_INTENTS_46))
+
+        def forward(self, input_ids, attention_mask=None, output_hidden_states: bool = False):
+            h = self.drop_outer(self.emb(input_ids).mean(dim=1))
+            h = self.proj(h)
+            logits = self.head(h)
+            if output_hidden_states:
+                return SimpleNamespace(logits=logits, hidden_states=(h.unsqueeze(1),))
+            return SimpleNamespace(logits=logits)
+
+    torch.manual_seed(seed)
+    return _ToyClassifier()
+
+
+def test_deterministic_kl_init_identity_zero_and_zero_anchor_grad_vs_stochastic_dropout():
+    import copy
+    from pipeline.training.train_boundary_candidate import _forward_student_logits_eval_mode
+
+    student = _make_synthetic_dropout_classifier(seed=17)
+    teacher = copy.deepcopy(student)
+    student.train()
+    teacher.eval()
+    for p in teacher.parameters():
+        p.requires_grad_(False)
+
+    input_ids = torch.randint(0, 32, (8, 5))
+    attn = torch.ones_like(input_ids)
+    mask = torch.ones(8, dtype=torch.long)
+    with torch.no_grad():
+        t_logits = teacher(input_ids=input_ids, attention_mask=attn).logits
+
+    # Deterministic eval-mode student forward with autograd enabled: KL ~ 0 and grad ~ 0
+    student.zero_grad()
+    det_logits = _forward_student_logits_eval_mode(student, input_ids, attn)
+    det_loss, det_cnt = compute_masked_teacher_kl_loss(det_logits, t_logits, mask, teacher_temperature=1.0)
+    assert det_cnt == 8
+    assert float(det_loss.item()) < 1e-7
+    det_loss.backward()
+    det_grad_norm = torch.sqrt(
+        sum((p.grad.detach().pow(2).sum() for p in student.parameters() if p.grad is not None), torch.tensor(0.0))
+    )
+    assert float(det_grad_norm.item()) < 1e-6
+
+    # Stochastic train-mode counterexample: dropout noise induces artificial non-zero KL & gradient
+    torch.manual_seed(99)
+    student.zero_grad()
+    stoch_logits = student(input_ids=input_ids, attention_mask=attn).logits
+    stoch_loss, _ = compute_masked_teacher_kl_loss(stoch_logits, t_logits, mask, teacher_temperature=1.0)
+    assert float(stoch_loss.item()) > 1e-4
+    stoch_loss.backward()
+    stoch_grad_norm = torch.sqrt(
+        sum((p.grad.detach().pow(2).sum() for p in student.parameters() if p.grad is not None), torch.tensor(0.0))
+    )
+    assert float(stoch_grad_norm.item()) > 1e-4
+
+
+def test_deterministic_kl_perturbed_student_positive_and_gradient_toward_teacher():
+    import copy
+    from pipeline.training.train_boundary_candidate import _forward_student_logits_eval_mode
+
+    teacher = _make_synthetic_dropout_classifier(seed=23)
+    student = copy.deepcopy(teacher)
+    teacher.eval()
+    for p in teacher.parameters():
+        p.requires_grad_(False)
+    student.train()
+    with torch.no_grad():
+        student.head.weight[0].add_(0.4)
+        student.head.weight[1].sub_(0.3)
+
+    input_ids = torch.randint(0, 32, (6, 5))
+    attn = torch.ones_like(input_ids)
+    mask = torch.tensor([1, 1, 0, 1, 1, 0], dtype=torch.long)
+    with torch.no_grad():
+        t_logits = teacher(input_ids=input_ids, attention_mask=attn).logits
+
+    det_1 = _forward_student_logits_eval_mode(student, input_ids, attn)
+    loss_1, cnt_1 = compute_masked_teacher_kl_loss(det_1, t_logits, mask, teacher_temperature=1.0)
+    det_2 = _forward_student_logits_eval_mode(student, input_ids, attn)
+    loss_2, _ = compute_masked_teacher_kl_loss(det_2, t_logits, mask, teacher_temperature=1.0)
+    assert cnt_1 == 4
+    assert float(loss_1.item()) > 1e-4
+    assert float((loss_1.detach() - loss_2.detach()).abs().item()) == 0.0
+
+    student.zero_grad()
+    loss_1.backward()
+    # Autograd gradient points away from teacher ((theta_s - theta_t) . grad > 0) without optimizer updates
+    directional_alignment = sum(
+        float(((p.detach() - pt.detach()) * p.grad.detach()).sum().item())
+        for p, pt in zip(student.parameters(), teacher.parameters())
+        if p.grad is not None
+    )
+    assert directional_alignment > 0.0
+
+
+def test_deterministic_kl_mask_all_added_empty_zero_and_canonical_exclusion():
+    import copy
+    from apps.core_backend.intent.routing import ESCALATED_34_INTENTS, SUPPORTED_12_INTENTS
+    from pipeline.training.train_boundary_candidate import _forward_student_logits_eval_mode
+
+    teacher = _make_synthetic_dropout_classifier(seed=31)
+    student = copy.deepcopy(teacher)
+    teacher.eval()
+    student.train()
+
+    input_ids = torch.randint(0, 32, (4, 5))
+    attn = torch.ones_like(input_ids)
+    empty_mask = torch.zeros(4, dtype=torch.long)
+    with torch.no_grad():
+        t_logits = teacher(input_ids=input_ids, attention_mask=attn).logits
+
+    det_logits = _forward_student_logits_eval_mode(student, input_ids, attn)
+    loss_empty, cnt_empty = compute_masked_teacher_kl_loss(det_logits, t_logits, empty_mask, teacher_temperature=1.0)
+    assert cnt_empty == 0
+    assert torch.isfinite(loss_empty)
+    assert float(loss_empty.item()) == 0.0
+    assert loss_empty.requires_grad is False
+
+    sup_lbl = sorted(SUPPORTED_12_INTENTS)[0]
+    esc_lbl = sorted(ESCALATED_34_INTENTS)[0]
+    pos_canon = [{"sample_id": f"c_s_{i}", "intent": sup_lbl} for i in range(133)] + [
+        {"sample_id": f"c_e_{i}", "intent": esc_lbl} for i in range(48)
+    ]
+    ext_rows = [{"sample_id": f"orig_ret_ch_s_{i}", "intent": sup_lbl} for i in range(10)] + [
+        {"sample_id": f"orig_ret_ch_e_{i}", "intent": esc_lbl} for i in range(8)
+    ]
+    mask, summary = build_teacher_anchor_mask(
+        pos_train=pos_canon + ext_rows,
+        bitext_rows=[{"sample_id": f"bx_{i}", "intent": sup_lbl} for i in range(11040)],
+        neg_train=[{"sample_id": f"neg_{i}", "intent": "unsupported_x"} for i in range(99)],
+        neg_repeat_counts=[12] * 99,
+        extension_rows=ext_rows,
+    )
+    assert summary["anchor_effective_total"] == 13000 and sum(mask) == 13000
+    assert summary["excluded_effective_total"] == 80 and (len(mask) - sum(mask)) == 80
+
+
+def test_deterministic_kl_base_forward_rng_modes_unchanged_and_exception_restore():
+    import copy
+    import random as py_random
+    import numpy as np
+    from pipeline.training.train_boundary_candidate import _forward_student_logits_eval_mode
+
+    teacher = _make_synthetic_dropout_classifier(seed=41)
+    student = copy.deepcopy(teacher)
+    teacher.eval()
+    for p in teacher.parameters():
+        p.requires_grad_(False)
+
+    # Set non-uniform nested module .training flags and confirm exact restore on normal call AND exception
+    student.train()
+    student.drop_outer.eval()
+    student.proj[1].train()
+    expected_flags = {name: mod.training for name, mod in student.named_modules()}
+
+    input_ids = torch.randint(0, 32, (4, 5))
+    attn = torch.ones_like(input_ids)
+    _ = _forward_student_logits_eval_mode(student, input_ids, attn)
+    assert {name: mod.training for name, mod in student.named_modules()} == expected_flags
+
+    orig_head_forward = student.head.forward
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError("injected forward failure")
+
+    student.head.forward = _boom  # type: ignore[method-assign]
+    with pytest.raises(RuntimeError, match="injected forward failure"):
+        _ = _forward_student_logits_eval_mode(student, input_ids, attn)
+    student.head.forward = orig_head_forward  # type: ignore[method-assign]
+    assert {name: mod.training for name, mod in student.named_modules()} == expected_flags
+
+    # RNG preservation & base stochastic forward identity
+    student.train()
+    with torch.no_grad():
+        student.head.weight[0].add_(0.2)
+    mask = torch.ones(4, dtype=torch.long)
+
+    torch.manual_seed(1234)
+    ref_out_1 = student(input_ids=input_ids, attention_mask=attn, output_hidden_states=True).logits
+    ref_out_2 = student(input_ids=input_ids, attention_mask=attn, output_hidden_states=True).logits
+
+    torch.manual_seed(1234)
+    np.random.seed(1234)
+    py_random.seed(1234)
+    base_out_1 = student(input_ids=input_ids, attention_mask=attn, output_hidden_states=True).logits
+    cpu_rng_before = torch.get_rng_state()
+    cuda_rng_before = torch.cuda.get_rng_state() if torch.cuda.is_available() else None
+    np_rng_before = repr(np.random.get_state())
+    py_rng_before = py_random.getstate()
+
+    with torch.no_grad():
+        t_logits = teacher(input_ids=input_ids, attention_mask=attn).logits
+    det_logits = _forward_student_logits_eval_mode(student, input_ids, attn)
+    l_tkl, _ = compute_masked_teacher_kl_loss(det_logits, t_logits, mask, teacher_temperature=1.0)
+    l_tkl.backward()
+
+    assert torch.equal(torch.get_rng_state(), cpu_rng_before)
+    if cuda_rng_before is not None:
+        assert torch.equal(torch.cuda.get_rng_state(), cuda_rng_before)
+    assert repr(np.random.get_state()) == np_rng_before
+    assert py_random.getstate() == py_rng_before
+
+    base_out_2 = student(input_ids=input_ids, attention_mask=attn, output_hidden_states=True).logits
+    assert torch.equal(base_out_1.detach(), ref_out_1.detach())
+    assert torch.equal(base_out_2.detach(), ref_out_2.detach())
+
+
+def test_deterministic_kl_no_grad_only_teacher_and_profile_archive_forward_flags(tmp_path: Path, monkeypatch):
+    import copy
+    import hashlib
+    import shutil
+    from pipeline.training.train_boundary_candidate import _forward_student_logits_eval_mode
+
+    # Part A: autograd active ONLY on det_student_logits, never on teacher
+    teacher = _make_synthetic_dropout_classifier(seed=53)
+    student = copy.deepcopy(teacher)
+    teacher.eval()
+    for p in teacher.parameters():
+        p.requires_grad_(False)
+    student.train()
+    with torch.no_grad():
+        student.head.weight[2].add_(0.35)
+    t_snap = {k: v.detach().clone() for k, v in teacher.state_dict().items()}
+
+    input_ids = torch.randint(0, 32, (4, 5))
+    attn = torch.ones_like(input_ids)
+    with torch.no_grad():
+        t_logits = teacher(input_ids=input_ids, attention_mask=attn).logits
+    assert t_logits.requires_grad is False and t_logits.grad_fn is None
+
+    det_logits = _forward_student_logits_eval_mode(student, input_ids, attn)
+    assert det_logits.requires_grad is True and det_logits.grad_fn is not None
+    l_tkl, _ = compute_masked_teacher_kl_loss(det_logits, t_logits, torch.ones(4, dtype=torch.long))
+    assert l_tkl.requires_grad is True
+    l_tkl.backward()
+    for p in teacher.parameters():
+        assert p.grad is None and p.requires_grad is False
+    for k, orig_t in t_snap.items():
+        assert torch.equal(teacher.state_dict()[k], orig_t)
+
+    # Part B: profile isolation, fail-closed anchor-mode guards, prep plan & runner forwarding
+    assert "teacher_student_anchor_mode" not in AUTHORIZED_FIT_PROFILES["option_a_teacher_kl"]
+    det_cfg = AUTHORIZED_FIT_PROFILES["option_a_teacher_kl_deterministic"]
+    assert det_cfg["teacher_kl_weight"] == 1.0
+    assert det_cfg["teacher_temperature"] == 1.0
+    assert det_cfg["teacher_student_anchor_mode"] == "eval_no_dropout_autograd_enabled"
+
+    with pytest.raises(ValueError, match="option_a_teacher_kl_deterministic requires explicit teacher_student_anchor_mode"):
+        validate_profile_settings(
+            profile="option_a_teacher_kl_deterministic",
+            epochs=3,
+            lr=2e-5,
+            batch_size=32,
+            seed=42,
+            fit_mode="fit2_supcon_energy",
+            enable_selective_rejector=False,
+            teacher_kl_weight=1.0,
+            teacher_temperature=1.0,
+            teacher_weights_sha256=EXPECTED_FIT2_SHA256,
+            teacher_student_anchor_mode="train_stochastic",
+        )
+    with pytest.raises(ValueError, match="option_a_teacher_kl forbids non-stochastic"):
+        validate_profile_settings(
+            profile="option_a_teacher_kl",
+            epochs=3,
+            lr=2e-5,
+            batch_size=32,
+            seed=42,
+            fit_mode="fit2_supcon_energy",
+            enable_selective_rejector=False,
+            teacher_kl_weight=1.0,
+            teacher_temperature=1.0,
+            teacher_weights_sha256=EXPECTED_FIT2_SHA256,
+            teacher_student_anchor_mode="eval_no_dropout_autograd_enabled",
+        )
+
+    def _sha(p: Path) -> str:
+        return hashlib.sha256(p.read_bytes()).hexdigest().lower()
+
+    repo_root = Path(__file__).resolve().parents[2]
+    prep_dir = tmp_path / "run-records-fit2-orig-deterministic-kl-v1-prep"
+    ds_dir = prep_dir / "datasets"
+    ds_dir.mkdir(parents=True)
+    plan = _build_planned_execution_plan(
+        profile_name="option_a_teacher_kl_deterministic",
+        prep_records_dir=prep_dir,
+        planned_fit_run_id="fit2-orig-deterministic-kl-v1",
+        planned_future_paths={"archive_dir": str(tmp_path / "arch")},
+        experiment_mode="return_contrast",
+    )
+    assert "--teacher-student-anchor-mode" in plan["planned_cli"]
+    assert "eval_no_dropout_autograd_enabled" in plan["planned_cli"]
+    assert plan["teacher_student_anchor_mode"] == "eval_no_dropout_autograd_enabled"
+
+    ds_hashes: dict[str, str] = {}
+    new_hashes: dict[str, str] = {}
+    for fname in (*EXPECTED_ORIG_STAGE2_LOCKED_FILES, "orig_fit2_return_contrast_extension.jsonl"):
+        fp = ds_dir / fname
+        fp.write_text('{"ok": true}\n' if fname.endswith(".json") else '{"sample_id": "x"}\n', encoding="utf-8")
+        digest = _sha(fp)
+        key = (
+            "boundary_split_manifest"
+            if fname == "split_manifest.json"
+            else ("orig_fit2_return_contrast_extension" if fname == "orig_fit2_return_contrast_extension.jsonl" else fname[:-len(".jsonl")])
+        )
+        ds_hashes[key] = digest
+        new_hashes[fname] = digest
+    source_hashes = {rel: _sha(repo_root / rel) for rel in RELEVANT_SOURCE_PATHS}
+    for rel in RELEVANT_SOURCE_PATHS:
+        snap = prep_dir / "source_snapshot" / rel
+        snap.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(repo_root / rel, snap)
+    base_metrics = {
+        "boundary_pos_cal": {"count": 86, "correct_count": 68, "mean_max_prob": 0.686},
+        "boundary_pos_cal_sup12": {"count": 48, "correct_count": 38, "conf_ge_070_count": 28, "conf_ge_080_count": 26},
+        "boundary_pos_cal_esc34": {"count": 38, "correct_count": 30, "mean_max_prob": 0.671, "max_sup12_mass": 0.48},
+        "bitext_cal": {"count": 690, "correct_count": 689},
+        "boundary_neg_cal": {"count": 48, "pred_sup12_count": 9, "max_sup12_mass": 0.72, "max_single_sup12_prob": 0.56},
+        "pos_train_added_18": {"count": 18, "correct_count": 18},
+        "attribution_breakdown": {},
+    }
+    (prep_dir / "status.json").write_text(
+        json.dumps({"status": "complete", "fits_executed": 0, "prep_archive": True}), encoding="utf-8"
+    )
+    (prep_dir / "prep_manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "orig_fit2_return_contrast_prep.v4",
+                "experiment_mode": "return_contrast",
+                "is_promotion_candidate": True,
+                "git_commit": "a" * 40,
+                "source_hashes": source_hashes,
+                "unchanged_original_recipe_parameters": UNCHANGED_ORIGINAL_RECIPE_PARAMETERS,
+                "authorized_fit_profile": det_cfg,
+                "execution_plan": plan,
+                "teacher_anchor_config": {
+                    "enabled": True,
+                    "teacher_weights_sha256": EXPECTED_FIT2_SHA256,
+                    "teacher_kl_weight": 1.0,
+                    "teacher_temperature": 1.0,
+                    "teacher_student_anchor_mode": "eval_no_dropout_autograd_enabled",
+                    "anchor_effective_count": 13000,
+                    "excluded_effective_count": 80,
+                },
+                "baseline_cal_reference": {
+                    "baseline_weights_sha256": EXPECTED_FIT2_SHA256,
+                    "baseline_calibration_manifest_sha256": "c" * 64,
+                    "dataset_hashes": ds_hashes,
+                    "metrics": base_metrics,
+                },
+                "preflight": {
+                    "extension_version": "orig_fit2_return_channel_contrast_v2",
+                    "counts": {"extension_pos_train_added": 18},
+                    "dataset_hashes": ds_hashes,
+                    "new_input_file_hashes": new_hashes,
+                },
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    _write_and_verify_sha_inventory(prep_dir, "sidecar_sha_inventory.json")
+
+    candidates_dir = tmp_path / "candidates"
+    local_base = tmp_path / "local"
+    init_dir = tmp_path / "init_f695"
+    serving_dir = tmp_path / "serving"
+    init_dir.mkdir()
+    serving_dir.mkdir()
+    (init_dir / "model.safetensors").write_bytes(b"fit2")
+    (serving_dir / "model.safetensors").write_bytes(b"serving")
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit._sha256_lower",
+        lambda p: (
+            EXPECTED_SERVING_SHA256
+            if p == serving_dir / "model.safetensors"
+            else (EXPECTED_FIT2_SHA256 if p == init_dir / "model.safetensors" else _sha(p))
+        ),
+    )
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.verify_fit2_starting_checkpoint",
+        lambda p: {"weights_sha256": EXPECTED_FIT2_SHA256, "temperature": 1.0, "rejector_enabled": False, "num_labels": 46},
+    )
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.verify_orig_relevant_source_provenance",
+        lambda root: {"git_commit": "b" * 40, "source_hashes": source_hashes},
+    )
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.verify_git_commit_ancestor",
+        lambda root, anc, desc="HEAD": "b" * 40,
+    )
+
+    captured_kwargs: dict[str, object] = {}
+
+    def _fake_det_fit(**kwargs):
+        captured_kwargs.update(kwargs)
+        cand_dir = kwargs["artifact_root"] / kwargs["output_subdir"]
+        cand_dir.mkdir(parents=True)
+        for fname in ("model.safetensors", "tokenizer.json", "tokenizer_config.json", "config.json"):
+            (cand_dir / fname).write_bytes(fname.encode("utf-8"))
+        (cand_dir / "calibration_manifest.json").write_text('{"valid": true}', encoding="utf-8")
+        (cand_dir / "candidate_provenance_manifest.json").write_text(
+            json.dumps(
+                {
+                    "provenance_status": "verified",
+                    "training_lineage": {
+                        "teacher_kl_enabled": True,
+                        "teacher_weights_sha256": kwargs["expected_teacher_weights_sha256"],
+                        "teacher_kl_weight": kwargs["teacher_kl_weight"],
+                        "teacher_temperature": kwargs["teacher_temperature"],
+                        "teacher_student_anchor_mode": kwargs["teacher_student_anchor_mode"],
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        return {"fit_mode": "fit2_supcon_energy", "temperature": 1.0}
+
+    monkeypatch.setattr("scripts.run_orig_fit2_return_contrast_fit.run_fit_and_lock_candidate", _fake_det_fit)
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.validate_calibration_manifest",
+        lambda d, p: {"valid": True, "temperature": 1.0, "rejector": {"enabled": False}},
+    )
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.audit_candidate_provenance",
+        lambda d, p: {"provenance_passed": True, "num_labels": 46},
+    )
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.verify_reload_from_archive",
+        lambda d: {"reload_verified": True, "archive_dir": str(d), "num_labels": 46},
+    )
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.evaluate_cal_guard_metrics_for_model",
+        lambda d, inp: dict(base_metrics),
+    )
+
+    fit_res = run_authorized_fit(
+        repo_root=repo_root,
+        prep_dir=prep_dir,
+        run_id="fit2-orig-deterministic-kl-v1",
+        profile="option_a_teacher_kl_deterministic",
+        epochs=3,
+        lr=2e-5,
+        teacher_kl_weight=1.0,
+        teacher_temperature=1.0,
+        teacher_weights_sha256=EXPECTED_FIT2_SHA256,
+        teacher_student_anchor_mode="eval_no_dropout_autograd_enabled",
+        execute_fit=True,
+        main_candidates_dir=candidates_dir,
+        local_root_base=local_base,
+        init_model_dir=init_dir,
+        serving_dir=serving_dir,
+    )
+    assert captured_kwargs["teacher_student_anchor_mode"] == "eval_no_dropout_autograd_enabled"
+    run_cfg = json.loads((Path(fit_res["records_dir"]) / "run_config.json").read_text(encoding="utf-8"))
+    assert run_cfg["teacher_anchor_config"]["teacher_student_anchor_mode"] == "eval_no_dropout_autograd_enabled"

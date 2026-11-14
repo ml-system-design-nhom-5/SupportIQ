@@ -80,6 +80,7 @@ def validate_profile_settings(
     teacher_kl_weight: Optional[float] = None,
     teacher_temperature: Optional[float] = None,
     teacher_weights_sha256: Optional[str] = None,
+    teacher_student_anchor_mode: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Fail closed on any deviation from the locked parameters for an authorized fit profile."""
     if profile not in AUTHORIZED_FIT_PROFILES:
@@ -98,7 +99,7 @@ def validate_profile_settings(
     if bool(enable_selective_rejector) != bool(cfg["enable_selective_rejector"]):
         raise ValueError(f"{profile} enforces selective rejector OFF (enable_selective_rejector=False)")
 
-    if profile == "option_a_teacher_kl":
+    if profile in ("option_a_teacher_kl", "option_a_teacher_kl_deterministic"):
         if teacher_kl_weight is None or abs(float(teacher_kl_weight) - float(cfg["teacher_kl_weight"])) > 1e-12:
             raise ValueError(
                 f"{profile} requires explicit teacher_kl_weight={cfg['teacher_kl_weight']}; got {teacher_kl_weight!r}"
@@ -111,6 +112,17 @@ def validate_profile_settings(
         exp_sha = str(cfg["teacher_weights_sha256"]).lower()
         if norm_sha != exp_sha:
             raise ValueError(f"{profile} requires exact teacher_weights_sha256={exp_sha}; got {teacher_weights_sha256!r}")
+        mode_val = str(teacher_student_anchor_mode or "").strip()
+        if profile == "option_a_teacher_kl_deterministic":
+            if mode_val != str(cfg["teacher_student_anchor_mode"]):
+                raise ValueError(
+                    f"{profile} requires explicit teacher_student_anchor_mode={cfg['teacher_student_anchor_mode']!r}; "
+                    f"got {teacher_student_anchor_mode!r}"
+                )
+        elif mode_val and mode_val != "train_stochastic":
+            raise ValueError(
+                f"{profile} forbids non-stochastic teacher_student_anchor_mode; got {teacher_student_anchor_mode!r}"
+            )
     else:
         if teacher_kl_weight is not None and abs(float(teacher_kl_weight)) > 1e-12:
             raise ValueError(f"{profile} forbids non-zero teacher_kl_weight; got {teacher_kl_weight!r}")
@@ -118,6 +130,8 @@ def validate_profile_settings(
             raise ValueError(f"{profile} forbids custom teacher_temperature; got {teacher_temperature!r}")
         if teacher_weights_sha256 is not None and str(teacher_weights_sha256).strip():
             raise ValueError(f"{profile} forbids teacher_weights_sha256; got {teacher_weights_sha256!r}")
+        if teacher_student_anchor_mode is not None and str(teacher_student_anchor_mode).strip():
+            raise ValueError(f"{profile} forbids teacher_student_anchor_mode; got {teacher_student_anchor_mode!r}")
     return dict(cfg)
 
 
@@ -238,15 +252,19 @@ def verify_locked_prep_bundle(
                 or str(holder.get("init_weights_sha256", "")).lower() != EXPECTED_FIT2_SHA256
             ):
                 raise ValueError(f"Invalid {holder_name} in prep_manifest: {holder}")
-            if prep_profile == "option_a_teacher_kl" and (
+            if prep_profile in ("option_a_teacher_kl", "option_a_teacher_kl_deterministic") and (
                 abs(float(holder.get("teacher_kl_weight", -1.0)) - float(expected_cfg["teacher_kl_weight"])) > 1e-12
                 or abs(float(holder.get("teacher_temperature", -1.0)) - float(expected_cfg["teacher_temperature"])) > 1e-12
                 or str(holder.get("teacher_weights_sha256", "")).lower() != str(expected_cfg["teacher_weights_sha256"]).lower()
             ):
                 raise ValueError(f"Invalid teacher-KL config in {holder_name}: {holder}")
+            if prep_profile == "option_a_teacher_kl_deterministic" and (
+                str(holder.get("teacher_student_anchor_mode", "")) != str(expected_cfg["teacher_student_anchor_mode"])
+            ):
+                raise ValueError(f"Invalid teacher_student_anchor_mode in {holder_name}: {holder}")
 
         tkl_cfg = manifest.get("teacher_anchor_config")
-        if prep_profile == "option_a_teacher_kl":
+        if prep_profile in ("option_a_teacher_kl", "option_a_teacher_kl_deterministic"):
             if (
                 not isinstance(tkl_cfg, dict)
                 or tkl_cfg.get("enabled") is not True
@@ -257,6 +275,15 @@ def verify_locked_prep_bundle(
                 or int(tkl_cfg.get("excluded_effective_count", -1)) != 80
             ):
                 raise ValueError(f"Invalid teacher_anchor_config in prep_manifest: {tkl_cfg}")
+            if prep_profile == "option_a_teacher_kl_deterministic" and (
+                str(tkl_cfg.get("teacher_student_anchor_mode", "")) != str(expected_cfg["teacher_student_anchor_mode"])
+            ):
+                raise ValueError(f"Invalid teacher_student_anchor_mode in teacher_anchor_config: {tkl_cfg}")
+            if prep_profile == "option_a_teacher_kl" and tkl_cfg.get("teacher_student_anchor_mode") not in (
+                None,
+                "train_stochastic",
+            ):
+                raise ValueError(f"Stochastic teacher-KL prep has invalid anchor mode: {tkl_cfg}")
         elif tkl_cfg is not None:
             raise ValueError(f"Unexpected teacher_anchor_config in non-teacher-KL prep profile {prep_profile!r}")
 
@@ -382,6 +409,7 @@ def run_authorized_fit(
     teacher_kl_weight: Optional[float] = None,
     teacher_temperature: Optional[float] = None,
     teacher_weights_sha256: Optional[str] = None,
+    teacher_student_anchor_mode: Optional[str] = None,
     teacher_model_dir: Optional[Path] = None,
     execute_fit: bool = False,
     main_candidates_dir: Path = MAIN_CANDIDATES_DIR,
@@ -401,6 +429,7 @@ def run_authorized_fit(
         teacher_kl_weight=teacher_kl_weight,
         teacher_temperature=teacher_temperature,
         teacher_weights_sha256=teacher_weights_sha256,
+        teacher_student_anchor_mode=teacher_student_anchor_mode,
     )
     out_paths = _check_output_paths_unused(
         run_id=run_id,
@@ -421,7 +450,8 @@ def run_authorized_fit(
         raise ValueError(f"Serving weights SHA mismatch: {serving_sha} != {EXPECTED_SERVING_SHA256}")
 
     init_info = verify_fit2_starting_checkpoint(init_model_dir)
-    is_teacher_kl = profile == "option_a_teacher_kl"
+    is_teacher_kl = profile in ("option_a_teacher_kl", "option_a_teacher_kl_deterministic")
+    is_det_teacher_kl = profile == "option_a_teacher_kl_deterministic"
     resolved_teacher_dir = (teacher_model_dir if teacher_model_dir is not None else init_model_dir) if is_teacher_kl else None
     if is_teacher_kl:
         assert resolved_teacher_dir is not None
@@ -449,12 +479,15 @@ def run_authorized_fit(
             "planned_outputs": {k: str(v) for k, v in out_paths.items()},
         }
         if is_teacher_kl:
-            val_res["teacher_anchor_config"] = {
+            val_tkl_cfg: Dict[str, Any] = {
                 "teacher_model_dir": str(resolved_teacher_dir),
                 "teacher_weights_sha256": str(profile_cfg["teacher_weights_sha256"]),
                 "teacher_kl_weight": float(profile_cfg["teacher_kl_weight"]),
                 "teacher_temperature": float(profile_cfg["teacher_temperature"]),
             }
+            if is_det_teacher_kl:
+                val_tkl_cfg["teacher_student_anchor_mode"] = str(profile_cfg["teacher_student_anchor_mode"])
+            val_res["teacher_anchor_config"] = val_tkl_cfg
         return val_res
 
     archive_dir = out_paths["archive_dir"]
@@ -527,12 +560,15 @@ def run_authorized_fit(
         "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
     }
     if is_teacher_kl:
-        run_config_payload["teacher_anchor_config"] = {
+        run_tkl_cfg: Dict[str, Any] = {
             "teacher_model_dir": str(resolved_teacher_dir),
             "teacher_weights_sha256": str(profile_cfg["teacher_weights_sha256"]),
             "teacher_kl_weight": float(profile_cfg["teacher_kl_weight"]),
             "teacher_temperature": float(profile_cfg["teacher_temperature"]),
         }
+        if is_det_teacher_kl:
+            run_tkl_cfg["teacher_student_anchor_mode"] = str(profile_cfg["teacher_student_anchor_mode"])
+        run_config_payload["teacher_anchor_config"] = run_tkl_cfg
     (records_dir / "run_config.json").write_text(json.dumps(run_config_payload, indent=2) + "\n", encoding="utf-8")
 
     log_lines: list[str] = []
@@ -581,6 +617,8 @@ def run_authorized_fit(
                 "teacher_model_dir": resolved_teacher_dir,
                 "expected_teacher_weights_sha256": str(profile_cfg["teacher_weights_sha256"]),
             }
+            if is_det_teacher_kl:
+                trainer_kwargs["teacher_student_anchor_mode"] = str(profile_cfg["teacher_student_anchor_mode"])
         fit_result = run_fit_and_lock_candidate(
             worktree_root=repo_root,
             data_repo_root=repo_root,
@@ -629,6 +667,11 @@ def run_authorized_fit(
                 or abs(float(t_lineage.get("teacher_kl_weight", -1.0)) - float(profile_cfg["teacher_kl_weight"])) > 1e-12
                 or abs(float(t_lineage.get("teacher_temperature", -1.0)) - float(profile_cfg["teacher_temperature"]))
                 > 1e-12
+                or (
+                    is_det_teacher_kl
+                    and str(t_lineage.get("teacher_student_anchor_mode", ""))
+                    != str(profile_cfg["teacher_student_anchor_mode"])
+                )
             ):
                 raise ValueError(f"Candidate provenance manifest missing valid teacher-KL lineage: {t_lineage}")
 
@@ -757,6 +800,7 @@ def main() -> None:
     ap.add_argument("--teacher-kl-weight", type=float, default=None)
     ap.add_argument("--teacher-temperature", type=float, default=None)
     ap.add_argument("--teacher-weights-sha256", type=str, default=None)
+    ap.add_argument("--teacher-student-anchor-mode", type=str, default=None)
     ap.add_argument("--validate-only", action="store_true", help="Run fail-closed profile & locked prep checks without fitting")
     ap.add_argument("--run-authorized-fit", action="store_true", help="Execute the single authorized continuation fit for --profile")
     ap.add_argument("--run-option-a-fit", action="store_true", help="Legacy Option A execution flag (requires --profile option_a)")
@@ -785,6 +829,7 @@ def main() -> None:
         teacher_kl_weight=args.teacher_kl_weight,
         teacher_temperature=args.teacher_temperature,
         teacher_weights_sha256=args.teacher_weights_sha256,
+        teacher_student_anchor_mode=args.teacher_student_anchor_mode,
         execute_fit=execute_fit,
     )
     print(json.dumps(res, indent=2))
