@@ -2312,3 +2312,502 @@ def test_deterministic_kl_no_grad_only_teacher_and_profile_archive_forward_flags
     assert captured_kwargs["teacher_student_anchor_mode"] == "eval_no_dropout_autograd_enabled"
     run_cfg = json.loads((Path(fit_res["records_dir"]) / "run_config.json").read_text(encoding="utf-8"))
     assert run_cfg["teacher_anchor_config"]["teacher_student_anchor_mode"] == "eval_no_dropout_autograd_enabled"
+
+
+def test_head_only_freeze_component_hashes_nograd_and_optimizer_exact_param_list():
+    from transformers import DistilBertConfig, DistilBertForSequenceClassification
+    from pipeline.evaluation.classifier_acceptance_gate import SUPPORTED_12_INTENTS
+    from pipeline.training.train_boundary_candidate import (
+        _configure_trainable_scope,
+        _set_epoch_module_modes,
+        _snapshot_frozen_component_hashes,
+    )
+
+    torch.manual_seed(42)
+    full_cfg = DistilBertConfig(num_labels=len(STANDARD_INTENTS_46))
+    model = DistilBertForSequenceClassification(full_cfg)
+    scope_info = _configure_trainable_scope(
+        model,
+        "classifier_head_only",
+        expected_trainable_param_count=35374,
+        expected_frozen_param_count=66953472,
+    )
+    assert scope_info["trainable_param_count"] == 35374
+    assert scope_info["frozen_param_count"] == 66953472
+    assert scope_info["trainable_param_names"] == ["classifier.weight", "classifier.bias"]
+    assert sum(p.numel() for p in model.parameters()) == 66988846
+
+    pre_snap = _snapshot_frozen_component_hashes(model)
+    expected_components = {
+        "distilbert.embeddings",
+        *[f"distilbert.transformer.layer.{i}" for i in range(6)],
+        "pre_classifier",
+        "buffers",
+    }
+    assert expected_components.issubset(set(pre_snap["component_hashes"].keys()))
+
+    trainable_params = [p for p in model.parameters() if p.requires_grad]
+    optimizer = torch.optim.AdamW(trainable_params, lr=1e-4, weight_decay=0.01)
+    assert len(optimizer.param_groups) == 1
+    opt_ids = [id(p) for p in optimizer.param_groups[0]["params"]]
+    assert opt_ids == [id(model.classifier.weight), id(model.classifier.bias)]
+    assert sum(p.numel() for p in optimizer.param_groups[0]["params"]) == 35374
+    assert optimizer.param_groups[0]["lr"] == 1e-4
+    assert optimizer.param_groups[0]["weight_decay"] == 0.01
+
+    _set_epoch_module_modes(model, trainable_scope="classifier_head_only", feature_dropout_eval_mode=True)
+    input_ids = torch.randint(0, full_cfg.vocab_size, (4, 12))
+    attention_mask = torch.ones((4, 12), dtype=torch.long)
+    logits = model(input_ids=input_ids, attention_mask=attention_mask, output_hidden_states=False).logits
+    sup12_idx = torch.tensor([STANDARD_INTENTS_46.index(x) for x in SUPPORTED_12_INTENTS], dtype=torch.long)
+    uniform_target = torch.full((2, len(STANDARD_INTENTS_46)), 1.0 / len(STANDARD_INTENTS_46))
+
+    l_pos = torch.nn.functional.cross_entropy(logits[:2], torch.tensor([0, 31], dtype=torch.long), label_smoothing=0.03)
+    neg_logits = logits[2:]
+    l_kl = torch.nn.functional.kl_div(torch.nn.functional.log_softmax(neg_logits, dim=-1), uniform_target, reduction="batchmean")
+    sup12_mass = torch.softmax(neg_logits, dim=-1)[:, sup12_idx].sum(dim=-1)
+    l_ceil = torch.relu(sup12_mass - 0.18).pow(2).mean()
+    pos_eng = (-torch.logsumexp(logits[:2], dim=-1)).mean().detach()
+    neg_eng = -torch.logsumexp(neg_logits, dim=-1)
+    l_eng = 0.25 * torch.relu((pos_eng + 2.0) - neg_eng).pow(2).mean()
+    loss = l_pos + (0.80 * l_kl + 3.0 * l_ceil + l_eng)
+    optimizer.zero_grad()
+    loss.backward()
+
+    assert model.classifier.weight.grad is not None and float(model.classifier.weight.grad.abs().max().item()) > 0.0
+    assert model.classifier.bias.grad is not None and float(model.classifier.bias.grad.abs().max().item()) > 0.0
+    assert all(p.grad is None for _, p in model.named_parameters() if not p.requires_grad)
+
+    # Do NOT step optimizer; verify frozen parameter + buffer hashes remain bit-identical.
+    post_snap = _snapshot_frozen_component_hashes(model)
+    assert post_snap["all_frozen_tensors_sha256"] == pre_snap["all_frozen_tensors_sha256"]
+    assert post_snap["component_hashes"] == pre_snap["component_hashes"]
+
+
+def test_head_only_eval_dropout_deterministic_rng_zero_and_mode_guards():
+    import numpy as np
+    import random
+    from transformers import DistilBertConfig, DistilBertForSequenceClassification
+    from pipeline.training.train_boundary_candidate import (
+        _configure_trainable_scope,
+        _set_epoch_module_modes,
+    )
+
+    cfg = DistilBertConfig(
+        num_labels=len(STANDARD_INTENTS_46),
+        vocab_size=256,
+        dim=64,
+        hidden_dim=128,
+        n_layers=2,
+        n_heads=4,
+    )
+    model = DistilBertForSequenceClassification(cfg)
+    _configure_trainable_scope(model, "classifier_head_only")
+
+    # Even if recursive model.train() ran earlier, per-epoch _set_epoch_module_modes disables frozen dropout.
+    model.train()
+    _set_epoch_module_modes(model, trainable_scope="classifier_head_only", feature_dropout_eval_mode=True)
+    assert model.distilbert.training is False
+    assert model.pre_classifier.training is False
+    assert model.dropout.training is False
+    assert model.classifier.training is True
+    for mod in model.modules():
+        if mod is model.classifier:
+            assert mod.training is True
+        else:
+            assert mod.training is False
+
+    x = torch.randint(0, 256, (4, 10))
+    mask = torch.ones((4, 10), dtype=torch.long)
+    torch_rng0 = torch.get_rng_state().clone()
+    np_rng0 = np.random.get_state()
+    py_rng0 = random.getstate()
+
+    out1 = model(input_ids=x, attention_mask=mask).logits
+    out1.sum().backward()
+    model.zero_grad(set_to_none=True)
+    out2 = model(input_ids=x, attention_mask=mask).logits.detach()
+
+    assert float((out1.detach() - out2).abs().max().item()) == 0.0
+    assert torch.equal(torch.get_rng_state(), torch_rng0)
+    np_rng1 = np.random.get_state()
+    assert np_rng0[0] == np_rng1[0] and np.array_equal(np_rng0[1], np_rng1[1]) and np_rng0[2:] == np_rng1[2:]
+    assert random.getstate() == py_rng0
+
+    with pytest.raises(ValueError, match="requires explicit feature_dropout_eval_mode=True"):
+        _set_epoch_module_modes(model, trainable_scope="classifier_head_only", feature_dropout_eval_mode=False)
+    with pytest.raises(ValueError, match="only allowed with trainable_scope='classifier_head_only'"):
+        _set_epoch_module_modes(model, trainable_scope="all", feature_dropout_eval_mode=True)
+
+
+def test_head_only_inactive_supcon_equivalent_head_grad():
+    from transformers import DistilBertConfig, DistilBertForSequenceClassification
+    from pipeline.training.train_boundary_candidate import (
+        _configure_trainable_scope,
+        _set_epoch_module_modes,
+        _supcon_loss,
+    )
+
+    torch.manual_seed(7)
+    cfg = DistilBertConfig(
+        num_labels=len(STANDARD_INTENTS_46),
+        vocab_size=256,
+        dim=64,
+        hidden_dim=128,
+        n_layers=2,
+        n_heads=4,
+    )
+    model = DistilBertForSequenceClassification(cfg)
+    _configure_trainable_scope(model, "classifier_head_only")
+    _set_epoch_module_modes(model, trainable_scope="classifier_head_only", feature_dropout_eval_mode=True)
+
+    x = torch.randint(0, 256, (6, 8))
+    mask = torch.ones((6, 8), dtype=torch.long)
+    y = torch.tensor([0, 0, 5, 5, 0, 0], dtype=torch.long)
+    neg_mask = torch.tensor([False, False, False, False, True, True])
+
+    out = model(input_ids=x, attention_mask=mask, output_hidden_states=True)
+    l_base = torch.nn.functional.cross_entropy(out.logits[~neg_mask], y[~neg_mask], label_smoothing=0.03)
+    model.zero_grad(set_to_none=True)
+    l_base.backward(retain_graph=True)
+    w_grad_base = model.classifier.weight.grad.detach().clone()
+    b_grad_base = model.classifier.bias.grad.detach().clone()
+
+    cls_norm = torch.nn.functional.normalize(out.hidden_states[-1][:, 0, :], dim=-1)
+    sc_targets = torch.where(neg_mask, torch.full_like(y, -1), y)
+    l_sc = 0.25 * _supcon_loss(cls_norm, sc_targets, temperature=0.12)
+    assert l_sc.requires_grad is False
+
+    model.zero_grad(set_to_none=True)
+    (l_base + l_sc).backward()
+    assert float((model.classifier.weight.grad - w_grad_base).abs().max().item()) == 0.0
+    assert float((model.classifier.bias.grad - b_grad_base).abs().max().item()) == 0.0
+    assert all(p.grad is None for _, p in model.named_parameters() if not p.requires_grad)
+
+
+def test_head_only_profile_validation_defaults_and_negative_guards():
+    from transformers import DistilBertConfig, DistilBertForSequenceClassification
+    from pipeline.training.train_boundary_candidate import _configure_trainable_scope
+    from scripts.run_orig_fit2_return_contrast_prep import DEFAULT_PREP_PROFILE
+
+    assert DEFAULT_PREP_PROFILE == "lr5e6"
+    assert "option_a_classifier_head_only_v1" in AUTHORIZED_FIT_PROFILES
+    head_cfg = AUTHORIZED_FIT_PROFILES["option_a_classifier_head_only_v1"]
+    assert head_cfg["lr"] == 1e-4
+    assert head_cfg["epochs"] == 2
+    assert head_cfg["batch_size"] == 32
+    assert head_cfg["seed"] == 42
+    assert head_cfg["weight_decay"] == 0.01
+    assert head_cfg["fit_mode"] == "fit2_supcon_energy"
+    assert head_cfg["min_temperature"] == 1.0
+    assert head_cfg["enable_selective_rejector"] is False
+    assert head_cfg["trainable_scope"] == "classifier_head_only"
+    assert head_cfg["feature_dropout_eval_mode"] is True
+    assert head_cfg["expected_trainable_param_count"] == 35374
+    assert head_cfg["expected_frozen_param_count"] == 66953472
+
+    ok = validate_profile_settings(
+        profile="option_a_classifier_head_only_v1",
+        epochs=2,
+        lr=1e-4,
+        batch_size=32,
+        seed=42,
+        fit_mode="fit2_supcon_energy",
+        enable_selective_rejector=False,
+        weight_decay=0.01,
+        trainable_scope="classifier_head_only",
+        feature_dropout_eval_mode=True,
+    )
+    assert ok["selected_recipe"] == "option_a_classifier_head_only_adamw_1e4_2ep"
+
+    # Existing default profiles stay isolated and reject head-only flags.
+    for p_name, p_epochs, p_lr, extra in (
+        ("option_a", 3, 2e-5, {}),
+        ("lr5e6", 3, 5e-6, {}),
+        (
+            "option_a_teacher_kl",
+            3,
+            2e-5,
+            {"teacher_kl_weight": 1.0, "teacher_temperature": 1.0, "teacher_weights_sha256": EXPECTED_FIT2_SHA256},
+        ),
+    ):
+        with pytest.raises(ValueError, match="forbids non-all trainable_scope"):
+            validate_profile_settings(
+                profile=p_name,
+                epochs=p_epochs,
+                lr=p_lr,
+                batch_size=32,
+                seed=42,
+                fit_mode="fit2_supcon_energy",
+                enable_selective_rejector=False,
+                trainable_scope="classifier_head_only",
+                **extra,
+            )
+        with pytest.raises(ValueError, match="forbids feature_dropout_eval_mode=True"):
+            validate_profile_settings(
+                profile=p_name,
+                epochs=p_epochs,
+                lr=p_lr,
+                batch_size=32,
+                seed=42,
+                fit_mode="fit2_supcon_energy",
+                enable_selective_rejector=False,
+                feature_dropout_eval_mode=True,
+                **extra,
+            )
+
+    # Head-only rejects wrong lr, epochs, weight_decay, trainable_scope, missing eval mode, or teacher_kl.
+    for bad_kwargs, match in (
+        ({"lr": 2e-5}, "enforces lr="),
+        ({"epochs": 3}, "enforces epochs=2"),
+        ({"weight_decay": 0.0}, "requires explicit weight_decay=0.01"),
+        ({"weight_decay": None}, "requires explicit weight_decay=0.01"),
+        ({"trainable_scope": "all"}, "requires explicit trainable_scope='classifier_head_only'"),
+        ({"trainable_scope": None}, "requires explicit trainable_scope='classifier_head_only'"),
+        ({"feature_dropout_eval_mode": False}, "requires explicit feature_dropout_eval_mode=True"),
+        ({"enable_selective_rejector": True}, "selective rejector OFF"),
+        ({"teacher_kl_weight": 1.0}, "forbids non-zero teacher_kl_weight"),
+    ):
+        kw = dict(
+            profile="option_a_classifier_head_only_v1",
+            epochs=2,
+            lr=1e-4,
+            batch_size=32,
+            seed=42,
+            fit_mode="fit2_supcon_energy",
+            enable_selective_rejector=False,
+            weight_decay=0.01,
+            trainable_scope="classifier_head_only",
+            feature_dropout_eval_mode=True,
+        )
+        kw.update(bad_kwargs)
+        with pytest.raises(ValueError, match=match):
+            validate_profile_settings(**kw)
+
+    tiny = DistilBertForSequenceClassification(
+        DistilBertConfig(num_labels=46, vocab_size=128, dim=32, hidden_dim=64, n_layers=1, n_heads=2)
+    )
+    with pytest.raises(ValueError, match="Trainable parameter count mismatch"):
+        _configure_trainable_scope(tiny, "classifier_head_only", expected_trainable_param_count=35374)
+
+
+def test_head_only_prep_archival_kwargs_forwarding_and_validate_only_zero_fits(monkeypatch, tmp_path):
+    import hashlib
+    import shutil
+    from scripts.run_orig_fit2_return_contrast_prep import _build_planned_execution_plan
+
+    def _sha(p: Path) -> str:
+        return hashlib.sha256(p.read_bytes()).hexdigest().lower()
+
+    repo_root = Path(__file__).resolve().parents[2]
+    prep_dir = tmp_path / "run-records-fit2-orig-classifier-head-only-v1-prep"
+    ds_dir = prep_dir / "datasets"
+    ds_dir.mkdir(parents=True)
+    head_cfg = AUTHORIZED_FIT_PROFILES["option_a_classifier_head_only_v1"]
+    plan = _build_planned_execution_plan(
+        profile_name="option_a_classifier_head_only_v1",
+        prep_records_dir=prep_dir,
+        planned_fit_run_id="fit2-orig-classifier-head-only-v1",
+        planned_future_paths={"archive_dir": "arc", "records_dir": "rec", "local_dir": "loc"},
+    )
+    assert "--trainable-scope" in plan["planned_cli"]
+    assert "classifier_head_only" in plan["planned_cli"]
+    assert "--feature-dropout-eval-mode" in plan["planned_cli"]
+    assert "--weight-decay" in plan["planned_cli"]
+    assert "--teacher-kl-weight" not in plan["planned_cli"]
+    assert plan["authorized_to_train_now"] is False
+
+    ds_hashes: dict[str, str] = {}
+    new_hashes: dict[str, str] = {}
+    for fname in (*EXPECTED_ORIG_STAGE2_LOCKED_FILES, "orig_fit2_return_contrast_extension.jsonl"):
+        fp = ds_dir / fname
+        fp.write_text('{"ok": true}\n' if fname.endswith(".json") else '{"sample_id": "x"}\n', encoding="utf-8")
+        digest = _sha(fp)
+        key = (
+            "boundary_split_manifest"
+            if fname == "split_manifest.json"
+            else ("orig_fit2_return_contrast_extension" if fname == "orig_fit2_return_contrast_extension.jsonl" else fname[:-len(".jsonl")])
+        )
+        ds_hashes[key] = digest
+        new_hashes[fname] = digest
+    source_hashes = {rel: _sha(repo_root / rel) for rel in RELEVANT_SOURCE_PATHS}
+    for rel in RELEVANT_SOURCE_PATHS:
+        snap = prep_dir / "source_snapshot" / rel
+        snap.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(repo_root / rel, snap)
+    base_metrics = {
+        "boundary_pos_cal": {"count": 86, "correct_count": 68, "mean_max_prob": 0.686},
+        "boundary_pos_cal_sup12": {"count": 48, "correct_count": 38, "conf_ge_070_count": 28, "conf_ge_080_count": 26},
+        "boundary_pos_cal_esc34": {"count": 38, "correct_count": 30, "mean_max_prob": 0.671, "max_sup12_mass": 0.48},
+        "bitext_cal": {"count": 690, "correct_count": 689},
+        "boundary_neg_cal": {"count": 48, "pred_sup12_count": 9, "max_sup12_mass": 0.72, "max_single_sup12_prob": 0.56},
+        "pos_train_added_18": {"count": 18, "correct_count": 18},
+        "attribution_breakdown": {},
+    }
+    init_freeze_sha = "d" * 64
+    (prep_dir / "status.json").write_text(
+        json.dumps({"status": "complete", "fits_executed": 0, "prep_archive": True}), encoding="utf-8"
+    )
+    (prep_dir / "prep_manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "orig_fit2_return_contrast_prep.v4",
+                "experiment_mode": "return_contrast",
+                "is_promotion_candidate": True,
+                "git_commit": "a" * 40,
+                "source_hashes": source_hashes,
+                "unchanged_original_recipe_parameters": UNCHANGED_ORIGINAL_RECIPE_PARAMETERS,
+                "authorized_fit_profile": head_cfg,
+                "execution_plan": plan,
+                "classifier_head_only_config": {
+                    "enabled": True,
+                    "trainable_scope": "classifier_head_only",
+                    "feature_dropout_eval_mode": True,
+                    "weight_decay": 0.01,
+                    "teacher_used": False,
+                    "trainable_param_count": 35374,
+                    "frozen_param_count": 66953472,
+                    "initial_frozen_tensors_sha256": init_freeze_sha,
+                    "initial_freeze_component_hashes": {"distilbert.embeddings": "e" * 64},
+                },
+                "baseline_cal_reference": {
+                    "baseline_weights_sha256": EXPECTED_FIT2_SHA256,
+                    "baseline_calibration_manifest_sha256": "c" * 64,
+                    "dataset_hashes": ds_hashes,
+                    "metrics": base_metrics,
+                },
+                "preflight": {
+                    "extension_version": "orig_fit2_return_channel_contrast_v2",
+                    "counts": {"extension_pos_train_added": 18},
+                    "dataset_hashes": ds_hashes,
+                    "new_input_file_hashes": new_hashes,
+                },
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    _write_and_verify_sha_inventory(prep_dir, "sidecar_sha_inventory.json")
+
+    candidates_dir = tmp_path / "candidates"
+    local_base = tmp_path / "local"
+    init_dir = tmp_path / "init_f695"
+    serving_dir = tmp_path / "serving"
+    init_dir.mkdir()
+    serving_dir.mkdir()
+    (init_dir / "model.safetensors").write_bytes(b"fit2")
+    (serving_dir / "model.safetensors").write_bytes(b"serving")
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit._sha256_lower",
+        lambda p: (
+            EXPECTED_SERVING_SHA256
+            if p == serving_dir / "model.safetensors"
+            else (EXPECTED_FIT2_SHA256 if p == init_dir / "model.safetensors" else _sha(p))
+        ),
+    )
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.verify_fit2_starting_checkpoint",
+        lambda p: {"weights_sha256": EXPECTED_FIT2_SHA256, "temperature": 1.0, "rejector_enabled": False, "num_labels": 46},
+    )
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.verify_orig_relevant_source_provenance",
+        lambda root: {"git_commit": "b" * 40, "source_hashes": source_hashes},
+    )
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.verify_git_commit_ancestor",
+        lambda root, anc, desc="HEAD": "b" * 40,
+    )
+
+    val_out = run_authorized_fit(
+        repo_root=repo_root,
+        prep_dir=prep_dir,
+        run_id="fit2-orig-classifier-head-only-v1",
+        profile="option_a_classifier_head_only_v1",
+        epochs=2,
+        lr=1e-4,
+        weight_decay=0.01,
+        trainable_scope="classifier_head_only",
+        feature_dropout_eval_mode=True,
+        execute_fit=False,
+        main_candidates_dir=candidates_dir,
+        local_root_base=local_base,
+        init_model_dir=init_dir,
+        serving_dir=serving_dir,
+    )
+    assert val_out["validated_only"] is True
+    assert val_out["fits_executed"] == 0
+
+    captured_kwargs: dict[str, object] = {}
+
+    def _fake_head_fit(**kwargs):
+        captured_kwargs.update(kwargs)
+        cand_dir = kwargs["artifact_root"] / kwargs["output_subdir"]
+        cand_dir.mkdir(parents=True)
+        for fname in ("model.safetensors", "tokenizer.json", "tokenizer_config.json", "config.json"):
+            (cand_dir / fname).write_bytes(fname.encode("utf-8"))
+        (cand_dir / "calibration_manifest.json").write_text('{"valid": true}', encoding="utf-8")
+        (cand_dir / "candidate_provenance_manifest.json").write_text(
+            json.dumps(
+                {
+                    "provenance_status": "verified",
+                    "training_lineage": {
+                        "trainable_scope": kwargs["trainable_scope"],
+                        "feature_dropout_eval_mode": kwargs["feature_dropout_eval_mode"],
+                        "weight_decay": kwargs["weight_decay"],
+                        "trainable_param_count": kwargs["expected_trainable_param_count"],
+                        "frozen_param_count": kwargs["expected_frozen_param_count"],
+                        "post_fit_freeze_verified": True,
+                        "post_fit_frozen_tensors_sha256": init_freeze_sha,
+                        "teacher_kl_enabled": False,
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        return {"fit_mode": "fit2_supcon_energy", "temperature": 1.0}
+
+    monkeypatch.setattr("scripts.run_orig_fit2_return_contrast_fit.run_fit_and_lock_candidate", _fake_head_fit)
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.validate_calibration_manifest",
+        lambda d, p: {"valid": True, "temperature": 1.0, "rejector": {"enabled": False}},
+    )
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.audit_candidate_provenance",
+        lambda d, p: {"provenance_passed": True, "num_labels": 46},
+    )
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.verify_reload_from_archive",
+        lambda d: {"reload_verified": True, "archive_dir": str(d), "num_labels": 46},
+    )
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.evaluate_cal_guard_metrics_for_model",
+        lambda d, inp: dict(base_metrics),
+    )
+
+    fit_res = run_authorized_fit(
+        repo_root=repo_root,
+        prep_dir=prep_dir,
+        run_id="fit2-orig-classifier-head-only-v1",
+        profile="option_a_classifier_head_only_v1",
+        epochs=2,
+        lr=1e-4,
+        weight_decay=0.01,
+        trainable_scope="classifier_head_only",
+        feature_dropout_eval_mode=True,
+        execute_fit=True,
+        main_candidates_dir=candidates_dir,
+        local_root_base=local_base,
+        init_model_dir=init_dir,
+        serving_dir=serving_dir,
+    )
+    assert captured_kwargs["trainable_scope"] == "classifier_head_only"
+    assert captured_kwargs["feature_dropout_eval_mode"] is True
+    assert captured_kwargs["weight_decay"] == 0.01
+    assert captured_kwargs["expected_trainable_param_count"] == 35374
+    assert captured_kwargs["expected_frozen_param_count"] == 66953472
+    assert "teacher_kl_weight" not in captured_kwargs
+    run_cfg = json.loads((Path(fit_res["records_dir"]) / "run_config.json").read_text(encoding="utf-8"))
+    assert run_cfg["classifier_head_only_config"]["trainable_scope"] == "classifier_head_only"
+    assert run_cfg["classifier_head_only_config"]["teacher_used"] is False
+    cal_rep = json.loads((Path(fit_res["records_dir"]) / "cal_guard_report.json").read_text(encoding="utf-8"))
+    assert len(cal_rep["checks"]) == 12

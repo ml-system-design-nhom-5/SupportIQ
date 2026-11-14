@@ -772,6 +772,139 @@ VALID_TEACHER_STUDENT_ANCHOR_MODES: Tuple[str, ...] = (
     "eval_no_dropout_autograd_enabled",
 )
 
+VALID_TRAINABLE_SCOPES: Tuple[str, ...] = (
+    "all",
+    "classifier_head_only",
+)
+
+
+def _tensor_bytes_sha256(tensor: torch.Tensor) -> str:
+    """Return lowercase SHA-256 of raw tensor bytes on CPU across any dtype."""
+    raw = tensor.detach().cpu().contiguous().reshape(-1).view(torch.uint8).numpy().tobytes()
+    return hashlib.sha256(raw).hexdigest().lower()
+
+
+def _configure_trainable_scope(
+    model: Any,
+    trainable_scope: str,
+    *,
+    expected_trainable_param_count: Optional[int] = None,
+    expected_frozen_param_count: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Configure requires_grad according to trainable_scope and fail closed on parameter count mismatches."""
+    if str(trainable_scope) not in VALID_TRAINABLE_SCOPES:
+        raise ValueError(
+            f"Unsupported trainable_scope {trainable_scope!r}; expected one of {VALID_TRAINABLE_SCOPES}"
+        )
+    if trainable_scope == "all":
+        for p in model.parameters():
+            p.requires_grad = True
+    else:
+        for p in model.parameters():
+            p.requires_grad = False
+        unfrozen_names: List[str] = []
+        for name, p in model.named_parameters():
+            if name in ("classifier.weight", "classifier.bias"):
+                p.requires_grad = True
+                unfrozen_names.append(name)
+        if sorted(unfrozen_names) != ["classifier.bias", "classifier.weight"]:
+            raise ValueError(
+                f"classifier_head_only requires exact ['classifier.weight', 'classifier.bias']; got {unfrozen_names}"
+            )
+
+    trainable_names = [name for name, p in model.named_parameters() if p.requires_grad]
+    trainable_count = int(sum(p.numel() for _, p in model.named_parameters() if p.requires_grad))
+    frozen_count = int(sum(p.numel() for _, p in model.named_parameters() if not p.requires_grad))
+    if expected_trainable_param_count is not None and trainable_count != int(expected_trainable_param_count):
+        raise ValueError(
+            f"Trainable parameter count mismatch: expected {expected_trainable_param_count}, got {trainable_count}"
+        )
+    if expected_frozen_param_count is not None and frozen_count != int(expected_frozen_param_count):
+        raise ValueError(
+            f"Frozen parameter count mismatch: expected {expected_frozen_param_count}, got {frozen_count}"
+        )
+    return {
+        "trainable_scope": str(trainable_scope),
+        "trainable_param_count": trainable_count,
+        "frozen_param_count": frozen_count,
+        "trainable_param_names": trainable_names,
+    }
+
+
+def _snapshot_frozen_component_hashes(model: Any) -> Dict[str, Any]:
+    """Hash all frozen parameters and all buffers bit-for-bit, grouped by logical architecture component."""
+    frozen_tensor_hashes: Dict[str, str] = {
+        name: _tensor_bytes_sha256(p)
+        for name, p in model.named_parameters()
+        if not p.requires_grad
+    }
+    buffer_hashes: Dict[str, str] = {
+        name: _tensor_bytes_sha256(b)
+        for name, b in model.named_buffers()
+    }
+
+    def _agg_digest(entries: Sequence[Tuple[str, str]]) -> str:
+        payload = "\n".join(f"{k}:{v}" for k, v in sorted(entries))
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest().lower()
+
+    groups: Dict[str, List[Tuple[str, str]]] = {
+        "distilbert.embeddings": [],
+        **{f"distilbert.transformer.layer.{i}": [] for i in range(6)},
+        "pre_classifier": [],
+        "other_frozen_params": [],
+    }
+    for name, digest in frozen_tensor_hashes.items():
+        matched = False
+        for prefix in (
+            "distilbert.embeddings",
+            *[f"distilbert.transformer.layer.{i}" for i in range(6)],
+            "pre_classifier",
+        ):
+            if name == prefix or name.startswith(prefix + "."):
+                groups[prefix].append((name, digest))
+                matched = True
+                break
+        if not matched:
+            groups["other_frozen_params"].append((name, digest))
+
+    component_hashes = {k: _agg_digest(v) for k, v in groups.items() if v}
+    component_hashes["buffers"] = _agg_digest(list(buffer_hashes.items()))
+    all_entries = [(f"param:{k}", v) for k, v in frozen_tensor_hashes.items()] + [
+        (f"buffer:{k}", v) for k, v in buffer_hashes.items()
+    ]
+    return {
+        "frozen_tensor_hashes": frozen_tensor_hashes,
+        "buffer_hashes": buffer_hashes,
+        "component_hashes": component_hashes,
+        "all_frozen_tensors_sha256": _agg_digest(all_entries),
+    }
+
+
+def _set_epoch_module_modes(
+    model: Any,
+    *,
+    trainable_scope: str,
+    feature_dropout_eval_mode: bool,
+) -> None:
+    """Set module .training flags per epoch without letting recursive model.train() enable frozen dropout."""
+    if trainable_scope == "all":
+        if feature_dropout_eval_mode:
+            raise ValueError("feature_dropout_eval_mode=True is only allowed with trainable_scope='classifier_head_only'")
+        model.train()
+        return
+    if not feature_dropout_eval_mode:
+        raise ValueError("classifier_head_only requires explicit feature_dropout_eval_mode=True")
+    if not hasattr(model, "classifier"):
+        raise ValueError("classifier_head_only requires model.classifier module")
+    model.eval()
+    model.classifier.train(True)
+    for mod in model.modules():
+        if mod is model.classifier:
+            if not mod.training:
+                raise RuntimeError("classifier module must be in train() mode under classifier_head_only")
+        elif mod.training:
+            raise RuntimeError(f"Non-classifier module unexpectedly in train() mode: {type(mod).__name__}")
+
 
 def _forward_student_logits_eval_mode(
     model: Any,
@@ -1162,6 +1295,11 @@ def run_fit_and_lock_candidate(
     teacher_model_dir: Optional[Path] = None,
     expected_teacher_weights_sha256: Optional[str] = None,
     teacher_student_anchor_mode: str = "train_stochastic",
+    trainable_scope: str = "all",
+    feature_dropout_eval_mode: bool = False,
+    weight_decay: float = 0.01,
+    expected_trainable_param_count: Optional[int] = None,
+    expected_frozen_param_count: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Run Fit 1 or Fit 2 from locked splits, fit T>=1.0 on cal (+ optional 776d rejector), and lock manifests."""
     if not np.isfinite(float(teacher_kl_weight)) or float(teacher_kl_weight) < 0.0:
@@ -1173,7 +1311,20 @@ def run_fit_and_lock_candidate(
             f"Unsupported teacher_student_anchor_mode {teacher_student_anchor_mode!r}; "
             f"expected one of {VALID_TEACHER_STUDENT_ANCHOR_MODES}"
         )
+    if str(trainable_scope) not in VALID_TRAINABLE_SCOPES:
+        raise ValueError(f"Unsupported trainable_scope {trainable_scope!r}; expected one of {VALID_TRAINABLE_SCOPES}")
+    if not np.isfinite(float(weight_decay)) or float(weight_decay) < 0.0:
+        raise ValueError(f"weight_decay must be finite and >= 0.0, got {weight_decay}")
     use_teacher_kl = float(teacher_kl_weight) > 0.0
+    if trainable_scope == "classifier_head_only":
+        if not feature_dropout_eval_mode:
+            raise ValueError("trainable_scope='classifier_head_only' requires explicit feature_dropout_eval_mode=True")
+        if use_teacher_kl or str(teacher_student_anchor_mode) != "train_stochastic":
+            raise ValueError(
+                "trainable_scope='classifier_head_only' forbids teacher_kl_weight > 0 or non-default teacher_student_anchor_mode"
+            )
+    elif feature_dropout_eval_mode:
+        raise ValueError("feature_dropout_eval_mode=True is only allowed with trainable_scope='classifier_head_only'")
 
     datasets_dir = artifact_root / "datasets"
     lock_path = datasets_dir / "dataset_lock_manifest.json"
@@ -1227,9 +1378,16 @@ def run_fit_and_lock_candidate(
 
     tokenizer = AutoTokenizer.from_pretrained(str(init_model_dir))
     model = AutoModelForSequenceClassification.from_pretrained(str(init_model_dir))
-    for p in model.parameters():
-        p.requires_grad = True
+    scope_info = _configure_trainable_scope(
+        model,
+        trainable_scope,
+        expected_trainable_param_count=expected_trainable_param_count,
+        expected_frozen_param_count=expected_frozen_param_count,
+    )
     model.to(device)
+    pre_freeze_snapshot = (
+        _snapshot_frozen_component_hashes(model) if trainable_scope == "classifier_head_only" else None
+    )
 
     enc = tokenizer(train_texts, max_length=64, padding="max_length", truncation=True, return_tensors="pt")
     teacher_anchor_mask: Optional[List[int]] = None
@@ -1263,17 +1421,26 @@ def run_fit_and_lock_candidate(
     ds = _BoundaryDataset(enc, train_labels, train_is_neg, teacher_anchor_mask=teacher_anchor_mask)
     loader = DataLoader(ds, batch_size=batch_size, shuffle=True, generator=torch.Generator().manual_seed(seed))
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=0.01)
+    trainable_params = [p for p in model.parameters() if p.requires_grad]
+    if not trainable_params:
+        raise RuntimeError("No trainable parameters selected in model")
+    opt_params = list(model.parameters()) if trainable_scope == "all" else trainable_params
+    optimizer = torch.optim.AdamW(opt_params, lr=lr, weight_decay=float(weight_decay))
     total_steps = max(1, len(loader) * epochs)
     scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=int(0.10 * total_steps), num_training_steps=total_steps)
 
     sup12_idx_t = torch.tensor(sup12_indices, dtype=torch.long, device=device)
     uniform_target = torch.full((1, len(STANDARD_INTENTS_46)), 1.0 / len(STANDARD_INTENTS_46), device=device)
+    use_supcon = (fit_mode == "fit2_supcon_energy") and (trainable_scope != "classifier_head_only")
 
     t0 = time.perf_counter()
     epoch_stats: List[Dict[str, Any]] = []
     for ep in range(1, epochs + 1):
-        model.train()
+        _set_epoch_module_modes(
+            model,
+            trainable_scope=trainable_scope,
+            feature_dropout_eval_mode=feature_dropout_eval_mode,
+        )
         if teacher_model is not None:
             teacher_model.eval()
         tot_loss = 0.0
@@ -1290,7 +1457,7 @@ def run_fit_and_lock_candidate(
             labels = batch["labels"].to(device)
             is_neg = batch["is_neg"].to(device)
 
-            out = model(input_ids=input_ids, attention_mask=attention_mask, output_hidden_states=(fit_mode == "fit2_supcon_energy"))
+            out = model(input_ids=input_ids, attention_mask=attention_mask, output_hidden_states=use_supcon)
             logits = out.logits
             pos_mask = is_neg == 0
             neg_mask = is_neg == 1
@@ -1301,7 +1468,7 @@ def run_fit_and_lock_candidate(
                 loss = loss + l_pos
                 pos_sum += float(l_pos.item())
 
-            if fit_mode == "fit2_supcon_energy":
+            if use_supcon:
                 cls_norm = F.normalize(out.hidden_states[-1][:, 0, :], dim=-1)
                 sc_targets = torch.where(neg_mask, torch.full_like(labels, -1), labels)
                 l_sc = 0.25 * _supcon_loss(cls_norm, sc_targets, temperature=0.12)
@@ -1355,7 +1522,7 @@ def run_fit_and_lock_candidate(
                 excluded_rows_seen += int(input_ids.shape[0] - active_tkl_count)
 
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            torch.nn.utils.clip_grad_norm_(opt_params, 1.0)
             optimizer.step()
             scheduler.step()
             tot_loss += float(loss.item())
@@ -1373,6 +1540,30 @@ def run_fit_and_lock_candidate(
             ep_record["anchor_rows_seen"] = int(anchor_rows_seen)
             ep_record["excluded_rows_seen"] = int(excluded_rows_seen)
         epoch_stats.append(ep_record)
+
+    post_freeze_snapshot: Optional[Dict[str, Any]] = None
+    if trainable_scope == "classifier_head_only":
+        assert pre_freeze_snapshot is not None
+        non_none_frozen_grads = [
+            name for name, p in model.named_parameters() if (not p.requires_grad) and (p.grad is not None)
+        ]
+        if non_none_frozen_grads:
+            raise RuntimeError(f"Frozen parameters unexpectedly received gradients: {non_none_frozen_grads[:5]}")
+        post_freeze_snapshot = _snapshot_frozen_component_hashes(model)
+        mutated_params = [
+            k
+            for k, v in pre_freeze_snapshot["frozen_tensor_hashes"].items()
+            if post_freeze_snapshot["frozen_tensor_hashes"].get(k) != v
+        ]
+        mutated_buffers = [
+            k
+            for k, v in pre_freeze_snapshot["buffer_hashes"].items()
+            if post_freeze_snapshot["buffer_hashes"].get(k) != v
+        ]
+        if mutated_params or mutated_buffers:
+            raise RuntimeError(
+                f"Frozen tensors/buffers mutated during training! params={mutated_params[:5]}, buffers={mutated_buffers[:5]}"
+            )
 
     if use_teacher_kl and resolved_teacher_dir is not None and teacher_weights_sha is not None:
         post_teacher_sha = _sha256_file(resolved_teacher_dir / "model.safetensors")
@@ -1507,6 +1698,12 @@ def run_fit_and_lock_candidate(
         "epochs": epochs,
         "batch_size": batch_size,
         "lr": lr,
+        "weight_decay": float(weight_decay),
+        "trainable_scope": str(trainable_scope),
+        "feature_dropout_eval_mode": bool(feature_dropout_eval_mode),
+        "trainable_param_count": int(scope_info["trainable_param_count"]),
+        "frozen_param_count": int(scope_info["frozen_param_count"]),
+        "trainable_param_names": list(scope_info["trainable_param_names"]),
         "max_length": 64,
         "seed": seed,
         "device": str(device),
@@ -1517,6 +1714,18 @@ def run_fit_and_lock_candidate(
         "max_neg_cal_supported12_prob": round(max_neg_cal_sup_prob, 6),
         "selective_rejector_enabled": bool(enable_selective_rejector),
     }
+    if trainable_scope == "classifier_head_only":
+        assert pre_freeze_snapshot is not None and post_freeze_snapshot is not None
+        training_lineage.update(
+            {
+                "supcon_inactive_under_frozen_encoder": True,
+                "initial_frozen_tensors_sha256": pre_freeze_snapshot["all_frozen_tensors_sha256"],
+                "initial_freeze_component_hashes": pre_freeze_snapshot["component_hashes"],
+                "post_fit_freeze_verified": True,
+                "post_fit_frozen_tensors_sha256": post_freeze_snapshot["all_frozen_tensors_sha256"],
+                "post_fit_freeze_component_hashes": post_freeze_snapshot["component_hashes"],
+            }
+        )
     if use_teacher_kl:
         training_lineage.update(
             {
@@ -1542,7 +1751,7 @@ def run_fit_and_lock_candidate(
             "init_checkpoint": str(init_model_dir),
             "init_weights_sha256": lock_manifest["init_weights_sha256"],
             "original_backbone": "distilbert-base-uncased",
-            "unfrozen_transformer_layers": 6,
+            "unfrozen_transformer_layers": 0 if trainable_scope == "classifier_head_only" else 6,
         },
         "training_lineage": training_lineage,
         "dataset_hashes": lock_manifest["dataset_hashes"],
@@ -1561,7 +1770,14 @@ def run_fit_and_lock_candidate(
         "selective_rejector_cal_selection": rejector_cal_stats,
         "train_seconds": train_elapsed,
         "epoch_stats": epoch_stats,
+        "trainable_scope": str(trainable_scope),
+        "trainable_param_count": int(scope_info["trainable_param_count"]),
+        "frozen_param_count": int(scope_info["frozen_param_count"]),
     }
+    if trainable_scope == "classifier_head_only":
+        assert post_freeze_snapshot is not None
+        result["post_fit_freeze_verified"] = True
+        result["post_fit_frozen_tensors_sha256"] = post_freeze_snapshot["all_frozen_tensors_sha256"]
     if use_teacher_kl:
         result["teacher_kl"] = {
             "teacher_weights_sha256": teacher_weights_sha,

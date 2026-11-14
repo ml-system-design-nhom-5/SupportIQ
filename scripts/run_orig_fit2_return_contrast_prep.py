@@ -35,7 +35,11 @@ from pipeline.training.orig_fit2_return_contrast_data import (
     prepare_and_lock_orig_fit2_return_contrast_splits,
     prepare_and_lock_orig_fit2_zero_delta_control_splits,
 )
-from pipeline.training.train_boundary_candidate import verify_original_46_label_lineage
+from pipeline.training.train_boundary_candidate import (
+    _configure_trainable_scope,
+    _snapshot_frozen_component_hashes,
+    verify_original_46_label_lineage,
+)
 from scripts.run_boundary_contrast_fit import (
     EXPECTED_FIT2_SHA256,
     EXPECTED_SERVING_SHA256,
@@ -112,6 +116,23 @@ AUTHORIZED_FIT_PROFILES: Dict[str, Dict[str, Any]] = {
         "teacher_kl_weight": 1.0,
         "teacher_temperature": 1.0,
         "teacher_student_anchor_mode": "eval_no_dropout_autograd_enabled",
+    },
+    "option_a_classifier_head_only_v1": {
+        "profile": "option_a_classifier_head_only_v1",
+        "selected_recipe": "option_a_classifier_head_only_adamw_1e4_2ep",
+        "lr": 1e-4,
+        "epochs": 2,
+        "batch_size": 32,
+        "seed": 42,
+        "weight_decay": 0.01,
+        "fit_mode": "fit2_supcon_energy",
+        "min_temperature": 1.0,
+        "enable_selective_rejector": False,
+        "init_weights_sha256": EXPECTED_FIT2_SHA256,
+        "trainable_scope": "classifier_head_only",
+        "feature_dropout_eval_mode": True,
+        "expected_trainable_param_count": 35374,
+        "expected_frozen_param_count": 66953472,
     },
 }
 
@@ -799,7 +820,29 @@ def _format_lr_cli(lr: float) -> str:
         return "5e-6"
     if lr == 2e-5:
         return "2e-5"
+    if lr == 1e-4:
+        return "1e-4"
     return str(lr)
+
+
+def _snapshot_init_freeze_component_hashes(model_dir: Path, cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """Load baseline model read-only in eval mode and snapshot frozen component + tensor SHA-256 digests."""
+    model = AutoModelForSequenceClassification.from_pretrained(str(model_dir))
+    model.eval()
+    scope_info = _configure_trainable_scope(
+        model,
+        str(cfg["trainable_scope"]),
+        expected_trainable_param_count=int(cfg["expected_trainable_param_count"]),
+        expected_frozen_param_count=int(cfg["expected_frozen_param_count"]),
+    )
+    snap = _snapshot_frozen_component_hashes(model)
+    return {
+        "trainable_param_count": scope_info["trainable_param_count"],
+        "frozen_param_count": scope_info["frozen_param_count"],
+        "trainable_param_names": scope_info["trainable_param_names"],
+        "initial_frozen_tensors_sha256": snap["all_frozen_tensors_sha256"],
+        "initial_freeze_component_hashes": snap["component_hashes"],
+    }
 
 
 def _build_planned_execution_plan(
@@ -821,6 +864,7 @@ def _build_planned_execution_plan(
     cfg = AUTHORIZED_FIT_PROFILES[profile_name]
     is_teacher_kl = profile_name in ("option_a_teacher_kl", "option_a_teacher_kl_deterministic")
     is_det_teacher_kl = profile_name == "option_a_teacher_kl_deterministic"
+    is_head_only = profile_name == "option_a_classifier_head_only_v1"
     run_flag = (
         "--run-authorized-fit"
         if (experiment_mode == "zero_delta_control" or profile_name != "option_a")
@@ -865,6 +909,16 @@ def _build_planned_execution_plan(
                     str(cfg["teacher_student_anchor_mode"]),
                 ]
             )
+    if is_head_only:
+        planned_cli.extend(
+            [
+                "--weight-decay",
+                str(cfg["weight_decay"]),
+                "--trainable-scope",
+                str(cfg["trainable_scope"]),
+                "--feature-dropout-eval-mode",
+            ]
+        )
     planned_cli.append(run_flag)
     is_control = experiment_mode == "zero_delta_control"
     if is_control:
@@ -873,6 +927,18 @@ def _build_planned_execution_plan(
             "(f695b1fe...) for epochs=3, lr=2e-5 on bit-identical 13 original stage2_inputs (11,320 full_train rows, "
             "181 boundary_pos_train rows, 13,000 effective rows; 0 added return-contrast rows) to isolate continuation "
             "optimization drift from the +18-row data delta. NOT a promotion candidate."
+        )
+    elif is_head_only:
+        caveat = (
+            "Original Fit2 (f695b1fe...) trained from Fit1 (95a940b6...) with epochs=3, lr=2e-5. "
+            "option_a_classifier_head_only_v1 locks frozen embeddings + 6 transformer layers + pre_classifier "
+            "(66,953,472 params in deterministic .eval() with dropout p=0.2 off) and trains ONLY classifier.weight/"
+            "classifier.bias (35,374 params) with AdamW(lr=1e-4, weight_decay=0.01), epochs=2, batch_size=32, seed=42 "
+            "on untouched L_pos + L_neg (SupCon has zero head gradient and is inactive; no teacher KL/tether/LoRA). "
+            "Compares architecture constraint + matched locked recipe exploratory (Attempt 1/2 pending release, NOT "
+            "a single-factor randomized cause); frozen feature geometry sits at 0/8 return_product_in_store 1-NN/centroid "
+            "match on added_18 (does not prove impossibility, high risk of linear-separability ceiling -> hard EARLY STOP "
+            "if accuracy/separation gates fail)."
         )
     elif is_det_teacher_kl:
         caveat = (
@@ -925,6 +991,13 @@ def _build_planned_execution_plan(
         plan["teacher_weights_sha256"] = cfg["teacher_weights_sha256"]
         if is_det_teacher_kl:
             plan["teacher_student_anchor_mode"] = cfg["teacher_student_anchor_mode"]
+    if is_head_only:
+        plan["weight_decay"] = cfg["weight_decay"]
+        plan["trainable_scope"] = cfg["trainable_scope"]
+        plan["feature_dropout_eval_mode"] = cfg["feature_dropout_eval_mode"]
+        plan["expected_trainable_param_count"] = cfg["expected_trainable_param_count"]
+        plan["expected_frozen_param_count"] = cfg["expected_frozen_param_count"]
+        plan["budget_attempt_label"] = "Attempt_1_of_2_pending_coordinator_release"
     return plan
 
 
@@ -1125,11 +1198,32 @@ def _archive_orig_fit2_prep_bundle(
                     "(autograd ON) normalized by sum(m_i) on active batch anchors (0.0 if sum(m_i)==0)"
                 )
             manifest["teacher_anchor_config"] = tkl_manifest_block
+        elif profile_name == "option_a_classifier_head_only_v1":
+            cfg_head = AUTHORIZED_FIT_PROFILES[profile_name]
+            init_freeze = _snapshot_init_freeze_component_hashes(FIT2_BASELINE_DIR, cfg_head)
+            manifest["classifier_head_only_config"] = {
+                "enabled": True,
+                "trainable_scope": str(cfg_head["trainable_scope"]),
+                "feature_dropout_eval_mode": bool(cfg_head["feature_dropout_eval_mode"]),
+                "weight_decay": float(cfg_head["weight_decay"]),
+                "teacher_used": False,
+                "teacher_kl_weight": 0.0,
+                "supcon_inactive_under_frozen_encoder": True,
+                "budget_attempt_label": "Attempt_1_of_2_pending_coordinator_release",
+                "budget_consumed_by_prep": 0,
+                "feature_geometry_risk_disclosure": (
+                    "Read-only Worker B audit on f695b1fe eval() features found 8/18 added_18 match canonical "
+                    "1-NN/centroid (8/10 return_policy, 0/8 return_product_in_store). Does not prove impossibility, "
+                    "but exposes high risk of linear-separability ceiling -> hard EARLY STOP on accuracy/separation fail."
+                ),
+                **init_freeze,
+            }
         (dest_dir / "prep_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-        (dest_dir / "status.json").write_text(
-            json.dumps({"status": "complete", "fits_executed": 0, "prep_archive": True}, indent=2) + "\n",
-            encoding="utf-8",
-        )
+        status_payload: Dict[str, Any] = {"status": "complete", "fits_executed": 0, "prep_archive": True}
+        if profile_name == "option_a_classifier_head_only_v1":
+            status_payload["budget_attempt_label"] = "Attempt_1_of_2_pending_coordinator_release"
+            status_payload["budget_consumed_by_prep"] = 0
+        (dest_dir / "status.json").write_text(json.dumps(status_payload, indent=2) + "\n", encoding="utf-8")
         _write_and_verify_sha_inventory(dest_dir, "sidecar_sha_inventory.json")
     except Exception as exc:
         (dest_dir / "status.json").write_text(
