@@ -1,11 +1,12 @@
-"""The loaded release: its asset versions, and the port that tells whether one is loaded.
+"""The loaded release, the port that tells whether one is loaded, and why one is refused.
 
-ai-service serves exactly one release manifest at a time, loaded at startup (DATA-56). Until
-a manifest is loaded and every checksum matches, ai-service is not ready and serves no
-request that needs the release.
+ai-service serves exactly one release manifest at a time, loaded at startup (DATA-56). It
+does not start with a manifest that is incomplete or whose files do not match it (ERR-17).
+While no verified release is loaded, it serves no request that needs the release.
 """
 
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import ClassVar, Protocol
 
 from supportiq_ai_service.platform import AiServiceError, ErrorCode
@@ -65,3 +66,46 @@ class ReleaseNotLoadedError(AiServiceError):
     def __init__(self) -> None:
         """Build the error with its fixed detail."""
         super().__init__("The release manifest is not loaded.")
+
+
+class ReleaseInvalidReason(StrEnum):
+    """Why a release manifest, or an entry of its folder, is refused (DATA-56)."""
+
+    MANIFEST_UNREADABLE = "manifest_unreadable"
+    MANIFEST_INVALID = "manifest_invalid"
+    GATE_RUN_MISSING = "gate_run_missing"
+    ROUTING_MODEL_MISMATCH = "routing_model_mismatch"
+    FILE_OUTSIDE_RELEASE = "file_outside_release"
+    FILE_UNREADABLE = "file_unreadable"
+    LINK_IN_RELEASE = "link_in_release"
+    FILE_UNLISTED = "file_unlisted"
+    SIZE_MISMATCH = "size_mismatch"
+    CHECKSUM_MISMATCH = "checksum_mismatch"
+
+
+class ReleaseInvalidError(AiServiceError):
+    """A release manifest or one of its files is invalid, so ai-service does not start.
+
+    It keeps the reason, the asset, and the path of the file inside the release, never the
+    content of a file.
+    """
+
+    code: ClassVar[ErrorCode] = ErrorCode.INTERNAL_ERROR
+
+    def __init__(
+        self,
+        reason: ReleaseInvalidReason,
+        asset: str | None = None,
+        file_path: str | None = None,
+    ) -> None:
+        """Build the error with a detail that names only the reason.
+
+        Args:
+            reason: Why the release is refused.
+            asset: The asset of the manifest that is refused, when one is.
+            file_path: The path of the refused file inside the release, when one is.
+        """
+        super().__init__(f"The release manifest is refused: {reason}.")
+        self.reason = reason
+        self.asset = asset
+        self.file_path = file_path

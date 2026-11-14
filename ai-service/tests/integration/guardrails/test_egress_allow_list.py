@@ -25,6 +25,7 @@ from supportiq_ai_service.platform.adapters.egress import (
 )
 from tests.integration.application import build_settings
 from tests.unit.platform.fakes import RecordingEgressClientFactory, RecordingEventRecorder
+from tests.unit.release.release_folder import write_release
 
 GEMINI_HOST = "generativelanguage.googleapis.com"
 # Hosts outside the allow-list, as addresses, so that a client that failed to refuse would
@@ -80,12 +81,13 @@ def assert_refuses_other_hosts(client: httpx.Client) -> None:
 
 @pytest.mark.anyio
 async def test_the_client_of_a_replica_refuses_every_other_host_before_it_connects(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     factory = RecordingEgressClientFactory()
     monkeypatch.setattr(cli, "create_egress_client", factory)
+    settings = build_settings(write_release(tmp_path))
 
-    app = cli.build_application(build_settings(), RecordingEventRecorder())
+    app = cli.build_application(settings, RecordingEventRecorder())
 
     ((allow_list, client),) = factory.created
     assert allow_list == packaged_egress_allow_list()

@@ -21,6 +21,8 @@ class EventName(StrEnum):
     SETTINGS_LOADED = "settings.loaded"
     SETTINGS_INVALID = "settings.invalid"
     EGRESS_ALLOW_LIST_INVALID = "egress_allow_list.invalid"
+    RELEASE_LOADED = "release.loaded"
+    RELEASE_INVALID = "release.invalid"
     SHUTDOWN_STARTED = "shutdown.started"
     REQUEST_COMPLETED = "request.completed"
     REQUEST_FAILED = "request.failed"
@@ -60,6 +62,13 @@ EVENT_DESCRIPTIONS: Mapping[EventName, EventDescription] = MappingProxyType(
         ),
         EventName.EGRESS_ALLOW_LIST_INVALID: EventDescription(
             EventLevel.ERROR, "The egress allow-list is missing or invalid, so ai-service stops"
+        ),
+        EventName.RELEASE_LOADED: EventDescription(
+            EventLevel.INFO, "Release manifest loaded, and every file matches it"
+        ),
+        EventName.RELEASE_INVALID: EventDescription(
+            EventLevel.ERROR,
+            "The release manifest or one of its files is invalid, so ai-service stops",
         ),
         EventName.SHUTDOWN_STARTED: EventDescription(
             EventLevel.INFO, "ai-service is shutting down"

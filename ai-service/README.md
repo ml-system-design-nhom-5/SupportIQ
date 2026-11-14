@@ -38,13 +38,13 @@ These steps work from a fresh clone, on Linux, macOS, and Windows. Only Linux ge
 
    torch is locked for Linux only, so this group installs nothing on macOS or Windows ([ADR-0021, Python and dependencies](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#python-and-dependencies), statement 2).
 
-4. Create your settings. `.env` is ignored by git, and its values never leave your machine. Replace every placeholder; `SERVICE_TOKEN` is the same value as the `backend` setting `AI_SERVICE_TOKEN`.
+4. Create your settings. `.env` is ignored by git, and its values never leave your machine. Replace every placeholder; `SERVICE_TOKEN` is the same value as the `backend` setting `AI_SERVICE_TOKEN`, and `RELEASE_MANIFEST_PATH` names the manifest of a release whose files are on your machine ([Release manifest](#release-manifest)).
 
    ```bash
    cp .env.example .env
    ```
 
-`ai-service serve` validates the settings first. A missing or invalid setting stops it with exit status 2 and a `settings.invalid` line that names the setting, never its value ([ARCH-34](../docs/rules/architecture.md)). It then reads the egress allow-list, and a missing or invalid file stops it the same way, with an `egress_allow_list.invalid` line that names the file ([Egress and secrets](#egress-and-secrets)).
+`ai-service serve` validates the settings first. A missing or invalid setting stops it with exit status 2 and a `settings.invalid` line that names the setting, never its value ([ARCH-34](../docs/rules/architecture.md)). It then reads the egress allow-list, and a missing or invalid file stops it the same way, with an `egress_allow_list.invalid` line that names the file ([Egress and secrets](#egress-and-secrets)). It then checks the release, and a missing, incomplete, or changed release stops it the same way, with a `release.invalid` line that names the reason ([Release manifest](#release-manifest)). There is no fallback model, so without a release whose files are on the machine, `ai-service serve` does not start.
 
 Docker is not part of local development. CI builds the [`Dockerfile`](Dockerfile), which installs the `torch` group.
 
@@ -103,7 +103,7 @@ Each feature has the layers of [ARCH-16](../docs/rules/architecture.md):
 | `adapters/` | Implementations of the ports, such as the intent model, the encoder, the index, and the LLM client | `domain/` of the feature, and public APIs |
 | `api/` | Routes and the mapping between contract models and domain types | `application/`, `domain/`, and `generated/` |
 
-Features depend on each other in one direction and only through the `__init__.py` of the feature, its public API (ARCH-17, ARCH-18). `uv run lint-imports` enforces this with the contracts in [`pyproject.toml`](pyproject.toml). `platform` has a second public entry point, `platform.web`, for the interface layers and the composition root, and `release` has `release.api`, for the asset versions that every result embeds. `ml/` and `eval/` use only the HTTP contract of `ai-service`, the public interface of `supportiq_ai_service`, and the formats of the model artifact and the release manifest; they never import its internals ([ADR-0021, Where the code of `main` goes](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#where-the-code-of-main-goes), statement 1).
+Features depend on each other in one direction and only through the `__init__.py` of the feature, its public API (ARCH-17, ARCH-18). `uv run lint-imports` enforces this with the contracts in [`pyproject.toml`](pyproject.toml). `platform` has a second public entry point, `platform.web`, for the interface layers and the composition root, and `release` has two: `release.api`, for the asset versions that every result embeds, and `release.manifest`, the interim format of the release manifest and its checks, for the composition root and for `eval/`. `ml/` and `eval/` use only the HTTP contract of `ai-service`, the public interface of `supportiq_ai_service`, and the formats of the model artifact and the release manifest; they never import its internals ([ADR-0021, Where the code of `main` goes](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#where-the-code-of-main-goes), statement 1).
 
 ## Egress and secrets
 
@@ -119,6 +119,39 @@ Features depend on each other in one direction and only through the `__init__.py
 - Every operation except `/health/live` and `/health/ready` checks the service token ([ADR-0018, Access](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#access)).
 - Provider responses, prompts, and keys are never logged ([LOG-29](../docs/rules/logging-and-observability.md#privacy-in-telemetry)). The Gemini API key and the service token are Modal Secrets ([ADR-0018, Secrets](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#secrets)).
 
+## Release manifest
+
+A replica serves exactly one release, which it checks at startup ([DATA-56](../docs/rules/data-and-ml.md#models-and-artifacts)). A release is one folder: the manifest file and every asset file that it names, by a path relative to that folder. `RELEASE_MANIFEST_PATH` names the manifest. On Modal, the folder is the one that `modal deploy` adds to the image ([ADR-0018, Deploy](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#deploy)).
+
+The format is interim. `ReleaseManifest` in [`release/adapters/manifest_file.py`](src/supportiq_ai_service/release/adapters/manifest_file.py) defines it, and `supportiq_ai_service.release.manifest` exports it with its checks. A data contract in `contracts/` replaces it ([Open questions](#open-questions)). The manifest is read strictly: a missing field, an unknown field, or a value of the wrong type refuses it.
+
+| Field | Holds |
+|---|---|
+| `format` | Always `supportiq-release-manifest/interim-1` |
+| `release_id` | The unique, immutable identifier of the release, with the pattern of `release_id` in the contract. It is never reused, not even after a candidate fails the gate ([ARCH-40](../docs/rules/architecture.md#versioned-assets)) |
+| `assets` | Exactly six assets: `model`, `kb`, `mapping`, `prompts`, `routing`, and `index` |
+| `assets.<asset>.version` | The version that results report, with the pattern of `AssetVersion` in the contract |
+| `assets.<asset>.files` | At least one file, each with its `path`, its `sha256` in lowercase hexadecimal, and its `size_bytes`. A path is relative, uses `/`, has no `.` or `..` segment, and belongs to one asset only |
+| `assets.routing.model_version` | The model version that the routing configuration was tuned for. It must be the version of `assets.model` ([DATA-58](../docs/rules/data-and-ml.md#models-and-artifacts)) |
+| `gate_run` | The passing run of the offline evaluation gate: `run_id`, `outcome` (always `passed`), `record` (the path of its record in the repository), and `record_sha256`. It is `null` only in a candidate ([DATA-57](../docs/rules/data-and-ml.md#models-and-artifacts)) |
+
+- `index` holds the files of the encoder too, because an index is valid only with the encoder that built it, and the encoder also embeds each query.
+- The first release holds a `kb` without any document, and a `mapping` and an `index` built from it, because KB ingestion admits no document of KB v2 ([ADR-0021, KB ingestion](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#kb-ingestion)). The format sets no minimum number of documents.
+- Every result reports the versions of the manifest ([ARCH-39](../docs/rules/architecture.md#versioned-assets)). `prompt_version` is the version of `prompts`, because the contract has one version for the set of prompts.
+- The release command of `eval/` writes the manifest. `ai-service serve`, the release command, the download script before `modal deploy`, and CI read it. Nobody edits a published manifest.
+- A release folder holds only regular files and folders. The release command and the download script never write a symbolic link into it.
+
+`ai-service serve` refuses a release, in this order, and stops with exit status 2 and a `release.invalid` line that names the reason, the asset, and the path, never the content of a file:
+
+1. the manifest is unreadable, is not JSON in UTF-8, or breaks the format;
+2. it links no passing gate run;
+3. `assets.routing.model_version` is not the version of `assets.model`;
+4. a file resolves outside the folder, through a symbolic link too, or is not a readable regular file;
+5. the folder holds a symbolic link, even one that the manifest names, another entry that is not a folder and that the manifest does not name, or a folder that cannot be listed. A model library reads a whole folder, so a link or an extra file would change what is served without a checksum ([ADR-0018, Decision drivers](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#decision-drivers));
+6. a file has another size or another SHA-256 than the manifest states.
+
+The release command checks a candidate with `verify_candidate`, which accepts `"gate_run": null`, and runs the gate in its own process on exactly that candidate ([ADR-0021, Release and the offline evaluation gate](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#release-and-the-offline-evaluation-gate)). `ai-service serve` always calls `verify_release` and has no option to serve a candidate.
+
 ## Events
 
 Every log line is one JSON object on standard output, with the attributes of an allow-list; every string in it is redacted for email addresses and long tokens. The catalog is [`platform/domain/events.py`](src/supportiq_ai_service/platform/domain/events.py) ([LOG-12](../docs/rules/logging-and-observability.md)).
@@ -128,6 +161,8 @@ Every log line is one JSON object on standard output, with the attributes of an 
 | `startup.completed`, `shutdown.started` | A replica starts or stops |
 | `settings.loaded`, `settings.invalid` | The settings are read; `settings.invalid` names the settings, never a value |
 | `egress_allow_list.invalid` | The egress allow-list is missing or invalid, so the replica stops; it names the file, never its content |
+| `release.loaded` | The release manifest and every file it names pass the check, with the `release_id` |
+| `release.invalid` | The release manifest or a file it names fails the check, so the replica stops; it names the reason, the asset, and the path of the file, never its content |
 | `request.completed` | Every request ends, with the route template, the method, the status, and the duration |
 | `request.failed` | A request fails unexpectedly, with the error type |
 | `request.refused` | A request answers `503 not-ready`, because no verified release is loaded |
@@ -153,8 +188,9 @@ Every request continues the trace of a valid `traceparent` or starts a new one, 
 
 ## Known limits
 
-- `ai-service` loads no release manifest yet, so every instance answers `503 not-ready` on readiness and on every operation that needs the release, and `backend` uses manual handling.
-- The model weights and the encoder are not in git. They are assets of GitHub Releases, named with their checksums in the release manifest ([ADR-0018, Artifact store](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#artifact-store)). `ai-service` has no fallback model: without a valid release it is not ready and answers `503`, and `backend` falls back to manual handling.
+- The pipeline of `main` is not wired in yet. A replica with a verified release answers ready, but `createAnalysis` and `createDraft` answer `503 not-ready`, and `getKbDocumentVersion` finds no document.
+- The model weights and the encoder are not in git. They are assets of GitHub Releases, named with their checksums in the release manifest ([ADR-0018, Artifact store](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#artifact-store)). `ai-service` has no fallback model: without a verified release it does not start, and `backend` falls back to manual handling.
+- The interim manifest names the files of each asset and their checksums only. It does not state the parts of the model artifact that [DATA-35](../docs/rules/data-and-ml.md#models-and-artifacts) requires; the data contract will ([Open questions](#open-questions)).
 - The intent model of `main` reports uncalibrated softmax scores. Calibrated probabilities (FR-01) wait for the pipeline design and a calibration on validation data ([contracts v1 design, Work for the join](../docs/design/contracts-v1.md#work-for-the-join-with-the-ai-and-ml-code)).
 - The first release serves no KB document, so every policy question leads to abstention (ESC-04) until a new KB version arrives ([ADR-0021, KB ingestion](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#kb-ingestion)).
 - The masks that `ai-service` writes before an LLM call come from patterns. A personal value that no pattern matches, such as an address written in slang, can remain ([ADR-0010, Detection](../docs/decisions/0010-pseudonymization-and-egress-control.md#detection)).
@@ -218,4 +254,4 @@ The build backend is `uv_build`, from the same release as uv (MIT or Apache-2.0)
 ## Open questions
 
 - **Pipeline design.** The [contracts v1 design](../docs/design/contracts-v1.md#work-for-the-join-with-the-ai-and-ml-code) refers to an `ai-service` pipeline design, which does not exist yet. It decides the features of the pipeline and where the interim use cases of `suggestions/` go, the domain of routing, the calibration of the intent probabilities, and the high-band threshold of `ConfidenceBand`.
-- **Release manifest format.** The data contract for the release manifest and the model artifact format is not written yet ([ADR-0021, Follow-ups](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#follow-ups)). `release/` loads the manifest in that format once it exists ([DATA-56](../docs/rules/data-and-ml.md#models-and-artifacts)).
+- **Release manifest format.** The format of [Release manifest](#release-manifest) is interim. A data contract in `contracts/` for the release manifest and the model artifact format, written by the contract owners, replaces it ([ADR-0021, Follow-ups](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#follow-ups)). Until then, `eval/` writes and checks manifests only through `supportiq_ai_service.release.manifest`.

@@ -45,6 +45,9 @@ ALLOWED_ATTRIBUTES = frozenset(
         "http_status_code",
         "setting_names",
         "file_name",
+        "reason",
+        "asset",
+        "file_path",
         "logger_name",
     }
 )

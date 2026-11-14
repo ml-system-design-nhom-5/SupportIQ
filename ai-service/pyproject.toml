@@ -264,6 +264,7 @@ forbidden_modules = [
     "supportiq_ai_service.retrieval.api",
     "supportiq_ai_service.release.adapters",
     "supportiq_ai_service.release.api",
+    "supportiq_ai_service.release.manifest",
     "supportiq_ai_service.platform.adapters",
     "supportiq_ai_service.platform.web",
 ]
@@ -298,6 +299,7 @@ forbidden_modules = [
     "supportiq_ai_service.retrieval.adapters",
     "supportiq_ai_service.drafting.adapters",
     "supportiq_ai_service.release.adapters",
+    "supportiq_ai_service.release.manifest",
     "supportiq_ai_service.platform.adapters",
 ]
 
@@ -310,6 +312,7 @@ forbidden_modules = [
     "supportiq_ai_service.release.domain",
     "supportiq_ai_service.release.application",
     "supportiq_ai_service.release.adapters",
+    "supportiq_ai_service.release.manifest",
     "supportiq_ai_service.platform.domain",
     "supportiq_ai_service.platform.application",
     "supportiq_ai_service.platform.adapters",

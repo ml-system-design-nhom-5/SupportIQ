@@ -3,6 +3,7 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from pathlib import Path
 
 import httpx
 from fastapi import FastAPI
@@ -24,6 +25,9 @@ from tests.unit.suggestions.fakes import FakePipeline
 BASE_URL = "http://ai-service.test"
 SERVICE_TOKEN = "service-token-for-integration-tests"
 SERVICE_TOKEN_HEADERS = {"Authorization": f"Bearer {SERVICE_TOKEN}"}
+# `create_app` never reads the release manifest: only the command checks it, before it creates
+# the application. So a replica built from its ports takes a path that names no file.
+UNCHECKED_RELEASE_MANIFEST_PATH = Path("release-manifest.json")
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,13 +43,18 @@ class RunningAiService:
     events: RecordingEventRecorder
 
 
-def build_settings() -> Settings:
+def build_settings(release_manifest_path: Path = UNCHECKED_RELEASE_MANIFEST_PATH) -> Settings:
     """Build the settings of a replica for tests, without reading the environment.
+
+    Args:
+        release_manifest_path: The release manifest; one that names no file by default.
 
     Returns:
         The validated settings with the test service token.
     """
-    return Settings.model_validate({"service_token": SERVICE_TOKEN})
+    return Settings.model_validate(
+        {"service_token": SERVICE_TOKEN, "release_manifest_path": release_manifest_path}
+    )
 
 
 def build_ports(

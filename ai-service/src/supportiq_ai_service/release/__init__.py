@@ -8,6 +8,8 @@ from supportiq_ai_service.release.application import (
 from supportiq_ai_service.release.domain import (
     AssetVersions,
     LoadedRelease,
+    ReleaseInvalidError,
+    ReleaseInvalidReason,
     ReleaseNotLoadedError,
     ReleaseSource,
 )
@@ -16,6 +18,8 @@ __all__ = [
     "AssetVersions",
     "GetAssetVersions",
     "LoadedRelease",
+    "ReleaseInvalidError",
+    "ReleaseInvalidReason",
     "ReleaseNotLoadedError",
     "ReleaseReadinessProbe",
     "ReleaseSource",

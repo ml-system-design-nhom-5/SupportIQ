@@ -1,4 +1,4 @@
-"""The KB documents of an instance without a release manifest: none."""
+"""The KB documents while no KB is wired to the release: none."""
 
 from supportiq_ai_service.release import LoadedRelease
 from supportiq_ai_service.retrieval.domain import KbDocument
