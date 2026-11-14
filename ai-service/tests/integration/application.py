@@ -5,12 +5,17 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
 import httpx
+from fastapi import FastAPI
 
-from supportiq_ai_service.composition_root import create_app
+from supportiq_ai_service.composition_root import ServicePorts, create_app
 from supportiq_ai_service.platform.settings import Settings
 from supportiq_ai_service.release import ReleaseSource
+from supportiq_ai_service.retrieval import KbDocumentSource
+from supportiq_ai_service.suggestions import SuggestionPipeline
 from tests.unit.platform.fakes import FakeClock, RecordingEventRecorder
 from tests.unit.release.fakes import StaticReleaseSource
+from tests.unit.retrieval.fakes import StaticKbDocuments
+from tests.unit.suggestions.fakes import FakePipeline
 
 BASE_URL = "http://ai-service.test"
 SERVICE_TOKEN = "service-token-for-integration-tests"
@@ -39,22 +44,74 @@ def build_settings() -> Settings:
     return Settings.model_validate({"service_token": SERVICE_TOKEN})
 
 
+def build_ports(
+    release_source: ReleaseSource | None = None,
+    pipeline: SuggestionPipeline | None = None,
+    kb_documents: KbDocumentSource | None = None,
+) -> ServicePorts:
+    """Build the ports of a replica for tests, with the examples of the contract by default.
+
+    Args:
+        release_source: The release source; the example release when None.
+        pipeline: The pipeline; one that answers the contract's examples when None.
+        kb_documents: The KB; one with the example document version when None.
+
+    Returns:
+        The ports.
+    """
+    return ServicePorts(
+        release_source=StaticReleaseSource() if release_source is None else release_source,
+        pipeline=FakePipeline() if pipeline is None else pipeline,
+        kb_documents=StaticKbDocuments() if kb_documents is None else kb_documents,
+    )
+
+
+def build_app(ports: ServicePorts, events: RecordingEventRecorder) -> FastAPI:
+    """Create the wired application for tests.
+
+    Args:
+        ports: The ports of the replica.
+        events: Where the application records events.
+
+    Returns:
+        The application.
+    """
+    return create_app(build_settings(), events, FakeClock(), ports)
+
+
+@asynccontextmanager
+async def running_app(app: FastAPI) -> AsyncGenerator[httpx.AsyncClient]:
+    """Run the lifespan of an application and yield an HTTP client to it.
+
+    Args:
+        app: The application.
+
+    Yields:
+        A client whose requests go to the application in the test process.
+    """
+    async with app.router.lifespan_context(app):
+        transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+        async with httpx.AsyncClient(transport=transport, base_url=BASE_URL) as client:
+            yield client
+
+
 @asynccontextmanager
 async def running_ai_service(
     release_source: ReleaseSource | None = None,
+    pipeline: SuggestionPipeline | None = None,
+    kb_documents: KbDocumentSource | None = None,
 ) -> AsyncGenerator[RunningAiService]:
     """Start the application with its lifespan and yield an HTTP client to it.
 
     Args:
         release_source: The release source; the example release when None.
+        pipeline: The pipeline; one that answers the contract's examples when None.
+        kb_documents: The KB; one with the example document version when None.
 
     Yields:
         The running application and its recorded events.
     """
     events = RecordingEventRecorder()
-    source = StaticReleaseSource() if release_source is None else release_source
-    app = create_app(build_settings(), events, FakeClock(), source)
-    async with app.router.lifespan_context(app):
-        transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
-        async with httpx.AsyncClient(transport=transport, base_url=BASE_URL) as client:
-            yield RunningAiService(client, events)
+    app = build_app(build_ports(release_source, pipeline, kb_documents), events)
+    async with running_app(app) as client:
+        yield RunningAiService(client, events)

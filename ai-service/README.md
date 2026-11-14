@@ -78,8 +78,9 @@ ai-service/
 ├── src/supportiq_ai_service/
 │   ├── platform/           # Clock, errors, events, settings, logging, trace context, the service token, web
 │   ├── release/            # The release manifest: loading, checksums, the asset versions, readiness
+│   ├── suggestions/        # For now createAnalysis and createDraft: use cases, results, the pipeline port
 │   ├── intent/             # For now only the adapters of the intent model
-│   ├── retrieval/          # For now only the adapters of the encoder, the index, and the KB
+│   ├── retrieval/          # getKbDocumentVersion, and for now the adapters of the encoder, the index, and the KB
 │   ├── drafting/           # For now only the adapters of the LLM client and its budget
 │   ├── composition_root/   # The only place that wires everything: the app and its command
 │   └── generated/          # Models generated from the contract; never edited by hand
@@ -92,7 +93,7 @@ ai-service/
 └── pyproject.toml          # Dependencies and the configuration of every tool
 ```
 
-`platform/`, `release/`, `composition_root/`, `generated/`, `config/`, and the test folders are fixed. `intent/`, `retrieval/`, and `drafting/` hold the adapters taken over from `main` until the pipeline design decides the features of the pipeline.
+`platform/`, `release/`, `composition_root/`, `generated/`, `config/`, and the test folders are fixed. `suggestions/` is an interim feature named after the tag of its two operations in the contract: it holds their use cases, the types of their results in the shape of the contract, and the port of the pipeline, which computes nothing itself. `intent/`, `retrieval/`, and `drafting/` hold the adapters taken over from `main`. The pipeline design decides the features of the pipeline and replaces this split ([Open questions](#open-questions)).
 
 Each feature has the layers of [ARCH-16](../docs/rules/architecture.md):
 
@@ -103,7 +104,7 @@ Each feature has the layers of [ARCH-16](../docs/rules/architecture.md):
 | `adapters/` | Implementations of the ports, such as the intent model, the encoder, the index, and the LLM client | `domain/` of the feature, and public APIs |
 | `api/` | Routes and the mapping between contract models and domain types | `application/`, `domain/`, and `generated/` |
 
-Features depend on each other in one direction and only through the `__init__.py` of the feature, its public API (ARCH-17, ARCH-18). `uv run lint-imports` enforces this with the contracts in [`pyproject.toml`](pyproject.toml). `platform` has a second public entry point, `platform.web`, for the interface layers and the composition root. `ml/` and `eval/` use only the HTTP contract of `ai-service`, the public interface of `supportiq_ai_service`, and the formats of the model artifact and the release manifest; they never import its internals ([ADR-0021, Where the code of `main` goes](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#where-the-code-of-main-goes), statement 1).
+Features depend on each other in one direction and only through the `__init__.py` of the feature, its public API (ARCH-17, ARCH-18). `uv run lint-imports` enforces this with the contracts in [`pyproject.toml`](pyproject.toml). `platform` has a second public entry point, `platform.web`, for the interface layers and the composition root, and `release` has `release.api`, for the asset versions that every result embeds. `ml/` and `eval/` use only the HTTP contract of `ai-service`, the public interface of `supportiq_ai_service`, and the formats of the model artifact and the release manifest; they never import its internals ([ADR-0021, Where the code of `main` goes](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#where-the-code-of-main-goes), statement 1).
 
 ## Egress and secrets
 
@@ -140,7 +141,7 @@ Every request continues the trace of a valid `traceparent` or starts a new one, 
 - Every test runs with `HF_HUB_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1`, and an empty `HF_HOME`, so no test downloads a model or reads a cached one.
 - Unit tests have no network. Integration tests may open only loopback connections.
 - No test reads `.env` or uses an API key from the environment, and no test calls an LLM: a fake LLM adapter replaces Gemini ([ADR-0021, CI](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#ci), statement 2).
-- Tests that load real model weights carry the marker `real_model`. They are skipped by default and in CI, and run only with `-m real_model` on a machine that holds the release assets. The real model is otherwise tested on the Modal deployment ([ADR-0021, Python and dependencies](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#python-and-dependencies), statement 3).
+- Tests that load real model weights carry the marker `real_model`. An empty `HF_HOME` does not stop a test from loading weights from a local path, so every test that needs real weights carries the marker, without exception. They are skipped by default and in CI, and run only with `-m real_model` on a machine that holds the release assets. The real model is otherwise tested on the Modal deployment ([ADR-0021, Python and dependencies](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#python-and-dependencies), statement 3).
 - CI runs the tests on Linux twice: without torch, with fakes, and with torch from the CPU index (ADR-0021, CI, statement 4).
 
 ## Known limits
@@ -164,6 +165,7 @@ Each direct dependency, with why it is here ([WF-27](../docs/rules/workflow.md#d
 |---|---|---|---|
 | fastapi | 0.162.0 | MIT | The web framework ([ADR-0003](../docs/decisions/0003-tech-stack.md)) |
 | pydantic | 2.14.3 | MIT | Contract models and validation (ADR-0003) |
+| pydantic-core | 2.50.4 | MIT | `from_json` and `to_json`, which read a request body strictly while integral numbers stay integers, imported directly, as in `backend` |
 | pydantic-settings | 2.16.2 | MIT | Typed settings, validated at startup (ADR-0003, ARCH-34) |
 | starlette | 1.10.0 | BSD-3-Clause | The ASGI types and routing classes under FastAPI, imported directly by the middleware and the exception handler, as in `backend` |
 | uvicorn | 0.54.0 | BSD-3-Clause | The ASGI server that runs a replica, as in `backend`. The standard library has none |
@@ -206,5 +208,5 @@ The build backend is `uv_build`, from the same release as uv (MIT or Apache-2.0)
 
 ## Open questions
 
-- **Pipeline design.** The [contracts v1 design](../docs/design/contracts-v1.md#work-for-the-join-with-the-ai-and-ml-code) refers to an `ai-service` pipeline design, which does not exist yet. It decides the features of the pipeline, the use cases of `createAnalysis` and `createDraft` and their handlers, the domain of routing, the calibration of the intent probabilities, and the high-band threshold of `ConfidenceBand`.
+- **Pipeline design.** The [contracts v1 design](../docs/design/contracts-v1.md#work-for-the-join-with-the-ai-and-ml-code) refers to an `ai-service` pipeline design, which does not exist yet. It decides the features of the pipeline and where the interim use cases of `suggestions/` go, the domain of routing, the calibration of the intent probabilities, and the high-band threshold of `ConfidenceBand`.
 - **Release manifest format.** The data contract for the release manifest and the model artifact format is not written yet ([ADR-0021, Follow-ups](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#follow-ups)). `release/` loads the manifest in that format once it exists ([DATA-56](../docs/rules/data-and-ml.md#models-and-artifacts)).

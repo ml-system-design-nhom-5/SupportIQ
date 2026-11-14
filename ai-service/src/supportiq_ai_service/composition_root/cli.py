@@ -15,7 +15,7 @@ from supportiq_ai_service.composition_root.settings_loading import (
     SettingsInvalidError,
     load_settings,
 )
-from supportiq_ai_service.composition_root.web_application import create_app
+from supportiq_ai_service.composition_root.web_application import ServicePorts, create_app
 from supportiq_ai_service.platform import EventRecorder
 from supportiq_ai_service.platform.adapters.logging_setup import (
     GENERIC_REDACTION_PATTERNS,
@@ -25,6 +25,8 @@ from supportiq_ai_service.platform.adapters.logging_setup import (
 )
 from supportiq_ai_service.platform.adapters.system_clock import SystemClock
 from supportiq_ai_service.release.adapters import NoReleaseSource
+from supportiq_ai_service.retrieval.adapters.no_kb_documents import NoKbDocuments
+from supportiq_ai_service.suggestions.adapters import UnavailablePipeline
 
 EXIT_SUCCESS = 0
 EXIT_SETTINGS_INVALID = 2
@@ -59,7 +61,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         settings = load_settings(events)
     except SettingsInvalidError:
         return EXIT_SETTINGS_INVALID
-    app = create_app(settings, events, SystemClock(), NoReleaseSource())
+    ports = ServicePorts(
+        release_source=NoReleaseSource(),
+        pipeline=UnavailablePipeline(),
+        kb_documents=NoKbDocuments(),
+    )
+    app = create_app(settings, events, SystemClock(), ports)
     uvicorn.run(
         app,
         host=arguments.host,

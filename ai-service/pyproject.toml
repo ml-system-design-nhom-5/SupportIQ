@@ -14,6 +14,7 @@ dependencies = [
     "numpy==2.5.4",
     "opentelemetry-api==1.45.2",
     "pydantic==2.14.3",
+    "pydantic-core==2.50.4",
     "pydantic-settings==2.16.2",
     "starlette==1.10.0",
     "transformers==5.22.1",
@@ -181,17 +182,36 @@ exclude_also = [
 ]
 
 # ----- Layer and feature boundaries (ARCH-11, ARCH-17, ARCH-18, ARCH-19) -----
-# Contracts for the domain and application layers come with those layers, once the pipeline
-# design names the features (README.md, Open questions).
+# Third-party contracts follow indirect imports, so a domain module cannot reach a framework
+# through another module. Contracts between modules of ai-service check direct imports,
+# because a public API of a feature may be imported from any layer. The contracts follow
+# those of backend.
 [tool.importlinter]
 root_package = "supportiq_ai_service"
 include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Layers inside each feature: api, then application, then domain (ARCH-11)"
+type = "layers"
+containers = [
+    "supportiq_ai_service.suggestions",
+    "supportiq_ai_service.retrieval",
+    "supportiq_ai_service.release",
+]
+layers = ["(api)", "(application)", "domain"]
+
+[[tool.importlinter.contracts]]
+name = "Layers inside platform: web, then application, then domain (ARCH-11, ARCH-19)"
+type = "layers"
+containers = ["supportiq_ai_service.platform"]
+layers = ["web", "application", "domain"]
 
 [[tool.importlinter.contracts]]
 name = "Features depend on each other without cycles, and platform on no feature (ARCH-18)"
 type = "layers"
 layers = [
     "supportiq_ai_service.composition_root",
+    "supportiq_ai_service.suggestions",
     "supportiq_ai_service.intent | supportiq_ai_service.retrieval | supportiq_ai_service.drafting",
     "supportiq_ai_service.release",
     "supportiq_ai_service.platform",
@@ -204,11 +224,94 @@ source_modules = ["supportiq_ai_service"]
 forbidden_modules = ["apps", "pipeline", "supportiq_backend", "supportiq_eval", "supportiq_ml"]
 
 [[tool.importlinter.contracts]]
-name = "Adapters use no contract model (ARCH-11, ARCH-15)"
+name = "Domain and application code use no framework, model library, or SDK (ARCH-11, ARCH-12)"
 type = "forbidden"
 source_modules = [
+    "supportiq_ai_service.suggestions.domain",
+    "supportiq_ai_service.suggestions.application",
+    "supportiq_ai_service.retrieval.domain",
+    "supportiq_ai_service.retrieval.application",
+    "supportiq_ai_service.release.domain",
+    "supportiq_ai_service.release.application",
+    "supportiq_ai_service.platform.domain",
+    "supportiq_ai_service.platform.application",
+]
+forbidden_modules = [
+    "fastapi", "httpx", "numpy", "opentelemetry", "pydantic", "pydantic_core",
+    "pydantic_settings", "starlette", "transformers", "uvicorn",
+    "supportiq_ai_service.generated",
+    "supportiq_ai_service.platform.settings",
+]
+
+[[tool.importlinter.contracts]]
+name = "Domain and application code import no adapter and no interface code (ARCH-11)"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = [
+    "supportiq_ai_service.suggestions.domain",
+    "supportiq_ai_service.suggestions.application",
+    "supportiq_ai_service.retrieval.domain",
+    "supportiq_ai_service.retrieval.application",
+    "supportiq_ai_service.release.domain",
+    "supportiq_ai_service.release.application",
+    "supportiq_ai_service.platform.domain",
+    "supportiq_ai_service.platform.application",
+]
+forbidden_modules = [
+    "supportiq_ai_service.suggestions.adapters",
+    "supportiq_ai_service.suggestions.api",
+    "supportiq_ai_service.retrieval.adapters",
+    "supportiq_ai_service.retrieval.api",
+    "supportiq_ai_service.release.adapters",
+    "supportiq_ai_service.release.api",
+    "supportiq_ai_service.platform.adapters",
+    "supportiq_ai_service.platform.web",
+]
+
+[[tool.importlinter.contracts]]
+name = "Adapters use no contract model and no settings (ARCH-11, ARCH-15, ARCH-33)"
+type = "forbidden"
+source_modules = [
+    "supportiq_ai_service.suggestions.adapters",
     "supportiq_ai_service.intent.adapters",
     "supportiq_ai_service.retrieval.adapters",
     "supportiq_ai_service.drafting.adapters",
+    "supportiq_ai_service.release.adapters",
+    "supportiq_ai_service.platform.adapters",
 ]
-forbidden_modules = ["supportiq_ai_service.generated"]
+forbidden_modules = ["supportiq_ai_service.generated", "supportiq_ai_service.platform.settings"]
+
+[[tool.importlinter.contracts]]
+name = "Interface code uses no settings and imports no adapter (ARCH-11)"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = [
+    "supportiq_ai_service.suggestions.api",
+    "supportiq_ai_service.retrieval.api",
+    "supportiq_ai_service.release.api",
+    "supportiq_ai_service.platform.web",
+]
+forbidden_modules = [
+    "supportiq_ai_service.platform.settings",
+    "supportiq_ai_service.suggestions.adapters",
+    "supportiq_ai_service.intent.adapters",
+    "supportiq_ai_service.retrieval.adapters",
+    "supportiq_ai_service.drafting.adapters",
+    "supportiq_ai_service.release.adapters",
+    "supportiq_ai_service.platform.adapters",
+]
+
+[[tool.importlinter.contracts]]
+name = "Features reach other features only through their public API and release.api (ARCH-17)"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = ["supportiq_ai_service.suggestions", "supportiq_ai_service.retrieval"]
+forbidden_modules = [
+    "supportiq_ai_service.release.domain",
+    "supportiq_ai_service.release.application",
+    "supportiq_ai_service.release.adapters",
+    "supportiq_ai_service.platform.domain",
+    "supportiq_ai_service.platform.application",
+    "supportiq_ai_service.platform.adapters",
+    "supportiq_ai_service.platform.settings",
+]

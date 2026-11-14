@@ -9,19 +9,43 @@ from http import HTTPStatus
 import pytest
 
 from supportiq_ai_service.platform import EventName
+from tests.contract.documented import list_operations, load_contract
 from tests.integration.application import SERVICE_TOKEN, running_ai_service
 from tests.unit.release.fakes import StaticReleaseSource
 
 pytestmark = pytest.mark.anyio
 
-# The operations of contract 1.0.0 that ai-service serves so far, other than the health checks.
-SECURED_OPERATIONS = (("GET", "/v1/asset-versions"),)
+# Every operation of contract 1.0.0 that names the `serviceToken` scheme, with a path that
+# reaches it. A test below compares the list with the contract, so a new operation fails here
+# until it is listed.
+SECURED_OPERATIONS = (
+    ("POST", "/v1/analyses"),
+    ("POST", "/v1/drafts"),
+    ("GET", "/v1/kb-documents/SAMPLE-REFUND-001/versions/1.0"),
+    ("GET", "/v1/asset-versions"),
+)
+SECURED_OPERATION_TEMPLATES = (
+    ("POST", "/v1/analyses"),
+    ("POST", "/v1/drafts"),
+    ("GET", "/v1/kb-documents/{document_id}/versions/{version}"),
+    ("GET", "/v1/asset-versions"),
+)
 WRONG_AUTHORIZATIONS = (
     None,
     "Bearer wrong-token",
     f"Basic {SERVICE_TOKEN}",
     f"Bearer {SERVICE_TOKEN}-and-more",
 )
+
+
+def test_the_list_holds_every_operation_that_needs_the_service_token() -> None:
+    documented = {
+        (operation.method, operation.path)
+        for operation in list_operations(load_contract())
+        if operation.needs_service_token
+    }
+
+    assert set(SECURED_OPERATION_TEMPLATES) == documented
 
 
 @pytest.mark.parametrize(("method", "path"), SECURED_OPERATIONS)
