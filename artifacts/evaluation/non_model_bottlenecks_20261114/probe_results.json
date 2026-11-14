@@ -1,0 +1,114 @@
+{
+  "generated_at_utc": "2026-11-14T03:49:30.589304+00:00",
+  "boundary": "read_only_local_diagnostic_zero_live_llm_calls",
+  "cold_start": {
+    "model_container_load_ms": 3216.71,
+    "model_ready": true,
+    "model_trained_ready": true,
+    "retrieval_adapter_load_ms": 2074.63,
+    "eligible_docs": 14,
+    "quarantined_docs": [
+      {
+        "document_id": "b1000000-0000-0000-0000-000000000001",
+        "reason": "not_in_current_release"
+      },
+      {
+        "document_id": "b1000000-0000-0000-0000-000000000002",
+        "reason": "not_in_current_release"
+      },
+      {
+        "document_id": "b1000000-0000-0000-0000-000000000003",
+        "reason": "not_in_current_release"
+      }
+    ],
+    "spacy_en_core_web_sm_loaded": false,
+    "spacy_load_ms": 0.52,
+    "pseudonymize_sample_ms": 0.26,
+    "pseudonymize_sample_tokens": [
+      "[NAME_1]",
+      "[PHONE_1]",
+      "[EMAIL_1]",
+      "[ORDER_ID_1]"
+    ]
+  },
+  "retrieval_and_duplicate_stage": {
+    "supported_cases": 31,
+    "supported_recall_at_3": 0.9839,
+    "supported_hit_at_3": 1.0,
+    "ood_isolated_false_answer_rate": 0.6,
+    "expired_false_answer_rate": 0.0,
+    "retrieve_ms_p50": 19.79,
+    "retrieve_ms_p95": 24.0,
+    "engine_analyse_ms_p50": 29.34,
+    "engine_analyse_ms_p95": 36.7,
+    "engine_draft_zero_llm_overhead_ms_p50": 29.95,
+    "engine_draft_zero_llm_overhead_ms_p95": 36.45,
+    "draft_eligible_supported_count": 15
+  },
+  "order_context_contract": {
+    "backend_sent_fields": [
+      "order_status",
+      "order_total",
+      "refund_amount",
+      "refund_status",
+      "shipment_status",
+      "shipping_cost"
+    ],
+    "prompt_order_facts_fields": [
+      "order_status",
+      "refund_status"
+    ],
+    "prompt_s2_excerpt": "Verified Order Details:\norder_status: shipped\nrefund_status: under_review",
+    "engine_draft_shipment_only_status": "draft_ready",
+    "engine_draft_shipment_only_reasons": [],
+    "engine_draft_with_order_status_citations": [
+      {
+        "citation_id": "S2",
+        "source_type": "kb_document",
+        "document_id": "POL-ORD-002",
+        "version": "1.0",
+        "snippet": "Order Cancellation Rules and Conditions on Tiki\nCustomers can click 'Cancel Order' directly on the Tiki app if the order is in 'Processing' or 'Awaiting Packing' status and has not yet been handed over to the shipping carrier. Once the order transitions to 'In Transit', the direct cancellation button is disabled; customers should reject the package upon courier contact. For canceled prepaid orders, refunds will be issued automatically according to Tiki refund policies."
+      }
+    ]
+  },
+  "grounding_uncited_probes": {
+    "polite_hello": "unsupported_number",
+    "polite_mentions_order": "uncited_claim",
+    "polite_check_delivery": "uncited_claim",
+    "polite_closing_policy": "unsupported_number"
+  },
+  "backend_contract_probes": {
+    "malformed_content_length_status": 500,
+    "report_sqlite_status": "TypeError: can't compare offset-naive and offset-aware datetimes",
+    "report_llm_cost_micro_usd": null,
+    "report_handling_time_ms": null
+  },
+  "postgres_readonly": {
+    "checked": true,
+    "select_1": 1,
+    "tickets": 66,
+    "suggestions": 76,
+    "pending_jobs": 0,
+    "total_jobs": 76
+  },
+  "live_local_health": {
+    "backend": {
+      "status_code": 200,
+      "body": {
+        "status": "ready",
+        "backend_build": "application-v1"
+      }
+    },
+    "ai_service": {
+      "status_code": 200,
+      "body": {
+        "status": "ready",
+        "llm_enabled": true,
+        "llm_configured": true,
+        "retrieval_ready": true,
+        "model_mode": "trained",
+        "model_verified": true
+      }
+    }
+  }
+}

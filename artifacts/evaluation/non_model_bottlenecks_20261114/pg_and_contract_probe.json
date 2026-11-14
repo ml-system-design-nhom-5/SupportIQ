@@ -1,0 +1,45 @@
+{
+  "pg_telemetry": {
+    "ticket_modes": {
+      "assisted": 66
+    },
+    "ticket_statuses": {
+      "awaiting_approval": 1,
+      "closed": 27,
+      "open": 35,
+      "escalated": 3
+    },
+    "draft_statuses": {
+      "abstained": 38,
+      "llm_unavailable": 4,
+      "draft_ready": 34
+    },
+    "llm_usage_present": 34,
+    "cost_micro_usd_present": 0,
+    "decisions": {},
+    "audit_events": {
+      "ticket.recovered_from_test_schema": 2,
+      "reply_proposal.submitted": 1,
+      "reply.sent": 27,
+      "message.pseudonymized": 76,
+      "suggestion.part_completed": 152,
+      "ticket.created": 64,
+      "ticket.escalated": 3,
+      "intent.overridden": 6
+    }
+  },
+  "uncited_checks_on_pol_ret_001": {
+    "polite_hello_with_ret001": null,
+    "polite_order_with_ret001": "uncited_claim",
+    "polite_closing_with_ret001": "uncited_claim"
+  },
+  "order_sid_in_prompt": "S4",
+  "order_cite_res_status": "draft_ready",
+  "order_cite_res_citations": [
+    {
+      "citation_id": "S2_order_status",
+      "source_type": "order_context",
+      "field": "order_status"
+    }
+  ]
+}
