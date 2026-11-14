@@ -120,3 +120,42 @@ def test_escalation_idempotency_persisted_in_store(test_store, fake_llm, offline
     assert res2["action"] == "escalate"
     assert res2["is_duplicate_run"] is True
     assert res2["decision_id"] == res1["decision_id"]
+
+
+def test_multi_request_policy_sends_clause_options_and_blocks_drafting(test_store, fake_llm, offline_retrieval):
+    """docs/design/multi-request-detection.md: with a multi_request policy block the runner asks for clauses."""
+    from apps.core_backend.intent.routing import load_policy_v2
+    from apps.core_backend.intent.schemas import ClausePrediction, MultiRequestPolicy
+
+    calls = []
+
+    class ClauseClient:
+        def classify_intent(self, text, request_id=None, **kw):
+            calls.append(kw)
+            return IntentPrediction(intent="return_policy", confidence=0.95, margin=0.9, model_version="v2.0.0",
+                                    clauses=[ClausePrediction(intent="return_policy", confidence=0.9),
+                                             ClausePrediction(intent="shipping_costs", confidence=0.9)])
+
+    policy = load_policy_v2()
+    policy.multi_request = MultiRequestPolicy(min_clause_confidence=0.6)
+    runner = PipelineRunner(intent_client=ClauseClient(), policy=policy, store=test_store, llm_client=fake_llm,
+                            retrieval_adapter=offline_retrieval)
+    res = runner.run("What is the return policy and how much is shipping?", RoutingContext(ticket_customer_id="demo-customer"))
+    assert calls == [{"clause_min_words": 3, "clause_max": 4, "clause_requests_only": False}]
+    assert res["action"] == "clarify" and res["reason_codes"] == ["multiple_requests"]
+    assert res["clause_intents"] == ["return_policy", "shipping_costs"]
+    assert res["draft_body"] is None
+
+
+def test_return_channel_guard_sets_flag_from_message(test_store, fake_llm, offline_retrieval):
+    """docs/design/return-channel-guard.md: the runner derives return_channel_named from the message text."""
+    from apps.core_backend.intent.routing import load_policy_v2
+
+    pred = IntentPrediction(intent="return_policy", confidence=0.95, margin=0.9, model_version="v2.0.0")
+    policy = load_policy_v2()
+    policy.return_channel_guard = True
+    runner = PipelineRunner(intent_client=DummyIntentClient(pred), policy=policy, store=test_store, llm_client=fake_llm,
+                            retrieval_adapter=offline_retrieval)
+    res = runner.run("Can I return the toaster at your Hanoi branch?", RoutingContext(ticket_customer_id="demo-customer"))
+    assert res["action"] == "escalate" and res["reason_codes"] == ["return_channel_named"]
+    assert res["requested_team"] == "returns_support" and res["draft_body"] is None

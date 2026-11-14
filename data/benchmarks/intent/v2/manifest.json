@@ -1,0 +1,19 @@
+{
+  "version": "intent-v2",
+  "adr": "docs/decisions/0016-frozen-intent-scenario-set.md",
+  "seed": 42,
+  "author": "independent AI agent session, 2026-11-13 (see AUTHORING.md)",
+  "counts": {
+    "raw_cases.jsonl": 236,
+    "cases.jsonl": 164,
+    "ml_oos.jsonl": 72,
+    "ml_noise.jsonl": 480
+  },
+  "files": {
+    "raw_cases.jsonl": "1ef7ab4d588beec56e7349e0eb418b370907397f6b879b123906f6d33996ac29",
+    "AUTHORING.md": "1e8b117ce577e6eb6ef8ad195dd058066eb62009e35b8ebae9805e3d0944f5ef",
+    "cases.jsonl": "00922952e5397527a5226686982fd076cdae77fb1ed97cb45d297b1dc110981c",
+    "ml_oos.jsonl": "f3ec8b88a2d8aeabcfab4bf846e7a700b92e5208ec007aefccacf97e5932a86d",
+    "ml_noise.jsonl": "37dc6c80f22aac057dba39d46b332e1bb07cb0a27e04503edd53e36da926e386"
+  }
+}

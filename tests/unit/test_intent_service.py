@@ -134,3 +134,57 @@ def test_calibrated_temperature_scaling():
     expected_probs = torch.softmax(logits / 1.25, dim=-1).tolist()
     assert abs(calibrated_result["confidence"] - expected_probs[-1]) < 1e-5
 
+
+
+def test_predict_classifies_whole_message_and_clauses_in_one_batch():
+    import torch
+
+    container.device = torch.device("cpu")
+    container.tokenizer.return_value = {"input_ids": torch.tensor([[1], [2], [3]])}
+    n = len(container.id2label)
+    logits = torch.zeros(3, n)
+    logits[0, 0], logits[1, 1], logits[2, 2] = 5.0, 6.0, 7.0
+    container.model.return_value.logits = logits
+    result = container.predict("Cancel my order and tell me the shipping fee", clause_min_words=3, clause_max=4)
+    batch = container.tokenizer.call_args.args[0]
+    assert batch == ["Cancel my order and tell me the shipping fee", "Cancel my order", "tell me the shipping fee"]
+    assert result["intent"] == container.id2label[0]
+    assert [c.intent for c in result["clauses"]] == [container.id2label[1], container.id2label[2]]
+    assert all(0.0 < c.confidence <= 1.0 for c in result["clauses"])
+
+
+def test_predict_without_clause_options_returns_no_clauses():
+    import torch
+
+    container.device = torch.device("cpu")
+    container.tokenizer.return_value = {"input_ids": torch.tensor([[1]])}
+    container.model.return_value.logits = torch.zeros(1, len(container.id2label))
+    result = container.predict("Cancel my order and tell me the shipping fee")
+    assert container.tokenizer.call_args.args[0] == ["Cancel my order and tell me the shipping fee"]
+    assert result["clauses"] is None
+
+
+def test_client_sends_clause_options_and_parses_clauses():
+    http = MagicMock()
+    http.post.return_value.json.return_value = {
+        "intent": "track_order", "confidence": 0.9, "margin": 0.8, "model_version": "v1.0.0",
+        "top_k": [], "clauses": [{"intent": "track_order", "confidence": 0.9}, {"intent": "cancel_order", "confidence": 0.8}],
+    }
+    pred = IntentClient(http_client=http).classify_intent("x", clause_min_words=3, clause_max=4, clause_requests_only=True)
+    assert http.post.call_args.kwargs["json"]["clause_requests_only"] is True
+    assert http.post.call_args.kwargs["json"]["clause_min_words"] == 3
+    assert [c.intent for c in pred.clauses] == ["track_order", "cancel_order"]
+    IntentClient(http_client=http).classify_intent("x")
+    assert "clause_min_words" not in http.post.call_args.kwargs["json"]
+
+
+def test_predict_returns_summed_draftable_probability():
+    import torch
+    from apps.ml_inference.preprocessing import DRAFTABLE_INTENTS
+
+    container.device = torch.device("cpu")
+    container.tokenizer.return_value = {"input_ids": torch.tensor([[1]])}
+    container.model.return_value.logits = torch.zeros(1, len(container.id2label))
+    result = container.predict("Where is my order?")
+    assert abs(result["scope_probability"] - len(DRAFTABLE_INTENTS) / len(container.id2label)) < 1e-6
+    assert result["scope_kind"] == "summed_draftable_probability"

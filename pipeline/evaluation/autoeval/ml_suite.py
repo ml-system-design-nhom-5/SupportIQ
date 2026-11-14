@@ -6,22 +6,37 @@ from pathlib import Path
 from typing import Any
 
 from apps.core_backend.intent.routing import INTENT_TO_QUEUE_MAP, SUPPORTED_12_INTENTS, decide_route, load_policy_v2
-from apps.core_backend.intent.schemas import IntentPrediction, RoutingContext
+from apps.core_backend.intent.channels import names_return_channel
+from apps.core_backend.intent.schemas import ClausePrediction, IntentPrediction, RoutingContext
 
 from . import metrics as M
 from .backends import IntentModel, load_backend, verify_model
+from .build_intent_set import verify_manifest as verify_intent_set
 from .datasets import REPO_ROOT, load_jsonl
 
 ML_FAULTS = {"ml_timeout", "ml_error"}
 SUPPORTED = set(SUPPORTED_12_INTENTS)
 
 
-def _route(policy, pred: dict | None, context: dict, model_version: str, fault: str | None = None):
+def _route(policy, pred: dict | None, context: dict, model_version: str, fault: str | None = None, text: str = ""):
     if fault in ML_FAULTS or pred is None:
         p = IntentPrediction(intent="unknown", confidence=0.0, margin=0.0, model_version=model_version, error=fault or "ml_error")
     else:
-        p = IntentPrediction(intent=pred["intent"], confidence=pred["confidence"], margin=pred["margin"], model_version=model_version)
+        clauses = [ClausePrediction(**c) for c in pred["clauses"]] if pred.get("clauses") else None
+        p = IntentPrediction(intent=pred["intent"], confidence=pred["confidence"], margin=pred["margin"],
+                             model_version=model_version, clauses=clauses)
+    # Same flag as PipelineRunner sets from the message (docs/design/return-channel-guard.md).
+    context = {**context, "return_channel_named": bool(policy.return_channel_guard and names_return_channel(text))}
     return decide_route(p, RoutingContext(**context), policy)
+
+
+def _predict(model: IntentModel, policy, text: str) -> dict:
+    """Whole-message prediction plus clauses when the policy enables multi-request detection, as in serving."""
+    pred = model.predict(text)
+    multi = policy.multi_request
+    if multi is not None and multi.enabled:
+        pred["clauses"] = model.predict_clauses(text, multi.min_words, multi.max_clauses, multi.request_clauses_only)
+    return pred
 
 
 def _threshold(policy, intent: str) -> float:
@@ -44,16 +59,24 @@ def run(config: dict, backend: str = "auto", log=print) -> dict[str, Any]:
     policy = load_policy_v2(str(REPO_ROOT / cfg["policy"]))
     out["policy_version"] = policy.version
     mv = check.get("pinned_model_version") or "v1.0.0"
-    root = REPO_ROOT / config["autoeval_dir"]
+    # The gate set (ADR-0016) may differ from the LLM suite's data; it is used only when its manifest matches.
+    root = REPO_ROOT / cfg.get("sets_dir", config["autoeval_dir"])
+    bench_path = REPO_ROOT / cfg.get("benchmark", config["benchmark"])
+    if "sets_dir" in cfg:
+        frozen = verify_intent_set(root)
+        out["frozen_set"] = {"dir": cfg["sets_dir"], **frozen}
+        if not frozen["ok"]:
+            out["error"] = f"frozen intent set does not match its manifest: {frozen}"
+            return out
 
     # ---------------------------------------------------------------- benchmark (written queries)
-    bench = load_jsonl(REPO_ROOT / config["benchmark"])
+    bench = load_jsonl(bench_path)
     log(f"[ml] benchmark: {len(bench)} cases ({model.backend.name} backend)")
     rows = []
     for c in bench:
         fault = c.get("fault")
-        pred = None if fault in ML_FAULTS else model.predict(c["text"])
-        d = _route(policy, pred, c["context"], mv, fault)
+        pred = None if fault in ML_FAULTS else _predict(model, policy, c["text"])
+        d = _route(policy, pred, c["context"], mv, fault, c["text"])
         rows.append({"id": c["id"], "slice": c["primary_slice"], "text": c["text"], "gold": c.get("true_intent"),
                      "pred": pred and pred["intent"], "conf": pred and pred["confidence"], "margin": pred and pred["margin"],
                      "entropy": pred and pred["entropy"], "top_k": pred and pred["top_k"], "fault": fault,
@@ -97,6 +120,8 @@ def run(config: dict, backend: str = "auto", log=print) -> dict[str, Any]:
         "drafts_n": len(drafts),
         "escalation_team_accuracy": M.rate(sum(r["team"] == r["exp_team"] for r in esc), len(esc)),
         "reason_codes": dict(Counter(x for r in rows for x in r["reasons"]).most_common()),
+        # Single-request labelled messages flagged as multiple requests (design: multi-request-detection).
+        "multiple_requests_false_flags": sum("multiple_requests" in r["reasons"] for r in rows if r["gold"]),
     }
     out["benchmark"] = {
         "n_cases": len(rows), "n_labeled": len(lab),
@@ -138,8 +163,8 @@ def run(config: dict, backend: str = "auto", log=print) -> dict[str, Any]:
     log(f"[ml] out-of-scope: {len(oos)} cases")
     orows = []
     for o in oos:
-        p = model.predict(o["text"])
-        d = _route(policy, p, o["context"], mv)
+        p = _predict(model, policy, o["text"])
+        d = _route(policy, p, o["context"], mv, text=o["text"])
         low = p["confidence"] < _threshold(policy, p["intent"])
         orows.append({"id": o["id"], "category": o["category"], "text": o["text"], "pred": p["intent"], "conf": p["confidence"],
                       "entropy": p["entropy"], "low_conf": low, "action": d.action,

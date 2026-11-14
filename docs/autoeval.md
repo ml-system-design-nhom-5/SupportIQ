@@ -31,6 +31,20 @@ Kết quả nằm ở `artifacts/evaluation/autoeval/<run-id>/` (`report.md` đ�
 ### Suite ML (`--suite ml`)
 Chạy model DistilBERT đã phát hành **cùng hàm routing thật** (`decide_route` + policy v2).
 
+> **Gate data (2026-11-12, [ADR-0016](decisions/0016-frozen-intent-scenario-set.md)).** The ML suite reads its
+> benchmark and its noise and out-of-scope sets from `ml.benchmark` and `ml.sets_dir` in
+> `pipeline/configs/autoeval.json`, now the frozen set `data/benchmarks/intent/v2/` (since 2026-11-13; `intent/v1` is a
+> diagnostic, see the ADR revision) (164 labelled messages,
+> 480 noisy variants, 72 out-of-scope messages), written by an independent author. The run stops when the set
+> does not match its `manifest.json`. The `system/v1` and `autoeval/v1` files named in the table below remain as
+> development diagnostics only. Messages pass through `apps/ml_inference/preprocessing.normalize_placeholders`
+> before tokenization, as in serving (DATA-59). The procedure and gate tolerances are in the
+> [intent evaluation protocol](design/intent-evaluation-protocol.md).
+> When `ml.policy` has a `multi_request` block (policy `v3`), each message is also split with
+> `split_clauses` and classified clause by clause, as `ModelContainer.predict` does, so routing gate 2d
+> ([multi-request detection](design/multi-request-detection.md)) is measured; the report adds
+> `routing.multiple_requests_false_flags`.
+
 | Nhóm | Dữ liệu | Chỉ số chính |
 |---|---|---|
 | Toàn vẹn model | `artifacts/models/trained/distilbert-supportiq` | checksum khớp `EXPECTED_MANIFEST` của dịch vụ ML, đủ 46 nhãn |
@@ -92,6 +106,8 @@ Lệnh `run` từ chối chạy nếu dữ liệu, benchmark, KB hoặc mock ord
 - `ml_oos.jsonl` viết tay; thêm câu rồi chạy `build-data` để cập nhật manifest.
 - Không chỉnh model, ngưỡng hoặc prompt dựa trên từng câu của các bộ này; nếu cần dữ liệu để tinh chỉnh,
   tách một bộ dev riêng.
+- `data/benchmarks/intent/v1/` is built once by `python -m pipeline.evaluation.autoeval.build_intent_set` from
+  `raw_cases.jsonl`; the script refuses to rebuild once `manifest.json` exists (DATA-23) and prints counts only.
 
 ## CI (`.github/workflows/autoeval.yml`)
 

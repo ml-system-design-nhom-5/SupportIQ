@@ -34,7 +34,14 @@ class IntentClient:
                 pass
             self._http = None
 
-    def classify_intent(self, text: str, request_id: Optional[str] = None) -> IntentPrediction:
+    def classify_intent(
+        self,
+        text: str,
+        request_id: Optional[str] = None,
+        clause_min_words: Optional[int] = None,
+        clause_max: Optional[int] = None,
+        clause_requests_only: bool = False,
+    ) -> IntentPrediction:
         """Call ML inference service. In case of timeout, connection error, non-200 status,
         or response model version mismatch, returns an explicit IntentPrediction with error status,
         NEVER fabricating regex scores.
@@ -44,6 +51,10 @@ class IntentClient:
             "request_id": request_id,
             "expected_model_version": self.expected_model_version,
         }
+        if clause_min_words is not None and clause_max is not None:
+            payload["clause_min_words"] = clause_min_words
+            payload["clause_max"] = clause_max
+            payload["clause_requests_only"] = clause_requests_only
         try:
             resp = self._get_client().post(f"{self.base_url}/predict", json=payload, timeout=self.timeout)
             resp.raise_for_status()
@@ -68,6 +79,8 @@ class IntentClient:
                 model_version=data["model_version"],
                 top_k=data.get("top_k"),
                 score_kind=data.get("score_kind", "uncalibrated_softmax"),
+                clauses=data.get("clauses"),
+                scope_probability=data.get("scope_probability"),
                 error=None,
             )
         except Exception as exc:

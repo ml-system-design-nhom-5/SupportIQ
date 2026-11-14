@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 
 from apps.core_backend.intent.schemas import RoutingContext, RouteDecision, IntentPolicy
+from apps.core_backend.intent.channels import names_return_channel
 from apps.core_backend.intent.routing import decide_route, load_policy_v2
 from apps.core_backend.intent.client import IntentClient
 from apps.core_backend.commerce.adapter import CommerceAdapter
@@ -58,11 +59,19 @@ class PipelineRunner:
 
         # 2. Intent classification
         t_classify = time.perf_counter()
-        prediction = self.intent_client.classify_intent(text, request_id=actual_run_id)
+        multi = self.policy.multi_request
+        if multi is not None and multi.enabled:
+            prediction = self.intent_client.classify_intent(
+                text, request_id=actual_run_id, clause_min_words=multi.min_words, clause_max=multi.max_clauses,
+                clause_requests_only=multi.request_clauses_only)
+        else:
+            prediction = self.intent_client.classify_intent(text, request_id=actual_run_id)
         stage_elapsed_ms["classify_ms"] = round((time.perf_counter() - t_classify) * 1000.0, 2)
 
         # 3. Gate routing decision
         t_route = time.perf_counter()
+        if self.policy.return_channel_guard:
+            context = context.model_copy(update={"return_channel_named": names_return_channel(text)})
         decision: RouteDecision = decide_route(prediction, context, self.policy)
         decision.decision_id = str(uuid.uuid4())
         initial_routing_action = decision.action
@@ -148,6 +157,7 @@ class PipelineRunner:
             "requested_team": decision.requested_team,
             "target_queue": decision.target_queue,
             "reason_codes": decision.reason_codes,
+            "clause_intents": list(decision.clause_intents),
             "must_human_approve": decision.must_human_approve,
             "can_execute_transaction": decision.can_execute_transaction,
             "model_version": decision.model_version,

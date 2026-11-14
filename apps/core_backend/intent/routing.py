@@ -78,6 +78,12 @@ INTENT_TO_QUEUE_MAP = {
 ESCALATED_34_INTENTS = [k for k in INTENT_TO_QUEUE_MAP.keys() if k not in SUPPORTED_12_INTENTS]
 STANDARD_INTENTS_46 = sorted(SUPPORTED_12_INTENTS + ESCALATED_34_INTENTS)
 
+# Requests that need staff authority (ESC-03): a message combining one with another request is escalated.
+AUTHORITY_INTENTS = {"cancel_order", "request_refund"}
+
+# Routed intents that gate 2e escalates when the message names a return channel (label definitions D2).
+RETURN_FAMILY_INTENTS = {"return_product", "return_policy"}
+
 # Intents that require an order_id slot when processing personal customer requests
 PERSONAL_ORDER_REQUIRED = {
     "track_order",
@@ -154,11 +160,19 @@ def decide_route(
             policy_version=pol_ver,
         )
 
+    is_invalid_clause = any(
+        c.intent not in STANDARD_INTENTS_46
+        or math.isnan(c.confidence)
+        or not 0.0 <= c.confidence <= 1.0
+        for c in (prediction.clauses or [])
+    )
+
     # Gate 1b: Fail-closed on invalid ML output or ML service error
     if (
         prediction.error
         or is_invalid_confidence
         or is_invalid_margin
+        or is_invalid_clause
         or final_intent not in STANDARD_INTENTS_46
     ):
         return RouteDecision(
@@ -196,6 +210,83 @@ def decide_route(
             requested_team=team,
             target_queue="standard",
             reason_codes=["recognized_outside_product_scope"],
+            model_version=model_ver,
+            policy_version=pol_ver,
+        )
+
+    # Gate 2d: Multiple requests (docs/design/multi-request-detection.md). Two clauses confidently classified as
+    # different intents never go to a direct draft: escalate when one needs a human or authority, else clarify once.
+    multi = policy.multi_request
+    if multi is not None and multi.enabled and prediction.clauses and not context.intent_override:
+        confident = [c.intent for c in prediction.clauses if c.confidence >= multi.min_clause_confidence]
+        if len(set(confident)) >= 2:
+            needs_human = [
+                i for i in confident
+                if i == "human_agent" or i in ESCALATED_34_INTENTS or i in AUTHORITY_INTENTS
+            ]
+            sensitive = any(i in policy.sensitive_action_intents for i in confident)
+            if needs_human or context.clarify_count >= 1:
+                return RouteDecision(
+                    action="escalate",
+                    predicted_intent=predicted,
+                    final_intent=final_intent,
+                    requested_team=INTENT_TO_QUEUE_MAP[needs_human[0]] if needs_human else team,
+                    target_queue="manager" if sensitive else "standard",
+                    reason_codes=["multiple_requests"] + ([] if needs_human else ["max_clarify_reached"]),
+                    model_version=model_ver,
+                    policy_version=pol_ver,
+                    clause_intents=confident,
+                )
+            return RouteDecision(
+                action="clarify",
+                predicted_intent=predicted,
+                final_intent=final_intent,
+                requested_team=team,
+                target_queue="standard",
+                reason_codes=["multiple_requests"],
+                model_version=model_ver,
+                policy_version=pol_ver,
+                clause_intents=confident,
+            )
+
+    # Gate 2e: Return channel named (docs/design/return-channel-guard.md). A return request naming a store, the post,
+    # or a courier is a channel-return intent outside the supported set (D2, ESC-02), whatever the model said.
+    if (
+        policy.return_channel_guard
+        and context.return_channel_named
+        and final_intent in RETURN_FAMILY_INTENTS
+        and not context.intent_override
+    ):
+        return RouteDecision(
+            action="escalate",
+            predicted_intent=predicted,
+            final_intent=final_intent,
+            requested_team="returns_support",
+            target_queue="standard",
+            reason_codes=["return_channel_named"],
+            model_version=model_ver,
+            policy_version=pol_ver,
+        )
+
+    # Gate 2f: Scope (docs/design/intent-model-v1.2.md). A draftable intent whose message is unlikely to be a
+    # draftable request at all is clarified once, then escalated.
+    scope = prediction.scope_probability
+    if (
+        policy.min_scope_probability is not None
+        and scope is not None
+        and not math.isnan(scope)
+        and scope < policy.min_scope_probability
+        and final_intent != "human_agent"
+        and not context.intent_override
+    ):
+        escalate = context.clarify_count >= 1
+        return RouteDecision(
+            action="escalate" if escalate else "clarify",
+            predicted_intent=predicted,
+            final_intent=final_intent,
+            requested_team=team,
+            target_queue="standard",
+            reason_codes=["low_scope_probability"] + (["max_clarify_reached"] if escalate else []),
             model_version=model_ver,
             policy_version=pol_ver,
         )

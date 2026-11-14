@@ -22,6 +22,7 @@ An architecture decision record (ADR) captures one significant decision: its con
 | [0012](0012-roles-v1.md) | Roles v1: customer, staff, manager, and admin | Accepted | 2026-11-05 |
 | [0013](0013-shop-demo-with-read-only-catalog.md) | Shop demo with a read-only catalog | Accepted | 2026-11-05 |
 | [0014](0014-citations-to-order-context.md) | Citations to the order context | Proposed | 2026-11-04 |
+| [0016](0016-frozen-intent-scenario-set.md) | Frozen intent scenario set written independently of training | Proposed | 2026-11-12 |
 
 Notes on the index:
 

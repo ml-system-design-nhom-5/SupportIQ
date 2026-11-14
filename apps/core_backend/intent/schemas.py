@@ -2,6 +2,10 @@ from datetime import datetime
 from typing import Literal, Optional, Dict, Any, List
 from pydantic import BaseModel, Field
 
+class ClausePrediction(BaseModel):
+    intent: str
+    confidence: float
+
 class IntentPrediction(BaseModel):
     intent: str
     confidence: float
@@ -10,6 +14,8 @@ class IntentPrediction(BaseModel):
     top_k: Optional[List[Dict[str, Any]]] = None
     score_kind: Optional[str] = "uncalibrated_softmax"
     error: Optional[str] = None
+    clauses: Optional[List[ClausePrediction]] = None  # multi-request detection; None = not computed
+    scope_probability: Optional[float] = None  # P(draftable request); None = not provided
 
 class RoutingContext(BaseModel):
     verified_scope: str = "ticket:read"
@@ -19,6 +25,7 @@ class RoutingContext(BaseModel):
     is_personal_lookup: bool = False  # Differentiates general policy vs personal order inquiry
     extracted_slots: Dict[str, Any] = Field(default_factory=dict)
     clarify_count: int = 0
+    return_channel_named: bool = False  # set from the message text (docs/design/return-channel-guard.md)
     intent_override: Optional[str] = None
     override_provenance: Optional[Dict[str, Any]] = None
     role: str = "agent"
@@ -38,6 +45,15 @@ class RouteDecision(BaseModel):
     can_execute_transaction: bool = False
     model_version: Optional[str] = None
     policy_version: Optional[str] = None
+    clause_intents: List[str] = Field(default_factory=list)  # set only with reason multiple_requests
+
+class MultiRequestPolicy(BaseModel):
+    """Gate 2d settings (docs/design/multi-request-detection.md); tuned on dev data only (DATA-58)."""
+    enabled: bool = True
+    min_clause_confidence: float = Field(ge=0.0, le=1.0)
+    min_words: int = Field(default=3, ge=1, le=20)
+    max_clauses: int = Field(default=4, ge=2, le=4)
+    request_clauses_only: bool = False  # keep only request clauses unless an additive cue is present
 
 class IntentPolicy(BaseModel):
     version: str
@@ -52,3 +68,6 @@ class IntentPolicy(BaseModel):
     default_margin_threshold: float = 0.10
     margin_thresholds: Dict[str, float] = Field(default_factory=dict)
     team_mapping: Dict[str, str] = Field(default_factory=dict)
+    multi_request: Optional[MultiRequestPolicy] = None
+    return_channel_guard: bool = False
+    min_scope_probability: Optional[float] = Field(default=None, ge=0.0, le=1.0)  # gate 2f; None = off

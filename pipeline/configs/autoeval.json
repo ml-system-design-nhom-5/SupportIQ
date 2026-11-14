@@ -9,6 +9,8 @@
   "regression_tolerance": 0.02,
   "ml": {
     "model_dir": "artifacts/models/trained/distilbert-supportiq",
+    "benchmark": "data/benchmarks/intent/v2/cases.jsonl",
+    "sets_dir": "data/benchmarks/intent/v2",
     "policy": "apps/core_backend/config/policies/intent_policy.v2.json",
     "confident_error_threshold": 0.8,
     "downstream_faults": ["encoder_unavailable", "encoder_failure", "llm_timeout", "llm_invalid_citations", "commerce_unauthorized", "commerce_not_found"]

@@ -1,0 +1,39 @@
+{
+  "version": "v1",
+  "classification": "synthetic-dev-only",
+  "source": "Authored with AI assistance on 2026-11-06 per docs/design/intent-label-definitions.md; identifiers replaced by normalized placeholders on 2026-11-12; 23 rows removed on 2026-11-12 because they were near-duplicates (token Jaccard >= 0.7) of data/benchmarks/intent/v1 (DATA-24); 7 more removed on 2026-11-13 as near-duplicates of data/benchmarks/intent/v2; multi_dev authored with AI assistance on 2026-11-13 per docs/design/multi-request-detection.md without reading data/benchmarks/intent/v1; escalation_dev authored with AI assistance on 2026-11-13 for the intents named by failed gate case IDs, without reading their texts",
+  "producing_process": "hand-authored; validated by pipeline/preparation/intent_extra.py",
+  "created": "2026-11-06",
+  "files": {
+    "train_supplement": {
+      "path": "data/intent/train_supplement/v1/rows.synthetic-dev-only.psv",
+      "sha256": "b063626efbddd24c4dd40213a8b5d3ff3c6e01722f84ad4fe0790998bdaf5154",
+      "rows": 500
+    },
+    "dev_cases": {
+      "path": "data/intent/dev/v1/cases.synthetic-dev-only.psv",
+      "sha256": "39e9fead5b08a0df61dd4f837a8a962f4f32ef50b0a8ff4f617ac2e3ef7437a9",
+      "rows": 181
+    },
+    "oos_train": {
+      "path": "data/intent/oos_train/v1/rows.synthetic-dev-only.psv",
+      "sha256": "aceebddf970da705ecc8e85eae620ec8c5e529119ddefe5e4f1e4533b72fef8f",
+      "rows": 94
+    },
+    "oos_dev": {
+      "path": "data/intent/dev/v1/oos.synthetic-dev-only.psv",
+      "sha256": "8f2e752f5d892bbcc2c82304e9d2ac27f79798b385a0dfe82033378cbccadc00",
+      "rows": 39
+    },
+    "multi_dev": {
+      "path": "data/intent/dev_multi/v1/cases.synthetic-dev-only.psv",
+      "sha256": "95e99a06c56eed0c9f98dd650db2aae555fbb82f4df5c6ad44074576156b0992",
+      "rows": 80
+    },
+    "escalation_dev": {
+      "path": "data/intent/dev_escalation/v1/cases.synthetic-dev-only.psv",
+      "sha256": "21b7a5e6ef9eb31ea84e198c6af8747887f49949b40350c14726c6fd025b6917",
+      "rows": 52
+    }
+  }
+}

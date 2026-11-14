@@ -7,8 +7,10 @@ from typing import Optional, Dict, Any, List
 
 import torch
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
+
+from apps.ml_inference.preprocessing import DRAFTABLE_INTENTS, normalize_placeholders, split_clauses
 
 logger = logging.getLogger("ml_inference")
 
@@ -42,10 +44,18 @@ class PredictRequest(BaseModel):
     expected_model_version: Optional[str] = None
     temperature: Optional[float] = None
     calibrated: Optional[bool] = False
+    # Multi-request detection (docs/design/multi-request-detection.md): set by the routing policy, absent = off.
+    clause_min_words: Optional[int] = Field(default=None, ge=1, le=20)
+    clause_max: Optional[int] = Field(default=None, ge=2, le=4)
+    clause_requests_only: Optional[bool] = False
 
 class PredictionItem(BaseModel):
     intent: str
     probability: float
+
+class ClauseItem(BaseModel):
+    intent: str
+    confidence: float
 
 class PredictResponse(BaseModel):
     request_id: Optional[str] = None
@@ -57,6 +67,11 @@ class PredictResponse(BaseModel):
     model_version: str
     model_checksum: Optional[str] = None
     tokenizer_checksum: Optional[str] = None
+    # Per-clause predictions in message order; labels and scores only, never clause text.
+    clauses: Optional[List[ClauseItem]] = None
+    # Probability that the message is a draftable request (docs/design/intent-model-v1.2.md).
+    scope_probability: Optional[float] = None
+    scope_kind: Optional[str] = None
 
 class ModelContainer:
     def __init__(self):
@@ -154,6 +169,9 @@ class ModelContainer:
         top_k_count: int = 3,
         temperature: Optional[float] = None,
         calibrated: bool = False,
+        clause_min_words: Optional[int] = None,
+        clause_max: Optional[int] = None,
+        clause_requests_only: bool = False,
     ) -> Dict[str, Any]:
         if not self.is_ready():
             raise RuntimeError("Model is not loaded, verified, or ready")
@@ -205,8 +223,13 @@ class ModelContainer:
                 "tokenizer_checksum": self.tokenizer_checksum,
             }
 
+        clauses: List[str] = []
+        if clause_min_words is not None and clause_max is not None:
+            clauses = split_clauses(text, min_words=clause_min_words, max_clauses=clause_max,
+                                    request_clauses_only=clause_requests_only)
+        # The whole message and its clauses go through the model in one batch; row 0 is the whole message.
         inputs = self.tokenizer(
-            text,
+            [normalize_placeholders(text)] + clauses,
             max_length=64,
             padding="max_length",
             truncation=True,
@@ -219,14 +242,15 @@ class ModelContainer:
 
         with torch.inference_mode():
             outputs = self.model(**inputs)
-            logits = outputs.logits[0]
-            if use_calibrated:
-                scaled_logits = logits / temp
-                probs = torch.softmax(scaled_logits, dim=-1).cpu().tolist()
-                score_kind = "calibrated_probability"
-            else:
-                probs = torch.softmax(logits, dim=-1).cpu().tolist()
-                score_kind = "uncalibrated_softmax"
+            batch_logits = outputs.logits / temp if use_calibrated else outputs.logits
+            batch_probs = torch.softmax(batch_logits, dim=-1).cpu()
+            probs = batch_probs[0].tolist()
+            score_kind = "calibrated_probability" if use_calibrated else "uncalibrated_softmax"
+        clause_items = None
+        if clauses:
+            top = batch_probs[1:].max(dim=-1)
+            clause_items = [ClauseItem(intent=self.id2label[int(i)], confidence=float(c))
+                            for c, i in zip(top.values.tolist(), top.indices.tolist())]
 
         sorted_indices = sorted(range(len(probs)), key=lambda i: probs[i], reverse=True)
         top1_idx = sorted_indices[0]
@@ -240,6 +264,7 @@ class ModelContainer:
             PredictionItem(intent=self.id2label[idx], probability=probs[idx])
             for idx in sorted_indices[:top_k_count]
         ]
+        scope_probability = float(sum(p for i, p in enumerate(probs) if self.id2label[i] in DRAFTABLE_INTENTS))
 
         return {
             "intent": top1_intent,
@@ -250,6 +275,9 @@ class ModelContainer:
             "model_version": self.verified_model_version,
             "model_checksum": self.model_checksum,
             "tokenizer_checksum": self.tokenizer_checksum,
+            "clauses": clause_items,
+            "scope_probability": scope_probability,
+            "scope_kind": "summed_draftable_probability",
         }
 
 container = ModelContainer()
@@ -293,7 +321,10 @@ def predict_endpoint(req: PredictRequest):
         res = container.predict(
             req.text,
             temperature=req.temperature,
-            calibrated=bool(req.calibrated)
+            calibrated=bool(req.calibrated),
+            clause_min_words=req.clause_min_words,
+            clause_max=req.clause_max,
+            clause_requests_only=bool(req.clause_requests_only),
         )
         res["request_id"] = req.request_id
         return PredictResponse(**res)
