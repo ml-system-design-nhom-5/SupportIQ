@@ -41,12 +41,19 @@ from pipeline.preparation.utils import STANDARD_INTENTS
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = REPO_ROOT / "data/intent"
 TRAIN_SUPPLEMENT = DATA_DIR / "train_supplement/v1/rows.synthetic-dev-only.psv"
+# v2 = v1 plus rows for unsupported intents confused with draftable ones (docs/design/intent-model-v1.2.md).
+TRAIN_SUPPLEMENT_V2 = DATA_DIR / "train_supplement/v2/rows.synthetic-dev-only.psv"
+# v3 = v2 plus rows for patterns chosen from dev errors in round 5 (docs/design/intent-model-v1.2.md).
+TRAIN_SUPPLEMENT_V3 = DATA_DIR / "train_supplement/v3/rows.synthetic-dev-only.psv"
 DEV_SET = DATA_DIR / "dev/v1/cases.synthetic-dev-only.psv"
 OOS_TRAIN = DATA_DIR / "oos_train/v1/rows.synthetic-dev-only.psv"
 OOS_DEV = DATA_DIR / "dev/v1/oos.synthetic-dev-only.psv"
 MULTI_DEV = DATA_DIR / "dev_multi/v1/cases.synthetic-dev-only.psv"
 MULTI_KINDS = {"multi", "single"}
 ESCALATION_DEV = DATA_DIR / "dev_escalation/v1/cases.synthetic-dev-only.psv"
+# Written by an independent author (docs/design/intent-model-v1.2.md); development data, never training.
+INDEPENDENT_DEV = DATA_DIR / "dev_independent/v1/cases.synthetic-dev-only.jsonl"
+INDEPENDENT_KINDS = {"labelled", "oos", "multi"}
 MANIFEST = DATA_DIR / "manifest.json"
 OOS_CATEGORIES = {"general", "other_domain", "ecommerce_not_in_taxonomy", "vague"}
 BENCHMARK_DIR = REPO_ROOT / "data/benchmarks"
@@ -83,7 +90,7 @@ def load_psv(path: str | Path, id_prefix: str, *, key: str = "intent", allowed: 
 
 
 def load_train_supplement(path: str | Path = TRAIN_SUPPLEMENT) -> pd.DataFrame:
-    return load_psv(path, "supp-v1")
+    return load_psv(path, f"supp-{Path(path).parent.name}")
 
 
 def load_dev_set(path: str | Path = DEV_SET) -> pd.DataFrame:
@@ -109,6 +116,29 @@ def load_multi_dev(path: str | Path = MULTI_DEV) -> pd.DataFrame:
 
 def load_escalation_dev(path: str | Path = ESCALATION_DEV) -> pd.DataFrame:
     return load_psv(path, "esc-dev-v1")
+
+
+def load_independent_dev(path: str | Path = INDEPENDENT_DEV) -> list[dict]:
+    """Rows ``{id, kind, true_intent, category, text}``; placeholders normalized as the classifier sees them."""
+    from apps.ml_inference.preprocessing import normalize_placeholders
+
+    rows, seen = [], set()
+    for lineno, line in enumerate(Path(path).read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        kind, label, text = row.get("kind"), row.get("true_intent"), row.get("text", "")
+        if kind not in INDEPENDENT_KINDS:
+            raise ValueError(f"{path}:{lineno}: unknown kind {kind!r}")
+        if kind == "labelled" and label not in STANDARD_INTENTS:
+            raise ValueError(f"{path}:{lineno}: unknown intent {label!r}")
+        if _RAW_IDENTIFIER.search(text):
+            raise ValueError(f"{path}:{lineno}: raw identifier; use a placeholder (DATA-59)")
+        if text.lower() in seen:
+            raise ValueError(f"{path}:{lineno}: duplicate text")
+        seen.add(text.lower())
+        rows.append({**row, "text": normalize_placeholders(text)})
+    return rows
 
 
 _NUMBER_RE = re.compile(r"\b(?:ord-?|#|no\.\s*)?\d[\d,.]*\b", re.I)
@@ -151,9 +181,11 @@ def benchmark_texts(root: Path = BENCHMARK_DIR) -> list[tuple[str, str]]:
 
 
 def leakage_report(threshold: float = NEAR_DUPLICATE_THRESHOLD) -> dict[str, list[tuple[str, str, float]]]:
-    train = load_train_supplement()["instruction"].tolist() + load_oos_train()["instruction"].tolist()
+    train = load_train_supplement(TRAIN_SUPPLEMENT_V3)["instruction"].tolist() + load_oos_train()["instruction"].tolist()
     dev = (load_dev_set()["instruction"].tolist() + load_oos_dev()["instruction"].tolist()
            + load_multi_dev()["instruction"].tolist() + load_escalation_dev()["instruction"].tolist())
+    if INDEPENDENT_DEV.exists():
+        dev += [r["text"] for r in load_independent_dev()]
     bench = benchmark_texts()
     return {
         "train_vs_benchmark": find_near_duplicates(train, bench, threshold),
@@ -170,12 +202,16 @@ def build_manifest() -> dict:
     """Manifest per DATA-09: source, version, checksum, row count, producing process, creation date."""
     files = {
         "train_supplement": (TRAIN_SUPPLEMENT, load_train_supplement),
+        "train_supplement_v2": (TRAIN_SUPPLEMENT_V2, lambda: load_train_supplement(TRAIN_SUPPLEMENT_V2)),
+        "train_supplement_v3": (TRAIN_SUPPLEMENT_V3, lambda: load_train_supplement(TRAIN_SUPPLEMENT_V3)),
         "dev_cases": (DEV_SET, load_dev_set),
         "oos_train": (OOS_TRAIN, load_oos_train),
         "oos_dev": (OOS_DEV, load_oos_dev),
         "multi_dev": (MULTI_DEV, load_multi_dev),
         "escalation_dev": (ESCALATION_DEV, load_escalation_dev),
     }
+    if INDEPENDENT_DEV.exists():
+        files["independent_dev"] = (INDEPENDENT_DEV, load_independent_dev)
     return {
         "version": "v1",
         "classification": "synthetic-dev-only",

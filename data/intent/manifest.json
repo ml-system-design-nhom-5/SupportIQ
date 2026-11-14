@@ -10,6 +10,16 @@
       "sha256": "b063626efbddd24c4dd40213a8b5d3ff3c6e01722f84ad4fe0790998bdaf5154",
       "rows": 500
     },
+    "train_supplement_v2": {
+      "path": "data/intent/train_supplement/v2/rows.synthetic-dev-only.psv",
+      "sha256": "6db2d096e85c015fb1264a6fb3066bd59506e7fb6b1ab74dbcc42cd4701fdf76",
+      "rows": 668
+    },
+    "train_supplement_v3": {
+      "path": "data/intent/train_supplement/v3/rows.synthetic-dev-only.psv",
+      "sha256": "353ad5701341d9853c0ef0d3eb8a4e4bde577af9b8dc10a078b655ef8e721b0d",
+      "rows": 716
+    },
     "dev_cases": {
       "path": "data/intent/dev/v1/cases.synthetic-dev-only.psv",
       "sha256": "39e9fead5b08a0df61dd4f837a8a962f4f32ef50b0a8ff4f617ac2e3ef7437a9",
@@ -34,6 +44,11 @@
       "path": "data/intent/dev_escalation/v1/cases.synthetic-dev-only.psv",
       "sha256": "21b7a5e6ef9eb31ea84e198c6af8747887f49949b40350c14726c6fd025b6917",
       "rows": 52
+    },
+    "independent_dev": {
+      "path": "data/intent/dev_independent/v1/cases.synthetic-dev-only.jsonl",
+      "sha256": "c1d3bf01702c73ad791b60bb9471a2e4bf917b43614c9334978f560ab654f4dc",
+      "rows": 242
     }
   }
 }

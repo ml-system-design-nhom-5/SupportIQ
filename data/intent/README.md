@@ -10,6 +10,9 @@ never policy, never reported as test results. Checksums and row counts are in [`
 | `dev/v1/cases.synthetic-dev-only.psv` | **Validation**: temperature calibration and τ/δ tuning ([DATA-34](../../docs/rules/data-and-ml.md#models-and-artifacts), DATA-58) | 181 |
 | `dev/v1/oos.synthetic-dev-only.psv` | **Validation**: out-of-domain low-confidence rate | 39 |
 | `dev_multi/v1/cases.synthetic-dev-only.psv` | **Validation**: tuning of the multi-request routing gate ([design](../../docs/design/multi-request-detection.md)); 40 `multi` messages and 40 `single` requests that contain a conjunction or two sentences | 80 |
+| `train_supplement/v2/rows.synthetic-dev-only.psv` | **Training** for v1.2.0 rounds 1–4: v1 plus 168 rows for unsupported intents confused with draftable ones ([design](../../docs/design/intent-model-v1.2.md)) | 668 |
+| `train_supplement/v3/rows.synthetic-dev-only.psv` | **Training** for v1.2.0 round 5: v2 plus 48 rows for patterns found in dev errors | 716 |
+| `dev_independent/v1/cases.synthetic-dev-only.jsonl` | **Validation** for v1.2.0, written by an independent agent session (see its `AUTHORING.md`); 55 rows near benchmarks or training rows removed | 242 |
 
 Format: pipe-separated, header `intent|text` (`category|text` for the out-of-domain files, categories `general`,
 `other_domain`, `ecommerce_not_in_taxonomy`, `vague`; `kind|text` for `dev_multi`, kinds `multi` and `single`).
