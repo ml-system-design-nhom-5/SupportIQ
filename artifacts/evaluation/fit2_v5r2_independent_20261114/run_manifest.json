@@ -1,0 +1,39 @@
+{
+  "branch": "minh",
+  "git_head": "4f0c614fdd6df4c5af29e4ad5e8dd5b914f95f59",
+  "reviewed_runtime_sha": "183cdf6935ad392e2e01e6af331d56a326dfabb9",
+  "candidate_training_git_commit": "21cb8fe789f6f3a408ee98a1b0110fc98234fea3",
+  "runtime_conditions": "0 live LLM calls; _MockNoCallLLM for Engine._analyse/routing only; _OfflineValidSpyLLM for PipelineRunner draft eligibility/snapshot only (not real LLM generation). existingfresh34 is treated strictly as historical regression, not unseen holdout.",
+  "commands": [
+    ".venv/Scripts/python.exe -B artifacts/evaluation/fit2_v5r2_independent_20261114/evaluate_v5r2.py"
+  ],
+  "sha256": {
+    "artifacts/models/candidates/fit2-taxonomy-audit-v5-r2/model.safetensors": "0b2d26c2adc22928a52bdbafe580fa1673d8ae1d112c42f3def643e137eaa33d",
+    "artifacts/models/candidates/fit2-taxonomy-audit-v5-r2/calibration_manifest.json": "ca3d711c78f9c1e960ebf2d700b4445c4538e0bd4b52cc2dd6fb502dc8e472c1",
+    "artifacts/models/candidates/fit2-taxonomy-audit-v5-r2/candidate_provenance_manifest.json": "9d85c0d50d44788949749ac62ba6bc7aa16f610ab4cf3476dcb5b193c34b0eca",
+    "artifacts/models/candidates/fit2-boundary-contrast-v4p1/model.safetensors": "e1039f9207a6aef5bfd2fcb5b8f14eb84a86d735da2a7386ed9721fb89ccb76f",
+    "artifacts/models/candidates/fit2-boundary-contrast-v4p1/calibration_manifest.json": "73e0d60b5d80a7f9b7e935f742bfd13f913c831e625b578942f64b8e92afe151",
+    "artifacts/models/candidates/reconstructed-fit2-supcon-20261113/model.safetensors": "f695b1fe514aba81aafc968823047d496b03474a0b47199c65eaac6bd93c6dfa",
+    "artifacts/models/trained/distilbert-supportiq/model.safetensors": "dc7af8cffb19fe7711ed5a5d0137ffff3d7d1a1f43bad5a35edff8c8de4c1302",
+    "data/knowledge/approved_kb.v2.json": "f8dcfbbdbb9cb2cd7a09d2ec12e0149083fdd4fa04931df6261fc4d1e6425fec",
+    "apps/ai_service/kb-release.json": "cf450a72758e3d68ac7453802b5bc6c042ef2eddb9a6c4fa76483d4009c42804",
+    "apps/core_backend/config/policies/intent_policy.v2.json": "8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+    "data/benchmarks/final_acceptance/cases.jsonl": "fcb1007bf026e7406f3270ccf54770f262ed22a708c2fcf3aae3600195641b9b",
+    "data/benchmarks/system/v2/acceptance/cases.jsonl": "c54c7efcd2d363317a87344cd12c76791db35ec17ca83a2e02b8fcb43f23150b",
+    "data/benchmarks/autoeval/v1/ml_noise.jsonl": "e62cfc978725c24f99cf64d20875e61c4ca4282a9681e5f1d546beea1169a694",
+    "data/benchmarks/autoeval/v1/ml_oos.jsonl": "93422de07094b39384fa6bce16aaaa5ecc874e689fface0ef7c5816f0fa5c1cb",
+    "artifacts/evaluation/fit2_independent_gate_20261113/cases.jsonl": "19a56d87299fd28c177f38cce87691598b47c1ed35143ce29194d5215daecc2f",
+    "artifacts/evaluation/sealed_holdout_20261113/sealed_holdout_cases.jsonl": "c874a2b829fa1dad645ca4d0684a9b9d558895e002564a56edae0865c81ab78d",
+    "artifacts/models/candidates/run-records-fit2-taxonomy-audit-v5-r2/inputs/boundary_pos_evaluation.jsonl": "397b0cb6a48714b0be3408b396312c418d87c8fe058770561b52987b16d6eec0",
+    "artifacts/models/candidates/run-records-fit2-taxonomy-audit-v5-r2/inputs/boundary_neg_evaluation.jsonl": "7a905de90b191e076002306cba7afe03fe6a222a377fc82f164406b8c8f2e3ff",
+    "artifacts/models/candidates/run-records-fit2-taxonomy-audit-v5-r2/inputs/bitext_test_6690.jsonl": "c2279c30a6e7a9fde7488ea78d80a05fa560eb4ea9c02c746ffd87f6767c50b8",
+    "artifacts/evaluation/fit2_v4p1_independent_20261114/fresh_holdout_34.jsonl": "c1482fb4f8e60c58e0afc8b626fecce693dda9314559e22f9d92a195c9405f4c",
+    "artifacts/evaluation/fit2_v5r2_independent_20261114/evaluate_v5r2.py": "c87c1945fc3de7d0161a869854078545023ebf11c882c35451bcd46112a8cbed",
+    "artifacts/evaluation/fit2_v5r2_independent_20261114/suites_comparison.json": "eb221634d5f228a1a8d564a7b5b2d87177c1dc7b6d4c8283511804a411bbcb68",
+    "artifacts/evaluation/fit2_v5r2_independent_20261114/predictions_serving.jsonl": "e3d41cb79f76c9a29962be6301bc3fe56f8fa5edb912857cb9a4e56953726d45",
+    "artifacts/evaluation/fit2_v5r2_independent_20261114/predictions_orig_fit2.jsonl": "e3aa12a6a81431dcfb91fe4e93dd3d46ea9af3c010b6543e512c2ff28862b95d",
+    "artifacts/evaluation/fit2_v5r2_independent_20261114/predictions_v4p1.jsonl": "463bdac15900438016cad43fb7886ec00be7ce12280985a8bf367ee395663be3",
+    "artifacts/evaluation/fit2_v5r2_independent_20261114/predictions_v5_r2.jsonl": "ffc18f0920a853b91182052cbacfbee4d7511b776aaa9820279a1a5aec632f11",
+    "artifacts/evaluation/fit2_v5r2_independent_20261114/gate_report_v5r2.json": "b595fa50f1223b8e9fa268fec4eea0da25b90edd34f0603f3d35eca0c18dae2e"
+  }
+}
