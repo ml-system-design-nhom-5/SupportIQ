@@ -1,0 +1,146 @@
+{
+  "model_dir": "artifacts/models/trained/distilbert-supportiq-v1.2.0-r3",
+  "policy": "artifacts/training/intent-v1.2.0/round-3/intent_policy.json",
+  "policy_version": "v4.0.0-r3",
+  "backend": "torch",
+  "data": "data/intent dev files; data/benchmarks/ not read",
+  "all": {
+    "multi_flag_rate": 0.9077,
+    "multi_flagged_by_gate_rate": 0.5692,
+    "single_false_flag_rate": 0.0,
+    "single_draft_rate": 0.725,
+    "dev_clarify_rate": 0.1488,
+    "dev_correct_draft_rate": 0.7581,
+    "dev_wrong_intent_drafts": 10,
+    "dev_must_escalate_drafted": 1,
+    "oos_flag_rate": 0.9821,
+    "dev_macro_f1": 0.8183,
+    "dev_confident_error_rate": 0.0254,
+    "n": {
+      "multi": 65,
+      "single": 40,
+      "dev": 433,
+      "oos": 56,
+      "draftable": 215
+    },
+    "noise_f1_drop": 0.1115
+  },
+  "independent": {
+    "multi_flag_rate": 1.0,
+    "multi_flagged_by_gate_rate": 0.64,
+    "single_false_flag_rate": null,
+    "single_draft_rate": null,
+    "dev_clarify_rate": 0.1667,
+    "dev_correct_draft_rate": 0.7292,
+    "dev_wrong_intent_drafts": 6,
+    "dev_must_escalate_drafted": 1,
+    "oos_flag_rate": 0.9412,
+    "dev_macro_f1": 0.7875,
+    "dev_confident_error_rate": 0.035,
+    "n": {
+      "multi": 25,
+      "single": 0,
+      "dev": 200,
+      "oos": 17,
+      "draftable": 96
+    },
+    "noise_f1_drop": 0.1115
+  },
+  "own": {
+    "multi_flag_rate": 0.85,
+    "multi_flagged_by_gate_rate": 0.525,
+    "single_false_flag_rate": 0.0,
+    "single_draft_rate": 0.725,
+    "dev_clarify_rate": 0.1345,
+    "dev_correct_draft_rate": 0.7815,
+    "dev_wrong_intent_drafts": 4,
+    "dev_must_escalate_drafted": 0,
+    "oos_flag_rate": 1.0,
+    "dev_macro_f1": 0.8904,
+    "dev_confident_error_rate": 0.0172,
+    "n": {
+      "multi": 40,
+      "single": 40,
+      "dev": 233,
+      "oos": 39,
+      "draftable": 119
+    }
+  },
+  "noise_independent": {
+    "macro_f1": {
+      "clean": 0.8792,
+      "casual": 0.8466,
+      "typo": 0.7677
+    },
+    "drop": {
+      "casual": 0.0326,
+      "typo": 0.1115
+    },
+    "max_drop": 0.1115
+  },
+  "targets_all": {
+    "dev_must_escalate_drafted": {
+      "value": 1,
+      "target": "== 0",
+      "met": false
+    },
+    "dev_macro_f1": {
+      "value": 0.8183,
+      "target": ">= 0.78",
+      "met": true
+    },
+    "oos_flag_rate": {
+      "value": 0.9821,
+      "target": ">= 0.92",
+      "met": true
+    },
+    "dev_clarify_rate": {
+      "value": 0.1488,
+      "target": "<= 0.15",
+      "met": true
+    },
+    "dev_confident_error_rate": {
+      "value": 0.0254,
+      "target": "<= 0.02",
+      "met": false
+    },
+    "noise_f1_drop": {
+      "value": 0.1115,
+      "target": "<= 0.08",
+      "met": false
+    }
+  },
+  "targets_independent": {
+    "dev_must_escalate_drafted": {
+      "value": 1,
+      "target": "== 0",
+      "met": false
+    },
+    "dev_macro_f1": {
+      "value": 0.7875,
+      "target": ">= 0.78",
+      "met": true
+    },
+    "oos_flag_rate": {
+      "value": 0.9412,
+      "target": ">= 0.92",
+      "met": true
+    },
+    "dev_clarify_rate": {
+      "value": 0.1667,
+      "target": "<= 0.15",
+      "met": false
+    },
+    "dev_confident_error_rate": {
+      "value": 0.035,
+      "target": "<= 0.02",
+      "met": false
+    },
+    "noise_f1_drop": {
+      "value": 0.1115,
+      "target": "<= 0.08",
+      "met": false
+    }
+  },
+  "milestone_met": false
+}

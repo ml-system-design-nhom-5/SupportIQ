@@ -1,0 +1,101 @@
+{
+  "config_file": "pipeline/configs/training_v1.2_r1.json",
+  "config": {
+    "description": "Intent classifier v1.2.0 round 1 (targeted rows): docs/design/intent-model-v1.2.md",
+    "pretrained_model_dir": "artifacts/models/pretrained/distilbert-base-uncased",
+    "cleaned_csv": "data/datasets/processed/06-11-2026-00/cleaned.csv",
+    "splits_csv": "data/datasets/splits/06-11-2026-00/split_assignments.csv",
+    "output_dir": "artifacts/models/trained/distilbert-supportiq-v1.2.0-r1",
+    "run_dir": "artifacts/training/intent-v1.2.0/round-1",
+    "protocol": "single",
+    "epochs": 2,
+    "batch_size": 32,
+    "lr": 3e-05,
+    "max_length": 64,
+    "variants_per_row": 1,
+    "augment_fraction": 1.0,
+    "label_smoothing": 0.0,
+    "extra_train": "data/intent/train_supplement/v2/rows.synthetic-dev-only.psv",
+    "extra_variants": 4,
+    "oos_train": "data/intent/oos_train/v1/rows.synthetic-dev-only.psv",
+    "oos_weight": 0.5,
+    "oos_variants": 2,
+    "dev_set": "data/intent/dev/v1/cases.synthetic-dev-only.psv",
+    "oos_dev": "data/intent/dev/v1/oos.synthetic-dev-only.psv",
+    "calibration_source": "dev",
+    "min_temperature": 1.0,
+    "seed": 42
+  },
+  "code_commit": "a4be3c74741072e69c1de83007600974a4c01e19",
+  "seed": 42,
+  "data_sha256": {
+    "data/datasets/processed/06-11-2026-00/cleaned.csv": "8BC10CFA056371BDECB3394BFD4C75EEE7E10022ACE5071833ECD140B2D75846",
+    "data/datasets/splits/06-11-2026-00/split_assignments.csv": "1D366E898F6BA68BE46C5CA0F9059E9862FAD1D7BAFE350D9CDD310DD3E0A04C",
+    "data/intent/train_supplement/v2/rows.synthetic-dev-only.psv": "6DB2D096E85C015FB1264A6FB3066BD59506E7FB6B1AB74DBCC42CD4701FDF76",
+    "data/intent/dev/v1/cases.synthetic-dev-only.psv": "AF55F8E383449222793582AA94A720ED38571C0CB7F8607814CD6B3D3F84195B",
+    "data/intent/oos_train/v1/rows.synthetic-dev-only.psv": "F04B164173708005C9729643B8A638D5498C79589B5FED981C509EC02774CF80",
+    "data/intent/dev/v1/oos.synthetic-dev-only.psv": "1297D0A9B5DD68D53F7D93EAF1337781DB06ED1B0DB1AC21E8F02135FAEFA900"
+  },
+  "environment": {
+    "python": "3.12.10",
+    "torch": "2.9.1+rocm7.2.1",
+    "transformers": "5.22.1",
+    "device": "AMD Radeon RX 9060 XT",
+    "nondeterminism": "GPU kernels are not bit-reproducible; compare metrics, not weights (DATA-31)"
+  },
+  "artifact": {
+    "dir": "artifacts/models/trained/distilbert-supportiq-v1.2.0-r1",
+    "weights_sha256": "D9751DAC0A4A5099C56FFA90227C898FC87117FBADF16E2BA705175C2C186B62"
+  },
+  "metrics": {
+    "validation": {
+      "folds_evaluated": [
+        0
+      ],
+      "macro_f1_mean": 0.9984539510240955,
+      "macro_f1_std": 0.0,
+      "noisy_macro_f1_mean": 0.9910993697750684,
+      "noisy_macro_f1_std": 0.0,
+      "accuracy_mean": 0.9984177215189873,
+      "ece_before": 0.0053084913271700404,
+      "ece_after": 0.0053084913271700404,
+      "nll_before": 0.021655031648222703,
+      "nll_after": 0.021655031648222703
+    },
+    "calibration": {
+      "method": "temperature scaling on the product dev set (validation), folded into classifier",
+      "source": "dev",
+      "temperature": 1.0,
+      "fitted_temperature": 0.7345808705847637,
+      "oof_fitted_temperature": 0.7750650274479906,
+      "min_temperature": 1.0
+    },
+    "dev_set": {
+      "file": "data/intent/dev/v1/cases.synthetic-dev-only.psv",
+      "sha256": "AF55F8E383449222793582AA94A720ED38571C0CB7F8607814CD6B3D3F84195B",
+      "macro_f1": 0.5534021007335046,
+      "accuracy": 0.9226519337016574,
+      "macro_f1_present_labels": 0.9091605940621863,
+      "supported_accuracy": 0.9401709401709402,
+      "scope_accuracy": 0.9723756906077348,
+      "ece_at_t": 0.06878162184408051,
+      "ece_at_1": 0.06878162184408051,
+      "dev_fitted_temperature": 0.7345808705847637,
+      "confident_errors_at_0_8": 4,
+      "n": 181,
+      "out_of_domain": {
+        "n": 39,
+        "low_conf_rate": 0.9743589743589743,
+        "low_conf_rate_by_category": {
+          "ecommerce_not_in_taxonomy": 0.9,
+          "general": 1.0,
+          "other_domain": 1.0,
+          "vague": 1.0
+        },
+        "median_confidence": 0.04644119095477719,
+        "in_domain_low_conf_rate": 0.14917127071823205,
+        "auroc_one_minus_conf": 0.9712423856070265
+      }
+    }
+  }
+}

@@ -1,0 +1,182 @@
+intent|text
+track_order|Hey, can you see where [ORDER_ID] is at the moment?
+track_order|Did my order from Sunday leave the warehouse?
+track_order|What's the latest on my air fryer purchase?
+track_order|I'd like to know if my order is being prepared or already sent out.
+track_order|Could you find out when [ORDER_ID] will get to me?
+track_order|Is my order with the delivery company yet?
+track_order|Need an update on my order, it's been a few days.
+track_order|Has anything happened with my order since it was confirmed?
+track_order|Where's my stuff? Order [ORDER_ID].
+cancel_order|I'd like to cancel [ORDER_ID] before it goes out.
+cancel_order|Can my order still be cancelled? It says processing.
+cancel_order|please cancel, I ordered by mistake
+cancel_order|How do I stop an order from being shipped?
+cancel_order|What's the deadline for cancelling an order?
+cancel_order|Cancel the laptop stand I ordered an hour ago.
+cancel_order|Is it possible to cancel after the seller confirmed?
+cancel_order|Get rid of my order, I don't need it.
+cancel_order|Can you void my order before payment is taken?
+delivery_time|Typically how many days does delivery take?
+delivery_time|How long would shipping take to Hai Phong?
+delivery_time|Is there a 2-hour option in Ho Chi Minh City?
+delivery_time|Do couriers deliver on Sundays?
+delivery_time|How long do express orders take compared to standard?
+delivery_time|When would something ordered on Friday night usually arrive?
+delivery_time|What's your normal shipping time?
+delivery_time|How long does delivery to the mountains take?
+delivery_time|Can I get it tomorrow if I order now?
+delivery_time|What delivery speeds are available?
+delivery_issue|The app says delivered but there's nothing here.
+delivery_issue|My parcel hasn't moved from the hub for days.
+delivery_issue|It's way past the delivery estimate and still no package.
+delivery_issue|The courier dropped my order at the wrong house.
+delivery_issue|I believe my shipment was lost.
+delivery_issue|Delivery failed but no one came to my door.
+delivery_issue|Order [ORDER_ID] is over a week late.
+delivery_issue|Status says returned to sender, I never refused it.
+delivery_issue|My order disappeared somewhere in transit.
+delivery_issue|The driver didn't deliver and marked me as absent.
+shipping_costs|What does delivery cost for small orders?
+shipping_costs|Do I get free shipping above some amount?
+shipping_costs|Why is there a 25,000 vnd fee on my order?
+shipping_costs|How much extra is express shipping?
+shipping_costs|Is shipping cheaper for TikiPRO members?
+shipping_costs|How do you work out the delivery fee?
+shipping_costs|What's the charge to ship a heavy item?
+shipping_costs|Is there free delivery in Hanoi?
+shipping_costs|Shipping price to another province?
+shipping_costs|Do I pay shipping twice if I buy from two sellers?
+return_policy|How long is the return period?
+return_policy|Can opened products be returned?
+return_policy|What items are non-returnable?
+return_policy|Do returns need the original box?
+return_policy|Can I return something if I just don't like it?
+return_policy|Is the return window different for marketplace sellers?
+return_policy|Are swimsuits returnable?
+return_policy|Do I have to pay for the return shipping?
+return_policy|What are the conditions for a return to be accepted?
+return_policy|When does the 30-day return clock start?
+return_product|Those earbuds from last week, I'd like to send them back.
+return_product|What do I do to return what I got in [ORDER_ID]?
+return_product|Please help me return the desk lamp.
+return_product|I'd like to return one of the items in my order.
+return_product|These shoes are too small, I'm returning them.
+return_product|How do I open a return request?
+return_product|I need to return my purchase, what should I do?
+return_product|Can I return the blender from order [ORDER_ID]?
+return_product|I want to return this product to the seller.
+return_product|Start a return for my office chair please.
+refund_policy|How long do refunds usually take?
+refund_policy|How many days for a refund to come back to my Visa card?
+refund_policy|Do refunds go to the same payment method I used?
+refund_policy|When is a refund issued after a return is received?
+refund_policy|Are refunds paid as credit or money?
+refund_policy|How long does a refund to an e-wallet take?
+refund_policy|Can I get my shipping fee refunded?
+refund_policy|What makes an order eligible for a refund?
+refund_policy|How long until money comes back after an order is cancelled?
+refund_policy|Is there any fee taken from refunds?
+request_refund|Please refund the item I returned.
+request_refund|Can I get a refund on the backpack?
+request_refund|I'd like to request a refund.
+request_refund|Refund me for the cancelled order please.
+request_refund|How can I claim a refund?
+request_refund|I want a full refund to my card.
+request_refund|Please reimburse me for my purchase.
+request_refund|Can you refund my payment for order [ORDER_ID]?
+request_refund|I need to get a refund for the air fryer.
+refund_status|Has my refund come through yet?
+refund_status|Where's my refund? It's been two weeks.
+refund_status|Can you check on the refund for [ORDER_ID]?
+refund_status|My refund was approved but I still don't see the money.
+refund_status|What's happening with my refund?
+refund_status|Is my refund processed?
+refund_status|I returned my order and haven't been refunded.
+refund_status|Refund still pending, why?
+refund_status|Did the refund go back to my MoMo account?
+refund_status|Status of the refund for the shoes I returned?
+payment_issue|My card was declined at checkout.
+payment_issue|I got charged twice for one order.
+payment_issue|Money was taken but my order says unpaid.
+payment_issue|Payment failed but the bank deducted the amount.
+payment_issue|MoMo shows success but your site says payment error.
+payment_issue|I can't pay, the transaction keeps failing.
+payment_issue|Double charge on my account for [ORDER_ID].
+payment_issue|I paid but didn't get an order confirmation.
+payment_issue|My bank transfer isn't showing on the order.
+payment_issue|The payment got stuck and now I see two pending charges.
+human_agent|I want to speak to a person.
+human_agent|Can you connect me with an agent?
+human_agent|Is there a human I can chat with?
+human_agent|Transfer me to a real staff member please.
+human_agent|I'd like to talk to support personally.
+human_agent|No bots please, I need a human.
+human_agent|Can a representative contact me?
+human_agent|Let me speak to someone from your team.
+human_agent|Put me in touch with an agent.
+human_agent|I need human help.
+track_delivery|How do I check a J&T tracking number?
+track_delivery|Where can I track a shipment with the courier's code?
+track_delivery|My courier gave me tracking code [TRACKING_ID], how do I use it?
+track_delivery|Can I track packages on the carrier website?
+damaged_delivery|The package arrived broken.
+damaged_delivery|My order came with a smashed screen.
+damaged_delivery|The box was crushed and the kettle is dented.
+damaged_delivery|Items were damaged during delivery.
+missing_item|One product is missing from my delivery.
+missing_item|I only received one of the two items I ordered.
+missing_item|The cable that should come with it is not in the box.
+missing_item|Part of order [ORDER_ID] wasn't in the parcel.
+wrong_item|I got the wrong product.
+wrong_item|The color I received isn't the one I ordered.
+wrong_item|You sent me someone else's order.
+wrong_item|I ordered a lamp and got a fan.
+change_order|I moved, can the order go to my new address instead?
+change_order|I want to add an item to the order I just placed.
+change_order|Change the size in my order please.
+change_order|Can I edit my order before it ships?
+order_history|Where can I find my previous orders?
+order_history|Show me my purchase history.
+order_history|I want to see orders from last year.
+order_history|How do I view my old orders?
+payment_methods|What ways can I pay?
+payment_methods|Do you accept ZaloPay?
+payment_methods|Is cash on delivery an option?
+payment_methods|Can I pay with a credit card?
+pay|What are the steps to pay for the items in my cart?
+pay|I want to make the payment now.
+pay|How can I complete the payment for [ORDER_ID]?
+pay|Show me how to pay in the app.
+return_product_in_store|Can I return my online purchase at one of your shops?
+return_product_in_store|Will a shop counter accept my return?
+return_product_in_store|Can I drop the return off at a store?
+return_product_in_store|Do branches accept returns for app orders?
+return_product_online|How do I return something online?
+return_product_online|Will someone collect the return from my place?
+return_product_online|I'd like to post my return back.
+return_product_online|Is there an online return form?
+exchange_product|Can I exchange for another size?
+exchange_product|I want to swap the item for a different color.
+exchange_product|How do exchanges work?
+exchange_product|Exchange my shoes please.
+customer_service|How can I contact support?
+customer_service|What's your customer service email?
+customer_service|What hours is support open?
+customer_service|Which number do I call for customer support?
+store_opening_hours|When does your shop open?
+store_opening_hours|Are stores open on Sundays?
+store_opening_hours|What are the branch opening hours?
+store_opening_hours|Do branches close during Tet?
+product_information|What's the backpack made of?
+product_information|How big is the office chair?
+product_information|Is the bottle BPA free?
+product_information|What's the warranty on this blender?
+availability|Is the air fryer in stock?
+availability|When will the lamp be back in stock?
+availability|Do you have size 40 in these shoes?
+availability|Is the black one available?
+technical_issue|The app crashes when I open it.
+technical_issue|I keep getting an error on your website.
+technical_issue|The site won't load.
+technical_issue|The app is frozen on the home screen.

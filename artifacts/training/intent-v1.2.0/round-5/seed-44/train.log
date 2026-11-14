@@ -1,0 +1,72 @@
+======================================================================
+SupportIQ DistilBERT robust training | protocol=single | device=cuda:0
+Development samples: 37911 | hold-out test samples isolated (never loaded): 6690
+Label smoothing 0.0 | min temperature 1.0 | epochs 2 | lr 3e-05
+Extra training rows: 716 (+4 noisy variants each) | dev set: 181 | out-of-domain train 94 (+2 variants, weight 0.5), dev 39
+======================================================================
+
+>>> Fold 0: train 72100 (incl. augmentation) | val 3792 clean + 3792 noisy
+  Fold 0 | 282 out-of-domain rows trained towards uniform (weight 0.5)
+Loading weights:   0%|          | 0/100 [00:00<?, ?it/s]Loading weights: 100%|##########| 100/100 [00:00<00:00, 50009.59it/s]
+[transformers] [1mDistilBertForSequenceClassification LOAD REPORT[0m from: artifacts\models\pretrained\distilbert-base-uncased
+Key                   | Status  | 
+----------------------+---------+-
+classifier.bias       | MISSING | 
+classifier.weight     | MISSING | 
+pre_classifier.bias   | MISSING | 
+pre_classifier.weight | MISSING | 
+
+Notes:
+- MISSING:	those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.
+C:\Users\vulin\Documents\GitHub\SupportIQ\.venv-rocm\Lib\site-packages\transformers\integrations\sdpa_attention.py:174: UserWarning: Mem Efficient attention on Current AMD GPU is still experimental. Enable it with TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1. (Triggered internally at C:\b\pytorch\aten\src\ATen\native\transformers\hip\sdp_utils.cpp:361.)
+  attn_output = torch.nn.functional.scaled_dot_product_attention(
+  Fold 0 | [##..................]  10.0% | run   5.0% (1/2 fits) | elapsed 0m29s | ETA 9m20s
+  Fold 0 | [####................]  20.0% | run  10.0% (1/2 fits) | elapsed 0m48s | ETA 7m17s
+  Fold 0 | [######..............]  30.0% | run  15.0% (1/2 fits) | elapsed 1m07s | ETA 6m24s
+  Fold 0 | [########............]  40.0% | run  20.0% (1/2 fits) | elapsed 1m26s | ETA 5m47s
+  Fold 0 | [##########..........]  50.0% | run  25.0% (1/2 fits) | elapsed 1m45s | ETA 5m17s
+  Fold 0 | Epoch 1/2 loss 1.1915 (99.3s)
+  Fold 0 | [############........]  60.0% | run  30.0% (1/2 fits) | elapsed 2m04s | ETA 4m51s
+  Fold 0 | [##############......]  70.0% | run  35.0% (1/2 fits) | elapsed 2m24s | ETA 4m27s
+  Fold 0 | [################....]  80.0% | run  40.0% (1/2 fits) | elapsed 2m43s | ETA 4m04s
+  Fold 0 | [##################..]  90.0% | run  45.0% (1/2 fits) | elapsed 3m02s | ETA 3m42s
+  Fold 0 | [####################] 100.0% | run  50.0% (1/2 fits) | elapsed 3m21s | ETA 3m21s
+  Fold 0 | Epoch 2/2 loss 0.3083 (95.7s)
+  Fold 0 macro-F1 clean 0.9979 | noisy 0.9900
+
+============================================================
+Validation macro-F1 clean 0.9979 ± 0.0000 | noisy 0.9900 ± 0.0000
+Temperature T=1.000 (fitted 0.762) | ECE 0.0074 -> 0.0074
+============================================================
+
+>>> Final fit: 34119 Bitext rows, 72100 rows incl. augmentation and extra data
+  Final | 282 out-of-domain rows trained towards uniform (weight 0.5)
+Loading weights:   0%|          | 0/100 [00:00<?, ?it/s]Loading weights: 100%|##########| 100/100 [00:00<00:00, 3030.15it/s]
+[transformers] [1mDistilBertForSequenceClassification LOAD REPORT[0m from: artifacts\models\pretrained\distilbert-base-uncased
+Key                   | Status  | 
+----------------------+---------+-
+classifier.bias       | MISSING | 
+classifier.weight     | MISSING | 
+pre_classifier.bias   | MISSING | 
+pre_classifier.weight | MISSING | 
+
+Notes:
+- MISSING:	those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.
+  Final | [##..................]  10.0% | run  55.0% (2/2 fits) | elapsed 4m00s | ETA 3m16s
+  Final | [####................]  20.0% | run  60.0% (2/2 fits) | elapsed 4m19s | ETA 2m53s
+  Final | [######..............]  30.0% | run  65.0% (2/2 fits) | elapsed 4m38s | ETA 2m30s
+  Final | [########............]  40.0% | run  70.0% (2/2 fits) | elapsed 4m57s | ETA 2m07s
+  Final | [##########..........]  50.0% | run  75.0% (2/2 fits) | elapsed 5m16s | ETA 1m45s
+  Final | Epoch 1/2 loss 1.1915 (95.5s)
+  Final | [############........]  60.0% | run  80.0% (2/2 fits) | elapsed 5m35s | ETA 1m23s
+  Final | [##############......]  70.0% | run  85.0% (2/2 fits) | elapsed 5m55s | ETA 1m02s
+  Final | [################....]  80.0% | run  90.0% (2/2 fits) | elapsed 6m14s | ETA 0m41s
+  Final | [##################..]  90.0% | run  95.0% (2/2 fits) | elapsed 6m33s | ETA 0m20s
+  Final | [####################] 100.0% | run 100.0% (2/2 fits) | elapsed 6m52s | ETA 0m00s
+  Final | Epoch 2/2 loss 0.3083 (95.8s)
+Temperature from dev set: T=1.000 (fitted 0.843)
+Dev set (181): macro-F1 0.8967 | supported acc 0.9316 | scope acc 0.9724 | ECE@T 0.0540 | T fitted on dev would be 0.843
+Dev out-of-domain (39): low-confidence rate 0.949 | median conf 0.042 | AUROC 0.967 | in-domain low-conf 0.144
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]Writing model shards: 100%|##########| 1/1 [00:00<00:00,  3.20it/s]Writing model shards: 100%|##########| 1/1 [00:00<00:00,  3.20it/s]
+Saved model, tokenizer and report to artifacts\models\trained\distilbert-supportiq-v1.2.0-r5-s44
+Run record: artifacts\training\intent-v1.2.0\round-5\seed-44\run.json

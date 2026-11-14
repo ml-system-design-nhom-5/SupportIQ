@@ -8,8 +8,10 @@ from typing import Optional, Dict, Any, List
 
 import torch
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
+
+from apps.ml_inference.preprocessing import DRAFTABLE_INTENTS, normalize_placeholders, split_clauses
 
 logger = logging.getLogger("ml_inference")
 
@@ -67,10 +69,18 @@ class PredictRequest(BaseModel):
     expected_model_version: Optional[str] = None
     temperature: Optional[float] = None
     calibrated: Optional[bool] = None
+    # Multi-request detection (docs/design/multi-request-detection.md): set by the routing policy, absent = off.
+    clause_min_words: Optional[int] = Field(default=None, ge=1, le=20)
+    clause_max: Optional[int] = Field(default=None, ge=2, le=4)
+    clause_requests_only: Optional[bool] = False
 
 class PredictionItem(BaseModel):
     intent: str
     probability: float
+
+class ClauseItem(BaseModel):
+    intent: str
+    confidence: float
 
 class PredictResponse(BaseModel):
     request_id: Optional[str] = None
@@ -94,6 +104,11 @@ class PredictResponse(BaseModel):
     selective_score: Optional[float] = None
     selective_threshold: Optional[float] = None
     rejected_by_experimental_adapter: Optional[bool] = None
+    # Per-clause predictions in message order; labels and scores only, never clause text.
+    clauses: Optional[List[ClauseItem]] = None
+    # Probability that the message is a draftable request (docs/design/intent-model-v1.2.md).
+    scope_probability: Optional[float] = None
+    scope_kind: Optional[str] = None
 
 class ModelContainer:
     def __init__(self):
@@ -591,6 +606,9 @@ class ModelContainer:
         top_k_count: int = 3,
         temperature: Optional[float] = None,
         calibrated: Optional[bool] = None,
+        clause_min_words: Optional[int] = None,
+        clause_max: Optional[int] = None,
+        clause_requests_only: bool = False,
     ) -> Dict[str, Any]:
         if not self.is_ready():
             raise RuntimeError("Model is not loaded, verified, or ready")
@@ -630,8 +648,13 @@ class ModelContainer:
                 "verified": False,
             }
 
+        clauses: List[str] = []
+        if clause_min_words is not None and clause_max is not None:
+            clauses = split_clauses(text, min_words=clause_min_words, max_clauses=clause_max,
+                                    request_clauses_only=clause_requests_only)
+        # The whole message and its clauses go through the model in one batch; row 0 is the whole message.
         inputs = self.tokenizer(
-            text,
+            [normalize_placeholders(text)] + clauses,
             max_length=64,
             padding="max_length",
             truncation=True,
@@ -683,6 +706,17 @@ class ModelContainer:
                 probs = raw_probs
                 score_kind = "uncalibrated_softmax"
 
+            # Rows 1..n are the clauses (multi-request detection); same calibration as the whole message.
+            clause_items = None
+            if clauses:
+                clause_logits = outputs.logits[1:]
+                if not torch.isfinite(clause_logits).all():
+                    raise ValueError("Model returned non-finite clause logits (NaN or Inf)")
+                clause_probs = torch.softmax(clause_logits / temp if use_calibrated else clause_logits, dim=-1).cpu()
+                top = clause_probs.max(dim=-1)
+                clause_items = [ClauseItem(intent=self.id2label[int(i)], confidence=float(c))
+                                for c, i in zip(top.values.tolist(), top.indices.tolist())]
+
             rejector_result: Optional[Dict[str, Any]] = None
             if rejector is not None:
                 rejector_temp = self.calibration_temperature if self.calibration_temperature is not None else temp
@@ -718,6 +752,7 @@ class ModelContainer:
             PredictionItem(intent=self.id2label[idx], probability=probs[idx])
             for idx in sorted_indices[:top_k_count]
         ]
+        scope_probability = float(sum(p for i, p in enumerate(probs) if self.id2label[i] in DRAFTABLE_INTENTS))
 
         result: Dict[str, Any] = {
             "intent": top1_intent,
@@ -736,6 +771,9 @@ class ModelContainer:
             "calibration_temperature": temp if use_calibrated else None,
             "calibration_schema_version": self.calibration_schema_version,
             "calibration_checksum": self.calibration_checksum,
+            "clauses": clause_items,
+            "scope_probability": scope_probability,
+            "scope_kind": "summed_draftable_probability",
         }
         if rejector_result is not None:
             result.update(rejector_result)
@@ -784,10 +822,18 @@ def predict_endpoint(req: PredictRequest):
         )
 
     try:
+        # Clause options are passed only when the caller asks for clauses, so containers without them keep working.
+        clause_kwargs = (
+            {"clause_min_words": req.clause_min_words, "clause_max": req.clause_max,
+             "clause_requests_only": bool(req.clause_requests_only)}
+            if req.clause_min_words is not None and req.clause_max is not None
+            else {}
+        )
         res = container.predict(
             req.text,
             temperature=req.temperature,
-            calibrated=req.calibrated
+            calibrated=req.calibrated,
+            **clause_kwargs,
         )
         res["request_id"] = req.request_id
         return PredictResponse(**res)

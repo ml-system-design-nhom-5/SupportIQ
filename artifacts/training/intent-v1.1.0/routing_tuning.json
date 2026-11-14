@@ -1,0 +1,385 @@
+{
+  "model_dir": "artifacts/models/trained/distilbert-supportiq-v1.1.0",
+  "backend": "torch",
+  "base_policy": "v2.0.0",
+  "data": "data/intent/manifest.json (dev_cases, oos_dev, multi_dev); data/benchmarks/ not read",
+  "grid": {
+    "min_clause_confidence": [
+      0.5,
+      0.6,
+      0.7,
+      0.8,
+      0.9
+    ],
+    "min_words": [
+      2,
+      3,
+      4
+    ],
+    "tau_shift": [
+      -0.1,
+      -0.05,
+      0.0,
+      0.05,
+      0.1
+    ],
+    "delta": [
+      0.05,
+      0.1,
+      0.15,
+      0.2
+    ],
+    "request_clauses_only": [
+      false,
+      true
+    ]
+  },
+  "constraints": {
+    "multi_flag_rate": [
+      ">=",
+      0.9
+    ],
+    "single_false_flag_rate": [
+      "<=",
+      0.1
+    ],
+    "dev_clarify_rate": [
+      "<=",
+      0.15
+    ],
+    "oos_flag_rate": [
+      ">=",
+      0.9
+    ]
+  },
+  "base_policy_without_gate": {
+    "multi_flag_rate": 0.375,
+    "multi_flagged_by_gate_rate": 0.0,
+    "single_false_flag_rate": 0.0,
+    "single_draft_rate": 0.65,
+    "dev_clarify_rate": 0.1429,
+    "dev_correct_draft_rate": 0.8235,
+    "dev_wrong_intent_drafts": 7,
+    "dev_must_escalate_drafted": 6,
+    "oos_flag_rate": 1.0,
+    "n": {
+      "multi": 40,
+      "single": 40,
+      "dev": 233,
+      "oos": 39,
+      "draftable": 119
+    }
+  },
+  "selected": {
+    "settings": {
+      "min_clause_confidence": 0.6,
+      "min_words": 3,
+      "tau_shift": -0.05,
+      "delta": 0.1,
+      "request_clauses_only": true
+    },
+    "metrics": {
+      "multi_flag_rate": 0.9,
+      "multi_flagged_by_gate_rate": 0.675,
+      "single_false_flag_rate": 0.0,
+      "single_draft_rate": 0.675,
+      "dev_clarify_rate": 0.1176,
+      "dev_correct_draft_rate": 0.8235,
+      "dev_wrong_intent_drafts": 2,
+      "dev_must_escalate_drafted": 0,
+      "oos_flag_rate": 1.0,
+      "n": {
+        "multi": 40,
+        "single": 40,
+        "dev": 233,
+        "oos": 39,
+        "draftable": 119
+      }
+    },
+    "violation": 0.0,
+    "feasible": true,
+    "n_feasible": 56
+  },
+  "top10": [
+    {
+      "settings": {
+        "min_clause_confidence": 0.5,
+        "min_words": 2,
+        "tau_shift": -0.1,
+        "delta": 0.05,
+        "request_clauses_only": true
+      },
+      "metrics": {
+        "multi_flag_rate": 0.925,
+        "multi_flagged_by_gate_rate": 0.725,
+        "single_false_flag_rate": 0.025,
+        "single_draft_rate": 0.65,
+        "dev_clarify_rate": 0.1092,
+        "dev_correct_draft_rate": 0.8235,
+        "dev_wrong_intent_drafts": 4,
+        "dev_must_escalate_drafted": 1,
+        "oos_flag_rate": 1.0,
+        "n": {
+          "multi": 40,
+          "single": 40,
+          "dev": 233,
+          "oos": 39,
+          "draftable": 119
+        }
+      },
+      "violation": 0.0
+    },
+    {
+      "settings": {
+        "min_clause_confidence": 0.5,
+        "min_words": 2,
+        "tau_shift": -0.1,
+        "delta": 0.1,
+        "request_clauses_only": true
+      },
+      "metrics": {
+        "multi_flag_rate": 0.925,
+        "multi_flagged_by_gate_rate": 0.725,
+        "single_false_flag_rate": 0.025,
+        "single_draft_rate": 0.65,
+        "dev_clarify_rate": 0.1092,
+        "dev_correct_draft_rate": 0.8235,
+        "dev_wrong_intent_drafts": 4,
+        "dev_must_escalate_drafted": 1,
+        "oos_flag_rate": 1.0,
+        "n": {
+          "multi": 40,
+          "single": 40,
+          "dev": 233,
+          "oos": 39,
+          "draftable": 119
+        }
+      },
+      "violation": 0.0
+    },
+    {
+      "settings": {
+        "min_clause_confidence": 0.5,
+        "min_words": 2,
+        "tau_shift": -0.1,
+        "delta": 0.15,
+        "request_clauses_only": true
+      },
+      "metrics": {
+        "multi_flag_rate": 0.925,
+        "multi_flagged_by_gate_rate": 0.725,
+        "single_false_flag_rate": 0.025,
+        "single_draft_rate": 0.65,
+        "dev_clarify_rate": 0.1092,
+        "dev_correct_draft_rate": 0.8235,
+        "dev_wrong_intent_drafts": 4,
+        "dev_must_escalate_drafted": 1,
+        "oos_flag_rate": 1.0,
+        "n": {
+          "multi": 40,
+          "single": 40,
+          "dev": 233,
+          "oos": 39,
+          "draftable": 119
+        }
+      },
+      "violation": 0.0
+    },
+    {
+      "settings": {
+        "min_clause_confidence": 0.5,
+        "min_words": 2,
+        "tau_shift": -0.1,
+        "delta": 0.2,
+        "request_clauses_only": true
+      },
+      "metrics": {
+        "multi_flag_rate": 0.925,
+        "multi_flagged_by_gate_rate": 0.725,
+        "single_false_flag_rate": 0.025,
+        "single_draft_rate": 0.65,
+        "dev_clarify_rate": 0.1092,
+        "dev_correct_draft_rate": 0.8235,
+        "dev_wrong_intent_drafts": 4,
+        "dev_must_escalate_drafted": 1,
+        "oos_flag_rate": 1.0,
+        "n": {
+          "multi": 40,
+          "single": 40,
+          "dev": 233,
+          "oos": 39,
+          "draftable": 119
+        }
+      },
+      "violation": 0.0
+    },
+    {
+      "settings": {
+        "min_clause_confidence": 0.5,
+        "min_words": 2,
+        "tau_shift": -0.05,
+        "delta": 0.05,
+        "request_clauses_only": true
+      },
+      "metrics": {
+        "multi_flag_rate": 0.925,
+        "multi_flagged_by_gate_rate": 0.725,
+        "single_false_flag_rate": 0.025,
+        "single_draft_rate": 0.65,
+        "dev_clarify_rate": 0.1176,
+        "dev_correct_draft_rate": 0.8235,
+        "dev_wrong_intent_drafts": 2,
+        "dev_must_escalate_drafted": 0,
+        "oos_flag_rate": 1.0,
+        "n": {
+          "multi": 40,
+          "single": 40,
+          "dev": 233,
+          "oos": 39,
+          "draftable": 119
+        }
+      },
+      "violation": 0.0
+    },
+    {
+      "settings": {
+        "min_clause_confidence": 0.5,
+        "min_words": 2,
+        "tau_shift": -0.05,
+        "delta": 0.1,
+        "request_clauses_only": true
+      },
+      "metrics": {
+        "multi_flag_rate": 0.925,
+        "multi_flagged_by_gate_rate": 0.725,
+        "single_false_flag_rate": 0.025,
+        "single_draft_rate": 0.65,
+        "dev_clarify_rate": 0.1176,
+        "dev_correct_draft_rate": 0.8235,
+        "dev_wrong_intent_drafts": 2,
+        "dev_must_escalate_drafted": 0,
+        "oos_flag_rate": 1.0,
+        "n": {
+          "multi": 40,
+          "single": 40,
+          "dev": 233,
+          "oos": 39,
+          "draftable": 119
+        }
+      },
+      "violation": 0.0
+    },
+    {
+      "settings": {
+        "min_clause_confidence": 0.5,
+        "min_words": 2,
+        "tau_shift": -0.05,
+        "delta": 0.15,
+        "request_clauses_only": true
+      },
+      "metrics": {
+        "multi_flag_rate": 0.925,
+        "multi_flagged_by_gate_rate": 0.725,
+        "single_false_flag_rate": 0.025,
+        "single_draft_rate": 0.65,
+        "dev_clarify_rate": 0.1176,
+        "dev_correct_draft_rate": 0.8235,
+        "dev_wrong_intent_drafts": 2,
+        "dev_must_escalate_drafted": 0,
+        "oos_flag_rate": 1.0,
+        "n": {
+          "multi": 40,
+          "single": 40,
+          "dev": 233,
+          "oos": 39,
+          "draftable": 119
+        }
+      },
+      "violation": 0.0
+    },
+    {
+      "settings": {
+        "min_clause_confidence": 0.5,
+        "min_words": 2,
+        "tau_shift": -0.05,
+        "delta": 0.2,
+        "request_clauses_only": true
+      },
+      "metrics": {
+        "multi_flag_rate": 0.925,
+        "multi_flagged_by_gate_rate": 0.725,
+        "single_false_flag_rate": 0.025,
+        "single_draft_rate": 0.65,
+        "dev_clarify_rate": 0.1176,
+        "dev_correct_draft_rate": 0.8235,
+        "dev_wrong_intent_drafts": 2,
+        "dev_must_escalate_drafted": 0,
+        "oos_flag_rate": 1.0,
+        "n": {
+          "multi": 40,
+          "single": 40,
+          "dev": 233,
+          "oos": 39,
+          "draftable": 119
+        }
+      },
+      "violation": 0.0
+    },
+    {
+      "settings": {
+        "min_clause_confidence": 0.5,
+        "min_words": 3,
+        "tau_shift": -0.1,
+        "delta": 0.05,
+        "request_clauses_only": true
+      },
+      "metrics": {
+        "multi_flag_rate": 0.925,
+        "multi_flagged_by_gate_rate": 0.725,
+        "single_false_flag_rate": 0.0,
+        "single_draft_rate": 0.675,
+        "dev_clarify_rate": 0.1092,
+        "dev_correct_draft_rate": 0.8235,
+        "dev_wrong_intent_drafts": 4,
+        "dev_must_escalate_drafted": 1,
+        "oos_flag_rate": 1.0,
+        "n": {
+          "multi": 40,
+          "single": 40,
+          "dev": 233,
+          "oos": 39,
+          "draftable": 119
+        }
+      },
+      "violation": 0.0
+    },
+    {
+      "settings": {
+        "min_clause_confidence": 0.5,
+        "min_words": 3,
+        "tau_shift": -0.1,
+        "delta": 0.1,
+        "request_clauses_only": true
+      },
+      "metrics": {
+        "multi_flag_rate": 0.925,
+        "multi_flagged_by_gate_rate": 0.725,
+        "single_false_flag_rate": 0.0,
+        "single_draft_rate": 0.675,
+        "dev_clarify_rate": 0.1092,
+        "dev_correct_draft_rate": 0.8235,
+        "dev_wrong_intent_drafts": 4,
+        "dev_must_escalate_drafted": 1,
+        "oos_flag_rate": 1.0,
+        "n": {
+          "multi": 40,
+          "single": 40,
+          "dev": 233,
+          "oos": 39,
+          "draftable": 119
+        }
+      },
+      "violation": 0.0
+    }
+  ]
+}

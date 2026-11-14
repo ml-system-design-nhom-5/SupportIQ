@@ -1,0 +1,242 @@
+{"id": "labelled-track_order-01", "kind": "labelled", "true_intent": "track_order", "has_order_reference": true, "text": "Where is my order [ORDER_ID_1]? It has said processing for four days now."}
+{"id": "labelled-track_order-03", "kind": "labelled", "true_intent": "track_order", "has_order_reference": true, "text": "Can you tell me the current status of [ORDER_ID_1]? I bought it last week."}
+{"id": "labelled-track_order-04", "kind": "labelled", "true_intent": "track_order", "has_order_reference": false, "text": "I ordered a desk lamp on Monday and I'd like to know when it will get to me."}
+{"id": "labelled-track_order-05", "kind": "labelled", "true_intent": "track_order", "has_order_reference": true, "text": "Order [ORDER_ID_1] - expected arrival date please"}
+{"id": "labelled-track_order-06", "kind": "labelled", "true_intent": "track_order", "has_order_reference": true, "text": "My package for order [ORDER_ID_1] shows in transit. Which city is it in right now?"}
+{"id": "labelled-track_order-07", "kind": "labelled", "true_intent": "track_order", "has_order_reference": false, "text": "The tracking number you emailed for my order is [TRACKING_ID_1]. Where is that parcel at the moment?"}
+{"id": "labelled-track_order-08", "kind": "labelled", "true_intent": "track_order", "has_order_reference": false, "text": "wheres my stuff i ordered on sat"}
+{"id": "labelled-track_order-09", "kind": "labelled", "true_intent": "track_order", "has_order_reference": true, "text": "Could you check how far along [ORDER_ID_1] is? I need it before my sister's birthday on Friday."}
+{"id": "labelled-track_order-10", "kind": "labelled", "true_intent": "track_order", "has_order_reference": true, "text": "Any update on [ORDER_ID_1]? The order page hasn't moved since Tuesday and I just want to know where it is."}
+{"id": "labelled-cancel_order-01", "kind": "labelled", "true_intent": "cancel_order", "has_order_reference": true, "text": "Please cancel order [ORDER_ID_1]."}
+{"id": "labelled-cancel_order-02", "kind": "labelled", "true_intent": "cancel_order", "has_order_reference": false, "text": "I no longer want the rain jacket I ordered this morning. My partner has just given me one as a present, so can you stop the order before it goes out?"}
+{"id": "labelled-cancel_order-03", "kind": "labelled", "true_intent": "cancel_order", "has_order_reference": true, "text": "Is it still possible to cancel [ORDER_ID_1] if it has already shipped?"}
+{"id": "labelled-cancel_order-05", "kind": "labelled", "true_intent": "cancel_order", "has_order_reference": false, "text": "I placed the same order twice by accident, please call off the second one."}
+{"id": "labelled-cancel_order-06", "kind": "labelled", "true_intent": "cancel_order", "has_order_reference": true, "text": "Cancel [ORDER_ID_1] and don't ship it, I found it cheaper somewhere else."}
+{"id": "labelled-cancel_order-07", "kind": "labelled", "true_intent": "cancel_order", "has_order_reference": false, "text": "Can I still cancel within an hour of ordering, or is it too late by then?"}
+{"id": "labelled-cancel_order-08", "kind": "labelled", "true_intent": "cancel_order", "has_order_reference": true, "text": "changed my mind pls cancel order [ORDER_ID_1]"}
+{"id": "labelled-cancel_order-09", "kind": "labelled", "true_intent": "cancel_order", "has_order_reference": true, "text": "I want to cancel the whole of [ORDER_ID_1], not just one of the items in it."}
+{"id": "labelled-cancel_order-10", "kind": "labelled", "true_intent": "cancel_order", "has_order_reference": true, "text": "What do I need to do to cancel order [ORDER_ID_1] while it's still processing?"}
+{"id": "labelled-delivery_time-03", "kind": "labelled", "true_intent": "delivery_time", "has_order_reference": false, "text": "how many business days is express shipping"}
+{"id": "labelled-delivery_time-04", "kind": "labelled", "true_intent": "delivery_time", "has_order_reference": false, "text": "If I order today, roughly when would it arrive in the north of the country?"}
+{"id": "labelled-delivery_time-06", "kind": "labelled", "true_intent": "delivery_time", "has_order_reference": false, "text": "What delivery time slots can I choose from? I'm at work most of the day."}
+{"id": "labelled-delivery_time-07", "kind": "labelled", "true_intent": "delivery_time", "has_order_reference": false, "text": "How fast is your shipping to Canada?"}
+{"id": "labelled-delivery_time-08", "kind": "labelled", "true_intent": "delivery_time", "has_order_reference": false, "text": "Do you have next-day delivery, and what's the cut-off time for it?"}
+{"id": "labelled-delivery_time-09", "kind": "labelled", "true_intent": "delivery_time", "has_order_reference": false, "text": "roughly how long till stuff arrives after i order"}
+{"id": "labelled-delivery_time-10", "kind": "labelled", "true_intent": "delivery_time", "has_order_reference": false, "text": "Typical delivery time for large furniture items like wardrobes?"}
+{"id": "labelled-delivery_issue-01", "kind": "labelled", "true_intent": "delivery_issue", "has_order_reference": true, "text": "My order [ORDER_ID_1] was marked as delivered yesterday but there is nothing at my door."}
+{"id": "labelled-delivery_issue-02", "kind": "labelled", "true_intent": "delivery_issue", "has_order_reference": true, "text": "The parcel for [ORDER_ID_1] has been stuck at the same depot for nine days."}
+{"id": "labelled-delivery_issue-03", "kind": "labelled", "true_intent": "delivery_issue", "has_order_reference": true, "text": "It's a week past the estimated date for [ORDER_ID_1] and still no package."}
+{"id": "labelled-delivery_issue-04", "kind": "labelled", "true_intent": "delivery_issue", "has_order_reference": false, "text": "the courier never showed up even tho i stayed home all day"}
+{"id": "labelled-delivery_issue-05", "kind": "labelled", "true_intent": "delivery_issue", "has_order_reference": false, "text": "I think my package went to my old address because I only updated it after placing the order. The tracking shows it was delivered to a street I moved away from last month. Can you sort it out?"}
+{"id": "labelled-delivery_issue-06", "kind": "labelled", "true_intent": "delivery_issue", "has_order_reference": true, "text": "Tracking for [ORDER_ID_1] says lost in transit. What happens now?"}
+{"id": "labelled-delivery_issue-07", "kind": "labelled", "true_intent": "delivery_issue", "has_order_reference": false, "text": "Your driver handed my parcel to someone I don't know and now it has disappeared."}
+{"id": "labelled-delivery_issue-08", "kind": "labelled", "true_intent": "delivery_issue", "has_order_reference": true, "text": "Delivery of order [ORDER_ID_1] got pushed back again, this is the third new date they've given me."}
+{"id": "labelled-delivery_issue-09", "kind": "labelled", "true_intent": "delivery_issue", "has_order_reference": false, "text": "The courier was rude and refused to carry the box past the front gate."}
+{"id": "labelled-delivery_issue-10", "kind": "labelled", "true_intent": "delivery_issue", "has_order_reference": false, "text": "Package has said out for delivery since Friday but it never came and the courier won't answer the phone."}
+{"id": "labelled-shipping_costs-02", "kind": "labelled", "true_intent": "shipping_costs", "has_order_reference": false, "text": "What's the minimum spend for free delivery?"}
+{"id": "labelled-shipping_costs-04", "kind": "labelled", "true_intent": "shipping_costs", "has_order_reference": false, "text": "do u charge for shipping to the islands"}
+{"id": "labelled-shipping_costs-05", "kind": "labelled", "true_intent": "shipping_costs", "has_order_reference": false, "text": "Is express delivery more expensive than standard?"}
+{"id": "labelled-shipping_costs-06", "kind": "labelled", "true_intent": "shipping_costs", "has_order_reference": false, "text": "How much does it cost to ship a three-seater sofa?"}
+{"id": "labelled-shipping_costs-07", "kind": "labelled", "true_intent": "shipping_costs", "has_order_reference": true, "text": "There's a 9.99 shipping charge on [ORDER_ID_1] and I want to understand where it comes from."}
+{"id": "labelled-shipping_costs-08", "kind": "labelled", "true_intent": "shipping_costs", "has_order_reference": false, "text": "any free shipping??"}
+{"id": "labelled-shipping_costs-09", "kind": "labelled", "true_intent": "shipping_costs", "has_order_reference": false, "text": "Does the shipping fee depend on weight or is it a flat rate?"}
+{"id": "labelled-shipping_costs-10", "kind": "labelled", "true_intent": "shipping_costs", "has_order_reference": false, "text": "What are your international shipping rates?"}
+{"id": "labelled-return_policy-01", "kind": "labelled", "true_intent": "return_policy", "has_order_reference": false, "text": "What is your return window?"}
+{"id": "labelled-return_policy-03", "kind": "labelled", "true_intent": "return_policy", "has_order_reference": false, "text": "Are swimsuits returnable?"}
+{"id": "labelled-return_policy-04", "kind": "labelled", "true_intent": "return_policy", "has_order_reference": false, "text": "Who pays for return shipping if I simply don't like the product? On some sites it's free and on others they take it off the refund, so I want to know before I buy."}
+{"id": "labelled-return_policy-05", "kind": "labelled", "true_intent": "return_policy", "has_order_reference": false, "text": "Is it free to send a return back by post, or do you deduct a fee?"}
+{"id": "labelled-return_policy-07", "kind": "labelled", "true_intent": "return_policy", "has_order_reference": false, "text": "Can items bought online be returned in one of your stores? Just asking about the rules for now."}
+{"id": "labelled-return_policy-08", "kind": "labelled", "true_intent": "return_policy", "has_order_reference": false, "text": "do returns need the original box"}
+{"id": "labelled-return_policy-10", "kind": "labelled", "true_intent": "return_policy", "has_order_reference": true, "text": "Could I still return the speaker from [ORDER_ID_1] after 30 days, or is that past the limit?"}
+{"id": "labelled-return_product-01", "kind": "labelled", "true_intent": "return_product", "has_order_reference": true, "text": "I'd like to return the blender from order [ORDER_ID_1]."}
+{"id": "labelled-return_product-02", "kind": "labelled", "true_intent": "return_product", "has_order_reference": false, "text": "How do I send back a dress that doesn't fit?"}
+{"id": "labelled-return_product-03", "kind": "labelled", "true_intent": "return_product", "has_order_reference": true, "text": "Start a return on [ORDER_ID_1] please, the headphones aren't what I expected."}
+{"id": "labelled-return_product-04", "kind": "labelled", "true_intent": "return_product", "has_order_reference": false, "text": "I want to return this jacket. It's too small across the shoulders."}
+{"id": "labelled-return_product-05", "kind": "labelled", "true_intent": "return_product", "has_order_reference": false, "text": "what are the steps to return something"}
+{"id": "labelled-return_product-06", "kind": "labelled", "true_intent": "return_product", "has_order_reference": true, "text": "need to return 2 of the 3 shirts from [ORDER_ID_1]"}
+{"id": "labelled-return_product-07", "kind": "labelled", "true_intent": "return_product", "has_order_reference": true, "text": "Can you open a return request for my order [ORDER_ID_1]?"}
+{"id": "labelled-return_product-08", "kind": "labelled", "true_intent": "return_product", "has_order_reference": false, "text": "The chair is fine but it doesn't fit in my room, so I'd like to return it."}
+{"id": "labelled-return_product-09", "kind": "labelled", "true_intent": "return_product", "has_order_reference": false, "text": "returning the boots, how do i do that"}
+{"id": "labelled-return_product-10", "kind": "labelled", "true_intent": "return_product", "has_order_reference": false, "text": "Please help me return the printer I bought last week. I never even plugged it in, the box is still sealed, and I just realised my office already has one that does the same job."}
+{"id": "labelled-refund_policy-01", "kind": "labelled", "true_intent": "refund_policy", "has_order_reference": false, "text": "How long does a refund take to show up on a credit card?"}
+{"id": "labelled-refund_policy-02", "kind": "labelled", "true_intent": "refund_policy", "has_order_reference": false, "text": "Do you refund to the original payment method or as store credit?"}
+{"id": "labelled-refund_policy-03", "kind": "labelled", "true_intent": "refund_policy", "has_order_reference": false, "text": "Am I eligible for a refund on a sale item?"}
+{"id": "labelled-refund_policy-04", "kind": "labelled", "true_intent": "refund_policy", "has_order_reference": false, "text": "how many days for refunds to paypal"}
+{"id": "labelled-refund_policy-05", "kind": "labelled", "true_intent": "refund_policy", "has_order_reference": false, "text": "What are the conditions for getting your money back?"}
+{"id": "labelled-refund_policy-06", "kind": "labelled", "true_intent": "refund_policy", "has_order_reference": false, "text": "If I paid with a gift card, where does the refund go?"}
+{"id": "labelled-refund_policy-07", "kind": "labelled", "true_intent": "refund_policy", "has_order_reference": false, "text": "Do you refund the original shipping fee as well when an item is returned?"}
+{"id": "labelled-refund_policy-08", "kind": "labelled", "true_intent": "refund_policy", "has_order_reference": false, "text": "Generally speaking, how quickly are refunds processed once you receive the return?"}
+{"id": "labelled-refund_policy-09", "kind": "labelled", "true_intent": "refund_policy", "has_order_reference": false, "text": "Can I get a refund rather than an exchange? I'm only asking how it works."}
+{"id": "labelled-refund_policy-10", "kind": "labelled", "true_intent": "refund_policy", "has_order_reference": true, "text": "If I return part of [ORDER_ID_1], would the refund cover the delivery charge too?"}
+{"id": "labelled-request_refund-02", "kind": "labelled", "true_intent": "request_refund", "has_order_reference": false, "text": "Please give me my money back for the broken kettle."}
+{"id": "labelled-request_refund-03", "kind": "labelled", "true_intent": "request_refund", "has_order_reference": false, "text": "The item looks nothing like the photos on your site. The fabric is thin, the colour is a different shade entirely, and honestly I'd just like to be reimbursed for it."}
+{"id": "labelled-request_refund-04", "kind": "labelled", "true_intent": "request_refund", "has_order_reference": false, "text": "refund me pls the headphones stopped working after 2 days"}
+{"id": "labelled-request_refund-05", "kind": "labelled", "true_intent": "request_refund", "has_order_reference": false, "text": "I'd like to claim a refund for the jacket I sent back last week."}
+{"id": "labelled-request_refund-06", "kind": "labelled", "true_intent": "request_refund", "has_order_reference": true, "text": "Can I get my money back for [ORDER_ID_1]? It arrived after the event I bought it for."}
+{"id": "labelled-request_refund-07", "kind": "labelled", "true_intent": "request_refund", "has_order_reference": false, "text": "The lamp was cheaper on your site the day after I bought it, please refund the difference."}
+{"id": "labelled-request_refund-08", "kind": "labelled", "true_intent": "request_refund", "has_order_reference": true, "text": "Requesting a full refund for [ORDER_ID_1]. The quality is terrible."}
+{"id": "labelled-request_refund-09", "kind": "labelled", "true_intent": "request_refund", "has_order_reference": false, "text": "i want my money back"}
+{"id": "labelled-request_refund-10", "kind": "labelled", "true_intent": "request_refund", "has_order_reference": true, "text": "Could you refund the delivery fee on [ORDER_ID_1]? The parcel came three days late."}
+{"id": "labelled-refund_status-01", "kind": "labelled", "true_intent": "refund_status", "has_order_reference": true, "text": "Where is my refund for order [ORDER_ID_1]?"}
+{"id": "labelled-refund_status-02", "kind": "labelled", "true_intent": "refund_status", "has_order_reference": false, "text": "I returned the shoes two weeks ago, the courier confirmed you received them on the 4th, and I still haven't received my refund. Could you look into where it is?"}
+{"id": "labelled-refund_status-04", "kind": "labelled", "true_intent": "refund_status", "has_order_reference": false, "text": "my refund says pending for 10 days whats going on"}
+{"id": "labelled-refund_status-05", "kind": "labelled", "true_intent": "refund_status", "has_order_reference": true, "text": "You approved my refund for [ORDER_ID_1] on the 3rd but nothing has reached my bank account."}
+{"id": "labelled-refund_status-06", "kind": "labelled", "true_intent": "refund_status", "has_order_reference": false, "text": "Can you check on the refund you promised me last month?"}
+{"id": "labelled-refund_status-07", "kind": "labelled", "true_intent": "refund_status", "has_order_reference": false, "text": "Any news on my refund? I sent the parcel back ages ago."}
+{"id": "labelled-refund_status-08", "kind": "labelled", "true_intent": "refund_status", "has_order_reference": false, "text": "Is my refund on its way? The confirmation email didn't give a date."}
+{"id": "labelled-refund_status-10", "kind": "labelled", "true_intent": "refund_status", "has_order_reference": true, "text": "The agent told me the refund for [ORDER_ID_1] was issued, so when will I actually see it?"}
+{"id": "labelled-payment_issue-01", "kind": "labelled", "true_intent": "payment_issue", "has_order_reference": false, "text": "My card was declined but I know there's money on it."}
+{"id": "labelled-payment_issue-03", "kind": "labelled", "true_intent": "payment_issue", "has_order_reference": true, "text": "The money left my account but order [ORDER_ID_1] still isn't confirmed."}
+{"id": "labelled-payment_issue-04", "kind": "labelled", "true_intent": "payment_issue", "has_order_reference": false, "text": "payment keeps failing at checkout"}
+{"id": "labelled-payment_issue-05", "kind": "labelled", "true_intent": "payment_issue", "has_order_reference": false, "text": "Why is there a double charge from your shop on my statement?"}
+{"id": "labelled-payment_issue-06", "kind": "labelled", "true_intent": "payment_issue", "has_order_reference": true, "text": "The payment for [ORDER_ID_1] has been stuck on processing in PayPal for an hour."}
+{"id": "labelled-payment_issue-07", "kind": "labelled", "true_intent": "payment_issue", "has_order_reference": false, "text": "I tried paying three times this evening and got an error message each time, but now my bank shows three pending charges from your shop and I have no order confirmation at all."}
+{"id": "labelled-payment_issue-08", "kind": "labelled", "true_intent": "payment_issue", "has_order_reference": false, "text": "card got debited and i got no confirmation email or anything"}
+{"id": "labelled-payment_issue-09", "kind": "labelled", "true_intent": "payment_issue", "has_order_reference": false, "text": "The payment page froze and now I don't know if I paid. My banking app shows a deduction."}
+{"id": "labelled-payment_issue-10", "kind": "labelled", "true_intent": "payment_issue", "has_order_reference": false, "text": "Apple Pay says the transaction failed. Please help."}
+{"id": "labelled-human_agent-02", "kind": "labelled", "true_intent": "human_agent", "has_order_reference": false, "text": "I want to speak with a human, not a bot."}
+{"id": "labelled-human_agent-03", "kind": "labelled", "true_intent": "human_agent", "has_order_reference": false, "text": "connect me to an agent"}
+{"id": "labelled-human_agent-05", "kind": "labelled", "true_intent": "human_agent", "has_order_reference": false, "text": "Is there a live representative available right now?"}
+{"id": "labelled-human_agent-06", "kind": "labelled", "true_intent": "human_agent", "has_order_reference": false, "text": "I've been going in circles with this chat. Put me through to a person."}
+{"id": "labelled-human_agent-07", "kind": "labelled", "true_intent": "human_agent", "has_order_reference": false, "text": "human pls asap"}
+{"id": "labelled-human_agent-08", "kind": "labelled", "true_intent": "human_agent", "has_order_reference": true, "text": "Could a member of staff phone me back about order [ORDER_ID_1]?"}
+{"id": "labelled-human_agent-09", "kind": "labelled", "true_intent": "human_agent", "has_order_reference": false, "text": "I'd rather explain this to an actual employee than type it all out here, it's a long story involving two orders and three phone calls, so please get someone to talk to me."}
+{"id": "labelled-human_agent-10", "kind": "labelled", "true_intent": "human_agent", "has_order_reference": false, "text": "Transfer me to someone on your team who can actually make a decision."}
+{"id": "labelled-return_product_in_store-01", "kind": "labelled", "true_intent": "return_product_in_store", "has_order_reference": false, "text": "Can I bring the jeans back to your store downtown?"}
+{"id": "labelled-return_product_in_store-02", "kind": "labelled", "true_intent": "return_product_in_store", "has_order_reference": true, "text": "I'd like to return order [ORDER_ID_1] at a branch near me."}
+{"id": "labelled-return_product_in_store-03", "kind": "labelled", "true_intent": "return_product_in_store", "has_order_reference": false, "text": "how do i return something at the shop"}
+{"id": "labelled-return_product_in_store-04", "kind": "labelled", "true_intent": "return_product_in_store", "has_order_reference": false, "text": "I want to drop off a return in person at one of your stores."}
+{"id": "labelled-return_product_in_store-05", "kind": "labelled", "true_intent": "return_product_in_store", "has_order_reference": false, "text": "I bought a coat online and want to take it back to the mall store this weekend."}
+{"id": "labelled-return_product_in_store-06", "kind": "labelled", "true_intent": "return_product_in_store", "has_order_reference": false, "text": "Returning a lamp in store - what do I need to bring with me?"}
+{"id": "labelled-return_product_in_store-07", "kind": "labelled", "true_intent": "return_product_in_store", "has_order_reference": true, "text": "I'd like to take the kettle from [ORDER_ID_1] back to the branch, it's too big for my kitchen."}
+{"id": "labelled-return_product_in_store-08", "kind": "labelled", "true_intent": "return_product_in_store", "has_order_reference": false, "text": "going to return the shoes at ur store on main st what do i do"}
+{"id": "labelled-return_product_online-02", "kind": "labelled", "true_intent": "return_product_online", "has_order_reference": false, "text": "I want to post the sweater back to you."}
+{"id": "labelled-return_product_online-03", "kind": "labelled", "true_intent": "return_product_online", "has_order_reference": true, "text": "Can you arrange a courier pickup for my return of [ORDER_ID_1]?"}
+{"id": "labelled-return_product_online-04", "kind": "labelled", "true_intent": "return_product_online", "has_order_reference": true, "text": "Please send me a return label so I can mail back order [ORDER_ID_1]."}
+{"id": "labelled-return_product_online-05", "kind": "labelled", "true_intent": "return_product_online", "has_order_reference": true, "text": "I'd like to start an online return for the speaker in [ORDER_ID_1]."}
+{"id": "labelled-return_product_online-06", "kind": "labelled", "true_intent": "return_product_online", "has_order_reference": false, "text": "need a courier to collect the tv for a return"}
+{"id": "labelled-return_product_online-07", "kind": "labelled", "true_intent": "return_product_online", "has_order_reference": false, "text": "I want to return the boots by mail. They pinch my toes."}
+{"id": "labelled-return_product_online-08", "kind": "labelled", "true_intent": "return_product_online", "has_order_reference": false, "text": "Where on the website do I start returning something I bought?"}
+{"id": "labelled-track_delivery-02", "kind": "labelled", "true_intent": "track_delivery", "has_order_reference": false, "text": "Is [TRACKING_ID_1] a valid tracking code? The courier site can't find it."}
+{"id": "labelled-track_delivery-03", "kind": "labelled", "true_intent": "track_delivery", "has_order_reference": false, "text": "Which courier website should I use to follow a package?"}
+{"id": "labelled-track_delivery-04", "kind": "labelled", "true_intent": "track_delivery", "has_order_reference": false, "text": "track package [TRACKING_ID_1]"}
+{"id": "labelled-track_delivery-05", "kind": "labelled", "true_intent": "track_delivery", "has_order_reference": false, "text": "How do I follow a shipment on the carrier's site?"}
+{"id": "labelled-track_delivery-06", "kind": "labelled", "true_intent": "track_delivery", "has_order_reference": false, "text": "Can I get text alerts from the courier about a parcel?"}
+{"id": "labelled-track_delivery-07", "kind": "labelled", "true_intent": "track_delivery", "has_order_reference": false, "text": "where is the package with tracking [TRACKING_ID_1]"}
+{"id": "labelled-track_delivery-08", "kind": "labelled", "true_intent": "track_delivery", "has_order_reference": false, "text": "A friend sent me a present from your shop and gave me a tracking code with the message. I don't have an account with you, so how do I check where it is?"}
+{"id": "labelled-missing_item-01", "kind": "labelled", "true_intent": "missing_item", "has_order_reference": false, "text": "The box arrived but one of the two mugs is missing."}
+{"id": "labelled-missing_item-03", "kind": "labelled", "true_intent": "missing_item", "has_order_reference": false, "text": "Only 3 of the 4 chairs were in the delivery."}
+{"id": "labelled-missing_item-04", "kind": "labelled", "true_intent": "missing_item", "has_order_reference": false, "text": "parcel came but the earrings arent in it"}
+{"id": "labelled-missing_item-05", "kind": "labelled", "true_intent": "missing_item", "has_order_reference": true, "text": "An item from [ORDER_ID_1] wasn't in the package. Everything else was there though."}
+{"id": "labelled-missing_item-06", "kind": "labelled", "true_intent": "missing_item", "has_order_reference": false, "text": "The packing slip lists a phone case but it wasn't in the box."}
+{"id": "labelled-missing_item-07", "kind": "labelled", "true_intent": "missing_item", "has_order_reference": true, "text": "I got the parcel for [ORDER_ID_1] today and the second pair of socks is not in it."}
+{"id": "labelled-missing_item-08", "kind": "labelled", "true_intent": "missing_item", "has_order_reference": false, "text": "Half my order is missing from the parcel that showed up today."}
+{"id": "labelled-product_issue-01", "kind": "labelled", "true_intent": "product_issue", "has_order_reference": true, "text": "The vacuum cleaner from [ORDER_ID_1] stopped working after one week."}
+{"id": "labelled-product_issue-02", "kind": "labelled", "true_intent": "product_issue", "has_order_reference": false, "text": "The zip on my new backpack broke the first time I used it."}
+{"id": "labelled-product_issue-03", "kind": "labelled", "true_intent": "product_issue", "has_order_reference": false, "text": "my phone case doesnt fit the model it says it fits"}
+{"id": "labelled-product_issue-04", "kind": "labelled", "true_intent": "product_issue", "has_order_reference": false, "text": "The blender gives off a burning smell when I switch it on, even on the lowest setting with nothing inside it. I've only used it twice so far."}
+{"id": "labelled-product_issue-05", "kind": "labelled", "true_intent": "product_issue", "has_order_reference": false, "text": "The shirt's colour faded after one wash. Is that normal?"}
+{"id": "labelled-product_issue-06", "kind": "labelled", "true_intent": "product_issue", "has_order_reference": true, "text": "The headphones from order [ORDER_ID_1] only play sound on one side."}
+{"id": "labelled-product_issue-07", "kind": "labelled", "true_intent": "product_issue", "has_order_reference": false, "text": "The watch strap keeps coming loose, and I've only had it a few days."}
+{"id": "labelled-product_issue-08", "kind": "labelled", "true_intent": "product_issue", "has_order_reference": true, "text": "There's a dead pixel on the monitor from [ORDER_ID_1]."}
+{"id": "labelled-wrong_item-02", "kind": "labelled", "true_intent": "wrong_item", "has_order_reference": true, "text": "You sent me the wrong size for [ORDER_ID_1]."}
+{"id": "labelled-wrong_item-03", "kind": "labelled", "true_intent": "wrong_item", "has_order_reference": true, "text": "The box for order [ORDER_ID_1] had a completely different product in it."}
+{"id": "labelled-wrong_item-04", "kind": "labelled", "true_intent": "wrong_item", "has_order_reference": false, "text": "got something totally different from what i paid for"}
+{"id": "labelled-wrong_item-05", "kind": "labelled", "true_intent": "wrong_item", "has_order_reference": false, "text": "I received the 32GB model instead of the 128GB one I ordered."}
+{"id": "labelled-wrong_item-06", "kind": "labelled", "true_intent": "wrong_item", "has_order_reference": false, "text": "This isn't what I ordered. It's a different brand altogether."}
+{"id": "labelled-wrong_item-07", "kind": "labelled", "true_intent": "wrong_item", "has_order_reference": true, "text": "The parcel contained kids' shoes, but I ordered adult sizes in [ORDER_ID_1]."}
+{"id": "labelled-wrong_item-08", "kind": "labelled", "true_intent": "wrong_item", "has_order_reference": false, "text": "Wrong item delivered: I ordered a desk lamp and got a floor lamp."}
+{"id": "labelled-order_history-02", "kind": "labelled", "true_intent": "order_history", "has_order_reference": false, "text": "Show me everything I bought last year."}
+{"id": "labelled-order_history-03", "kind": "labelled", "true_intent": "order_history", "has_order_reference": false, "text": "where do i find my old orders"}
+{"id": "labelled-order_history-04", "kind": "labelled", "true_intent": "order_history", "has_order_reference": false, "text": "I need a list of my previous purchases for my budget spreadsheet."}
+{"id": "labelled-order_history-05", "kind": "labelled", "true_intent": "order_history", "has_order_reference": false, "text": "Can I look up the details of an order I placed two years ago?"}
+{"id": "labelled-order_history-06", "kind": "labelled", "true_intent": "order_history", "has_order_reference": false, "text": "Is there a way to see what I ordered back in March?"}
+{"id": "labelled-order_history-07", "kind": "labelled", "true_intent": "order_history", "has_order_reference": false, "text": "Could you pull up my purchase history? I want to reorder something I bought before."}
+{"id": "labelled-order_history-08", "kind": "labelled", "true_intent": "order_history", "has_order_reference": true, "text": "Remind me what was in order [ORDER_ID_1], I can't remember."}
+{"id": "labelled-product_information-02", "kind": "labelled", "true_intent": "product_information", "has_order_reference": false, "text": "Does this laptop have a backlit keyboard?"}
+{"id": "labelled-product_information-03", "kind": "labelled", "true_intent": "product_information", "has_order_reference": false, "text": "what are the dimensions of the oak dining table"}
+{"id": "labelled-product_information-04", "kind": "labelled", "true_intent": "product_information", "has_order_reference": false, "text": "Is the face cream suitable for sensitive skin?"}
+{"id": "labelled-product_information-05", "kind": "labelled", "true_intent": "product_information", "has_order_reference": false, "text": "How long is the warranty on the coffee machine?"}
+{"id": "labelled-product_information-07", "kind": "labelled", "true_intent": "product_information", "has_order_reference": true, "text": "Is the pan from [ORDER_ID_1] safe to use on an induction hob?"}
+{"id": "labelled-product_information-08", "kind": "labelled", "true_intent": "product_information", "has_order_reference": false, "text": "Does the stroller fold flat? I need it to fit in a small car boot."}
+{"id": "labelled-close_account-03", "kind": "labelled", "true_intent": "close_account", "has_order_reference": false, "text": "I want to deactivate my profile permanently."}
+{"id": "labelled-close_account-04", "kind": "labelled", "true_intent": "close_account", "has_order_reference": false, "text": "remove my account and all my data"}
+{"id": "labelled-close_account-05", "kind": "labelled", "true_intent": "close_account", "has_order_reference": false, "text": "I don't shop here anymore, so I'd like to close my account."}
+{"id": "labelled-close_account-06", "kind": "labelled", "true_intent": "close_account", "has_order_reference": false, "text": "Can I terminate my customer account online?"}
+{"id": "labelled-close_account-07", "kind": "labelled", "true_intent": "close_account", "has_order_reference": false, "text": "Cancel my account please."}
+{"id": "labelled-close_account-08", "kind": "labelled", "true_intent": "close_account", "has_order_reference": false, "text": "how to delete acct"}
+{"id": "labelled-customer_service-01", "kind": "labelled", "true_intent": "customer_service", "has_order_reference": false, "text": "How do I get in touch with your support team?"}
+{"id": "labelled-customer_service-02", "kind": "labelled", "true_intent": "customer_service", "has_order_reference": false, "text": "what number do i call for customer service"}
+{"id": "labelled-change_account-02", "kind": "labelled", "true_intent": "change_account", "has_order_reference": false, "text": "I moved house and need to update the address saved in my profile."}
+{"id": "labelled-open_account-02", "kind": "labelled", "true_intent": "open_account", "has_order_reference": false, "text": "can i sign up without a phone number"}
+{"id": "labelled-recover_password-01", "kind": "labelled", "true_intent": "recover_password", "has_order_reference": false, "text": "How do I reset my password?"}
+{"id": "labelled-recover_password-02", "kind": "labelled", "true_intent": "recover_password", "has_order_reference": false, "text": "I forgot my password and the security question too. How do I get back into my account?"}
+{"id": "labelled-technical_issue-01", "kind": "labelled", "true_intent": "technical_issue", "has_order_reference": false, "text": "Your website keeps crashing when I open the product page."}
+{"id": "labelled-technical_issue-02", "kind": "labelled", "true_intent": "technical_issue", "has_order_reference": false, "text": "the app shows a blank screen after i log in"}
+{"id": "labelled-add_product-01", "kind": "labelled", "true_intent": "add_product", "has_order_reference": false, "text": "How do I add this to my basket?"}
+{"id": "labelled-add_product-02", "kind": "labelled", "true_intent": "add_product", "has_order_reference": false, "text": "Please add two more pairs of the wool socks to my cart."}
+{"id": "labelled-remove_product-02", "kind": "labelled", "true_intent": "remove_product", "has_order_reference": false, "text": "take the blue mug out of my basket"}
+{"id": "labelled-change_order-02", "kind": "labelled", "true_intent": "change_order", "has_order_reference": true, "text": "I'd like to swap the size on [ORDER_ID_1] before it ships, medium instead of large."}
+{"id": "labelled-request_invoice-01", "kind": "labelled", "true_intent": "request_invoice", "has_order_reference": true, "text": "Can I get an invoice for order [ORDER_ID_1]?"}
+{"id": "labelled-request_invoice-02", "kind": "labelled", "true_intent": "request_invoice", "has_order_reference": false, "text": "i need a vat receipt for my company"}
+{"id": "labelled-damaged_delivery-01", "kind": "labelled", "true_intent": "damaged_delivery", "has_order_reference": false, "text": "The parcel arrived crushed and the vase inside is broken."}
+{"id": "labelled-damaged_delivery-02", "kind": "labelled", "true_intent": "damaged_delivery", "has_order_reference": true, "text": "Order [ORDER_ID_1] came soaking wet and the book inside is ruined."}
+{"id": "labelled-submit_feedback-01", "kind": "labelled", "true_intent": "submit_feedback", "has_order_reference": false, "text": "I want to leave feedback about your service."}
+{"id": "labelled-submit_feedback-02", "kind": "labelled", "true_intent": "submit_feedback", "has_order_reference": false, "text": "Just wanted to say your delivery driver was really kind today."}
+{"id": "labelled-submit_product_feedback-01", "kind": "labelled", "true_intent": "submit_product_feedback", "has_order_reference": false, "text": "I'd like to write a review of the rice cooker."}
+{"id": "labelled-submit_product_feedback-02", "kind": "labelled", "true_intent": "submit_product_feedback", "has_order_reference": false, "text": "the new running shoes are great where can i rate them"}
+{"id": "labelled-submit_product_idea-01", "kind": "labelled", "true_intent": "submit_product_idea", "has_order_reference": false, "text": "You should sell these mugs in more colours."}
+{"id": "labelled-submit_product_idea-02", "kind": "labelled", "true_intent": "submit_product_idea", "has_order_reference": false, "text": "Have you thought about making a vegan version of the leather tote?"}
+{"id": "labelled-pay-02", "kind": "labelled", "true_intent": "pay", "has_order_reference": true, "text": "I want to pay the remaining balance on order [ORDER_ID_1]."}
+{"id": "labelled-payment_methods-01", "kind": "labelled", "true_intent": "payment_methods", "has_order_reference": false, "text": "Do you accept Klarna?"}
+{"id": "labelled-payment_methods-02", "kind": "labelled", "true_intent": "payment_methods", "has_order_reference": false, "text": "which cards do u take"}
+{"id": "labelled-availability_in_store-01", "kind": "labelled", "true_intent": "availability_in_store", "has_order_reference": false, "text": "Does your city centre store have the coffee maker in stock?"}
+{"id": "labelled-availability_in_store-02", "kind": "labelled", "true_intent": "availability_in_store", "has_order_reference": false, "text": "can i find this dress at the mall branch"}
+{"id": "labelled-availability_online-01", "kind": "labelled", "true_intent": "availability_online", "has_order_reference": false, "text": "Is the blender available to buy on the website?"}
+{"id": "labelled-availability_online-02", "kind": "labelled", "true_intent": "availability_online", "has_order_reference": false, "text": "Can I still order the limited edition print online, or is it sold out?"}
+{"id": "labelled-exchange_product-01", "kind": "labelled", "true_intent": "exchange_product", "has_order_reference": true, "text": "Can I swap the trousers from [ORDER_ID_1] for a bigger size?"}
+{"id": "labelled-exchange_product-02", "kind": "labelled", "true_intent": "exchange_product", "has_order_reference": false, "text": "i want to exchange the black bag for the brown one"}
+{"id": "labelled-exchange_product_in_store-01", "kind": "labelled", "true_intent": "exchange_product_in_store", "has_order_reference": false, "text": "Can I exchange my shoes at the store?"}
+{"id": "labelled-exchange_product_in_store-02", "kind": "labelled", "true_intent": "exchange_product_in_store", "has_order_reference": false, "text": "I'd like to swap the lamp for a different model at your branch on the high street."}
+{"id": "oos-general-04", "kind": "oos", "true_intent": null, "category": "general", "has_order_reference": false, "text": "Can you help me with my maths homework?"}
+{"id": "oos-general-06", "kind": "oos", "true_intent": null, "category": "general", "has_order_reference": false, "text": "how r u today"}
+{"id": "oos-other_domain-01", "kind": "oos", "true_intent": null, "category": "other_domain", "has_order_reference": false, "text": "I need to book a flight to Rome next month."}
+{"id": "oos-other_domain-02", "kind": "oos", "true_intent": null, "category": "other_domain", "has_order_reference": false, "text": "Can you move money between my savings and current account?"}
+{"id": "oos-other_domain-03", "kind": "oos", "true_intent": null, "category": "other_domain", "has_order_reference": false, "text": "Book me a table for two at 8 tonight."}
+{"id": "oos-other_domain-04", "kind": "oos", "true_intent": null, "category": "other_domain", "has_order_reference": false, "text": "my broadband keeps dropping every evening"}
+{"id": "oos-other_domain-05", "kind": "oos", "true_intent": null, "category": "other_domain", "has_order_reference": false, "text": "How do I renew my car insurance?"}
+{"id": "oos-other_domain-06", "kind": "oos", "true_intent": null, "category": "other_domain", "has_order_reference": false, "text": "I want to schedule a dentist appointment for next week."}
+{"id": "oos-ecommerce_not_in_taxonomy-02", "kind": "oos", "true_intent": null, "category": "ecommerce_not_in_taxonomy", "has_order_reference": false, "text": "Can I use two discount codes on one order?"}
+{"id": "oos-ecommerce_not_in_taxonomy-03", "kind": "oos", "true_intent": null, "category": "ecommerce_not_in_taxonomy", "has_order_reference": false, "text": "How do loyalty points work on your site?"}
+{"id": "oos-ecommerce_not_in_taxonomy-06", "kind": "oos", "true_intent": null, "category": "ecommerce_not_in_taxonomy", "has_order_reference": false, "text": "Do you price match if I find it cheaper elsewhere?"}
+{"id": "oos-ecommerce_not_in_taxonomy-08", "kind": "oos", "true_intent": null, "category": "ecommerce_not_in_taxonomy", "has_order_reference": false, "text": "Do you give bulk pricing if my company orders 200 units?"}
+{"id": "oos-vague-03", "kind": "oos", "true_intent": null, "category": "vague", "has_order_reference": false, "text": "It's about the thing from before."}
+{"id": "oos-vague-05", "kind": "oos", "true_intent": null, "category": "vague", "has_order_reference": false, "text": "this is not ok"}
+{"id": "oos-vague-07", "kind": "oos", "true_intent": null, "category": "vague", "has_order_reference": false, "text": "I need help with an issue I'm having."}
+{"id": "oos-vague-08", "kind": "oos", "true_intent": null, "category": "vague", "has_order_reference": false, "text": "still waiting on this"}
+{"id": "oos-vague-09", "kind": "oos", "true_intent": null, "category": "vague", "has_order_reference": false, "text": "it's wrong again"}
+{"id": "multi-multi_intent-01", "kind": "multi", "true_intent": "cancel_order", "category": "multi_intent", "has_order_reference": true, "text": "Cancel order [ORDER_ID_1] and refund me the money."}
+{"id": "multi-multi_intent-02", "kind": "multi", "true_intent": "track_order", "category": "multi_intent", "has_order_reference": true, "text": "Where is my order [ORDER_ID_1]? Also, how much is shipping to Ireland?"}
+{"id": "multi-multi_intent-03", "kind": "multi", "true_intent": "request_refund", "category": "multi_intent", "has_order_reference": false, "text": "What's your return window, and can I get a refund for the scarf I don't want?"}
+{"id": "multi-multi_intent-04", "kind": "multi", "true_intent": "payment_issue", "category": "multi_intent", "has_order_reference": false, "text": "my card was charged twice and i also want to talk to a real person"}
+{"id": "multi-multi_intent-05", "kind": "multi", "true_intent": "delivery_time", "category": "multi_intent", "has_order_reference": false, "text": "How long does delivery take, and is there free shipping on orders over 40?"}
+{"id": "multi-multi_intent-06", "kind": "multi", "true_intent": "return_product", "category": "multi_intent", "has_order_reference": false, "text": "I want to return the boots and also find out where my refund for the coat is."}
+{"id": "multi-multi_intent-07", "kind": "multi", "true_intent": "cancel_order", "category": "multi_intent", "has_order_reference": false, "text": "Can you cancel my order? And while you're at it, how do I reset my password?"}
+{"id": "multi-multi_intent-08", "kind": "multi", "true_intent": "availability", "category": "multi_intent", "has_order_reference": false, "text": "Is the grey sofa in stock, and how long would delivery take to my postcode?"}
+{"id": "multi-multi_intent-09", "kind": "multi", "true_intent": "payment_methods", "category": "multi_intent", "has_order_reference": false, "text": "What payment methods do you accept? My last card payment failed and I need to know why."}
+{"id": "multi-multi_intent-10", "kind": "multi", "true_intent": "request_refund", "category": "multi_intent", "has_order_reference": true, "text": "Please refund [ORDER_ID_1] and send me an invoice for my other purchase."}
+{"id": "multi-multi_intent-11", "kind": "multi", "true_intent": "refund_status", "category": "multi_intent", "has_order_reference": false, "text": "has my refund gone through yet and when does the sale start"}
+{"id": "multi-multi_intent-12", "kind": "multi", "true_intent": "refund_policy", "category": "multi_intent", "has_order_reference": true, "text": "How long do refunds usually take, and can you tell me where order [ORDER_ID_1] is?"}
+{"id": "multi-multi_intent-13", "kind": "multi", "true_intent": "cancel_order", "category": "multi_intent", "has_order_reference": false, "text": "I'd like to speak to an agent, and I also need to cancel my order from yesterday."}
+{"id": "multi-multi_intent-14", "kind": "multi", "true_intent": "change_account", "category": "multi_intent", "has_order_reference": false, "text": "Can you update the email on my account and show me my past orders?"}
+{"id": "multi-multi_intent-15", "kind": "multi", "true_intent": "cancel_order", "category": "multi_intent", "has_order_reference": false, "text": "where is my package and can i still cancel it"}
+{"id": "multi-multi_intent-16", "kind": "multi", "true_intent": "delivery_time", "category": "multi_intent", "has_order_reference": false, "text": "Do you deliver on Sundays? Also, is there a store near the train station?"}
+{"id": "multi-multi_intent-17", "kind": "multi", "true_intent": "request_refund", "category": "multi_intent", "has_order_reference": false, "text": "The zip on my bag broke. I'd like a refund, and please tell me your return policy for sale items too."}
+{"id": "multi-multi_intent-18", "kind": "multi", "true_intent": "shipping_costs", "category": "multi_intent", "has_order_reference": false, "text": "What's the shipping fee to Spain, and do you take PayPal?"}
+{"id": "multi-multi_intent-19", "kind": "multi", "true_intent": "track_order", "category": "multi_intent", "has_order_reference": true, "text": "Track my order [ORDER_ID_1] and tell me when your Oxford store opens."}
+{"id": "multi-multi_intent-20", "kind": "multi", "true_intent": "request_refund", "category": "multi_intent", "has_order_reference": false, "text": "I was double charged. Refund the extra charge and cancel the second order."}
+{"id": "multi-multi_intent-21", "kind": "multi", "true_intent": "close_account", "category": "multi_intent", "has_order_reference": false, "text": "I want to close my account, but first send me a copy of my last invoice."}
+{"id": "multi-multi_intent-22", "kind": "multi", "true_intent": "recover_password", "category": "multi_intent", "has_order_reference": false, "text": "How do I reset my password and where can I see my order history?"}
+{"id": "multi-multi_intent-23", "kind": "multi", "true_intent": "availability", "category": "multi_intent", "has_order_reference": false, "text": "Is the blue kettle back in stock? If it is, can I add it to my existing order?"}
+{"id": "multi-multi_intent-24", "kind": "multi", "true_intent": "return_product", "category": "multi_intent", "has_order_reference": false, "text": "Please arrange a return for the lamp and tell me how long the replacement will take to arrive."}
+{"id": "multi-multi_intent-25", "kind": "multi", "true_intent": "refund_status", "category": "multi_intent", "has_order_reference": false, "text": "Could you check my refund status and then connect me to a human?"}

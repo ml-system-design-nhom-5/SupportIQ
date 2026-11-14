@@ -15,6 +15,8 @@ from typing import Any
 
 import numpy as np
 
+from apps.ml_inference.preprocessing import DRAFTABLE_INTENTS, normalize_placeholders, split_clauses
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SERVICE_FILE = REPO_ROOT / "apps" / "ml_inference" / "app.py"
 
@@ -66,7 +68,7 @@ class NumpyBackend:
         self.id2label = self.model.id2label
 
     def logits(self, text: str) -> np.ndarray:
-        ids, _ = self.model.tok.encode(text)
+        ids, _ = self.model.tok.encode(normalize_placeholders(text))
         return self.model.logits(ids).astype(np.float64)
 
 
@@ -84,7 +86,7 @@ class TorchBackend:
 
     def logits(self, text: str) -> np.ndarray:
         # Mirrors apps/ml_inference/app.py: max_length=64, padding="max_length", truncation.
-        enc = self.tok(text, max_length=self.max_length, padding="max_length", truncation=True, return_tensors="pt")
+        enc = self.tok(normalize_placeholders(text), max_length=self.max_length, padding="max_length", truncation=True, return_tensors="pt")
         with self.torch.inference_mode():
             return self.model(**enc).logits[0].double().cpu().numpy()
 
@@ -104,6 +106,29 @@ def load_backend(model_dir: Path, preferred: str = "auto"):
     return backend
 
 
+class EnsembleBackend:
+    """Averages the logits of several members with the same label order (docs/design/intent-model-v1.2.md)."""
+
+    def __init__(self, members: list):
+        if not members:
+            raise ValueError("an ensemble needs at least one member")
+        if any(m.id2label != members[0].id2label for m in members):
+            raise ValueError("ensemble members must share one label order")
+        self.members = members
+        self.id2label = members[0].id2label
+        self.name = f"ensemble[{len(members)}x{members[0].name}]"
+
+    def logits(self, text: str) -> np.ndarray:
+        return np.mean([m.logits(text) for m in self.members], axis=0)
+
+
+def load_model_dirs(model_dirs: str, repo_root: Path, preferred: str = "auto"):
+    """One backend for a single directory, an ``EnsembleBackend`` for a comma-separated list."""
+    dirs = [d.strip() for d in model_dirs.split(",") if d.strip()]
+    backends = [load_backend(repo_root / d, preferred) for d in dirs]
+    return backends[0] if len(backends) == 1 else EnsembleBackend(backends)
+
+
 class IntentModel:
     """Turns raw logits into the same fields the ML service returns (+ entropy)."""
 
@@ -112,10 +137,11 @@ class IntentModel:
         self.id2label = backend.id2label
         self.latencies_ms: list[float] = []
 
-    def predict(self, text: str, k: int = 3) -> dict[str, Any]:
+    def predict(self, text: str, k: int = 3, record_latency: bool = True) -> dict[str, Any]:
         t0 = time.perf_counter()
         z = self.backend.logits(text)
-        self.latencies_ms.append((time.perf_counter() - t0) * 1000.0)
+        if record_latency:
+            self.latencies_ms.append((time.perf_counter() - t0) * 1000.0)
         p = np.exp(z - z.max())
         p /= p.sum()
         order = np.argsort(-p)
@@ -125,7 +151,21 @@ class IntentModel:
             "margin": float(p[order[0]] - p[order[1]]),
             "top_k": [[self.id2label[int(j)], round(float(p[j]), 4)] for j in order[:k]],
             "entropy": float(-(p * np.log(p + 1e-12)).sum()),
+            "scope_probability": float(sum(p[i] for i, label in self.id2label.items() if label in DRAFTABLE_INTENTS)),
         }
+
+    def predict_clauses(self, text: str, min_words: int, max_clauses: int,
+                        request_clauses_only: bool = False) -> list[dict[str, Any]] | None:
+        """Per-clause intent and confidence, as ``ModelContainer.predict`` returns them (multi-request detection).
+
+        Each clause is padded to the same length as in the service batch, so its logits match the batched ones.
+        """
+        clauses = split_clauses(text, min_words=min_words, max_clauses=max_clauses,
+                                request_clauses_only=request_clauses_only)
+        if not clauses:
+            return None
+        return [{"intent": p["intent"], "confidence": p["confidence"]}
+                for p in (self.predict(c, record_latency=False) for c in clauses)]
 
 
 def parity(model_dir: Path, texts: list[str], tol: float = 1e-3) -> dict[str, Any]:

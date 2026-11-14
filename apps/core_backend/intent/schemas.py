@@ -32,6 +32,10 @@ def _validate_finite_float(
     return num
 
 
+class ClausePrediction(BaseModel):
+    intent: str
+    confidence: float
+
 class IntentPrediction(BaseModel):
     intent: str
     confidence: float
@@ -56,6 +60,8 @@ class IntentPrediction(BaseModel):
     rejected_by_experimental_adapter: Optional[StrictBool] = None
     rejector_decision: Optional[str] = None
     error: Optional[str] = None
+    clauses: Optional[List[ClausePrediction]] = None  # multi-request detection; None = not computed
+    scope_probability: Optional[float] = None  # P(draftable request); None = not provided
     failure_code: Optional[Literal["ml_timeout", "ml_error", "ml_unavailable", "invalid_model_output"]] = None
 
     @field_validator("confidence", mode="before")
@@ -70,7 +76,7 @@ class IntentPrediction(BaseModel):
             return None
         return _validate_numeric_not_bool(value, "margin")
 
-    @field_validator("raw_confidence", "selective_score", "selective_threshold", mode="before")
+    @field_validator("raw_confidence", "selective_score", "selective_threshold", "scope_probability", mode="before")
     @classmethod
     def _validate_unit_interval_score(cls, value: Any, info: ValidationInfo) -> Optional[float]:
         return _validate_finite_float(value, info.field_name, min_value=0.0, max_value=1.0)
@@ -102,6 +108,7 @@ class RoutingContext(BaseModel):
     is_personal_lookup: bool = False  # Differentiates general policy vs personal order inquiry
     extracted_slots: Dict[str, Any] = Field(default_factory=dict)
     clarify_count: int = 0
+    return_channel_named: bool = False  # set from the message text (docs/design/return-channel-guard.md)
     intent_override: Optional[str] = None
     override_provenance: Optional[Dict[str, Any]] = None
     role: str = "agent"
@@ -121,6 +128,15 @@ class RouteDecision(BaseModel):
     can_execute_transaction: bool = False
     model_version: Optional[str] = None
     policy_version: Optional[str] = None
+    clause_intents: List[str] = Field(default_factory=list)  # set only with reason multiple_requests
+
+class MultiRequestPolicy(BaseModel):
+    """Gate 2d settings (docs/design/multi-request-detection.md); tuned on dev data only (DATA-58)."""
+    enabled: bool = True
+    min_clause_confidence: float = Field(ge=0.0, le=1.0)
+    min_words: int = Field(default=3, ge=1, le=20)
+    max_clauses: int = Field(default=4, ge=2, le=4)
+    request_clauses_only: bool = False  # keep only request clauses unless an additive cue is present
 
 class IntentPolicy(BaseModel):
     version: str
@@ -135,3 +151,6 @@ class IntentPolicy(BaseModel):
     default_margin_threshold: float = 0.10
     margin_thresholds: Dict[str, float] = Field(default_factory=dict)
     team_mapping: Dict[str, str] = Field(default_factory=dict)
+    multi_request: Optional[MultiRequestPolicy] = None
+    return_channel_guard: bool = False
+    min_scope_probability: Optional[float] = Field(default=None, ge=0.0, le=1.0)  # gate 2f; None = off
