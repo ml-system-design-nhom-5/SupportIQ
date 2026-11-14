@@ -1,0 +1,307 @@
+{
+  "schema_version": "fit2_next_evaluation_protocol.v1",
+  "created_at": "2026-11-14",
+  "owner": "worker_c",
+  "scope": "Independent evaluation protocol freeze & Original Fit2 baseline integrity verification for post-Original-Fit2 one-factor TRAIN contrast",
+  "runtime_environment": {
+    "active_local_model_dir": "artifacts/models/candidates/reconstructed-fit2-supcon-20261113",
+    "active_local_calibration_manifest": "artifacts/models/candidates/reconstructed-fit2-supcon-20261113/calibration_manifest.json",
+    "live_llm_budget_env_cap": 2,
+    "budget_ledger_remaining_estimate": "2 of 24 (1 live call used by worker_d during baseline activation smoke)",
+    "zero_live_llm_eval_rule": true,
+    "llm_modes_for_offline_eval": {
+      "engine": "_MockNoCallLLM (zero live calls; deterministic routing only)",
+      "runner": "_OfflineValidSpyLLM (zero live calls; deterministic draft eligibility & evidence snapshot only)"
+    }
+  },
+  "baseline_and_reference_artifacts": {
+    "orig_fit2": {
+      "dir": "artifacts/models/candidates/reconstructed-fit2-supcon-20261113",
+      "model_version": "fit2-supcon-energy-boundary-v1",
+      "num_labels": 46,
+      "valid_46_label_bijection": true,
+      "max_length": 64,
+      "temperature": 1.0,
+      "min_temperature": 1.0,
+      "calibrated": true,
+      "calibration_sample_count": 776,
+      "selective_rejector_enabled": false,
+      "init_checkpoint": "reconstructed-closure-fit1-20261113",
+      "init_weights_sha256": "95a940b630f44bf8d11882a26062c857839baa2d80d188f5451d52cecc2158a6",
+      "provenance_git_commit": "4939970b27ca93bff68196021119a038828cbc23",
+      "max_neg_cal_supported12_prob": 0.557692,
+      "sha256": {
+        "model.safetensors": "f695b1fe514aba81aafc968823047d496b03474a0b47199c65eaac6bd93c6dfa",
+        "calibration_manifest.json": "782c88db3fcd80615c3dceabbdb96ea2be7aa769119201f94229535becc7ae39",
+        "candidate_provenance_manifest.json": "79428567d0a4d23e69f224fca86ffcbdd26a4fe6dc5cd45980ff45bfb644574f",
+        "config.json": "6fa1fa9cc6a94063a977b0adaf2c9c3b296cf296d4ad9dcc6f2c52ca3bac9cb2",
+        "tokenizer.json": "41b9d12a4c559e098f30173bc0f76d092c43d7b1f873e7027da45a256f30f87",
+        "tokenizer_config.json": "15c067a68c4f12b2019e3a892c1158d4735544703fa496f2a6b73242b5812d84"
+      },
+      "model_safetensors_bytes": 267967920
+    },
+    "fit1_initializer": {
+      "path": "artifacts/models/candidates/reconstructed-closure-fit1-20261113/model.safetensors",
+      "sha256": "95a940b630f44bf8d11882a26062c857839baa2d80d188f5451d52cecc2158a6"
+    },
+    "serving_distilbert": {
+      "path": "artifacts/models/trained/distilbert-supportiq/model.safetensors",
+      "sha256": "dc7af8cffb19fe7711ed5a5d0137ffff3d7d1a1f43bad5a35edff8c8de4c1302"
+    },
+    "kb_and_policy": {
+      "data/knowledge/approved_kb.v2.json": "f8dcfbbdbb9cb2cd7a09d2ec12e0149083fdd4fa04931df6261fc4d1e6425fec",
+      "apps/ai_service/kb-release.json": "cf450a72758e3d68ac7453802b5bc6c042ef2eddb9a6c4fa76483d4009c42804",
+      "apps/core_backend/config/policies/intent_policy.v2.json": "8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7"
+    },
+    "archived_rejected_candidates": {
+      "v4p1": {
+        "dir": "artifacts/models/candidates/fit2-boundary-contrast-v4p1",
+        "model_safetensors_sha256": "e1039f9207a6aef5bfd2fcb5b8f14eb84a86d735da2a7386ed9721fb89ccb76f",
+        "calibration_manifest_sha256": "73e0d60b5d80a7f9b7e935f742bfd13f913c831e625b578942f64b8e92afe151",
+        "status": "REJECTED_ARCHIVED"
+      },
+      "v5_r2": {
+        "dir": "artifacts/models/candidates/fit2-taxonomy-audit-v5-r2",
+        "model_safetensors_sha256": "0b2d26c2adc22928a52bdbafe580fa1673d8ae1d112c42f3def643e137eaa33d",
+        "calibration_manifest_sha256": "ca3d711c78f9c1e960ebf2d700b4445c4538e0bd4b52cc2dd6fb502dc8e472c1",
+        "candidate_provenance_manifest_sha256": "9d85c0d50d44788949749ac62ba6bc7aa16f610ab4cf3476dcb5b193c34b0eca",
+        "status": "REJECTED_ARCHIVED"
+      }
+    }
+  },
+  "frozen_evaluation_inputs": {
+    "final24": {
+      "path": "data/benchmarks/final_acceptance/cases.jsonl",
+      "sha256": "fcb1007bf026e7406f3270ccf54770f262ed22a708c2fcf3aae3600195641b9b",
+      "rows": 24,
+      "distinct_raw_texts": 24,
+      "distinct_norm_texts": 24,
+      "distinct_base_ids": 24,
+      "extract_group_count": 1,
+      "pseudonymize_changed_rows": 1,
+      "role": "final_acceptance_benchmark"
+    },
+    "sa156": {
+      "path": "data/benchmarks/system/v2/acceptance/cases.jsonl",
+      "sha256": "c54c7efcd2d363317a87344cd12c76791db35ec17ca83a2e02b8fcb43f23150b",
+      "rows": 156,
+      "distinct_raw_texts": 156,
+      "distinct_norm_texts": 156,
+      "distinct_base_ids": 156,
+      "extract_group_count": 1,
+      "pseudonymize_changed_rows": 32,
+      "role": "system_acceptance_benchmark"
+    },
+    "noise420": {
+      "path": "data/benchmarks/autoeval/v1/ml_noise.jsonl",
+      "sha256": "e62cfc978725c24f99cf64d20875e61c4ca4282a9681e5f1d546beea1169a694",
+      "rows": 420,
+      "distinct_raw_texts": 420,
+      "distinct_norm_texts": 420,
+      "distinct_base_queries_source_id": 84,
+      "pseudonymize_changed_rows": 89,
+      "role": "noise_robustness_12_class_benchmark"
+    },
+    "oos80": {
+      "path": "data/benchmarks/autoeval/v1/ml_oos.jsonl",
+      "sha256": "93422de07094b39384fa6bce16aaaa5ecc874e689fface0ef7c5816f0fa5c1cb",
+      "rows": 80,
+      "distinct_raw_texts": 80,
+      "distinct_norm_texts": 80,
+      "distinct_base_ids": 80,
+      "pseudonymize_changed_rows": 2,
+      "role": "oos_safety_benchmark"
+    },
+    "ind36": {
+      "path": "artifacts/evaluation/fit2_independent_gate_20261113/cases.jsonl",
+      "sha256": "19a56d87299fd28c177f38cce87691598b47c1ed35143ce29194d5215daecc2f",
+      "rows": 36,
+      "distinct_raw_texts": 36,
+      "distinct_norm_texts": 36,
+      "distinct_base_ids": 36,
+      "pseudonymize_changed_rows": 2,
+      "role": "independent_gate_suite"
+    },
+    "old_sealed72": {
+      "path": "artifacts/evaluation/sealed_holdout_20261113/sealed_holdout_cases.jsonl",
+      "sha256": "c874a2b829fa1dad645ca4d0684a9b9d558895e002564a56edae0865c81ab78d",
+      "rows": 72,
+      "distinct_raw_texts": 72,
+      "distinct_norm_texts": 72,
+      "distinct_base_ids": 72,
+      "extract_group_count": 72,
+      "pseudonymize_changed_rows": 3,
+      "role": "sealed_holdout_20261113"
+    },
+    "fresh34": {
+      "path": "artifacts/evaluation/fit2_v4p1_independent_20261114/fresh_holdout_34.jsonl",
+      "sha256": "c1482fb4f8e60c58e0afc8b626fecce693dda9314559e22f9d92a195c9405f4c",
+      "rows": 34,
+      "distinct_raw_texts": 34,
+      "distinct_norm_texts": 34,
+      "distinct_base_ids": 34,
+      "extract_group_count": 34,
+      "pseudonymize_changed_rows": 9,
+      "role": "historical_regression_only_not_unseen_holdout"
+    },
+    "pos175": {
+      "path": "artifacts/models/candidates/run-records-fit2-taxonomy-audit-v5-r2/inputs/boundary_pos_evaluation.jsonl",
+      "sha256": "397b0cb6a48714b0be3408b396312c418d87c8fe058770561b52987b16d6eec0",
+      "rows": 175,
+      "distinct_raw_texts": 175,
+      "distinct_norm_texts": 175,
+      "distinct_base_ids": 85,
+      "extract_group_count": 85,
+      "pseudonymize_changed_rows": 0,
+      "role": "boundary_positive_evaluation"
+    },
+    "neg51": {
+      "path": "artifacts/models/candidates/run-records-fit2-taxonomy-audit-v5-r2/inputs/boundary_neg_evaluation.jsonl",
+      "sha256": "7a905de90b191e076002306cba7afe03fe6a222a377fc82f164406b8c8f2e3ff",
+      "rows": 51,
+      "distinct_raw_texts": 51,
+      "distinct_norm_texts": 51,
+      "distinct_base_ids": 20,
+      "extract_group_count": 20,
+      "pseudonymize_changed_rows": 0,
+      "role": "boundary_negative_evaluation"
+    },
+    "bitext6690": {
+      "path": "artifacts/models/candidates/run-records-fit2-taxonomy-audit-v5-r2/inputs/bitext_test_6690.jsonl",
+      "sha256": "c2279c30a6e7a9fde7488ea78d80a05fa560eb4ea9c02c746ffd87f6767c50b8",
+      "rows": 6690,
+      "distinct_raw_texts": 6690,
+      "distinct_norm_texts": 6690,
+      "distinct_base_ids": 6690,
+      "extract_group_count": 6690,
+      "role": "bitext_46_class_regression"
+    }
+  },
+  "orig_fit2_verified_baseline_metrics": {
+    "final24": {
+      "ans12_correct": 10,
+      "ans12_total": 12,
+      "ans12_wrong": 0,
+      "active_unans8_leaks": 0,
+      "injected_uninjected4_drafted_engine_runner": ["final-case-21"]
+    },
+    "sa156": {
+      "sup34_draft_expected": 25,
+      "sup34_total": 34,
+      "raw_draft": 28,
+      "precision": 0.892857,
+      "labeled_153_acc": 0.797386,
+      "labeled_153_macro_f1": 0.732573,
+      "esc34_acc": 0.692308,
+      "esc34_macro_f1": 0.735294,
+      "mand63_correct": {
+        "raw_pre": 42,
+        "raw_post": 42,
+        "engine": 57,
+        "runner": 50
+      },
+      "mand63_leaks": {
+        "raw_pre": 9,
+        "raw_post": 9,
+        "engine": 2,
+        "runner_real": 1
+      }
+    },
+    "noise420": {
+      "acc_12": 0.857143,
+      "macro_f1_12": 0.857307,
+      "ece_10bin": 0.063060,
+      "brier": 0.113556,
+      "surfaces": {
+        "raw_pre": {"drafted": 303, "correct": 276, "wrong": 27, "safe_rate": 0.935714},
+        "raw_post": {"drafted": 303, "correct": 276, "wrong": 27, "safe_rate": 0.935714},
+        "bare_gate": {"drafted": 293, "correct": 267, "wrong": 26, "safe_rate": 0.938095},
+        "engine": {"drafted": 295, "correct": 268, "wrong": 27, "safe_rate": 0.935714},
+        "runner": {"drafted": 286, "correct": 260, "wrong": 26, "safe_rate": 0.938095}
+      }
+    },
+    "oos80": {
+      "leaks_raw_pre": 3,
+      "leaks_raw_post": 3,
+      "leaks_bare": 3,
+      "leaks_engine": 0,
+      "leaks_runner": 0
+    },
+    "pos175": {
+      "acc_46": 0.765714,
+      "macro_f1_46": 0.435000,
+      "esc34_acc": 0.807692,
+      "sup11_correct": {"raw": 40, "engine": 39, "runner": 35, "gate_supported12": 36},
+      "esc34_unsafe_leaks": {"raw_engine": 4, "runner": 3}
+    },
+    "neg51": {
+      "unsafe_leaks_all_surfaces": 1
+    },
+    "bitext6690": {
+      "acc_46": 0.996263,
+      "macro_f1_46": 0.996313,
+      "sup11_correct": 1600,
+      "sup11_total": 1613,
+      "esc34_unsafe_leaks": 1
+    },
+    "ind36": {
+      "answerable_correct": {"raw_engine": 6, "runner": 5, "total": 11},
+      "leaks": 0,
+      "mand_strict_escalate": {"raw_bare": 4, "engine_runner": 5, "total": 12}
+    },
+    "old_sealed72": {
+      "answerable_correct": {"raw": 7, "engine_bare": 6, "runner": 5, "total": 24},
+      "leaks": 0,
+      "mand_strict_escalate": {"raw": 19, "engine_runner": 20, "total": 24}
+    },
+    "fresh34": {
+      "answerable_correct": 4,
+      "answerable_total": 11,
+      "unsafe_leaks_all_surfaces": 1
+    },
+    "baseline_gate_status": "FAILS_SAFETY_GATE (known unsafe leaks in pos175_esc34=3..4, neg51=1, sa156_mand63=1..9, fresh34=1, bitext6690=1; used strictly as comparative utility/F1 floor, NOT automatic acceptance)"
+  },
+  "required_evaluation_surfaces": [
+    "raw_pre",
+    "raw_post",
+    "bare_decide_route",
+    "engine_raw_mock_llm",
+    "runner_raw_offline_spy_llm",
+    "runtime_model_container_parity",
+    "postprivacy_masked_classifier_and_engine"
+  ],
+  "comparative_minima_vs_orig_fit2": {
+    "note": "Necessary non-regression floor relative to Original Fit2 utility/F1; passing comparative minima does NOT grant acceptance without zero unsafe draft leaks and independent fresh domain-gate verification.",
+    "final24_runner_ans12_correct_min": 10,
+    "sa156_runner_sup34_correct_min": 25,
+    "noise420_macro_f1_12_min": 0.8573,
+    "noise420_gate_correct_min": 267,
+    "noise420_runner_correct_min": 260
+  },
+  "mandatory_acceptance_gates": {
+    "zero_unsafe_draft_leaks_across_all_surfaces": [
+      "pos175_esc34 == 0",
+      "neg51 == 0",
+      "oos80 == 0",
+      "ind36 == 0",
+      "old_sealed72 == 0",
+      "fresh34 == 0",
+      "sa156_mand63_excluding_uninjected_unc_return_policy_04 == 0",
+      "final24_active_unans8 == 0",
+      "bitext6690_esc34 == 0"
+    ],
+    "train_and_cal_leakage_checks": [
+      "exact_norm_text_overlap(candidate_train, all_eval_suites) == 0",
+      "exact_norm_text_overlap(candidate_cal, all_eval_suites) == 0",
+      "CG.check_split_isolation_and_gold_contamination passed == true"
+    ],
+    "provenance_and_calibration_checks": [
+      "candidate_provenance_manifest.init_weights_sha256 matches declared base checkpoint (f695b1fe514aba81aafc968823047d496b03474a0b47199c65eaac6bd93c6dfa for warm-start from Original Fit2; or 95a940b630f44bf8d11882a26062c857839baa2d80d188f5451d52cecc2158a6 if explicitly re-fit from Fit1)",
+      "calibration_manifest.schema_version == selective_calibration.v1",
+      "valid_46_label_bijection == true",
+      "verify_runtime_score_parity passed under candidate SUPPORTIQ_MODEL_DIR and SUPPORTIQ_CALIBRATION_MANIFEST_PATH",
+      "postprivacy masked inference stability checked via pseudonymize(text, {})"
+    ],
+    "independent_domain_gate_requirement": "Independent fresh unseen holdout cases (authoring reserved solely to evaluator C AFTER B passes data readiness and A completes 1 bounded fit) focused on return-policy/store-channel contrast plus broader cross-intent regression, without sharing unseen holdout cases with trainer A prior to evaluation."
+  }
+}
