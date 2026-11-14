@@ -9,13 +9,13 @@ together.
 """
 
 from collections.abc import Callable, Mapping
-from datetime import datetime
 from typing import assert_never
 
-from supportiq_backend.accounts import AccountId, Principal, SupportPrincipal
+from supportiq_backend.accounts import Principal, SupportPrincipal, SupportRole
 from supportiq_backend.audit import AuditEventType, AuditValue
 from supportiq_backend.idempotency import (
     IdempotencyKey,
+    IdempotentRequest,
     RepeatedRequest,
     RequesterId,
     StoredResponse,
@@ -25,8 +25,11 @@ from supportiq_backend.platform import EventName, OperationId, SpanName, Transac
 from supportiq_backend.suggestions import Suggestion, SuggestionId
 from supportiq_backend.tickets.application.canonical_requests import to_canonical_reply
 from supportiq_backend.tickets.application.console_actions import (
+    ActionContext,
+    begin_action,
     build_audit_entry,
     build_recorded_decision,
+    load_display_name,
     record_decision_event,
     save_decision,
 )
@@ -41,6 +44,7 @@ from supportiq_backend.tickets.domain import (
     ConsoleTicket,
     NoAiDraftReply,
     ProposalReply,
+    ProposalRequest,
     RejectedAiDraftReply,
     ReplyBasis,
     ReplyId,
@@ -125,12 +129,7 @@ class SendReply:
                 that is not the ticket's proposal (422).
             DatabaseUnavailableError: The database is not available or a timeout fired.
         """
-        request = build_idempotent_request(
-            RequesterId(support.account_id),
-            OperationId.SEND_REPLY,
-            key,
-            to_canonical_reply(ticket_id, reply),
-        )
+        request = _build_request(support, ticket_id, reply, key)
         with self._ports.steps.step(SpanName.SEND_REPLY):
             self._ports.steps.record_ticket(ticket_id)
             async with self._transactions.begin() as transaction:
@@ -141,12 +140,9 @@ class SendReply:
                 claim = await self._ports.guard.claim(stores.idempotency, request)
                 if isinstance(claim, RepeatedRequest):
                     return claim.response
-                suggestion = await load_current_suggestion(stores.suggestions, ticket)
-                check_reply_allowed(ticket, suggestion, support.role)
-                check_suggestion_is_current(ticket, _suggestion_id_of(reply))
-                resolved = await _resolve_proposal(stores, ticket, reply)
-                validate_reply_body(ticket, suggestion, resolved)
-                record, decision = await self._send(stores, ticket, suggestion, support, resolved)
+                suggestion, resolved = await _check_reply(stores, ticket, support.role, reply)
+                action = begin_action(self._ports, ticket, support)
+                record, decision = await self._send(stores, action, suggestion, resolved)
                 response = self._render_response(record)
                 await stores.idempotency.save_response(request, response)
                 await transaction.commit()
@@ -156,49 +152,53 @@ class SendReply:
     async def _send(
         self,
         stores: ConsoleStores,
-        ticket: ConsoleTicket,
+        action: ActionContext,
         suggestion: Suggestion | None,
-        support: SupportPrincipal,
         reply: ResolvedReply,
     ) -> tuple[ReplyRecord, StaffDecision | None]:
-        draft_text = None
-        if suggestion is not None and suggestion.ready_draft is not None:
-            draft_text = (await restore_suggestion(stores.restorer, suggestion)).draft_text
+        draft_text = await _restored_draft_text(stores, suggestion)
         decision = derive_decision(reply, suggestion, draft_text)
-        sent = _build_sent_reply(
-            ReplyId(self._ports.ids.generate()),
-            ticket.ticket_id,
-            support.account_id,
-            reply,
-            self._ports.clock.now(),
-        )
+        sent = _build_sent_reply(ReplyId(self._ports.ids.generate()), action, reply)
         await stores.replies.insert_reply(sent)
-        await stores.tickets.close_ticket(ticket.ticket_id, sent.sent_at)
+        await stores.ticket_states.close_ticket(action.ticket_id, action.acted_at)
         await stores.audit.append(
             build_audit_entry(
-                self._ports,
-                ticket.ticket_id,
-                support.account_id,
-                AuditEventType.REPLY_SENT,
-                _reply_sent_data(sent, reply),
+                self._ports, action, AuditEventType.REPLY_SENT, _reply_sent_data(sent, reply)
             )
         )
         if decision is not None:
             sent_proposal = reply if isinstance(reply, SentProposal) else None
-            await save_decision(
-                stores,
-                self._ports,
-                build_recorded_decision(
-                    self._ports, ticket.ticket_id, support.account_id, decision, sent_proposal
-                ),
-            )
-        names = await stores.staff.load_display_names(frozenset({support.account_id}))
-        return ReplyRecord(sent, names[support.account_id]), decision
+            recorded = build_recorded_decision(self._ports, action, decision, sent_proposal)
+            await save_decision(stores, self._ports, recorded)
+        return ReplyRecord(sent, await load_display_name(stores, action.actor)), decision
 
     def _record_events(self, ticket_id: TicketId, decision: StaffDecision | None) -> None:
         self._ports.events.record(EventName.REPLY_SENT, ticket_id=ticket_id)
         if decision is not None:
             record_decision_event(self._ports, ticket_id, decision)
+
+
+def _build_request(
+    support: SupportPrincipal, ticket_id: TicketId, reply: ReplyRequest, key: IdempotencyKey
+) -> IdempotentRequest:
+    return build_idempotent_request(
+        RequesterId(support.account_id),
+        OperationId.SEND_REPLY,
+        key,
+        to_canonical_reply(ticket_id, reply),
+    )
+
+
+async def _check_reply(
+    stores: ConsoleStores, ticket: ConsoleTicket, role: SupportRole, reply: ReplyRequest
+) -> tuple[Suggestion | None, ResolvedReply]:
+    # Steps 4 to 8 of the check order, after the lock and the idempotency claim.
+    suggestion = await load_current_suggestion(stores.suggestions, ticket)
+    check_reply_allowed(ticket, suggestion, role)
+    check_suggestion_is_current(ticket, _suggestion_id_of(reply))
+    resolved = await _resolve_proposal(stores, ticket, reply)
+    validate_reply_body(ticket, suggestion, resolved)
+    return suggestion, resolved
 
 
 async def _resolve_proposal(
@@ -214,46 +214,59 @@ async def _resolve_proposal(
             assert_never(reply)
 
 
-def _build_sent_reply(
-    reply_id: ReplyId,
-    ticket_id: TicketId,
-    sent_by: AccountId,
-    reply: ResolvedReply,
-    sent_at: datetime,
-) -> SentReply:
+async def _restored_draft_text(stores: ConsoleStores, suggestion: Suggestion | None) -> str | None:
+    # The decision compares the body with the draft that staff read: its restored text.
+    if suggestion is None or suggestion.ready_draft is None:
+        return None
+    return (await restore_suggestion(stores.restorer, suggestion)).draft_text
+
+
+def _build_sent_reply(reply_id: ReplyId, action: ActionContext, reply: ResolvedReply) -> SentReply:
     match reply:
         case SentProposal():
-            # The acknowledgments, reason codes, and note of staff stay in the proposal that
-            # the reply names; the reply holds what the manager's request carried.
-            return SentReply(
-                reply_id=reply_id,
-                ticket_id=ticket_id,
-                basis=ReplyBasis.REPLY_PROPOSAL,
-                body=reply.body,
-                suggestion_id=reply.proposal.request.suggestion_id,
-                proposal_id=reply.proposal.proposal_id,
-                acknowledged_warning_ids=(),
-                staff_reason_codes=(),
-                note=None,
-                sent_by=sent_by,
-                sent_at=sent_at,
-            )
+            return _build_reply_from_proposal(reply_id, action, reply)
         case AiDraftReply() | RejectedAiDraftReply() | NoAiDraftReply():
-            return SentReply(
-                reply_id=reply_id,
-                ticket_id=ticket_id,
-                basis=reply.basis,
-                body=reply.body,
-                suggestion_id=reply.suggestion_id,
-                proposal_id=None,
-                acknowledged_warning_ids=tuple(sorted(reply.acknowledged_warning_ids)),
-                staff_reason_codes=reply.staff_reason_codes,
-                note=reply.note,
-                sent_by=sent_by,
-                sent_at=sent_at,
-            )
+            return _build_reply_on_its_basis(reply_id, action, reply)
         case _:
             assert_never(reply)
+
+
+def _build_reply_from_proposal(
+    reply_id: ReplyId, action: ActionContext, sent: SentProposal
+) -> SentReply:
+    # The acknowledgments, reason codes, and note of staff stay in the proposal that the reply
+    # names; the reply holds what the manager's request carried.
+    return SentReply(
+        reply_id=reply_id,
+        ticket_id=action.ticket_id,
+        basis=ReplyBasis.REPLY_PROPOSAL,
+        body=sent.body,
+        suggestion_id=sent.proposal.request.suggestion_id,
+        proposal_id=sent.proposal.proposal_id,
+        acknowledged_warning_ids=(),
+        staff_reason_codes=(),
+        note=None,
+        sent_by=action.actor,
+        sent_at=action.acted_at,
+    )
+
+
+def _build_reply_on_its_basis(
+    reply_id: ReplyId, action: ActionContext, reply: ProposalRequest
+) -> SentReply:
+    return SentReply(
+        reply_id=reply_id,
+        ticket_id=action.ticket_id,
+        basis=reply.basis,
+        body=reply.body,
+        suggestion_id=reply.suggestion_id,
+        proposal_id=None,
+        acknowledged_warning_ids=tuple(sorted(reply.acknowledged_warning_ids)),
+        staff_reason_codes=reply.staff_reason_codes,
+        note=reply.note,
+        sent_by=action.actor,
+        sent_at=action.acted_at,
+    )
 
 
 def _suggestion_id_of(reply: ReplyRequest) -> SuggestionId | None:

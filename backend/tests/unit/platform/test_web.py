@@ -62,13 +62,19 @@ REQUEST_THAT_FAILS_AFTER_THE_START: Scope = {
 
 
 class DependencyNotReadyError(BackendError):
-    """A dependency other than the database cannot answer, as ai-service can."""
+    """A dependency cannot answer, and no code logged it before the handler."""
 
     code: ClassVar[ErrorCode] = ErrorCode.NOT_READY
 
     def __init__(self) -> None:
         """Build the error with its fixed detail."""
         super().__init__("A dependency is not available.")
+
+
+class HandledDependencyError(DependencyNotReadyError):
+    """A dependency cannot answer, and the use case that handled it logged it already."""
+
+    is_logged_where_handled: ClassVar[bool] = True
 
 
 def build_app(
@@ -85,18 +91,6 @@ def build_app(
     async def handle_get_order(_order_id: Annotated[str, Path(alias="order_id")]) -> Response:
         raise ResourceNotFoundError
 
-    @app.get("/v1/failures/database")
-    async def handle_database_defect() -> Response:
-        raise DatabaseOperationError from KeyError(SECRET_DETAIL)
-
-    @app.get("/v1/failures/unexpected")
-    async def handle_unexpected_failure() -> Response:
-        raise RuntimeError(SECRET_DETAIL)
-
-    @app.get("/v1/failures/dependency")
-    async def handle_unavailable_dependency() -> Response:
-        raise DependencyNotReadyError
-
     @app.get("/v1/two-methods")
     async def handle_read_of_a_resource_with_two_methods() -> Response:
         return Response(status_code=HTTPStatus.NO_CONTENT)
@@ -109,9 +103,28 @@ def build_app(
     async def handle_get_number(_number: Annotated[int, Path(alias="number")]) -> Response:
         return Response(status_code=HTTPStatus.NO_CONTENT)
 
+    add_failure_routes(app)
     add_route_that_fails_after_the_response_started(app)
     instrument_application(app, tracer_provider or TracerProvider())
     return app
+
+
+def add_failure_routes(app: FastAPI) -> None:
+    @app.get("/v1/failures/database")
+    async def handle_database_defect() -> Response:
+        raise DatabaseOperationError from KeyError(SECRET_DETAIL)
+
+    @app.get("/v1/failures/unexpected")
+    async def handle_unexpected_failure() -> Response:
+        raise RuntimeError(SECRET_DETAIL)
+
+    @app.get("/v1/failures/dependency")
+    async def handle_unavailable_dependency() -> Response:
+        raise DependencyNotReadyError
+
+    @app.get("/v1/failures/handled-dependency")
+    async def handle_unavailable_dependency_logged_by_its_use_case() -> Response:
+        raise HandledDependencyError
 
 
 def add_route_that_fails_after_the_response_started(app: FastAPI) -> None:
@@ -229,10 +242,22 @@ async def test_readiness_answers_503_and_logs_when_the_database_does_not_answer(
     assert unavailable.attributes == {"error_type": "DatabaseUnavailableError"}
 
 
-async def test_another_dependency_that_is_not_ready_is_left_to_the_code_that_handled_it(
+async def test_a_not_ready_error_without_the_marker_is_logged_once(
     events: RecordingEventRecorder,
 ) -> None:
     response = await send_get(events, "/v1/failures/dependency")
+
+    (unavailable,) = events.of(EventName.DATABASE_CALL_FAILED)
+
+    assert response.status_code == HTTPStatus.SERVICE_UNAVAILABLE
+    assert response.json()["type"] == "urn:supportiq:problem:not-ready"
+    assert unavailable.attributes == {"error_type": "DependencyNotReadyError"}
+
+
+async def test_an_error_logged_where_it_was_handled_is_not_logged_again(
+    events: RecordingEventRecorder,
+) -> None:
+    response = await send_get(events, "/v1/failures/handled-dependency")
 
     assert response.status_code == HTTPStatus.SERVICE_UNAVAILABLE
     assert response.json()["type"] == "urn:supportiq:problem:not-ready"
@@ -371,14 +396,14 @@ async def test_unavailable_database_is_recorded_on_the_span_of_the_request(
     assert exception_types_of(spans) == ["DatabaseUnavailableError"]
 
 
-async def test_another_dependency_that_is_not_ready_is_recorded_on_the_span_of_the_request(
+async def test_an_error_logged_where_it_was_handled_is_still_recorded_on_the_span(
     events: RecordingEventRecorder,
 ) -> None:
     spans = await spans_of_get(
-        events, "/v1/failures/dependency", CheckReadiness((FakeReadinessProbe(),))
+        events, "/v1/failures/handled-dependency", CheckReadiness((FakeReadinessProbe(),))
     )
 
-    assert exception_types_of(spans) == ["DependencyNotReadyError"]
+    assert exception_types_of(spans) == ["HandledDependencyError"]
 
 
 async def test_refusal_is_not_recorded_as_a_failure(events: RecordingEventRecorder) -> None:

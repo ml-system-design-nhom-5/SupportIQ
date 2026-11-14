@@ -10,6 +10,7 @@ from datetime import datetime
 from enum import StrEnum
 
 from supportiq_backend.commerce import Money, OrderStatus, RefundStatus, ShipmentStatus
+from supportiq_backend.suggestions.domain.kb_documents import KbDocumentId, KbDocumentVersionTag
 from supportiq_backend.suggestions.domain.labels import (
     AiReasonCode,
     ConfidenceBand,
@@ -175,8 +176,8 @@ class RankedDocument:
         snippet: The supporting snippet.
     """
 
-    document_id: str
-    version: str
+    document_id: KbDocumentId
+    version: KbDocumentVersionTag
     title: str
     policy_key: str
     effective_start_at: datetime
@@ -266,8 +267,8 @@ class KbDocumentCitation:
     """
 
     citation_id: str
-    document_id: str
-    version: str
+    document_id: KbDocumentId
+    version: KbDocumentVersionTag
     snippet: str
 
 

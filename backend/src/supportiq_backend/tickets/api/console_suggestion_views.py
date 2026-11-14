@@ -1,8 +1,8 @@
 """Map a suggestion and its two parts to the contract (`SuggestionView`).
 
-Pseudonyms are already restored in the texts that reach this module (ADR-0010). Only the
-citations of a ready draft need the order mappings of commerce, so a new suggestion, whose
-parts are both pending, maps without them.
+Pseudonyms are already restored in the texts that reach this module (ADR-0010). Only a part
+with a result needs the mappings of other features: its asset versions and the citations of
+a ready draft. A new suggestion, whose parts are both pending, maps without them.
 """
 
 from typing import assert_never
@@ -12,7 +12,6 @@ from pydantic import MISSING
 from supportiq_backend.generated import (
     AiItemId,
     AnalysisPart,
-    AssetVersion,
     ConsoleDraftSegment,
     ConsoleIntent,
     ConsoleIntentAlternative,
@@ -32,7 +31,6 @@ from supportiq_backend.generated import (
     UnavailableDraftPart,
 )
 from supportiq_backend.generated import AiReasonCode as ContractAiReasonCode
-from supportiq_backend.generated import AssetVersions as ContractAssetVersions
 from supportiq_backend.generated import ConfidenceBand as ContractConfidenceBand
 from supportiq_backend.generated import DocumentValidity as ContractDocumentValidity
 from supportiq_backend.generated import IntentLabel as ContractIntentLabel
@@ -42,13 +40,12 @@ from supportiq_backend.generated import StepLatencies as ContractStepLatencies
 from supportiq_backend.generated import SuggestionTrigger as ContractSuggestionTrigger
 from supportiq_backend.generated import Warning as ContractWarning
 from supportiq_backend.platform import UnexpectedFailureError
-from supportiq_backend.platform.web import format_timestamp
+from supportiq_backend.platform.web import format_optional_timestamp, format_timestamp
 from supportiq_backend.suggestions import (
     AiReasonCode,
     Analysis,
     AnalysisIntent,
     AnalysisState,
-    AssetVersions,
     CancelledPart,
     DraftReady,
     DraftState,
@@ -62,21 +59,20 @@ from supportiq_backend.suggestions import (
     UnavailablePart,
 )
 from supportiq_backend.tickets.api.console_citation_views import to_citation_view
-from supportiq_backend.tickets.api.order_views import OrderViewMappers
+from supportiq_backend.tickets.api.console_view_mappers import ConsoleViewMappers
 from supportiq_backend.tickets.domain import RestoredSuggestion
 
 type _AnalysisView = PendingAnalysisPart | ReadyAnalysisPart | UnavailableAnalysisPart
 type _DraftView = PendingDraftPart | ReadyDraftPart | NoDraftPart | UnavailableDraftPart
 
 
-def to_suggestion_view(
-    restored: RestoredSuggestion, order_views: OrderViewMappers
-) -> SuggestionView:
+def to_suggestion_view(restored: RestoredSuggestion, views: ConsoleViewMappers) -> SuggestionView:
     """Map a suggestion with its restored texts to the contract.
 
     Args:
         restored: The suggestion and its restored texts.
-        order_views: The order mappings of commerce, for the amounts of order citations.
+        views: The mappings of other features, for the asset versions and the amounts of
+            order citations.
 
     Returns:
         The contract model.
@@ -88,8 +84,8 @@ def to_suggestion_view(
     suggestion = restored.suggestion
     return _build_suggestion_view(
         suggestion,
-        _to_analysis_part(suggestion.analysis),
-        _to_draft_part(restored, order_views),
+        _to_analysis_part(suggestion.analysis, views),
+        _to_draft_part(restored, views),
     )
 
 
@@ -136,7 +132,7 @@ def _build_suggestion_view(
     )
 
 
-def _to_analysis_part(state: AnalysisState) -> _AnalysisView:
+def _to_analysis_part(state: AnalysisState, views: ConsoleViewMappers) -> _AnalysisView:
     match state:
         case PendingPart():
             return PendingAnalysisPart(analysis_status="pending")
@@ -146,7 +142,7 @@ def _to_analysis_part(state: AnalysisState) -> _AnalysisView:
                 reason_codes=[ContractAiReasonCode(state.reason_code.value)],
             )
         case Analysis():
-            return _to_ready_analysis(state)
+            return _to_ready_analysis(state, views)
         case CancelledPart():
             # Only a superseded suggestion has cancelled parts, and the workspace shows the
             # current one only.
@@ -155,7 +151,7 @@ def _to_analysis_part(state: AnalysisState) -> _AnalysisView:
             assert_never(state)
 
 
-def _to_ready_analysis(analysis: Analysis) -> ReadyAnalysisPart:
+def _to_ready_analysis(analysis: Analysis, views: ConsoleViewMappers) -> ReadyAnalysisPart:
     return ReadyAnalysisPart(
         analysis_status="ready",
         intent=ConsoleIntent(_to_intent(analysis.intent)),
@@ -178,7 +174,7 @@ def _to_ready_analysis(analysis: Analysis) -> ReadyAnalysisPart:
             )
             for item in analysis.warnings
         ],
-        versions=_to_versions(analysis.versions),
+        versions=views.to_asset_versions_view(analysis.versions),
         step_latencies=_to_latencies(analysis.step_latencies),
     )
 
@@ -198,7 +194,7 @@ def _to_intent(intent: AnalysisIntent) -> ConsoleModelIntent | ConsoleStaffInten
             assert_never(intent)
 
 
-def _to_draft_part(restored: RestoredSuggestion, order_views: OrderViewMappers) -> _DraftView:
+def _to_draft_part(restored: RestoredSuggestion, views: ConsoleViewMappers) -> _DraftView:
     state: DraftState = restored.suggestion.draft
     match state:
         case PendingPart():
@@ -209,13 +205,13 @@ def _to_draft_part(restored: RestoredSuggestion, order_views: OrderViewMappers) 
                 reason_codes=[ContractAiReasonCode(state.reason_code.value)],
             )
         case DraftReady():
-            return _to_ready_draft(restored, state, order_views)
+            return _to_ready_draft(restored, state, views)
         case NoDraft():
             return NoDraftPart(
                 draft_status=state.status.value,
                 reason_codes=_to_reason_codes(state.details.reason_codes),
                 staff_note=MISSING if restored.staff_note is None else restored.staff_note,
-                versions=_to_versions(state.details.versions),
+                versions=views.to_asset_versions_view(state.details.versions),
                 step_latencies=_to_latencies(state.details.step_latencies),
             )
         case CancelledPart():
@@ -225,7 +221,7 @@ def _to_draft_part(restored: RestoredSuggestion, order_views: OrderViewMappers) 
 
 
 def _to_ready_draft(
-    restored: RestoredSuggestion, draft: DraftReady, order_views: OrderViewMappers
+    restored: RestoredSuggestion, draft: DraftReady, views: ConsoleViewMappers
 ) -> ReadyDraftPart:
     sent_context = restored.suggestion.sent_order_context
     if restored.draft_text is None:
@@ -242,41 +238,28 @@ def _to_ready_draft(
             for segment, text in zip(draft.draft.segments, restored.segment_texts, strict=True)
         ],
         citations=[
-            to_citation_view(citation, sent_context, order_views)
+            to_citation_view(citation, sent_context, views.orders)
             for citation in draft.draft.citations
         ],
         text=restored.draft_text,
         reason_codes=_to_reason_codes(draft.details.reason_codes),
         staff_note=MISSING if restored.staff_note is None else restored.staff_note,
-        versions=_to_versions(draft.details.versions),
+        versions=views.to_asset_versions_view(draft.details.versions),
         step_latencies=_to_latencies(draft.details.step_latencies),
     )
 
 
 def _to_document(document: RankedDocument) -> ContractRankedDocument:
-    end = document.effective_end_at
     return ContractRankedDocument(
         document_id=KbDocumentId(document.document_id),
         version=KbDocumentVersionTag(document.version),
         title=document.title,
         policy_key=document.policy_key,
         effective_start_at=format_timestamp(document.effective_start_at),
-        effective_end_at=MISSING if end is None else format_timestamp(end),
+        effective_end_at=format_optional_timestamp(document.effective_end_at),
         validity=ContractDocumentValidity(document.validity.value),
         rank=document.rank,
         snippet=document.snippet,
-    )
-
-
-def _to_versions(versions: AssetVersions) -> ContractAssetVersions:
-    return ContractAssetVersions(
-        release_id=versions.release_id,
-        model_version=AssetVersion(versions.model_version),
-        kb_version=AssetVersion(versions.kb_version),
-        mapping_version=AssetVersion(versions.mapping_version),
-        prompt_version=AssetVersion(versions.prompt_version),
-        routing_version=AssetVersion(versions.routing_version),
-        index_version=AssetVersion(versions.index_version),
     )
 
 

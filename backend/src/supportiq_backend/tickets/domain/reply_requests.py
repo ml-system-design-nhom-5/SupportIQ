@@ -120,12 +120,13 @@ class ProposalReply:
     Attributes:
         basis: Always `reply_proposal`.
         body: The text that the customer reads.
-        proposal_id: The proposal.
+        proposal_id: The proposal, as the request sent it: an opaque string that is compared
+            with the ticket's proposal and never parsed (CON-15).
     """
 
     basis: ClassVar[ReplyBasis] = ReplyBasis.REPLY_PROPOSAL
     body: str
-    proposal_id: ProposalId
+    proposal_id: str
 
 
 # The bodies of `createReplyProposal`: every basis but `reply_proposal`, because a proposal is

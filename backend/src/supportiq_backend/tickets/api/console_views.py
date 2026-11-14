@@ -1,12 +1,10 @@
 """Map the console's tickets to `backend` contract 1.2.0: queues, workspace, and staff actions.
 
 Pseudonyms are already restored in the texts that reach this module (ADR-0010). The console's
-order views repeat the shop's order schemas, so they reuse the shop's order mapping, which
-the composition root passes in: tickets never imports the interface of commerce (ARCH-17,
-ARCH-21, ARCH-22).
+order views repeat the shop's order schemas, and its asset versions repeat those of the admin
+area, so they reuse the mappings of commerce and suggestions, which the composition root
+passes in: tickets never imports the interface of another feature (ARCH-17, ARCH-21, ARCH-22).
 """
-
-from datetime import datetime
 
 from pydantic import MISSING
 
@@ -38,9 +36,10 @@ from supportiq_backend.generated import StaffReasonCode as ContractStaffReasonCo
 from supportiq_backend.generated import TicketAction as ContractTicketAction
 from supportiq_backend.generated import TicketSummary as ContractTicketSummary
 from supportiq_backend.generated import TicketWorkspace as ContractTicketWorkspace
-from supportiq_backend.platform.web import format_timestamp
+from supportiq_backend.platform.web import format_optional_timestamp, format_timestamp
 from supportiq_backend.suggestions import get_part_status
 from supportiq_backend.tickets.api.console_suggestion_views import to_suggestion_view
+from supportiq_backend.tickets.api.console_view_mappers import ConsoleViewMappers
 from supportiq_backend.tickets.api.order_views import OrderViewMappers
 from supportiq_backend.tickets.domain import (
     EscalationRecord,
@@ -71,8 +70,8 @@ def to_ticket_summary(summary: TicketSummary) -> ContractTicketSummary:
         status=ConsoleTicketStatus(ticket.status.value),
         handling_mode=ContractHandlingMode(ticket.handling_mode.value),
         is_authority_required=ticket.is_authority_required,
-        handling_started_at=_optional_time(ticket.handling_started_at),
-        closed_at=_optional_time(ticket.closed_at),
+        handling_started_at=format_optional_timestamp(ticket.handling_started_at),
+        closed_at=format_optional_timestamp(ticket.closed_at),
         customer=ConsoleCustomerView(display_name=summary.customer_display_name),
         message_excerpt=ticket.message_excerpt,
         draft_status=(
@@ -92,14 +91,13 @@ def to_ticket_summary(summary: TicketSummary) -> ContractTicketSummary:
     )
 
 
-def to_workspace(
-    workspace: TicketWorkspace, order_views: OrderViewMappers
-) -> ContractTicketWorkspace:
+def to_workspace(workspace: TicketWorkspace, views: ConsoleViewMappers) -> ContractTicketWorkspace:
     """Map the ticket workspace to the contract.
 
     Args:
         workspace: The workspace, with the AI text restored.
-        order_views: The order mappings of commerce, for the orders and the order facts.
+        views: The mappings of other features, for the orders, the order facts, and the
+            asset versions.
 
     Returns:
         The contract model.
@@ -115,22 +113,22 @@ def to_workspace(
         handling_mode=ContractHandlingMode(ticket.handling_mode.value),
         is_authority_required=ticket.is_authority_required,
         created_at=format_timestamp(ticket.created_at),
-        handling_started_at=_optional_time(ticket.handling_started_at),
-        closed_at=_optional_time(ticket.closed_at),
+        handling_started_at=format_optional_timestamp(ticket.handling_started_at),
+        closed_at=format_optional_timestamp(ticket.closed_at),
         customer=ConsoleCustomerView(display_name=workspace.customer_display_name),
         message=ConsoleMessageView(
             body=MessageText(ticket.message), created_at=format_timestamp(ticket.created_at)
         ),
-        order=MISSING if workspace.order is None else _to_order(workspace.order, order_views),
+        order=MISSING if workspace.order is None else _to_order(workspace.order, views.orders),
         other_orders=(
-            [_to_other_order(order, order_views) for order in workspace.other_orders]
+            [_to_other_order(order, views.orders) for order in workspace.other_orders]
             if workspace.other_orders
             else MISSING
         ),
         suggestion=(
             MISSING
             if workspace.suggestion is None
-            else to_suggestion_view(workspace.suggestion, order_views)
+            else to_suggestion_view(workspace.suggestion, views)
         ),
         proposal=MISSING if workspace.proposal is None else to_proposal_view(workspace.proposal),
         escalation=(
@@ -241,10 +239,6 @@ def _to_other_order(order: Order, order_views: OrderViewMappers) -> ConsoleOther
         order_total=shop_view.order_total,
         lines=shop_view.lines,
     )
-
-
-def _optional_time(moment: datetime | None) -> str | MISSING:
-    return MISSING if moment is None else format_timestamp(moment)
 
 
 def _to_reason_codes(codes: tuple[StaffReasonCode, ...]) -> list[ContractStaffReasonCode]:

@@ -26,7 +26,6 @@ from supportiq_backend.tickets.domain import (
     ConsoleTicket,
     ConsoleTicketPosition,
     HandlingMode,
-    ManagerQueue,
     TicketId,
     TicketStatus,
 )
@@ -128,43 +127,6 @@ class PostgresConsoleTicketStore:
                 )
         rows = await self._session.execute(ordered.limit(limit))
         return tuple(_to_console_ticket(row) for row in rows)
-
-    async def start_handling(self, ticket_id: TicketId, started_at: datetime) -> None:
-        """Set `handling_started_at`, which starts the handling clock (NFR-11).
-
-        Args:
-            ticket_id: The ticket, locked, whose clock has not started.
-            started_at: The time of the first view.
-        """
-        await self._session.execute(
-            update(TicketRow)
-            .where(TicketRow.ticket_id == ticket_id, TicketRow.handling_started_at.is_(None))
-            .values(handling_started_at=started_at)
-        )
-
-    async def move_to_manager_queue(self, ticket_id: TicketId, queue: ManagerQueue) -> None:
-        """Move an `open` ticket to a manager's queue; a trigger keeps to the state machine.
-
-        Args:
-            ticket_id: The ticket, locked and `open`.
-            queue: `awaiting_approval` or `escalated`.
-        """
-        await self._session.execute(
-            update(TicketRow).where(TicketRow.ticket_id == ticket_id).values(status=queue.value)
-        )
-
-    async def close_ticket(self, ticket_id: TicketId, closed_at: datetime) -> None:
-        """Set the ticket `closed`, when its reply is sent.
-
-        Args:
-            ticket_id: The ticket, locked.
-            closed_at: When the reply was sent.
-        """
-        await self._session.execute(
-            update(TicketRow)
-            .where(TicketRow.ticket_id == ticket_id)
-            .values(status=TicketStatus.CLOSED.value, closed_at=closed_at)
-        )
 
 
 class PostgresTicketLinks:

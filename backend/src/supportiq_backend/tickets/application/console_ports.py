@@ -31,6 +31,7 @@ from supportiq_backend.tickets.domain import (
     ReplyProposalStore,
     ReplyStore,
     RestoredSuggestion,
+    TicketStateStore,
     build_draft_text,
 )
 
@@ -41,6 +42,7 @@ class ConsoleStores:
 
     Attributes:
         tickets: The tickets and their messages.
+        ticket_states: The state of a locked ticket: its handling clock, queue, and closing.
         replies: The replies and staff decisions.
         proposals: The reply proposals.
         escalations: The escalations.
@@ -54,6 +56,7 @@ class ConsoleStores:
     """
 
     tickets: ConsoleTicketStore
+    ticket_states: TicketStateStore
     replies: ReplyStore
     proposals: ReplyProposalStore
     escalations: EscalationStore

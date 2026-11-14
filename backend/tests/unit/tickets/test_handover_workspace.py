@@ -99,7 +99,7 @@ async def test_a_closed_ticket_still_shows_its_proposal_next_to_the_reply() -> N
     harness = await proposed_harness()
     proposal = harness.proposals.proposals[TICKET_ID]
     await build_send(harness).execute(
-        MANAGER, TICKET_ID, ProposalReply(PROPOSED_TEXT, proposal.proposal_id), SEND_KEY
+        MANAGER, TICKET_ID, ProposalReply(PROPOSED_TEXT, str(proposal.proposal_id)), SEND_KEY
     )
 
     workspace = await build_get(harness).execute(SIGNED_IN_STAFF, TICKET_ID)

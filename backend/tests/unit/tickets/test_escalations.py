@@ -47,6 +47,7 @@ from tests.unit.tickets.console_fakes import (
     build_console_ticket,
     build_escalate,
     with_suggestion,
+    with_ticking_clock,
 )
 from tests.unit.tickets.fakes import MANAGER_ACCOUNT_ID
 
@@ -85,6 +86,37 @@ async def test_staff_escalate_an_open_ticket_to_the_manager_queue() -> None:
     )
     assert escalation.request.staff_reason_codes == (StaffReasonCode.CASE_EXCEPTION,)
     assert harness.tickets.tickets[TICKET_ID].status is TicketStatus.ESCALATED
+
+
+async def test_an_escalation_gives_every_record_the_time_of_one_clock_read() -> None:
+    harness = with_ticking_clock(harness_with_suggestion())
+
+    await build_escalate(harness).execute(STAFF, TICKET_ID, ESCALATION, KEY)
+
+    (decision,) = harness.replies.decisions
+    moments = {
+        harness.escalations.escalations[TICKET_ID].escalated_at,
+        decision.decided_at,
+        *(entry.occurred_at for entry in harness.audit.entries),
+    }
+    assert moments == {FAKE_CLOCK_START}
+
+
+async def test_a_retry_with_the_reason_codes_in_another_order_returns_the_first_response() -> None:
+    harness = harness_with_suggestion()
+    escalate = build_escalate(harness)
+    codes = (StaffReasonCode.CASE_EXCEPTION, StaffReasonCode.KB_GAP)
+    first = await escalate.execute(
+        STAFF, TICKET_ID, EscalationRequest(codes, None, SUGGESTION_ID), KEY
+    )
+
+    repeated = await escalate.execute(
+        STAFF, TICKET_ID, EscalationRequest(codes[::-1], None, SUGGESTION_ID), KEY
+    )
+
+    assert repeated == first
+    assert harness.escalations.escalations[TICKET_ID].request.staff_reason_codes == codes
+    assert len(harness.events.of(EventName.TICKET_ESCALATED)) == 1
 
 
 async def test_an_escalation_records_the_decision_escalate() -> None:

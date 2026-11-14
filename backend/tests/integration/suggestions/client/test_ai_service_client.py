@@ -7,7 +7,6 @@ import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from http import HTTPStatus
-from pathlib import Path
 
 import httpx
 import pytest
@@ -26,8 +25,8 @@ from supportiq_backend.suggestions.adapters.ai_service_client import (
     HttpAiService,
     create_ai_service_client,
 )
+from tests.integration.ai_service_doubles import EXAMPLES
 
-EXAMPLES = Path(__file__).parents[4] / "contracts" / "examples"
 BASE_URL = "http://ai-service.test"
 SERVICE_TOKEN = "service-token-for-tests"
 CALL_AND_RETRY = 2

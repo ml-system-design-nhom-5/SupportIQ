@@ -11,12 +11,13 @@ from supportiq_backend.accounts import Principal, SupportPrincipal
 from supportiq_backend.idempotency import (
     NO_CONTENT_BODY,
     IdempotencyKey,
+    IdempotentRequest,
     RepeatedRequest,
     RequesterId,
     StoredResponse,
     build_idempotent_request,
 )
-from supportiq_backend.platform import EventName, OperationId, TransactionRunner
+from supportiq_backend.platform import EventName, OperationId, SpanName, TransactionRunner
 from supportiq_backend.suggestions import (
     AiServiceOperation,
     AiServiceUnavailableError,
@@ -96,13 +97,7 @@ class RecordTicketView:
             DatabaseUnavailableError: The database is not available or a timeout fired.
         """
         loaded_kb_version = await self._read_kb_version_of_first_view(ticket_id)
-        request = build_idempotent_request(
-            RequesterId(support.account_id),
-            OperationId.RECORD_TICKET_VIEW,
-            key,
-            {TICKET_ID_FIELD: ticket_id},
-        )
-        started: StartedSuggestion | None = None
+        request = _build_request(support, ticket_id, key)
         async with self._transactions.begin() as transaction:
             stores = transaction.stores
             ticket = await stores.tickets.lock_console_ticket(ticket_id)
@@ -111,15 +106,7 @@ class RecordTicketView:
             claim = await self._ports.guard.claim(stores.idempotency, request)
             if isinstance(claim, RepeatedRequest):
                 return claim.response
-            is_first_view = ticket.handling_started_at is None
-            if is_first_view:
-                await stores.tickets.start_handling(ticket_id, self._ports.clock.now())
-            started = await self._start_suggestion(
-                stores,
-                ticket,
-                support,
-                await self._choose_trigger(stores, ticket, is_first_view, loaded_kb_version),
-            )
+            started = await self._record(stores, ticket, support, loaded_kb_version)
             await stores.idempotency.save_response(request, VIEW_RECORDED)
             await transaction.commit()
         if started is not None:
@@ -130,28 +117,39 @@ class RecordTicketView:
     async def _read_kb_version_of_first_view(self, ticket_id: TicketId) -> str | None:
         async with self._transactions.begin() as transaction:
             ticket = await transaction.stores.tickets.load_console_ticket(ticket_id)
-        # Only a first view of a ticket with a suggestion can need a new one for its KB.
-        needs_kb_check = (
-            ticket is not None
-            and _is_ai_handled(ticket)
-            and ticket.handling_started_at is None
-            and ticket.current_suggestion_id is not None
-        )
-        if not needs_kb_check:
+        if ticket is None or not _needs_kb_check(ticket):
             return None
-        try:
-            versions = await self._ports.ai_service.fetch_asset_versions()
-        except AiServiceUnavailableError as error:
-            # The view is recorded without a KB check (backend ticket workflow design); the
-            # failure is logged once, at `error` when it is a contract violation.
-            record_ai_service_failure(
-                self._ports.events,
-                AiServiceOperation.GET_ASSET_VERSIONS,
-                error,
-                ticket_id=ticket_id,
-            )
-            return None
+        return await self._fetch_kb_version(ticket_id)
+
+    async def _fetch_kb_version(self, ticket_id: TicketId) -> str | None:
+        with self._ports.steps.step(SpanName.CALL_AI_SERVICE):
+            self._ports.steps.record_ai_service_endpoint(AiServiceOperation.GET_ASSET_VERSIONS)
+            try:
+                versions = await self._ports.ai_service.fetch_asset_versions()
+            except AiServiceUnavailableError as error:
+                # The view is recorded without a KB check (backend ticket workflow design);
+                # the failure is logged once, at `error` when it is a contract violation.
+                record_ai_service_failure(
+                    self._ports.events,
+                    AiServiceOperation.GET_ASSET_VERSIONS,
+                    error,
+                    ticket_id=ticket_id,
+                )
+                return None
         return versions.kb_version
+
+    async def _record(
+        self,
+        stores: ConsoleStores,
+        ticket: ConsoleTicket,
+        support: SupportPrincipal,
+        loaded_kb_version: str | None,
+    ) -> StartedSuggestion | None:
+        is_first_view = ticket.handling_started_at is None
+        if is_first_view:
+            await stores.ticket_states.start_handling(ticket.ticket_id, self._ports.clock.now())
+        chosen = await self._choose_trigger(stores, ticket, is_first_view, loaded_kb_version)
+        return await self._start_suggestion(stores, ticket, support, chosen)
 
     async def _choose_trigger(
         self,
@@ -192,6 +190,26 @@ class RecordTicketView:
                 support.account_id,
             ),
         )
+
+
+def _build_request(
+    support: SupportPrincipal, ticket_id: TicketId, key: IdempotencyKey
+) -> IdempotentRequest:
+    return build_idempotent_request(
+        RequesterId(support.account_id),
+        OperationId.RECORD_TICKET_VIEW,
+        key,
+        {TICKET_ID_FIELD: ticket_id},
+    )
+
+
+def _needs_kb_check(ticket: ConsoleTicket) -> bool:
+    # Only a first view of a ticket with a suggestion can need a new one for its KB.
+    return (
+        _is_ai_handled(ticket)
+        and ticket.handling_started_at is None
+        and ticket.current_suggestion_id is not None
+    )
 
 
 def _is_ai_handled(ticket: ConsoleTicket) -> bool:

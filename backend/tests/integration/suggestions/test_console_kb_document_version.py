@@ -1,10 +1,11 @@
 """Reading a KB document version over HTTP (`getConsoleKbDocumentVersion`, UI-20, SEC-41).
 
 The ai-service of these tests is an in-memory one that answers with the examples of its
-contract, or refuses every connection. The document reaches the console as ai-service serves
-it; a `404` of ai-service is a `404`, and an ai-service that cannot answer is `503 not-ready`,
-logged once as `ai_service.call_failed` (backend ticket workflow design, The `ai-service`
-client).
+contract, answers with an error, or refuses every connection. The document reaches the console
+as ai-service serves it; a `404` of ai-service is a `404`. An ai-service that cannot answer is
+`503 not-ready`, logged once as `ai_service.call_failed`, and a response outside the contract is
+`500`, logged once as `ai_service.contract_violated` (backend ticket workflow design, The
+`ai-service` client; ERR-05).
 """
 
 from http import HTTPStatus
@@ -13,6 +14,7 @@ import pytest
 
 from supportiq_backend.platform import EventName
 from tests.integration.ai_service_doubles import (
+    Answer,
     FakeAiService,
     answer_with,
     read_example,
@@ -26,15 +28,15 @@ from tests.integration.application import (
 )
 from tests.integration.builders import DatabaseBuilder
 from tests.integration.database import WorkerDatabase
-from tests.integration.suggestions.api.read_requests import (
+from tests.integration.suggestions.read_requests import (
     SignIn,
+    headers_of,
     problem_example,
     problem_of,
     sign_in_as_admin,
     sign_in_as_customer,
-    sign_in_as_manager,
-    sign_in_as_staff,
 )
+from tests.integration.tickets.console_requests import sign_in_as_manager, sign_in_as_support
 from tests.unit.platform.fakes import FakeClock, RecordingEventRecorder
 
 pytestmark = pytest.mark.anyio
@@ -51,6 +53,12 @@ PATHS_OUTSIDE_THE_PATTERN = [
     "/v1/console/kb-documents/SAMPLE-REFUND-001/versions/1%200",
 ]
 OUTSIDE_IDS = ["leading-dot", "too-long", "leading-dash", "space"]
+# A connection error and a `5xx`: the failures of an ai-service that cannot answer.
+CANNOT_ANSWER: list[Answer] = [
+    refuse_connection,
+    answer_with(read_example("problems/internal-error.json"), HTTPStatus.INTERNAL_SERVER_ERROR),
+]
+CANNOT_ANSWER_IDS = ["connection-refused", "5xx"]
 FAILURE_EVENTS = (
     EventName.AI_SERVICE_CALL_FAILED,
     EventName.AI_SERVICE_CONTRACT_VIOLATED,
@@ -63,7 +71,11 @@ def failures_of(events: RecordingEventRecorder) -> list[EventName]:
     return [name for name in events.names() if name in FAILURE_EVENTS]
 
 
-@pytest.mark.parametrize("sign_in", [sign_in_as_staff, sign_in_as_manager])
+@pytest.mark.parametrize(
+    "sign_in",
+    [headers_of(sign_in_as_support), headers_of(sign_in_as_manager)],
+    ids=["staff", "manager"],
+)
 async def test_staff_and_managers_get_the_document_version_as_ai_service_serves_it(
     worker_database: WorkerDatabase, builder: DatabaseBuilder, sign_in: SignIn
 ) -> None:
@@ -90,7 +102,7 @@ async def test_every_optional_field_that_ai_service_sends_reaches_the_console(
     document = read_example("getConsoleKbDocumentVersion/document-version.json") | {
         "last_reviewed_at": LAST_REVIEWED_AT
     }
-    headers = await sign_in_as_staff(builder)
+    headers = (await sign_in_as_support(builder)).headers
 
     async with running_client(
         build_settings(worker_database),
@@ -139,7 +151,7 @@ async def test_a_path_outside_the_pattern_is_404_and_ai_service_is_not_read(
     worker_database: WorkerDatabase, builder: DatabaseBuilder, path: str
 ) -> None:
     ai_service = FakeAiService(answer_with(read_example(FOUND)))
-    headers = await sign_in_as_staff(builder)
+    headers = (await sign_in_as_support(builder)).headers
 
     async with running_client(
         build_settings(worker_database),
@@ -159,7 +171,7 @@ async def test_a_version_that_ai_service_does_not_know_is_404_without_a_failure(
 ) -> None:
     not_found = read_example("problems/not-found.json")
     events = RecordingEventRecorder()
-    headers = await sign_in_as_staff(builder)
+    headers = (await sign_in_as_support(builder)).headers
 
     async with running_client(
         build_settings(worker_database),
@@ -174,12 +186,13 @@ async def test_a_version_that_ai_service_does_not_know_is_404_without_a_failure(
     assert failures_of(events) == []
 
 
-async def test_an_ai_service_that_refuses_the_connection_is_503_logged_once(
-    worker_database: WorkerDatabase, builder: DatabaseBuilder
+@pytest.mark.parametrize("answer", CANNOT_ANSWER, ids=CANNOT_ANSWER_IDS)
+async def test_an_ai_service_that_cannot_answer_is_503_logged_once(
+    worker_database: WorkerDatabase, builder: DatabaseBuilder, answer: Answer
 ) -> None:
-    ai_service = FakeAiService(refuse_connection)
+    ai_service = FakeAiService(answer)
     events = RecordingEventRecorder()
-    headers = await sign_in_as_staff(builder)
+    headers = (await sign_in_as_support(builder)).headers
 
     async with running_client(
         build_settings(worker_database), events, FakeClock(), ai_service=ai_service
@@ -199,7 +212,7 @@ async def test_a_document_version_outside_the_contract_is_500_logged_once(
 ) -> None:
     outside = read_example(FOUND) | {"title": 7}
     events = RecordingEventRecorder()
-    headers = await sign_in_as_staff(builder)
+    headers = (await sign_in_as_support(builder)).headers
 
     async with running_client(
         build_settings(worker_database),
@@ -209,11 +222,11 @@ async def test_a_document_version_outside_the_contract_is_500_logged_once(
     ) as client:
         response = await client.get(DOCUMENT_PATH, headers=headers)
 
-    (failure,) = events.of(EventName.REQUEST_FAILED)
+    (failure,) = events.of(EventName.AI_SERVICE_CONTRACT_VIOLATED)
     assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
     assert problem_of(response) == problem_example("internal-error")
-    assert failure.attributes == {"error_type": "AiServiceContractError"}
-    assert failures_of(events) == [EventName.REQUEST_FAILED]
+    assert failure.attributes == {"ai_service_operation": "getKbDocumentVersion"}
+    assert failures_of(events) == [EventName.AI_SERVICE_CONTRACT_VIOLATED]
 
 
 async def test_a_read_without_a_session_is_401(backend: RunningBackend) -> None:

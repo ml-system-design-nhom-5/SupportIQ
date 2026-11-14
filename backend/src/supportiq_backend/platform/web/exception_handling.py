@@ -3,9 +3,9 @@
 Every error that leaves a request becomes a Problem Details body here and nowhere else:
 domain errors, framework validation errors, unknown routes, and unexpected exceptions. An
 error is logged once, where it is handled (ERR-05): here, unexpected failures as
-`request.failed` and database failures as `database.call_failed`. Another dependency that
-cannot answer, such as ai-service, is logged by the use case that handled its failure, with
-the event of that dependency, so this handler only marks the span. Bodies never carry a stack
+`request.failed` and a backend that cannot serve as `database.call_failed`. Only an error
+whose class sets `is_logged_where_handled` was logged by the use case that raised it, with the
+event of its cause, so this handler then only marks the span. Bodies never carry a stack
 trace, an internal name, or a value that was sent (CON-12).
 """
 
@@ -22,7 +22,6 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from supportiq_backend.platform import (
     BackendError,
-    DatabaseUnavailableError,
     ErrorCode,
     EventName,
     EventRecorder,
@@ -142,11 +141,10 @@ class _ProblemHandler:
     def _record_failure(self, error: BackendError) -> None:
         # One log line and the span of the request (ERR-05, LOG-22). A refusal is no failure.
         cause = _cause_of(error)
+        if error.is_logged_where_handled:
+            self._trace_context.record_failure(cause)
+            return
         match error.code:
-            case ErrorCode.NOT_READY if not isinstance(error, DatabaseUnavailableError):
-                # The use case that handled the failure of the dependency logged it already.
-                self._trace_context.record_failure(cause)
-                return
             case ErrorCode.NOT_READY:
                 event = EventName.DATABASE_CALL_FAILED
                 error_type = type(error).__name__

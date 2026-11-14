@@ -13,6 +13,11 @@ import pytest
 
 from tests.integration.application import RunningBackend, session_headers
 from tests.integration.builders import AccountSpec, DatabaseBuilder, TicketSpec
+from tests.integration.tickets.console_requests import (
+    AUTHORITY_REQUIRED,
+    FORBIDDEN,
+    INVALID_REQUEST,
+)
 
 pytestmark = pytest.mark.anyio
 
@@ -23,9 +28,7 @@ OTHER_KEY = "00000000-0000-4000-8000-000000000002"
 THIRD_KEY = "00000000-0000-4000-8000-000000000003"
 PROPOSED_TEXT = "We have approved a refund of the full amount to your card."
 REPLY_TEXT = "Your parcel left our warehouse yesterday."
-AUTHORITY_REQUIRED = "urn:supportiq:problem:authority-required"
-FORBIDDEN = "urn:supportiq:problem:forbidden"
-INVALID_REQUEST = "urn:supportiq:problem:invalid-request"
+ESCALATION_NOTE = "The customer disputes the carrier's delivery scan."
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,7 +84,8 @@ async def send_as_staff(backend: RunningBackend, desk: Desk) -> tuple[HTTPStatus
         json={"basis": "no_ai_draft", "body": REPLY_TEXT},
         headers={**desk.staff, "Idempotency-Key": OTHER_KEY},
     )
-    return HTTPStatus(response.status_code), response.json()["type"]
+    # A reply that was sent has no problem type, so the assert names the status it got.
+    return HTTPStatus(response.status_code), response.json().get("type")
 
 
 async def shop_view(backend: RunningBackend, desk: Desk) -> str:
@@ -96,10 +100,12 @@ async def test_a_proposal_reaches_the_customer_only_when_a_manager_sends_it(
     desk = await build_desk(builder, is_authority_required=True)
     proposal = {"basis": "no_ai_draft", "body": PROPOSED_TEXT}
 
-    before_proposal = await send_as_staff(backend, desk)
+    # Each step depends on the one before, so each is checked before the next one runs.
+    assert await send_as_staff(backend, desk) == (HTTPStatus.FORBIDDEN, AUTHORITY_REQUIRED)
     proposed_status, proposed = await act(backend, desk, desk.staff, "reply-proposals", proposal)
-    after_proposal = await send_as_staff(backend, desk)
-    seen_while_waiting = await shop_view(backend, desk)
+    assert proposed_status == HTTPStatus.CREATED
+    assert await send_as_staff(backend, desk) == (HTTPStatus.FORBIDDEN, FORBIDDEN)
+    assert PROPOSED_TEXT not in await shop_view(backend, desk)
     sent_status, _ = await act(
         backend,
         desk,
@@ -112,10 +118,6 @@ async def test_a_proposal_reaches_the_customer_only_when_a_manager_sends_it(
         },
     )
 
-    assert before_proposal == (HTTPStatus.FORBIDDEN, AUTHORITY_REQUIRED)
-    assert proposed_status == HTTPStatus.CREATED
-    assert after_proposal == (HTTPStatus.FORBIDDEN, FORBIDDEN)
-    assert PROPOSED_TEXT not in seen_while_waiting
     assert sent_status == HTTPStatus.CREATED
     assert PROPOSED_TEXT in await shop_view(backend, desk)
     assert (
@@ -133,17 +135,23 @@ async def test_an_escalated_ticket_reaches_the_customer_only_when_a_manager_send
     desk = await build_desk(builder, is_authority_required=False)
 
     escalated_status, _ = await act(
-        backend, desk, desk.staff, "escalations", {"staff_reason_codes": ["case_exception"]}
+        backend,
+        desk,
+        desk.staff,
+        "escalations",
+        {"staff_reason_codes": ["other"], "note": ESCALATION_NOTE},
     )
     after_escalation = await send_as_staff(backend, desk)
     seen_while_escalated = await shop_view(backend, desk)
+    replies_while_escalated = await builder.scalar("SELECT count(*) FROM replies")
     sent_status, _ = await act(
         backend, desk, desk.manager, "replies", {"basis": "no_ai_draft", "body": REPLY_TEXT}
     )
 
     assert escalated_status == HTTPStatus.CREATED
     assert after_escalation == (HTTPStatus.FORBIDDEN, FORBIDDEN)
-    assert REPLY_TEXT not in seen_while_escalated
+    assert replies_while_escalated == 0
+    assert [text for text in (REPLY_TEXT, ESCALATION_NOTE) if text in seen_while_escalated] == []
     assert sent_status == HTTPStatus.CREATED
     assert REPLY_TEXT in await shop_view(backend, desk)
 

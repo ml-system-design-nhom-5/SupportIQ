@@ -66,6 +66,8 @@ from tests.unit.tickets.fakes import (
     FakeReplyProposalStore,
     FakeReplyStore,
     FakeStaffDirectory,
+    FakeTicketStateStore,
+    TickingClock,
 )
 
 RETENTION_MS = 86_400_000
@@ -162,6 +164,12 @@ def with_suggestion(harness: ConsoleHarness, suggestion: Suggestion) -> ConsoleH
     return harness
 
 
+def with_ticking_clock(harness: ConsoleHarness) -> ConsoleHarness:
+    """Give the use cases a clock that moves after each read, to prove one read per action."""
+    harness.ports = replace(harness.ports, clock=TickingClock())
+    return harness
+
+
 def build_list(harness: ConsoleHarness) -> ListConsoleTickets:
     """Build `listConsoleTickets` on the harness."""
     return ListConsoleTickets(harness.transactions, harness.ports)
@@ -227,6 +235,7 @@ class _FakeStores:
         """Return the stores of the use cases, with the fakes that nothing inspects."""
         return ConsoleStores(
             tickets=self.tickets,
+            ticket_states=FakeTicketStateStore(self.tickets.tickets),
             replies=self.replies,
             proposals=self.proposals,
             escalations=self.escalations,

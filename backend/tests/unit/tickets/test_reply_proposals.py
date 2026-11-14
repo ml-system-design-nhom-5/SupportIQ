@@ -61,6 +61,7 @@ from tests.unit.tickets.console_fakes import (
     build_console_ticket,
     build_propose,
     with_suggestion,
+    with_ticking_clock,
 )
 from tests.unit.tickets.fakes import MANAGER_ACCOUNT_ID
 
@@ -118,6 +119,15 @@ async def test_staff_propose_the_draft_of_a_ticket_that_requires_authority() -> 
     assert proposal.request.body == RESTORED_DRAFT_TEXT
     assert json.loads(response.body) == {"proposal_id": str(proposal.proposal_id)}
     assert harness.tickets.tickets[TICKET_ID].status is TicketStatus.AWAITING_APPROVAL
+
+
+async def test_a_proposal_gives_its_records_the_time_of_one_clock_read() -> None:
+    harness = with_ticking_clock(ready_harness())
+
+    await build_propose(harness).execute(STAFF, TICKET_ID, ai_draft_proposal(), KEY)
+
+    (entry,) = harness.audit.entries
+    assert {stored_proposal(harness).created_at, entry.occurred_at} == {FAKE_CLOCK_START}
 
 
 async def test_a_proposal_reaches_no_customer_and_records_no_decision() -> None:

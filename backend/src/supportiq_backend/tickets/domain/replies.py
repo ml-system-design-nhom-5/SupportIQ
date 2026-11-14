@@ -6,7 +6,7 @@ generated `repr` (LOG-29).
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import NewType, assert_never
+from typing import NewType, Self, assert_never
 from uuid import UUID
 
 from supportiq_backend.accounts import AccountId
@@ -36,9 +36,6 @@ ReplyId = NewType("ReplyId", UUID)
 _PARAGRAPH_SEPARATOR = "\n\n"
 _SEGMENT_SEPARATOR = " "
 _NO_DRAFT_STATUS = "absent"
-# Why `reply_proposal` is refused when the body names no proposal of the ticket (contract
-# `InvalidReply`: "`reply_proposal` with another proposal").
-_OTHER_PROPOSAL = "with a proposal_id that is not the proposal of the ticket"
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -73,17 +70,38 @@ class SentReply:
 
 
 class ReplyBasisInvalidError(InvalidRequestError):
-    """The basis of a reply is not valid for the ticket: its draft or its proposal (422)."""
+    """The basis of a reply is not valid for the ticket: its draft or its proposal (422).
 
-    def __init__(self, basis: ReplyBasis, reason: str) -> None:
-        """Build the error from the basis and why the ticket refuses it.
+    Each named constructor builds one fixed detail from statuses only (PY-23, ERR-02).
+    """
+
+    @classmethod
+    def for_current_draft(cls, basis: ReplyBasis, suggestion: Suggestion | None) -> Self:
+        """Build the error of a basis that the ticket's state or its current draft refuses.
 
         Args:
             basis: The basis of the body.
-            reason: The end of the detail, from statuses only, such as `while the current
-                draft is draft_ready`.
+            suggestion: The ticket's current suggestion, when it has one.
+
+        Returns:
+            The error, whose detail names the basis and the status of the current draft.
         """
-        super().__init__(f"The basis {basis.value} is not valid {reason}.")
+        draft_status = _draft_status_name(suggestion)
+        return cls(
+            f"The basis {basis.value} is not valid while the current draft is {draft_status}."
+        )
+
+    @classmethod
+    def for_other_proposal(cls) -> Self:
+        """Build the error of a `reply_proposal` body that names no proposal of the ticket.
+
+        Returns:
+            The error of contract `InvalidReply`: "`reply_proposal` with another proposal".
+        """
+        return cls(
+            f"The basis {ReplyBasis.REPLY_PROPOSAL.value} is not valid with a proposal_id that"
+            " is not the proposal of the ticket."
+        )
 
 
 class WarningsNotAcknowledgedError(InvalidRequestError):
@@ -130,8 +148,9 @@ def parse_sent_proposal(reply: ProposalReply, proposal: ReplyProposal | None) ->
     Raises:
         ReplyBasisInvalidError: The body names another proposal, or the ticket has none.
     """
-    if proposal is None or proposal.proposal_id != reply.proposal_id:
-        raise ReplyBasisInvalidError(ReplyBasis.REPLY_PROPOSAL, _OTHER_PROPOSAL)
+    # The ID of the body is an opaque string, so it is compared and never parsed (CON-15).
+    if proposal is None or str(proposal.proposal_id) != reply.proposal_id:
+        raise ReplyBasisInvalidError.for_other_proposal()
     return SentProposal(proposal, reply.body)
 
 
@@ -220,8 +239,7 @@ def _validate_basis(
         case _:
             assert_never(reply)
     if not is_valid:
-        draft_status = _draft_status_name(suggestion)
-        raise ReplyBasisInvalidError(reply.basis, f"while the current draft is {draft_status}")
+        raise ReplyBasisInvalidError.for_current_draft(reply.basis, suggestion)
 
 
 def _warning_ids(suggestion: Suggestion | None) -> frozenset[str]:

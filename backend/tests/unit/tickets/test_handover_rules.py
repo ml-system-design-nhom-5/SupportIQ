@@ -58,8 +58,10 @@ from tests.unit.tickets.console_fakes import TICKET_ID, build_console_ticket
 
 DRAFT_TEXT = "Hello Lan, your refund is under review."
 EDITED_TEXT = "Hello Lan, your refund was approved."
-PROPOSAL_ID = ProposalId(UUID(int=7))
-OTHER_PROPOSAL_ID = ProposalId(UUID(int=8))
+PROPOSAL_ID = ProposalId(UUID("00000000-0000-4000-8000-0000000000ab"))
+# The proposal IDs that a request names: opaque strings, compared and never parsed (CON-15).
+REQUESTED_PROPOSAL_ID = str(PROPOSAL_ID)
+OTHER_PROPOSAL_IDS = [str(UUID(int=8)), "p-1", REQUESTED_PROPOSAL_ID.upper()]
 UNCHANGED = AiDraftReply(DRAFT_TEXT, SUGGESTION_ID, frozenset(), (), None)
 NOT_OPEN = [TicketStatus.AWAITING_APPROVAL, TicketStatus.ESCALATED, TicketStatus.CLOSED]
 HANDOVER_ACTIONS = {TicketAction.SUBMIT_REPLY_PROPOSAL, TicketAction.ESCALATE}
@@ -139,19 +141,22 @@ def test_a_manager_is_offered_no_proposal_and_no_escalation() -> None:
 def test_a_reply_on_the_proposal_of_the_ticket_sends_that_proposal() -> None:
     proposal = build_proposal()
 
-    sent = parse_sent_proposal(ProposalReply(EDITED_TEXT, PROPOSAL_ID), proposal)
+    sent = parse_sent_proposal(ProposalReply(EDITED_TEXT, REQUESTED_PROPOSAL_ID), proposal)
 
     assert (sent.proposal, sent.body) == (proposal, EDITED_TEXT)
 
 
-def test_a_reply_on_another_proposal_is_refused() -> None:
+@pytest.mark.parametrize(
+    "proposal_id", OTHER_PROPOSAL_IDS, ids=["other-uuid", "not-a-uuid", "uppercase"]
+)
+def test_a_reply_on_another_proposal_is_refused(proposal_id: str) -> None:
     with pytest.raises(ReplyBasisInvalidError):
-        parse_sent_proposal(ProposalReply(DRAFT_TEXT, OTHER_PROPOSAL_ID), build_proposal())
+        parse_sent_proposal(ProposalReply(DRAFT_TEXT, proposal_id), build_proposal())
 
 
 def test_a_reply_on_a_proposal_of_a_ticket_without_one_is_refused() -> None:
     with pytest.raises(ReplyBasisInvalidError):
-        parse_sent_proposal(ProposalReply(DRAFT_TEXT, PROPOSAL_ID), None)
+        parse_sent_proposal(ProposalReply(DRAFT_TEXT, REQUESTED_PROPOSAL_ID), None)
 
 
 def test_a_sent_proposal_is_valid_only_while_the_ticket_awaits_approval() -> None:

@@ -39,6 +39,8 @@ from supportiq_backend.suggestions.domain.completions import (
 from supportiq_backend.suggestions.domain.errors import (
     MANUAL_MODE_STATE,
     AiServiceContractError,
+    AiServiceReadContractError,
+    AiServiceReadUnavailableError,
     AiServiceUnavailableError,
     InvalidTicketStateError,
     KbDocumentVersionNotFoundError,
@@ -110,6 +112,8 @@ __all__ = [
     "AiReasonCode",
     "AiService",
     "AiServiceContractError",
+    "AiServiceReadContractError",
+    "AiServiceReadUnavailableError",
     "AiServiceUnavailableError",
     "AiWarning",
     "Analysis",

@@ -20,7 +20,12 @@ from supportiq_backend.suggestions import (
     read_cited_facts,
     read_order_fact,
 )
-from tests.unit.suggestions.builders import build_draft_ready, build_no_draft
+from tests.unit.suggestions.builders import (
+    DOCUMENT_ID,
+    DOCUMENT_VERSION,
+    build_draft_ready,
+    build_no_draft,
+)
 
 # Every field has its own value, so reading the wrong field fails the test.
 PLACED_AT = datetime(2026, 11, 1, 8, 12, 30, tzinfo=UTC)
@@ -57,7 +62,7 @@ FACTS_OF_FULL_CONTEXT: Mapping[OrderContextField, OrderFact] = {
 CONTEXT_WITHOUT_REFUND = replace(
     FULL_CONTEXT, refund_status=None, refund_amount=None, refund_requested_at=None
 )
-KB_CITATION = KbDocumentCitation("c1", "SAMPLE-REFUND-001", "1.0", "Sample text.")
+KB_CITATION = KbDocumentCitation("c1", DOCUMENT_ID, DOCUMENT_VERSION, "Sample text.")
 
 
 def citing(*fields: OrderContextField) -> DraftReady:

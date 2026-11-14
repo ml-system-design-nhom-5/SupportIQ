@@ -71,7 +71,7 @@ class TicketStore(Protocol):
 
 
 class ConsoleTicketStore(Protocol):
-    """Read and change tickets for the console; every action locks the ticket row first."""
+    """Read tickets for the console; every action locks the ticket row first."""
 
     async def lock_console_ticket(self, ticket_id: TicketId) -> ConsoleTicket | None:
         """Lock a ticket row with `SELECT ... FOR UPDATE` and load it with its message.
@@ -112,6 +112,10 @@ class ConsoleTicketStore(Protocol):
             The tickets.
         """
         ...
+
+
+class TicketStateStore(Protocol):
+    """Change a ticket that the action's transaction locked: its clock, queue, and closing."""
 
     async def start_handling(self, ticket_id: TicketId, started_at: datetime) -> None:
         """Set `handling_started_at`, which starts the handling clock (NFR-11).

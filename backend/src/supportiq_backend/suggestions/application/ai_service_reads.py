@@ -4,13 +4,14 @@
 `ai_service_read_timeout_ms` and without a retry. The first answers `503 not-ready` when
 ai-service cannot answer; the second still answers, without the versions of ai-service
 (backend ticket workflow design, The `ai-service` client). Each use case checks the role first,
-in the application layer (SEC-16).
+in the application layer (SEC-16), runs its call in a `call_ai_service` span (LOG-20), and
+records a failed call once, at the level that tells a defect from degradation (ERR-05, LOG-15).
 """
 
 from dataclasses import dataclass
 
 from supportiq_backend.accounts import Authorizer, Principal, SupportPrincipal
-from supportiq_backend.platform import EventRecorder, OperationId, UnexpectedFailureError
+from supportiq_backend.platform import EventRecorder, OperationId, SpanName, StepTracer
 from supportiq_backend.suggestions.application.ai_service_failures import (
     AiServiceOperation,
     record_ai_service_failure,
@@ -18,6 +19,8 @@ from supportiq_backend.suggestions.application.ai_service_failures import (
 from supportiq_backend.suggestions.domain import (
     AiService,
     AiServiceContractError,
+    AiServiceReadContractError,
+    AiServiceReadUnavailableError,
     AiServiceUnavailableError,
     AssetVersions,
     KbDocumentId,
@@ -35,11 +38,13 @@ class AiServiceReadPorts:
         authorizer: The role checks.
         ai_service: The client of ai-service.
         events: Where a failed call is recorded.
+        steps: Runs each call in its span.
     """
 
     authorizer: Authorizer
     ai_service: AiService
     events: EventRecorder
+    steps: StepTracer
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,13 +89,11 @@ class GetConsoleKbDocumentVersion:
         )
 
     async def execute(
-        self, _support: SupportPrincipal, document_id: KbDocumentId, version: KbDocumentVersionTag
+        self, document_id: KbDocumentId, version: KbDocumentVersionTag
     ) -> KbDocumentVersion:
-        """Read the document version from ai-service.
+        """Read the document version from ai-service, after `authorize` allowed the caller.
 
         Args:
-            _support: The caller; the type proves the role check, and the read depends on it no
-                further.
             document_id: The KB document.
             version: The version of the document.
 
@@ -99,20 +102,25 @@ class GetConsoleKbDocumentVersion:
 
         Raises:
             KbDocumentVersionNotFoundError: The loaded KB has no such version.
-            AiServiceUnavailableError: ai-service timed out, was unreachable, or answered
+            AiServiceReadUnavailableError: ai-service timed out, was unreachable, or answered
                 `5xx`; the failure is recorded once, as `ai_service.call_failed`.
-            UnexpectedFailureError: ai-service refused the read or answered outside its
-                contract, a defect that the exception handler records once (ERR-05).
+            AiServiceReadContractError: ai-service refused the read or answered outside its
+                contract, a defect recorded once, as `ai_service.contract_violated`.
         """
-        try:
-            document = await self._ports.ai_service.fetch_kb_document_version(document_id, version)
-        except AiServiceContractError as error:
-            raise UnexpectedFailureError from error
-        except AiServiceUnavailableError as error:
-            record_ai_service_failure(
-                self._ports.events, AiServiceOperation.GET_KB_DOCUMENT_VERSION, error
-            )
-            raise
+        operation = AiServiceOperation.GET_KB_DOCUMENT_VERSION
+        with self._ports.steps.step(SpanName.CALL_AI_SERVICE):
+            self._ports.steps.record_ai_service_endpoint(operation)
+            try:
+                document = await self._ports.ai_service.fetch_kb_document_version(
+                    document_id, version
+                )
+            # A contract error is also an `AiServiceUnavailableError`, so it is caught first.
+            except AiServiceContractError as error:
+                record_ai_service_failure(self._ports.events, operation, error)
+                raise AiServiceReadContractError from error
+            except AiServiceUnavailableError as error:
+                record_ai_service_failure(self._ports.events, operation, error)
+                raise AiServiceReadUnavailableError from error
         if document is None:
             raise KbDocumentVersionNotFoundError
         return document
@@ -145,11 +153,12 @@ class GetAdminVersions:
             ForbiddenRoleError: The caller is not an admin.
         """
         self._ports.authorizer.require_admin(principal, OperationId.GET_ADMIN_VERSIONS)
-        try:
-            versions = await self._ports.ai_service.fetch_asset_versions()
-        except AiServiceUnavailableError as error:
-            record_ai_service_failure(
-                self._ports.events, AiServiceOperation.GET_ASSET_VERSIONS, error
-            )
-            return VersionsInUse(self._backend_version, None)
+        operation = AiServiceOperation.GET_ASSET_VERSIONS
+        with self._ports.steps.step(SpanName.CALL_AI_SERVICE):
+            self._ports.steps.record_ai_service_endpoint(operation)
+            try:
+                versions = await self._ports.ai_service.fetch_asset_versions()
+            except AiServiceUnavailableError as error:
+                record_ai_service_failure(self._ports.events, operation, error)
+                return VersionsInUse(self._backend_version, None)
         return VersionsInUse(self._backend_version, versions)

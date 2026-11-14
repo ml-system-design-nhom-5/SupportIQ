@@ -24,11 +24,14 @@ from tests.integration.tickets.console_requests import (
     OTHER_KEY,
     PROPOSALS,
     REPLIES,
+    SUGGESTION_SUPERSEDED,
+    UNKNOWN_SUGGESTION_ID,
     act_on_ticket,
     key_headers,
     sign_in_as_manager,
     sign_in_as_support,
     ticket_path,
+    ticket_status,
 )
 from tests.integration.tickets.shop_requests import create_ticket, sign_in_as_new_customer
 from tests.unit.platform.fakes import FakeClock, RecordingEventRecorder
@@ -37,11 +40,8 @@ pytestmark = pytest.mark.anyio
 
 PROPOSED_TEXT = "A manager will confirm the shipping options for your city."
 REPLY_TEXT = "We ship to your city. Shipping is free for orders over 30 USD."
-UNKNOWN_SUGGESTION_ID = "00000000-0000-4000-8000-0000000000f2"
-SUGGESTION_SUPERSEDED = "urn:supportiq:problem:suggestion-superseded"
 WITHOUT_DRAFT = {"basis": "no_ai_draft", "body": REPLY_TEXT}
 MANUAL_ACTIONS = ["escalate", "send_reply", "submit_reply_proposal"]
-TICKET_STATUS = "SELECT status FROM tickets WHERE ticket_id = :ticket_id"
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,10 +74,6 @@ async def desk(
     ) as client:
         created = await create_ticket(client, customer_headers, order_id)
         yield ManualDesk(client, ai_service, created.json()["ticket_id"], customer_headers)
-
-
-async def ticket_status(builder: DatabaseBuilder, ticket_id: str) -> object:
-    return await builder.scalar(TICKET_STATUS, ticket_id=ticket_id)
 
 
 async def test_a_manual_shop_ticket_gets_no_suggestion_and_no_job(

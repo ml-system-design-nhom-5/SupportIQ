@@ -27,6 +27,8 @@ from tests.integration.tickets.console_requests import (
     PREDICTED_INTENT,
     REPLIES,
     STAFF_NAME,
+    SUGGESTION_SUPERSEDED,
+    UNKNOWN_SUGGESTION_ID,
     UNKNOWN_TICKET_ID,
     act_on_ticket,
     analysis_ready_draft_pending,
@@ -37,6 +39,7 @@ from tests.integration.tickets.console_requests import (
     sign_in_as_manager,
     sign_in_as_support,
     ticket_path,
+    ticket_status,
     without_fields,
 )
 
@@ -44,15 +47,8 @@ pytestmark = pytest.mark.anyio
 
 NOTE = "The customer asks to talk to a person."
 REPLY_TEXT = "Thank you for your patience. A manager will call you today."
-UNKNOWN_SUGGESTION_ID = "00000000-0000-4000-8000-0000000000f2"
-SUGGESTION_SUPERSEDED = "urn:supportiq:problem:suggestion-superseded"
 CASE_EXCEPTION = {"staff_reason_codes": ["case_exception"]}
 NOTE_REQUIRED_DETAIL = "A note is required when staff_reason_codes contains other."
-TICKET_STATUS = "SELECT status FROM tickets WHERE ticket_id = :ticket_id"
-
-
-async def ticket_status(builder: DatabaseBuilder, ticket_id: str) -> object:
-    return await builder.scalar(TICKET_STATUS, ticket_id=ticket_id)
 
 
 async def test_escalation_answers_201_in_the_shape_of_the_contract(

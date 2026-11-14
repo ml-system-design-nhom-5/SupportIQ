@@ -20,6 +20,7 @@ from supportiq_backend.pseudonymization.adapters.pseudonym_map_store import (
     PostgresPseudonymMapStore,
 )
 from supportiq_backend.suggestions.adapters.suggestion_store import PostgresSuggestionStore
+from supportiq_backend.suggestions.api.admin import to_asset_versions_view
 from supportiq_backend.tickets import (
     ConsolePorts,
     ConsoleStores,
@@ -43,19 +44,28 @@ from supportiq_backend.tickets.adapters.console_store import (
 from supportiq_backend.tickets.adapters.escalation_store import PostgresEscalationStore
 from supportiq_backend.tickets.adapters.proposal_store import PostgresReplyProposalStore
 from supportiq_backend.tickets.adapters.reply_store import PostgresReplyStore
+from supportiq_backend.tickets.adapters.ticket_state_store import PostgresTicketStateStore
 from supportiq_backend.tickets.adapters.ticket_store import PostgresTicketStore
-from supportiq_backend.tickets.api.console import (
-    ConsoleTicketRoutes,
-    build_console_tickets_router,
+from supportiq_backend.tickets.api.console import ConsoleTicketRoutes, build_console_tickets_router
+from supportiq_backend.tickets.api.console_action_routes import (
+    ConsoleActionRoutes,
+    build_console_actions_router,
     render_created_escalation,
     render_created_proposal,
     render_sent_reply,
 )
+from supportiq_backend.tickets.api.console_view_mappers import ConsoleViewMappers
 from supportiq_backend.tickets.api.order_views import OrderViewMappers
 from supportiq_backend.tickets.api.shop import (
     ShopTicketRoutes,
     build_shop_tickets_router,
     render_created_ticket,
+)
+
+# The mappings of commerce and suggestions that the console's views reuse (CODE-55).
+CONSOLE_VIEW_MAPPERS = ConsoleViewMappers(
+    orders=OrderViewMappers(to_order_view=to_order_view, to_money=to_money),
+    to_asset_versions_view=to_asset_versions_view,
 )
 
 
@@ -111,6 +121,7 @@ class ConsoleStoreBuilder:
         """
         return ConsoleStores(
             tickets=PostgresConsoleTicketStore(session),
+            ticket_states=PostgresTicketStateStore(session),
             replies=PostgresReplyStore(session),
             proposals=PostgresReplyProposalStore(session),
             escalations=PostgresEscalationStore(session),
@@ -141,11 +152,12 @@ def wire_tickets(
         suggestions: The starter of suggestions and the ai-service client.
 
     Returns:
-        The routers of the shop's and the console's ticket operations.
+        The routers of the shop's ticket operations, of the console's ticket reads and
+        requests, and of the console's staff actions.
     """
     return (
         _wire_shop(settings, session_factory, shared, accounts, suggestions),
-        _wire_console(session_factory, shared, accounts, suggestions),
+        *_wire_console(session_factory, shared, accounts, suggestions),
     )
 
 
@@ -186,9 +198,43 @@ def _wire_console(
     shared: SharedPorts,
     accounts: AccountsWiring,
     suggestions: SuggestionsWiring,
-) -> APIRouter:
+) -> tuple[APIRouter, APIRouter]:
     transactions = SqlAlchemyTransactionRunner(session_factory, ConsoleStoreBuilder(shared.events))
-    ports = ConsolePorts(
+    ports = _build_console_ports(shared, accounts, suggestions)
+    tickets_router = build_console_tickets_router(
+        ConsoleTicketRoutes(
+            list_tickets=ListConsoleTickets(transactions, ports),
+            get_ticket=GetConsoleTicket(transactions, ports),
+            record_view=RecordTicketView(transactions, ports),
+            create_suggestion=suggestions.create_suggestion,
+            check_origin=accounts.check_origin,
+            current_session=accounts.current_session,
+            views=CONSOLE_VIEW_MAPPERS,
+        )
+    )
+    return tickets_router, _build_console_actions_router(transactions, ports, accounts)
+
+
+def _build_console_actions_router(
+    transactions: SqlAlchemyTransactionRunner[ConsoleStores],
+    ports: ConsolePorts,
+    accounts: AccountsWiring,
+) -> APIRouter:
+    return build_console_actions_router(
+        ConsoleActionRoutes(
+            create_proposal=CreateReplyProposal(transactions, ports, render_created_proposal),
+            send_reply=SendReply(transactions, ports, render_sent_reply),
+            create_escalation=CreateEscalation(transactions, ports, render_created_escalation),
+            check_origin=accounts.check_origin,
+            current_session=accounts.current_session,
+        )
+    )
+
+
+def _build_console_ports(
+    shared: SharedPorts, accounts: AccountsWiring, suggestions: SuggestionsWiring
+) -> ConsolePorts:
+    return ConsolePorts(
         authorizer=accounts.authorizer,
         guard=shared.guard,
         clock=shared.clock,
@@ -198,18 +244,4 @@ def _wire_console(
         steps=shared.steps,
         starter=suggestions.starter,
         ai_service=suggestions.ai_service,
-    )
-    return build_console_tickets_router(
-        ConsoleTicketRoutes(
-            list_tickets=ListConsoleTickets(transactions, ports),
-            get_ticket=GetConsoleTicket(transactions, ports),
-            record_view=RecordTicketView(transactions, ports),
-            create_suggestion=suggestions.create_suggestion,
-            create_proposal=CreateReplyProposal(transactions, ports, render_created_proposal),
-            send_reply=SendReply(transactions, ports, render_sent_reply),
-            create_escalation=CreateEscalation(transactions, ports, render_created_escalation),
-            check_origin=accounts.check_origin,
-            current_session=accounts.current_session,
-            order_views=OrderViewMappers(to_order_view=to_order_view, to_money=to_money),
-        )
     )

@@ -10,10 +10,13 @@ from supportiq_backend.platform import (
     ErrorCode,
     InvalidRequestError,
     ResourceNotFoundError,
+    UnexpectedFailureError,
 )
 
 # The state that refuses a suggestion on a ticket in manual mode (contract `SuggestionConflict`).
 MANUAL_MODE_STATE = "in manual mode"
+# The detail of the example `ai-service-not-ready` (contract `NotReady`).
+_AI_SERVICE_NOT_READY_DETAIL = "ai-service did not answer in time."
 
 
 class InvalidTicketStateError(BackendError):
@@ -87,7 +90,7 @@ class AiServiceUnavailableError(BackendError):
 
     def __init__(self) -> None:
         """Build the error with its fixed detail."""
-        super().__init__("ai-service did not answer in time.")
+        super().__init__(_AI_SERVICE_NOT_READY_DETAIL)
 
 
 class AiServiceContractError(AiServiceUnavailableError):
@@ -97,3 +100,28 @@ class AiServiceContractError(AiServiceUnavailableError):
     `unavailable` like any failure of `ai-service`: an unknown reason code could be one that
     requires authority (CON-22).
     """
+
+
+class AiServiceReadUnavailableError(BackendError):
+    """ai-service could not answer a read of the console, which recorded the failure (503).
+
+    The read recorded `ai_service.call_failed`, so the exception handler logs nothing more and
+    only marks the span (ERR-05). The detail is the one of the example `ai-service-not-ready`.
+    """
+
+    code: ClassVar[ErrorCode] = ErrorCode.NOT_READY
+    is_logged_where_handled: ClassVar[bool] = True
+
+    def __init__(self) -> None:
+        """Build the error with its fixed detail."""
+        super().__init__(_AI_SERVICE_NOT_READY_DETAIL)
+
+
+class AiServiceReadContractError(UnexpectedFailureError):
+    """ai-service refused a read of the console or answered outside its contract (500).
+
+    Both are defects. The read recorded `ai_service.contract_violated`, so the exception handler
+    logs nothing more and only marks the span (ERR-05).
+    """
+
+    is_logged_where_handled: ClassVar[bool] = True

@@ -12,6 +12,7 @@ from supportiq_backend.accounts import Principal, SupportPrincipal
 from supportiq_backend.audit import AuditEventType
 from supportiq_backend.idempotency import (
     IdempotencyKey,
+    IdempotentRequest,
     RepeatedRequest,
     RequesterId,
     StoredResponse,
@@ -20,7 +21,10 @@ from supportiq_backend.idempotency import (
 from supportiq_backend.platform import EventName, OperationId, TransactionRunner
 from supportiq_backend.tickets.application.canonical_requests import to_canonical_reply
 from supportiq_backend.tickets.application.console_actions import (
+    ActionContext,
+    begin_action,
     build_audit_entry,
+    load_display_name,
 )
 from supportiq_backend.tickets.application.console_ports import (
     ConsolePorts,
@@ -28,6 +32,7 @@ from supportiq_backend.tickets.application.console_ports import (
     load_current_suggestion,
 )
 from supportiq_backend.tickets.domain import (
+    ConsoleTicket,
     ProposalId,
     ProposalRecord,
     ProposalRequest,
@@ -103,12 +108,7 @@ class CreateReplyProposal:
             InvalidRequestError: A body rule of the basis is broken (422).
             DatabaseUnavailableError: The database is not available or a timeout fired.
         """
-        request = build_idempotent_request(
-            RequesterId(support.account_id),
-            OperationId.CREATE_REPLY_PROPOSAL,
-            key,
-            to_canonical_reply(ticket_id, proposal),
-        )
+        request = _build_request(support, ticket_id, proposal, key)
         self._ports.steps.record_ticket(ticket_id)
         async with self._transactions.begin() as transaction:
             stores = transaction.stores
@@ -118,42 +118,55 @@ class CreateReplyProposal:
             claim = await self._ports.guard.claim(stores.idempotency, request)
             if isinstance(claim, RepeatedRequest):
                 return claim.response
-            suggestion = await load_current_suggestion(stores.suggestions, ticket)
-            check_proposal_allowed(ticket, suggestion)
-            check_suggestion_is_current(ticket, proposal.suggestion_id)
-            validate_reply_body(ticket, suggestion, proposal)
-            response = self._render_response(
-                await self._submit(stores, ticket_id, support, proposal)
-            )
+            await _check_proposal(stores, ticket, proposal)
+            action = begin_action(self._ports, ticket, support)
+            response = self._render_response(await self._submit(stores, action, proposal))
             await stores.idempotency.save_response(request, response)
             await transaction.commit()
         self._ports.events.record(EventName.REPLY_PROPOSAL_SUBMITTED, ticket_id=ticket_id)
         return response
 
     async def _submit(
-        self,
-        stores: ConsoleStores,
-        ticket_id: TicketId,
-        support: SupportPrincipal,
-        request: ProposalRequest,
+        self, stores: ConsoleStores, action: ActionContext, request: ProposalRequest
     ) -> ProposalRecord:
         proposal = ReplyProposal(
             proposal_id=ProposalId(self._ports.ids.generate()),
-            ticket_id=ticket_id,
+            ticket_id=action.ticket_id,
             request=request,
-            proposed_by=support.account_id,
-            created_at=self._ports.clock.now(),
+            proposed_by=action.actor,
+            created_at=action.acted_at,
         )
         await stores.proposals.insert_proposal(proposal)
-        await stores.tickets.move_to_manager_queue(ticket_id, TicketStatus.AWAITING_APPROVAL)
+        await stores.ticket_states.move_to_manager_queue(
+            action.ticket_id, TicketStatus.AWAITING_APPROVAL
+        )
         await stores.audit.append(
             build_audit_entry(
                 self._ports,
-                ticket_id,
-                support.account_id,
+                action,
                 AuditEventType.REPLY_PROPOSAL_SUBMITTED,
                 {"proposal_id": str(proposal.proposal_id), "basis": request.basis.value},
             )
         )
-        names = await stores.staff.load_display_names(frozenset({support.account_id}))
-        return ProposalRecord(proposal, names[support.account_id])
+        return ProposalRecord(proposal, await load_display_name(stores, action.actor))
+
+
+def _build_request(
+    support: SupportPrincipal, ticket_id: TicketId, proposal: ProposalRequest, key: IdempotencyKey
+) -> IdempotentRequest:
+    return build_idempotent_request(
+        RequesterId(support.account_id),
+        OperationId.CREATE_REPLY_PROPOSAL,
+        key,
+        to_canonical_reply(ticket_id, proposal),
+    )
+
+
+async def _check_proposal(
+    stores: ConsoleStores, ticket: ConsoleTicket, proposal: ProposalRequest
+) -> None:
+    # Steps 4 to 8 of the check order, after the lock and the idempotency claim.
+    suggestion = await load_current_suggestion(stores.suggestions, ticket)
+    check_proposal_allowed(ticket, suggestion)
+    check_suggestion_is_current(ticket, proposal.suggestion_id)
+    validate_reply_body(ticket, suggestion, proposal)

@@ -30,6 +30,7 @@ from supportiq_backend.suggestions.adapters.tables import (
 )
 from supportiq_backend.suggestions.domain import (
     AiReasonCode,
+    AiServiceContractError,
     AnalysisState,
     CancelledPart,
     ClaimedJob,
@@ -148,6 +149,10 @@ class PostgresSuggestionStore:
 
         Returns:
             The suggestion, or None when it is unknown.
+
+        Raises:
+            UnexpectedFailureError: A stored part breaks an invariant, or a stored result no
+                longer matches the contract: a defect.
         """
         suggestions = await self.load_suggestions(frozenset({suggestion_id}))
         return suggestions.get(suggestion_id)
@@ -162,6 +167,10 @@ class PostgresSuggestionStore:
 
         Returns:
             Each known suggestion by its ID.
+
+        Raises:
+            UnexpectedFailureError: A stored part breaks an invariant, or a stored result no
+                longer matches the contract: a defect.
         """
         if not suggestion_ids:
             return {}
@@ -177,9 +186,15 @@ class PostgresSuggestionStore:
             )
         ).all()
         part_by_key = {(part.suggestion_id, part.part): part for part in parts}
-        return {
-            SuggestionId(str(row.suggestion_id)): _to_suggestion(row, part_by_key) for row in rows
-        }
+        try:
+            return {
+                SuggestionId(str(row.suggestion_id)): _to_suggestion(row, part_by_key)
+                for row in rows
+            }
+        except AiServiceContractError as error:
+            # Backend stored only values that matched the contract, so one that no longer parses
+            # is a defect of backend, not a failure of ai-service: `500`, logged once (ERR-05).
+            raise UnexpectedFailureError from error
 
 
 class PostgresSuggestionJobStore:

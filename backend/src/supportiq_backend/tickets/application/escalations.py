@@ -12,18 +12,21 @@ from supportiq_backend.accounts import Principal, SupportPrincipal
 from supportiq_backend.audit import AuditEventType, AuditValue
 from supportiq_backend.idempotency import (
     IdempotencyKey,
+    IdempotentRequest,
     RepeatedRequest,
     RequesterId,
     StoredResponse,
     build_idempotent_request,
 )
 from supportiq_backend.platform import EventName, OperationId, TransactionRunner
-from supportiq_backend.suggestions import Suggestion
 from supportiq_backend.tickets.application.canonical_requests import to_canonical_escalation
 from supportiq_backend.tickets.application.console_actions import (
+    ActionContext,
+    begin_action,
     build_audit_entry,
     build_recorded_decision,
     join_reason_codes,
+    load_display_name,
     record_decision_event,
     save_decision,
 )
@@ -33,6 +36,7 @@ from supportiq_backend.tickets.application.console_ports import (
     load_current_suggestion,
 )
 from supportiq_backend.tickets.domain import (
+    ConsoleTicket,
     Escalation,
     EscalationId,
     EscalationRecord,
@@ -109,12 +113,7 @@ class CreateEscalation:
             NoteRequiredError: `other` without a note (422).
             DatabaseUnavailableError: The database is not available or a timeout fired.
         """
-        request = build_idempotent_request(
-            RequesterId(support.account_id),
-            OperationId.CREATE_ESCALATION,
-            key,
-            to_canonical_escalation(ticket_id, escalation),
-        )
+        request = _build_request(support, ticket_id, escalation, key)
         self._ports.steps.record_ticket(ticket_id)
         async with self._transactions.begin() as transaction:
             stores = transaction.stores
@@ -124,13 +123,9 @@ class CreateEscalation:
             claim = await self._ports.guard.claim(stores.idempotency, request)
             if isinstance(claim, RepeatedRequest):
                 return claim.response
-            check_escalation_allowed(ticket)
-            check_suggestion_is_current(ticket, escalation.suggestion_id)
-            validate_escalation_body(escalation)
-            suggestion = await load_current_suggestion(stores.suggestions, ticket)
-            record, decision = await self._escalate(
-                stores, ticket_id, support, escalation, suggestion
-            )
+            _check_escalation(ticket, escalation)
+            action = begin_action(self._ports, ticket, support)
+            record, decision = await self._escalate(stores, ticket, action, escalation)
             response = self._render_response(record)
             await stores.idempotency.save_response(request, response)
             await transaction.commit()
@@ -141,37 +136,50 @@ class CreateEscalation:
     async def _escalate(
         self,
         stores: ConsoleStores,
-        ticket_id: TicketId,
-        support: SupportPrincipal,
+        ticket: ConsoleTicket,
+        action: ActionContext,
         request: EscalationRequest,
-        suggestion: Suggestion | None,
     ) -> tuple[EscalationRecord, StaffDecision]:
+        suggestion = await load_current_suggestion(stores.suggestions, ticket)
         escalation = Escalation(
             escalation_id=EscalationId(self._ports.ids.generate()),
-            ticket_id=ticket_id,
+            ticket_id=action.ticket_id,
             request=request,
-            escalated_by=support.account_id,
-            escalated_at=self._ports.clock.now(),
+            escalated_by=action.actor,
+            escalated_at=action.acted_at,
         )
         await stores.escalations.insert_escalation(escalation)
-        await stores.tickets.move_to_manager_queue(ticket_id, TicketStatus.ESCALATED)
+        await stores.ticket_states.move_to_manager_queue(action.ticket_id, TicketStatus.ESCALATED)
         await stores.audit.append(
             build_audit_entry(
-                self._ports,
-                ticket_id,
-                support.account_id,
-                AuditEventType.TICKET_ESCALATED,
-                _escalated_data(escalation),
+                self._ports, action, AuditEventType.TICKET_ESCALATED, _escalated_data(escalation)
             )
         )
         decision = derive_escalation_decision(request, suggestion)
-        await save_decision(
-            stores,
-            self._ports,
-            build_recorded_decision(self._ports, ticket_id, support.account_id, decision, None),
-        )
-        names = await stores.staff.load_display_names(frozenset({support.account_id}))
-        return EscalationRecord(escalation, names[support.account_id]), decision
+        recorded = build_recorded_decision(self._ports, action, decision, None)
+        await save_decision(stores, self._ports, recorded)
+        return EscalationRecord(escalation, await load_display_name(stores, action.actor)), decision
+
+
+def _build_request(
+    support: SupportPrincipal,
+    ticket_id: TicketId,
+    escalation: EscalationRequest,
+    key: IdempotencyKey,
+) -> IdempotentRequest:
+    return build_idempotent_request(
+        RequesterId(support.account_id),
+        OperationId.CREATE_ESCALATION,
+        key,
+        to_canonical_escalation(ticket_id, escalation),
+    )
+
+
+def _check_escalation(ticket: ConsoleTicket, escalation: EscalationRequest) -> None:
+    # Steps 4, 7, and 8 of the check order; a pending part does not matter here (step 6).
+    check_escalation_allowed(ticket)
+    check_suggestion_is_current(ticket, escalation.suggestion_id)
+    validate_escalation_body(escalation)
 
 
 def _escalated_data(escalation: Escalation) -> Mapping[str, AuditValue]:

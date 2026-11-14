@@ -21,6 +21,7 @@ from supportiq_backend.tickets import (
     TicketPosition,
     TicketStatus,
 )
+from tests.unit.platform.fakes import FakeClock
 from tests.unit.suggestions.builders import STAFF_ACCOUNT_ID
 
 FIRST_TICKET_ID = TicketId("TCK-1001")
@@ -100,6 +101,13 @@ class FakeConsoleTicketStore:
         del after
         return tuple(ticket for ticket in self.tickets.values() if ticket.status is status)[:limit]
 
+
+@dataclass(slots=True)
+class FakeTicketStateStore:
+    """Change the tickets of a `FakeConsoleTicketStore`, whose mapping it shares."""
+
+    tickets: dict[TicketId, ConsoleTicket]
+
     async def start_handling(self, ticket_id: TicketId, started_at: datetime) -> None:
         """Start the handling clock."""
         self.tickets[ticket_id] = replace(self.tickets[ticket_id], handling_started_at=started_at)
@@ -138,34 +146,48 @@ class FakeReplyStore:
 
 @dataclass(slots=True)
 class FakeReplyProposalStore:
-    """Keep the proposal of each ticket."""
+    """Keep the proposal of each ticket, or fail with a given error."""
 
     proposals: dict[TicketId, ReplyProposal] = field(default_factory=dict[TicketId, ReplyProposal])
+    failure: BackendError | None = None
 
     async def insert_proposal(self, proposal: ReplyProposal) -> None:
         """Keep the one proposal of a ticket."""
+        self._fail_when_chosen()
         assert proposal.ticket_id not in self.proposals
         self.proposals[proposal.ticket_id] = proposal
 
     async def load_proposal(self, ticket_id: TicketId) -> ReplyProposal | None:
         """Return the proposal of a ticket."""
+        self._fail_when_chosen()
         return self.proposals.get(ticket_id)
+
+    def _fail_when_chosen(self) -> None:
+        if self.failure is not None:
+            raise self.failure
 
 
 @dataclass(slots=True)
 class FakeEscalationStore:
-    """Keep the escalation of each ticket."""
+    """Keep the escalation of each ticket, or fail with a given error."""
 
     escalations: dict[TicketId, Escalation] = field(default_factory=dict[TicketId, Escalation])
+    failure: BackendError | None = None
 
     async def insert_escalation(self, escalation: Escalation) -> None:
         """Keep the one escalation of a ticket."""
+        self._fail_when_chosen()
         assert escalation.ticket_id not in self.escalations
         self.escalations[escalation.ticket_id] = escalation
 
     async def load_escalation(self, ticket_id: TicketId) -> Escalation | None:
         """Return the escalation of a ticket."""
+        self._fail_when_chosen()
         return self.escalations.get(ticket_id)
+
+    def _fail_when_chosen(self) -> None:
+        if self.failure is not None:
+            raise self.failure
 
 
 @dataclass(slots=True)
@@ -181,3 +203,16 @@ class FakeStaffDirectory:
             for account_id, name in _NAME_BY_ACCOUNT.items()
             if account_id in account_ids
         }
+
+
+class TickingClock(FakeClock):
+    """A fake clock that moves one millisecond forward after each read, so no two reads agree.
+
+    A use case that reads it once gives every record of its action the same time.
+    """
+
+    def now(self) -> datetime:
+        """Return the current fake time, then move it forward."""
+        moment = super().now()
+        self.advance(1)
+        return moment

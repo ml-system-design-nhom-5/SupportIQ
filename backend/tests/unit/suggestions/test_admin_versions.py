@@ -2,7 +2,8 @@
 
 Only an admin reads the versions in use, and the role check comes before the read of
 ai-service. When ai-service cannot answer, the build version of backend is still returned, and
-the failure is recorded once, at the level that tells a defect from degradation (LOG-15).
+the failure is recorded once, at the level that tells a defect from degradation (LOG-15). The
+call runs in its own span (LOG-20).
 """
 
 import pytest
@@ -22,6 +23,7 @@ from supportiq_backend.platform import (
     BackendError,
     EventLevel,
     EventName,
+    SpanName,
 )
 from supportiq_backend.suggestions import (
     AiServiceContractError,
@@ -30,7 +32,7 @@ from supportiq_backend.suggestions import (
     GetAdminVersions,
     VersionsInUse,
 )
-from tests.unit.platform.fakes import RecordingEventRecorder
+from tests.unit.platform.fakes import RecordingEventRecorder, RecordingStepTracer
 from tests.unit.suggestions.builders import STAFF_ACCOUNT_ID, build_versions
 from tests.unit.suggestions.fakes import FakeAiService
 
@@ -46,9 +48,16 @@ STAFF = InternalPrincipal(STAFF_ACCOUNT_ID, InternalRole.STAFF)
 MANAGER = InternalPrincipal(STAFF_ACCOUNT_ID, InternalRole.MANAGER)
 
 
-def build_read(ai_service: FakeAiService) -> tuple[GetAdminVersions, RecordingEventRecorder]:
+def build_read(
+    ai_service: FakeAiService, steps: RecordingStepTracer | None = None
+) -> tuple[GetAdminVersions, RecordingEventRecorder]:
     events = RecordingEventRecorder()
-    ports = AiServiceReadPorts(authorizer=Authorizer(events), ai_service=ai_service, events=events)
+    ports = AiServiceReadPorts(
+        authorizer=Authorizer(events),
+        ai_service=ai_service,
+        events=events,
+        steps=steps or RecordingStepTracer(),
+    )
     return GetAdminVersions(ports, BUILD_VERSION), events
 
 
@@ -59,6 +68,16 @@ async def test_an_admin_gets_the_build_version_and_the_versions_of_ai_service() 
 
     assert versions == VersionsInUse(BUILD_VERSION, build_versions())
     assert events.names() == ()
+
+
+async def test_the_read_of_ai_service_runs_in_a_span_that_names_the_operation() -> None:
+    steps = RecordingStepTracer()
+    read, _ = build_read(FakeAiService(), steps)
+
+    await read.execute(ADMIN)
+
+    assert steps.steps == [SpanName.CALL_AI_SERVICE]
+    assert steps.ai_service_endpoints == ["getAssetVersions"]
 
 
 @pytest.mark.parametrize(

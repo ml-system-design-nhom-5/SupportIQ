@@ -2,7 +2,9 @@
 
 Staff propose the reply of a ticket that requires authority, and a manager sends it; the
 decision row then holds both accounts (contracts v1 design, Recorded decision; FR-06). The
-customer sees no proposal text until a manager sends it (FR-04).
+customer sees no proposal text until a manager sends it (FR-04). A `proposal_id` is an opaque
+string, so one that is not a UUID gets the answer of the first check that fails, in the order
+of the contract (CON-02, CON-15).
 """
 
 from http import HTTPStatus
@@ -13,36 +15,42 @@ from tests.integration.application import RunningBackend
 from tests.integration.builders import DatabaseBuilder, TicketSpec
 from tests.integration.database import WorkerDatabase
 from tests.integration.tickets.console_requests import (
+    AUTHORITY_REQUIRED,
     DECISION_ROWS,
     DRAFT_TEXT,
     FORBIDDEN,
+    INVALID_TICKET_STATE,
     MANAGER_NAME,
     MESSAGE,
     NOW_TEXT,
     OTHER_KEY,
     PREDICTED_INTENT,
     REPLIES,
+    UNKNOWN_PROPOSAL_ID,
+    UNKNOWN_TICKET_ID,
     act_on_ticket,
+    count_replies,
     open_ticket,
     sign_in_as_manager,
     sign_in_as_support,
     ticket_path,
+    ticket_status,
     without_fields,
 )
 from tests.integration.tickets.proposal_requests import (
     OWN_TEXT,
     WITHOUT_DRAFT,
     on_the_draft,
+    on_the_proposal,
     propose,
-    ticket_status,
     ticket_with_a_ready_draft,
 )
 from tests.integration.tickets.shop_requests import sign_in_as_new_customer
 
 pytestmark = pytest.mark.anyio
 
-UNKNOWN_PROPOSAL_ID = "00000000-0000-4000-8000-0000000000f3"
-AUTHORITY_REQUIRED = "urn:supportiq:problem:authority-required"
+# A proposal ID that is no UUID: an opaque string that the backend never parses (CON-15).
+NOT_A_UUID = "p-1"
 
 
 async def test_workspace_shows_the_proposal_and_lets_only_a_manager_send_it(
@@ -76,7 +84,7 @@ async def test_staff_get_403_forbidden_when_they_reply_to_an_awaiting_ticket(
 
     assert response.status_code == HTTPStatus.FORBIDDEN
     assert response.json()["type"] == FORBIDDEN
-    assert await builder.scalar("SELECT count(*) FROM replies") == 0
+    assert await count_replies(builder) == 0
 
 
 async def test_authority_needs_a_proposal_that_a_manager_sends_with_both_accounts_recorded(
@@ -95,7 +103,7 @@ async def test_authority_needs_a_proposal_that_a_manager_sends_with_both_account
         backend.client,
         manager,
         path,
-        {"basis": "reply_proposal", "body": DRAFT_TEXT, "proposal_id": proposal["proposal_id"]},
+        on_the_proposal(str(proposal["proposal_id"]), DRAFT_TEXT),
         OTHER_KEY,
     )
 
@@ -133,7 +141,7 @@ async def test_reply_from_a_proposal_answers_201_in_the_shape_of_the_contract(
         backend.client,
         manager,
         ticket_path(ticket.ticket_id, REPLIES),
-        {"basis": "reply_proposal", "body": OWN_TEXT, "proposal_id": proposal["proposal_id"]},
+        on_the_proposal(str(proposal["proposal_id"])),
         OTHER_KEY,
     )
 
@@ -159,7 +167,7 @@ async def test_closed_workspace_keeps_the_proposal_next_to_the_reply(
         backend.client,
         manager,
         ticket_path(ticket.ticket_id, REPLIES),
-        {"basis": "reply_proposal", "body": OWN_TEXT, "proposal_id": proposal["proposal_id"]},
+        on_the_proposal(str(proposal["proposal_id"])),
         OTHER_KEY,
     )
 
@@ -186,8 +194,11 @@ async def test_customer_sees_no_proposal_text_until_a_manager_sends_it(
     assert OWN_TEXT not in response.text
 
 
+@pytest.mark.parametrize(
+    "proposal_id", [UNKNOWN_PROPOSAL_ID, NOT_A_UUID], ids=["unknown-uuid", "not-a-uuid"]
+)
 async def test_reply_on_another_proposal_returns_422_and_sends_nothing(
-    backend: RunningBackend, builder: DatabaseBuilder
+    backend: RunningBackend, builder: DatabaseBuilder, proposal_id: str
 ) -> None:
     staff = await sign_in_as_support(builder)
     manager = await sign_in_as_manager(builder)
@@ -198,7 +209,7 @@ async def test_reply_on_another_proposal_returns_422_and_sends_nothing(
         backend.client,
         manager,
         ticket_path(ticket.ticket_id, REPLIES),
-        {"basis": "reply_proposal", "body": OWN_TEXT, "proposal_id": UNKNOWN_PROPOSAL_ID},
+        on_the_proposal(proposal_id),
         OTHER_KEY,
     )
 
@@ -207,4 +218,58 @@ async def test_reply_on_another_proposal_returns_422_and_sends_nothing(
         "The basis reply_proposal is not valid with a proposal_id that is not the proposal of"
         " the ticket."
     )
-    assert await builder.scalar("SELECT count(*) FROM replies") == 0
+    assert await count_replies(builder) == 0
+
+
+async def test_a_manager_on_a_closed_ticket_gets_409_before_the_proposal_id_is_read(
+    backend: RunningBackend, builder: DatabaseBuilder
+) -> None:
+    staff = await sign_in_as_support(builder)
+    manager = await sign_in_as_manager(builder)
+    ticket = await open_ticket(builder)
+    path = ticket_path(ticket.ticket_id, REPLIES)
+    await act_on_ticket(backend.client, staff, path, WITHOUT_DRAFT)
+
+    response = await act_on_ticket(
+        backend.client, manager, path, on_the_proposal(NOT_A_UUID), OTHER_KEY
+    )
+
+    assert (response.status_code, response.json()["type"]) == (
+        HTTPStatus.CONFLICT,
+        INVALID_TICKET_STATE,
+    )
+    assert await count_replies(builder) == 1
+
+
+async def test_staff_on_an_awaiting_ticket_get_403_before_the_proposal_id_is_read(
+    backend: RunningBackend, builder: DatabaseBuilder
+) -> None:
+    staff = await sign_in_as_support(builder)
+    ticket = await open_ticket(builder)
+    await propose(backend, staff, ticket.ticket_id, WITHOUT_DRAFT)
+
+    response = await act_on_ticket(
+        backend.client,
+        staff,
+        ticket_path(ticket.ticket_id, REPLIES),
+        on_the_proposal(NOT_A_UUID),
+        OTHER_KEY,
+    )
+
+    assert (response.status_code, response.json()["type"]) == (HTTPStatus.FORBIDDEN, FORBIDDEN)
+    assert await count_replies(builder) == 0
+
+
+async def test_a_proposal_reply_to_an_unknown_ticket_returns_404(
+    backend: RunningBackend, builder: DatabaseBuilder
+) -> None:
+    manager = await sign_in_as_manager(builder)
+
+    response = await act_on_ticket(
+        backend.client,
+        manager,
+        ticket_path(UNKNOWN_TICKET_ID, REPLIES),
+        on_the_proposal(NOT_A_UUID),
+    )
+
+    assert response.status_code == HTTPStatus.NOT_FOUND

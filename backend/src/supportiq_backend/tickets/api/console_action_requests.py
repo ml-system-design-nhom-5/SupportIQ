@@ -3,10 +3,11 @@
 `sendReply` and `createReplyProposal` take a body whose basis chooses the variant, and
 `createEscalation` takes its reasons (CODE-32). A repeated item of an array that the contract
 marks `uniqueItems: true` is refused, so a repeated warning ID never stands in for another.
+A `proposal_id` stays the string that the request sent: identifiers are opaque, so it is
+compared with the ticket's proposal in step 8 of the check order and never parsed (CON-15).
 """
 
 from typing import assert_never
-from uuid import UUID
 
 from pydantic import MISSING
 
@@ -19,7 +20,6 @@ from supportiq_backend.generated import (
     StaffNoteText,
 )
 from supportiq_backend.generated import StaffReasonCode as ContractStaffReasonCode
-from supportiq_backend.platform import RequestContractError
 from supportiq_backend.suggestions import SuggestionId
 from supportiq_backend.tickets.api.console_request_fields import (
     parse_storable_text,
@@ -29,7 +29,6 @@ from supportiq_backend.tickets.domain import (
     AiDraftReply,
     EscalationRequest,
     NoAiDraftReply,
-    ProposalId,
     ProposalReply,
     ProposalRequest,
     RejectedAiDraftReply,
@@ -41,7 +40,6 @@ _BODY_LOCATION = "body.body"
 _WARNINGS_LOCATION = "body.acknowledged_warning_ids"
 _REASON_CODES_LOCATION = "body.staff_reason_codes"
 _NOTE_LOCATION = "body.note"
-_PROPOSAL_LOCATION = "body.proposal_id"
 
 # The variants of `CreateReplyProposalRequest`, discriminated by `basis`.
 type ProposalRequestBody = AiDraftReplyRequest | RejectedAiDraftReplyRequest | NoAiDraftReplyRequest
@@ -59,14 +57,12 @@ def parse_reply_request(body: ReplyRequestBody) -> ReplyRequest:
         The domain request.
 
     Raises:
-        RequestContractError: A text cannot be stored, an array repeats an item, or the
-            proposal ID is not a UUID.
+        RequestContractError: A text cannot be stored, or an array repeats an item.
     """
     match body:
         case ReplyProposalReplyRequest():
             return ProposalReply(
-                parse_storable_text(body.body.root.root, _BODY_LOCATION),
-                _parse_proposal_id(body.proposal_id),
+                parse_storable_text(body.body.root.root, _BODY_LOCATION), body.proposal_id
             )
         case AiDraftReplyRequest() | RejectedAiDraftReplyRequest() | NoAiDraftReplyRequest():
             return parse_proposal_request(body)
@@ -152,10 +148,3 @@ def _parse_note(note: StaffNoteText | MISSING) -> str | None:
 
 def _parse_suggestion_id(raw: str | MISSING) -> SuggestionId | None:
     return None if raw is MISSING else SuggestionId(raw)
-
-
-def _parse_proposal_id(raw: str) -> ProposalId:
-    try:
-        return ProposalId(UUID(raw))
-    except ValueError as error:
-        raise RequestContractError((_PROPOSAL_LOCATION,)) from error

@@ -7,12 +7,11 @@ ticket workflow design, Data and contracts).
 """
 
 from dataclasses import dataclass
-from datetime import datetime
 from http import HTTPStatus
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response
-from pydantic import MISSING, RootModel, ValidationError
+from pydantic import RootModel, ValidationError
 
 from supportiq_backend.accounts import AuthenticatedSession
 from supportiq_backend.generated import KbDocumentId as ContractKbDocumentId
@@ -20,6 +19,7 @@ from supportiq_backend.generated import KbDocumentVersion as ContractKbDocumentV
 from supportiq_backend.generated import KbDocumentVersionTag as ContractKbDocumentVersionTag
 from supportiq_backend.platform.web import (
     RequestDependency,
+    format_optional_timestamp,
     format_timestamp,
     json_response,
     provide,
@@ -97,10 +97,10 @@ def to_kb_document_version_view(document: KbDocumentVersion) -> ContractKbDocume
         body=document.body,
         policy_key=document.policy_key,
         effective_start_at=format_timestamp(document.effective_start_at),
-        effective_end_at=_to_optional_timestamp(document.effective_end_at),
+        effective_end_at=format_optional_timestamp(document.effective_end_at),
         owner=document.owner,
         source=document.source,
-        last_reviewed_at=_to_optional_timestamp(document.last_reviewed_at),
+        last_reviewed_at=format_optional_timestamp(document.last_reviewed_at),
     )
 
 
@@ -124,9 +124,9 @@ def build_console_kb_documents_router(routes: ConsoleKbDocumentRoutes) -> APIRou
         session: Annotated[AuthenticatedSession, current_session],
         use_case: Annotated[GetConsoleKbDocumentVersion, get_document_version],
     ) -> Response:
-        support = use_case.authorize(session.principal)
+        use_case.authorize(session.principal)
         document = await use_case.execute(
-            support, parse_kb_document_id(document_id), parse_kb_document_version_tag(version)
+            parse_kb_document_id(document_id), parse_kb_document_version_tag(version)
         )
         return json_response(to_kb_document_version_view(document))
 
@@ -138,7 +138,3 @@ def _match_pattern(model: type[RootModel[str]], raw: str) -> str:
         return model.model_validate(raw, strict=True).root
     except ValidationError as error:
         raise KbDocumentVersionNotFoundError from error
-
-
-def _to_optional_timestamp(moment: datetime | None) -> str | MISSING:
-    return MISSING if moment is None else format_timestamp(moment)

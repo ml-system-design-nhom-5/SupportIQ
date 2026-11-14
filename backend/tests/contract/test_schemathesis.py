@@ -24,6 +24,7 @@ from schemathesis.python.asgi import shutdown_lifespans
 from supportiq_backend.composition_root import BackgroundWork, create_app
 from supportiq_backend.composition_root.seed_commands import seed
 from tests.contract.conftest import CONTRACT_FILE
+from tests.contract.test_permissions import OPERATIONS_WITH_ROLES
 from tests.integration.ai_service_doubles import FakeAiService, serve_examples
 from tests.integration.application import ALLOWED_ORIGIN, build_settings
 from tests.integration.builders import FAILED_SUGGESTION, DatabaseBuilder
@@ -56,12 +57,16 @@ ROLE_OF_OPERATION = {
     "getConsoleTicket": "staff",
     "recordTicketView": "staff",
     "createSuggestion": "staff",
+    "createReplyProposal": "staff",
     "sendReply": "staff",
+    "createEscalation": "staff",
+    "getConsoleKbDocumentVersion": "staff",
     "listAdminAccounts": "admin",
     "createAdminAccount": "admin",
     "changeAccountRole": "admin",
     "changeAccountStatus": "admin",
     "resetAccountPassword": "admin",
+    "getAdminVersions": "admin",
 }
 # The contract: a value that is not a valid `traceparent` is ignored and never causes `422`, so
 # no value of it can make a request invalid. A unit test covers that case, and generation
@@ -71,8 +76,9 @@ TRACEPARENT_REFERENCE = {"$ref": "#/components/parameters/Traceparent"}
 # another operation, returns `422`; a change or a reset that breaks an admin limit returns `422`
 # with `violated_rule`; a wrong current password returns `422` with
 # `current_password_incorrect`; a retry with nothing to retry, or an intent correction while no
-# intent is known, returns `422`; and a reply that breaks a rule of its basis, or holds a
-# placeholder, returns `422`. So on these operations a request can match the schema and still
+# intent is known, returns `422`; a reply or a reply proposal that breaks a rule of its basis,
+# or holds a placeholder, returns `422`; and an escalation with `other` and no note returns
+# `422`. So on these operations a request can match the schema and still
 # get `422`. Every other operation keeps the strict default of the check.
 OPERATIONS_WITH_A_DOCUMENTED_422_FOR_VALID_DATA = [
     "listShopProducts",
@@ -80,7 +86,9 @@ OPERATIONS_WITH_A_DOCUMENTED_422_FOR_VALID_DATA = [
     "listShopTickets",
     "listConsoleTickets",
     "createSuggestion",
+    "createReplyProposal",
     "sendReply",
+    "createEscalation",
     "listAdminAccounts",
     "changeAccountRole",
     "changeAccountStatus",
@@ -254,6 +262,12 @@ def seeded_identifiers_schema(
 
 generated_identifiers = schemathesis.pytest.from_fixture("generated_identifiers_schema")
 seeded_identifiers = schemathesis.pytest.from_fixture("seeded_identifiers_schema")
+
+
+def test_every_operation_with_roles_is_sent_with_a_session_of_one_of_its_roles() -> None:
+    # Without a session every request gets `401`, so an operation missing here would pass
+    # without being checked.
+    assert set(ROLE_OF_OPERATION) == set(OPERATIONS_WITH_ROLES)
 
 
 @generated_identifiers.parametrize()  # pyright: ignore[reportUnknownMemberType, reportUntypedFunctionDecorator]  # the decorator of Schemathesis is untyped, #3

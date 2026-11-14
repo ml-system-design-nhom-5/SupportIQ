@@ -177,6 +177,10 @@ class SuggestionStore(Protocol):
 
         Returns:
             The suggestion, or None when it is unknown.
+
+        Raises:
+            UnexpectedFailureError: A stored part breaks an invariant, or a stored result no
+                longer matches the contract: a defect.
         """
         ...
 
@@ -190,6 +194,10 @@ class SuggestionStore(Protocol):
 
         Returns:
             Each known suggestion by its ID.
+
+        Raises:
+            UnexpectedFailureError: A stored part breaks an invariant, or a stored result no
+                longer matches the contract: a defect.
         """
         ...
 

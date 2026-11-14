@@ -21,7 +21,6 @@ from tests.integration.tickets.console_requests import (
 OWN_TEXT = "A manager will confirm the refund of your order today."
 NOTE = "The customer asked for the manager by name."
 WITHOUT_DRAFT = {"basis": "no_ai_draft", "body": OWN_TEXT}
-TICKET_STATUS = "SELECT status FROM tickets WHERE ticket_id = :ticket_id"
 
 
 def on_the_draft(suggestion_id: str, body: str = DRAFT_TEXT) -> dict[str, object]:
@@ -31,6 +30,11 @@ def on_the_draft(suggestion_id: str, body: str = DRAFT_TEXT) -> dict[str, object
         "suggestion_id": suggestion_id,
         "acknowledged_warning_ids": [WARNING_ID],
     }
+
+
+def on_the_proposal(proposal_id: str, body: str = OWN_TEXT) -> dict[str, object]:
+    """Return the body of a manager's reply that sends the proposal that it names."""
+    return {"basis": "reply_proposal", "body": body, "proposal_id": proposal_id}
 
 
 async def ticket_with_a_ready_draft(
@@ -53,7 +57,3 @@ async def propose(
 ) -> dict[str, object]:
     response = await act_on_ticket(backend.client, staff, ticket_path(ticket_id, PROPOSALS), body)
     return response.json()
-
-
-async def ticket_status(builder: DatabaseBuilder, ticket_id: str) -> object:
-    return await builder.scalar(TICKET_STATUS, ticket_id=ticket_id)

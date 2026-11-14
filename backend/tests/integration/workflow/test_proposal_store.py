@@ -1,16 +1,19 @@
 """Adapter tests of `PostgresReplyProposalStore` against PostgreSQL 17 (TEST-01).
 
 A proposal is inserted once and read back with its basis, so a proposal on a draft keeps its
-suggestion, acknowledged warnings, staff reason codes, and note (contracts v1 design).
+suggestion, acknowledged warnings, staff reason codes, and note (contracts v1 design). A
+stored proposal on a draft without its suggestion is a defect that no read hides.
 """
 
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from datetime import timedelta
 
 import pytest
+from sqlalchemy import insert
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from supportiq_backend.accounts import AccountId
+from supportiq_backend.platform import UnexpectedFailureError
 from supportiq_backend.platform.adapters.database import create_session_factory
 from supportiq_backend.suggestions import SuggestionId
 from supportiq_backend.tickets import (
@@ -24,7 +27,9 @@ from supportiq_backend.tickets import (
     TicketId,
 )
 from supportiq_backend.tickets.adapters.proposal_store import PostgresReplyProposalStore
+from supportiq_backend.tickets.adapters.tables import ReplyProposalRow
 from tests.integration.builders import AccountSpec, DatabaseBuilder
+from tests.integration.database import WorkerDatabase, create_owner_engine
 from tests.integration.workflow.workflow_rows import insert_ticket, start_suggestion, ticket_created
 from tests.unit.platform.fakes import FAKE_CLOCK_START
 
@@ -42,6 +47,13 @@ PROPOSAL_COLUMNS = """
     )
     FROM reply_proposals
 """
+
+
+@pytest.fixture
+async def owner_engine(worker_database: WorkerDatabase) -> AsyncIterator[AsyncEngine]:
+    engine = create_owner_engine(worker_database)
+    yield engine
+    await engine.dispose()
 
 
 async def insert_proposal(engine: AsyncEngine, proposal: ReplyProposal) -> None:
@@ -149,3 +161,29 @@ async def test_load_proposal_before_staff_submit_one_is_none(
     ticket_id = TicketId(await insert_ticket(builder))
 
     assert await load_proposal(app_engine, ticket_id) is None
+
+
+@pytest.mark.parametrize("basis", ["ai_draft", "rejected_ai_draft"])
+async def test_load_proposal_on_a_draft_without_its_suggestion_is_a_defect(
+    app_engine: AsyncEngine, owner_engine: AsyncEngine, builder: DatabaseBuilder, basis: str
+) -> None:
+    ticket_id = await insert_ticket(builder)
+    staff_id = await builder.account(AccountSpec("staff"))
+    async with owner_engine.begin() as connection:
+        await connection.execute(
+            insert(ReplyProposalRow).values(
+                proposal_id=builder.next_uuid(),
+                ticket_id=ticket_id,
+                basis=basis,
+                suggestion_id=None,
+                acknowledged_warning_ids=[],
+                staff_reason_codes=[StaffReasonCode.KB_GAP.value],
+                proposed_by_account_id=staff_id,
+                created_at=CREATED_AT,
+                body=BODY,
+                note=None,
+            )
+        )
+
+    with pytest.raises(UnexpectedFailureError):
+        await load_proposal(app_engine, TicketId(ticket_id))

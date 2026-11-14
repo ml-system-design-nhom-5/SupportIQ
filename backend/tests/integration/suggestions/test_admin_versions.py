@@ -18,15 +18,15 @@ from tests.integration.ai_service_doubles import (
 from tests.integration.application import build_settings, running_client
 from tests.integration.builders import DatabaseBuilder
 from tests.integration.database import WorkerDatabase
-from tests.integration.suggestions.api.read_requests import (
+from tests.integration.suggestions.read_requests import (
     SignIn,
+    headers_of,
     problem_example,
     problem_of,
     sign_in_as_admin,
     sign_in_as_customer,
-    sign_in_as_manager,
-    sign_in_as_staff,
 )
+from tests.integration.tickets.console_requests import sign_in_as_manager, sign_in_as_support
 from tests.unit.platform.fakes import FakeClock, RecordingEventRecorder
 
 pytestmark = pytest.mark.anyio
@@ -74,7 +74,11 @@ async def test_an_admin_gets_only_the_build_version_while_ai_service_refuses(
     assert events.of(EventName.DATABASE_CALL_FAILED) == ()
 
 
-@pytest.mark.parametrize("sign_in", [sign_in_as_staff, sign_in_as_manager, sign_in_as_customer])
+@pytest.mark.parametrize(
+    "sign_in",
+    [headers_of(sign_in_as_support), headers_of(sign_in_as_manager), sign_in_as_customer],
+    ids=["staff", "manager", "customer"],
+)
 async def test_every_other_role_gets_403_and_ai_service_is_not_read(
     worker_database: WorkerDatabase, builder: DatabaseBuilder, sign_in: SignIn
 ) -> None:

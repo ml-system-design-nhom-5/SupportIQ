@@ -5,12 +5,22 @@ Customers and admins never reach a console use case, and an unknown ticket, a re
 (backend ticket workflow design, Ticket state machine and check order).
 """
 
+from collections.abc import Callable
+
 import pytest
 
 from supportiq_backend.accounts import ForbiddenRoleError, Principal
 from supportiq_backend.idempotency import IdempotencyKeyReusedError
 from supportiq_backend.platform import DatabaseUnavailableError, EventName
-from supportiq_backend.tickets import NoAiDraftReply, TicketId, TicketNotFoundError, TicketStatus
+from supportiq_backend.tickets import (
+    EscalationRequest,
+    NoAiDraftReply,
+    ProposalReply,
+    StaffReasonCode,
+    TicketId,
+    TicketNotFoundError,
+    TicketStatus,
+)
 from tests.unit.suggestions.builders import build_ready_suggestion
 from tests.unit.tickets.console_fakes import (
     ADMIN,
@@ -23,8 +33,10 @@ from tests.unit.tickets.console_fakes import (
     ConsoleHarness,
     build_console_harness,
     build_console_ticket,
+    build_escalate,
     build_get,
     build_list,
+    build_propose,
     build_send,
     build_view,
     with_suggestion,
@@ -38,12 +50,21 @@ REFUSED_ROLES = [(CUSTOMER, "customer"), (ADMIN, "admin")]
 PAGE_LIMIT = 10
 REPLY = NoAiDraftReply("Your parcel left our warehouse today.", None)
 OTHER_REPLY = NoAiDraftReply("Your parcel arrives tomorrow.", None)
+ESCALATION = EscalationRequest((StaffReasonCode.CASE_EXCEPTION,), None, None)
 
 
 def with_failing_suggestion_store(harness: ConsoleHarness) -> ConsoleHarness:
     with_suggestion(harness, build_ready_suggestion())
     harness.suggestions.failure = DatabaseUnavailableError()
     return harness
+
+
+def fail_proposal_store(harness: ConsoleHarness) -> None:
+    harness.proposals.failure = DatabaseUnavailableError()
+
+
+def fail_escalation_store(harness: ConsoleHarness) -> None:
+    harness.escalations.failure = DatabaseUnavailableError()
 
 
 @pytest.mark.parametrize(("principal", "role"), REFUSED_ROLES)
@@ -190,3 +211,63 @@ async def test_unavailable_database_sends_no_reply_and_records_no_event() -> Non
     assert harness.replies.replies == {}
     assert harness.transactions.commit_count == 0
     assert harness.events.of(EventName.REPLY_SENT) == ()
+
+
+async def test_unavailable_proposal_store_stores_no_proposal_and_records_no_event() -> None:
+    harness = build_console_harness(build_console_ticket())
+    fail_proposal_store(harness)
+
+    with pytest.raises(DatabaseUnavailableError):
+        await build_propose(harness).execute(STAFF, TICKET_ID, REPLY, KEY)
+
+    assert harness.proposals.proposals == {}
+    assert harness.tickets.tickets[TICKET_ID].status is TicketStatus.OPEN
+    assert harness.audit.entries == []
+    assert harness.transactions.commit_count == 0
+    assert harness.events.of(EventName.REPLY_PROPOSAL_SUBMITTED) == ()
+
+
+async def test_unavailable_escalation_store_escalates_nothing_and_records_no_event() -> None:
+    harness = build_console_harness(build_console_ticket())
+    fail_escalation_store(harness)
+
+    with pytest.raises(DatabaseUnavailableError):
+        await build_escalate(harness).execute(STAFF, TICKET_ID, ESCALATION, KEY)
+
+    assert harness.escalations.escalations == {}
+    assert harness.replies.decisions == []
+    assert harness.tickets.tickets[TICKET_ID].status is TicketStatus.OPEN
+    assert harness.transactions.commit_count == 0
+    assert harness.events.of(EventName.TICKET_ESCALATED) == ()
+    assert harness.events.of(EventName.DECISION_RECORDED) == ()
+
+
+async def test_unavailable_proposal_read_sends_no_reply_and_records_no_event() -> None:
+    harness = build_console_harness(build_console_ticket(status=TicketStatus.AWAITING_APPROVAL))
+    fail_proposal_store(harness)
+    reply = ProposalReply("A manager approved your refund today.", "p-1")
+
+    with pytest.raises(DatabaseUnavailableError):
+        await build_send(harness).execute(MANAGER, TICKET_ID, reply, KEY)
+
+    assert harness.replies.replies == {}
+    assert harness.tickets.tickets[TICKET_ID].status is TicketStatus.AWAITING_APPROVAL
+    assert harness.transactions.commit_count == 0
+    assert harness.events.of(EventName.REPLY_SENT) == ()
+
+
+@pytest.mark.parametrize(
+    ("status", "fail_store"),
+    [
+        pytest.param(TicketStatus.AWAITING_APPROVAL, fail_proposal_store, id="proposal"),
+        pytest.param(TicketStatus.ESCALATED, fail_escalation_store, id="escalation"),
+    ],
+)
+async def test_unavailable_read_of_a_staff_action_reaches_the_workspace(
+    status: TicketStatus, fail_store: Callable[[ConsoleHarness], None]
+) -> None:
+    harness = build_console_harness(build_console_ticket(status=status))
+    fail_store(harness)
+
+    with pytest.raises(DatabaseUnavailableError):
+        await build_get(harness).execute(SIGNED_IN_MANAGER, TICKET_ID)

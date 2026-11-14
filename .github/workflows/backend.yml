@@ -92,7 +92,8 @@ jobs:
       # ai-service from in-memory fakes and never call ai-service over the network (TEST-16).
       AI_SERVICE_BASE_URL: http://ai-service.invalid
       AI_SERVICE_TOKEN: ci-ai-service-token
-      BACKEND_BUILD_VERSION: ci
+      # The build version that getAdminVersions reports: the commit SHA, as a deploy sets it.
+      BACKEND_BUILD_VERSION: ${{ github.sha }}
     steps:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1

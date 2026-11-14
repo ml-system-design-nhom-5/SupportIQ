@@ -20,7 +20,6 @@ from supportiq_backend.tickets import (
     DecisionType,
     NoAiDraftReply,
     PlaceholderInBodyError,
-    ProposalId,
     ProposalReply,
     ProposalRequest,
     RecordedDecision,
@@ -67,7 +66,7 @@ STAFF_EDIT = "Hello Lan Tran, your refund is under review. We will write again o
 MANAGER_EDIT = "Hello Lan Tran, your refund was approved today."
 OWN_TEXT = "A manager will confirm your refund."
 SEND_KEY = IdempotencyKey(UUID("00000000-0000-4000-8000-000000000124"))
-OTHER_PROPOSAL_ID = ProposalId(UUID("00000000-0000-4000-8000-0000000000f1"))
+OTHER_PROPOSAL_ID = "00000000-0000-4000-8000-0000000000f1"
 UNCHANGED = AiDraftReply(RESTORED_DRAFT_TEXT, SUGGESTION_ID, frozenset(), (), None)
 EDITED = AiDraftReply(
     STAFF_EDIT, SUGGESTION_ID, frozenset(), (StaffReasonCode.TONE_OR_CLARITY,), None
@@ -86,7 +85,7 @@ async def proposed(proposal: ProposalRequest) -> tuple[ConsoleHarness, ReplyProp
 
 
 async def send(harness: ConsoleHarness, proposal: ReplyProposal, body: str) -> StoredResponse:
-    reply = ProposalReply(body, proposal.proposal_id)
+    reply = ProposalReply(body, str(proposal.proposal_id))
     return await build_send(harness).execute(MANAGER, TICKET_ID, reply, SEND_KEY)
 
 
@@ -300,7 +299,7 @@ async def test_a_proposal_reply_with_a_placeholder_is_refused() -> None:
 
 async def test_staff_may_not_send_the_proposal_that_they_submitted() -> None:
     harness, proposal = await proposed(UNCHANGED)
-    reply = ProposalReply(RESTORED_DRAFT_TEXT, proposal.proposal_id)
+    reply = ProposalReply(RESTORED_DRAFT_TEXT, str(proposal.proposal_id))
 
     with pytest.raises(ForbiddenRoleError):
         await build_send(harness).execute(STAFF, TICKET_ID, reply, SEND_KEY)

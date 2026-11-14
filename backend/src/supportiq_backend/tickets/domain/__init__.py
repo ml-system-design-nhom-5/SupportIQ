@@ -35,6 +35,7 @@ from supportiq_backend.tickets.domain.ports import (
     EscalationStore,
     ReplyProposalStore,
     ReplyStore,
+    TicketStateStore,
     TicketStore,
 )
 from supportiq_backend.tickets.domain.proposals import ReplyProposal, ResolvedReply, SentProposal
@@ -135,6 +136,7 @@ __all__ = [
     "TicketPage",
     "TicketPosition",
     "TicketSource",
+    "TicketStateStore",
     "TicketStatus",
     "TicketStore",
     "TicketSummary",

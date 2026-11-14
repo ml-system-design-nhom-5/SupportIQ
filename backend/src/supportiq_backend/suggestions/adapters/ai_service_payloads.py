@@ -283,8 +283,8 @@ def _to_intent(model: contract.ModelIntent | contract.StaffIntent) -> AnalysisIn
 
 def _to_document(model: contract.RankedDocument) -> RankedDocument:
     return RankedDocument(
-        document_id=model.document_id.root,
-        version=model.version.root,
+        document_id=KbDocumentId(model.document_id.root),
+        version=KbDocumentVersionTag(model.version.root),
         title=model.title,
         policy_key=model.policy_key,
         effective_start_at=_to_time(model.effective_start_at),
@@ -350,7 +350,10 @@ def _to_citation(
     match model:
         case contract.KbDocumentCitation():
             return KbDocumentCitation(
-                model.citation_id.root, model.document_id.root, model.version.root, model.snippet
+                model.citation_id.root,
+                KbDocumentId(model.document_id.root),
+                KbDocumentVersionTag(model.version.root),
+                model.snippet,
             )
         case contract.OrderContextCitation():
             return OrderContextCitation(

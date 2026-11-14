@@ -76,6 +76,13 @@ ESCALATIONS = "/escalations"
 REPLIES = "/replies"
 FORBIDDEN = "urn:supportiq:problem:forbidden"
 INVALID_TICKET_STATE = "urn:supportiq:problem:invalid-ticket-state"
+SUGGESTION_PENDING = "urn:supportiq:problem:suggestion-pending"
+SUGGESTION_SUPERSEDED = "urn:supportiq:problem:suggestion-superseded"
+AUTHORITY_REQUIRED = "urn:supportiq:problem:authority-required"
+# A suggestion and a proposal that no ticket has.
+UNKNOWN_SUGGESTION_ID = "00000000-0000-4000-8000-0000000000f2"
+UNKNOWN_PROPOSAL_ID = "00000000-0000-4000-8000-0000000000f3"
+TICKET_STATUS = "SELECT status FROM tickets WHERE ticket_id = :ticket_id"
 # The decision rows of the tests, without their IDs and times, as one JSON value per row.
 DECISION_ROWS = """
     SELECT jsonb_agg(jsonb_build_object(
@@ -210,6 +217,36 @@ async def insert_suggestion(
     finally:
         await engine.dispose()
     return str(suggestion_id)
+
+
+async def complete_draft(worker_database: WorkerDatabase, suggestion_id: str) -> None:
+    """Store `draft_ready_outcome` in a pending draft part, as the claim loop stores a result.
+
+    Args:
+        worker_database: The database of the worker.
+        suggestion_id: The suggestion whose draft part is pending.
+    """
+    engine = create_owner_engine(worker_database)
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(
+                update(SuggestionPartRow)
+                .where(
+                    SuggestionPartRow.suggestion_id == UUID(suggestion_id),
+                    SuggestionPartRow.part == "draft",
+                )
+                .values(
+                    status="draft_ready",
+                    completed_at=PART_COMPLETED_AT,
+                    result=draft_ready_outcome(),
+                )
+            )
+    finally:
+        await engine.dispose()
+
+
+async def ticket_status(builder: DatabaseBuilder, ticket_id: str) -> object:
+    return await builder.scalar(TICKET_STATUS, ticket_id=ticket_id)
 
 
 def asset_versions() -> dict[str, object]:

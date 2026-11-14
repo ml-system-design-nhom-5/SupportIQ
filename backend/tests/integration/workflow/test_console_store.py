@@ -1,10 +1,11 @@
-"""Adapter tests of `PostgresConsoleTicketStore` against PostgreSQL 17 (TEST-01).
+"""Adapter tests of `PostgresConsoleTicketStore` and `PostgresTicketStateStore` (TEST-01).
 
-Each console queue lists one status: `open`, `awaiting_approval`, and `escalated` oldest first
-by `created_at`, `closed` newest first by `closed_at`, then by ticket ID by code point, and a
-page continues after the position of the last ticket of the previous one (contract
-`listConsoleTickets`). Every action locks the ticket row first (backend ticket workflow design,
-Ticket state machine and check order).
+Both run against PostgreSQL 17. Each console queue lists one status: `open`,
+`awaiting_approval`, and `escalated` oldest first by `created_at`, `closed` newest first by
+`closed_at`, then by ticket ID by code point, and a page continues after the position of the
+last ticket of the previous one (contract `listConsoleTickets`). Every action locks the ticket
+row first, and then changes its state along the state machine (backend ticket workflow
+design, Ticket state machine and check order).
 """
 
 import asyncio
@@ -29,6 +30,7 @@ from supportiq_backend.tickets import (
     TicketStatus,
 )
 from supportiq_backend.tickets.adapters.console_store import PostgresConsoleTicketStore
+from supportiq_backend.tickets.adapters.ticket_state_store import PostgresTicketStateStore
 from tests.integration.builders import DatabaseBuilder, TicketSpec
 from tests.integration.database import WorkerDatabase, create_owner_engine
 from tests.integration.workflow.workflow_rows import set_ticket_status, wait_until_row_lock_waits
@@ -123,13 +125,13 @@ async def move_to_manager_queue(
     engine: AsyncEngine, ticket_id: TicketId, queue: ManagerQueue
 ) -> None:
     async with create_session_factory(engine)() as session:
-        await PostgresConsoleTicketStore(session).move_to_manager_queue(ticket_id, queue)
+        await PostgresTicketStateStore(session).move_to_manager_queue(ticket_id, queue)
         await session.commit()
 
 
 async def start_handling(engine: AsyncEngine, ticket_id: TicketId, started_at: datetime) -> None:
     async with create_session_factory(engine)() as session:
-        await PostgresConsoleTicketStore(session).start_handling(ticket_id, started_at)
+        await PostgresTicketStateStore(session).start_handling(ticket_id, started_at)
         await session.commit()
 
 
@@ -302,7 +304,7 @@ async def test_close_ticket_sets_the_ticket_closed_at_the_time_of_the_reply(
     ticket_id = await insert_ticket_at(builder, customer_order, FIRST)
 
     async with create_session_factory(app_engine)() as session:
-        await PostgresConsoleTicketStore(session).close_ticket(ticket_id, THIRD)
+        await PostgresTicketStateStore(session).close_ticket(ticket_id, THIRD)
         await session.commit()
 
     closed = await load_ticket(app_engine, ticket_id)

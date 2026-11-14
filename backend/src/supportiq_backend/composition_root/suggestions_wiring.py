@@ -273,7 +273,10 @@ def _build_read_routers(
     settings: Settings, shared: SharedPorts, accounts: AccountsWiring, ai_service: HttpAiService
 ) -> tuple[APIRouter, ...]:
     ports = AiServiceReadPorts(
-        authorizer=accounts.authorizer, ai_service=ai_service, events=shared.events
+        authorizer=accounts.authorizer,
+        ai_service=ai_service,
+        events=shared.events,
+        steps=shared.steps,
     )
     return (
         build_console_kb_documents_router(

@@ -5,12 +5,14 @@ authority, also while a part is pending (FR-06), and no body with a placeholder 
 (SEC-38).
 """
 
+from dataclasses import replace
+
 import pytest
 
 from supportiq_backend.accounts import ForbiddenRoleError, Principal
 from supportiq_backend.audit import AuditEventType
 from supportiq_backend.commerce import AddressedOrder
-from supportiq_backend.platform import EventName
+from supportiq_backend.platform import EventName, SpanName
 from supportiq_backend.suggestions import (
     AiReasonCode,
     AiServiceContractError,
@@ -33,7 +35,7 @@ from supportiq_backend.tickets import (
 )
 from supportiq_backend.tickets.domain import OTHER_ORDERS_LIMIT
 from tests.unit.commerce.fakes import build_order
-from tests.unit.platform.fakes import FAKE_CLOCK_START
+from tests.unit.platform.fakes import FAKE_CLOCK_START, RecordingStepTracer
 from tests.unit.pseudonymization.fakes import REFERENCES
 from tests.unit.suggestions.builders import (
     OTHER_KB_VERSION,
@@ -62,6 +64,7 @@ from tests.unit.tickets.console_fakes import (
     build_send,
     build_view,
     with_suggestion,
+    with_ticking_clock,
 )
 
 DRAFT_TEXT = "Hello [NAME_1], your refund is under review."
@@ -121,6 +124,27 @@ async def test_an_unchanged_restored_draft_is_sent_and_approved() -> None:
         AuditEventType.DECISION_RECORDED,
     ]
     assert EventName.REPLY_SENT in harness.events.names()
+
+
+@pytest.mark.anyio
+async def test_a_reply_gives_every_record_the_time_of_one_clock_read() -> None:
+    harness = with_ticking_clock(
+        with_suggestion(
+            build_console_harness(build_console_ticket(), restorer=RESTORER),
+            build_ready_suggestion(build_draft_ready((0, DRAFT_TEXT))),
+        )
+    )
+
+    await build_send(harness).execute(STAFF, TICKET_ID, ai_draft_reply(), KEY)
+
+    (decision,) = harness.replies.decisions
+    moments = {
+        harness.replies.replies[TICKET_ID].sent_at,
+        harness.tickets.tickets[TICKET_ID].closed_at,
+        decision.decided_at,
+        *(entry.occurred_at for entry in harness.audit.entries),
+    }
+    assert moments == {FAKE_CLOCK_START}
 
 
 @pytest.mark.anyio
@@ -206,6 +230,21 @@ async def test_the_first_view_reruns_a_suggestion_made_with_another_kb_version()
     new = harness.suggestions.data.suggestions[harness.queue.notifications[0][1]]
     assert new.trigger is SuggestionTrigger.KB_VERSION_CHANGED
     assert new.intent_override is PREDICTED_INTENT
+
+
+@pytest.mark.anyio
+async def test_the_kb_read_of_a_first_view_runs_in_a_call_ai_service_span() -> None:
+    harness = with_suggestion(
+        build_console_harness(build_console_ticket()), build_ready_suggestion()
+    )
+    steps = RecordingStepTracer()
+    harness.ports = replace(harness.ports, steps=steps)
+
+    await build_view(harness).execute(STAFF, TICKET_ID, KEY)
+
+    assert harness.ai_service.version_reads == 1
+    assert steps.steps == [SpanName.CALL_AI_SERVICE]
+    assert steps.ai_service_endpoints == ["getAssetVersions"]
 
 
 @pytest.mark.anyio

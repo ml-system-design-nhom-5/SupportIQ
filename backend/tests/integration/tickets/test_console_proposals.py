@@ -25,6 +25,10 @@ from tests.integration.tickets.console_requests import (
     OTHER_KEY,
     PROPOSALS,
     STAFF_NAME,
+    SUGGESTION_PENDING,
+    SUGGESTION_SUPERSEDED,
+    UNKNOWN_PROPOSAL_ID,
+    UNKNOWN_SUGGESTION_ID,
     UNKNOWN_TICKET_ID,
     act_on_ticket,
     analysis_ready_draft_pending,
@@ -34,6 +38,7 @@ from tests.integration.tickets.console_requests import (
     sign_in_as_manager,
     sign_in_as_support,
     ticket_path,
+    ticket_status,
     without_fields,
 )
 from tests.integration.tickets.proposal_requests import (
@@ -41,17 +46,12 @@ from tests.integration.tickets.proposal_requests import (
     OWN_TEXT,
     WITHOUT_DRAFT,
     on_the_draft,
+    on_the_proposal,
     propose,
-    ticket_status,
     ticket_with_a_ready_draft,
 )
 
 pytestmark = pytest.mark.anyio
-
-UNKNOWN_SUGGESTION_ID = "00000000-0000-4000-8000-0000000000f2"
-UNKNOWN_PROPOSAL_ID = "00000000-0000-4000-8000-0000000000f3"
-SUGGESTION_PENDING = "urn:supportiq:problem:suggestion-pending"
-SUGGESTION_SUPERSEDED = "urn:supportiq:problem:suggestion-superseded"
 
 
 async def test_proposal_on_the_draft_answers_201_in_the_shape_of_the_contract(
@@ -289,7 +289,7 @@ async def test_proposal_with_the_basis_reply_proposal_returns_422(
 ) -> None:
     staff = await sign_in_as_support(builder)
     ticket = await open_ticket(builder)
-    body = {"basis": "reply_proposal", "body": OWN_TEXT, "proposal_id": UNKNOWN_PROPOSAL_ID}
+    body = on_the_proposal(UNKNOWN_PROPOSAL_ID)
 
     response = await act_on_ticket(
         backend.client, staff, ticket_path(ticket.ticket_id, PROPOSALS), body

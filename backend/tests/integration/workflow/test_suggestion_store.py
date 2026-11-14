@@ -2,7 +2,8 @@
 
 A suggestion is inserted with two pending parts and a queued job, read back with the state of
 each part, and superseded by cancelling every pending part of its ticket and ending its job
-(backend ticket workflow design, Suggestions and the job queue, item 1).
+(backend ticket workflow design, Suggestions and the job queue, item 1). A stored value that no
+longer matches the contract is a defect of backend, read as an unexpected failure (ERR-05).
 """
 
 from dataclasses import replace
@@ -13,9 +14,11 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from supportiq_backend.accounts import AccountId
 from supportiq_backend.commerce import Money, OrderStatus, ShipmentStatus
+from supportiq_backend.platform import UnexpectedFailureError
 from supportiq_backend.platform.adapters.database import create_session_factory
 from supportiq_backend.suggestions import (
     AiReasonCode,
+    AiServiceContractError,
     CancelledPart,
     IntentLabel,
     OrderContext,
@@ -31,6 +34,17 @@ from supportiq_backend.suggestions import (
 )
 from supportiq_backend.suggestions.adapters.suggestion_store import PostgresSuggestionStore
 from tests.integration.builders import AccountSpec, DatabaseBuilder
+from tests.integration.database import WorkerDatabase
+from tests.integration.tickets.console_requests import (
+    PartSpec,
+    SuggestionSpec,
+    draft_ready_outcome,
+    ready_analysis,
+    sent_request,
+)
+from tests.integration.tickets.console_requests import (
+    insert_suggestion as insert_stored_suggestion,
+)
 from tests.integration.workflow.workflow_rows import (
     LEASE,
     build_new_suggestion,
@@ -77,6 +91,17 @@ PART_RESULTS_ARE_ABSENT = """
     SELECT bool_and(versions IS NULL AND mask_count_by_type IS NULL AND result IS NULL)
     FROM suggestion_parts
 """
+# A stored analysis, draft outcome, and request that no longer match the contract: a boolean
+# as text, a reason code that the contract does not list, and a message that is no text.
+OUTSIDE_THE_CONTRACT = [
+    SuggestionSpec(analysis=PartSpec("ready", ready_analysis() | {"is_in_scope": "yes"})),
+    SuggestionSpec(
+        analysis=PartSpec("ready", ready_analysis()),
+        draft=PartSpec("draft_ready", draft_ready_outcome() | {"reason_codes": ["unknown"]}),
+    ),
+    SuggestionSpec(request=sent_request() | {"message": 7}),
+]
+OUTSIDE_IDS = ["analysis", "draft-outcome", "request"]
 
 
 async def load_suggestion(engine: AsyncEngine, suggestion_id: SuggestionId) -> Suggestion | None:
@@ -229,6 +254,22 @@ async def test_load_suggestion_reads_the_order_context_of_the_stored_request(
 
     assert loaded is not None
     assert loaded.sent_order_context == ORDER_CONTEXT
+
+
+@pytest.mark.parametrize("spec", OUTSIDE_THE_CONTRACT, ids=OUTSIDE_IDS)
+async def test_load_suggestion_of_a_stored_value_outside_the_contract_is_an_unexpected_failure(
+    app_engine: AsyncEngine,
+    worker_database: WorkerDatabase,
+    builder: DatabaseBuilder,
+    spec: SuggestionSpec,
+) -> None:
+    ticket_id = await insert_ticket(builder)
+    suggestion_id = await insert_stored_suggestion(worker_database, builder, ticket_id, spec)
+
+    with pytest.raises(UnexpectedFailureError) as caught:
+        await load_suggestion(app_engine, SuggestionId(suggestion_id))
+
+    assert isinstance(caught.value.__cause__, AiServiceContractError)
 
 
 async def test_cancel_pending_suggestions_cancels_only_the_pending_parts(
