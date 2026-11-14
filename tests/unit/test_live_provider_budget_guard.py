@@ -141,4 +141,3 @@ def test_live_ff0e147_artifact_hashes_budget_and_no_secret_leaks():
     assert data["tokens_and_cost"]["attempts_missing_usage"] == 6
     assert data["tokens_and_cost"]["observed_reported_total_tokens"] is None
     assert data["tokens_and_cost"]["complete_cost_known"] is False
-
