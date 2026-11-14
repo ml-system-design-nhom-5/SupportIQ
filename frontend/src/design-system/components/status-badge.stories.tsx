@@ -4,7 +4,9 @@ import { StatusBadge } from "@/design-system/components/status-badge";
 import {
   authorityRequiredPresentation,
   presentationByAccountStatus,
+  presentationByAiServiceStatus,
   presentationByAiStatus,
+  presentationByCompletedDraftStatus,
   presentationByConsoleTicketStatus,
   presentationByDocumentValidity,
   presentationByHandlingMode,
@@ -47,6 +49,14 @@ export const ConsoleTicketStatuses: Story = {
 };
 
 export const AiStatuses: Story = { render: () => renderAll(presentationByAiStatus) };
+
+export const CompletedDraftStatuses: Story = {
+  render: () => renderAll(presentationByCompletedDraftStatus),
+};
+
+export const AiServiceStatuses: Story = {
+  render: () => renderAll(presentationByAiServiceStatus),
+};
 
 export const HandlingModes: Story = { render: () => renderAll(presentationByHandlingMode) };
 

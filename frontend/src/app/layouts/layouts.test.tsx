@@ -99,7 +99,7 @@ describe("ConsoleLayout, the current page of the navigation", () => {
 });
 
 describe("AdminLayout", () => {
-  it("shows SupportIQ Admin with Accounts and the account menu of the admin", async () => {
+  it("shows SupportIQ Admin with Accounts, Versions, and the account menu of the admin", async () => {
     openWithSession("/admin", "admin");
 
     const bar = await screen.findByRole("banner");
@@ -107,6 +107,10 @@ describe("AdminLayout", () => {
     expect(within(bar).getByRole("link", { name: "Accounts" })).toHaveAttribute(
       "href",
       "/admin/accounts",
+    );
+    expect(within(bar).getByRole("link", { name: "Versions" })).toHaveAttribute(
+      "href",
+      "/admin/versions",
     );
     expect(within(bar).getByRole("button", { name: "Quang Vo · Admin" })).toBeVisible();
   });

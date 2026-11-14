@@ -1,8 +1,10 @@
+import { CircleCheck, CircleX } from "lucide-react";
 import { describe, expect, it } from "vitest";
 
 import {
   authorityRequiredPresentation,
   presentationByAccountStatus,
+  presentationByAiServiceStatus,
   presentationByAiStatus,
   presentationByCompletedDraftStatus,
   presentationByConsoleTicketStatus,
@@ -74,6 +76,16 @@ describe("ticket and account status presentations (UI-12, shop UI and admin UI d
   ] as const)("presents the account status %s in the %s tone as %s", (status, tone, label) => {
     expect(presentationByAccountStatus[status]).toMatchObject({ tone, label });
   });
+
+  it.each([
+    ["available", { tone: "success", icon: CircleCheck, label: "Available" }],
+    ["unavailable", { tone: "danger", icon: CircleX, label: "Unavailable" }],
+  ] as const)(
+    "presents the ai-service status %s with its tone, icon, and label",
+    (status, shown) => {
+      expect(presentationByAiServiceStatus[status]).toEqual(shown);
+    },
+  );
 });
 
 describe("console status presentations (UI-12, console UI design)", () => {

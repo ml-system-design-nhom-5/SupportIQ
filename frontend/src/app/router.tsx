@@ -16,6 +16,7 @@ import { ProductRoute } from "@/app/routes/product-route";
 import { TicketRoute } from "@/app/routes/ticket-route";
 import { ScreenErrorBoundary } from "@/app/screen-error-boundary";
 import { ACCOUNTS_ROUTE, AccountsPage } from "@/features/admin-accounts";
+import { VERSIONS_ROUTE, VersionsPage } from "@/features/admin-versions";
 import { REPORTS_ROUTE, ReportsPage } from "@/features/console-reports";
 import { NoTicketSelected, TICKET_ROUTE } from "@/features/console-tickets";
 import {
@@ -78,6 +79,7 @@ export const appRoutes: RouteObject[] = [
         errorElement: <ScreenErrorBoundary />,
       },
       { path: ACCOUNTS_ROUTE, element: <AccountsPage />, errorElement: <ScreenErrorBoundary /> },
+      { path: VERSIONS_ROUTE, element: <VersionsPage />, errorElement: <ScreenErrorBoundary /> },
     ],
   },
   { path: "*", element: <NotFoundPage />, errorElement: <RouteErrorBoundary /> },

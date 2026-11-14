@@ -37,6 +37,7 @@ export const resetAccountPasswordRoute: FakeRoute = {
   method: "POST",
   path: /^\/v1\/admin\/accounts\/[^/]+\/password-resets$/,
 };
+export const getAdminVersionsRoute: FakeRoute = { method: "GET", path: "/v1/admin/versions" };
 export const listConsoleTicketsRoute: FakeRoute = { method: "GET", path: "/v1/console/tickets" };
 export const getConsoleTicketRoute: FakeRoute = {
   method: "GET",

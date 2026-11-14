@@ -166,6 +166,7 @@ export type { StatusBannerProps, StatusBannerTone } from "@/design-system/compon
 export { StatusBanner } from "@/design-system/components/status-banner";
 export type {
   AccountStatusName,
+  AiServiceStatusName,
   AiStatusName,
   CompletedDraftStatusName,
   ConsoleTicketStatusName,
@@ -182,6 +183,7 @@ export type {
 export {
   authorityRequiredPresentation,
   presentationByAccountStatus,
+  presentationByAiServiceStatus,
   presentationByAiStatus,
   presentationByCompletedDraftStatus,
   presentationByConsoleTicketStatus,

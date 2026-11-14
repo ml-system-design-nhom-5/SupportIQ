@@ -97,6 +97,17 @@ export const presentationByAccountStatus: Readonly<Record<AccountStatusName, Sta
     deactivated: { tone: "neutral", icon: CircleX, label: "Deactivated" },
   };
 
+/**
+ * Whether `backend` could read the versions of `ai-service`: admin UI design, Status
+ * presentations.
+ */
+export const presentationByAiServiceStatus: Readonly<
+  Record<AiServiceStatusName, StatusPresentation>
+> = {
+  available: { tone: "success", icon: CircleCheck, label: "Available" },
+  unavailable: { tone: "danger", icon: CircleX, label: "Unavailable" },
+};
+
 /** Ticket statuses for staff and managers: console UI design, Status presentations. */
 export const presentationByConsoleTicketStatus: Readonly<
   Record<ConsoleTicketStatusName, StatusPresentation>
@@ -190,6 +201,12 @@ export type InternalRoleName = "staff" | "manager" | "admin" | "unknown";
 
 /** Whether an internal account can sign in. */
 export type AccountStatusName = "active" | "deactivated";
+
+/**
+ * Whether `backend` could read the versions of `ai-service` (`AiServiceStatus` of the contract; an
+ * unknown value is `unavailable`).
+ */
+export type AiServiceStatusName = "available" | "unavailable";
 
 /** Ticket statuses as staff see them (`ConsoleTicketStatus` of the contract). */
 export type ConsoleTicketStatusName =
