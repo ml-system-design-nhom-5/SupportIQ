@@ -2436,7 +2436,7 @@ def test_head_only_eval_dropout_deterministic_rng_zero_and_mode_guards():
 
     with pytest.raises(ValueError, match="requires explicit feature_dropout_eval_mode=True"):
         _set_epoch_module_modes(model, trainable_scope="classifier_head_only", feature_dropout_eval_mode=False)
-    with pytest.raises(ValueError, match="only allowed with trainable_scope='classifier_head_only'"):
+    with pytest.raises(ValueError, match="only allowed with subhead"):
         _set_epoch_module_modes(model, trainable_scope="all", feature_dropout_eval_mode=True)
 
 
@@ -2811,3 +2811,427 @@ def test_head_only_prep_archival_kwargs_forwarding_and_validate_only_zero_fits(m
     assert run_cfg["classifier_head_only_config"]["teacher_used"] is False
     cal_rep = json.loads((Path(fit_res["records_dir"]) / "cal_guard_report.json").read_text(encoding="utf-8"))
     assert len(cal_rep["checks"]) == 12
+
+
+def test_pre_classifier_head_freeze_buffers_optimizer_autograd_both_layers_and_supcon_equiv():
+    from transformers import DistilBertConfig, DistilBertForSequenceClassification
+    from pipeline.evaluation.classifier_acceptance_gate import SUPPORTED_12_INTENTS
+    from pipeline.training.train_boundary_candidate import (
+        _configure_trainable_scope,
+        _set_epoch_module_modes,
+        _snapshot_frozen_component_hashes,
+        _supcon_loss,
+    )
+
+    torch.manual_seed(42)
+    full_cfg = DistilBertConfig(num_labels=len(STANDARD_INTENTS_46))
+    model = DistilBertForSequenceClassification(full_cfg)
+    scope_info = _configure_trainable_scope(
+        model,
+        "pre_classifier_and_classifier",
+        expected_trainable_param_count=625966,
+        expected_frozen_param_count=66362880,
+    )
+    assert scope_info["trainable_param_count"] == 625966
+    assert scope_info["frozen_param_count"] == 66362880
+    assert scope_info["trainable_param_names"] == [
+        "pre_classifier.weight",
+        "pre_classifier.bias",
+        "classifier.weight",
+        "classifier.bias",
+    ]
+    assert sum(p.numel() for p in model.parameters()) == 66988846
+
+    pre_snap = _snapshot_frozen_component_hashes(model)
+    assert len(pre_snap["frozen_tensor_hashes"]) == 100
+    assert len(pre_snap["buffer_hashes"]) == 1
+    assert "pre_classifier" not in pre_snap["component_hashes"]
+    expected_components = {"distilbert.embeddings", *[f"distilbert.transformer.layer.{i}" for i in range(6)], "buffers"}
+    assert set(pre_snap["component_hashes"].keys()) == expected_components
+
+    trainable_params = [p for p in model.parameters() if p.requires_grad]
+    optimizer = torch.optim.AdamW(trainable_params, lr=5e-5, weight_decay=0.01)
+    assert len(optimizer.param_groups) == 1
+    assert [id(p) for p in optimizer.param_groups[0]["params"]] == [
+        id(model.pre_classifier.weight),
+        id(model.pre_classifier.bias),
+        id(model.classifier.weight),
+        id(model.classifier.bias),
+    ]
+    assert sum(p.numel() for p in optimizer.param_groups[0]["params"]) == 625966
+    assert optimizer.param_groups[0]["lr"] == 5e-5
+    assert optimizer.param_groups[0]["weight_decay"] == 0.01
+
+    _set_epoch_module_modes(model, trainable_scope="pre_classifier_and_classifier", feature_dropout_eval_mode=True)
+    input_ids = torch.randint(0, full_cfg.vocab_size, (4, 12))
+    attention_mask = torch.ones((4, 12), dtype=torch.long)
+    out = model(input_ids=input_ids, attention_mask=attention_mask, output_hidden_states=True)
+    logits = out.logits
+    sup12_idx = torch.tensor([STANDARD_INTENTS_46.index(x) for x in SUPPORTED_12_INTENTS], dtype=torch.long)
+    uniform_target = torch.full((2, len(STANDARD_INTENTS_46)), 1.0 / len(STANDARD_INTENTS_46))
+
+    l_pos = torch.nn.functional.cross_entropy(logits[:2], torch.tensor([0, 31], dtype=torch.long), label_smoothing=0.03)
+    neg_logits = logits[2:]
+    l_kl = torch.nn.functional.kl_div(torch.nn.functional.log_softmax(neg_logits, dim=-1), uniform_target, reduction="batchmean")
+    sup12_mass = torch.softmax(neg_logits, dim=-1)[:, sup12_idx].sum(dim=-1)
+    l_ceil = torch.relu(sup12_mass - 0.18).pow(2).mean()
+    pos_eng = (-torch.logsumexp(logits[:2], dim=-1)).mean().detach()
+    neg_eng = -torch.logsumexp(neg_logits, dim=-1)
+    l_eng = 0.25 * torch.relu((pos_eng + 2.0) - neg_eng).pow(2).mean()
+    loss = l_pos + (0.80 * l_kl + 3.0 * l_ceil + l_eng)
+
+    optimizer.zero_grad(set_to_none=True)
+    loss.backward(retain_graph=True)
+    grads_base = {n: p.grad.detach().clone() for n, p in model.named_parameters() if p.requires_grad}
+    assert all(float(g.abs().max().item()) > 0.0 for g in grads_base.values())
+    assert all(p.grad is None for _, p in model.named_parameters() if not p.requires_grad)
+
+    cls_norm = torch.nn.functional.normalize(out.hidden_states[-1][:, 0, :], dim=-1)
+    sc_targets = torch.tensor([0, 31, -1, -1], dtype=torch.long)
+    l_sc = 0.25 * _supcon_loss(cls_norm, sc_targets, temperature=0.12)
+    assert l_sc.requires_grad is False
+    optimizer.zero_grad(set_to_none=True)
+    (loss + l_sc).backward()
+    for n, p in model.named_parameters():
+        if p.requires_grad:
+            assert float((p.grad - grads_base[n]).abs().max().item()) == 0.0
+        else:
+            assert p.grad is None
+
+    post_snap = _snapshot_frozen_component_hashes(model)
+    assert post_snap["all_frozen_tensors_sha256"] == pre_snap["all_frozen_tensors_sha256"]
+    assert post_snap["component_hashes"] == pre_snap["component_hashes"]
+
+
+def test_pre_classifier_head_modes_det_rng_and_nonlinear_relu_preserved():
+    import numpy as np
+    import random
+    from transformers import DistilBertConfig, DistilBertForSequenceClassification
+    from pipeline.training.train_boundary_candidate import _configure_trainable_scope, _set_epoch_module_modes
+
+    cfg = DistilBertConfig(
+        num_labels=len(STANDARD_INTENTS_46),
+        vocab_size=256,
+        dim=64,
+        hidden_dim=128,
+        n_layers=2,
+        n_heads=4,
+    )
+    model = DistilBertForSequenceClassification(cfg)
+    _configure_trainable_scope(model, "pre_classifier_and_classifier")
+    model.train()
+    _set_epoch_module_modes(model, trainable_scope="pre_classifier_and_classifier", feature_dropout_eval_mode=True)
+
+    assert model.distilbert.training is False
+    assert model.dropout.training is False
+    assert model.pre_classifier.training is True
+    assert model.classifier.training is True
+    for mod in model.modules():
+        if mod is model.pre_classifier or mod is model.classifier:
+            assert mod.training is True
+        else:
+            assert mod.training is False
+
+    x = torch.randint(0, 256, (4, 10))
+    mask = torch.ones((4, 10), dtype=torch.long)
+    torch_rng0 = torch.get_rng_state().clone()
+    np_rng0 = np.random.get_state()
+    py_rng0 = random.getstate()
+
+    out1 = model(input_ids=x, attention_mask=mask).logits
+    out1.sum().backward()
+    assert float(model.pre_classifier.weight.grad.abs().max().item()) > 0.0
+    model.zero_grad(set_to_none=True)
+    out2 = model(input_ids=x, attention_mask=mask).logits.detach()
+
+    assert float((out1.detach() - out2).abs().max().item()) == 0.0
+    assert torch.equal(torch.get_rng_state(), torch_rng0)
+    np_rng1 = np.random.get_state()
+    assert np_rng0[0] == np_rng1[0] and np.array_equal(np_rng0[1], np_rng1[1]) and np_rng0[2:] == np_rng1[2:]
+    assert random.getstate() == py_rng0
+
+    # Verify negative pre-classifier activations are gated by ReLU (nonlinear head intact).
+    with torch.no_grad():
+        h_cls = model.distilbert(input_ids=x[:1], attention_mask=mask[:1])[0][:, 0]
+        model.pre_classifier.weight.zero_()
+        model.pre_classifier.bias.fill_(-1.0)
+        assert float(torch.nn.functional.relu(model.pre_classifier(h_cls)).abs().max().item()) == 0.0
+        assert torch.allclose(model(input_ids=x[:1], attention_mask=mask[:1]).logits, model.classifier.bias.unsqueeze(0))
+
+    with pytest.raises(ValueError, match="requires explicit feature_dropout_eval_mode=True"):
+        _set_epoch_module_modes(model, trainable_scope="pre_classifier_and_classifier", feature_dropout_eval_mode=False)
+    with pytest.raises(ValueError, match="Unsupported trainable_scope"):
+        _set_epoch_module_modes(model, trainable_scope="bogus", feature_dropout_eval_mode=True)
+
+
+def test_pre_classifier_head_profile_guards_and_archival_kwargs(monkeypatch, tmp_path):
+    import hashlib
+    import shutil
+    from transformers import DistilBertConfig, DistilBertForSequenceClassification
+    from pipeline.training.train_boundary_candidate import _configure_trainable_scope
+    from scripts.run_orig_fit2_return_contrast_prep import _build_planned_execution_plan
+
+    def _sha(p: Path) -> str:
+        return hashlib.sha256(p.read_bytes()).hexdigest().lower()
+
+    cfg = AUTHORIZED_FIT_PROFILES["option_a_pre_classifier_head_v1"]
+    assert (cfg["lr"], cfg["epochs"], cfg["batch_size"], cfg["seed"], cfg["weight_decay"]) == (5e-5, 3, 32, 42, 0.01)
+    assert (cfg["trainable_scope"], cfg["feature_dropout_eval_mode"]) == ("pre_classifier_and_classifier", True)
+    assert (cfg["expected_trainable_param_count"], cfg["expected_frozen_param_count"]) == (625966, 66362880)
+    # Old head-only profile remains untouched.
+    assert AUTHORIZED_FIT_PROFILES["option_a_classifier_head_only_v1"]["lr"] == 1e-4
+    assert AUTHORIZED_FIT_PROFILES["option_a_classifier_head_only_v1"]["expected_trainable_param_count"] == 35374
+
+    ok = validate_profile_settings(
+        profile="option_a_pre_classifier_head_v1",
+        epochs=3,
+        lr=5e-5,
+        batch_size=32,
+        seed=42,
+        fit_mode="fit2_supcon_energy",
+        enable_selective_rejector=False,
+        weight_decay=0.01,
+        trainable_scope="pre_classifier_and_classifier",
+        feature_dropout_eval_mode=True,
+    )
+    assert ok["selected_recipe"] == "option_a_pre_classifier_head_adamw_5e5_3ep"
+
+    for p_name, p_epochs, p_lr, extra in (
+        ("option_a", 3, 2e-5, {}),
+        ("lr5e6", 3, 5e-6, {}),
+        ("option_a_classifier_head_only_v1", 2, 1e-4, {"weight_decay": 0.01, "feature_dropout_eval_mode": True}),
+    ):
+        with pytest.raises(ValueError):
+            validate_profile_settings(
+                profile=p_name,
+                epochs=p_epochs,
+                lr=p_lr,
+                batch_size=32,
+                seed=42,
+                fit_mode="fit2_supcon_energy",
+                enable_selective_rejector=False,
+                trainable_scope="pre_classifier_and_classifier",
+                **extra,
+            )
+
+    for bad_kwargs in (
+        {"lr": 1e-4},
+        {"epochs": 2},
+        {"weight_decay": 0.0},
+        {"trainable_scope": "classifier_head_only"},
+        {"trainable_scope": None},
+        {"feature_dropout_eval_mode": False},
+        {"enable_selective_rejector": True},
+        {"teacher_kl_weight": 1.0},
+    ):
+        kw = dict(
+            profile="option_a_pre_classifier_head_v1",
+            epochs=3,
+            lr=5e-5,
+            batch_size=32,
+            seed=42,
+            fit_mode="fit2_supcon_energy",
+            enable_selective_rejector=False,
+            weight_decay=0.01,
+            trainable_scope="pre_classifier_and_classifier",
+            feature_dropout_eval_mode=True,
+        )
+        kw.update(bad_kwargs)
+        with pytest.raises(ValueError):
+            validate_profile_settings(**kw)
+
+    tiny = DistilBertForSequenceClassification(
+        DistilBertConfig(num_labels=46, vocab_size=128, dim=32, hidden_dim=64, n_layers=1, n_heads=2)
+    )
+    with pytest.raises(ValueError, match="Trainable parameter count mismatch"):
+        _configure_trainable_scope(tiny, "pre_classifier_and_classifier", expected_trainable_param_count=625966)
+
+    repo_root = Path(__file__).resolve().parents[2]
+    prep_dir = tmp_path / "run-records-fit2-orig-pre-classifier-head-v1-prep"
+    ds_dir = prep_dir / "datasets"
+    ds_dir.mkdir(parents=True)
+    plan = _build_planned_execution_plan(
+        profile_name="option_a_pre_classifier_head_v1",
+        prep_records_dir=prep_dir,
+        planned_fit_run_id="fit2-orig-pre-classifier-head-v1",
+        planned_future_paths={"archive_dir": "arc", "records_dir": "rec", "local_dir": "loc"},
+    )
+    cli_str = " ".join(plan["planned_cli"])
+    assert "--profile option_a_pre_classifier_head_v1" in cli_str and "--lr 5e-5" in cli_str
+    assert "--epochs 3" in cli_str and "--trainable-scope pre_classifier_and_classifier" in cli_str
+    assert "--feature-dropout-eval-mode" in cli_str and "--run-authorized-fit" in cli_str
+    assert "--teacher-kl-weight" not in cli_str
+
+    ds_hashes: dict[str, str] = {}
+    new_hashes: dict[str, str] = {}
+    for fname in (*EXPECTED_ORIG_STAGE2_LOCKED_FILES, "orig_fit2_return_contrast_extension.jsonl"):
+        fp = ds_dir / fname
+        fp.write_text('{"ok": true}\n' if fname.endswith(".json") else '{"sample_id": "x"}\n', encoding="utf-8")
+        digest = _sha(fp)
+        key = (
+            "boundary_split_manifest"
+            if fname == "split_manifest.json"
+            else ("orig_fit2_return_contrast_extension" if fname == "orig_fit2_return_contrast_extension.jsonl" else fname[:-len(".jsonl")])
+        )
+        ds_hashes[key] = digest
+        new_hashes[fname] = digest
+    source_hashes = {rel: _sha(repo_root / rel) for rel in RELEVANT_SOURCE_PATHS}
+    for rel in RELEVANT_SOURCE_PATHS:
+        snap = prep_dir / "source_snapshot" / rel
+        snap.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(repo_root / rel, snap)
+    base_metrics = {
+        "boundary_pos_cal": {"count": 86, "correct_count": 68, "mean_max_prob": 0.686},
+        "boundary_pos_cal_sup12": {"count": 48, "correct_count": 38, "conf_ge_070_count": 28, "conf_ge_080_count": 26},
+        "boundary_pos_cal_esc34": {"count": 38, "correct_count": 30, "mean_max_prob": 0.671, "max_sup12_mass": 0.48},
+        "bitext_cal": {"count": 690, "correct_count": 689},
+        "boundary_neg_cal": {"count": 48, "pred_sup12_count": 9, "max_sup12_mass": 0.72, "max_single_sup12_prob": 0.56},
+        "pos_train_added_18": {"count": 18, "correct_count": 18},
+        "attribution_breakdown": {},
+    }
+    init_freeze_sha = "d" * 64
+    (prep_dir / "status.json").write_text(
+        json.dumps({"status": "complete", "fits_executed": 0, "prep_archive": True}), encoding="utf-8"
+    )
+    (prep_dir / "prep_manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "orig_fit2_return_contrast_prep.v4",
+                "experiment_mode": "return_contrast",
+                "is_promotion_candidate": True,
+                "git_commit": "a" * 40,
+                "source_hashes": source_hashes,
+                "unchanged_original_recipe_parameters": UNCHANGED_ORIGINAL_RECIPE_PARAMETERS,
+                "authorized_fit_profile": cfg,
+                "execution_plan": plan,
+                "subhead_scope_config": {
+                    "enabled": True,
+                    "trainable_scope": "pre_classifier_and_classifier",
+                    "feature_dropout_eval_mode": True,
+                    "weight_decay": 0.01,
+                    "teacher_used": False,
+                    "trainable_param_count": 625966,
+                    "frozen_param_count": 66362880,
+                    "initial_frozen_tensors_sha256": init_freeze_sha,
+                    "initial_freeze_component_hashes": {"distilbert.embeddings": "e" * 64},
+                },
+                "baseline_cal_reference": {
+                    "baseline_weights_sha256": EXPECTED_FIT2_SHA256,
+                    "baseline_calibration_manifest_sha256": "c" * 64,
+                    "dataset_hashes": ds_hashes,
+                    "metrics": base_metrics,
+                },
+                "preflight": {
+                    "extension_version": "orig_fit2_return_channel_contrast_v2",
+                    "counts": {"extension_pos_train_added": 18},
+                    "dataset_hashes": ds_hashes,
+                    "new_input_file_hashes": new_hashes,
+                },
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    _write_and_verify_sha_inventory(prep_dir, "sidecar_sha_inventory.json")
+
+    candidates_dir, local_base = tmp_path / "candidates", tmp_path / "local"
+    init_dir, serving_dir = tmp_path / "init_f695", tmp_path / "serving"
+    init_dir.mkdir()
+    serving_dir.mkdir()
+    (init_dir / "model.safetensors").write_bytes(b"fit2")
+    (serving_dir / "model.safetensors").write_bytes(b"serving")
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit._sha256_lower",
+        lambda p: EXPECTED_SERVING_SHA256 if p == serving_dir / "model.safetensors" else (EXPECTED_FIT2_SHA256 if p == init_dir / "model.safetensors" else _sha(p)),
+    )
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.verify_fit2_starting_checkpoint",
+        lambda p: {"weights_sha256": EXPECTED_FIT2_SHA256, "temperature": 1.0, "rejector_enabled": False, "num_labels": 46},
+    )
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.verify_orig_relevant_source_provenance",
+        lambda root: {"git_commit": "b" * 40, "source_hashes": source_hashes},
+    )
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.verify_git_commit_ancestor",
+        lambda root, anc, desc="HEAD": "b" * 40,
+    )
+
+    val_out = run_authorized_fit(
+        repo_root=repo_root,
+        prep_dir=prep_dir,
+        run_id="fit2-orig-pre-classifier-head-v1",
+        profile="option_a_pre_classifier_head_v1",
+        epochs=3,
+        lr=5e-5,
+        weight_decay=0.01,
+        trainable_scope="pre_classifier_and_classifier",
+        feature_dropout_eval_mode=True,
+        execute_fit=False,
+        main_candidates_dir=candidates_dir,
+        local_root_base=local_base,
+        init_model_dir=init_dir,
+        serving_dir=serving_dir,
+    )
+    assert val_out["validated_only"] is True and val_out["fits_executed"] == 0
+
+    captured_kwargs: dict[str, object] = {}
+
+    def _fake_subhead_fit(**kwargs):
+        captured_kwargs.update(kwargs)
+        cand_dir = kwargs["artifact_root"] / kwargs["output_subdir"]
+        cand_dir.mkdir(parents=True)
+        for fname in ("model.safetensors", "tokenizer.json", "tokenizer_config.json", "config.json"):
+            (cand_dir / fname).write_bytes(fname.encode("utf-8"))
+        (cand_dir / "calibration_manifest.json").write_text('{"valid": true}', encoding="utf-8")
+        (cand_dir / "candidate_provenance_manifest.json").write_text(
+            json.dumps(
+                {
+                    "provenance_status": "verified",
+                    "training_lineage": {
+                        "trainable_scope": kwargs["trainable_scope"],
+                        "feature_dropout_eval_mode": kwargs["feature_dropout_eval_mode"],
+                        "weight_decay": kwargs["weight_decay"],
+                        "trainable_param_count": kwargs["expected_trainable_param_count"],
+                        "frozen_param_count": kwargs["expected_frozen_param_count"],
+                        "post_fit_freeze_verified": True,
+                        "post_fit_frozen_tensors_sha256": init_freeze_sha,
+                        "trainable_layer_update_verified": True,
+                        "teacher_kl_enabled": False,
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        return {"fit_mode": "fit2_supcon_energy", "temperature": 1.0}
+
+    monkeypatch.setattr("scripts.run_orig_fit2_return_contrast_fit.run_fit_and_lock_candidate", _fake_subhead_fit)
+    monkeypatch.setattr("scripts.run_orig_fit2_return_contrast_fit.validate_calibration_manifest", lambda d, p: {"valid": True, "temperature": 1.0, "rejector": {"enabled": False}})
+    monkeypatch.setattr("scripts.run_orig_fit2_return_contrast_fit.audit_candidate_provenance", lambda d, p: {"provenance_passed": True, "num_labels": 46})
+    monkeypatch.setattr("scripts.run_orig_fit2_return_contrast_fit.verify_reload_from_archive", lambda d: {"reload_verified": True, "archive_dir": str(d), "num_labels": 46})
+    monkeypatch.setattr("scripts.run_orig_fit2_return_contrast_fit.evaluate_cal_guard_metrics_for_model", lambda d, inp: dict(base_metrics))
+
+    fit_res = run_authorized_fit(
+        repo_root=repo_root,
+        prep_dir=prep_dir,
+        run_id="fit2-orig-pre-classifier-head-v1",
+        profile="option_a_pre_classifier_head_v1",
+        epochs=3,
+        lr=5e-5,
+        weight_decay=0.01,
+        trainable_scope="pre_classifier_and_classifier",
+        feature_dropout_eval_mode=True,
+        execute_fit=True,
+        main_candidates_dir=candidates_dir,
+        local_root_base=local_base,
+        init_model_dir=init_dir,
+        serving_dir=serving_dir,
+    )
+    assert captured_kwargs["trainable_scope"] == "pre_classifier_and_classifier"
+    assert captured_kwargs["expected_trainable_param_count"] == 625966
+    assert captured_kwargs["expected_frozen_param_count"] == 66362880
+    assert "teacher_kl_weight" not in captured_kwargs
+    run_cfg = json.loads((Path(fit_res["records_dir"]) / "run_config.json").read_text(encoding="utf-8"))
+    assert run_cfg["subhead_scope_config"]["trainable_scope"] == "pre_classifier_and_classifier"
+    assert run_cfg["subhead_scope_config"]["teacher_used"] is False
+    assert len(json.loads((Path(fit_res["records_dir"]) / "cal_guard_report.json").read_text(encoding="utf-8"))["checks"]) == 12

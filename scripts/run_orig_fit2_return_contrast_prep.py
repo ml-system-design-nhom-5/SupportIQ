@@ -134,7 +134,48 @@ AUTHORIZED_FIT_PROFILES: Dict[str, Dict[str, Any]] = {
         "expected_trainable_param_count": 35374,
         "expected_frozen_param_count": 66953472,
     },
+    "option_a_pre_classifier_head_v1": {
+        "profile": "option_a_pre_classifier_head_v1",
+        "selected_recipe": "option_a_pre_classifier_head_adamw_5e5_3ep",
+        "lr": 5e-5,
+        "epochs": 3,
+        "batch_size": 32,
+        "seed": 42,
+        "weight_decay": 0.01,
+        "fit_mode": "fit2_supcon_energy",
+        "min_temperature": 1.0,
+        "enable_selective_rejector": False,
+        "init_weights_sha256": EXPECTED_FIT2_SHA256,
+        "trainable_scope": "pre_classifier_and_classifier",
+        "feature_dropout_eval_mode": True,
+        "expected_trainable_param_count": 625966,
+        "expected_frozen_param_count": 66362880,
+    },
 }
+
+SUBHEAD_PROFILE_MANIFEST_KEYS: Dict[str, str] = {
+    "option_a_classifier_head_only_v1": "classifier_head_only_config",
+    "option_a_pre_classifier_head_v1": "subhead_scope_config",
+}
+SUBHEAD_FIT_PROFILES: Tuple[str, ...] = tuple(SUBHEAD_PROFILE_MANIFEST_KEYS.keys())
+
+
+def validate_subhead_config_block(block: Any, profile_name: str) -> None:
+    """Validate frozen subhead manifest/run-config metadata against AUTHORIZED_FIT_PROFILES."""
+    cfg = AUTHORIZED_FIT_PROFILES[profile_name]
+    if (
+        not isinstance(block, dict)
+        or block.get("enabled") is not True
+        or str(block.get("trainable_scope", "")) != str(cfg["trainable_scope"])
+        or block.get("feature_dropout_eval_mode") is not True
+        or abs(float(block.get("weight_decay", -1.0)) - float(cfg["weight_decay"])) > 1e-12
+        or block.get("teacher_used") is not False
+        or int(block.get("trainable_param_count", -1)) != int(cfg["expected_trainable_param_count"])
+        or int(block.get("frozen_param_count", -1)) != int(cfg["expected_frozen_param_count"])
+        or not block.get("initial_frozen_tensors_sha256")
+        or not isinstance(block.get("initial_freeze_component_hashes"), dict)
+    ):
+        raise ValueError(f"Invalid {SUBHEAD_PROFILE_MANIFEST_KEYS[profile_name]} in prep_manifest: {block}")
 
 CAL_GUARD_FLOAT_TOLERANCE = 3e-6
 CAL_GUARD_DENOMINATORS: Dict[str, int] = {
@@ -820,6 +861,8 @@ def _format_lr_cli(lr: float) -> str:
         return "5e-6"
     if lr == 2e-5:
         return "2e-5"
+    if lr == 5e-5:
+        return "5e-5"
     if lr == 1e-4:
         return "1e-4"
     return str(lr)
@@ -864,7 +907,7 @@ def _build_planned_execution_plan(
     cfg = AUTHORIZED_FIT_PROFILES[profile_name]
     is_teacher_kl = profile_name in ("option_a_teacher_kl", "option_a_teacher_kl_deterministic")
     is_det_teacher_kl = profile_name == "option_a_teacher_kl_deterministic"
-    is_head_only = profile_name == "option_a_classifier_head_only_v1"
+    is_subhead = profile_name in SUBHEAD_FIT_PROFILES
     run_flag = (
         "--run-authorized-fit"
         if (experiment_mode == "zero_delta_control" or profile_name != "option_a")
@@ -909,7 +952,7 @@ def _build_planned_execution_plan(
                     str(cfg["teacher_student_anchor_mode"]),
                 ]
             )
-    if is_head_only:
+    if is_subhead:
         planned_cli.extend(
             [
                 "--weight-decay",
@@ -928,7 +971,17 @@ def _build_planned_execution_plan(
             "181 boundary_pos_train rows, 13,000 effective rows; 0 added return-contrast rows) to isolate continuation "
             "optimization drift from the +18-row data delta. NOT a promotion candidate."
         )
-    elif is_head_only:
+    elif profile_name == "option_a_pre_classifier_head_v1":
+        caveat = (
+            "Original Fit2 (f695b1fe...) trained from Fit1 (95a940b6...) with epochs=3, lr=2e-5. "
+            "option_a_pre_classifier_head_v1 freezes embeddings + all 6 transformer layers + dropout (66,362,880 params "
+            "+ 1 buffer in deterministic .eval() with dropout off) and trains pre_classifier + classifier (625,966 "
+            "params) with AdamW(lr=5e-5, weight_decay=0.01), epochs=3, batch_size=32, seed=42 on untouched L_pos + L_neg "
+            "(SupCon inactive on frozen encoder; no teacher KL/tether/LoRA). Multi-factor change (architecture + lr + "
+            "epochs at n=1, 3 historical noisy overlaps preserved) and high feature-geometry risk (0/8 "
+            "return_product_in_store 1-NN in h_cls); FINAL Attempt 2/2 -> permanent STOP if CAL < 12/12."
+        )
+    elif profile_name == "option_a_classifier_head_only_v1":
         caveat = (
             "Original Fit2 (f695b1fe...) trained from Fit1 (95a940b6...) with epochs=3, lr=2e-5. "
             "option_a_classifier_head_only_v1 locks frozen embeddings + 6 transformer layers + pre_classifier "
@@ -991,13 +1044,17 @@ def _build_planned_execution_plan(
         plan["teacher_weights_sha256"] = cfg["teacher_weights_sha256"]
         if is_det_teacher_kl:
             plan["teacher_student_anchor_mode"] = cfg["teacher_student_anchor_mode"]
-    if is_head_only:
+    if is_subhead:
         plan["weight_decay"] = cfg["weight_decay"]
         plan["trainable_scope"] = cfg["trainable_scope"]
         plan["feature_dropout_eval_mode"] = cfg["feature_dropout_eval_mode"]
         plan["expected_trainable_param_count"] = cfg["expected_trainable_param_count"]
         plan["expected_frozen_param_count"] = cfg["expected_frozen_param_count"]
-        plan["budget_attempt_label"] = "Attempt_1_of_2_pending_coordinator_release"
+        plan["budget_attempt_label"] = (
+            "Attempt_2_of_2_final_pending_coordinator_release"
+            if profile_name == "option_a_pre_classifier_head_v1"
+            else "Attempt_1_of_2_pending_coordinator_release"
+        )
     return plan
 
 
@@ -1198,10 +1255,24 @@ def _archive_orig_fit2_prep_bundle(
                     "(autograd ON) normalized by sum(m_i) on active batch anchors (0.0 if sum(m_i)==0)"
                 )
             manifest["teacher_anchor_config"] = tkl_manifest_block
-        elif profile_name == "option_a_classifier_head_only_v1":
+        elif profile_name in SUBHEAD_FIT_PROFILES:
             cfg_head = AUTHORIZED_FIT_PROFILES[profile_name]
             init_freeze = _snapshot_init_freeze_component_hashes(FIT2_BASELINE_DIR, cfg_head)
-            manifest["classifier_head_only_config"] = {
+            is_final_attempt = profile_name == "option_a_pre_classifier_head_v1"
+            attempt_label = (
+                "Attempt_2_of_2_final_pending_coordinator_release"
+                if is_final_attempt
+                else "Attempt_1_of_2_pending_coordinator_release"
+            )
+            geom_disclosure = (
+                "Read-only Worker B audit on f695b1fe h_cls features found 0/8 added return_product_in_store 1-NN to "
+                "canonical return_product_in_store (high geometry risk -> permanent STOP if CAL < 12/12)."
+                if is_final_attempt
+                else "Read-only Worker B audit on f695b1fe eval() features found 8/18 added_18 match canonical "
+                "1-NN/centroid (8/10 return_policy, 0/8 return_product_in_store). Does not prove impossibility, "
+                "but exposes high risk of linear-separability ceiling -> hard EARLY STOP on accuracy/separation fail."
+            )
+            manifest[SUBHEAD_PROFILE_MANIFEST_KEYS[profile_name]] = {
                 "enabled": True,
                 "trainable_scope": str(cfg_head["trainable_scope"]),
                 "feature_dropout_eval_mode": bool(cfg_head["feature_dropout_eval_mode"]),
@@ -1209,19 +1280,15 @@ def _archive_orig_fit2_prep_bundle(
                 "teacher_used": False,
                 "teacher_kl_weight": 0.0,
                 "supcon_inactive_under_frozen_encoder": True,
-                "budget_attempt_label": "Attempt_1_of_2_pending_coordinator_release",
+                "budget_attempt_label": attempt_label,
                 "budget_consumed_by_prep": 0,
-                "feature_geometry_risk_disclosure": (
-                    "Read-only Worker B audit on f695b1fe eval() features found 8/18 added_18 match canonical "
-                    "1-NN/centroid (8/10 return_policy, 0/8 return_product_in_store). Does not prove impossibility, "
-                    "but exposes high risk of linear-separability ceiling -> hard EARLY STOP on accuracy/separation fail."
-                ),
+                "feature_geometry_risk_disclosure": geom_disclosure,
                 **init_freeze,
             }
         (dest_dir / "prep_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         status_payload: Dict[str, Any] = {"status": "complete", "fits_executed": 0, "prep_archive": True}
-        if profile_name == "option_a_classifier_head_only_v1":
-            status_payload["budget_attempt_label"] = "Attempt_1_of_2_pending_coordinator_release"
+        if profile_name in SUBHEAD_FIT_PROFILES:
+            status_payload["budget_attempt_label"] = attempt_label
             status_payload["budget_consumed_by_prep"] = 0
         (dest_dir / "status.json").write_text(json.dumps(status_payload, indent=2) + "\n", encoding="utf-8")
         _write_and_verify_sha_inventory(dest_dir, "sidecar_sha_inventory.json")

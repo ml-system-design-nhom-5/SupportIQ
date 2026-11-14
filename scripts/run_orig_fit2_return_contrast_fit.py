@@ -30,6 +30,7 @@ from pipeline.evaluation.classifier_acceptance_gate import (
 )
 from pipeline.training.orig_fit2_return_contrast_data import EXPECTED_ORIG_STAGE2_LOCKED_FILES
 from pipeline.training.train_boundary_candidate import (
+    VALID_TRAINABLE_SCOPES,
     run_fit_and_lock_candidate,
     verify_reload_from_archive,
 )
@@ -50,10 +51,13 @@ from scripts.run_orig_fit2_return_contrast_prep import (
     DEFAULT_PLANNED_FIT_RUN_ID,
     DEFAULT_PREP_RUN_ID,
     LOCAL_ORIG_CONTRAST_ROOT,
+    SUBHEAD_FIT_PROFILES,
+    SUBHEAD_PROFILE_MANIFEST_KEYS,
     UNCHANGED_ORIGINAL_RECIPE_PARAMETERS,
     _format_lr_cli,
     evaluate_cal_guard_metrics_for_model,
     evaluate_cal_guard_report,
+    validate_subhead_config_block,
     verify_git_commit_ancestor,
     verify_orig_relevant_source_provenance,
 )
@@ -136,7 +140,7 @@ def validate_profile_settings(
         if teacher_student_anchor_mode is not None and str(teacher_student_anchor_mode).strip():
             raise ValueError(f"{profile} forbids teacher_student_anchor_mode; got {teacher_student_anchor_mode!r}")
 
-    if profile == "option_a_classifier_head_only_v1":
+    if profile in SUBHEAD_FIT_PROFILES:
         if weight_decay is None or abs(float(weight_decay) - float(cfg["weight_decay"])) > 1e-12:
             raise ValueError(
                 f"{profile} requires explicit weight_decay={cfg['weight_decay']}; got {weight_decay!r}"
@@ -286,14 +290,14 @@ def verify_locked_prep_bundle(
                 str(holder.get("teacher_student_anchor_mode", "")) != str(expected_cfg["teacher_student_anchor_mode"])
             ):
                 raise ValueError(f"Invalid teacher_student_anchor_mode in {holder_name}: {holder}")
-            if prep_profile == "option_a_classifier_head_only_v1" and (
+            if prep_profile in SUBHEAD_FIT_PROFILES and (
                 abs(float(holder.get("weight_decay", -1.0)) - float(expected_cfg["weight_decay"])) > 1e-12
                 or str(holder.get("trainable_scope", "")) != str(expected_cfg["trainable_scope"])
                 or holder.get("feature_dropout_eval_mode") is not True
                 or int(holder.get("expected_trainable_param_count", -1)) != int(expected_cfg["expected_trainable_param_count"])
                 or int(holder.get("expected_frozen_param_count", -1)) != int(expected_cfg["expected_frozen_param_count"])
             ):
-                raise ValueError(f"Invalid classifier_head_only config in {holder_name}: {holder}")
+                raise ValueError(f"Invalid subhead scope config in {holder_name}: {holder}")
 
         tkl_cfg = manifest.get("teacher_anchor_config")
         if prep_profile in ("option_a_teacher_kl", "option_a_teacher_kl_deterministic"):
@@ -319,23 +323,12 @@ def verify_locked_prep_bundle(
         elif tkl_cfg is not None:
             raise ValueError(f"Unexpected teacher_anchor_config in non-teacher-KL prep profile {prep_profile!r}")
 
-        head_cfg = manifest.get("classifier_head_only_config")
-        if prep_profile == "option_a_classifier_head_only_v1":
-            if (
-                not isinstance(head_cfg, dict)
-                or head_cfg.get("enabled") is not True
-                or str(head_cfg.get("trainable_scope", "")) != str(expected_cfg["trainable_scope"])
-                or head_cfg.get("feature_dropout_eval_mode") is not True
-                or abs(float(head_cfg.get("weight_decay", -1.0)) - float(expected_cfg["weight_decay"])) > 1e-12
-                or head_cfg.get("teacher_used") is not False
-                or int(head_cfg.get("trainable_param_count", -1)) != int(expected_cfg["expected_trainable_param_count"])
-                or int(head_cfg.get("frozen_param_count", -1)) != int(expected_cfg["expected_frozen_param_count"])
-                or not head_cfg.get("initial_frozen_tensors_sha256")
-                or not isinstance(head_cfg.get("initial_freeze_component_hashes"), dict)
-            ):
-                raise ValueError(f"Invalid classifier_head_only_config in prep_manifest: {head_cfg}")
-        elif head_cfg is not None:
-            raise ValueError(f"Unexpected classifier_head_only_config in prep profile {prep_profile!r}")
+        for sub_prof, mkey in SUBHEAD_PROFILE_MANIFEST_KEYS.items():
+            sub_block = manifest.get(mkey)
+            if prep_profile == sub_prof:
+                validate_subhead_config_block(sub_block, prep_profile)
+            elif sub_block is not None:
+                raise ValueError(f"Unexpected {mkey} in prep profile {prep_profile!r}")
 
         base_cal_ref = manifest.get("baseline_cal_reference") or {}
         base_metrics = base_cal_ref.get("metrics") or {}
@@ -508,7 +501,8 @@ def run_authorized_fit(
     init_info = verify_fit2_starting_checkpoint(init_model_dir)
     is_teacher_kl = profile in ("option_a_teacher_kl", "option_a_teacher_kl_deterministic")
     is_det_teacher_kl = profile == "option_a_teacher_kl_deterministic"
-    is_head_only = profile == "option_a_classifier_head_only_v1"
+    is_subhead = profile in SUBHEAD_FIT_PROFILES
+    subhead_manifest_key = SUBHEAD_PROFILE_MANIFEST_KEYS.get(profile)
     resolved_teacher_dir = (teacher_model_dir if teacher_model_dir is not None else init_model_dir) if is_teacher_kl else None
     if is_teacher_kl:
         assert resolved_teacher_dir is not None
@@ -545,8 +539,9 @@ def run_authorized_fit(
             if is_det_teacher_kl:
                 val_tkl_cfg["teacher_student_anchor_mode"] = str(profile_cfg["teacher_student_anchor_mode"])
             val_res["teacher_anchor_config"] = val_tkl_cfg
-        if is_head_only:
-            val_res["classifier_head_only_config"] = prep_verified["manifest"].get("classifier_head_only_config")
+        if is_subhead:
+            assert subhead_manifest_key is not None
+            val_res[subhead_manifest_key] = prep_verified["manifest"].get(subhead_manifest_key)
         return val_res
 
     archive_dir = out_paths["archive_dir"]
@@ -628,8 +623,9 @@ def run_authorized_fit(
         if is_det_teacher_kl:
             run_tkl_cfg["teacher_student_anchor_mode"] = str(profile_cfg["teacher_student_anchor_mode"])
         run_config_payload["teacher_anchor_config"] = run_tkl_cfg
-    if is_head_only:
-        run_config_payload["classifier_head_only_config"] = {
+    if is_subhead:
+        assert subhead_manifest_key is not None
+        run_config_payload[subhead_manifest_key] = {
             "weight_decay": float(profile_cfg["weight_decay"]),
             "trainable_scope": str(profile_cfg["trainable_scope"]),
             "feature_dropout_eval_mode": bool(profile_cfg["feature_dropout_eval_mode"]),
@@ -687,7 +683,7 @@ def run_authorized_fit(
             }
             if is_det_teacher_kl:
                 trainer_kwargs["teacher_student_anchor_mode"] = str(profile_cfg["teacher_student_anchor_mode"])
-        if is_head_only:
+        if is_subhead:
             trainer_kwargs.update(
                 {
                     "trainable_scope": str(profile_cfg["trainable_scope"]),
@@ -752,12 +748,13 @@ def run_authorized_fit(
                 )
             ):
                 raise ValueError(f"Candidate provenance manifest missing valid teacher-KL lineage: {t_lineage}")
-        if is_head_only:
+        if is_subhead:
+            assert subhead_manifest_key is not None
             prov_json = json.loads((archive_dir / "candidate_provenance_manifest.json").read_text(encoding="utf-8"))
             h_lineage = prov_json.get("training_lineage") or {}
-            prep_head_cfg = prep_verified["manifest"].get("classifier_head_only_config") or {}
+            prep_head_cfg = prep_verified["manifest"].get(subhead_manifest_key) or {}
             if (
-                str(h_lineage.get("trainable_scope", "")) != "classifier_head_only"
+                str(h_lineage.get("trainable_scope", "")) != str(profile_cfg["trainable_scope"])
                 or h_lineage.get("feature_dropout_eval_mode") is not True
                 or abs(float(h_lineage.get("weight_decay", -1.0)) - float(profile_cfg["weight_decay"])) > 1e-12
                 or int(h_lineage.get("trainable_param_count", -1)) != int(profile_cfg["expected_trainable_param_count"])
@@ -766,8 +763,12 @@ def run_authorized_fit(
                 or h_lineage.get("teacher_kl_enabled") is True
                 or str(h_lineage.get("post_fit_frozen_tensors_sha256", ""))
                 != str(prep_head_cfg.get("initial_frozen_tensors_sha256", ""))
+                or (
+                    profile == "option_a_pre_classifier_head_v1"
+                    and h_lineage.get("trainable_layer_update_verified") is not True
+                )
             ):
-                raise ValueError(f"Candidate provenance manifest failed classifier_head_only verification: {h_lineage}")
+                raise ValueError(f"Candidate provenance manifest failed {profile} verification: {h_lineage}")
 
         reload_info = verify_reload_from_archive(archive_dir)
         archive_inv = _write_and_verify_sha_inventory(archive_dir, "archive_sha_inventory.json")
@@ -896,7 +897,7 @@ def main() -> None:
     ap.add_argument("--teacher-weights-sha256", type=str, default=None)
     ap.add_argument("--teacher-student-anchor-mode", type=str, default=None)
     ap.add_argument("--weight-decay", type=float, default=None)
-    ap.add_argument("--trainable-scope", type=str, default=None, choices=("all", "classifier_head_only"))
+    ap.add_argument("--trainable-scope", type=str, default=None, choices=VALID_TRAINABLE_SCOPES)
     ap.add_argument("--feature-dropout-eval-mode", action="store_true")
     ap.add_argument("--validate-only", action="store_true", help="Run fail-closed profile & locked prep checks without fitting")
     ap.add_argument("--run-authorized-fit", action="store_true", help="Execute the single authorized continuation fit for --profile")
