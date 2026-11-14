@@ -41,7 +41,7 @@ from scripts.run_boundary_contrast_fit import (
     verify_fit2_starting_checkpoint,
 )
 
-DEFAULT_PREP_RUN_ID = "fit2-orig-ret-channel-v2"
+DEFAULT_PREP_RUN_ID = "fit2-orig-ret-channel-v3"
 DEFAULT_PLANNED_FIT_RUN_ID = "fit2-orig-ret-channel-fit-v1"
 LOCAL_ORIG_CONTRAST_ROOT = Path(__file__).resolve().parents[1] / "artifacts/evaluation/fit2_orig_ret_channel_20261114"
 FIT1_CHECKPOINT_REL = "artifacts/models/candidates/reconstructed-closure-fit1-20261113"
@@ -53,12 +53,17 @@ RELEVANT_SOURCE_PATHS: Tuple[str, ...] = (
     "scripts/run_orig_fit2_return_contrast_fit.py",
     "scripts/run_boundary_contrast_fit.py",
     "pipeline/training/orig_fit2_return_contrast_data.py",
+    "pipeline/training/boundary_contrast_data.py",
     "pipeline/training/train_boundary_candidate.py",
+    "pipeline/training/train_selective_candidate.py",
+    "pipeline/training/train_domain_candidate.py",
     "pipeline/training/boundary_curriculum_data.py",
     "pipeline/training/closure_domain_data.py",
     "pipeline/training/selective_domain_data.py",
     "pipeline/training/domain_templates.py",
+    "pipeline/preparation/utils.py",
     "pipeline/evaluation/classifier_acceptance_gate.py",
+    "apps/backend/tickets/privacy.py",
     "apps/core_backend/intent/routing.py",
     "apps/core_backend/config/policies/intent_policy.v2.json",
     "data/knowledge/approved_kb.v2.json",
@@ -93,13 +98,13 @@ UNCHANGED_ORIGINAL_RECIPE_PARAMETERS: Dict[str, Any] = {
 
 
 def verify_orig_relevant_source_provenance(repo_root: Path) -> Dict[str, Any]:
-    """Fail closed if any relevant prep/training/gate/KB/policy file has uncommitted changes vs HEAD."""
-    git_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=str(repo_root), text=True).strip()
-    if not re.fullmatch(r"[0-9a-fA-F]{40}", git_sha):
+    """Fail closed if any relevant prep/training/gate/KB/policy file has uncommitted or untracked changes vs HEAD."""
+    git_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=str(repo_root), text=True).strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{40}", git_sha):
         raise RuntimeError(f"Expected 40-char HEAD SHA, got {git_sha!r}")
 
     porcelain = subprocess.check_output(
-        ["git", "status", "--porcelain", "--", *RELEVANT_SOURCE_PATHS],
+        ["git", "status", "--porcelain", "--untracked-files=all", "--", *RELEVANT_SOURCE_PATHS],
         cwd=str(repo_root),
         text=True,
     ).strip()
@@ -113,6 +118,36 @@ def verify_orig_relevant_source_provenance(repo_root: Path) -> Dict[str, Any]:
             raise FileNotFoundError(f"Missing relevant source file: {p}")
         source_hashes[rel] = _sha256_lower(p)
     return {"git_commit": git_sha, "source_hashes": source_hashes}
+
+
+def verify_git_commit_ancestor(repo_root: Path, ancestor_sha: str, descendant_ref: str = "HEAD") -> str:
+    """Verify ancestor_sha is a 40-char commit reachable as an ancestor of descendant_ref (default HEAD)."""
+    anc = str(ancestor_sha or "").strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{40}", anc):
+        raise ValueError(f"Invalid prep git_commit SHA (expected 40-char hex): {ancestor_sha!r}")
+
+    head_sha = subprocess.check_output(
+        ["git", "rev-parse", descendant_ref],
+        cwd=str(repo_root),
+        text=True,
+    ).strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{40}", head_sha):
+        raise RuntimeError(f"Expected 40-char SHA for {descendant_ref}, got {head_sha!r}")
+
+    proc = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", anc, head_sha],
+        cwd=str(repo_root),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "").strip()
+        raise ValueError(
+            f"Locked prep git_commit {anc} is not an ancestor of current HEAD {head_sha}"
+            + (f" ({detail})" if detail else "")
+        )
+    return head_sha
 
 
 def run_orig_fit2_preflight(repo_root: Path, dryrun_root: Path) -> Dict[str, Any]:
@@ -282,7 +317,7 @@ def _archive_orig_fit2_prep_bundle(
             planned_future_paths=planned_future_paths,
         )
         manifest = {
-            "schema_version": "orig_fit2_return_contrast_prep.v2",
+            "schema_version": "orig_fit2_return_contrast_prep.v3",
             "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
             "git_commit": source_prov["git_commit"],
             "source_hashes": source_prov["source_hashes"],

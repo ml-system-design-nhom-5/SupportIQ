@@ -25,25 +25,31 @@ from scripts.run_orig_fit2_return_contrast_fit import (
     validate_option_a_settings,
 )
 from scripts.run_orig_fit2_return_contrast_prep import (
+    DEFAULT_PREP_RUN_ID,
     EXPECTED_FIT1_SHA256,
     RELEVANT_SOURCE_PATHS,
     UNCHANGED_ORIGINAL_RECIPE_PARAMETERS,
     _build_planned_option_a_plan,
     run_orig_fit2_preflight,
+    verify_git_commit_ancestor,
     verify_orig_relevant_source_provenance,
 )
 
 
 def test_verify_orig_relevant_source_provenance_blocks_uncommitted_diff(monkeypatch, tmp_path):
-    calls = {"n": 0}
+    seen_cmds = []
 
     def _fake_check_output(cmd, **kwargs):
-        calls["n"] += 1
+        seen_cmds.append(list(cmd))
         return ("a" * 40) + "\n" if "rev-parse" in cmd else " M scripts/run_orig_fit2_return_contrast_fit.py\n"
 
     monkeypatch.setattr(subprocess, "check_output", _fake_check_output)
     with pytest.raises(RuntimeError, match="Uncommitted changes in relevant source files"):
         verify_orig_relevant_source_provenance(tmp_path)
+    assert "--untracked-files=all" in seen_cmds[1]
+    assert "apps/backend/tickets/privacy.py" in RELEVANT_SOURCE_PATHS
+    assert "pipeline/training/train_domain_candidate.py" in RELEVANT_SOURCE_PATHS
+    assert "pipeline/preparation/utils.py" in RELEVANT_SOURCE_PATHS
 
 
 def test_extension_balance_kb_semantics_and_no_refund_policy_leakage():
@@ -205,7 +211,13 @@ def test_option_a_runner_guards_reject_wrong_settings_and_dirty_or_tampered_inpu
         return hashlib.sha256(p.read_bytes()).hexdigest().lower()
 
     source_hashes = {rel: _sha(repo_root / rel) for rel in RELEVANT_SOURCE_PATHS}
+    for rel in RELEVANT_SOURCE_PATHS:
+        snap_fp = prep_dir / "source_snapshot" / rel
+        snap_fp.parent.mkdir(parents=True, exist_ok=True)
+        snap_fp.write_text(f"# {rel}\n", encoding="utf-8")
+
     git_sha = "a" * 40
+    head_sha = "b" * 40
     ds_hashes = {"boundary_split_manifest": _sha(split_manifest), "full_train_split": _sha(full_train)}
     new_hashes = {"split_manifest.json": _sha(split_manifest), "full_train_split.jsonl": _sha(full_train)}
 
@@ -215,7 +227,7 @@ def test_option_a_runner_guards_reject_wrong_settings_and_dirty_or_tampered_inpu
     (prep_dir / "prep_manifest.json").write_text(
         json.dumps(
             {
-                "schema_version": "orig_fit2_return_contrast_prep.v2",
+                "schema_version": "orig_fit2_return_contrast_prep.v3",
                 "git_commit": git_sha,
                 "source_hashes": source_hashes,
                 "unchanged_original_recipe_parameters": UNCHANGED_ORIGINAL_RECIPE_PARAMETERS,
@@ -254,10 +266,14 @@ def test_option_a_runner_guards_reject_wrong_settings_and_dirty_or_tampered_inpu
     )
     monkeypatch.setattr(
         "scripts.run_orig_fit2_return_contrast_fit.verify_orig_relevant_source_provenance",
-        lambda root: {"git_commit": git_sha, "source_hashes": {rel: _sha(root / rel) for rel in RELEVANT_SOURCE_PATHS}},
+        lambda root: {"git_commit": head_sha, "source_hashes": {rel: _sha(root / rel) for rel in RELEVANT_SOURCE_PATHS}},
+    )
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.verify_git_commit_ancestor",
+        lambda root, anc, desc="HEAD": head_sha,
     )
 
-    # 1) Validate-only passes cleanly with zero fits.
+    # 1) Validate-only passes cleanly with zero fits (including descendant HEAD != prep git_sha).
     val_res = run_authorized_option_a_fit(
         repo_root=repo_root,
         prep_dir=prep_dir,
@@ -269,6 +285,7 @@ def test_option_a_runner_guards_reject_wrong_settings_and_dirty_or_tampered_inpu
         serving_dir=serving_dir,
     )
     assert val_res["validated_only"] is True and val_res["fits_executed"] == 0
+    assert val_res["prep_git_commit"] == git_sha and val_res["head_git_commit"] == head_sha
 
     # 2) Mocked Option A execution archives complete outputs, manifests, logs, and inventories cleanly.
     def _fake_fit(**kwargs):
@@ -365,6 +382,178 @@ def test_option_a_runner_guards_reject_wrong_settings_and_dirty_or_tampered_inpu
     # 6) Tampered prep dataset input fails closed via sidecar inventory / input SHA check.
     full_train.write_text('{"sample_id": "tampered"}\n', encoding="utf-8")
     with pytest.raises(ValueError, match="SHA mismatch"):
+        run_authorized_option_a_fit(
+            repo_root=repo_root,
+            prep_dir=prep_dir,
+            run_id="fit2-orig-ret-channel-fit-v2",
+            execute_fit=False,
+            main_candidates_dir=candidates_dir,
+            local_root_base=local_base,
+            init_model_dir=init_dir,
+            serving_dir=serving_dir,
+        )
+
+
+def test_real_git_ancestor_source_hash_and_incomplete_exception_path(monkeypatch, tmp_path):
+    """Verify real git ancestor + source-hash checks and execute_fit=True incomplete status handling."""
+    import hashlib
+    import shutil
+
+    def _sha(p: Path) -> str:
+        return hashlib.sha256(p.read_bytes()).hexdigest().lower()
+
+    def _git(cwd: Path, *args: str) -> str:
+        return subprocess.check_output(["git", *args], cwd=str(cwd), text=True).strip()
+
+    repo_root = tmp_path / "git_repo"
+    repo_root.mkdir()
+    _git(repo_root, "init")
+    _git(repo_root, "config", "user.name", "Test")
+    _git(repo_root, "config", "user.email", "test@example.com")
+
+    for rel in RELEVANT_SOURCE_PATHS:
+        fp = repo_root / rel
+        fp.parent.mkdir(parents=True, exist_ok=True)
+        fp.write_text(f"# {rel}\n", encoding="utf-8")
+    _git(repo_root, "add", ".")
+    _git(repo_root, "commit", "-m", "prep baseline")
+    prep_commit = _git(repo_root, "rev-parse", "HEAD")
+
+    # Side-branch non-ancestor commit with identical RELEVANT_SOURCE_PATHS content.
+    _git(repo_root, "checkout", "-b", "other")
+    (repo_root / "docs/unrelated.md").parent.mkdir(parents=True, exist_ok=True)
+    (repo_root / "docs/unrelated.md").write_text("side branch\n", encoding="utf-8")
+    _git(repo_root, "add", "docs/unrelated.md")
+    _git(repo_root, "commit", "-m", "side branch")
+    non_ancestor_commit = _git(repo_root, "rev-parse", "HEAD")
+
+    _git(repo_root, "checkout", "-")
+    (repo_root / "docs/audits/review.md").parent.mkdir(parents=True, exist_ok=True)
+    (repo_root / "docs/audits/review.md").write_text("review doc\n", encoding="utf-8")
+    _git(repo_root, "add", "docs/audits/review.md")
+    _git(repo_root, "commit", "-m", "descendant review doc")
+    doc_descendant_commit = _git(repo_root, "rev-parse", "HEAD")
+    assert doc_descendant_commit != prep_commit
+
+    prep_dir = tmp_path / f"run-records-{DEFAULT_PREP_RUN_ID}-prep"
+    ds_dir = prep_dir / "datasets"
+    ds_dir.mkdir(parents=True)
+    split_manifest = ds_dir / "split_manifest.json"
+    full_train = ds_dir / "full_train_split.jsonl"
+    split_manifest.write_text('{"ok": true}\n', encoding="utf-8")
+    full_train.write_text('{"sample_id": "x"}\n', encoding="utf-8")
+    source_hashes = {rel: _sha(repo_root / rel) for rel in RELEVANT_SOURCE_PATHS}
+    for rel in RELEVANT_SOURCE_PATHS:
+        dst = prep_dir / "source_snapshot" / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(repo_root / rel, dst)
+
+    def _write_prep_manifest(commit_sha: str) -> None:
+        (prep_dir / "status.json").write_text(
+            json.dumps({"status": "complete", "fits_executed": 0, "prep_archive": True}), encoding="utf-8"
+        )
+        (prep_dir / "prep_manifest.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": "orig_fit2_return_contrast_prep.v3",
+                    "git_commit": commit_sha,
+                    "source_hashes": source_hashes,
+                    "unchanged_original_recipe_parameters": UNCHANGED_ORIGINAL_RECIPE_PARAMETERS,
+                    "option_a_execution_plan": {"epochs": 3, "lr": 2e-5, "enable_selective_rejector": False},
+                    "preflight": {
+                        "extension_version": "orig_fit2_return_channel_contrast_v2",
+                        "counts": {"extension_pos_train_added": 18},
+                        "dataset_hashes": {
+                            "boundary_split_manifest": _sha(split_manifest),
+                            "full_train_split": _sha(full_train),
+                        },
+                        "new_input_file_hashes": {
+                            "split_manifest.json": _sha(split_manifest),
+                            "full_train_split.jsonl": _sha(full_train),
+                        },
+                    },
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        _write_and_verify_sha_inventory(prep_dir, "sidecar_sha_inventory.json")
+
+    candidates_dir = tmp_path / "candidates"
+    local_base = tmp_path / "local"
+    init_dir = tmp_path / "init_f695"
+    serving_dir = tmp_path / "serving"
+    init_dir.mkdir()
+    serving_dir.mkdir()
+    (serving_dir / "model.safetensors").write_bytes(b"serving")
+
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit._sha256_lower",
+        lambda p: EXPECTED_SERVING_SHA256 if p == serving_dir / "model.safetensors" else _sha(p),
+    )
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.verify_fit2_starting_checkpoint",
+        lambda p: {"weights_sha256": EXPECTED_FIT2_SHA256, "temperature": 1.0, "rejector_enabled": False, "num_labels": 46},
+    )
+
+    # 1) Non-ancestor commit rejected even when RELEVANT_SOURCE_PATHS hashes match.
+    _write_prep_manifest(non_ancestor_commit)
+    with pytest.raises(ValueError, match="not an ancestor"):
+        run_authorized_option_a_fit(
+            repo_root=repo_root,
+            prep_dir=prep_dir,
+            run_id="fit2-orig-ret-channel-fit-v1",
+            execute_fit=False,
+            main_candidates_dir=candidates_dir,
+            local_root_base=local_base,
+            init_model_dir=init_dir,
+            serving_dir=serving_dir,
+        )
+
+    # 2) Valid doc-only descendant HEAD != prep_commit is accepted.
+    _write_prep_manifest(prep_commit)
+    assert verify_git_commit_ancestor(repo_root, prep_commit, doc_descendant_commit) == doc_descendant_commit
+    res = run_authorized_option_a_fit(
+        repo_root=repo_root,
+        prep_dir=prep_dir,
+        run_id="fit2-orig-ret-channel-fit-v1",
+        execute_fit=False,
+        main_candidates_dir=candidates_dir,
+        local_root_base=local_base,
+        init_model_dir=init_dir,
+        serving_dir=serving_dir,
+    )
+    assert res["prep_git_commit"] == prep_commit
+    assert res["head_git_commit"] == doc_descendant_commit
+    assert res["fits_executed"] == 0
+
+    # 3) execute_fit=True exception path records status == "incomplete" and fits_completed == 0.
+    def _boom(**kwargs):
+        raise RuntimeError("simulated training failure")
+
+    monkeypatch.setattr("scripts.run_orig_fit2_return_contrast_fit.run_fit_and_lock_candidate", _boom)
+    with pytest.raises(RuntimeError, match="simulated training failure"):
+        run_authorized_option_a_fit(
+            repo_root=repo_root,
+            prep_dir=prep_dir,
+            run_id="fit2-orig-ret-channel-fit-v1",
+            execute_fit=True,
+            main_candidates_dir=candidates_dir,
+            local_root_base=local_base,
+            init_model_dir=init_dir,
+            serving_dir=serving_dir,
+        )
+    status_json = json.loads((candidates_dir / "run-records-fit2-orig-ret-channel-fit-v1" / "status.json").read_text(encoding="utf-8"))
+    assert status_json["status"] == "incomplete"
+    assert status_json["fits_completed"] == 0
+    assert status_json["prep_git_commit"] == prep_commit
+    assert status_json["head_git_commit"] == doc_descendant_commit
+
+    # 4) Committed descendant modifying a relevant dependency-closure file fails closed.
+    (repo_root / "apps/backend/tickets/privacy.py").write_text("# changed dependency\n", encoding="utf-8")
+    _git(repo_root, "add", "apps/backend/tickets/privacy.py")
+    _git(repo_root, "commit", "-m", "modify relevant dependency")
+    with pytest.raises(ValueError, match="source file hashes differ"):
         run_authorized_option_a_fit(
             repo_root=repo_root,
             prep_dir=prep_dir,

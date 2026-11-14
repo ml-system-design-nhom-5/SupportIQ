@@ -1,8 +1,9 @@
-# Original Fit2 Single-Factor Return-Channel Contrast Prep v2 (Worker A, Zero-Fit)
+# Original Fit2 Single-Factor Return-Channel Contrast Prep v3 (Worker A, Zero-Fit)
 
-- **Owner / Scope:** Worker A (`minh`), strictly zero-fit preparation addressing Worker B's two `BLOCK` items from [prefit review B](file:///F:/Năm%203/SD/project/SupportIQ/docs/audits/2026-11-14-fit2-orig-return-contrast-prefit-review-b.md) (`fits_executed = 0`, no optimizer/calibrator calls, no live LLM calls, no serving changes).
-- **Immutable MAIN Prep Bundle:** `artifacts/models/candidates/run-records-fit2-orig-ret-channel-v2-prep/` (generated cleanly after scoped `v2` commit; prior `run-records-fit2-orig-ret-channel-v1-prep/` preserved untouched).
-- **Explicit Option A Runner & Unused Fit Namespace:** [run_orig_fit2_return_contrast_fit.py](file:///F:/Năm%203/SD/project/SupportIQ/scripts/run_orig_fit2_return_contrast_fit.py), target fit ID `fit2-orig-ret-channel-fit-v1` (awaiting Worker B re-review `PASS` & explicit coordinator release).
+- **Owner / Scope:** Worker A (`minh`), strictly zero-fit preparation addressing Worker B's re-review `BLOCK` (`f8b6be5`, [rereview B](file:///F:/Năm%203/SD/project/SupportIQ/docs/audits/2026-11-14-fit2-orig-return-contrast-prefit-rereview-b.md)) as well as earlier review items (`614f098`, [prefit review B](file:///F:/Năm%203/SD/project/SupportIQ/docs/audits/2026-11-14-fit2-orig-return-contrast-prefit-review-b.md)) (`fits_executed = 0`, no optimizer/calibrator calls, no live LLM calls, no serving changes).
+- **Immutable MAIN Prep Bundle:** `artifacts/models/candidates/run-records-fit2-orig-ret-channel-v3-prep/` (generated cleanly after scoped `v3` commit; prior `run-records-fit2-orig-ret-channel-v1-prep/` and `run-records-fit2-orig-ret-channel-v2-prep/` preserved untouched).
+- **Dataset Content Invariant:** Zero dataset or recipe changes vs accepted `v2-prep` (`full_train_split.jsonl`, `boundary_pos_train.jsonl`, `orig_fit2_return_contrast_extension.jsonl`, `split_manifest.json`, and 11/13 baseline Stage-2 files bit-identical).
+- **Explicit Option A Runner & Unused Fit Namespace:** [run_orig_fit2_return_contrast_fit.py](file:///F:/Năm%203/SD/project/SupportIQ/scripts/run_orig_fit2_return_contrast_fit.py), target fit ID `fit2-orig-ret-channel-fit-v1` (awaiting Worker B final pass & explicit coordinator release).
 
 ---
 
@@ -35,18 +36,19 @@ Replaced/cleaned the `4` reviewed `return_policy` rows in [orig_fit2_return_cont
 
 All `10` `return_policy` (`4x` = `40` eff) and `8` `return_product_in_store` (`5x` = `40` eff) TRAIN-only rows (`18` total across `orig_ret_ch_g01..04`) contain zero refund-timeline / freight-refund / non-KB wording and align verbatim with `POL-RET-001/002/003` vs unsupported brick-and-mortar store walk-in returns.
 
-### 2.2 Blocker 2 Fix — Explicit Fail-Closed Option A Execution & Archival Runner
+### 2.2 Option A Runner, Ancestor+Source-Hash Provenance & Exception Handling (`v2` -> `v3`)
 
-Added thin explicit runner [run_orig_fit2_return_contrast_fit.py](file:///F:/Năm%203/SD/project/SupportIQ/scripts/run_orig_fit2_return_contrast_fit.py):
-- Consumes **only** locked `run-records-fit2-orig-ret-channel-v2-prep/datasets` (never calls `prepare_and_lock_splits`).
+Added/hardened thin explicit runner [run_orig_fit2_return_contrast_fit.py](file:///F:/Năm%203/SD/project/SupportIQ/scripts/run_orig_fit2_return_contrast_fit.py):
+- Consumes **only** locked `--prep-dir/datasets` (defaulting to `run-records-fit2-orig-ret-channel-v3-prep`; never calls `prepare_and_lock_splits`).
 - Enforces **Option A** parameters fail-closed (`epochs=3, lr=2e-5, batch_size=32, seed=42, fit_mode="fit2_supcon_energy", min_temperature=1.0, enable_selective_rejector=False`; no alternate hardcoded 2-epoch / `1e-5` path).
-- Verifies `v2-prep/sidecar_sha_inventory.json`, `new_input_file_hashes`, exact `HEAD == prep_manifest.git_commit`, clean git status + matching `source_hashes` across all `14` tracked `RELEVANT_SOURCE_PATHS`, untouched Serving (`dc7af8cf...`) & Fit2 `f695b1fe...` init (`T=1.0`, rejector `false`), and unused `archive_dir` / `records_dir` / `local_root`.
+- Replaces strict `HEAD == prep.git_commit` equality with fail-closed **Git-ancestor + full-dependency-closure `source_hashes`** validation (`git merge-base --is-ancestor <prep_commit> HEAD` + `git status --porcelain --untracked-files=all` clean across all `19` tracked dependency-closure `RELEVANT_SOURCE_PATHS` + frozen `source_snapshot/` SHA verification). Descendant audit/review doc commits (e.g. Worker B re-review commits) remain valid iff all `19` relevant source/KB/policy files match verbatim; any committed or uncommitted change to a relevant dependency or non-ancestor `prep_commit` fails closed.
+- Verifies `sidecar_sha_inventory.json`, `new_input_file_hashes`, untouched Serving (`dc7af8cf...`) & Fit2 `f695b1fe...` init (`T=1.0`, rejector `false`), and unused `archive_dir` / `records_dir` / `local_root`, and marks `status.json == "incomplete"` (`fits_completed == 0`) on training/post-check exceptions.
 - On future authorized `--run-option-a-fit`, preserves model weights/tokenizer/config, `calibration_manifest.json`, `candidate_provenance_manifest.json`, inputs snapshot + `inputs_sha256_inventory.json`, `source_snapshot/`, `environment.json`, `run_config.json`, `run.log`, `fit_result.json`, `archive_sha_inventory.json`, and `sidecar_sha_inventory.json`, failing closed unless `validate_calibration_manifest`, `audit_candidate_provenance`, and `verify_reload_from_archive` all pass.
 
-**Planned Option A Command (Recorded in `v2-prep/prep_manifest.json`; NOT Executed):**
+**Planned Option A Command (Recorded in `v3-prep/prep_manifest.json`; NOT Executed):**
 ```powershell
 .venv/Scripts/python.exe -m scripts.run_orig_fit2_return_contrast_fit `
-  --prep-dir "F:\Năm 3\SD\project\SupportIQ\artifacts\models\candidates\run-records-fit2-orig-ret-channel-v2-prep" `
+  --prep-dir "F:\Năm 3\SD\project\SupportIQ\artifacts\models\candidates\run-records-fit2-orig-ret-channel-v3-prep" `
   --run-id fit2-orig-ret-channel-fit-v1 `
   --epochs 3 --lr 2e-5 --batch-size 32 --seed 42 --fit-mode fit2_supcon_energy --run-option-a-fit
 ```

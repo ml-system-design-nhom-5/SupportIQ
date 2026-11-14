@@ -1,10 +1,12 @@
 """Strict fail-closed Option A continuation runner & archival orchestrator.
 
-Consumes ONLY an immutable locked `v2-prep` bundle (`run-records-fit2-orig-ret-channel-v2-prep`),
-verifies frozen source hashes, dataset/sidecar inventories, Original Fit2 `f695b1fe...` init,
-and locked Option A parameters (`epochs=3, lr=2e-5, batch_size=32, seed=42,
-fit_mode="fit2_supcon_energy", min_temperature=1.0, enable_selective_rejector=False`),
-before optionally executing 1 authorized continuation fit and archiving complete provenance,
+Consumes ONLY an immutable locked `-prep` bundle (`--prep-dir`, defaulting to
+`run-records-fit2-orig-ret-channel-v3-prep`), verifies ancestor git provenance,
+frozen source_snapshot + relevant source hashes, dataset/sidecar inventories,
+Original Fit2 `f695b1fe...` init, and locked Option A parameters (`epochs=3,
+lr=2e-5, batch_size=32, seed=42, fit_mode="fit2_supcon_energy",
+min_temperature=1.0, enable_selective_rejector=False`), before optionally
+executing 1 authorized continuation fit and archiving complete provenance,
 calibration, reload verification, logs, and SHA inventories in MAIN.
 """
 
@@ -17,7 +19,7 @@ import platform
 import shutil
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 import torch
 import transformers
@@ -46,7 +48,13 @@ from scripts.run_orig_fit2_return_contrast_prep import (
     DEFAULT_PREP_RUN_ID,
     LOCAL_ORIG_CONTRAST_ROOT,
     UNCHANGED_ORIGINAL_RECIPE_PARAMETERS,
+    verify_git_commit_ancestor,
     verify_orig_relevant_source_provenance,
+)
+
+EXPECTED_PREP_SCHEMAS: Tuple[str, ...] = (
+    "orig_fit2_return_contrast_prep.v2",
+    "orig_fit2_return_contrast_prep.v3",
 )
 
 OPTION_A_LOCKED: Dict[str, Any] = {
@@ -84,13 +92,13 @@ def validate_option_a_settings(
         raise ValueError("Option A enforces selective rejector OFF (enable_selective_rejector=False)")
 
 
-def verify_locked_v2_prep_bundle(
+def verify_locked_prep_bundle(
     *,
     prep_dir: Path,
     repo_root: Path,
-    expected_prep_schema: str = "orig_fit2_return_contrast_prep.v2",
+    expected_prep_schemas: Tuple[str, ...] = EXPECTED_PREP_SCHEMAS,
 ) -> Dict[str, Any]:
-    """Verify frozen v2-prep bundle integrity, sidecar SHA inventory, datasets, and source commit/SHAs."""
+    """Verify frozen prep bundle integrity, sidecar SHA inventory, datasets, ancestor commit, and source SHAs."""
     if not prep_dir.is_dir():
         raise FileNotFoundError(f"Missing locked prep bundle directory: {prep_dir}")
 
@@ -122,9 +130,9 @@ def verify_locked_v2_prep_bundle(
 
     manifest_path = prep_dir / "prep_manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if manifest.get("schema_version") != expected_prep_schema:
+    if manifest.get("schema_version") not in expected_prep_schemas:
         raise ValueError(
-            f"Unexpected prep_manifest schema_version {manifest.get('schema_version')!r}; expected {expected_prep_schema!r}"
+            f"Unexpected prep_manifest schema_version {manifest.get('schema_version')!r}; expected one of {expected_prep_schemas!r}"
         )
 
     preflight = manifest.get("preflight") or {}
@@ -152,17 +160,30 @@ def verify_locked_v2_prep_bundle(
         if actual != str(exp_sha).lower():
             raise ValueError(f"Prep input SHA mismatch for {fname}: {actual} != {exp_sha}")
 
+    expected_source_hashes = manifest.get("source_hashes") or {}
+    if not isinstance(expected_source_hashes, dict) or not expected_source_hashes:
+        raise ValueError("Missing source_hashes in prep_manifest")
+
+    snap_dir = prep_dir / "source_snapshot"
+    for rel, exp_sha in expected_source_hashes.items():
+        snap_fp = snap_dir / rel
+        if not snap_fp.is_file():
+            raise FileNotFoundError(f"Missing frozen source_snapshot file in prep bundle: {snap_fp}")
+        if _sha256_lower(snap_fp) != str(exp_sha).lower():
+            raise ValueError(f"Frozen source_snapshot SHA mismatch for {rel}")
+
     source_prov = verify_orig_relevant_source_provenance(repo_root)
-    if source_prov["git_commit"] != manifest.get("git_commit"):
-        raise ValueError(
-            f"Repo HEAD commit {source_prov['git_commit']} differs from locked prep commit {manifest.get('git_commit')}"
-        )
-    if source_prov["source_hashes"] != (manifest.get("source_hashes") or {}):
+    prep_commit = str(manifest.get("git_commit") or "").strip().lower()
+    head_commit = verify_git_commit_ancestor(repo_root, prep_commit, source_prov["git_commit"])
+    if source_prov["source_hashes"] != expected_source_hashes:
         raise ValueError("Relevant tracked source file hashes differ from locked prep source_hashes")
 
     return {
         "manifest": manifest,
         "manifest_sha256": _sha256_lower(manifest_path),
+        "prep_schema_version": manifest.get("schema_version"),
+        "prep_git_commit": prep_commit,
+        "head_git_commit": head_commit,
         "new_input_hashes": new_input_hashes,
         "dataset_hashes": preflight["dataset_hashes"],
         "source_prov": source_prov,
@@ -215,7 +236,7 @@ def run_authorized_option_a_fit(
         main_candidates_dir=main_candidates_dir,
         local_root_base=local_root_base,
     )
-    prep_verified = verify_locked_v2_prep_bundle(prep_dir=prep_dir, repo_root=repo_root)
+    prep_verified = verify_locked_prep_bundle(prep_dir=prep_dir, repo_root=repo_root)
 
     serving_weights = serving_dir / "model.safetensors"
     if not serving_weights.is_file():
@@ -230,8 +251,11 @@ def run_authorized_option_a_fit(
             "validated_only": True,
             "fits_executed": 0,
             "prep_dir": str(prep_dir),
+            "prep_schema_version": prep_verified["prep_schema_version"],
             "prep_manifest_sha256": prep_verified["manifest_sha256"],
-            "git_commit": prep_verified["source_prov"]["git_commit"],
+            "prep_git_commit": prep_verified["prep_git_commit"],
+            "head_git_commit": prep_verified["head_git_commit"],
+            "git_commit": prep_verified["head_git_commit"],
             "starting_checkpoint": init_info,
             "serving_weights_sha256": serving_sha,
             "option_a_settings": OPTION_A_LOCKED,
@@ -242,10 +266,11 @@ def run_authorized_option_a_fit(
     records_dir = out_paths["records_dir"]
     local_root = out_paths["local_root"]
     source_prov = prep_verified["source_prov"]
-    git_sha = source_prov["git_commit"]
+    git_sha = prep_verified["head_git_commit"]
+    prep_git_sha = prep_verified["prep_git_commit"]
     new_input_hashes = prep_verified["new_input_hashes"]
 
-    # Consume ONLY locked v2-prep/datasets (never regenerate splits during fit).
+    # Consume ONLY locked prep datasets (never regenerate splits during fit).
     local_root.mkdir(parents=True, exist_ok=False)
     shutil.copytree(prep_dir / "datasets", local_root / "datasets")
     _verify_dir_matches_lock_hashes(local_root / "datasets", prep_verified["dataset_hashes"])
@@ -288,6 +313,9 @@ def run_authorized_option_a_fit(
         json.dumps(
             {
                 "git_commit": git_sha,
+                "head_git_commit": git_sha,
+                "prep_git_commit": prep_git_sha,
+                "prep_schema_version": prep_verified["prep_schema_version"],
                 "source_hashes": source_prov["source_hashes"],
                 "cli_argv": list(sys.argv),
                 "prep_dir": str(prep_dir),
@@ -321,6 +349,8 @@ def run_authorized_option_a_fit(
         payload = {
             "status": status,
             "git_commit": git_sha,
+            "head_git_commit": git_sha,
+            "prep_git_commit": prep_git_sha,
             "run_id": run_id,
             "prep_dir": str(prep_dir),
             "updated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
@@ -399,7 +429,7 @@ def main() -> None:
         "--prep-dir",
         type=Path,
         default=MAIN_CANDIDATES_DIR / f"run-records-{DEFAULT_PREP_RUN_ID}-prep",
-        help="Locked v2-prep bundle directory",
+        help="Locked prep bundle directory",
     )
     ap.add_argument("--run-id", default=DEFAULT_PLANNED_FIT_RUN_ID)
     ap.add_argument("--epochs", type=int, default=3)
@@ -408,7 +438,7 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--fit-mode", default="fit2_supcon_energy")
     ap.add_argument("--enable-selective-rejector", action="store_true")
-    ap.add_argument("--validate-only", action="store_true", help="Run fail-closed Option A & v2-prep checks without fitting")
+    ap.add_argument("--validate-only", action="store_true", help="Run fail-closed Option A & locked prep checks without fitting")
     ap.add_argument("--run-option-a-fit", action="store_true", help="Execute the single authorized Option A continuation fit")
     args = ap.parse_args()
 
