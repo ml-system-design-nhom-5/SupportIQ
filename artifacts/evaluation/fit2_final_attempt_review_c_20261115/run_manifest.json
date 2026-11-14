@@ -1,0 +1,20 @@
+{
+  "schema_version": "worker_c_final_attempt_manifest.v1",
+  "reviewer": "Worker C",
+  "elapsed_seconds": 19.4,
+  "device_used": "cuda",
+  "git_branch": "minh",
+  "git_head": "9fbdebc149fb04a013ca40badbbe6cabf8d579dc",
+  "script_sha256": "2f9b8a81b8a6bb8dac87e28074ed7504b013543ee4955b5dc00a568a0c2ceb59",
+  "final_attempt_cal_verification_sha256": "55bb8e4ae3a11662d26d8ee28ecb5212e2dd7dd5e1ed6dd2046eae1c70d03b7f",
+  "scope_confirmations": {
+    "new_fits": 0,
+    "optimizer_steps": 0,
+    "backward_passes": 0,
+    "calibrators_fitted": 0,
+    "paid_llm_calls": 0,
+    "holdout_or_ood_inferences": 0,
+    "cleanup_executed": false,
+    "next_fit_proposals": 0
+  }
+}
