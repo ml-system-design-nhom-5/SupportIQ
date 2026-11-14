@@ -19,22 +19,34 @@ type ReplyEditorSectionProps = {
 };
 
 /**
- * Render the editor.
+ * Render the editor in its own section of the panel.
  *
- * @param props - The text, its handler, and the lines under the editor.
+ * @param props - The text, its change handler, and the hints.
  * @returns The section with the editor.
  */
-export function ReplyEditorSection({ value, onChange, hints = [] }: ReplyEditorSectionProps) {
+export function ReplyEditorSection(props: ReplyEditorSectionProps) {
   return (
     <PanelSection>
-      <ReplyEditor
-        label="Reply to the customer"
-        value={value}
-        onChange={onChange}
-        markedParts={splitPlaceholders(value)}
-        placeholder="Write the reply to the customer"
-        hints={hasPlaceholder(value) ? [...hints, `${PLACEHOLDER_LABEL}.`] : hints}
-      />
+      <ReplyEditorField {...props} />
     </PanelSection>
+  );
+}
+
+/**
+ * Render the editor, with every placeholder highlighted and its label among the hints (UI-43).
+ *
+ * @param props - The text, its change handler, and the hints.
+ * @returns The editor, such as inside the proposal card of a manager.
+ */
+export function ReplyEditorField({ value, onChange, hints = [] }: ReplyEditorSectionProps) {
+  return (
+    <ReplyEditor
+      label="Reply to the customer"
+      value={value}
+      onChange={onChange}
+      markedParts={splitPlaceholders(value)}
+      placeholder="Write the reply to the customer"
+      hints={hasPlaceholder(value) ? [...hints, `${PLACEHOLDER_LABEL}.`] : hints}
+    />
   );
 }

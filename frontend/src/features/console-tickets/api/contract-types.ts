@@ -64,3 +64,15 @@ export type StaffReasonCodeContract = Schemas["StaffReasonCode"];
 
 /** `TicketAction`: an action that `backend` allows the caller on a ticket now. */
 export type TicketActionContract = Schemas["TicketAction"];
+
+/** `ReplyProposalView`: a reply that staff prepared for a manager to send. */
+export type ReplyProposalContract = Schemas["ReplyProposalView"];
+
+/** `EscalationView`: the escalation of a ticket to the manager queue. */
+export type EscalationContract = Schemas["EscalationView"];
+
+/** `CreateReplyProposalRequest`: the body of `createReplyProposal`, discriminated by `basis`. */
+export type CreateReplyProposalRequestContract = Schemas["CreateReplyProposalRequest"];
+
+/** `CreateEscalationRequest`: the body of `createEscalation`. */
+export type CreateEscalationRequestContract = Schemas["CreateEscalationRequest"];

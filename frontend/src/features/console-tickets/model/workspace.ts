@@ -14,6 +14,12 @@ import { type AnalysisPart, toAnalysisPart } from "@/features/console-tickets/mo
 import { type DraftPart, toDraftPart } from "@/features/console-tickets/model/draft";
 import { type Intent, toIntent } from "@/features/console-tickets/model/intent";
 import {
+  type ReplyProposal,
+  type TicketEscalation,
+  toReplyProposal,
+  toTicketEscalation,
+} from "@/features/console-tickets/model/manager-handoff";
+import {
   type Order,
   type TicketOrder,
   toOrder,
@@ -57,6 +63,10 @@ export type TicketWorkspace = {
   readonly otherOrders: readonly Order[];
   /** Absent in `manual` mode. */
   readonly suggestion?: Suggestion;
+  /** The proposal that staff submitted for a manager; present from `awaiting_approval` on. */
+  readonly proposal?: ReplyProposal;
+  /** The escalation; present once the ticket was escalated. */
+  readonly escalation?: TicketEscalation;
   /** Present exactly when the ticket is `closed`. */
   readonly reply?: SentReply;
   /** What the caller may do now; empty for staff on a ticket that is not `open`. */
@@ -93,6 +103,10 @@ export function toTicketWorkspace(workspace: TicketWorkspaceContract): TicketWor
     ...(workspace.suggestion === undefined
       ? {}
       : { suggestion: toSuggestion(workspace.suggestion) }),
+    ...(workspace.proposal === undefined ? {} : { proposal: toReplyProposal(workspace.proposal) }),
+    ...(workspace.escalation === undefined
+      ? {}
+      : { escalation: toTicketEscalation(workspace.escalation) }),
     ...(workspace.reply === undefined ? {} : { reply: toSentReply(workspace.reply) }),
     allowedActions: toTicketActions(workspace.allowed_actions),
   };

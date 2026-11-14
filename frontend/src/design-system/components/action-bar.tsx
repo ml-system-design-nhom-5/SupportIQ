@@ -12,7 +12,7 @@
  */
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
 import { Ellipsis, Info, type LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 
 import { InlineMessage } from "@/design-system/components/inline-message";
 import { buttonVariants } from "@/design-system/primitives/button";
@@ -49,7 +49,7 @@ export type ActionBarProps = {
  * Render the action bar.
  *
  * @param props - The reason line, the secondary actions, the items of More, and the main action.
- * @returns The bar; the More menu opens in a portal.
+ * @returns The bar; the More menu opens in a portal inside it.
  */
 export function ActionBar({ reason, actions, moreItems = [], primaryAction }: ActionBarProps) {
   return (
@@ -77,10 +77,13 @@ type MoreMenuProps = {
  * Render More and its menu.
  *
  * @param props - The items, at least one.
- * @returns The icon button; the menu opens in a portal.
+ * @returns The icon button. The menu opens in a portal next to it, so it stays inside the landmark
+ *   of the reply area (axe region); it is positioned on top of the page, so the panel does not clip
+ *   it.
  */
 function MoreMenu({ items }: MoreMenuProps) {
   const isEveryItemDisabled = items.every((item) => item.isDisabled === true);
+  const [menuContainer, setMenuContainer] = useState<HTMLSpanElement | null>(null);
   return (
     // Not modal, as in the WAI-ARIA menu button pattern (axe aria-hidden-focus, UI-32).
     <DropdownMenuPrimitive.Root modal={false}>
@@ -95,7 +98,8 @@ function MoreMenu({ items }: MoreMenuProps) {
       >
         <Icon icon={Ellipsis} />
       </DropdownMenuPrimitive.Trigger>
-      <DropdownMenuPrimitive.Portal>
+      <span ref={setMenuContainer} />
+      <DropdownMenuPrimitive.Portal container={menuContainer}>
         <DropdownMenuPrimitive.Content
           side="top"
           align="end"

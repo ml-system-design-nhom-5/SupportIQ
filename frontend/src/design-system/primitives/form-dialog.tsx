@@ -6,22 +6,32 @@
  * mounted, and the caller says where the focus goes when it closes (UI-30).
  */
 import * as DialogPrimitive from "@radix-ui/react-dialog";
+import type { LucideIcon } from "lucide-react";
 import type { ReactNode, SubmitEvent } from "react";
 
 import { Button } from "@/design-system/primitives/button";
-import type { ConfirmDialogTone } from "@/design-system/primitives/confirm-dialog";
+import type {
+  ConfirmDialogText,
+  ConfirmDialogTone,
+} from "@/design-system/primitives/confirm-dialog";
 import {
   type DialogReturnFocus,
   returnFocusAfterDialog,
 } from "@/design-system/primitives/dialog-return-focus";
+import { Text } from "@/design-system/primitives/text";
 
-/** The texts of a {@link FormDialog}. */
-export type FormDialogText = {
+/**
+ * The texts of a {@link FormDialog}. The tone of the description is that of
+ * {@link ConfirmDialogText}: `muted` in the console dialogs, `default` in the admin dialogs.
+ */
+export type FormDialogText = Pick<ConfirmDialogText, "descriptionTone"> & {
   readonly title: string;
   /** Text under the title, such as what the change does; absent when the fields say enough. */
   readonly description?: ReactNode;
   /** A verb that names the result (UI-27). */
   readonly submitLabel: string;
+  /** The icon before the submit label, such as the arrow of Escalate ticket. */
+  readonly submitIcon?: LucideIcon;
 };
 
 /** Props of {@link FormDialog}. */
@@ -83,8 +93,8 @@ export function FormDialog({
             {text.title}
           </DialogPrimitive.Title>
           {text.description === undefined ? null : (
-            <DialogPrimitive.Description className="text-sm text-text">
-              {text.description}
+            <DialogPrimitive.Description className="text-sm">
+              <Text tone={text.descriptionTone ?? "default"}>{text.description}</Text>
             </DialogPrimitive.Description>
           )}
           <form noValidate className="flex flex-col gap-4" onSubmit={handleSubmit}>
@@ -98,6 +108,7 @@ export function FormDialog({
               <Button
                 type="submit"
                 variant={tone === "danger" ? "danger" : "primary"}
+                {...(text.submitIcon === undefined ? {} : { leadingIcon: text.submitIcon })}
                 isPending={isPending}
               >
                 {text.submitLabel}

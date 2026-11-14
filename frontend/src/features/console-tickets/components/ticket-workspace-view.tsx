@@ -14,22 +14,24 @@ import { WorkspaceLayout } from "@/design-system";
 import type { RequestFailure } from "@/features/backend-requests";
 import { useCreateSuggestion } from "@/features/console-tickets/api/use-create-suggestion";
 import { AiSidebar } from "@/features/console-tickets/components/ai-sidebar";
-import { ConfirmSendDialog } from "@/features/console-tickets/components/confirm-send-dialog";
 import { CustomerMessagePanel } from "@/features/console-tickets/components/customer-message-panel";
+import { ESCALATED_HEADING_ID } from "@/features/console-tickets/components/escalated-panel";
 import {
   IntentSection,
   OTHER_INTENT_ID,
 } from "@/features/console-tickets/components/intent-section";
 import { KbDocumentSheet } from "@/features/console-tickets/components/kb-document-sheet";
 import { PENDING_DRAFT_HEADING_ID } from "@/features/console-tickets/components/pending-draft-panel";
+import { PROPOSAL_HEADING_ID } from "@/features/console-tickets/components/proposal-panel";
 import { ReplyArea } from "@/features/console-tickets/components/reply-area";
+import { ReplyDialogs } from "@/features/console-tickets/components/reply-dialogs";
 import { SENT_REPLY_HEADING_ID } from "@/features/console-tickets/components/sent-reply-panel";
 import type { OrderPopoverState } from "@/features/console-tickets/components/ticket-order-chip";
 import { useFocusRequest } from "@/features/console-tickets/components/use-focus-request";
 import { useReplyComposer } from "@/features/console-tickets/components/use-reply-composer";
 import { WorkspaceBanners } from "@/features/console-tickets/components/workspace-banners";
 import { WorkspaceHeader } from "@/features/console-tickets/components/workspace-header";
-import { toComposerTicket } from "@/features/console-tickets/model/reply-request";
+import { toComposerTicket } from "@/features/console-tickets/model/composer-ticket";
 import { type SourceSelection, toSourceSelection } from "@/features/console-tickets/model/sources";
 import type { TicketWorkspace } from "@/features/console-tickets/model/workspace";
 import { buildWorkspaceRegions } from "@/features/console-tickets/model/workspace-regions";
@@ -77,8 +79,16 @@ export function TicketWorkspaceView({
   const composer = useReplyComposer(
     ticketId,
     toComposerTicket(workspace, regions, suggestionRequests.isSending),
-    () => {
-      requestFocus(SENT_REPLY_HEADING_ID);
+    {
+      onSent: () => {
+        requestFocus(SENT_REPLY_HEADING_ID);
+      },
+      onSubmitted: () => {
+        requestFocus(PROPOSAL_HEADING_ID);
+      },
+      onEscalated: () => {
+        requestFocus(ESCALATED_HEADING_ID);
+      },
     },
   );
   const hasBanners =
@@ -127,6 +137,9 @@ export function TicketWorkspaceView({
             <ReplyArea
               state={regions.reply}
               composer={composer}
+              {...(workspace.status === "escalated" && workspace.escalation !== undefined
+                ? { escalation: workspace.escalation }
+                : {})}
               aiRequests={{
                 ...suggestionRequests,
                 canRetry: workspace.allowedActions.has("retry_suggestion"),
@@ -160,16 +173,7 @@ export function TicketWorkspaceView({
           />
         }
       />
-      {composer.confirmation === undefined ? null : (
-        <ConfirmSendDialog
-          customerName={workspace.customerName}
-          body={composer.confirmation.body}
-          returnFocus={{ opener: composer.confirmation.opener, fallbackId: WORKSPACE_HEADING_ID }}
-          isSending={composer.isSending}
-          onConfirm={composer.confirmSend}
-          onCancel={composer.cancelSend}
-        />
-      )}
+      <ReplyDialogs composer={composer} ticket={workspace} fallbackId={WORKSPACE_HEADING_ID} />
       {openedSource === undefined ? null : (
         <KbDocumentSheet
           selection={openedSource.selection}

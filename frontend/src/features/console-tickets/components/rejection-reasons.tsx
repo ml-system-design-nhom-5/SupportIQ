@@ -8,14 +8,8 @@ import { useId } from "react";
 import { FieldLabel, PanelSection, Stack, TextInput, ToggleChipGroup } from "@/design-system";
 import {
   type StaffReasonCode,
-  staffReasonCodeLabels,
-  staffReasonCodes,
+  staffReasonOptions,
 } from "@/features/console-tickets/model/staff-reason-codes";
-
-const reasonOptions = staffReasonCodes.map((code) => ({
-  value: code,
-  label: staffReasonCodeLabels[code],
-}));
 
 /** Props of {@link RejectionReasons}. */
 type RejectionReasonsProps = {
@@ -42,7 +36,7 @@ export function RejectionReasons({
     <PanelSection>
       <ToggleChipGroup
         label="Why did you reject it?"
-        options={reasonOptions}
+        options={staffReasonOptions}
         selected={reasonCodes}
         onToggle={onToggle}
       />

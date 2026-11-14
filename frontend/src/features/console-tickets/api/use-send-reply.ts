@@ -13,7 +13,7 @@ import { useBackendClient } from "@/api/client";
 import { getRequestFailure, requestData, useWriteAttemptSender } from "@/features/backend-requests";
 import { consoleQueryKeys } from "@/features/console-tickets/api/console-query-keys";
 import type { SendReplyRequestContract } from "@/features/console-tickets/api/contract-types";
-import { describeSendFailure } from "@/features/console-tickets/model/send-failure";
+import { describeReplyFailure } from "@/features/console-tickets/model/send-failure";
 import { type SentReply, toSentReply } from "@/features/console-tickets/model/workspace";
 
 /** One confirmed Send reply: the request body and its key. */
@@ -59,7 +59,7 @@ export function useSendReply(
     onSuccess: reloadTicket,
     onError: (error) => {
       const failure = getRequestFailure(error);
-      if (failure !== undefined && describeSendFailure(failure).shouldReload) {
+      if (failure !== undefined && describeReplyFailure(failure, "send_reply").shouldReload) {
         reloadTicket();
       }
     },

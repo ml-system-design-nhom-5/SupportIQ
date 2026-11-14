@@ -4,6 +4,9 @@ import {
   STAFF_NOTE_MAX_LENGTH,
   staffReasonCodeLabels,
   staffReasonCodes,
+  staffReasonOptions,
+  toggleStaffReasonCode,
+  toStaffReasonCodes,
 } from "@/features/console-tickets/model/staff-reason-codes";
 import { readBackendSchema, readEnumValues } from "@/test/contract-schemas";
 
@@ -31,5 +34,30 @@ describe("STAFF_NOTE_MAX_LENGTH", () => {
     expect(readBackendSchema("StaffNoteText")).toContain(
       `maxLength: ${String(STAFF_NOTE_MAX_LENGTH)}\n`,
     );
+  });
+});
+
+describe("staffReasonOptions", () => {
+  it("gives each code its label, in the order of the contract", () => {
+    expect(staffReasonOptions.map((option) => option.value)).toEqual(staffReasonCodes);
+    expect(staffReasonOptions[0]).toEqual({ value: "wrong_intent", label: "Wrong intent" });
+  });
+});
+
+describe("toStaffReasonCodes", () => {
+  it("orders the codes as the contract does, and ignores unknown values (CON-22)", () => {
+    expect(toStaffReasonCodes(["kb_gap", "new_code", "wrong_intent"])).toEqual([
+      "wrong_intent",
+      "kb_gap",
+    ]);
+  });
+});
+
+describe("toggleStaffReasonCode", () => {
+  it("adds a code, and removes it when pressed again", () => {
+    const chosen = toggleStaffReasonCode(new Set(), "other");
+
+    expect(chosen).toEqual(new Set(["other"]));
+    expect(toggleStaffReasonCode(chosen, "other")).toEqual(new Set());
   });
 });

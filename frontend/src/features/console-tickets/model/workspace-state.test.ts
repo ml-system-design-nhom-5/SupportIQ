@@ -8,6 +8,7 @@ import {
 } from "@/features/console-tickets/model/workspace";
 import {
   getReplyAreaState,
+  getShownDraft,
   getSidebarState,
   hasPendingPart,
 } from "@/features/console-tickets/model/workspace-state";
@@ -48,6 +49,9 @@ describe("getReplyAreaState", () => {
     ["abstained-low-confidence", "choose_intent"],
     ["manual-mode", "manual_mode"],
     ["closed", "sent"],
+    ["awaiting-approval", "proposal"],
+    ["read-only-for-staff", "proposal"],
+    ["escalated", "escalated"],
   ])("shows the %s example as %s", (name, kind) => {
     expect(getReplyAreaState(readWorkspace(name)).kind).toBe(kind);
   });
@@ -160,5 +164,35 @@ describe("hasPendingPart", () => {
 
   it("is true while only the draft is pending", () => {
     expect(hasPendingPart(withParts("draft-ready", { draft: { status: "pending" } }))).toBe(true);
+  });
+});
+
+describe("getReplyAreaState of a ticket handed to a manager", () => {
+  it("shows the proposal with the ready AI draft for comparison", () => {
+    const state = getReplyAreaState(readWorkspace("awaiting-approval"));
+
+    expect(state).toMatchObject({
+      kind: "proposal",
+      proposal: { proposalId: "3e5a7c9b-1d2f-4a6c-8e0b-5d7f9a1c3e52" },
+      draft: { status: "draft_ready" },
+    });
+    expect(getShownDraft(state)).toMatchObject({ status: "draft_ready" });
+  });
+
+  it("shows the draft of an escalated ticket whose draft is ready, as a reply needs it", () => {
+    const { suggestion } = readWorkspace("draft-ready");
+    const workspace = {
+      ...readWorkspace("escalated"),
+      ...(suggestion === undefined ? {} : { suggestion }),
+    };
+
+    expect(getReplyAreaState(workspace).kind).toBe("draft");
+  });
+
+  it("shows the escalation of an escalated ticket without a ready draft", () => {
+    expect(getReplyAreaState(readWorkspace("escalated"))).toMatchObject({
+      kind: "escalated",
+      escalation: { reasonCodes: ["other"], escalatedByName: "Mai Nguyen" },
+    });
   });
 });

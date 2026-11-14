@@ -1,9 +1,9 @@
 /**
- * What the reply area says when Send reply fails (console UI design, Flow and Errors and
- * guardrails). Every problem becomes plain language (UI-25), and the text in the editor is never
+ * What the reply area says when Send reply or Submit for approval fails (console UI design, Flow
+ * and Errors and guardrails). Every problem becomes plain language (UI-25), and the text in the editor is never
  * lost. A refusal that means the ticket changed reloads the workspace, so staff see its current
  * state. After a timeout, a lost connection, `502`, or `504`, nobody knows whether the reply
- * arrived; confirming the same reply again reuses its key, so the customer gets it once (ERR-16).
+ * arrived; sending the same reply again reuses its key, so it arrives once (ERR-16).
  */
 import {
   categorizeFailure,
@@ -13,8 +13,9 @@ import {
   type RequestFailure,
 } from "@/features/backend-requests";
 import type { FailureView } from "@/features/console-tickets/model/failure-view";
+import type { ReplyAction } from "@/features/console-tickets/model/send-block";
 
-/** How the reply area shows a failed send. */
+/** How the reply area shows a failed Send reply or Submit for approval. */
 export type SendFailureView = FailureView & {
   /** True when the workspace loads the ticket again. */
   readonly shouldReload: boolean;
@@ -38,27 +39,62 @@ const messageByReloadedCategory: ReadonlyMap<FailureCategory, string> = new Map(
   ],
 ]);
 
+/** What a failed action says of the reply, by action. */
+type ReplyFailureTexts = {
+  readonly notDone: string;
+  readonly unknownOutcome: string;
+  readonly unknownOutcomeMessage: string;
+};
+
+/** A write of the reply area: Send reply, Submit for approval, or Escalate ticket. */
+export type ReplyAreaWrite = ReplyAction | "escalate";
+
+const textsByAction: Readonly<Record<ReplyAreaWrite, ReplyFailureTexts>> = {
+  send_reply: {
+    notDone: "The reply was not sent.",
+    unknownOutcome: "The reply may have been sent.",
+    unknownOutcomeMessage:
+      "We could not confirm it. Sending the same reply again is safe: the customer gets it once.",
+  },
+  submit_reply_proposal: {
+    notDone: "The reply was not submitted.",
+    unknownOutcome: "The reply may have been submitted.",
+    unknownOutcomeMessage:
+      "We could not confirm it. Submitting the same reply again is safe: a manager gets it once.",
+  },
+  escalate: {
+    notDone: "The ticket was not escalated.",
+    unknownOutcome: "The ticket may have been escalated.",
+    unknownOutcomeMessage:
+      "We could not confirm it. Escalating again with the same reasons is safe: it is escalated once.",
+  },
+};
+
 /**
- * Describe a failed send.
+ * Describe a failed Send reply, Submit for approval, or Escalate ticket.
  *
- * @param failure - The failure of `sendReply`.
+ * @param failure - The failure of `sendReply`, `createReplyProposal`, or `createEscalation`.
+ * @param action - The action that failed.
  * @returns The lead, the message, whether the workspace reloads, and the trace ID.
  */
-export function describeSendFailure(failure: RequestFailure): SendFailureView {
+export function describeReplyFailure(
+  failure: RequestFailure,
+  action: ReplyAreaWrite,
+): SendFailureView {
   const { message, traceId } = describeFailure(failure);
   const traceIdView = traceId === undefined ? {} : { traceId };
+  const texts = textsByAction[action];
   if (isWriteOutcomeUnknown(failure)) {
     return {
-      lead: "The reply may have been sent.",
-      message:
-        "We could not confirm it. Sending the same reply again is safe: the customer gets it once.",
+      lead: texts.unknownOutcome,
+      message: texts.unknownOutcomeMessage,
       shouldReload: false,
       ...traceIdView,
     };
   }
   const reloadedMessage = messageByReloadedCategory.get(categorizeFailure(failure));
   return {
-    lead: "The reply was not sent.",
+    lead: texts.notDone,
     message: reloadedMessage ?? message,
     shouldReload: reloadedMessage !== undefined,
     ...traceIdView,

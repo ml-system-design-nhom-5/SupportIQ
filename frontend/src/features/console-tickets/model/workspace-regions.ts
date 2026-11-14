@@ -15,6 +15,7 @@ import {
 import type { TicketWorkspace } from "@/features/console-tickets/model/workspace";
 import {
   getReplyAreaState,
+  getShownDraft,
   getSidebarState,
   type ReplyAreaState,
   type SidebarState,
@@ -45,7 +46,7 @@ export function buildWorkspaceRegions(workspace: TicketWorkspace): WorkspaceRegi
   const reply = getReplyAreaState(workspace);
   const sidebar = getSidebarState(workspace);
   const analysis = sidebar.kind === "analysis" ? sidebar.analysis : undefined;
-  const numberByKey = numberCitedDocuments(reply.kind === "draft" ? reply.draft : undefined);
+  const numberByKey = numberCitedDocuments(getShownDraft(reply));
   return {
     intent: getIntentAreaState(workspace),
     reply,

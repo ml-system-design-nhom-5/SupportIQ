@@ -1,126 +1,31 @@
 /**
- * The reply that Send reply sends (console UI design, Actions): its `basis` follows from what
- * staff did, and it names only the warnings that staff acknowledged, so `422` stays the backstop of
- * UI-18. `backend` checks every rule again and refuses with `403`, `409`, or `422` (FR-04, FR-06,
- * SEC-38). Nothing here sends: only a staff click and a confirmation send a reply.
+ * The bodies that Send reply and Submit for approval send (console UI design, Actions): the
+ * `basis` follows from what staff did, and a reply on the AI draft names only the warnings that
+ * staff acknowledged, so `422` stays the backstop of UI-18. A manager sends a proposal with the
+ * basis `reply_proposal`. `backend` checks every rule again and refuses with `403`, `409`, or
+ * `422` (FR-04, FR-06, SEC-38). Nothing here sends: only a staff click sends.
  */
-import type { SendReplyRequestContract } from "@/features/console-tickets/api/contract-types";
-import type { SuggestionWarning } from "@/features/console-tickets/model/reason-codes";
-import type { ComposerState, DraftMode } from "@/features/console-tickets/model/reply-composer";
-import { staffReasonCodes } from "@/features/console-tickets/model/staff-reason-codes";
-import type { TicketAction } from "@/features/console-tickets/model/ticket-actions";
-import type { TicketWorkspace } from "@/features/console-tickets/model/workspace";
+import type {
+  CreateReplyProposalRequestContract,
+  SendReplyRequestContract,
+} from "@/features/console-tickets/api/contract-types";
 import {
-  hasPendingPart,
-  type ReplyAreaState,
-} from "@/features/console-tickets/model/workspace-state";
+  type ComposerDraft,
+  type ComposerTicket,
+  getReplyBody,
+} from "@/features/console-tickets/model/composer-ticket";
+import type { ComposerState } from "@/features/console-tickets/model/reply-composer";
+import { staffReasonCodes } from "@/features/console-tickets/model/staff-reason-codes";
 
-/** What the composer needs to know of the ticket, derived from the workspace. */
-export type ComposerTicket = {
-  readonly allowedActions: ReadonlySet<TicketAction>;
-  readonly isAuthorityRequired: boolean;
-  /** True once the ticket is closed: its reply was sent. */
-  readonly isClosed: boolean;
-  /**
-   * True while a part of the current suggestion is `pending`, or while an intent correction or Try
-   * AI again is sending, which starts a new suggestion.
-   */
-  readonly isSuggestionRunning: boolean;
-  /** True when the AI abstained for low confidence: staff choose an intent first (ESC-01). */
-  readonly isIntentChoiceNeeded: boolean;
-  /** The current suggestion; absent in `manual` mode. */
-  readonly suggestionId?: string;
-  /** The ready draft of the current suggestion; absent when there is none. */
-  readonly draft?: { readonly suggestionId: string; readonly text: string };
-  /** The `warning_id` of every warning of the current suggestion. */
-  readonly warningIds: readonly string[];
-};
-
-/** What the composer reads of the regions of the workspace. */
-export type ComposerRegions = {
-  readonly reply: ReplyAreaState;
-  /** The warnings of the analysis; empty without a ready analysis. */
-  readonly warnings: readonly SuggestionWarning[];
-};
-
-/** What staff do: a mode of a ready draft, or `writing` a reply when there is none. */
-export type ComposerMode = DraftMode | "writing";
+/** The ready AI draft that a reply or a proposal is based on. */
+type AiDraft = Extract<ComposerDraft, { readonly kind: "ai_draft" }>;
 
 /**
- * Read what the composer needs of the ticket.
+ * Tell whether two requests send the same reply, so the second reuses the `Idempotency-Key` of
+ * the first (TS-29). The bodies are built by this module, so equal requests serialize equally.
  *
- * @param workspace - The ticket.
- * @param regions - The state of its reply area and the warnings of its analysis.
- * @param isSuggestionRequested - True while an intent correction or Try AI again is sending.
- * @returns The allowed actions, the authority flag, whether the ticket is closed, whether the AI
- *   is running, the current suggestion, its ready draft, and its warnings.
- */
-export function toComposerTicket(
-  workspace: TicketWorkspace,
-  regions: ComposerRegions,
-  isSuggestionRequested: boolean,
-): ComposerTicket {
-  const suggestionId = workspace.suggestion?.suggestionId;
-  const draftText = regions.reply.kind === "draft" ? regions.reply.draft.text : undefined;
-  return {
-    allowedActions: workspace.allowedActions,
-    isAuthorityRequired: workspace.isAuthorityRequired,
-    isClosed: workspace.status === "closed",
-    isSuggestionRunning: isSuggestionRequested || hasPendingPart(workspace),
-    isIntentChoiceNeeded: regions.reply.kind === "choose_intent",
-    ...(suggestionId === undefined ? {} : { suggestionId }),
-    ...(suggestionId === undefined || draftText === undefined
-      ? {}
-      : { draft: { suggestionId, text: draftText } }),
-    warningIds: regions.warnings.map((warning) => warning.warningId),
-  };
-}
-
-/**
- * Choose what staff do now.
- *
- * @param ticket - The ticket.
- * @param state - What staff composed.
- * @returns The draft mode while there is a ready draft; `writing` otherwise.
- */
-export function getComposerMode(ticket: ComposerTicket, state: ComposerState): ComposerMode {
-  return ticket.draft === undefined ? "writing" : state.draftMode;
-}
-
-/**
- * Read the text that Send reply sends.
- *
- * @param ticket - The ticket.
- * @param state - What staff composed.
- * @returns The draft's `text` while staff read the draft as is; the editor's text otherwise.
- */
-export function getReplyBody(ticket: ComposerTicket, state: ComposerState): string {
-  return ticket.draft !== undefined && state.draftMode === "viewing"
-    ? ticket.draft.text
-    : state.body;
-}
-
-/**
- * Tell whether staff may edit or reject the draft (console UI design, Actions): the draft is
- * ready, and `backend` allows a reply or a reply proposal.
- *
- * @param ticket - The ticket.
- * @returns True when Edit draft and Reject draft are enabled.
- */
-export function canChangeDraft(ticket: ComposerTicket): boolean {
-  return (
-    ticket.draft !== undefined &&
-    (ticket.allowedActions.has("send_reply") || ticket.allowedActions.has("submit_reply_proposal"))
-  );
-}
-
-/**
- * Tell whether two confirmations send the same reply, so the second reuses the
- * `Idempotency-Key` of the first (TS-29). The bodies are built by {@link buildSendReplyRequest},
- * so equal requests serialize equally.
- *
- * @param first - The request of the earlier confirmation.
- * @param second - The request of the later one.
+ * @param first - The earlier request.
+ * @param second - The later one.
  * @returns True when the requests are equal.
  */
 export function isSameReply(
@@ -131,9 +36,8 @@ export function isSameReply(
 }
 
 /**
- * Build the body of `sendReply`, with the basis of the console UI design (Actions):
- * `ai_draft` for a ready draft sent as is or edited, with the warnings that staff acknowledged;
- * `rejected_ai_draft` with the chosen reason codes; `no_ai_draft` without a ready draft.
+ * Build the body of `sendReply`: the basis `reply_proposal` with the proposal for a manager on a
+ * ticket awaiting approval, and the basis of {@link buildReplyProposalRequest} otherwise.
  *
  * @param ticket - The ticket.
  * @param state - What staff composed.
@@ -143,8 +47,32 @@ export function buildSendReplyRequest(
   ticket: ComposerTicket,
   state: ComposerState,
 ): SendReplyRequestContract {
-  const body = getReplyBody(ticket, state);
   const draft = ticket.draft;
+  if (draft?.kind === "reply_proposal") {
+    return {
+      basis: "reply_proposal",
+      body: getReplyBody(ticket, state),
+      proposal_id: draft.proposalId,
+    };
+  }
+  return buildReplyProposalRequest(ticket, state);
+}
+
+/**
+ * Build the body of `createReplyProposal`, with the basis of the console UI design (Actions):
+ * `ai_draft` for a ready draft sent as is or edited, with the warnings that staff acknowledged;
+ * `rejected_ai_draft` with the chosen reason codes; `no_ai_draft` without a ready draft.
+ *
+ * @param ticket - The ticket.
+ * @param state - What staff composed.
+ * @returns The request body, which is also the body of `sendReply` on an open ticket.
+ */
+export function buildReplyProposalRequest(
+  ticket: ComposerTicket,
+  state: ComposerState,
+): CreateReplyProposalRequestContract {
+  const body = getReplyBody(ticket, state);
+  const draft = ticket.draft?.kind === "ai_draft" ? ticket.draft : undefined;
   if (draft === undefined) {
     return {
       basis: "no_ai_draft",
@@ -152,21 +80,37 @@ export function buildSendReplyRequest(
       ...(ticket.suggestionId === undefined ? {} : { suggestion_id: ticket.suggestionId }),
     };
   }
-  if (state.draftMode === "rejecting") {
-    return {
-      basis: "rejected_ai_draft",
-      body,
-      suggestion_id: draft.suggestionId,
-      staff_reason_codes: staffReasonCodes.filter((code) => state.reasonCodes.has(code)),
-      ...(state.reasonCodes.has("other") ? { note: state.note } : {}),
-    };
-  }
+  return state.draftMode === "rejecting"
+    ? buildRejectedDraftReply(draft, state, body)
+    : {
+        basis: "ai_draft",
+        body,
+        suggestion_id: draft.suggestionId,
+        acknowledged_warning_ids: ticket.warningIds.filter((warningId) =>
+          state.acknowledgedWarningIds.has(warningId),
+        ),
+      };
+}
+
+/**
+ * Build a reply after a rejection (ADR-0006): the reason codes in the order of the contract, and
+ * the note only with `other`.
+ *
+ * @param draft - The rejected draft.
+ * @param state - What staff composed.
+ * @param body - The reply text.
+ * @returns The request body.
+ */
+function buildRejectedDraftReply(
+  draft: AiDraft,
+  state: ComposerState,
+  body: string,
+): CreateReplyProposalRequestContract {
   return {
-    basis: "ai_draft",
+    basis: "rejected_ai_draft",
     body,
     suggestion_id: draft.suggestionId,
-    acknowledged_warning_ids: ticket.warningIds.filter((warningId) =>
-      state.acknowledgedWarningIds.has(warningId),
-    ),
+    staff_reason_codes: staffReasonCodes.filter((code) => state.reasonCodes.has(code)),
+    ...(state.reasonCodes.has("other") ? { note: state.note } : {}),
   };
 }

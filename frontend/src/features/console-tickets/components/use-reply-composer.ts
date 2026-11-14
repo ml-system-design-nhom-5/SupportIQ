@@ -1,6 +1,7 @@
 /**
  * The reply area of one opened ticket (console UI design, Actions and Dialogs): what staff
- * composed, the confirmation step of Send reply (UI-17), and the send. Only a confirmation sends a
+ * composed, the main action and why it is disabled, the confirmation step of Send reply (UI-17),
+ * the send, and Submit for approval. Only a confirmation sends a
  * reply (FR-04), and it sends exactly the reply that the confirmation shows: the request and its
  * `Idempotency-Key` are fixed when it opens. The confirmation closes without a send when the
  * suggestion changes or Send reply becomes disabled while it is open. The state lives as long as
@@ -13,22 +14,35 @@ import { getRequestFailure, useCreateIdempotencyKey } from "@/features/backend-r
 import type { SendReplyRequestContract } from "@/features/console-tickets/api/contract-types";
 import { type ConfirmedReply, useSendReply } from "@/features/console-tickets/api/use-send-reply";
 import {
-  type ComposerState,
-  createComposerState,
-  followSuggestion,
-} from "@/features/console-tickets/model/reply-composer";
+  type Escalation,
+  useEscalation,
+} from "@/features/console-tickets/components/use-escalation";
 import {
-  buildSendReplyRequest,
+  type ProposalSubmission,
+  useProposalSubmission,
+} from "@/features/console-tickets/components/use-proposal-submission";
+import {
   canChangeDraft,
+  canEditProposal,
   type ComposerMode,
   type ComposerTicket,
   getComposerMode,
   getReplyBody,
-  isSameReply,
-} from "@/features/console-tickets/model/reply-request";
-import { findSendBlock } from "@/features/console-tickets/model/send-block";
+} from "@/features/console-tickets/model/composer-ticket";
 import {
-  describeSendFailure,
+  type ComposerState,
+  createComposerState,
+  followSuggestion,
+} from "@/features/console-tickets/model/reply-composer";
+import { buildSendReplyRequest, isSameReply } from "@/features/console-tickets/model/reply-request";
+import {
+  findActionNote,
+  findReplyBlock,
+  getPrimaryAction,
+  type ReplyAction,
+} from "@/features/console-tickets/model/send-block";
+import {
+  describeReplyFailure,
   type SendFailureView,
 } from "@/features/console-tickets/model/send-failure";
 
@@ -55,19 +69,41 @@ type ReplySending = {
 };
 
 /** The reply area of the opened ticket. */
-export type ReplyComposer = ReplySending & {
-  /** What staff composed, for the current suggestion. */
-  readonly state: ComposerState;
-  /** What staff do: a mode of the ready draft, or `writing` without one. */
-  readonly mode: ComposerMode;
-  /** True when Edit draft and Reject draft are enabled. */
-  readonly canChangeDraft: boolean;
-  /** Changes what staff composed. */
-  readonly change: (update: (state: ComposerState) => ComposerState) => void;
-  /** The text that Send reply sends. */
-  readonly body: string;
-  /** Why Send reply is disabled; undefined when it is enabled. */
-  readonly sendBlock: string | undefined;
+export type ReplyComposer = ReplySending &
+  ProposalSubmission & {
+    /** What staff composed, for the current suggestion. */
+    readonly state: ComposerState;
+    /** What staff do: a mode of the ready text, or `writing` without one. */
+    readonly mode: ComposerMode;
+    /** True when Edit draft and Reject draft are enabled. */
+    readonly canChangeDraft: boolean;
+    /** True when a manager may edit the proposal (Edit proposal). */
+    readonly canEditProposal: boolean;
+    /** True in manual handling, where Submit for approval is a visible button (UI-16, UI-26). */
+    readonly isManualHandling: boolean;
+    /** True when `backend` allows a reply or a proposal, so the editor is shown. */
+    readonly canWrite: boolean;
+    /** Changes what staff composed. */
+    readonly change: (update: (state: ComposerState) => ComposerState) => void;
+    /** The text that the main action sends. */
+    readonly body: string;
+    /** The main action, on the right of the action bar (UI-16). */
+    readonly primaryAction: ReplyAction;
+    /** Why the main action is disabled; undefined when it is enabled. */
+    readonly primaryBlock: string | undefined;
+    /** Why Submit for approval is disabled; undefined when it is enabled. */
+    readonly submitBlock: string | undefined;
+    /** The line above the buttons: why the main action is disabled, or a note. */
+    readonly barLine: string | undefined;
+    /** Escalate ticket and its dialog. */
+    readonly escalation: Escalation;
+  };
+
+/** What happens after an action of the reply area succeeded. */
+export type ReplyComposerEvents = {
+  readonly onSent: () => void;
+  readonly onSubmitted: () => void;
+  readonly onEscalated: () => void;
 };
 
 /** What the send reads of the reply area now. */
@@ -88,15 +124,17 @@ type Confirmation = {
 /**
  * Keep the reply area of a ticket.
  *
- * @param ticketId - The ticket of the address, the ticket of the send.
+ * @param ticketId - The ticket of the address, the ticket of every write.
  * @param ticket - What the composer reads of the ticket.
- * @param onSent - Called once a reply was sent.
- * @returns The state, its change, the send block, and the confirmation and send handlers.
+ * @param events - Called once a reply was sent, a proposal was submitted, or the ticket was
+ *   escalated.
+ * @returns The state, its change, the main action and its block, and the handlers of the
+ *   confirmation, the send, and Submit for approval.
  */
 export function useReplyComposer(
   ticketId: string,
   ticket: ComposerTicket,
-  onSent: () => void,
+  events: ReplyComposerEvents,
 ): ReplyComposer {
   const [storedState, setState] = useState(() => createComposerState(ticket.suggestionId));
   // A new suggestion resets what belonged to the old one, during the render that shows it (TS-21).
@@ -104,15 +142,33 @@ export function useReplyComposer(
   if (state !== storedState) {
     setState(state);
   }
-  const sendBlock = findSendBlock(ticket, state);
+  const primaryAction = getPrimaryAction(ticket);
+  const primaryBlock = findReplyBlock(ticket, state, primaryAction);
+  const sendBlock = findReplyBlock(ticket, state, "send_reply");
   return {
     state,
     mode: getComposerMode(ticket, state),
     canChangeDraft: canChangeDraft(ticket),
+    canEditProposal: canEditProposal(ticket),
+    isManualHandling: ticket.situation === "manual_handling",
+    canWrite:
+      ticket.allowedActions.has("send_reply") || ticket.allowedActions.has("submit_reply_proposal"),
     change: setState,
     body: getReplyBody(ticket, state),
-    sendBlock,
-    ...useReplySending(ticketId, { ticket, state, sendBlock }, onSent),
+    primaryAction,
+    primaryBlock,
+    submitBlock: findReplyBlock(ticket, state, "submit_reply_proposal"),
+    barLine: primaryBlock ?? findActionNote(ticket),
+    ...useReplySending(ticketId, { ticket, state, sendBlock }, events.onSent),
+    // Once the ticket went to a manager, what staff composed is done with.
+    ...useProposalSubmission(ticketId, { ticket, state }, () => {
+      setState(createComposerState(ticket.suggestionId));
+      events.onSubmitted();
+    }),
+    escalation: useEscalation(ticketId, ticket, () => {
+      setState(createComposerState(ticket.suggestionId));
+      events.onEscalated();
+    }),
   };
 }
 
@@ -161,7 +217,7 @@ function useReplySending(
       }
     },
     isSending: sendReply.isPending,
-    sendFailure: failure === undefined ? undefined : describeSendFailure(failure),
+    sendFailure: failure === undefined ? undefined : describeReplyFailure(failure, "send_reply"),
   };
 }
 

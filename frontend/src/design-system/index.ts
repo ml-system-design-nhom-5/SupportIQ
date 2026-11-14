@@ -127,6 +127,11 @@ export type { ProductDetailsProps } from "@/design-system/components/product-det
 export { ProductDetails } from "@/design-system/components/product-details";
 export type { ProductImageProps, ProductImageSize } from "@/design-system/components/product-image";
 export { ProductImage } from "@/design-system/components/product-image";
+export type {
+  ProposalComparisonProposal,
+  ProposalComparisonProps,
+} from "@/design-system/components/proposal-comparison";
+export { ProposalComparison } from "@/design-system/components/proposal-comparison";
 export type { RelativeTimeProps } from "@/design-system/components/relative-time";
 export { RelativeTime } from "@/design-system/components/relative-time";
 export type { RelativeTimeTextProps } from "@/design-system/components/relative-time-text";

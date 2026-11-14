@@ -1,8 +1,9 @@
 import { screen } from "@testing-library/react";
-import { Send, Sparkles } from "lucide-react";
+import { CircleArrowUp, Send, Sparkles } from "lucide-react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ConfirmDialog, type ConfirmDialogText } from "@/design-system/primitives/confirm-dialog";
+import { FormDialog, type FormDialogText } from "@/design-system/primitives/form-dialog";
 import { Panel } from "@/design-system/primitives/panel";
 import { PanelHeader } from "@/design-system/primitives/panel-header";
 import { renderUi } from "@/test/render-app";
@@ -42,6 +43,33 @@ function renderConfirmDialog(overrides: Partial<ConfirmDialogText> = {}) {
   return { onCancel, user };
 }
 
+/** The description of the Escalate ticket form in these tests. */
+const FORM_DESCRIPTION = "Choose at least one reason. The ticket becomes read-only for you.";
+
+/**
+ * Render an open Escalate ticket form.
+ *
+ * @param overrides - The texts that a test changes.
+ */
+function renderFormDialog(overrides: Partial<FormDialogText> = {}) {
+  renderUi(
+    <FormDialog
+      text={{
+        title: "Escalate ticket TCK-1042 to a manager?",
+        description: FORM_DESCRIPTION,
+        submitLabel: "Escalate ticket",
+        ...overrides,
+      }}
+      returnFocus={{ opener: document.body, fallbackId: "escalate-ticket" }}
+      isPending={false}
+      onSubmit={vi.fn()}
+      onCancel={vi.fn()}
+    >
+      Fields
+    </FormDialog>,
+  );
+}
+
 describe("ConfirmDialog, the cancel label", () => {
   it("names the button that keeps the change from happening, and cancels with it", async () => {
     const { onCancel, user } = renderConfirmDialog({ cancelLabel: "Keep editing" });
@@ -77,6 +105,38 @@ describe("ConfirmDialog, the console texts", () => {
     renderConfirmDialog({ descriptionTone: tone });
 
     expect(screen.getByText(DESCRIPTION)).toHaveClass(textClass);
+  });
+});
+
+describe("FormDialog, the console texts", () => {
+  it("shows the submit icon on the submit button, hidden from assistive technology", () => {
+    renderFormDialog({ submitIcon: CircleArrowUp });
+
+    expect(
+      screen.getByRole("button", { name: "Escalate ticket" }).querySelector("svg"),
+    ).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("shows no icon on the submit button without a submit icon", () => {
+    renderFormDialog();
+
+    expect(screen.getByRole("button", { name: "Escalate ticket" }).querySelector("svg")).toBeNull();
+  });
+
+  it.each([
+    { tone: "muted", textClass: "text-text-muted" },
+    { tone: "default", textClass: "text-text" },
+  ] as const)("gives a $tone description the class $textClass", ({ tone, textClass }) => {
+    renderFormDialog({ descriptionTone: tone });
+
+    expect(screen.getByText(FORM_DESCRIPTION)).toHaveClass(textClass);
+    expect(screen.getByRole("dialog")).toHaveAccessibleDescription(FORM_DESCRIPTION);
+  });
+
+  it("gives the description the text role by default", () => {
+    renderFormDialog();
+
+    expect(screen.getByText(FORM_DESCRIPTION)).toHaveClass("text-text");
   });
 });
 

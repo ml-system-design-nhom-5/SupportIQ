@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { canChangeDraft } from "@/features/console-tickets/model/composer-ticket";
 import {
   acknowledgeWarning,
   createComposerState,
@@ -8,8 +9,8 @@ import {
   startEditing,
 } from "@/features/console-tickets/model/reply-composer";
 import {
+  buildReplyProposalRequest,
   buildSendReplyRequest,
-  canChangeDraft,
   isSameReply,
 } from "@/features/console-tickets/model/reply-request";
 import { DRAFT_READY_SUGGESTION_ID, readComposerTicket } from "@/test/console-screen";
@@ -27,11 +28,11 @@ describe("toComposerTicket", () => {
         "escalate",
         "correct_intent",
       ]),
+      status: "open",
       isAuthorityRequired: false,
-      isClosed: false,
       isSuggestionRunning: false,
       suggestionId: DRAFT_READY_SUGGESTION_ID,
-      draft: { suggestionId: DRAFT_READY_SUGGESTION_ID },
+      draft: { kind: "ai_draft", suggestionId: DRAFT_READY_SUGGESTION_ID },
       warningIds: ["w1"],
     });
     expect(draftReady.draft?.text).toMatch(/^Hello Lan Tran, thank you for your patience\./);
@@ -54,7 +55,7 @@ describe("toComposerTicket", () => {
   });
 
   it("says that a ticket is closed", () => {
-    expect(readComposerTicket("closed")).toMatchObject({ isClosed: true });
+    expect(readComposerTicket("closed")).toMatchObject({ status: "closed" });
   });
 });
 
@@ -201,5 +202,59 @@ describe("isSameReply", () => {
     });
 
     expect(isSameReply(first, second)).toBe(false);
+  });
+});
+
+describe("buildSendReplyRequest of a manager on a proposal (FR-06)", () => {
+  const ticket = readComposerTicket("awaiting-approval");
+  const proposalOpened = createComposerState(ticket.suggestionId);
+
+  it("sends the proposal as is with the basis reply_proposal", () => {
+    expect(buildSendReplyRequest(ticket, proposalOpened)).toEqual({
+      basis: "reply_proposal",
+      body: ticket.draft?.text,
+      proposal_id: "3e5a7c9b-1d2f-4a6c-8e0b-5d7f9a1c3e52",
+    });
+  });
+
+  it("sends the edited proposal with the basis reply_proposal", () => {
+    expect(
+      buildSendReplyRequest(ticket, startEditing(proposalOpened, "The edited reply.")),
+    ).toEqual({
+      basis: "reply_proposal",
+      body: "The edited reply.",
+      proposal_id: "3e5a7c9b-1d2f-4a6c-8e0b-5d7f9a1c3e52",
+    });
+  });
+});
+
+describe("buildReplyProposalRequest", () => {
+  it("submits the draft with the basis that Send reply would use", () => {
+    expect(buildReplyProposalRequest(draftReady, acknowledged)).toEqual(
+      buildSendReplyRequest(draftReady, acknowledged),
+    );
+  });
+
+  it("submits the text kept over a new draft as an edit of the new draft", () => {
+    const kept = followSuggestion(
+      startEditing(createComposerState("s0"), "Edited reply."),
+      DRAFT_READY_SUGGESTION_ID,
+    );
+
+    expect(buildReplyProposalRequest(draftReady, kept)).toEqual({
+      basis: "ai_draft",
+      body: "Edited reply.",
+      suggestion_id: DRAFT_READY_SUGGESTION_ID,
+      acknowledged_warning_ids: [],
+    });
+  });
+
+  it("submits a reply without a draft in manual mode", () => {
+    expect(
+      buildReplyProposalRequest(readComposerTicket("manual-mode"), {
+        ...createComposerState(undefined),
+        body: "Here is the return label.",
+      }),
+    ).toEqual({ basis: "no_ai_draft", body: "Here is the return label." });
   });
 });

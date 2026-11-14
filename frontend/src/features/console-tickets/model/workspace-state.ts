@@ -7,11 +7,22 @@ import type { AiReasonCodeName, RecommendationName } from "@/design-system";
 import { assertNever } from "@/features/backend-requests";
 import type { ReadyAnalysis } from "@/features/console-tickets/model/analysis";
 import type { DraftPart, NoDraft, ReadyDraft } from "@/features/console-tickets/model/draft";
+import type {
+  ReplyProposal,
+  TicketEscalation,
+} from "@/features/console-tickets/model/manager-handoff";
 import type { SentReply, TicketWorkspace } from "@/features/console-tickets/model/workspace";
 
 /** The reply area. */
 export type ReplyAreaState =
   | { readonly kind: "sent"; readonly reply: SentReply }
+  | {
+      readonly kind: "proposal";
+      readonly proposal: ReplyProposal;
+      /** The ready AI draft, shown for comparison; absent when there is none. */
+      readonly draft?: ReadyDraft;
+    }
+  | { readonly kind: "escalated"; readonly escalation: TicketEscalation }
   | { readonly kind: "manual_mode" }
   | { readonly kind: "ai_unavailable"; readonly reasonCode: AiReasonCodeName }
   | { readonly kind: "pending" }
@@ -47,13 +58,71 @@ export type SidebarState =
  * Choose the state of the reply area.
  *
  * @param workspace - The ticket.
- * @returns The sent reply of a closed ticket, manual handling, the pending skeleton, the draft, the
- *   choice of intent (ESC-01), or the reason codes of a missing draft.
+ * @returns The sent reply of a closed ticket; the proposal of a ticket awaiting approval; the
+ *   escalation of an escalated ticket without a ready draft; otherwise manual handling, the
+ *   pending skeleton, the draft, the choice of intent (ESC-01), or the reason codes of a missing
+ *   draft.
  */
 export function getReplyAreaState(workspace: TicketWorkspace): ReplyAreaState {
   if (workspace.reply !== undefined) {
     return { kind: "sent", reply: workspace.reply };
   }
+  return getManagerHandoffState(workspace) ?? getSuggestionReplyState(workspace);
+}
+
+/**
+ * Read the ready draft that the reply area shows: the draft to review, or the AI draft next to a
+ * proposal.
+ *
+ * @param reply - The state of the reply area.
+ * @returns The ready draft, or undefined when the area shows none.
+ */
+export function getShownDraft(reply: ReplyAreaState): ReadyDraft | undefined {
+  return reply.kind === "draft" || reply.kind === "proposal" ? reply.draft : undefined;
+}
+
+/**
+ * Choose the state of a ticket that staff handed to a manager. An escalated ticket with a ready
+ * draft shows the draft, because a reply then needs it as its basis; its escalation shows above.
+ *
+ * @param workspace - The ticket.
+ * @returns The proposal while the ticket awaits approval, the escalation of an escalated ticket
+ *   without a ready draft, or undefined.
+ */
+function getManagerHandoffState(workspace: TicketWorkspace): ReplyAreaState | undefined {
+  const readyDraft = getReadyDraft(workspace);
+  if (workspace.status === "awaiting_approval" && workspace.proposal !== undefined) {
+    return {
+      kind: "proposal",
+      proposal: workspace.proposal,
+      ...(readyDraft === undefined ? {} : { draft: readyDraft }),
+    };
+  }
+  const escalation = workspace.status === "escalated" ? workspace.escalation : undefined;
+  return escalation === undefined || readyDraft !== undefined
+    ? undefined
+    : { kind: "escalated", escalation };
+}
+
+/**
+ * Read the ready draft of the current suggestion.
+ *
+ * @param workspace - The ticket.
+ * @returns The draft when it is `draft_ready`; undefined otherwise.
+ */
+function getReadyDraft(workspace: TicketWorkspace): ReadyDraft | undefined {
+  const draft = workspace.suggestion?.draft;
+  return draft?.status === "draft_ready" ? draft : undefined;
+}
+
+/**
+ * Choose the state of the reply area from the current suggestion.
+ *
+ * @param workspace - The ticket.
+ * @returns Manual handling, the pending skeleton, the draft, the choice of intent, or the reason
+ *   codes of a missing draft.
+ */
+function getSuggestionReplyState(workspace: TicketWorkspace): ReplyAreaState {
   const suggestion = workspace.suggestion;
   if (workspace.handlingMode === "manual" || suggestion === undefined) {
     return { kind: "manual_mode" };

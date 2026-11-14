@@ -10,7 +10,10 @@
  * the new one (UI-18, ADR-0006). The text that staff typed stays in the editor, and the new draft
  * shows above it (console UI design, Errors and guardrails, "The draft was superseded").
  */
-import type { StaffReasonCode } from "@/features/console-tickets/model/staff-reason-codes";
+import {
+  type StaffReasonCode,
+  toggleStaffReasonCode,
+} from "@/features/console-tickets/model/staff-reason-codes";
 
 /**
  * What staff do with a ready draft.
@@ -138,11 +141,7 @@ export function rejectDraft(state: ComposerState): ComposerState {
  * @returns The state with the code added or removed.
  */
 export function toggleReasonCode(state: ComposerState, reasonCode: StaffReasonCode): ComposerState {
-  const reasonCodes = new Set(state.reasonCodes);
-  if (!reasonCodes.delete(reasonCode)) {
-    reasonCodes.add(reasonCode);
-  }
-  return { ...state, reasonCodes };
+  return { ...state, reasonCodes: toggleStaffReasonCode(state.reasonCodes, reasonCode) };
 }
 
 /**

@@ -220,6 +220,38 @@ describe("ToggleChipGroup", () => {
 
     expect(onToggle).toHaveBeenCalledWith("wrong_intent");
   });
+
+  it("keeps a hidden label as the name of the group, for assistive technology only", () => {
+    renderUi(
+      <ToggleChipGroup
+        label="Why do you escalate this ticket?"
+        labelVisibility="hidden"
+        options={options}
+        selected={new Set()}
+        onToggle={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("group", { name: "Why do you escalate this ticket?" })).toBeVisible();
+    expect(screen.getByText("Why do you escalate this ticket?")).toHaveClass("sr-only");
+  });
+
+  it("shows an error under the chips that describes the group", () => {
+    renderUi(
+      <ToggleChipGroup
+        label="Why?"
+        options={options}
+        selected={new Set()}
+        onToggle={vi.fn()}
+        error="Choose at least one reason."
+      />,
+    );
+
+    expect(screen.getByRole("group", { name: "Why?" })).toHaveAccessibleDescription(
+      "Choose at least one reason.",
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent("Choose at least one reason.");
+  });
 });
 
 describe("MarkedText and DraftText", () => {

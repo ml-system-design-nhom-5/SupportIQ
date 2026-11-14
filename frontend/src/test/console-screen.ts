@@ -10,10 +10,12 @@ import type { UserEvent } from "@testing-library/user-event";
 import {
   type ComposerTicket,
   toComposerTicket,
-} from "@/features/console-tickets/model/reply-request";
+} from "@/features/console-tickets/model/composer-ticket";
 import { toTicketWorkspace } from "@/features/console-tickets/model/workspace";
 import { buildWorkspaceRegions } from "@/features/console-tickets/model/workspace-regions";
 import {
+  createEscalationRoute,
+  createReplyProposalRoute,
   createSuggestionRoute,
   getConsoleKbDocumentVersionRoute,
   getConsoleTicketRoute,
@@ -50,6 +52,10 @@ export type ConsoleAnswers = {
   readonly suggestion?: readonly FakeAnswer[];
   /** The answers of `sendReply`; the `from-ai-draft` example by default. */
   readonly reply?: readonly FakeAnswer[];
+  /** The answers of `createReplyProposal`; the `from-ai-draft` example by default. */
+  readonly proposal?: readonly FakeAnswer[];
+  /** The answers of `createEscalation`; the `escalated` example by default. */
+  readonly escalation?: readonly FakeAnswer[];
   readonly settings?: typeof testSettings;
 };
 
@@ -110,7 +116,7 @@ export function workspaceWith(
  * @param backend - The fake backend.
  * @param answers - The answers that differ from the defaults: a staff session, the open queue, a
  *   recorded view, the draft-ready workspace, the sample KB document version, a pending suggestion
- *   after an intent override, and a sent reply.
+ *   after an intent override, a sent reply, a stored proposal, and an escalation.
  */
 export function answerConsole(backend: FakeBackend, answers: ConsoleAnswers = {}): void {
   const { session, ...writtenAnswers } = answers;
@@ -125,13 +131,16 @@ export function answerConsole(backend: FakeBackend, answers: ConsoleAnswers = {}
   backend.answer(getConsoleKbDocumentVersionRoute, ...all.kbDocument);
   backend.answer(createSuggestionRoute, ...all.suggestion);
   backend.answer(sendReplyRoute, ...all.reply);
+  backend.answer(createReplyProposalRoute, ...all.proposal);
+  backend.answer(createEscalationRoute, ...all.escalation);
 }
 
 /**
  * List the default answers of the console.
  *
  * @returns The open queue, a recorded view, the draft-ready workspace, the sample KB document
- *   version, a pending suggestion after an intent override, and a sent reply.
+ *   version, a pending suggestion after an intent override, a sent reply, a stored proposal, and an
+ *   escalation.
  */
 function readDefaultAnswers() {
   return {
@@ -141,6 +150,8 @@ function readDefaultAnswers() {
     kbDocument: [exampleAnswer(200, "getConsoleKbDocumentVersion", "document-version")],
     suggestion: [exampleAnswer(202, "createSuggestion", "intent-override")],
     reply: [exampleAnswer(201, "sendReply", "from-ai-draft")],
+    proposal: [exampleAnswer(201, "createReplyProposal", "from-ai-draft")],
+    escalation: [exampleAnswer(201, "createEscalation", "escalated")],
   } satisfies Required<Omit<ConsoleAnswers, "session" | "settings">>;
 }
 

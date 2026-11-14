@@ -33,3 +33,38 @@ export const staffReasonCodeLabels: Readonly<Record<StaffReasonCode, string>> = 
   case_exception: "Case exception",
   other: "Other",
 };
+
+/**
+ * Map staff reason codes of `backend`, in the order of the contract.
+ *
+ * @param values - The `staff_reason_codes` of a proposal or an escalation.
+ * @returns The codes; a value that this version does not know is ignored (CON-22).
+ */
+export function toStaffReasonCodes(values: readonly string[]): readonly StaffReasonCode[] {
+  const given: ReadonlySet<string> = new Set(values);
+  return staffReasonCodes.filter((code) => given.has(code));
+}
+
+/** The chips of the staff reason codes, in the order of the contract. */
+export const staffReasonOptions: readonly {
+  readonly value: StaffReasonCode;
+  readonly label: string;
+}[] = staffReasonCodes.map((code) => ({ value: code, label: staffReasonCodeLabels[code] }));
+
+/**
+ * Choose or unchoose a reason code.
+ *
+ * @param codes - The chosen codes.
+ * @param reasonCode - The chip that staff pressed.
+ * @returns The codes with it added, or removed when it was chosen.
+ */
+export function toggleStaffReasonCode(
+  codes: ReadonlySet<StaffReasonCode>,
+  reasonCode: StaffReasonCode,
+): ReadonlySet<StaffReasonCode> {
+  const toggled = new Set(codes);
+  if (!toggled.delete(reasonCode)) {
+    toggled.add(reasonCode);
+  }
+  return toggled;
+}

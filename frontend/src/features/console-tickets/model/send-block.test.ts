@@ -3,10 +3,15 @@ import { describe, expect, it } from "vitest";
 import { MESSAGE_MAX_LENGTH } from "@/features/backend-requests";
 import {
   acknowledgeWarning,
+  type ComposerState,
   createComposerState,
   rejectDraft,
 } from "@/features/console-tickets/model/reply-composer";
-import { findSendBlock } from "@/features/console-tickets/model/send-block";
+import {
+  findActionNote,
+  findReplyBlock,
+  getPrimaryAction,
+} from "@/features/console-tickets/model/send-block";
 import { STAFF_NOTE_MAX_LENGTH } from "@/features/console-tickets/model/staff-reason-codes";
 import { DRAFT_READY_SUGGESTION_ID, readComposerTicket } from "@/test/console-screen";
 
@@ -17,43 +22,43 @@ const acknowledged = acknowledgeWarning(opened, { warningId: "w1", isAcknowledge
 const rejected = { ...rejectDraft(opened), body: "My own reply." };
 const withOther = { ...rejected, reasonCodes: new Set(["other"] as const) };
 
-describe("findSendBlock of the ticket", () => {
+describe("findReplyBlock of the ticket", () => {
   it.each([
     ["closed", "This ticket is closed. A reply was already sent."],
     ["suggestion-pending", "The AI is still working on this ticket."],
-    ["authority-required", "Only a manager can send the reply of this ticket."],
     ["abstained-low-confidence", "Choose an intent to get a draft."],
+    ["read-only-for-staff", "This ticket is read-only for you. A manager sends the reply."],
   ])("disables Send reply on the %s example", (name, reason) => {
-    expect(findSendBlock(readComposerTicket(name), acknowledged)).toBe(reason);
+    expect(findReplyBlock(readComposerTicket(name), acknowledged)).toBe(reason);
   });
 
   it("disables Send reply while an intent correction or Try AI again is sending", () => {
-    expect(findSendBlock(readComposerTicket("draft-ready", true), acknowledged)).toBe(
+    expect(findReplyBlock(readComposerTicket("draft-ready", true), acknowledged)).toBe(
       "The AI is still working on this ticket.",
     );
   });
 });
 
-describe("findSendBlock of the warnings (UI-18)", () => {
+describe("findReplyBlock of the warnings (UI-18)", () => {
   it.each([
     [draftReady, "Acknowledge 1 warning to send the reply."],
     [{ ...draftReady, warningIds: ["w1", "w2"] }, "Acknowledge 2 warnings to send the reply."],
   ])("counts the warnings left to acknowledge", (ticket, reason) => {
-    expect(findSendBlock(ticket, opened)).toBe(reason);
+    expect(findReplyBlock(ticket, opened)).toBe(reason);
   });
 
   it("enables Send reply once every warning is acknowledged", () => {
-    expect(findSendBlock(draftReady, acknowledged)).toBeUndefined();
+    expect(findReplyBlock(draftReady, acknowledged)).toBeUndefined();
   });
 
   it("asks for no acknowledgement after a rejection", () => {
     expect(
-      findSendBlock(draftReady, { ...rejected, reasonCodes: new Set(["kb_gap"]) }),
+      findReplyBlock(draftReady, { ...rejected, reasonCodes: new Set(["kb_gap"]) }),
     ).toBeUndefined();
   });
 });
 
-describe("findSendBlock of a rejection (ADR-0006)", () => {
+describe("findReplyBlock of a rejection (ADR-0006)", () => {
   it.each([
     [{ ...rejected }, "Choose why you rejected the draft to send the reply."],
     [{ ...withOther, note: " " }, "Write a note for the reason Other to send the reply."],
@@ -62,30 +67,30 @@ describe("findSendBlock of a rejection (ADR-0006)", () => {
       "Shorten the note to 1,000 characters to send the reply.",
     ],
   ])("says what the rejection needs", (state, reason) => {
-    expect(findSendBlock(draftReady, state)).toBe(reason);
+    expect(findReplyBlock(draftReady, state)).toBe(reason);
   });
 
   it("enables Send reply with a note of exactly 1 000 characters", () => {
     expect(
-      findSendBlock(draftReady, { ...withOther, note: "n".repeat(STAFF_NOTE_MAX_LENGTH) }),
+      findReplyBlock(draftReady, { ...withOther, note: "n".repeat(STAFF_NOTE_MAX_LENGTH) }),
     ).toBeUndefined();
   });
 });
 
-describe("findSendBlock of the text (UI-43)", () => {
+describe("findReplyBlock of the text (UI-43)", () => {
   it.each([
-    ["", "Write a reply to send it."],
-    ["  \n", "Write a reply to send it."],
+    ["", "Write a reply to send it or to submit it for approval."],
+    ["  \n", "Write a reply to send it or to submit it for approval."],
     ["a".repeat(MESSAGE_MAX_LENGTH + 1), "Shorten the reply to 2,000 characters to send it."],
     ["We sent the label to [EMAIL].", "Replace the highlighted text to send the reply."],
     ["You wrote [LITERAL_1].", "Replace the highlighted text to send the reply."],
   ])("disables Send reply for %j", (body, reason) => {
-    expect(findSendBlock(manual, { ...createComposerState(undefined), body })).toBe(reason);
+    expect(findReplyBlock(manual, { ...createComposerState(undefined), body })).toBe(reason);
   });
 
   it("enables Send reply for exactly 2 000 characters without a placeholder", () => {
     expect(
-      findSendBlock(manual, {
+      findReplyBlock(manual, {
         ...createComposerState(undefined),
         body: "a".repeat(MESSAGE_MAX_LENGTH),
       }),
@@ -93,10 +98,107 @@ describe("findSendBlock of the text (UI-43)", () => {
   });
 
   it("disables Send reply for a ready draft with a placeholder, sent as is", () => {
-    const draft = { suggestionId: DRAFT_READY_SUGGESTION_ID, text: "We wrote to [EMAIL]." };
+    const draft = {
+      kind: "ai_draft",
+      suggestionId: DRAFT_READY_SUGGESTION_ID,
+      text: "We wrote to [EMAIL].",
+    } as const;
 
-    expect(findSendBlock({ ...draftReady, draft }, acknowledged)).toBe(
+    expect(findReplyBlock({ ...draftReady, draft }, acknowledged)).toBe(
       "Replace the highlighted text to send the reply.",
     );
   });
 });
+
+describe("getPrimaryAction (UI-16)", () => {
+  it.each([
+    ["draft-ready", "send_reply"],
+    ["manual-mode", "send_reply"],
+    ["authority-required", "submit_reply_proposal"],
+    ["awaiting-approval", "send_reply"],
+    ["read-only-for-staff", "send_reply"],
+  ])("makes the main action of the %s example %s", (name, action) => {
+    expect(getPrimaryAction(readComposerTicket(name))).toBe(action);
+  });
+});
+
+describe("findReplyBlock of Submit for approval", () => {
+  const authority = readComposerTicket("authority-required");
+  const authorityOpened = createComposerState(authority.suggestionId);
+
+  it("is enabled on a ticket that requires authority, with the note of the bar", () => {
+    const state = acknowledgeAll(authority.warningIds, authorityOpened);
+
+    expect(findReplyBlock(authority, state)).toBeUndefined();
+    expect(findActionNote(authority)).toBe("A manager sends the reply on this ticket.");
+  });
+
+  it("says what a rejection still needs, with the verb of the action", () => {
+    expect(findReplyBlock(authority, { ...rejectDraft(authorityOpened), body: "Mine." })).toBe(
+      "Choose why you rejected the draft to submit the reply.",
+    );
+  });
+
+  it("asks for text to submit after a rejection with a reason", () => {
+    const rejectedWithReason = {
+      ...rejectDraft(authorityOpened),
+      reasonCodes: new Set(["kb_gap"] as const),
+    };
+
+    expect(findReplyBlock(authority, rejectedWithReason)).toBe(
+      "Write a reply to submit it for approval.",
+    );
+  });
+
+  it("is disabled while the AI runs, as backend refuses a proposal then", () => {
+    expect(
+      findReplyBlock(
+        readComposerTicket("draft-ready", true),
+        acknowledged,
+        "submit_reply_proposal",
+      ),
+    ).toBe("The AI is still working on this ticket.");
+  });
+});
+
+describe("findReplyBlock of the other states", () => {
+  it("asks to write or escalate when the AI recommends an escalation", () => {
+    const ticket = {
+      ...readComposerTicket("manual-mode"),
+      situation: "escalation_recommended",
+    } as const;
+
+    expect(findReplyBlock(ticket, createComposerState(undefined))).toBe(
+      "Write a reply to send it, or escalate the ticket.",
+    );
+  });
+
+  it("asks a manager to write on an escalated ticket", () => {
+    expect(findReplyBlock(readComposerTicket("escalated"), createComposerState(undefined))).toBe(
+      "Write a reply to send it.",
+    );
+  });
+
+  it("enables Send reply of a proposal as is, with the note of the bar", () => {
+    const ticket = readComposerTicket("awaiting-approval");
+
+    expect(findReplyBlock(ticket, createComposerState(ticket.suggestionId))).toBeUndefined();
+    expect(findActionNote(ticket)).toBe(
+      "Reject draft and Escalate ticket are not available while the ticket awaits approval.",
+    );
+  });
+});
+
+/**
+ * Acknowledge every warning of a ticket.
+ *
+ * @param warningIds - The warnings.
+ * @param state - The state to start from.
+ * @returns The state with every warning acknowledged.
+ */
+function acknowledgeAll(warningIds: readonly string[], state: ComposerState): ComposerState {
+  return warningIds.reduce(
+    (current, warningId) => acknowledgeWarning(current, { warningId, isAcknowledged: true }),
+    state,
+  );
+}
