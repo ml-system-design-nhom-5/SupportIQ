@@ -25,4 +25,5 @@ class Settings(BaseSettings):
     ai_service_draft_timeout_ms: int = 11_000
     job_lease_ms: int = 20_000
     job_poll_interval_ms: int = 500
+    job_concurrency: int = Field(default=4, ge=1, le=16)
     backend_build: str = "application-v1"

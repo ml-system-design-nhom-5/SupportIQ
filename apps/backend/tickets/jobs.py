@@ -1,5 +1,6 @@
 """Leased PostgreSQL jobs; late results never replace a newer suggestion."""
 
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from datetime import timedelta
 import threading
 import time
@@ -7,6 +8,14 @@ import uuid
 
 import httpx
 from sqlalchemy import or_, select
+
+_REAL_HTTPX_CLIENT = httpx.Client
+
+
+def _positive_int(value, default: int) -> int:
+    if isinstance(value, int) and not isinstance(value, bool) and value >= 1:
+        return value
+    return default
 
 from apps.backend.platform.database import audit, utcnow, ensure_utc
 from apps.backend.platform.models import Suggestion, SuggestionJob, Ticket
@@ -90,59 +99,163 @@ def validate_analysis(data):
 
 
 class SuggestionWorker:
-    def __init__(self, database, settings):
+    def __init__(self, database, settings, http_client=None):
         self.database, self.settings = database, settings
         self.stop_event = threading.Event()
         self.thread = None
+        self._concurrency = _positive_int(getattr(settings, "job_concurrency", 4), 4)
+        self._poll_interval_ms = _positive_int(getattr(settings, "job_poll_interval_ms", 500), 500)
+        self._lease_ms = _positive_int(getattr(settings, "job_lease_ms", 20_000), 20_000)
+        self._injected_http_client = http_client
+        self._client_lock = threading.Lock()
+        self._owned_http_client = None
+        self._owned_client_factory = None
 
     def start(self):
         if self.settings.ai_service_base_url:
+            self.stop_event.clear()
             self.thread = threading.Thread(target=self.run, daemon=True, name="suggestion-jobs")
             self.thread.start()
+
+    @staticmethod
+    def _close_client_safely(client) -> None:
+        try:
+            client.close()
+        except Exception:
+            pass
+
+    def _close_http_clients(self) -> None:
+        with self._client_lock:
+            client = self._owned_http_client
+            self._owned_http_client = None
+            self._owned_client_factory = None
+        if client is not None:
+            self._close_client_safely(client)
 
     def close(self):
         self.stop_event.set()
         if self.thread:
-            self.thread.join(timeout=12)
+            analysis_ms = _positive_int(getattr(self.settings, "ai_service_analysis_timeout_ms", 3_000), 3_000)
+            draft_ms = _positive_int(getattr(self.settings, "ai_service_draft_timeout_ms", 11_000), 11_000)
+            join_timeout = max(12.0, (analysis_ms + draft_ms) / 1000 + 2.0)
+            self.thread.join(timeout=join_timeout)
+        if not self.thread or not self.thread.is_alive():
+            self._close_http_clients()
+
+    def _post_ai(self, endpoint: str, payload: dict, budget_ms: int) -> dict:
+        url = self.settings.ai_service_base_url.rstrip("/") + "/v1/" + endpoint
+        timeout_s = budget_ms / 1000
+        if self._injected_http_client is not None:
+            response = self._injected_http_client.post(url, json=payload, timeout=timeout_s)
+            response.raise_for_status()
+            return response.json()
+
+        factory = httpx.Client
+        non_pooled_client = None
+        with self._client_lock:
+            if self._owned_http_client is not None and (
+                self._owned_client_factory is not factory
+                or getattr(self._owned_http_client, "is_closed", False)
+            ):
+                self._close_client_safely(self._owned_http_client)
+                self._owned_http_client = None
+                self._owned_client_factory = None
+            if self._owned_http_client is None:
+                if factory is _REAL_HTTPX_CLIENT:
+                    limits = httpx.Limits(
+                        max_connections=max(10, self._concurrency * 2),
+                        max_keepalive_connections=max(5, self._concurrency),
+                    )
+                    candidate = factory(timeout=timeout_s, trust_env=False, limits=limits)
+                else:
+                    candidate = factory(timeout=timeout_s, trust_env=False)
+                if isinstance(candidate, _REAL_HTTPX_CLIENT):
+                    self._owned_http_client = candidate
+                    self._owned_client_factory = factory
+                else:
+                    non_pooled_client = candidate
+            pooled_client = self._owned_http_client
+
+        if pooled_client is not None:
+            response = pooled_client.post(url, json=payload, timeout=timeout_s)
+            response.raise_for_status()
+            return response.json()
+
+        with non_pooled_client as client:
+            response = client.post(url, json=payload)
+            response.raise_for_status()
+            return response.json()
+
+    def _process_claimed(self, identifier, token, payload):
+        try:
+            self.process(identifier, token, payload)
+        except Exception:
+            # Retry through the durable lease; avoid crashing executor or stopping sibling jobs.
+            pass
 
     def run(self):
-        while not self.stop_event.is_set():
+        in_flight: set[Future] = set()
+        poll_s = self._poll_interval_ms / 1000
+        with ThreadPoolExecutor(max_workers=self._concurrency, thread_name_prefix="suggestion-jobs") as executor:
             try:
-                claimed = self.claim()
-                if claimed:
-                    self.process(*claimed)
-                    continue
-            except Exception:
-                # Retry through the durable lease; exception text may contain confidential SQL parameters.
-                pass
-            self.stop_event.wait(self.settings.job_poll_interval_ms / 1000)
+                while not self.stop_event.is_set():
+                    done = {fut for fut in in_flight if fut.done()}
+                    in_flight -= done
+
+                    while len(in_flight) < self._concurrency and not self.stop_event.is_set():
+                        try:
+                            claimed = self.claim()
+                        except Exception:
+                            # Retry through the durable lease; exception text may contain confidential SQL parameters.
+                            break
+                        if not claimed:
+                            break
+                        in_flight.add(executor.submit(self._process_claimed, *claimed))
+
+                    if self.stop_event.is_set():
+                        break
+
+                    if len(in_flight) >= self._concurrency:
+                        wait(in_flight, timeout=min(0.05, poll_s), return_when=FIRST_COMPLETED)
+                    else:
+                        self.stop_event.wait(poll_s)
+            finally:
+                for fut in list(in_flight):
+                    if not fut.done():
+                        fut.cancel()
+        self._close_http_clients()
 
     def claim(self, suggestion_id=None):
-        with self.database.transaction() as session:
-            query = select(SuggestionJob).where(SuggestionJob.finished.is_(False), or_(SuggestionJob.lease_until.is_(None), SuggestionJob.lease_until < utcnow()))
-            if suggestion_id:
-                query = query.where(SuggestionJob.suggestion_id == suggestion_id)
-            job = session.scalar(query.with_for_update(skip_locked=True).limit(1))
-            if job is None:
-                return None
-            suggestion = session.get(Suggestion, job.suggestion_id)
-            ticket = session.get(Ticket, suggestion.ticket_id)
-            if ticket.current_suggestion_id != suggestion.suggestion_id:
-                job.finished = True
-                return None
-            if job.attempts >= 3:
-                data = dict(suggestion.payload)
-                for part in ("analysis_status", "draft_status"):
-                    if data[part] == "pending":
-                        data[part] = "unavailable"
-                data["reason_codes"] = list(set(data.get("reason_codes", [])) | {"ai_service_unavailable"})
-                data["staff_note"] = "The AI service is unavailable after retries. Review the customer message and order records to write a reply manually."
-                suggestion.payload, suggestion.completed_at, job.finished = data, utcnow(), True
-                return None
-            job.attempts += 1
-            job.lease_token = str(uuid.uuid4())
-            job.lease_until = utcnow() + timedelta(milliseconds=self.settings.job_lease_ms)
-            return suggestion.suggestion_id, job.lease_token, suggestion.request_payload
+        while True:
+            with self.database.transaction() as session:
+                query = select(SuggestionJob).where(SuggestionJob.finished.is_(False), or_(SuggestionJob.lease_until.is_(None), SuggestionJob.lease_until < utcnow()))
+                if suggestion_id:
+                    query = query.where(SuggestionJob.suggestion_id == suggestion_id)
+                job = session.scalar(query.with_for_update(skip_locked=True).limit(1))
+                if job is None:
+                    return None
+                suggestion = session.get(Suggestion, job.suggestion_id)
+                ticket = session.get(Ticket, suggestion.ticket_id)
+                if ticket.current_suggestion_id != suggestion.suggestion_id:
+                    job.finished = True
+                    if suggestion_id:
+                        return None
+                    continue
+                if job.attempts >= 3:
+                    data = dict(suggestion.payload)
+                    for part in ("analysis_status", "draft_status"):
+                        if data[part] == "pending":
+                            data[part] = "unavailable"
+                    data["reason_codes"] = list(set(data.get("reason_codes", [])) | {"ai_service_unavailable"})
+                    data["staff_note"] = "The AI service is unavailable after retries. Review the customer message and order records to write a reply manually."
+                    suggestion.payload, suggestion.completed_at, job.finished = data, utcnow(), True
+                    if suggestion_id:
+                        return None
+                    continue
+                job.attempts += 1
+                job.lease_token = str(uuid.uuid4())
+                job.lease_until = utcnow() + timedelta(milliseconds=self._lease_ms)
+                return suggestion.suggestion_id, job.lease_token, suggestion.request_payload
 
     def process(self, identifier, token, payload):
         def fetch(part):
@@ -150,10 +263,7 @@ class SuggestionWorker:
             started = time.perf_counter()
             try:
                 endpoint = "analyses" if part == "analysis" else "drafts"
-                with httpx.Client(timeout=budget / 1000, trust_env=False) as client:
-                    response = client.post(self.settings.ai_service_base_url.rstrip("/") + "/v1/" + endpoint, json=payload)
-                    response.raise_for_status()
-                    result = response.json()
+                result = self._post_ai(endpoint, payload, budget)
                 if part == "analysis":
                     validate_analysis(result)
                 else:
@@ -239,6 +349,8 @@ class SuggestionWorker:
             return
 
         # 3. Otherwise execute draft
+        if self.stop_event.is_set():
+            return
         part, draft_res, latency, failure_info = fetch("draft")
         if draft_res is None:
             failure_code = (failure_info or {}).get("failure_code", "ai_service_unavailable")

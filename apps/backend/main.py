@@ -38,6 +38,7 @@ def create_app(settings=None, database=None, start_worker=True):
         engine_kwargs = {"hide_parameters": True}
         if not db_url.startswith("sqlite"):
             engine_kwargs["pool_pre_ping"] = True
+            engine_kwargs["pool_size"] = max(5, settings.job_concurrency + 2)
             engine_kwargs["connect_args"] = {"connect_timeout": 3, "options": "-c statement_timeout=5000 -c lock_timeout=3000"}
         database = Database(create_engine(db_url, **engine_kwargs))
     hasher = PasswordHasher()
