@@ -1,0 +1,58 @@
+{
+  "schema_version": "unseen_domain_gate_manifest.v1",
+  "created_before_candidate_inference": true,
+  "path": "artifacts/evaluation/fit2_orig_ret_channel_fit_v1_independent_c_20261114/unseen_domain_gate_cases.jsonl",
+  "sha256": "3e10b21b7d0e7651510c284143fe27d3ff9efab852e7821e22638286000c0447",
+  "rows": 36,
+  "distinct_base_groups": 36,
+  "distinct_raw_texts": 36,
+  "distinct_norm_texts": 36,
+  "pseudonymize_changed_rows": 8,
+  "pseudonymize_changed_ids": [
+    "ugc-retpol-04",
+    "ugc-retinstore-03",
+    "ugc-sup-01",
+    "ugc-sup-02",
+    "ugc-sup-06",
+    "ugc-sup-07",
+    "ugc-esc-02",
+    "ugc-esc-07"
+  ],
+  "slices": {
+    "return_contrast_supported": 5,
+    "return_contrast_escalated": 9,
+    "cross_intent_supported": 7,
+    "cross_intent_escalated": 7,
+    "novel_ood": 8
+  },
+  "split_isolation_check_against_cand_splits_and_non_bitext_gold": {
+    "passed": true,
+    "failure_reasons": [],
+    "counts": {
+      "train": 11338,
+      "calibration": 824,
+      "eval": 36
+    },
+    "group_counts": {
+      "train": 7457,
+      "calibration": 748,
+      "eval": 36
+    },
+    "group_overlaps": {
+      "train_vs_calibration": [],
+      "train_vs_eval": [],
+      "calibration_vs_eval": []
+    },
+    "text_overlaps": {
+      "train_vs_calibration": 0,
+      "train_vs_eval": 0,
+      "calibration_vs_eval": 0
+    },
+    "gold_exact_matches": [],
+    "gold_high_jaccard_matches": []
+  },
+  "historical_eval_overlap": {
+    "exact": 0,
+    "jaccard_ge_0_75": 0
+  }
+}

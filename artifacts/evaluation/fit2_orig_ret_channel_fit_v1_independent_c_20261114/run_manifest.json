@@ -1,0 +1,24 @@
+{
+  "branch": "minh",
+  "git_head": "1bf9e6af320dc8e046666b1b56bf5b00df2a8167",
+  "runtime_conditions": "0 live LLM calls; _MockNoCallLLM for Engine._analyse only; _OfflineValidSpyLLM for PipelineRunner draft eligibility/snapshot only. fresh34 treated strictly as historical regression, not unseen holdout. bitext6690 reports full 6690 AND exclude-3 inherited noisy train/test overlap sensitivity (6687).",
+  "commands": [
+    ".venv/Scripts/python.exe -B artifacts/evaluation/fit2_orig_ret_channel_fit_v1_independent_c_20261114/evaluate_candidate.py"
+  ],
+  "sha256": {
+    "artifacts/models/candidates/fit2-orig-ret-channel-fit-v1/model.safetensors": "dc3e88e713c71fe0e521a1dc5bec5831d9a0a91a83d4c3d1b413d3b1cd68e44d",
+    "artifacts/models/candidates/fit2-orig-ret-channel-fit-v1/calibration_manifest.json": "e0d1bfd63f65e2e055af46a2e023ec398240008e166c2df91eb1fa5d111bb56c",
+    "artifacts/models/candidates/fit2-orig-ret-channel-fit-v1/candidate_provenance_manifest.json": "6f4287cabed4128162b1bcb68192fea815b159de016a230c3706ef376c13908d",
+    "artifacts/models/candidates/reconstructed-fit2-supcon-20261113/model.safetensors": "f695b1fe514aba81aafc968823047d496b03474a0b47199c65eaac6bd93c6dfa",
+    "artifacts/models/candidates/reconstructed-fit2-supcon-20261113/calibration_manifest.json": "782c88db3fcd80615c3dceabbdb96ea2be7aa769119201f94229535becc7ae39",
+    "artifacts/models/trained/distilbert-supportiq/model.safetensors": "dc7af8cffb19fe7711ed5a5d0137ffff3d7d1a1f43bad5a35edff8c8de4c1302",
+    "artifacts/evaluation/fit2_next_protocol_c_20261114/protocol_manifest.json": "be48584f4c73ef152eae45a20d6b52a0e941c9ee8f152e357bfdc58be74ef794",
+    "artifacts/evaluation/fit2_orig_ret_channel_fit_v1_independent_c_20261114/unseen_domain_gate_cases.jsonl": "3e10b21b7d0e7651510c284143fe27d3ff9efab852e7821e22638286000c0447",
+    "artifacts/evaluation/fit2_orig_ret_channel_fit_v1_independent_c_20261114/unseen_domain_gate_manifest.json": "3f2d36ebe4d2e9769e595f7ccebe69d24b2cf1be5a8a8bc0ca0a2c189045417e",
+    "artifacts/evaluation/fit2_orig_ret_channel_fit_v1_independent_c_20261114/evaluate_candidate.py": "1ebe87ea1311a7cf2cc4c69c36a7da28dff6c836aa188b136853f18cc3e19e7e",
+    "artifacts/evaluation/fit2_orig_ret_channel_fit_v1_independent_c_20261114/predictions_orig_fit2.jsonl": "f64563b3af3c5fe317824103136b7e7608dc765a75df627de94540b4544de305",
+    "artifacts/evaluation/fit2_orig_ret_channel_fit_v1_independent_c_20261114/predictions_cand_fit_v1.jsonl": "810111278fb8405a0076e6b6019561b8fad73c7af967f154e788d7b1c22a4121",
+    "artifacts/evaluation/fit2_orig_ret_channel_fit_v1_independent_c_20261114/suites_comparison.json": "f21418331512f443c6b6cd5d483a44bb23eb946becdd33f230dcfc7e7de13a54",
+    "artifacts/evaluation/fit2_orig_ret_channel_fit_v1_independent_c_20261114/gate_report_cand_fit_v1.json": "2c38f2fb1dfda1ba679afbc1edf3a7a69cc42eb330b711c03fcb2ffa4d324072"
+  }
+}
