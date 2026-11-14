@@ -1,0 +1,974 @@
+{
+  "git_head_at_verification": "440a6d59960905c0af7c543c97a94484faee27a2",
+  "device_primary_seen": "cuda",
+  "duration_seconds": 64.2,
+  "integrity_verification": {
+    "archive_sha_inventory": "4d1f9204b8d8cd4a3f55543baec1d74b29f75c2253810591b1600013d9e49855",
+    "archive_files_verified": 6,
+    "archive_mismatches": [],
+    "sidecar_sha_inventory": "4b5f53e479115bb182cc9e9557c7ddea4b7f1b2bbd801f4cd96089b48a7c69b5",
+    "sidecar_files_verified": 41,
+    "sidecar_mismatches": [],
+    "inputs_files_verified": 15,
+    "inputs_mismatches": [],
+    "v4_prep_sidecar_verified": 39,
+    "v4_prep_sidecar_mismatches": [],
+    "orig_fit2_weights_sha256": "f695b1fe514aba81aafc968823047d496b03474a0b47199c65eaac6bd93c6dfa",
+    "cand_lr5e6_weights_sha256": "b7a285479b853b5bed9ad1c67caaeed1b45107bd78bf8e53e23f6ec4f332feb2",
+    "prior_2e5_weights_sha256": "dc3e88e713c71fe0e521a1dc5bec5831d9a0a91a83d4c3d1b413d3b1cd68e44d",
+    "serving_weights_sha256_untouched": "dc7af8cffb19fe7711ed5a5d0137ffff3d7d1a1f43bad5a35edff8c8de4c1302",
+    "cal_guard_report_sha256": "01d4b9956c563fba64512aa92ff3f1daf12cd732b8fb9d630e993f69a44613a4",
+    "source_snapshot_mismatches": []
+  },
+  "optimizer_and_lr_propagation_audit": {
+    "verified": true,
+    "bug_detected": false,
+    "actual_lr": 5e-06,
+    "actual_optimizer": "torch.optim.AdamW(lr=lr, weight_decay=0.01) + get_linear_schedule_with_warmup(0.10*steps)",
+    "epochs": 3,
+    "batch_size": 32,
+    "seed": 42,
+    "fit_mode": "fit2_supcon_energy",
+    "train_total_examples": 13080,
+    "cosmetic_provenance_note": {
+      "token_truncation_audit_train_all_count": 11320,
+      "actual_full_train_split_count": 11338,
+      "classification": "benign_cosmetic_provenance_audit_bug_not_training_input",
+      "explanation": "audit_token_truncation counts full_train_split in boundary_curriculum_data/repo root (11320) instead of prep datasets/full_train_split.jsonl (11338); real training loop consumed locked prep inputs/boundary_pos_train.jsonl (+18 rows -> 13080 effective examples matching fit-v1)."
+    }
+  },
+  "historical_bitext_overlaps": {
+    "count": 3,
+    "overlaps": [
+      {
+        "test_idx": 203,
+        "sample_id": "sample_001360",
+        "intent": null,
+        "train_sample_ids": [
+          "bitext_trn_aug_sample_001393_41"
+        ]
+      },
+      {
+        "test_idx": 3137,
+        "sample_id": "sample_020916",
+        "intent": null,
+        "train_sample_ids": [
+          "bitext_trn_aug_sample_020326_51"
+        ]
+      },
+      {
+        "test_idx": 4685,
+        "sample_id": "sample_031234",
+        "intent": null,
+        "train_sample_ids": [
+          "bitext_trn_aug_sample_031082_1"
+        ]
+      }
+    ],
+    "unchanged_from_orig_fit2": true
+  },
+  "cal_guard_recomputation": {
+    "independent_status": "CAL_GUARD_REJECT_DO_NOT_PROMOTE",
+    "sealed_status": "CAL_GUARD_REJECT_DO_NOT_PROMOTE",
+    "exact_status_match": true,
+    "reproduced_failed_checks": [
+      "boundary_pos_cal_correct_count",
+      "boundary_pos_cal_sup12_correct_count",
+      "boundary_neg_cal_pred_sup12_count",
+      "boundary_pos_cal_delta_mean_max_prob",
+      "boundary_pos_cal_esc34_delta_mean_max_prob",
+      "boundary_neg_cal_max_sup12_mass",
+      "boundary_neg_cal_max_single_sup12_prob"
+    ],
+    "int_mismatches_vs_sealed": [],
+    "float_diffs_vs_sealed_cpu": [
+      {
+        "name": "boundary_pos_cal_delta_mean_max_prob",
+        "sealed_actual": 0.03829489685014131,
+        "cpu_recomputed_actual": 0.038294876222715324,
+        "abs_diff_actual": 2.0627425989516723e-08,
+        "gpu_recomputed_actual": 0.03829467922830776,
+        "within_3e6_tol": true
+      },
+      {
+        "name": "boundary_pos_cal_esc34_delta_mean_max_prob",
+        "sealed_actual": 0.03758129611384764,
+        "cpu_recomputed_actual": 0.03758126875714318,
+        "abs_diff_actual": 2.7356704457304204e-08,
+        "gpu_recomputed_actual": 0.03758096422781476,
+        "within_3e6_tol": true
+      },
+      {
+        "name": "boundary_pos_cal_esc34_max_sup12_mass",
+        "sealed_actual": 0.4914717523196043,
+        "cpu_recomputed_actual": 0.49147332404333083,
+        "abs_diff_actual": 1.5717237265011619e-06,
+        "gpu_recomputed_actual": 0.4914717523196043,
+        "within_3e6_tol": true
+      },
+      {
+        "name": "boundary_neg_cal_max_sup12_mass",
+        "sealed_actual": 0.7451280811564883,
+        "cpu_recomputed_actual": 0.7451291647426208,
+        "abs_diff_actual": 1.083586132488712e-06,
+        "gpu_recomputed_actual": 0.7451280811564883,
+        "within_3e6_tol": true
+      },
+      {
+        "name": "boundary_neg_cal_max_single_sup12_prob",
+        "sealed_actual": 0.5895935447263043,
+        "cpu_recomputed_actual": 0.5895946925875805,
+        "abs_diff_actual": 1.1478612761406382e-06,
+        "gpu_recomputed_actual": 0.5895935447263043,
+        "within_3e6_tol": true
+      }
+    ],
+    "max_float_abs_diff_cpu_vs_sealed": 1.5717237265011619e-06,
+    "all_within_tolerance_3e6": true,
+    "cpu_vs_gpu_cand_passed_equal": true,
+    "mc_parity_orig": {
+      "checked_rows": 134,
+      "intent_mismatches": 0,
+      "max_confidence_abs_diff": 1.823573121395583e-06
+    },
+    "mc_parity_cand_lr5e6": {
+      "checked_rows": 134,
+      "intent_mismatches": 0,
+      "max_confidence_abs_diff": 2.1091657951832765e-06
+    },
+    "mc_parity_prior_2e5": {
+      "checked_rows": 134,
+      "intent_mismatches": 0,
+      "max_confidence_abs_diff": 3.3938261524424362e-06
+    }
+  },
+  "models_cal_guard_comparison": {
+    "orig_fit2": {
+      "temperature": 1.0,
+      "min_temperature": 1.0,
+      "rejector_enabled": false,
+      "weights_sha256": "f695b1fe514aba81aafc968823047d496b03474a0b47199c65eaac6bd93c6dfa",
+      "calibration_manifest_sha256": "782c88db3fcd80615c3dceabbdb96ea2be7aa769119201f94229535becc7ae39",
+      "boundary_pos_cal": {
+        "count": 86,
+        "correct_count": 68,
+        "accuracy": 0.7906976744186046,
+        "mean_max_prob": 0.6863444127808648
+      },
+      "boundary_pos_cal_sup12": {
+        "count": 48,
+        "correct_count": 38,
+        "accuracy": 0.7916666666666666,
+        "mean_max_prob": 0.6985215388705601,
+        "conf_ge_070_count": 28,
+        "conf_ge_080_count": 28
+      },
+      "boundary_pos_cal_esc34": {
+        "count": 38,
+        "correct_count": 30,
+        "accuracy": 0.7894736842105263,
+        "mean_max_prob": 0.6709627798254602,
+        "max_sup12_mass": 0.46736295658109467
+      },
+      "bitext_cal": {
+        "count": 690,
+        "correct_count": 689,
+        "accuracy": 0.9985507246376811,
+        "mean_max_prob": 0.9778003021660056
+      },
+      "pos_train_added_18": {
+        "count": 18,
+        "correct_count": 8,
+        "accuracy": 0.4444444444444444,
+        "mean_max_prob": 0.5045589008240243
+      },
+      "boundary_neg_cal": {
+        "count": 48,
+        "pred_sup12_count": 9,
+        "max_sup12_mass": 0.7156932622013416,
+        "mean_sup12_mass": 0.24840058694727238,
+        "max_single_sup12_prob": 0.5576920492062286
+      }
+    },
+    "cand_lr5e6": {
+      "metrics": {
+        "temperature": 1.0,
+        "min_temperature": 1.0,
+        "rejector_enabled": false,
+        "weights_sha256": "b7a285479b853b5bed9ad1c67caaeed1b45107bd78bf8e53e23f6ec4f332feb2",
+        "calibration_manifest_sha256": "a62c3a138cb6340c14c6e2ba20e97c81ee54a9dd7488249382546d07d75482da",
+        "boundary_pos_cal": {
+          "count": 86,
+          "correct_count": 66,
+          "accuracy": 0.7674418604651163,
+          "mean_max_prob": 0.7246392890035801
+        },
+        "boundary_pos_cal_sup12": {
+          "count": 48,
+          "correct_count": 36,
+          "accuracy": 0.75,
+          "mean_max_prob": 0.7373813543368536,
+          "conf_ge_070_count": 33,
+          "conf_ge_080_count": 29
+        },
+        "boundary_pos_cal_esc34": {
+          "count": 38,
+          "correct_count": 30,
+          "accuracy": 0.7894736842105263,
+          "mean_max_prob": 0.7085440485826033,
+          "max_sup12_mass": 0.49147332404333083
+        },
+        "bitext_cal": {
+          "count": 690,
+          "correct_count": 689,
+          "accuracy": 0.9985507246376811,
+          "mean_max_prob": 0.9771134768869573
+        },
+        "pos_train_added_18": {
+          "count": 18,
+          "correct_count": 18,
+          "accuracy": 1.0,
+          "mean_max_prob": 0.9779935319582989
+        },
+        "boundary_neg_cal": {
+          "count": 48,
+          "pred_sup12_count": 11,
+          "max_sup12_mass": 0.7451291647426208,
+          "mean_sup12_mass": 0.25890858785327237,
+          "max_single_sup12_prob": 0.5895946925875805
+        }
+      },
+      "checks": [
+        {
+          "name": "boundary_pos_cal_correct_count",
+          "kind": "integer",
+          "actual": 66,
+          "rule": ">= 68",
+          "passed": false
+        },
+        {
+          "name": "boundary_pos_cal_sup12_correct_count",
+          "kind": "integer",
+          "actual": 36,
+          "rule": ">= 38",
+          "passed": false
+        },
+        {
+          "name": "bitext_cal_correct_count",
+          "kind": "integer",
+          "actual": 689,
+          "rule": ">= 687",
+          "passed": true
+        },
+        {
+          "name": "pos_train_added_18_correct_count",
+          "kind": "integer",
+          "actual": 18,
+          "rule": ">= 15",
+          "passed": true
+        },
+        {
+          "name": "boundary_pos_cal_sup12_conf_ge_070_count",
+          "kind": "integer",
+          "actual": 33,
+          "rule": ">= 26",
+          "passed": true
+        },
+        {
+          "name": "boundary_pos_cal_sup12_conf_ge_080_count",
+          "kind": "integer",
+          "actual": 29,
+          "rule": ">= 24",
+          "passed": true
+        },
+        {
+          "name": "boundary_neg_cal_pred_sup12_count",
+          "kind": "integer",
+          "actual": 11,
+          "rule": "<= 9",
+          "passed": false
+        },
+        {
+          "name": "boundary_pos_cal_delta_mean_max_prob",
+          "kind": "float",
+          "actual": 0.038294876222715324,
+          "limit": 0.015,
+          "tolerance": 3e-06,
+          "passed": false
+        },
+        {
+          "name": "boundary_pos_cal_esc34_delta_mean_max_prob",
+          "kind": "float",
+          "actual": 0.03758126875714318,
+          "limit": 0.015,
+          "tolerance": 3e-06,
+          "passed": false
+        },
+        {
+          "name": "boundary_pos_cal_esc34_max_sup12_mass",
+          "kind": "float",
+          "actual": 0.49147332404333083,
+          "limit": 0.55,
+          "tolerance": 3e-06,
+          "passed": true
+        },
+        {
+          "name": "boundary_neg_cal_max_sup12_mass",
+          "kind": "float",
+          "actual": 0.7451291647426208,
+          "limit": 0.7156932622013416,
+          "tolerance": 3e-06,
+          "passed": false
+        },
+        {
+          "name": "boundary_neg_cal_max_single_sup12_prob",
+          "kind": "float",
+          "actual": 0.5895946925875805,
+          "limit": 0.5576920492062286,
+          "tolerance": 3e-06,
+          "passed": false
+        }
+      ],
+      "failed_checks": [
+        "boundary_pos_cal_correct_count",
+        "boundary_pos_cal_sup12_correct_count",
+        "boundary_neg_cal_pred_sup12_count",
+        "boundary_pos_cal_delta_mean_max_prob",
+        "boundary_pos_cal_esc34_delta_mean_max_prob",
+        "boundary_neg_cal_max_sup12_mass",
+        "boundary_neg_cal_max_single_sup12_prob"
+      ]
+    },
+    "prior_2e5": {
+      "metrics": {
+        "temperature": 1.0,
+        "min_temperature": 1.0,
+        "rejector_enabled": false,
+        "weights_sha256": "dc3e88e713c71fe0e521a1dc5bec5831d9a0a91a83d4c3d1b413d3b1cd68e44d",
+        "calibration_manifest_sha256": "e0d1bfd63f65e2e055af46a2e023ec398240008e166c2df91eb1fa5d111bb56c",
+        "boundary_pos_cal": {
+          "count": 86,
+          "correct_count": 68,
+          "accuracy": 0.7906976744186046,
+          "mean_max_prob": 0.7224392363553499
+        },
+        "boundary_pos_cal_sup12": {
+          "count": 48,
+          "correct_count": 38,
+          "accuracy": 0.7916666666666666,
+          "mean_max_prob": 0.7346297726356935,
+          "conf_ge_070_count": 34,
+          "conf_ge_080_count": 29
+        },
+        "boundary_pos_cal_esc34": {
+          "count": 38,
+          "correct_count": 30,
+          "accuracy": 0.7894736842105263,
+          "mean_max_prob": 0.7070406642117576,
+          "max_sup12_mass": 0.6822187544131687
+        },
+        "bitext_cal": {
+          "count": 690,
+          "correct_count": 689,
+          "accuracy": 0.9985507246376811,
+          "mean_max_prob": 0.9766763328636064
+        },
+        "pos_train_added_18": {
+          "count": 18,
+          "correct_count": 18,
+          "accuracy": 1.0,
+          "mean_max_prob": 0.9796458406040001
+        },
+        "boundary_neg_cal": {
+          "count": 48,
+          "pred_sup12_count": 10,
+          "max_sup12_mass": 0.7339951711458104,
+          "mean_sup12_mass": 0.25061037347364,
+          "max_single_sup12_prob": 0.5826455906880034
+        }
+      },
+      "checks": [
+        {
+          "name": "boundary_pos_cal_correct_count",
+          "kind": "integer",
+          "actual": 68,
+          "rule": ">= 68",
+          "passed": true
+        },
+        {
+          "name": "boundary_pos_cal_sup12_correct_count",
+          "kind": "integer",
+          "actual": 38,
+          "rule": ">= 38",
+          "passed": true
+        },
+        {
+          "name": "bitext_cal_correct_count",
+          "kind": "integer",
+          "actual": 689,
+          "rule": ">= 687",
+          "passed": true
+        },
+        {
+          "name": "pos_train_added_18_correct_count",
+          "kind": "integer",
+          "actual": 18,
+          "rule": ">= 15",
+          "passed": true
+        },
+        {
+          "name": "boundary_pos_cal_sup12_conf_ge_070_count",
+          "kind": "integer",
+          "actual": 34,
+          "rule": ">= 26",
+          "passed": true
+        },
+        {
+          "name": "boundary_pos_cal_sup12_conf_ge_080_count",
+          "kind": "integer",
+          "actual": 29,
+          "rule": ">= 24",
+          "passed": true
+        },
+        {
+          "name": "boundary_neg_cal_pred_sup12_count",
+          "kind": "integer",
+          "actual": 10,
+          "rule": "<= 9",
+          "passed": false
+        },
+        {
+          "name": "boundary_pos_cal_delta_mean_max_prob",
+          "kind": "float",
+          "actual": 0.036094823574485124,
+          "limit": 0.015,
+          "tolerance": 3e-06,
+          "passed": false
+        },
+        {
+          "name": "boundary_pos_cal_esc34_delta_mean_max_prob",
+          "kind": "float",
+          "actual": 0.03607788438629744,
+          "limit": 0.015,
+          "tolerance": 3e-06,
+          "passed": false
+        },
+        {
+          "name": "boundary_pos_cal_esc34_max_sup12_mass",
+          "kind": "float",
+          "actual": 0.6822187544131687,
+          "limit": 0.55,
+          "tolerance": 3e-06,
+          "passed": false
+        },
+        {
+          "name": "boundary_neg_cal_max_sup12_mass",
+          "kind": "float",
+          "actual": 0.7339951711458104,
+          "limit": 0.7156932622013416,
+          "tolerance": 3e-06,
+          "passed": false
+        },
+        {
+          "name": "boundary_neg_cal_max_single_sup12_prob",
+          "kind": "float",
+          "actual": 0.5826455906880034,
+          "limit": 0.5576920492062286,
+          "tolerance": 3e-06,
+          "passed": false
+        }
+      ],
+      "failed_checks": [
+        "boundary_neg_cal_pred_sup12_count",
+        "boundary_pos_cal_delta_mean_max_prob",
+        "boundary_pos_cal_esc34_delta_mean_max_prob",
+        "boundary_pos_cal_esc34_max_sup12_mass",
+        "boundary_neg_cal_max_sup12_mass",
+        "boundary_neg_cal_max_single_sup12_prob"
+      ]
+    }
+  },
+  "diagnostic_samples": {
+    "pos_cal_flips_or_large_conf_shifts_count": 32,
+    "pos_cal_flips_or_large_conf_shifts": [
+      {
+        "sample_id": "cls_trk_sms_alerts_1_0b6c442a4291",
+        "gold": "track_order",
+        "is_sup12": true,
+        "orig_pred": "track_order",
+        "orig_conf": 0.524666,
+        "cand_lr5e6_pred": "track_order",
+        "cand_lr5e6_conf": 0.602427,
+        "prior_2e5_pred": "track_order",
+        "prior_2e5_conf": 0.659518,
+        "delta_conf_lr5e6": 0.07776
+      },
+      {
+        "sample_id": "cls_trk_sms_alerts_2_7c359f9961ec",
+        "gold": "track_order",
+        "is_sup12": true,
+        "orig_pred": "track_order",
+        "orig_conf": 0.463513,
+        "cand_lr5e6_pred": "track_order",
+        "cand_lr5e6_conf": 0.641595,
+        "prior_2e5_pred": "track_order",
+        "prior_2e5_conf": 0.737381,
+        "delta_conf_lr5e6": 0.178082
+      },
+      {
+        "sample_id": "cls_can_reason_menu_1_b61da05f1225",
+        "gold": "cancel_order",
+        "is_sup12": true,
+        "orig_pred": "cancel_order",
+        "orig_conf": 0.664259,
+        "cand_lr5e6_pred": "cancel_order",
+        "cand_lr5e6_conf": 0.715956,
+        "prior_2e5_pred": "cancel_order",
+        "prior_2e5_conf": 0.672671,
+        "delta_conf_lr5e6": 0.051697
+      },
+      {
+        "sample_id": "cls_dtm_pre_order_eta_0_0ab138c43752",
+        "gold": "delivery_time",
+        "is_sup12": true,
+        "orig_pred": "store_opening_hours",
+        "orig_conf": 0.051539,
+        "cand_lr5e6_pred": "product_information",
+        "cand_lr5e6_conf": 0.121298,
+        "prior_2e5_pred": "delivery_time",
+        "prior_2e5_conf": 0.044505,
+        "delta_conf_lr5e6": 0.06976
+      },
+      {
+        "sample_id": "cls_dtm_pre_order_eta_1_3ff6356c64bc",
+        "gold": "delivery_time",
+        "is_sup12": true,
+        "orig_pred": "delivery_time",
+        "orig_conf": 0.558496,
+        "cand_lr5e6_pred": "delivery_time",
+        "cand_lr5e6_conf": 0.70201,
+        "prior_2e5_pred": "delivery_time",
+        "prior_2e5_conf": 0.680461,
+        "delta_conf_lr5e6": 0.143515
+      },
+      {
+        "sample_id": "cls_shp_return_courier_0_c1e6d58e2c8e",
+        "gold": "shipping_costs",
+        "is_sup12": true,
+        "orig_pred": "return_policy",
+        "orig_conf": 0.304719,
+        "cand_lr5e6_pred": "return_policy",
+        "cand_lr5e6_conf": 0.599264,
+        "prior_2e5_pred": "return_policy",
+        "prior_2e5_conf": 0.407068,
+        "delta_conf_lr5e6": 0.294545
+      },
+      {
+        "sample_id": "cls_rpo_defect_vs_mind_0_c8d7b7fd0b34",
+        "gold": "return_policy",
+        "is_sup12": true,
+        "orig_pred": "return_policy",
+        "orig_conf": 0.697185,
+        "cand_lr5e6_pred": "return_policy",
+        "cand_lr5e6_conf": 0.902346,
+        "prior_2e5_pred": "return_policy",
+        "prior_2e5_conf": 0.928553,
+        "delta_conf_lr5e6": 0.205162
+      },
+      {
+        "sample_id": "cls_rpr_qc_inspection_0_cb13cf805aa6",
+        "gold": "return_product",
+        "is_sup12": true,
+        "orig_pred": "return_policy",
+        "orig_conf": 0.526702,
+        "cand_lr5e6_pred": "return_policy",
+        "cand_lr5e6_conf": 0.747406,
+        "prior_2e5_pred": "return_policy",
+        "prior_2e5_conf": 0.773279,
+        "delta_conf_lr5e6": 0.220704
+      },
+      {
+        "sample_id": "cls_rpr_qc_inspection_1_4072a543ac35",
+        "gold": "return_product",
+        "is_sup12": true,
+        "orig_pred": "return_policy",
+        "orig_conf": 0.832773,
+        "cand_lr5e6_pred": "return_policy",
+        "cand_lr5e6_conf": 0.948554,
+        "prior_2e5_pred": "return_policy",
+        "prior_2e5_conf": 0.92157,
+        "delta_conf_lr5e6": 0.11578
+      },
+      {
+        "sample_id": "cls_rpr_qc_inspection_2_80de0abcbaeb",
+        "gold": "return_product",
+        "is_sup12": true,
+        "orig_pred": "return_product",
+        "orig_conf": 0.569871,
+        "cand_lr5e6_pred": "return_policy",
+        "cand_lr5e6_conf": 0.410029,
+        "prior_2e5_pred": "return_product",
+        "prior_2e5_conf": 0.458578,
+        "delta_conf_lr5e6": -0.159843
+      },
+      {
+        "sample_id": "cls_hum_escalate_now_1_58df76a91338",
+        "gold": "human_agent",
+        "is_sup12": true,
+        "orig_pred": "human_agent",
+        "orig_conf": 0.0415,
+        "cand_lr5e6_pred": "submit_feedback",
+        "cand_lr5e6_conf": 0.032653,
+        "prior_2e5_pred": "submit_feedback",
+        "prior_2e5_conf": 0.028129,
+        "delta_conf_lr5e6": -0.008847
+      },
+      {
+        "sample_id": "cls_e34_pinfo_cal_0_bbc88c5d68a9",
+        "gold": "product_information",
+        "is_sup12": false,
+        "orig_pred": "product_information",
+        "orig_conf": 0.647913,
+        "cand_lr5e6_pred": "product_information",
+        "cand_lr5e6_conf": 0.711726,
+        "prior_2e5_pred": "product_information",
+        "prior_2e5_conf": 0.71305,
+        "delta_conf_lr5e6": 0.063813
+      },
+      {
+        "sample_id": "cls_e34_avail_cal_1_b8ede25cf3be",
+        "gold": "availability",
+        "is_sup12": false,
+        "orig_pred": "availability",
+        "orig_conf": 0.719894,
+        "cand_lr5e6_pred": "availability",
+        "cand_lr5e6_conf": 0.607582,
+        "prior_2e5_pred": "availability",
+        "prior_2e5_conf": 0.740364,
+        "delta_conf_lr5e6": -0.112313
+      },
+      {
+        "sample_id": "cls_e34_avonl_cal_0_59a8c8648735",
+        "gold": "availability_online",
+        "is_sup12": false,
+        "orig_pred": "availability_online",
+        "orig_conf": 0.626435,
+        "cand_lr5e6_pred": "availability_online",
+        "cand_lr5e6_conf": 0.712363,
+        "prior_2e5_pred": "availability_online",
+        "prior_2e5_conf": 0.81129,
+        "delta_conf_lr5e6": 0.085928
+      },
+      {
+        "sample_id": "cls_e34_avonl_cal_1_af025937dd54",
+        "gold": "availability_online",
+        "is_sup12": false,
+        "orig_pred": "availability_online",
+        "orig_conf": 0.125375,
+        "cand_lr5e6_pred": "return_product_in_store",
+        "cand_lr5e6_conf": 0.834627,
+        "prior_2e5_pred": "return_product_in_store",
+        "prior_2e5_conf": 0.786956,
+        "delta_conf_lr5e6": 0.709252
+      },
+      {
+        "sample_id": "cls_e34_avonl_cal_2_776bd2b624fe",
+        "gold": "availability_online",
+        "is_sup12": false,
+        "orig_pred": "product_information",
+        "orig_conf": 0.525765,
+        "cand_lr5e6_pred": "product_information",
+        "cand_lr5e6_conf": 0.587349,
+        "prior_2e5_pred": "product_information",
+        "prior_2e5_conf": 0.569807,
+        "delta_conf_lr5e6": 0.061584
+      },
+      {
+        "sample_id": "cls_e34_exch_cal_2_9b25b1423dd4",
+        "gold": "exchange_product",
+        "is_sup12": false,
+        "orig_pred": "exchange_product",
+        "orig_conf": 0.843615,
+        "cand_lr5e6_pred": "exchange_product",
+        "cand_lr5e6_conf": 0.761904,
+        "prior_2e5_pred": "exchange_product",
+        "prior_2e5_conf": 0.551294,
+        "delta_conf_lr5e6": -0.081712
+      },
+      {
+        "sample_id": "cls_e34_dmg_cal_1_e4d18d17cda1",
+        "gold": "damaged_delivery",
+        "is_sup12": false,
+        "orig_pred": "damaged_delivery",
+        "orig_conf": 0.43927,
+        "cand_lr5e6_pred": "damaged_delivery",
+        "cand_lr5e6_conf": 0.494809,
+        "prior_2e5_pred": "damaged_delivery",
+        "prior_2e5_conf": 0.37788,
+        "delta_conf_lr5e6": 0.055539
+      },
+      {
+        "sample_id": "cls_e34_miss_cal_2_0e78119b7e0e",
+        "gold": "missing_item",
+        "is_sup12": false,
+        "orig_pred": "missing_item",
+        "orig_conf": 0.710943,
+        "cand_lr5e6_pred": "missing_item",
+        "cand_lr5e6_conf": 0.65155,
+        "prior_2e5_pred": "missing_item",
+        "prior_2e5_conf": 0.63205,
+        "delta_conf_lr5e6": -0.059394
+      },
+      {
+        "sample_id": "cls_e34_wrng_cal_1_d994b30ed2ae",
+        "gold": "wrong_item",
+        "is_sup12": false,
+        "orig_pred": "product_information",
+        "orig_conf": 0.372646,
+        "cand_lr5e6_pred": "product_information",
+        "cand_lr5e6_conf": 0.586368,
+        "prior_2e5_pred": "product_information",
+        "prior_2e5_conf": 0.58119,
+        "delta_conf_lr5e6": 0.213722
+      },
+      {
+        "sample_id": "cls_e34_wrng_cal_2_5c8e5d9cd3e0",
+        "gold": "wrong_item",
+        "is_sup12": false,
+        "orig_pred": "missing_item",
+        "orig_conf": 0.574414,
+        "cand_lr5e6_pred": "missing_item",
+        "cand_lr5e6_conf": 0.489917,
+        "prior_2e5_pred": "missing_item",
+        "prior_2e5_conf": 0.470232,
+        "delta_conf_lr5e6": -0.084497
+      },
+      {
+        "sample_id": "cls_e34_inv_cal_0_a9ffab6d7f31",
+        "gold": "request_invoice",
+        "is_sup12": false,
+        "orig_pred": "request_invoice",
+        "orig_conf": 0.820896,
+        "cand_lr5e6_pred": "request_invoice",
+        "cand_lr5e6_conf": 0.87094,
+        "prior_2e5_pred": "request_invoice",
+        "prior_2e5_conf": 0.919969,
+        "delta_conf_lr5e6": 0.050045
+      },
+      {
+        "sample_id": "cls_e34_inv_cal_1_0bf8b6b5d5d5",
+        "gold": "request_invoice",
+        "is_sup12": false,
+        "orig_pred": "request_invoice",
+        "orig_conf": 0.749729,
+        "cand_lr5e6_pred": "request_invoice",
+        "cand_lr5e6_conf": 0.810812,
+        "prior_2e5_pred": "request_invoice",
+        "prior_2e5_conf": 0.885133,
+        "delta_conf_lr5e6": 0.061083
+      },
+      {
+        "sample_id": "cls_e34_chg_cal_0_c36a18761dec",
+        "gold": "change_order",
+        "is_sup12": false,
+        "orig_pred": "exchange_product",
+        "orig_conf": 0.126839,
+        "cand_lr5e6_pred": "change_order",
+        "cand_lr5e6_conf": 0.100646,
+        "prior_2e5_pred": "change_order",
+        "prior_2e5_conf": 0.100934,
+        "delta_conf_lr5e6": -0.026193
+      },
+      {
+        "sample_id": "cls_e34_chg_cal_1_7bffcbdc957d",
+        "gold": "change_order",
+        "is_sup12": false,
+        "orig_pred": "change_order",
+        "orig_conf": 0.741331,
+        "cand_lr5e6_pred": "change_order",
+        "cand_lr5e6_conf": 0.678863,
+        "prior_2e5_pred": "change_order",
+        "prior_2e5_conf": 0.795015,
+        "delta_conf_lr5e6": -0.062468
+      },
+      {
+        "sample_id": "bnd_prodinfo_warranty_cal_0_7667e6f0b8f1",
+        "gold": "product_information",
+        "is_sup12": false,
+        "orig_pred": "product_information",
+        "orig_conf": 0.456686,
+        "cand_lr5e6_pred": "product_information",
+        "cand_lr5e6_conf": 0.586067,
+        "prior_2e5_pred": "product_information",
+        "prior_2e5_conf": 0.698317,
+        "delta_conf_lr5e6": 0.12938
+      },
+      {
+        "sample_id": "bnd_damaged_cal_0_e896156bb5d8",
+        "gold": "damaged_delivery",
+        "is_sup12": false,
+        "orig_pred": "damaged_delivery",
+        "orig_conf": 0.529312,
+        "cand_lr5e6_pred": "damaged_delivery",
+        "cand_lr5e6_conf": 0.706259,
+        "prior_2e5_pred": "damaged_delivery",
+        "prior_2e5_conf": 0.621255,
+        "delta_conf_lr5e6": 0.176947
+      },
+      {
+        "sample_id": "bnd_wrong_item_cal_0_378cb29f2bd4",
+        "gold": "wrong_item",
+        "is_sup12": false,
+        "orig_pred": "exchange_product",
+        "orig_conf": 0.392723,
+        "cand_lr5e6_pred": "exchange_product",
+        "cand_lr5e6_conf": 0.509441,
+        "prior_2e5_pred": "exchange_product",
+        "prior_2e5_conf": 0.565074,
+        "delta_conf_lr5e6": 0.116719
+      },
+      {
+        "sample_id": "bnd_refund_policy_cal_0_7ab3d684a5e4",
+        "gold": "refund_policy",
+        "is_sup12": true,
+        "orig_pred": "refund_policy",
+        "orig_conf": 0.872193,
+        "cand_lr5e6_pred": "refund_policy",
+        "cand_lr5e6_conf": 0.935952,
+        "prior_2e5_pred": "refund_policy",
+        "prior_2e5_conf": 0.926046,
+        "delta_conf_lr5e6": 0.063758
+      },
+      {
+        "sample_id": "bnd_return_product_cal_0_f6c7b606561c",
+        "gold": "return_product",
+        "is_sup12": true,
+        "orig_pred": "return_product",
+        "orig_conf": 0.076132,
+        "cand_lr5e6_pred": "return_product",
+        "cand_lr5e6_conf": 0.305481,
+        "prior_2e5_pred": "return_product",
+        "prior_2e5_conf": 0.193475,
+        "delta_conf_lr5e6": 0.229349
+      },
+      {
+        "sample_id": "bnd_track_order_cal_0_ea72bbaa8acd",
+        "gold": "track_order",
+        "is_sup12": true,
+        "orig_pred": "track_order",
+        "orig_conf": 0.565141,
+        "cand_lr5e6_pred": "track_order",
+        "cand_lr5e6_conf": 0.651978,
+        "prior_2e5_pred": "track_order",
+        "prior_2e5_conf": 0.72511,
+        "delta_conf_lr5e6": 0.086837
+      },
+      {
+        "sample_id": "bnd_return_policy_cal_0_c43ae05ae8d5",
+        "gold": "return_policy",
+        "is_sup12": true,
+        "orig_pred": "return_policy",
+        "orig_conf": 0.616897,
+        "cand_lr5e6_pred": "return_policy",
+        "cand_lr5e6_conf": 0.86826,
+        "prior_2e5_pred": "return_policy",
+        "prior_2e5_conf": 0.879546,
+        "delta_conf_lr5e6": 0.251363
+      }
+    ],
+    "neg_cal_notable_rows_count": 7,
+    "neg_cal_notable_rows": [
+      {
+        "sample_id": "cls_neg_cmi_cal_can_rqr_pmth_1_e84a3760e441",
+        "category": "compound_multi_intent",
+        "orig_pred": "cancel_order",
+        "orig_sup12_mass": 0.715693,
+        "orig_max_single_sup12": 0.557692,
+        "cand_lr5e6_pred": "cancel_order",
+        "cand_lr5e6_sup12_mass": 0.745129,
+        "cand_lr5e6_max_single_sup12": 0.589595,
+        "prior_2e5_pred": "cancel_order",
+        "prior_2e5_sup12_mass": 0.733995,
+        "prior_2e5_max_single_sup12": 0.582646
+      },
+      {
+        "sample_id": "cls_neg_cmi_cal_rpo_shp_hum_0_ec38e6e4895f",
+        "category": "compound_multi_intent",
+        "orig_pred": "return_policy",
+        "orig_sup12_mass": 0.249726,
+        "orig_max_single_sup12": 0.053182,
+        "cand_lr5e6_pred": "return_policy",
+        "cand_lr5e6_sup12_mass": 0.449806,
+        "cand_lr5e6_max_single_sup12": 0.304358,
+        "prior_2e5_pred": "return_policy",
+        "prior_2e5_sup12_mass": 0.312228,
+        "prior_2e5_max_single_sup12": 0.129034
+      },
+      {
+        "sample_id": "cls_neg_cmi_cal_rpo_shp_hum_1_50501565a035",
+        "category": "compound_multi_intent",
+        "orig_pred": "return_policy",
+        "orig_sup12_mass": 0.253329,
+        "orig_max_single_sup12": 0.051657,
+        "cand_lr5e6_pred": "return_policy",
+        "cand_lr5e6_sup12_mass": 0.30404,
+        "cand_lr5e6_max_single_sup12": 0.120558,
+        "prior_2e5_pred": "return_policy",
+        "prior_2e5_sup12_mass": 0.255248,
+        "prior_2e5_max_single_sup12": 0.056253
+      },
+      {
+        "sample_id": "cls_neg_cmi_cal_dtm_avail_rfs_0_71e7b4c50bdf",
+        "category": "compound_multi_intent",
+        "orig_pred": "refund_policy",
+        "orig_sup12_mass": 0.535924,
+        "orig_max_single_sup12": 0.302211,
+        "cand_lr5e6_pred": "refund_policy",
+        "cand_lr5e6_sup12_mass": 0.594242,
+        "cand_lr5e6_max_single_sup12": 0.366676,
+        "prior_2e5_pred": "refund_policy",
+        "prior_2e5_sup12_mass": 0.372702,
+        "prior_2e5_max_single_sup12": 0.129029
+      },
+      {
+        "sample_id": "cls_neg_off_cal_finance_1_c16b2323f38a",
+        "category": "off_domain_unrelated",
+        "orig_pred": "payment_methods",
+        "orig_sup12_mass": 0.318055,
+        "orig_max_single_sup12": 0.101455,
+        "cand_lr5e6_pred": "refund_policy",
+        "cand_lr5e6_sup12_mass": 0.381814,
+        "cand_lr5e6_max_single_sup12": 0.178648,
+        "prior_2e5_pred": "refund_policy",
+        "prior_2e5_sup12_mass": 0.457373,
+        "prior_2e5_max_single_sup12": 0.263891
+      },
+      {
+        "sample_id": "bnd_neg_homonym_cal_0_b32c79aceec4",
+        "category": "off_domain_homonym",
+        "orig_pred": "submit_product_feedback",
+        "orig_sup12_mass": 0.22611,
+        "orig_max_single_sup12": 0.044745,
+        "cand_lr5e6_pred": "return_policy",
+        "cand_lr5e6_sup12_mass": 0.332083,
+        "cand_lr5e6_max_single_sup12": 0.168183,
+        "prior_2e5_pred": "return_policy",
+        "prior_2e5_sup12_mass": 0.323084,
+        "prior_2e5_max_single_sup12": 0.150699
+      },
+      {
+        "sample_id": "bnd_neg_homonym_cal_1_f448da52a14e",
+        "category": "off_domain_homonym",
+        "orig_pred": "cancel_order",
+        "orig_sup12_mass": 0.476223,
+        "orig_max_single_sup12": 0.357731,
+        "cand_lr5e6_pred": "cancel_order",
+        "cand_lr5e6_sup12_mass": 0.617912,
+        "cand_lr5e6_max_single_sup12": 0.527806,
+        "prior_2e5_pred": "cancel_order",
+        "prior_2e5_sup12_mass": 0.631444,
+        "prior_2e5_max_single_sup12": 0.534802
+      }
+    ]
+  }
+}

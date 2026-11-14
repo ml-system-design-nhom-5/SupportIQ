@@ -1,0 +1,16 @@
+{
+  "generated_by": "Worker C independent read-only CAL verification",
+  "git_head": "440a6d59960905c0af7c543c97a94484faee27a2",
+  "commands": [
+    ".venv/Scripts/python.exe -B artifacts/evaluation/fit2_lr5e6_cal_review_c_20261114/verify_cal_guard.py"
+  ],
+  "zero_full_eval_or_ood_or_heldout_rerun": true,
+  "sha256": {
+    "cal_verification_summary.json": "5075aa2894746c032ab269d30a4d14422f3c2278acae84cd2bef75dfbefa118e",
+    "cal_case_predictions.jsonl": "a4af3cd8a57c8777ab90ab8671cfbbeab1e3e53ed2dd91dbcd2463615b452bc5",
+    "verify_cal_guard.py": "a1a38a1d501e293fc278a2f9105cc134b37ecdd07076d4a796b819335b29cfe3",
+    "verified_cal_guard_report.json": "01d4b9956c563fba64512aa92ff3f1daf12cd732b8fb9d630e993f69a44613a4",
+    "verified_archive_sha_inventory.json": "4d1f9204b8d8cd4a3f55543baec1d74b29f75c2253810591b1600013d9e49855",
+    "verified_sidecar_sha_inventory.json": "4b5f53e479115bb182cc9e9557c7ddea4b7f1b2bbd801f4cd96089b48a7c69b5"
+  }
+}
