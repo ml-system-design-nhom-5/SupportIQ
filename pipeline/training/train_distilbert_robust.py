@@ -48,7 +48,7 @@ from sklearn.metrics import accuracy_score, f1_score
 from torch.utils.data import DataLoader
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, get_linear_schedule_with_warmup
 
-from apps.ml_inference.preprocessing import normalize_placeholders
+from apps.ml_inference.preprocessing import DRAFTABLE_INTENTS, normalize_placeholders
 from pipeline.preparation.intent_extra import load_dev_set, load_oos, load_train_supplement
 from pipeline.preparation.utils import CORE_PRODUCT_INTENTS, STANDARD_INTENTS, compute_sha256, save_json
 from pipeline.training.augment import augment_frame
@@ -103,6 +103,16 @@ class ProgressReporter:
         self.done_fits += 1
 
 
+def scope_loss(logits: torch.Tensor, labels: torch.Tensor, draftable_mask: torch.Tensor, fn_weight: float) -> torch.Tensor:
+    """Asymmetric BCE on P(draftable) = summed softmax mass of the draftable intents."""
+    log_probs = torch.log_softmax(logits, dim=-1)
+    mask = draftable_mask.to(logits.device)
+    log_p = torch.logsumexp(log_probs.masked_fill(~mask, float("-inf")), dim=-1)
+    log_not_p = torch.logsumexp(log_probs.masked_fill(mask, float("-inf")), dim=-1)
+    target = mask[labels].float()
+    return -(target * log_p + fn_weight * (1.0 - target) * log_not_p).mean()
+
+
 def train_epoch_smoothed(
     model: torch.nn.Module,
     dataloader: DataLoader,
@@ -113,8 +123,16 @@ def train_epoch_smoothed(
     label_smoothing: float,
     oos_weight: float = 0.5,
     on_batch: Callable[[], None] | None = None,
+    scope_weight: float = 0.0,
+    scope_fn_weight: float = 3.0,
+    draftable_mask: torch.Tensor | None = None,
 ) -> float:
-    """One epoch: cross-entropy (+ label smoothing) on labelled rows, outlier exposure on rows labelled -1."""
+    """One epoch: cross-entropy (+ label smoothing) on labelled rows, outlier exposure on rows labelled -1.
+
+    With ``scope_weight`` > 0, labelled rows also get a scope loss (docs/design/intent-model-v1.2.md): binary
+    cross-entropy on the summed probability of the draftable intents (``draftable_mask``), the quantity routing
+    gate 2f reads. A must-escalate row whose draftable mass is high costs ``scope_fn_weight`` times more.
+    """
     model.train()
     loss_fn = torch.nn.CrossEntropyLoss(label_smoothing=label_smoothing)
     use_cuda = device.type == "cuda"
@@ -126,6 +144,8 @@ def train_epoch_smoothed(
         if (~in_domain).any():
             # Cross-entropy to the uniform distribution (Hendrycks et al., 2019, "Outlier Exposure").
             loss = loss + oos_weight * -torch.log_softmax(logits[~in_domain], dim=-1).mean()
+        if scope_weight > 0 and draftable_mask is not None and in_domain.any():
+            loss = loss + scope_weight * scope_loss(logits[in_domain], labels[in_domain], draftable_mask, scope_fn_weight)
         return loss
 
     for batch in dataloader:
@@ -280,10 +300,13 @@ def _fit_model(
     seed: int,
     tag: str,
     progress: ProgressReporter | None = None,
+    scope_weight: float = 0.0,
+    scope_fn_weight: float = 3.0,
 ) -> tuple[torch.nn.Module, list[float]]:
     """Fine-tune a fresh model from the pretrained base (bottom 3 layers frozen, as train_distilbert_cv)."""
     torch.manual_seed(seed)
     label2id = {c: i for i, c in enumerate(classes)}
+    draftable = torch.tensor([c in DRAFTABLE_INTENTS for c in classes])
     loader = _loader(tokenizer, train_df, label2id, max_length, batch_size, shuffle=True)
     n_oos = int((train_df["intent"] == OOS_LABEL).sum())
     if n_oos:
@@ -303,7 +326,9 @@ def _fit_model(
     for ep in range(1, epochs + 1):
         ep_start = time.time()
         losses.append(train_epoch_smoothed(model, loader, optimizer, scheduler, scaler, device, label_smoothing, oos_weight,
-                                           on_batch=progress.advance if progress is not None else None))
+                                           on_batch=progress.advance if progress is not None else None,
+                                           scope_weight=scope_weight, scope_fn_weight=scope_fn_weight,
+                                           draftable_mask=draftable))
         print(f"  {tag} | Epoch {ep}/{epochs} loss {losses[-1]:.4f} ({time.time() - ep_start:.1f}s)", flush=True)
     if progress is not None:
         progress.end_fit()
@@ -342,6 +367,8 @@ def run_robust_training(
     oos_train: str | Path | None = None,
     oos_dev: str | Path | None = None,
     oos_weight: float = 0.5,
+    scope_weight: float = 0.0,
+    scope_fn_weight: float = 3.0,
     oos_variants: int = 2,
     calibration_source: str = "dev",
     seed: int = 42,
@@ -366,7 +393,8 @@ def run_robust_training(
     oos = load_oos(oos_train, "oos-train").assign(intent=OOS_LABEL, fold=-1) if oos_train else None
     oos_dev_frame = load_oos(oos_dev, "oos-dev") if oos_dev else None
     fit_kwargs = dict(epochs=epochs, batch_size=batch_size, lr=lr, max_length=max_length,
-                      label_smoothing=label_smoothing, oos_weight=oos_weight)
+                      label_smoothing=label_smoothing, oos_weight=oos_weight,
+                      scope_weight=scope_weight, scope_fn_weight=scope_fn_weight)
     extra_kwargs = dict(variants_per_row=variants_per_row, augment_fraction=augment_fraction,
                         extra_variants=extra_variants, oos=oos, oos_variants=oos_variants)
 
@@ -550,7 +578,7 @@ RUN_KEYS = {
     "pretrained_model_dir", "cleaned_csv", "splits_csv", "output_dir", "protocol", "run_dir", "val_fold",
     "variants_per_row", "augment_fraction", "epochs", "batch_size", "lr", "max_length", "label_smoothing",
     "min_temperature", "extra_train", "extra_variants", "dev_set", "oos_train", "oos_dev", "oos_weight",
-    "oos_variants", "calibration_source", "seed",
+    "oos_variants", "calibration_source", "seed", "scope_weight", "scope_fn_weight",
 }
 
 

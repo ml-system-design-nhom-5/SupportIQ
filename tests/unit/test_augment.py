@@ -120,3 +120,15 @@ def test_unknown_protocol_is_rejected():
 
     with pytest.raises(ValueError, match="protocol"):
         run_robust_training("unused", "unused.csv", "unused.csv", "unused", protocol="bogus")
+
+
+def test_scope_loss_penalises_draftable_mass_on_must_escalate_rows_more():
+    torch = pytest.importorskip("torch")
+    from pipeline.training.train_distilbert_robust import scope_loss
+
+    mask = torch.tensor([True, True, False])  # two draftable intents, one must-escalate intent
+    logits = torch.tensor([[2.0, 1.0, 0.0]])  # most mass on draftable intents
+    esc = scope_loss(logits, torch.tensor([2]), mask, fn_weight=3.0)
+    esc1 = scope_loss(logits, torch.tensor([2]), mask, fn_weight=1.0)
+    draft = scope_loss(logits, torch.tensor([0]), mask, fn_weight=3.0)
+    assert esc > draft and abs(float(esc) - 3 * float(esc1)) < 1e-5
