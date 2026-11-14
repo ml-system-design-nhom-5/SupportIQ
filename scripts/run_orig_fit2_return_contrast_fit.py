@@ -77,6 +77,9 @@ def validate_profile_settings(
     seed: int,
     fit_mode: str,
     enable_selective_rejector: bool,
+    teacher_kl_weight: Optional[float] = None,
+    teacher_temperature: Optional[float] = None,
+    teacher_weights_sha256: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Fail closed on any deviation from the locked parameters for an authorized fit profile."""
     if profile not in AUTHORIZED_FIT_PROFILES:
@@ -94,6 +97,27 @@ def validate_profile_settings(
         raise ValueError(f"{profile} enforces fit_mode={cfg['fit_mode']!r}; got {fit_mode!r}")
     if bool(enable_selective_rejector) != bool(cfg["enable_selective_rejector"]):
         raise ValueError(f"{profile} enforces selective rejector OFF (enable_selective_rejector=False)")
+
+    if profile == "option_a_teacher_kl":
+        if teacher_kl_weight is None or abs(float(teacher_kl_weight) - float(cfg["teacher_kl_weight"])) > 1e-12:
+            raise ValueError(
+                f"{profile} requires explicit teacher_kl_weight={cfg['teacher_kl_weight']}; got {teacher_kl_weight!r}"
+            )
+        if teacher_temperature is None or abs(float(teacher_temperature) - float(cfg["teacher_temperature"])) > 1e-12:
+            raise ValueError(
+                f"{profile} requires explicit teacher_temperature={cfg['teacher_temperature']}; got {teacher_temperature!r}"
+            )
+        norm_sha = str(teacher_weights_sha256 or "").strip().lower()
+        exp_sha = str(cfg["teacher_weights_sha256"]).lower()
+        if norm_sha != exp_sha:
+            raise ValueError(f"{profile} requires exact teacher_weights_sha256={exp_sha}; got {teacher_weights_sha256!r}")
+    else:
+        if teacher_kl_weight is not None and abs(float(teacher_kl_weight)) > 1e-12:
+            raise ValueError(f"{profile} forbids non-zero teacher_kl_weight; got {teacher_kl_weight!r}")
+        if teacher_temperature is not None and abs(float(teacher_temperature) - 1.0) > 1e-12:
+            raise ValueError(f"{profile} forbids custom teacher_temperature; got {teacher_temperature!r}")
+        if teacher_weights_sha256 is not None and str(teacher_weights_sha256).strip():
+            raise ValueError(f"{profile} forbids teacher_weights_sha256; got {teacher_weights_sha256!r}")
     return dict(cfg)
 
 
@@ -214,6 +238,27 @@ def verify_locked_prep_bundle(
                 or str(holder.get("init_weights_sha256", "")).lower() != EXPECTED_FIT2_SHA256
             ):
                 raise ValueError(f"Invalid {holder_name} in prep_manifest: {holder}")
+            if prep_profile == "option_a_teacher_kl" and (
+                abs(float(holder.get("teacher_kl_weight", -1.0)) - float(expected_cfg["teacher_kl_weight"])) > 1e-12
+                or abs(float(holder.get("teacher_temperature", -1.0)) - float(expected_cfg["teacher_temperature"])) > 1e-12
+                or str(holder.get("teacher_weights_sha256", "")).lower() != str(expected_cfg["teacher_weights_sha256"]).lower()
+            ):
+                raise ValueError(f"Invalid teacher-KL config in {holder_name}: {holder}")
+
+        tkl_cfg = manifest.get("teacher_anchor_config")
+        if prep_profile == "option_a_teacher_kl":
+            if (
+                not isinstance(tkl_cfg, dict)
+                or tkl_cfg.get("enabled") is not True
+                or abs(float(tkl_cfg.get("teacher_kl_weight", -1.0)) - float(expected_cfg["teacher_kl_weight"])) > 1e-12
+                or abs(float(tkl_cfg.get("teacher_temperature", -1.0)) - float(expected_cfg["teacher_temperature"])) > 1e-12
+                or str(tkl_cfg.get("teacher_weights_sha256", "")).lower() != str(expected_cfg["teacher_weights_sha256"]).lower()
+                or int(tkl_cfg.get("anchor_effective_count", -1)) != 13000
+                or int(tkl_cfg.get("excluded_effective_count", -1)) != 80
+            ):
+                raise ValueError(f"Invalid teacher_anchor_config in prep_manifest: {tkl_cfg}")
+        elif tkl_cfg is not None:
+            raise ValueError(f"Unexpected teacher_anchor_config in non-teacher-KL prep profile {prep_profile!r}")
 
         base_cal_ref = manifest.get("baseline_cal_reference") or {}
         base_metrics = base_cal_ref.get("metrics") or {}
@@ -334,6 +379,10 @@ def run_authorized_fit(
     seed: int = 42,
     fit_mode: str = "fit2_supcon_energy",
     enable_selective_rejector: bool = False,
+    teacher_kl_weight: Optional[float] = None,
+    teacher_temperature: Optional[float] = None,
+    teacher_weights_sha256: Optional[str] = None,
+    teacher_model_dir: Optional[Path] = None,
     execute_fit: bool = False,
     main_candidates_dir: Path = MAIN_CANDIDATES_DIR,
     local_root_base: Path = LOCAL_ORIG_CONTRAST_ROOT,
@@ -349,6 +398,9 @@ def run_authorized_fit(
         seed=seed,
         fit_mode=fit_mode,
         enable_selective_rejector=enable_selective_rejector,
+        teacher_kl_weight=teacher_kl_weight,
+        teacher_temperature=teacher_temperature,
+        teacher_weights_sha256=teacher_weights_sha256,
     )
     out_paths = _check_output_paths_unused(
         run_id=run_id,
@@ -369,8 +421,19 @@ def run_authorized_fit(
         raise ValueError(f"Serving weights SHA mismatch: {serving_sha} != {EXPECTED_SERVING_SHA256}")
 
     init_info = verify_fit2_starting_checkpoint(init_model_dir)
+    is_teacher_kl = profile == "option_a_teacher_kl"
+    resolved_teacher_dir = (teacher_model_dir if teacher_model_dir is not None else init_model_dir) if is_teacher_kl else None
+    if is_teacher_kl:
+        assert resolved_teacher_dir is not None
+        t_weights = resolved_teacher_dir / "model.safetensors"
+        if not t_weights.is_file():
+            raise FileNotFoundError(f"Missing frozen teacher weights: {t_weights}")
+        t_sha = _sha256_lower(t_weights)
+        if t_sha != str(profile_cfg["teacher_weights_sha256"]).lower():
+            raise ValueError(f"Teacher checkpoint SHA mismatch: {t_sha} != {profile_cfg['teacher_weights_sha256']}")
+
     if not execute_fit:
-        return {
+        val_res: Dict[str, Any] = {
             "validated_only": True,
             "fits_executed": 0,
             "prep_dir": str(prep_dir),
@@ -385,6 +448,14 @@ def run_authorized_fit(
             "profile_settings": profile_cfg,
             "planned_outputs": {k: str(v) for k, v in out_paths.items()},
         }
+        if is_teacher_kl:
+            val_res["teacher_anchor_config"] = {
+                "teacher_model_dir": str(resolved_teacher_dir),
+                "teacher_weights_sha256": str(profile_cfg["teacher_weights_sha256"]),
+                "teacher_kl_weight": float(profile_cfg["teacher_kl_weight"]),
+                "teacher_temperature": float(profile_cfg["teacher_temperature"]),
+            }
+        return val_res
 
     archive_dir = out_paths["archive_dir"]
     records_dir = out_paths["records_dir"]
@@ -433,35 +504,36 @@ def run_authorized_fit(
         + "\n",
         encoding="utf-8",
     )
-    (records_dir / "run_config.json").write_text(
-        json.dumps(
-            {
-                "git_commit": git_sha,
-                "head_git_commit": git_sha,
-                "prep_git_commit": prep_git_sha,
-                "prep_schema_version": prep_verified["prep_schema_version"],
-                "source_hashes": source_prov["source_hashes"],
-                "cli_argv": list(sys.argv),
-                "prep_dir": str(prep_dir),
-                "prep_manifest_sha256": prep_verified["manifest_sha256"],
-                "authorized_fit_profile": profile,
-                "init_model_dir": str(init_model_dir),
-                "init_weights_sha256": EXPECTED_FIT2_SHA256,
-                "fit_mode": str(profile_cfg["fit_mode"]),
-                "epochs": int(profile_cfg["epochs"]),
-                "batch_size": int(profile_cfg["batch_size"]),
-                "lr": float(profile_cfg["lr"]),
-                "seed": int(profile_cfg["seed"]),
-                "min_temperature": float(profile_cfg["min_temperature"]),
-                "enable_selective_rejector": bool(profile_cfg["enable_selective_rejector"]),
-                "dataset_hashes": prep_verified["dataset_hashes"],
-                "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
-            },
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    run_config_payload: Dict[str, Any] = {
+        "git_commit": git_sha,
+        "head_git_commit": git_sha,
+        "prep_git_commit": prep_git_sha,
+        "prep_schema_version": prep_verified["prep_schema_version"],
+        "source_hashes": source_prov["source_hashes"],
+        "cli_argv": list(sys.argv),
+        "prep_dir": str(prep_dir),
+        "prep_manifest_sha256": prep_verified["manifest_sha256"],
+        "authorized_fit_profile": profile,
+        "init_model_dir": str(init_model_dir),
+        "init_weights_sha256": EXPECTED_FIT2_SHA256,
+        "fit_mode": str(profile_cfg["fit_mode"]),
+        "epochs": int(profile_cfg["epochs"]),
+        "batch_size": int(profile_cfg["batch_size"]),
+        "lr": float(profile_cfg["lr"]),
+        "seed": int(profile_cfg["seed"]),
+        "min_temperature": float(profile_cfg["min_temperature"]),
+        "enable_selective_rejector": bool(profile_cfg["enable_selective_rejector"]),
+        "dataset_hashes": prep_verified["dataset_hashes"],
+        "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+    }
+    if is_teacher_kl:
+        run_config_payload["teacher_anchor_config"] = {
+            "teacher_model_dir": str(resolved_teacher_dir),
+            "teacher_weights_sha256": str(profile_cfg["teacher_weights_sha256"]),
+            "teacher_kl_weight": float(profile_cfg["teacher_kl_weight"]),
+            "teacher_temperature": float(profile_cfg["teacher_temperature"]),
+        }
+    (records_dir / "run_config.json").write_text(json.dumps(run_config_payload, indent=2) + "\n", encoding="utf-8")
 
     log_lines: list[str] = []
 
@@ -501,6 +573,14 @@ def run_authorized_fit(
     cal_guard_status = "NOT_CONFIGURED_IN_LEGACY_PREP"
     cal_guard_failed_checks: list[str] = []
     try:
+        trainer_kwargs: Dict[str, Any] = {}
+        if is_teacher_kl:
+            trainer_kwargs = {
+                "teacher_kl_weight": float(profile_cfg["teacher_kl_weight"]),
+                "teacher_temperature": float(profile_cfg["teacher_temperature"]),
+                "teacher_model_dir": resolved_teacher_dir,
+                "expected_teacher_weights_sha256": str(profile_cfg["teacher_weights_sha256"]),
+            }
         fit_result = run_fit_and_lock_candidate(
             worktree_root=repo_root,
             data_repo_root=repo_root,
@@ -514,6 +594,7 @@ def run_authorized_fit(
             seed=int(profile_cfg["seed"]),
             enable_selective_rejector=bool(profile_cfg["enable_selective_rejector"]),
             candidate_name=run_id,
+            **trainer_kwargs,
         )
         cand_dir = local_root / output_subdir
         archive_dir.mkdir(parents=True, exist_ok=False)
@@ -534,6 +615,22 @@ def run_authorized_fit(
         prov_check = audit_candidate_provenance(archive_dir, archive_dir / "candidate_provenance_manifest.json")
         if not prov_check.get("provenance_passed"):
             raise ValueError(f"Archived candidate_provenance_manifest invalid: {prov_check.get('failure_reasons')}")
+        if is_teacher_kl:
+            assert resolved_teacher_dir is not None
+            post_t_sha = _sha256_lower(resolved_teacher_dir / "model.safetensors")
+            if post_t_sha != str(profile_cfg["teacher_weights_sha256"]).lower():
+                raise RuntimeError(f"Teacher weights SHA changed post-fit: {post_t_sha}")
+            prov_json = json.loads((archive_dir / "candidate_provenance_manifest.json").read_text(encoding="utf-8"))
+            t_lineage = prov_json.get("training_lineage") or {}
+            if (
+                t_lineage.get("teacher_kl_enabled") is not True
+                or str(t_lineage.get("teacher_weights_sha256", "")).lower()
+                != str(profile_cfg["teacher_weights_sha256"]).lower()
+                or abs(float(t_lineage.get("teacher_kl_weight", -1.0)) - float(profile_cfg["teacher_kl_weight"])) > 1e-12
+                or abs(float(t_lineage.get("teacher_temperature", -1.0)) - float(profile_cfg["teacher_temperature"]))
+                > 1e-12
+            ):
+                raise ValueError(f"Candidate provenance manifest missing valid teacher-KL lineage: {t_lineage}")
 
         reload_info = verify_reload_from_archive(archive_dir)
         archive_inv = _write_and_verify_sha_inventory(archive_dir, "archive_sha_inventory.json")
@@ -657,6 +754,9 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--fit-mode", default="fit2_supcon_energy")
     ap.add_argument("--enable-selective-rejector", action="store_true")
+    ap.add_argument("--teacher-kl-weight", type=float, default=None)
+    ap.add_argument("--teacher-temperature", type=float, default=None)
+    ap.add_argument("--teacher-weights-sha256", type=str, default=None)
     ap.add_argument("--validate-only", action="store_true", help="Run fail-closed profile & locked prep checks without fitting")
     ap.add_argument("--run-authorized-fit", action="store_true", help="Execute the single authorized continuation fit for --profile")
     ap.add_argument("--run-option-a-fit", action="store_true", help="Legacy Option A execution flag (requires --profile option_a)")
@@ -682,6 +782,9 @@ def main() -> None:
         seed=args.seed,
         fit_mode=args.fit_mode,
         enable_selective_rejector=args.enable_selective_rejector,
+        teacher_kl_weight=args.teacher_kl_weight,
+        teacher_temperature=args.teacher_temperature,
+        teacher_weights_sha256=args.teacher_weights_sha256,
         execute_fit=execute_fit,
     )
     print(json.dumps(res, indent=2))

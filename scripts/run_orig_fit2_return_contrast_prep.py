@@ -82,6 +82,21 @@ AUTHORIZED_FIT_PROFILES: Dict[str, Dict[str, Any]] = {
         "enable_selective_rejector": False,
         "init_weights_sha256": EXPECTED_FIT2_SHA256,
     },
+    "option_a_teacher_kl": {
+        "profile": "option_a_teacher_kl",
+        "selected_recipe": "option_a_masked_teacher_kl_v1",
+        "lr": 2e-5,
+        "epochs": 3,
+        "batch_size": 32,
+        "seed": 42,
+        "fit_mode": "fit2_supcon_energy",
+        "min_temperature": 1.0,
+        "enable_selective_rejector": False,
+        "init_weights_sha256": EXPECTED_FIT2_SHA256,
+        "teacher_weights_sha256": EXPECTED_FIT2_SHA256,
+        "teacher_kl_weight": 1.0,
+        "teacher_temperature": 1.0,
+    },
 }
 
 CAL_GUARD_FLOAT_TOLERANCE = 3e-6
@@ -788,6 +803,7 @@ def _build_planned_execution_plan(
         raise ValueError(f"zero_delta_control requires profile_name='option_a'; got {profile_name!r}")
 
     cfg = AUTHORIZED_FIT_PROFILES[profile_name]
+    is_teacher_kl = profile_name == "option_a_teacher_kl"
     run_flag = (
         "--run-authorized-fit"
         if (experiment_mode == "zero_delta_control" or profile_name != "option_a")
@@ -813,26 +829,45 @@ def _build_planned_execution_plan(
         str(cfg["seed"]),
         "--fit-mode",
         str(cfg["fit_mode"]),
-        run_flag,
     ]
+    if is_teacher_kl:
+        planned_cli.extend(
+            [
+                "--teacher-kl-weight",
+                str(cfg["teacher_kl_weight"]),
+                "--teacher-temperature",
+                str(cfg["teacher_temperature"]),
+                "--teacher-weights-sha256",
+                str(cfg["teacher_weights_sha256"]),
+            ]
+        )
+    planned_cli.append(run_flag)
     is_control = experiment_mode == "zero_delta_control"
-    caveat = (
-        (
+    if is_control:
+        caveat = (
             "Matched zero-delta scientific control ONLY (is_promotion_candidate=False): warm-starts Original Fit2 "
             "(f695b1fe...) for epochs=3, lr=2e-5 on bit-identical 13 original stage2_inputs (11,320 full_train rows, "
             "181 boundary_pos_train rows, 13,000 effective rows; 0 added return-contrast rows) to isolate continuation "
             "optimization drift from the +18-row data delta. NOT a promotion candidate."
         )
-        if is_control
-        else (
+    elif is_teacher_kl:
+        caveat = (
+            "Original Fit2 (f695b1fe...) was trained from Fit1 (95a940b6...) for epochs=3, lr=2e-5. "
+            "option_a_teacher_kl warm-starts from Original Fit2 at lr=2e-5, epochs=3 over 13,080 effective TRAIN rows "
+            "with frozen Original Fit2 masked teacher-KL (alpha_kl=1.0, T_teacher=1.0) on 13,000 canonical replay rows "
+            "(m=1) and masked off on the 80 effective added orig_ret_ch_* rows (m=0). alpha_kl=1.0 is exploratory "
+            "under a one-run budget (not pre-validated as optimal); direct comparison against untouched Original Fit2 "
+            "remains a comparative candidate evaluation."
+        )
+    else:
+        caveat = (
             f"Original Fit2 (f695b1fe...) was trained from Fit1 (95a940b6...) for epochs=3, lr=2e-5. "
             f"Warm-starting {profile_name} continuation (lr={_format_lr_cli(float(cfg['lr']))}) from converged "
             "Fit2 applies 3 additional full epochs over 13,080 effective rows on top of f695b1fe...; direct "
             "comparison against untouched Original Fit2 is a comparative candidate evaluation, NOT a matched "
             "causal control."
         )
-    )
-    return {
+    plan: Dict[str, Any] = {
         "experiment_mode": "matched_zero_delta_control" if is_control else "return_contrast",
         "is_promotion_candidate": not is_control,
         "profile": profile_name,
@@ -851,6 +886,11 @@ def _build_planned_execution_plan(
         "requires_worker_b_re_review_pass_and_coordinator_release": True,
         "causal_control_caveat": caveat,
     }
+    if is_teacher_kl:
+        plan["teacher_kl_weight"] = cfg["teacher_kl_weight"]
+        plan["teacher_temperature"] = cfg["teacher_temperature"]
+        plan["teacher_weights_sha256"] = cfg["teacher_weights_sha256"]
+    return plan
 
 
 def _build_planned_option_a_plan(
@@ -1024,6 +1064,25 @@ def _archive_orig_fit2_prep_bundle(
             )
         if profile_name == "option_a":
             manifest["option_a_execution_plan"] = execution_plan
+        elif profile_name == "option_a_teacher_kl":
+            cfg_tkl = AUTHORIZED_FIT_PROFILES[profile_name]
+            manifest["teacher_anchor_config"] = {
+                "enabled": True,
+                "teacher_checkpoint_dir": str(FIT2_BASELINE_DIR),
+                "teacher_weights_sha256": cfg_tkl["teacher_weights_sha256"],
+                "teacher_kl_weight": float(cfg_tkl["teacher_kl_weight"]),
+                "teacher_temperature": float(cfg_tkl["teacher_temperature"]),
+                "loss_scope": "TRAIN_ONLY_NO_CAL_OR_EVAL",
+                "loss_formula": "1.0 * KL(p_teacher || p_student), normalized by sum(m_i) on active batch anchors (0.0 if sum(m_i)==0)",
+                "mask_provenance_source": "orig_fit2_return_contrast_extension.jsonl:sample_id (orig_ret_ch_*)",
+                "anchor_effective_count": 13000,
+                "excluded_effective_count": 80,
+                "excluded_raw_count": 18,
+                "exploratory_coefficient_caveat": (
+                    "alpha_kl=1.0 is an exploratory single-run regularization coefficient, not pre-validated as optimal; "
+                    "base teacher accuracy on the 80 effective added rows is 40.0%."
+                ),
+            }
         (dest_dir / "prep_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         (dest_dir / "status.json").write_text(
             json.dumps({"status": "complete", "fits_executed": 0, "prep_archive": True}, indent=2) + "\n",
@@ -1059,7 +1118,11 @@ def main() -> None:
         raise ValueError(f"--experiment-mode zero_delta_control requires --profile option_a (lr=2e-5); got {args.profile!r}")
 
     repo_root = Path(__file__).resolve().parents[1]
-    dryrun_root = LOCAL_ORIG_CONTRAST_ROOT / f"dryrun-{args.run_id}" if args.experiment_mode == "zero_delta_control" else LOCAL_ORIG_CONTRAST_ROOT / "dryrun"
+    dryrun_root = (
+        LOCAL_ORIG_CONTRAST_ROOT / f"dryrun-{args.run_id}"
+        if (args.experiment_mode == "zero_delta_control" or args.run_id != DEFAULT_PREP_RUN_ID)
+        else LOCAL_ORIG_CONTRAST_ROOT / "dryrun"
+    )
     prep_ns: Dict[str, Path] | None = None
     source_prov: Dict[str, Any] | None = None
 

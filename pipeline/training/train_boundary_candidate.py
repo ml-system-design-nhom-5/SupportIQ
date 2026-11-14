@@ -652,10 +652,25 @@ def _has_gold_conflict(text: str, gold_norms: set[str], gold_toks: List[set[str]
 
 
 class _BoundaryDataset(Dataset):
-    def __init__(self, encodings: Dict[str, torch.Tensor], labels: List[int], is_neg: List[int]) -> None:
+    def __init__(
+        self,
+        encodings: Dict[str, torch.Tensor],
+        labels: List[int],
+        is_neg: List[int],
+        teacher_anchor_mask: Optional[List[int]] = None,
+    ) -> None:
         self.encodings = encodings
         self.labels = torch.tensor(labels, dtype=torch.long)
         self.is_neg = torch.tensor(is_neg, dtype=torch.long)
+        if teacher_anchor_mask is not None and len(teacher_anchor_mask) != len(labels):
+            raise ValueError(
+                f"teacher_anchor_mask length ({len(teacher_anchor_mask)}) != labels length ({len(labels)})"
+            )
+        self.teacher_anchor_mask = (
+            torch.tensor(teacher_anchor_mask, dtype=torch.long)
+            if teacher_anchor_mask is not None
+            else None
+        )
 
     def __len__(self) -> int:
         return len(self.labels)
@@ -664,7 +679,157 @@ class _BoundaryDataset(Dataset):
         item = {k: v[idx] for k, v in self.encodings.items()}
         item["labels"] = self.labels[idx]
         item["is_neg"] = self.is_neg[idx]
+        if self.teacher_anchor_mask is not None:
+            item["teacher_anchor_mask"] = self.teacher_anchor_mask[idx]
         return item
+
+
+def build_teacher_anchor_mask(
+    *,
+    pos_train: Sequence[Dict[str, Any]],
+    bitext_rows: Sequence[Dict[str, Any]],
+    neg_train: Sequence[Dict[str, Any]],
+    neg_repeat_counts: Sequence[int],
+    extension_rows: Sequence[Dict[str, Any]],
+) -> Tuple[List[int], Dict[str, int]]:
+    """Build exact binary teacher-KL mask excluding locked return-contrast extension rows by sample_id."""
+    if not extension_rows:
+        raise ValueError("orig_fit2_return_contrast_extension.jsonl is empty; refusing masked teacher-KL training")
+
+    ext_ids: set[str] = set()
+    for row in extension_rows:
+        sid = str(row.get("sample_id", "")).strip()
+        if not sid.startswith("orig_ret_ch_"):
+            raise ValueError(f"Invalid extension sample_id for teacher-KL exclusion: {sid!r}")
+        if sid in ext_ids:
+            raise ValueError(f"Duplicate extension sample_id in extension file: {sid!r}")
+        ext_ids.add(sid)
+
+    if len(neg_repeat_counts) != len(neg_train):
+        raise ValueError(f"neg_repeat_counts length ({len(neg_repeat_counts)}) != neg_train ({len(neg_train)})")
+
+    mask: List[int] = []
+    seen_ext_ids: set[str] = set()
+    canonical_pos_raw = 0
+    extension_pos_raw = 0
+    canonical_pos_eff = 0
+    extension_pos_eff = 0
+
+    for row in pos_train:
+        sid = str(row.get("sample_id", "")).strip()
+        is_ext = sid in ext_ids
+        if not is_ext and sid.startswith("orig_ret_ch_"):
+            raise ValueError(f"Unregistered orig_ret_ch_ sample_id in pos_train: {sid!r}")
+        rep = 5 if row["intent"] in ESCALATED_34_INTENTS else 4
+        if is_ext:
+            seen_ext_ids.add(sid)
+            extension_pos_raw += 1
+            extension_pos_eff += rep
+            mask.extend([0] * rep)
+        else:
+            canonical_pos_raw += 1
+            canonical_pos_eff += rep
+            mask.extend([1] * rep)
+
+    missing_ext = sorted(ext_ids - seen_ext_ids)
+    if missing_ext:
+        raise ValueError(f"Extension sample_ids missing from pos_train: {missing_ext[:5]}")
+
+    for row in bitext_rows:
+        sid = str(row.get("sample_id", "")).strip()
+        if sid in ext_ids or sid.startswith("orig_ret_ch_"):
+            raise ValueError(f"Extension sample_id leaked into bitext replay: {sid!r}")
+    bitext_eff = len(bitext_rows)
+    mask.extend([1] * bitext_eff)
+
+    neg_eff = 0
+    for row, row_rep in zip(neg_train, neg_repeat_counts):
+        sid = str(row.get("sample_id", "")).strip()
+        if sid in ext_ids or sid.startswith("orig_ret_ch_"):
+            raise ValueError(f"Extension sample_id leaked into neg_train: {sid!r}")
+        neg_eff += int(row_rep)
+        mask.extend([1] * int(row_rep))
+
+    anchor_eff_total = canonical_pos_eff + bitext_eff + neg_eff
+    if anchor_eff_total <= 0 or extension_pos_eff <= 0:
+        raise ValueError(
+            f"Invalid teacher-KL mask counts: anchor_eff_total={anchor_eff_total}, extension_pos_eff={extension_pos_eff}"
+        )
+
+    return mask, {
+        "extension_raw_count": extension_pos_raw,
+        "canonical_pos_raw_count": canonical_pos_raw,
+        "canonical_pos_effective_count": canonical_pos_eff,
+        "bitext_effective_count": bitext_eff,
+        "neg_effective_count": neg_eff,
+        "anchor_effective_total": anchor_eff_total,
+        "excluded_effective_total": extension_pos_eff,
+    }
+
+
+def compute_masked_teacher_kl_loss(
+    student_logits: torch.Tensor,
+    teacher_logits: torch.Tensor,
+    anchor_mask: torch.Tensor,
+    *,
+    teacher_temperature: float = 1.0,
+) -> Tuple[torch.Tensor, int]:
+    """Compute batch-masked KL(p_teacher || p_student) returning (loss, active_anchor_count)."""
+    if not np.isfinite(float(teacher_temperature)) or float(teacher_temperature) <= 0.0:
+        raise ValueError(f"teacher_temperature must be positive, got {teacher_temperature}")
+    mask_bool = anchor_mask.to(device=student_logits.device) > 0
+    active_count = int(mask_bool.sum().item())
+    if active_count == 0:
+        return student_logits.new_zeros((), dtype=student_logits.dtype), 0
+
+    t = float(teacher_temperature)
+    scaled_teacher = teacher_logits.detach() if t == 1.0 else (teacher_logits.detach() / t)
+    scaled_student = student_logits if t == 1.0 else (student_logits / t)
+    teacher_probs = F.softmax(scaled_teacher, dim=-1)
+    student_log_probs = F.log_softmax(scaled_student, dim=-1)
+    per_row_kl = F.kl_div(student_log_probs, teacher_probs, reduction="none").sum(dim=-1)
+    if t != 1.0:
+        per_row_kl = per_row_kl * (t * t)
+    masked_kl = (per_row_kl * mask_bool.to(dtype=per_row_kl.dtype)).sum() / float(active_count)
+    return masked_kl, active_count
+
+
+def _load_and_verify_frozen_teacher(
+    *,
+    teacher_dir: Path,
+    init_model_dir: Path,
+    expected_teacher_weights_sha256: Optional[str],
+    device: torch.device,
+) -> Tuple[Any, str]:
+    """Load frozen teacher in eval() with requires_grad=False and verify weights/label/tokenizer alignment."""
+    weights_path = teacher_dir / "model.safetensors"
+    cfg_path = teacher_dir / "config.json"
+    if not weights_path.is_file() or not cfg_path.is_file():
+        raise FileNotFoundError(f"Teacher checkpoint incomplete at {teacher_dir}")
+    actual_sha = _sha256_file(weights_path)
+    if expected_teacher_weights_sha256 is not None:
+        exp_sha = str(expected_teacher_weights_sha256).strip().lower()
+        if actual_sha != exp_sha:
+            raise ValueError(f"Teacher weights SHA-256 mismatch: expected {exp_sha}, got {actual_sha}")
+
+    cfg_json = json.loads(cfg_path.read_text(encoding="utf-8"))
+    id2label = {str(k): str(v) for k, v in (cfg_json.get("id2label") or {}).items()}
+    expected_id2label = {str(i): lbl for i, lbl in enumerate(STANDARD_INTENTS_46)}
+    if id2label != expected_id2label:
+        raise ValueError("Teacher id2label mapping does not match canonical 46-label taxonomy")
+
+    init_tok_path = init_model_dir / "tokenizer.json"
+    teacher_tok_path = teacher_dir / "tokenizer.json"
+    if init_tok_path.is_file() and teacher_tok_path.is_file():
+        if _sha256_file(init_tok_path) != _sha256_file(teacher_tok_path):
+            raise ValueError("Teacher tokenizer.json SHA-256 differs from student init_model_dir tokenizer.json")
+
+    teacher_model = AutoModelForSequenceClassification.from_pretrained(str(teacher_dir))
+    for p in teacher_model.parameters():
+        p.requires_grad_(False)
+    teacher_model.eval()
+    teacher_model.to(device)
+    return teacher_model, actual_sha
 
 
 def prepare_and_lock_splits(
@@ -970,8 +1135,18 @@ def run_fit_and_lock_candidate(
     enable_selective_rejector: bool = False,
     rejector_c_grid: Sequence[float] = DEFAULT_REJECTOR_C_GRID,
     candidate_name: Optional[str] = None,
+    teacher_kl_weight: float = 0.0,
+    teacher_temperature: float = 1.0,
+    teacher_model_dir: Optional[Path] = None,
+    expected_teacher_weights_sha256: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Run Fit 1 or Fit 2 from locked splits, fit T>=1.0 on cal (+ optional 776d rejector), and lock manifests."""
+    if not np.isfinite(float(teacher_kl_weight)) or float(teacher_kl_weight) < 0.0:
+        raise ValueError(f"teacher_kl_weight must be >= 0.0, got {teacher_kl_weight}")
+    if not np.isfinite(float(teacher_temperature)) or float(teacher_temperature) <= 0.0:
+        raise ValueError(f"teacher_temperature must be > 0.0, got {teacher_temperature}")
+    use_teacher_kl = float(teacher_kl_weight) > 0.0
+
     datasets_dir = artifact_root / "datasets"
     lock_path = datasets_dir / "dataset_lock_manifest.json"
     if not lock_path.exists():
@@ -1029,7 +1204,35 @@ def run_fit_and_lock_candidate(
     model.to(device)
 
     enc = tokenizer(train_texts, max_length=64, padding="max_length", truncation=True, return_tensors="pt")
-    ds = _BoundaryDataset(enc, train_labels, train_is_neg)
+    teacher_anchor_mask: Optional[List[int]] = None
+    teacher_mask_summary: Optional[Dict[str, int]] = None
+    teacher_model: Optional[Any] = None
+    teacher_weights_sha: Optional[str] = None
+    resolved_teacher_dir: Optional[Path] = None
+
+    if use_teacher_kl:
+        ext_path = datasets_dir / "orig_fit2_return_contrast_extension.jsonl"
+        if not ext_path.is_file():
+            raise FileNotFoundError(
+                f"Teacher-KL masking requires locked extension provenance file: {ext_path}"
+            )
+        ext_rows = _read_jsonl(ext_path)
+        teacher_anchor_mask, teacher_mask_summary = build_teacher_anchor_mask(
+            pos_train=pos_train,
+            bitext_rows=bitext_clean + bitext_noisy,
+            neg_train=neg_train,
+            neg_repeat_counts=resolved_neg_reps,
+            extension_rows=ext_rows,
+        )
+        resolved_teacher_dir = teacher_model_dir if teacher_model_dir is not None else init_model_dir
+        teacher_model, teacher_weights_sha = _load_and_verify_frozen_teacher(
+            teacher_dir=resolved_teacher_dir,
+            init_model_dir=init_model_dir,
+            expected_teacher_weights_sha256=expected_teacher_weights_sha256,
+            device=device,
+        )
+
+    ds = _BoundaryDataset(enc, train_labels, train_is_neg, teacher_anchor_mask=teacher_anchor_mask)
     loader = DataLoader(ds, batch_size=batch_size, shuffle=True, generator=torch.Generator().manual_seed(seed))
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=0.01)
@@ -1043,10 +1246,15 @@ def run_fit_and_lock_candidate(
     epoch_stats: List[Dict[str, Any]] = []
     for ep in range(1, epochs + 1):
         model.train()
+        if teacher_model is not None:
+            teacher_model.eval()
         tot_loss = 0.0
         pos_sum = 0.0
         neg_sum = 0.0
         supcon_sum = 0.0
+        teacher_kl_sum = 0.0
+        anchor_rows_seen = 0
+        excluded_rows_seen = 0
         for batch in loader:
             optimizer.zero_grad()
             input_ids = batch["input_ids"].to(device)
@@ -1088,21 +1296,46 @@ def run_fit_and_lock_candidate(
                 loss = loss + l_neg
                 neg_sum += float(l_neg.item())
 
+            if teacher_model is not None:
+                with torch.no_grad():
+                    teacher_logits = teacher_model(input_ids=input_ids, attention_mask=attention_mask).logits
+                l_tkl_raw, active_tkl_count = compute_masked_teacher_kl_loss(
+                    logits,
+                    teacher_logits,
+                    batch["teacher_anchor_mask"],
+                    teacher_temperature=teacher_temperature,
+                )
+                loss = loss + float(teacher_kl_weight) * l_tkl_raw
+                teacher_kl_sum += float(l_tkl_raw.item())
+                anchor_rows_seen += int(active_tkl_count)
+                excluded_rows_seen += int(input_ids.shape[0] - active_tkl_count)
+
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
             scheduler.step()
             tot_loss += float(loss.item())
 
-        epoch_stats.append(
-            {
-                "epoch": ep,
-                "mean_loss": round(tot_loss / max(1, len(loader)), 5),
-                "pos_loss_sum": round(pos_sum / max(1, len(loader)), 5),
-                "neg_loss_sum": round(neg_sum / max(1, len(loader)), 5),
-                "supcon_loss_sum": round(supcon_sum / max(1, len(loader)), 5),
-            }
-        )
+        ep_record: Dict[str, Any] = {
+            "epoch": ep,
+            "mean_loss": round(tot_loss / max(1, len(loader)), 5),
+            "pos_loss_sum": round(pos_sum / max(1, len(loader)), 5),
+            "neg_loss_sum": round(neg_sum / max(1, len(loader)), 5),
+            "supcon_loss_sum": round(supcon_sum / max(1, len(loader)), 5),
+        }
+        if use_teacher_kl:
+            ep_record["avg_teacher_kl_loss"] = round(teacher_kl_sum / max(1, len(loader)), 6)
+            ep_record["weighted_teacher_kl_loss"] = round((float(teacher_kl_weight) * teacher_kl_sum) / max(1, len(loader)), 6)
+            ep_record["anchor_rows_seen"] = int(anchor_rows_seen)
+            ep_record["excluded_rows_seen"] = int(excluded_rows_seen)
+        epoch_stats.append(ep_record)
+
+    if use_teacher_kl and resolved_teacher_dir is not None and teacher_weights_sha is not None:
+        post_teacher_sha = _sha256_file(resolved_teacher_dir / "model.safetensors")
+        if post_teacher_sha != teacher_weights_sha:
+            raise RuntimeError(
+                f"Teacher checkpoint mutated during training! expected={teacher_weights_sha}, got={post_teacher_sha}"
+            )
 
     cand_dir = artifact_root / output_subdir
     cand_dir.mkdir(parents=True, exist_ok=True)
@@ -1240,6 +1473,18 @@ def run_fit_and_lock_candidate(
         "max_neg_cal_supported12_prob": round(max_neg_cal_sup_prob, 6),
         "selective_rejector_enabled": bool(enable_selective_rejector),
     }
+    if use_teacher_kl:
+        training_lineage.update(
+            {
+                "teacher_kl_enabled": True,
+                "teacher_checkpoint": str(resolved_teacher_dir),
+                "teacher_weights_sha256": teacher_weights_sha,
+                "teacher_kl_weight": float(teacher_kl_weight),
+                "teacher_temperature": float(teacher_temperature),
+                "teacher_anchor_mask_source": "orig_fit2_return_contrast_extension.jsonl:sample_id",
+                "teacher_anchor_summary": teacher_mask_summary,
+            }
+        )
     if rejector_cal_stats is not None:
         training_lineage["selective_rejector_cal_selection"] = rejector_cal_stats
 
@@ -1261,7 +1506,7 @@ def run_fit_and_lock_candidate(
     }
     (cand_dir / "candidate_provenance_manifest.json").write_text(json.dumps(prov_manifest, indent=2), encoding="utf-8")
 
-    return {
+    result: Dict[str, Any] = {
         "fit_mode": fit_mode,
         "candidate_dir": str(cand_dir),
         "artifact_hashes": art_hashes,
@@ -1272,6 +1517,14 @@ def run_fit_and_lock_candidate(
         "train_seconds": train_elapsed,
         "epoch_stats": epoch_stats,
     }
+    if use_teacher_kl:
+        result["teacher_kl"] = {
+            "teacher_weights_sha256": teacher_weights_sha,
+            "teacher_kl_weight": float(teacher_kl_weight),
+            "teacher_temperature": float(teacher_temperature),
+            "teacher_anchor_summary": teacher_mask_summary,
+        }
+    return result
 
 
 def main() -> None:

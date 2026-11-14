@@ -14,7 +14,11 @@ from pipeline.training.orig_fit2_return_contrast_data import (
     build_orig_fit2_return_contrast_rows,
     prepare_and_lock_orig_fit2_zero_delta_control_splits,
 )
-from pipeline.training.train_boundary_candidate import classify_row_kb_semantics
+from pipeline.training.train_boundary_candidate import (
+    build_teacher_anchor_mask,
+    classify_row_kb_semantics,
+    compute_masked_teacher_kl_loss,
+)
 from scripts.run_boundary_contrast_fit import (
     EXPECTED_FIT2_SHA256,
     EXPECTED_SERVING_SHA256,
@@ -811,11 +815,13 @@ def test_lr5e6_profile_contract_cli_and_post_fit_cal_guard_archive(monkeypatch, 
     full_train = ds_dir / "full_train_split.jsonl"
     split_manifest.write_text('{"ok": true}\n', encoding="utf-8")
     full_train.write_text('{"sample_id": "x"}\n', encoding="utf-8")
+    import shutil
+
     source_hashes = {rel: _sha(repo_root / rel) for rel in RELEVANT_SOURCE_PATHS}
     for rel in RELEVANT_SOURCE_PATHS:
         snap = prep_dir / "source_snapshot" / rel
         snap.parent.mkdir(parents=True, exist_ok=True)
-        snap.write_text(f"# {rel}\n", encoding="utf-8")
+        shutil.copy2(repo_root / rel, snap)
 
     ds_hashes = {"boundary_split_manifest": _sha(split_manifest), "full_train_split": _sha(full_train)}
     new_hashes = {"split_manifest.json": _sha(split_manifest), "full_train_split.jsonl": _sha(full_train)}
@@ -1226,11 +1232,13 @@ def test_zero_delta_control_prep_and_fit_guards_reject_extension_and_wrong_profi
         new_hashes[fname] = digest
     assert not (ds_dir / "orig_fit2_return_contrast_extension.jsonl").exists()
 
+    import shutil
+
     source_hashes = {rel: _sha(repo_root / rel) for rel in RELEVANT_SOURCE_PATHS}
     for rel in RELEVANT_SOURCE_PATHS:
         snap = prep_dir / "source_snapshot" / rel
         snap.parent.mkdir(parents=True, exist_ok=True)
-        snap.write_text(f"# {rel}\n", encoding="utf-8")
+        shutil.copy2(repo_root / rel, snap)
 
     base_metrics = {
         "boundary_pos_cal": {"count": 86, "correct_count": 68, "mean_max_prob": 0.686},
@@ -1403,3 +1411,437 @@ def test_zero_delta_control_prep_and_fit_guards_reject_extension_and_wrong_profi
             init_model_dir=init_dir,
             serving_dir=serving_dir,
         )
+
+
+def test_teacher_kl_identity_student_equals_teacher_and_zero_mask_safe():
+    torch.manual_seed(7)
+    student = torch.nn.Sequential(torch.nn.Embedding(32, 8), torch.nn.Linear(8, len(STANDARD_INTENTS_46)))
+    teacher = torch.nn.Sequential(torch.nn.Embedding(32, 8), torch.nn.Linear(8, len(STANDARD_INTENTS_46)))
+    teacher.load_state_dict(student.state_dict())
+    student.eval()
+    teacher.eval()
+    for p in teacher.parameters():
+        p.requires_grad_(False)
+
+    tokens = torch.randint(0, 32, (6,))
+    with torch.no_grad():
+        t_logits = teacher(tokens)
+    s_logits = student(tokens)
+
+    loss_all, cnt_all = compute_masked_teacher_kl_loss(
+        s_logits, t_logits, torch.ones(6, dtype=torch.long), teacher_temperature=1.0
+    )
+    assert cnt_all == 6
+    assert float(loss_all.item()) < 1e-7
+
+    loss_zero, cnt_zero = compute_masked_teacher_kl_loss(
+        s_logits, t_logits, torch.zeros(6, dtype=torch.long), teacher_temperature=1.0
+    )
+    assert cnt_zero == 0
+    assert torch.isfinite(loss_zero)
+    assert float(loss_zero.item()) == 0.0
+
+
+def test_teacher_kl_teacher_immutability_and_student_gradient_update(tmp_path: Path):
+    import copy
+    import hashlib
+    from pipeline.training.train_boundary_candidate import _load_and_verify_frozen_teacher
+
+    torch.manual_seed(11)
+    student = torch.nn.Linear(8, len(STANDARD_INTENTS_46))
+    teacher = copy.deepcopy(student)
+    teacher.eval()
+    for p in teacher.parameters():
+        p.requires_grad_(False)
+    with torch.no_grad():
+        student.weight[0].add_(0.5)
+
+    teacher_snap = {k: v.detach().clone() for k, v in teacher.state_dict().items()}
+    student_snap = {k: v.detach().clone() for k, v in student.state_dict().items()}
+    opt = torch.optim.AdamW(student.parameters(), lr=1e-2)
+
+    x = torch.randn(4, 8)
+    mask = torch.tensor([1, 1, 0, 1], dtype=torch.long)
+    opt.zero_grad()
+    with torch.no_grad():
+        t_logits = teacher(x)
+    s_logits = student(x)
+    l_tkl, active = compute_masked_teacher_kl_loss(s_logits, t_logits, mask, teacher_temperature=1.0)
+    assert active == 3 and float(l_tkl.item()) > 1e-4
+    l_tkl.backward()
+    opt.step()
+
+    assert teacher.training is False
+    for p in teacher.parameters():
+        assert p.grad is None
+        assert p.requires_grad is False
+    for k, orig_t in teacher_snap.items():
+        assert torch.equal(teacher.state_dict()[k], orig_t)
+    assert not torch.equal(student.weight, student_snap["weight"])
+
+    t_dir = tmp_path / "teacher"
+    s_dir = tmp_path / "student"
+    t_dir.mkdir()
+    s_dir.mkdir()
+    (t_dir / "model.safetensors").write_bytes(b"fake-weights")
+    (s_dir / "tokenizer.json").write_text('{"tok": 1}\n', encoding="utf-8")
+    (t_dir / "tokenizer.json").write_text('{"tok": 2}\n', encoding="utf-8")
+    (t_dir / "config.json").write_text(
+        json.dumps({"id2label": {str(i): lbl for i, lbl in enumerate(STANDARD_INTENTS_46)}}), encoding="utf-8"
+    )
+    wrong_sha = hashlib.sha256(b"other").hexdigest()
+    with pytest.raises(ValueError, match="Teacher weights SHA-256 mismatch"):
+        _load_and_verify_frozen_teacher(
+            teacher_dir=t_dir, init_model_dir=s_dir, expected_teacher_weights_sha256=wrong_sha, device=torch.device("cpu")
+        )
+    actual_sha = hashlib.sha256(b"fake-weights").hexdigest()
+    with pytest.raises(ValueError, match="tokenizer.json SHA-256 differs"):
+        _load_and_verify_frozen_teacher(
+            teacher_dir=t_dir, init_model_dir=s_dir, expected_teacher_weights_sha256=actual_sha, device=torch.device("cpu")
+        )
+
+
+def test_teacher_kl_provenance_mask_exact_13000_anchor_and_80_excluded():
+    from apps.core_backend.intent.routing import ESCALATED_34_INTENTS, SUPPORTED_12_INTENTS
+
+    sup_lbl = sorted(SUPPORTED_12_INTENTS)[0]
+    esc_lbl = sorted(ESCALATED_34_INTENTS)[0]
+    pos_canon = [{"sample_id": f"canon_s_{i}", "intent": sup_lbl} for i in range(133)] + [
+        {"sample_id": f"canon_e_{i}", "intent": esc_lbl} for i in range(48)
+    ]
+    ext_rows = [{"sample_id": f"orig_ret_ch_s_{i}", "intent": sup_lbl} for i in range(10)] + [
+        {"sample_id": f"orig_ret_ch_e_{i}", "intent": esc_lbl} for i in range(8)
+    ]
+    pos_train = pos_canon + ext_rows
+    bitext_rows = [{"sample_id": f"bx_{i}", "intent": sup_lbl} for i in range(11040)]
+    neg_train = [{"sample_id": f"neg_{i}", "intent": "unsupported_x"} for i in range(99)]
+    neg_repeats = [12] * len(neg_train)
+
+    mask, summary = build_teacher_anchor_mask(
+        pos_train=pos_train,
+        bitext_rows=bitext_rows,
+        neg_train=neg_train,
+        neg_repeat_counts=neg_repeats,
+        extension_rows=ext_rows,
+    )
+    assert len(mask) == 13080
+    assert sum(mask) == 13000
+    assert len(mask) - sum(mask) == 80
+    assert summary["anchor_effective_total"] == 13000
+    assert summary["excluded_effective_total"] == 80
+    assert summary["extension_raw_count"] == 18
+
+    with pytest.raises(ValueError, match="empty"):
+        build_teacher_anchor_mask(
+            pos_train=pos_train, bitext_rows=bitext_rows, neg_train=neg_train, neg_repeat_counts=neg_repeats, extension_rows=[]
+        )
+    with pytest.raises(ValueError, match="leaked into bitext"):
+        build_teacher_anchor_mask(
+            pos_train=pos_train,
+            bitext_rows=bitext_rows + [ext_rows[0]],
+            neg_train=neg_train,
+            neg_repeat_counts=neg_repeats,
+            extension_rows=ext_rows,
+        )
+    with pytest.raises(ValueError, match="missing from pos_train"):
+        build_teacher_anchor_mask(
+            pos_train=pos_canon,
+            bitext_rows=bitext_rows,
+            neg_train=neg_train,
+            neg_repeat_counts=neg_repeats,
+            extension_rows=ext_rows,
+        )
+
+
+def test_teacher_kl_profile_isolation_and_fail_closed_cli_guards(monkeypatch):
+    from scripts.run_orig_fit2_return_contrast_prep import DEFAULT_PREP_PROFILE
+
+    assert DEFAULT_PREP_PROFILE == "lr5e6"
+    assert "teacher_kl_weight" not in AUTHORIZED_FIT_PROFILES["option_a"]
+    assert "teacher_kl_weight" not in AUTHORIZED_FIT_PROFILES["lr5e6"]
+
+    tkl = AUTHORIZED_FIT_PROFILES["option_a_teacher_kl"]
+    assert tkl["lr"] == 2e-5
+    assert tkl["epochs"] == 3
+    assert tkl["batch_size"] == 32
+    assert tkl["seed"] == 42
+    assert tkl["fit_mode"] == "fit2_supcon_energy"
+    assert tkl["min_temperature"] == 1.0
+    assert tkl["enable_selective_rejector"] is False
+    assert tkl["init_weights_sha256"] == EXPECTED_FIT2_SHA256
+    assert tkl["teacher_weights_sha256"] == EXPECTED_FIT2_SHA256
+    assert tkl["teacher_kl_weight"] == 1.0
+    assert tkl["teacher_temperature"] == 1.0
+
+    for bad_kwargs in (
+        {"teacher_kl_weight": None, "teacher_temperature": 1.0, "teacher_weights_sha256": EXPECTED_FIT2_SHA256},
+        {"teacher_kl_weight": 0.5, "teacher_temperature": 1.0, "teacher_weights_sha256": EXPECTED_FIT2_SHA256},
+        {"teacher_kl_weight": 1.0, "teacher_temperature": 2.0, "teacher_weights_sha256": EXPECTED_FIT2_SHA256},
+        {"teacher_kl_weight": 1.0, "teacher_temperature": 1.0, "teacher_weights_sha256": "0" * 64},
+    ):
+        with pytest.raises(ValueError, match="option_a_teacher_kl requires"):
+            validate_profile_settings(
+                profile="option_a_teacher_kl",
+                epochs=3,
+                lr=2e-5,
+                batch_size=32,
+                seed=42,
+                fit_mode="fit2_supcon_energy",
+                enable_selective_rejector=False,
+                **bad_kwargs,
+            )
+
+    with pytest.raises(ValueError, match="option_a forbids"):
+        validate_profile_settings(
+            profile="option_a",
+            epochs=3,
+            lr=2e-5,
+            batch_size=32,
+            seed=42,
+            fit_mode="fit2_supcon_energy",
+            enable_selective_rejector=False,
+            teacher_kl_weight=1.0,
+        )
+    with pytest.raises(ValueError, match="lr5e6 forbids"):
+        validate_profile_settings(
+            profile="lr5e6",
+            epochs=3,
+            lr=5e-6,
+            batch_size=32,
+            seed=42,
+            fit_mode="fit2_supcon_energy",
+            enable_selective_rejector=False,
+            teacher_weights_sha256=EXPECTED_FIT2_SHA256,
+        )
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "run_orig_fit2_return_contrast_fit.py",
+            "--profile",
+            "option_a_teacher_kl",
+            "--lr",
+            "2e-5",
+            "--validate-only",
+        ],
+    )
+    with pytest.raises(ValueError, match="option_a_teacher_kl requires"):
+        fit_cli_main()
+
+
+def test_teacher_kl_prep_plan_and_runner_forwarding_closure(tmp_path: Path, monkeypatch):
+    import hashlib
+
+    def _sha(p: Path) -> str:
+        return hashlib.sha256(p.read_bytes()).hexdigest().lower()
+
+    repo_root = Path(__file__).resolve().parents[2]
+    prep_dir = tmp_path / "run-records-fit2-orig-teacher-kl-v1-prep"
+    ds_dir = prep_dir / "datasets"
+    ds_dir.mkdir(parents=True)
+
+    plan = _build_planned_execution_plan(
+        profile_name="option_a_teacher_kl",
+        prep_records_dir=prep_dir,
+        planned_fit_run_id="fit2-orig-teacher-kl-v1",
+        planned_future_paths={"archive_dir": str(tmp_path / "arch")},
+        experiment_mode="return_contrast",
+    )
+    assert plan["is_promotion_candidate"] is True
+    assert "--teacher-kl-weight" in plan["planned_cli"]
+    assert "--teacher-weights-sha256" in plan["planned_cli"]
+    assert EXPECTED_FIT2_SHA256 in plan["planned_cli"]
+    assert plan["planned_cli"][-1] == "--run-authorized-fit"
+
+    ds_hashes: dict[str, str] = {}
+    new_hashes: dict[str, str] = {}
+    for fname in (*EXPECTED_ORIG_STAGE2_LOCKED_FILES, "orig_fit2_return_contrast_extension.jsonl"):
+        fp = ds_dir / fname
+        fp.write_text('{"ok": true}\n' if fname.endswith(".json") else '{"sample_id": "x"}\n', encoding="utf-8")
+        digest = _sha(fp)
+        if fname == "split_manifest.json":
+            ds_hashes["boundary_split_manifest"] = digest
+        elif fname == "orig_fit2_return_contrast_extension.jsonl":
+            ds_hashes["orig_fit2_return_contrast_extension"] = digest
+        else:
+            ds_hashes[fname[: -len(".jsonl")]] = digest
+        new_hashes[fname] = digest
+
+    import shutil
+
+    source_hashes = {rel: _sha(repo_root / rel) for rel in RELEVANT_SOURCE_PATHS}
+    for rel in RELEVANT_SOURCE_PATHS:
+        snap = prep_dir / "source_snapshot" / rel
+        snap.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(repo_root / rel, snap)
+
+    base_metrics = {
+        "boundary_pos_cal": {"count": 86, "correct_count": 68, "mean_max_prob": 0.686},
+        "boundary_pos_cal_sup12": {"count": 48, "correct_count": 38, "conf_ge_070_count": 28, "conf_ge_080_count": 26},
+        "boundary_pos_cal_esc34": {"count": 38, "correct_count": 30, "mean_max_prob": 0.671, "max_sup12_mass": 0.48},
+        "bitext_cal": {"count": 690, "correct_count": 689},
+        "boundary_neg_cal": {"count": 48, "pred_sup12_count": 9, "max_sup12_mass": 0.72, "max_single_sup12_prob": 0.56},
+        "pos_train_added_18": {"count": 18, "correct_count": 18},
+        "attribution_breakdown": {},
+    }
+    tkl_anchor_cfg = {
+        "enabled": True,
+        "teacher_weights_sha256": EXPECTED_FIT2_SHA256,
+        "teacher_kl_weight": 1.0,
+        "teacher_temperature": 1.0,
+        "anchor_effective_count": 13000,
+        "excluded_effective_count": 80,
+    }
+    (prep_dir / "status.json").write_text(
+        json.dumps({"status": "complete", "fits_executed": 0, "prep_archive": True}), encoding="utf-8"
+    )
+    (prep_dir / "prep_manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "orig_fit2_return_contrast_prep.v4",
+                "experiment_mode": "return_contrast",
+                "is_promotion_candidate": True,
+                "git_commit": "a" * 40,
+                "source_hashes": source_hashes,
+                "unchanged_original_recipe_parameters": UNCHANGED_ORIGINAL_RECIPE_PARAMETERS,
+                "authorized_fit_profile": AUTHORIZED_FIT_PROFILES["option_a_teacher_kl"],
+                "execution_plan": plan,
+                "teacher_anchor_config": tkl_anchor_cfg,
+                "baseline_cal_reference": {
+                    "baseline_weights_sha256": EXPECTED_FIT2_SHA256,
+                    "baseline_calibration_manifest_sha256": "c" * 64,
+                    "dataset_hashes": ds_hashes,
+                    "metrics": base_metrics,
+                },
+                "preflight": {
+                    "extension_version": "orig_fit2_return_channel_contrast_v2",
+                    "counts": {"extension_pos_train_added": 18},
+                    "dataset_hashes": ds_hashes,
+                    "new_input_file_hashes": new_hashes,
+                },
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    _write_and_verify_sha_inventory(prep_dir, "sidecar_sha_inventory.json")
+
+    candidates_dir = tmp_path / "candidates"
+    local_base = tmp_path / "local"
+    init_dir = tmp_path / "init_f695"
+    serving_dir = tmp_path / "serving"
+    init_dir.mkdir()
+    serving_dir.mkdir()
+    (init_dir / "model.safetensors").write_bytes(b"fit2")
+    (serving_dir / "model.safetensors").write_bytes(b"serving")
+
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit._sha256_lower",
+        lambda p: (
+            EXPECTED_SERVING_SHA256
+            if p == serving_dir / "model.safetensors"
+            else (EXPECTED_FIT2_SHA256 if p == init_dir / "model.safetensors" else _sha(p))
+        ),
+    )
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.verify_fit2_starting_checkpoint",
+        lambda p: {"weights_sha256": EXPECTED_FIT2_SHA256, "temperature": 1.0, "rejector_enabled": False, "num_labels": 46},
+    )
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.verify_orig_relevant_source_provenance",
+        lambda root: {"git_commit": "b" * 40, "source_hashes": source_hashes},
+    )
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.verify_git_commit_ancestor",
+        lambda root, anc, desc="HEAD": "b" * 40,
+    )
+
+    val_res = run_authorized_fit(
+        repo_root=repo_root,
+        prep_dir=prep_dir,
+        run_id="fit2-orig-teacher-kl-v1",
+        profile="option_a_teacher_kl",
+        epochs=3,
+        lr=2e-5,
+        teacher_kl_weight=1.0,
+        teacher_temperature=1.0,
+        teacher_weights_sha256=EXPECTED_FIT2_SHA256,
+        execute_fit=False,
+        main_candidates_dir=candidates_dir,
+        local_root_base=local_base,
+        init_model_dir=init_dir,
+        serving_dir=serving_dir,
+    )
+    assert val_res["validated_only"] is True
+    assert val_res["fits_executed"] == 0
+    assert val_res["teacher_anchor_config"]["teacher_kl_weight"] == 1.0
+
+    captured_trainer_kwargs: dict[str, object] = {}
+
+    def _fake_tkl_fit(**kwargs):
+        captured_trainer_kwargs.update(kwargs)
+        cand_dir = kwargs["artifact_root"] / kwargs["output_subdir"]
+        cand_dir.mkdir(parents=True)
+        for fname in ("model.safetensors", "tokenizer.json", "tokenizer_config.json", "config.json"):
+            (cand_dir / fname).write_bytes(fname.encode("utf-8"))
+        (cand_dir / "calibration_manifest.json").write_text('{"valid": true}', encoding="utf-8")
+        (cand_dir / "candidate_provenance_manifest.json").write_text(
+            json.dumps(
+                {
+                    "provenance_status": "verified",
+                    "training_lineage": {
+                        "teacher_kl_enabled": True,
+                        "teacher_weights_sha256": kwargs["expected_teacher_weights_sha256"],
+                        "teacher_kl_weight": kwargs["teacher_kl_weight"],
+                        "teacher_temperature": kwargs["teacher_temperature"],
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        return {"fit_mode": "fit2_supcon_energy", "temperature": 1.0}
+
+    monkeypatch.setattr("scripts.run_orig_fit2_return_contrast_fit.run_fit_and_lock_candidate", _fake_tkl_fit)
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.validate_calibration_manifest",
+        lambda d, p: {"valid": True, "temperature": 1.0, "rejector": {"enabled": False}},
+    )
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.audit_candidate_provenance",
+        lambda d, p: {"provenance_passed": True, "num_labels": 46},
+    )
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.verify_reload_from_archive",
+        lambda d: {"reload_verified": True, "archive_dir": str(d), "num_labels": 46},
+    )
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.evaluate_cal_guard_metrics_for_model",
+        lambda d, inp: dict(base_metrics),
+    )
+
+    fit_res = run_authorized_fit(
+        repo_root=repo_root,
+        prep_dir=prep_dir,
+        run_id="fit2-orig-teacher-kl-v1",
+        profile="option_a_teacher_kl",
+        epochs=3,
+        lr=2e-5,
+        teacher_kl_weight=1.0,
+        teacher_temperature=1.0,
+        teacher_weights_sha256=EXPECTED_FIT2_SHA256,
+        execute_fit=True,
+        main_candidates_dir=candidates_dir,
+        local_root_base=local_base,
+        init_model_dir=init_dir,
+        serving_dir=serving_dir,
+    )
+    assert fit_res["fits_executed"] == 1
+    assert captured_trainer_kwargs["teacher_kl_weight"] == 1.0
+    assert captured_trainer_kwargs["teacher_temperature"] == 1.0
+    assert captured_trainer_kwargs["expected_teacher_weights_sha256"] == EXPECTED_FIT2_SHA256
+    assert captured_trainer_kwargs["teacher_model_dir"] == init_dir
+    run_cfg = json.loads((Path(fit_res["records_dir"]) / "run_config.json").read_text(encoding="utf-8"))
+    assert run_cfg["teacher_anchor_config"]["teacher_kl_weight"] == 1.0
+    cal_report = json.loads((Path(fit_res["records_dir"]) / "cal_guard_report.json").read_text(encoding="utf-8"))
+    assert cal_report["cal_guard_mode"] == "candidate_12_checks"
+    assert fit_res["cal_guard_passed"] is True
