@@ -258,5 +258,6 @@ class TestEvaluateSystemGates:
             "retrieval": {"safety_violations": 0, "recall_at_3": 0.85, "answerable_count": 10},
         }
         res_pass = evaluate_system_gates(metrics_pass, system_config, evidence_kind="live")
-        assert res_pass["all_mandatory_passed"] is True
+        assert res_pass["numeric_targets_passed"] is True
+        assert res_pass["all_mandatory_passed"] is False  # No model provenance in component-only fixture.
         assert res_pass["gates"]["retrieval_recall"]["status"] == "pass"

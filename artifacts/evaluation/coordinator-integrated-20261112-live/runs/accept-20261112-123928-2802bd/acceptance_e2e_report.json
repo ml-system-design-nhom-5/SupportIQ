@@ -1,0 +1,292 @@
+{
+  "meta": {
+    "run_id": "accept-20261112-123928-2802bd",
+    "timestamp": "2026-11-12T12:39:28.179297+00:00",
+    "git_commit": "55f4eb157a32d0a16c7ea84120d25b31fa86bd59",
+    "mode": "live",
+    "boundary_kind": "in_process_asgi_testclient",
+    "evidence_kind": "bounded_live",
+    "scope": "end_to_end_application_acceptance",
+    "boundary": "POST /v1/shop/tickets -> PostgreSQL job -> GET /v1/console/tickets/{id} terminal state",
+    "certification_scope": "bounded_live_run",
+    "certification_disclaimer": "Local runner checks alone cannot certify overall Topic 1 or production deployment; holistic multi-worker acceptance required.",
+    "environment": {
+      "os": "Windows-11-10.0.26300-SP0",
+      "python_version": "3.12.14",
+      "psycopg_impl": "python"
+    },
+    "runner_config": {
+      "num_warm_requests": 4,
+      "poll_timeout_seconds": 25.0,
+      "analysis_timeout_ms": 3000,
+      "draft_timeout_ms": 11000
+    },
+    "raw_records_sha256": "1835908A87B8F1A28B9B4478CCE9FBC77F8BC79049C6ED754EFD10A40B0CF906",
+    "local_expected_provenance_hashes": {
+      "approved_kb_v2_sha256": "F8DCFBBDBB9CB2CD7A09D2EC12E0149083FDD4FA04931DF6261FC4D1E6425FEC",
+      "ai_service_kb_release_sha256": "CF450A72758E3D68AC7453802B5BC6C042EF2EDDB9A6C4FA76483D4009C42804",
+      "routing_policy_sha256": "8789EE26ACDAC2E105FEA90942A1129553CA98DB4B182FCC4D74880B1F537BE7",
+      "runner_config_sha256": "6DD15B083B09279FDBF40A7BB4CB9662954A14EC97E8C84FEA06780A23D92330"
+    },
+    "observed_live_service_provenance": {
+      "release_id": [
+        "local-e3d8cc1c94076875"
+      ],
+      "model_version": [
+        "gemini-3.1-flash-lite",
+        "v1.0.0"
+      ],
+      "kb_version": [
+        "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+      ],
+      "prompt_version": [
+        "grounded-v2"
+      ],
+      "llm_model": [
+        "gemini-3.1-flash-lite"
+      ],
+      "provider": [
+        "google_ai_studio"
+      ]
+    }
+  },
+  "acceptance_summary": {
+    "runner_checks_passed": true,
+    "overall_passed": true,
+    "mock_only_evaluation": false,
+    "global_production_accepted": false,
+    "total_cases": 5,
+    "successful_cases": 5,
+    "technical_errors": 0,
+    "timeouts": 0,
+    "failed_jobs": 0,
+    "auto_send_violations": 0,
+    "human_oversight_enforced": true,
+    "latency_coverage_complete": true
+  },
+  "performance": {
+    "p50_seconds": 0.17556,
+    "p95_seconds": 3.56772,
+    "min_seconds": 0.12688,
+    "max_seconds": 3.56772,
+    "target_p95_met": true,
+    "target_threshold_seconds": 12.0,
+    "conditions": {
+      "cold": {
+        "count": 1,
+        "latency_seconds": 2.49921,
+        "description": "App connection and DB pool cold start only (NOT model or provider cold start)"
+      },
+      "warm": {
+        "count": 4,
+        "p50_seconds": 0.17556,
+        "p95_seconds": 3.56772,
+        "description": "Subsequent tickets executed on warm connection pool and worker"
+      }
+    }
+  },
+  "tokens_and_cost": {
+    "total_prompt_tokens": 2988,
+    "total_candidate_tokens": 281,
+    "total_thinking_tokens": null,
+    "total_completion_tokens": null,
+    "total_tokens": null,
+    "observed_thought_tokens": 0,
+    "observed_partial_tokens": 3269,
+    "thinking_tracked": false,
+    "all_requests_tracked_thinking": false,
+    "cost_status": "partial_lower_bound_missing_thinking",
+    "cost_usd": null,
+    "lower_bound_cost_usd": 0.0011685,
+    "cost_note": "One or more billable attempts lacked thought_tokens/thinking_tokens. Complete cost_usd is strictly null (None); lower_bound_cost_usd reflects lower bound excluding thinking tokens.",
+    "observed_models": [
+      "gemini-3.1-flash-lite"
+    ],
+    "observed_providers": [
+      "google_ai_studio"
+    ],
+    "observed_tiers": []
+  },
+  "cases": [
+    {
+      "case_index": 0,
+      "condition": "cold",
+      "message": "What is your return policy?",
+      "ticket_id": "TCK-1001",
+      "wall_latency_ms": 2499.21,
+      "analysis_status": "ready",
+      "draft_status": "draft_ready",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {
+        "analysis": 18,
+        "draft": 1660,
+        "llm": 1604
+      },
+      "tokens": {
+        "input_tokens": 1419,
+        "output_tokens": 200,
+        "total_tokens": 1619
+      },
+      "llm_metadata": {
+        "provider": "google_ai_studio",
+        "model": "gemini-3.1-flash-lite",
+        "model_version": "gemini-3.1-flash-lite",
+        "prompt_version": "grounded-v2"
+      },
+      "llm_model": "gemini-3.1-flash-lite",
+      "versions": {
+        "release_id": "local-e3d8cc1c94076875",
+        "model_version": "v1.0.0",
+        "model_mode": "trained",
+        "verified": true,
+        "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "prompt_version": "grounded-v2",
+        "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+        "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": true
+    },
+    {
+      "case_index": 1,
+      "condition": "warm",
+      "message": "Can I return an item I bought last week?",
+      "ticket_id": "TCK-1002",
+      "wall_latency_ms": 175.56,
+      "analysis_status": "ready",
+      "draft_status": "abstained",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {
+        "analysis": 33,
+        "draft": 0
+      },
+      "tokens": {},
+      "llm_metadata": {},
+      "llm_model": null,
+      "versions": {
+        "release_id": "local-e3d8cc1c94076875",
+        "model_version": "v1.0.0",
+        "model_mode": "trained",
+        "verified": true,
+        "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "prompt_version": "grounded-v2",
+        "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+        "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": true
+    },
+    {
+      "case_index": 2,
+      "condition": "warm",
+      "message": "How long do I have to make a return?",
+      "ticket_id": "TCK-1003",
+      "wall_latency_ms": 126.88,
+      "analysis_status": "ready",
+      "draft_status": "abstained",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {
+        "analysis": 25,
+        "draft": 0
+      },
+      "tokens": {},
+      "llm_metadata": {},
+      "llm_model": null,
+      "versions": {
+        "release_id": "local-e3d8cc1c94076875",
+        "model_version": "v1.0.0",
+        "model_mode": "trained",
+        "verified": true,
+        "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "prompt_version": "grounded-v2",
+        "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+        "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": true
+    },
+    {
+      "case_index": 3,
+      "condition": "warm",
+      "message": "Do you offer refunds for returned items?",
+      "ticket_id": "TCK-1004",
+      "wall_latency_ms": 128.32,
+      "analysis_status": "ready",
+      "draft_status": "abstained",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {
+        "analysis": 13,
+        "draft": 0
+      },
+      "tokens": {},
+      "llm_metadata": {},
+      "llm_model": null,
+      "versions": {
+        "release_id": "local-e3d8cc1c94076875",
+        "model_version": "v1.0.0",
+        "model_mode": "trained",
+        "verified": true,
+        "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "prompt_version": "grounded-v2",
+        "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+        "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": true
+    },
+    {
+      "case_index": 4,
+      "condition": "warm",
+      "message": "What are the return shipping costs?",
+      "ticket_id": "TCK-1005",
+      "wall_latency_ms": 3567.72,
+      "analysis_status": "ready",
+      "draft_status": "draft_ready",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {
+        "analysis": 12,
+        "draft": 3396,
+        "llm": 3373
+      },
+      "tokens": {
+        "input_tokens": 1569,
+        "output_tokens": 81,
+        "total_tokens": 1650
+      },
+      "llm_metadata": {
+        "provider": "google_ai_studio",
+        "model": "gemini-3.1-flash-lite",
+        "model_version": "gemini-3.1-flash-lite",
+        "prompt_version": "grounded-v2"
+      },
+      "llm_model": "gemini-3.1-flash-lite",
+      "versions": {
+        "release_id": "local-e3d8cc1c94076875",
+        "model_version": "v1.0.0",
+        "model_mode": "trained",
+        "verified": true,
+        "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "prompt_version": "grounded-v2",
+        "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+        "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": true
+    }
+  ]
+}

@@ -1,0 +1,109 @@
+{
+  "evidence_kind": "cached_recomputed_with_serving_report_cross_check",
+  "new_training_executed": false,
+  "records_present_and_verified": true,
+  "baseline_audit": {
+    "manifest_path": "artifacts\\training\\03-11-2026-01\\manifest.json",
+    "oof_path": "artifacts\\training\\03-11-2026-01\\oof_predictions.csv",
+    "manifest_hash_match": true,
+    "n_folds": 10,
+    "n_labels": 46,
+    "candidates": [
+      {
+        "model_id": "linear_svm",
+        "candidate_id": "linear_svm__C=1.5",
+        "rows": 37911,
+        "n_folds": 10,
+        "n_labels": 46,
+        "macro_f1_mean": 0.9902582601407695,
+        "macro_f1_std": 0.0008831302426846849,
+        "oof_macro_f1": 0.9902568842287265,
+        "oof_accuracy": 0.9901611669436311,
+        "meets_target_085": true
+      },
+      {
+        "model_id": "logistic_regression",
+        "candidate_id": "logistic_regression__C=20.0",
+        "rows": 37911,
+        "n_folds": 10,
+        "n_labels": 46,
+        "macro_f1_mean": 0.9892201150363482,
+        "macro_f1_std": 0.0014374825743039214,
+        "oof_macro_f1": 0.9892210122488285,
+        "oof_accuracy": 0.9891060642030017,
+        "meets_target_085": true
+      },
+      {
+        "model_id": "multinomial_nb",
+        "candidate_id": "multinomial_nb__alpha=0.03",
+        "rows": 37911,
+        "n_folds": 10,
+        "n_labels": 46,
+        "macro_f1_mean": 0.9842034768978023,
+        "macro_f1_std": 0.001231515610333533,
+        "oof_macro_f1": 0.9842037536072658,
+        "oof_accuracy": 0.9840943261850122,
+        "meets_target_085": true
+      }
+    ]
+  },
+  "distilbert_oof": {
+    "oof_path": "artifacts\\training\\distilbert_cv\\oof_predictions.csv",
+    "fold_metrics_path": "artifacts\\training\\distilbert_cv\\fold_metrics.csv",
+    "oof_sha256": "db9a12112c1776eaa41e7e03ac85ddc22e654a6bb9ea26b820335542ef761330",
+    "fold_metrics_sha256": "1aaba403fc66e010d9c96f0d352e5db753ef3036e8151b1fcf306d5bcb3d1894",
+    "total_rows": 37911,
+    "unique_sample_ids": 37911,
+    "n_folds": 10,
+    "n_labels": 46,
+    "all_46_labels_present": true,
+    "macro_f1_mean": 0.9952684306823985,
+    "macro_f1_std_ddof0": 0.0009985089600143742,
+    "macro_f1_std_ddof1": 0.0010525208592438058,
+    "oof_macro_f1": 0.9952709256531839,
+    "oof_accuracy": 0.9952256600986521,
+    "core_12_intents_macro_f1": 0.9938866810047235,
+    "meets_target_085": true,
+    "max_fold_f1_delta_vs_fold_metrics_csv": 0.0,
+    "max_fold_acc_delta_vs_fold_metrics_csv": 0.0,
+    "alignment_with_baseline_oof": {
+      "status": "alignment_verified",
+      "aligned": true,
+      "total_samples": 37911,
+      "n_models": 4,
+      "models_verified": [
+        "linear_svm",
+        "logistic_regression",
+        "multinomial_nb",
+        "distilbert"
+      ],
+      "n_folds": 10,
+      "n_labels": 46,
+      "errors": []
+    }
+  },
+  "serving_training_report_linkage": {
+    "serving_dir": "F:\\Năm 3\\SD\\project\\SupportIQ\\artifacts\\models\\trained\\distilbert-supportiq",
+    "training_report_exists": true,
+    "train_sample_ids_exists": true,
+    "training_report_created_at": "2026-11-04T08:24:32.311556+00:00",
+    "training_report_cv_protocol": "10-fold cross-validation",
+    "training_report_cv_n_folds": 10,
+    "training_report_train_samples": 37911,
+    "training_report_cv_macro_f1_mean": 0.9952684306823985,
+    "training_report_cv_macro_f1_std_ddof1": 0.0010525208592438058,
+    "matches_oof_macro_f1_mean_within_1e12": true,
+    "matches_all_10_fold_metrics_within_1e12": true,
+    "training_report_git_commit_recorded": false,
+    "train_sample_ids_sha256_actual": "AEA5D14F09C8BBAB63FBAFE2FAB37C5060705C25798598F3D232F7DC21CE9220",
+    "train_sample_ids_sha256_expected": "AEA5D14F09C8BBAB63FBAFE2FAB37C5060705C25798598F3D232F7DC21CE9220",
+    "train_sample_ids_sha256_match": true,
+    "train_sample_ids_count": 37911,
+    "train_sample_ids_exact_match_oof_sample_ids": true
+  },
+  "missing_lineage_gaps": [
+    "artifacts/training/distilbert_cv/manifest.json hashing oof_predictions.csv/fold_metrics.csv is absent",
+    "serving distilbert-supportiq/training_report.json does not record a git_commit hash",
+    "individual 10-fold DistilBERT fold model weight checkpoints are not stored in the repository (only final refitted serving distilbert-supportiq weights + train_sample_ids + 37,911 OOF CSVs)"
+  ]
+}

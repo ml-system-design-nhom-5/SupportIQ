@@ -1,0 +1,57 @@
+{
+  "ml_noise": {
+    "path": "data\\benchmarks\\autoeval\\v1\\ml_noise.jsonl",
+    "sha256": "22acc786772210ea1b1411cb28f450757f6f6e6d0c159ba2cf760bb77bfaea2d",
+    "size_bytes": 143664
+  },
+  "ml_oos": {
+    "path": "data\\benchmarks\\autoeval\\v1\\ml_oos.jsonl",
+    "sha256": "956abf2c28fa2ccc7fe3c6800f264725c6f4fdd0e99c54f77c498d9c6bbb236c",
+    "size_bytes": 22124
+  },
+  "autoeval_manifest": {
+    "path": "data\\benchmarks\\autoeval\\v1\\manifest.json",
+    "sha256": "d965307a21de8eddcd239a64786b547ea69149e5c6b60f98c4267b9bb97d1553",
+    "size_bytes": 1049
+  },
+  "acceptance_cases": {
+    "path": "data\\benchmarks\\system\\v2\\acceptance\\cases.jsonl",
+    "sha256": "c54c7efcd2d363317a87344cd12c76791db35ec17ca83a2e02b8fcb43f23150b",
+    "size_bytes": 93677
+  },
+  "app_retrieval_gold": {
+    "path": "data\\benchmarks\\app_retrieval_gold_v2.json",
+    "sha256": "a33e6394d6d76384ac33771d014816ae7e2d1a3c379b3c1ec3a7f3605940bee7",
+    "size_bytes": 21859
+  },
+  "intent_policy": {
+    "path": "apps\\core_backend\\config\\policies\\intent_policy.v2.json",
+    "sha256": "8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+    "size_bytes": 4092
+  },
+  "kb_release": {
+    "path": "apps\\ai_service\\kb-release.json",
+    "sha256": "33cf05b50c25384fbb208cd0c0c5cae71991d29a0f754cb1b20a1d6d7285cdaa",
+    "size_bytes": 1130
+  },
+  "approved_kb": {
+    "path": "data\\knowledge\\approved_kb.v2.json",
+    "sha256": "aaa924c4b48dcd53a14269045b278b66f6e5e8ae9d1b614cd59b757102b78594",
+    "size_bytes": 20101
+  },
+  "model_weights": {
+    "path": "artifacts\\models\\trained\\distilbert-supportiq\\model.safetensors",
+    "sha256": "dc7af8cffb19fe7711ed5a5d0137ffff3d7d1a1f43bad5a35edff8c8de4c1302",
+    "size_bytes": 267967920
+  },
+  "model_tokenizer": {
+    "path": "artifacts\\models\\trained\\distilbert-supportiq\\tokenizer.json",
+    "sha256": "5f218e0ea9eaa9f154815cc067351fb941bea26da81bfd12af3ded3cc66fa3ff",
+    "size_bytes": 711648
+  },
+  "model_config": {
+    "path": "artifacts\\models\\trained\\distilbert-supportiq\\config.json",
+    "sha256": "6fa1fa9cc6a94063a977b0adaf2c9c3b296cf296d4ad9dcc6f2c52ca3bac9cb2",
+    "size_bytes": 3349
+  }
+}

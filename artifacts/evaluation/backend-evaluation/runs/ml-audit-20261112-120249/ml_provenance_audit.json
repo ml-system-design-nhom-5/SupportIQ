@@ -1,0 +1,181 @@
+{
+  "meta": {
+    "audit_run_id": "ml-audit-20261112-120249",
+    "timestamp": "2026-11-12T12:02:51.068189+00:00",
+    "git_commit": "f67a018a67f31460bdf9812cbb2815e1491f9660",
+    "repo_root": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-backend-evaluation-v2"
+  },
+  "baseline_audit": {
+    "status": "audited_verified",
+    "manifest_path": "artifacts\\training\\03-11-2026-01\\manifest.json",
+    "oof_path": "artifacts\\training\\03-11-2026-01\\oof_predictions.csv",
+    "sha256_raw": "8211E2DC23E9542FCCA02A5A977880597754FF3841849712BBF5319BF456A14A",
+    "sha256_crlf": "1A09AD4BB4806A9575D73DC75FAC59E164B1623CB1E827E1B4AF3030509A7344",
+    "sha256_lf": "8211E2DC23E9542FCCA02A5A977880597754FF3841849712BBF5319BF456A14A",
+    "manifest_declared_sha256": "1A09AD4BB4806A9575D73DC75FAC59E164B1623CB1E827E1B4AF3030509A7344",
+    "manifest_hash_match": true,
+    "total_rows": 113733,
+    "n_models": 3,
+    "n_folds": 10,
+    "n_labels": 46,
+    "all_46_labels_present": true,
+    "candidates": [
+      {
+        "model_id": "linear_svm",
+        "candidate_id": "linear_svm__C=1.5",
+        "rows": 37911,
+        "n_folds": 10,
+        "n_labels": 46,
+        "macro_f1_mean": 0.9902582601407695,
+        "macro_f1_std": 0.0008831302426846849,
+        "oof_macro_f1": 0.9902568842287265,
+        "oof_accuracy": 0.9901611669436311,
+        "meets_target_085": true
+      },
+      {
+        "model_id": "logistic_regression",
+        "candidate_id": "logistic_regression__C=20.0",
+        "rows": 37911,
+        "n_folds": 10,
+        "n_labels": 46,
+        "macro_f1_mean": 0.9892201150363482,
+        "macro_f1_std": 0.0014374825743039214,
+        "oof_macro_f1": 0.9892210122488285,
+        "oof_accuracy": 0.9891060642030017,
+        "meets_target_085": true
+      },
+      {
+        "model_id": "multinomial_nb",
+        "candidate_id": "multinomial_nb__alpha=0.03",
+        "rows": 37911,
+        "n_folds": 10,
+        "n_labels": 46,
+        "macro_f1_mean": 0.9842034768978023,
+        "macro_f1_std": 0.001231515610333533,
+        "oof_macro_f1": 0.9842037536072658,
+        "oof_accuracy": 0.9840943261850122,
+        "meets_target_085": true
+      }
+    ]
+  },
+  "distilbert_audit": {
+    "status": "audited_cached_recomputed",
+    "evidence_kind": "cached_recomputed",
+    "new_training_executed": false,
+    "per_fold_checkpoint_manifest_verified": false,
+    "missing_fold_manifests_forged": false,
+    "provenance_note": "Audited stored DistilBERT OOF predictions across 10 folds and 37,911 samples. No new training run was executed. Checkpoint manifests for individual folds are not present in repository; this audit does not forge missing manifests.",
+    "oof_path": "artifacts\\training\\distilbert_cv\\oof_predictions.csv",
+    "sha256_raw": "DB9A12112C1776EAA41E7E03AC85DDC22E654A6BB9EA26B820335542EF761330",
+    "sha256_crlf": "611BA5F3FCA1649AE8BE6687EBB4E09F9D2A3A0C40654491217B558401A9FFA4",
+    "sha256_lf": "DB9A12112C1776EAA41E7E03AC85DDC22E654A6BB9EA26B820335542EF761330",
+    "total_rows": 37911,
+    "n_folds": 10,
+    "n_labels": 46,
+    "all_46_labels_present": true,
+    "macro_f1_mean": 0.9952684306823985,
+    "macro_f1_std": 0.0009985089600143742,
+    "oof_macro_f1": 0.9952709256531839,
+    "oof_accuracy": 0.9952256600986521,
+    "core_12_intents_macro_f1": 0.9938866810047237,
+    "meets_target_085": true,
+    "artifacts_generated": {
+      "per_class_metrics_csv": "distilbert_per_class_metrics.csv",
+      "per_class_metrics_sha256": "D09F0C5212EC3BCD7D0F4F47634CE087FEB814E63C786E2363E83A7D80110FA3",
+      "confusion_matrix_csv": "distilbert_confusion_matrix.csv",
+      "confusion_matrix_sha256": "B63EAADED73C22876D7B0C6E0262E3AF17ECF7A3DE8A316F3F5B183746072E42"
+    }
+  },
+  "alignment_audit": {
+    "status": "alignment_verified",
+    "aligned": true,
+    "total_samples": 37911,
+    "n_models": 4,
+    "models_verified": [
+      "linear_svm",
+      "logistic_regression",
+      "multinomial_nb",
+      "distilbert"
+    ],
+    "n_folds": 10,
+    "n_labels": 46,
+    "errors": []
+  },
+  "robustness_audit": {
+    "status": "audited",
+    "noise_suite": {
+      "path": "data\\benchmarks\\autoeval\\v1\\ml_noise.jsonl",
+      "sha256": "22ACC786772210EA1B1411CB28F450757F6F6E6D0C159BA2CF760BB77BFAEA2D",
+      "total_cases": 420,
+      "slices": {
+        "clean": {
+          "n": 84,
+          "accuracy": 0.7738095238095238,
+          "macro_f1": 0.7858164983164984,
+          "median_confidence": 0.8559429583419271
+        },
+        "casual": {
+          "n": 84,
+          "accuracy": 0.7023809523809523,
+          "macro_f1": 0.7358930786562365,
+          "macro_f1_drop": 0.049923419660261814,
+          "median_confidence": 0.79668746236575,
+          "paired_denominator": 65,
+          "paired_conditional_accuracy": 0.9076923076923077
+        },
+        "typo": {
+          "n": 252,
+          "accuracy": 0.5992063492063492,
+          "macro_f1": 0.6266862956329259,
+          "macro_f1_drop": 0.15913020268357247,
+          "median_confidence": 0.7162089968187426,
+          "paired_denominator": 195,
+          "paired_conditional_accuracy": 0.7743589743589744
+        }
+      },
+      "max_f1_drop": 0.15913020268357247
+    },
+    "oos_suite": {
+      "path": "data\\benchmarks\\autoeval\\v1\\ml_oos.jsonl",
+      "sha256": "956ABF2C28FA2CCC7FE3C6800F264725C6F4FDD0E99C54F77C498D9C6BBB236C",
+      "total_cases": 80,
+      "overall_flagged_rate": 0.975,
+      "low_confidence_rate": 0.7625,
+      "drafted_count": 2,
+      "by_category": {
+        "ecommerce_not_in_taxonomy": {
+          "n": 15,
+          "flagged_rate": 1.0,
+          "low_conf_rate": 0.7333333333333333,
+          "drafted": 0
+        },
+        "general": {
+          "n": 20,
+          "flagged_rate": 1.0,
+          "low_conf_rate": 0.95,
+          "drafted": 0
+        },
+        "multi_intent": {
+          "n": 13,
+          "flagged_rate": 0.9230769230769231,
+          "low_conf_rate": 0.46153846153846156,
+          "drafted": 1
+        },
+        "other_domain": {
+          "n": 20,
+          "flagged_rate": 0.95,
+          "low_conf_rate": 0.75,
+          "drafted": 1
+        },
+        "vague": {
+          "n": 12,
+          "flagged_rate": 1.0,
+          "low_conf_rate": 0.8333333333333334,
+          "drafted": 0
+        }
+      },
+      "auroc_entropy": 0.8001488095238095,
+      "auroc_one_minus_conf": 0.7555059523809524
+    }
+  }
+}

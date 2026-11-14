@@ -1,0 +1,70 @@
+{
+  "report_type": "bounded_live_verification_dry_run",
+  "generated_at": "2026-11-13T02:14:31.713876+00:00",
+  "source_commit": "ff0e147d0181317d1550cec8df53420d8eddf771",
+  "preflight": {
+    "preflight_budget": "0/8",
+    "requests_attempted_before_first_call": 0,
+    "max_requests": 8,
+    "max_top_level_generations": 4,
+    "transport_retries_configured": 0,
+    "trust_env": false,
+    "follow_redirects": false,
+    "attempt_timeout_seconds": 5.0,
+    "budget_seconds": 10.0,
+    "provider": "google_ai_studio",
+    "model": "gemini-3.1-flash-lite",
+    "prompt_version": "grounded-v3"
+  },
+  "final_http_requests": 0,
+  "cases": [
+    {
+      "case_id": "final-case-02",
+      "expected_intent": "return_product",
+      "serving_raw_prediction": "return_policy",
+      "serving_raw_confidence": 0.769932,
+      "oracle_routing_recommendation": "draft",
+      "retrieved_docs": [
+        "POL-RET-002:2.0",
+        "POL-SHIP-004:1.0",
+        "POL-ORD-002:1.0"
+      ]
+    },
+    {
+      "case_id": "final-case-03",
+      "expected_intent": "refund_policy",
+      "serving_raw_prediction": "payment_issue",
+      "serving_raw_confidence": 0.44162,
+      "oracle_routing_recommendation": "draft",
+      "retrieved_docs": [
+        "POL-REFUND-001:1.0",
+        "POL-ORD-002:1.0",
+        "POL-RET-003:2.0"
+      ]
+    },
+    {
+      "case_id": "final-case-10",
+      "expected_intent": "delivery_issue",
+      "serving_raw_prediction": "delivery_issue",
+      "serving_raw_confidence": 0.261754,
+      "oracle_routing_recommendation": "draft",
+      "retrieved_docs": [
+        "POL-SHIP-004:1.0",
+        "POL-ORD-001:1.0",
+        "POL-ORD-003:1.0"
+      ]
+    },
+    {
+      "case_id": "final-case-12",
+      "expected_intent": "payment_issue",
+      "serving_raw_prediction": "track_order",
+      "serving_raw_confidence": 0.563562,
+      "oracle_routing_recommendation": "draft",
+      "retrieved_docs": [
+        "POL-PAY-001:1.0",
+        "POL-REFUND-007:1.0",
+        "POL-ORD-001:1.0"
+      ]
+    }
+  ]
+}

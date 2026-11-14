@@ -5,12 +5,54 @@ import math
 import re
 import time
 
-PLACEHOLDER = re.compile(r"\[(NAME|EMAIL|PHONE|CARD|ADDRESS|ORDER_ID|TRACKING_ID|TRANSACTION_ID|LITERAL)(_[1-9][0-9]{0,2})?\]")
+from apps.core_backend.safety import (
+    FACTUAL_COMMITMENT,
+    PLACEHOLDER,
+    SENSITIVE_AUTHORITY_PATTERN,
+    classify_retrieval_fault,
+    evaluate_text_safety,
+    has_unauthorized_duplicate_advice,
+    has_uncovered_cross_border_shipping,
+    has_unqualified_cosmetics_refusal,
+    policy_scope_requires_review,
+)
 
 
 class Engine:
     def __init__(self, model, retriever, llm, versions, policy):
         self.model, self.retriever, self.llm, self.versions, self.policy = model, retriever, llm, versions, policy
+
+    def _policy_scope_requires_review(self, message, evidence):
+        """Reject adjacent policy evidence for explicitly unsupported policy scopes."""
+        return policy_scope_requires_review(message, evidence, self.retriever.eligible_versions)
+
+    @staticmethod
+    def _extract_llm_usage_and_metadata(raw_source: dict) -> tuple[dict, dict]:
+        raw_usage = raw_source.get("usage", {}) or {}
+        llm_usage = {}
+        if "promptTokenCount" in raw_usage and raw_usage["promptTokenCount"] is not None:
+            llm_usage["input_tokens"] = raw_usage["promptTokenCount"]
+        if "candidatesTokenCount" in raw_usage and raw_usage["candidatesTokenCount"] is not None:
+            llm_usage["output_tokens"] = raw_usage["candidatesTokenCount"]
+        if "totalTokenCount" in raw_usage and raw_usage["totalTokenCount"] is not None:
+            llm_usage["total_tokens"] = raw_usage["totalTokenCount"]
+        elif "input_tokens" in llm_usage and "output_tokens" in llm_usage:
+            llm_usage["total_tokens_partial"] = llm_usage["input_tokens"] + llm_usage["output_tokens"]
+        if "thoughtsTokenCount" in raw_usage and raw_usage["thoughtsTokenCount"] is not None:
+            llm_usage["thought_tokens"] = raw_usage["thoughtsTokenCount"]
+
+        llm_metadata = {}
+        for meta_key, gen_key in (
+            ("provider", "provider"),
+            ("model", "model"),
+            ("model_version", "model_version"),
+            ("prompt_version", "prompt_version"),
+        ):
+            if raw_source.get(gen_key):
+                llm_metadata[meta_key] = raw_source[gen_key]
+        if "attempts" in raw_source and raw_source["attempts"]:
+            llm_metadata["attempts"] = list(raw_source["attempts"])
+        return llm_usage, llm_metadata
 
     def _analyse(self, request):
         started = time.perf_counter()
@@ -23,10 +65,37 @@ class Engine:
         codes = []
         if low:
             codes.append("low_confidence")
+        selective_accepted = prediction.get("selective_accepted")
+        rejected_flag = prediction.get("rejected_by_experimental_adapter")
+        rejector_decision = prediction.get("rejector_decision")
+        selective_rejected = (
+            (selective_accepted is False)
+            or (rejected_flag is True)
+            or (isinstance(rejector_decision, str) and rejector_decision.lower() == "reject")
+        )
+        if not override and selective_rejected:
+            if "low_confidence" not in codes:
+                codes.append("low_confidence")
+            if "out_of_scope_intent" not in codes:
+                codes.append("out_of_scope_intent")
+        all_46_labels = set(self.policy.get("all_46_labels", []))
+        recognized_outside_scope = (
+            label in all_46_labels and label not in self.policy["supported_12_intents"]
+        )
         if label not in self.policy["supported_12_intents"]:
-            codes.append("out_of_scope_intent")
-        if label == "human_agent":
-            codes.append("human_agent_requested")
+            if "out_of_scope_intent" not in codes:
+                codes.append("out_of_scope_intent")
+        text_safety = evaluate_text_safety(request["message"])
+        if label == "human_agent" or text_safety["human_agent_requested"]:
+            if "human_agent_requested" not in codes:
+                codes.append("human_agent_requested")
+
+        # Escalated intents outside product scope explicitly requested in customer message
+        explicit_outside_scope_action = text_safety["outside_product_scope"]
+        if explicit_outside_scope_action or text_safety["tax_ood"]:
+            if "out_of_scope_intent" not in codes:
+                codes.append("out_of_scope_intent")
+
         candidates = [item.model_dump() if hasattr(item, "model_dump") else item for item in prediction.get("top_k", [])]
         if not override and candidates:
             probs = [item.get("probability", 0) for item in candidates]
@@ -40,17 +109,49 @@ class Engine:
                         codes.append("low_confidence")
                     if "out_of_scope_intent" not in codes:
                         codes.append("out_of_scope_intent")
-        sensitive = label in self.policy["sensitive_action_intents"] or not override and any(item["intent"] in self.policy["sensitive_action_intents"] and item["probability"] >= self.policy.get("default_margin_threshold", .1) for item in candidates)
-        if sensitive or re.search(r"\b(fraud|lawsuit|legal action|chargeback|unauthorized transaction|policy exception)\b", request["message"], re.I):
-            codes.append("requires_authority")
+        explicit_authority = bool(text_safety["requires_authority"])
+        sensitive = (
+            label in self.policy.get("sensitive_action_intents", [])
+            or prediction.get("intent") in self.policy.get("sensitive_action_intents", [])
+            or any(
+                item.get("intent") in self.policy.get("sensitive_action_intents", [])
+                and item.get("probability", 0) >= self.policy.get("default_margin_threshold", 0.1)
+                for item in candidates
+            )
+            or explicit_authority
+        )
+        if sensitive:
+            if "requires_authority" not in codes:
+                codes.append("requires_authority")
         retrieved = self.retriever.retrieve(request["message"], label, role="agent", current_time=datetime.fromisoformat(request["as_of"].replace("Z", "+00:00")))
         evidence = retrieved.get("evidence", [])
         warnings = []
-        if retrieved.get("has_conflict"):
-            codes.append("conflicting_sources")
-            warnings.append("Retrieved knowledge base sources contain conflicting policy terms. Staff review required.")
-        if not evidence:
-            codes.append("no_valid_document")
+        retrieval_fault_codes = classify_retrieval_fault(retrieved)
+        is_retrieval_fault = bool(retrieval_fault_codes)
+        if retrieval_fault_codes:
+            for fault_code in retrieval_fault_codes:
+                if fault_code not in codes:
+                    codes.append(fault_code)
+            scope_review = self._policy_scope_requires_review(request["message"], evidence)
+        else:
+            if retrieved.get("has_conflict"):
+                codes.append("conflicting_sources")
+                warnings.append("Retrieved knowledge base sources contain conflicting policy terms. Staff review required.")
+            # Knowledge evidence validation: rely on retriever's configured relevance threshold (0.55 default),
+            # avoiding dual hidden thresholds or artificial safe-by-refusal.
+            retrieval_threshold = getattr(self.retriever, "relevance_threshold", 0.55)
+            uncovered_delivery = has_uncovered_cross_border_shipping(request["message"], evidence)
+            has_scores = any(item.get("score") is not None for item in evidence)
+            max_evidence_score = max((item.get("score") or 0.0) for item in evidence if item.get("score") is not None) if has_scores else 1.0
+            ret_reasons = set(retrieved.get("reason_codes", []))
+            if "only_expired_documents" in ret_reasons and "only_expired_documents" not in codes:
+                codes.append("only_expired_documents")
+            if not evidence or uncovered_delivery or (has_scores and max_evidence_score < retrieval_threshold) or "below_relevance_threshold" in ret_reasons:
+                if "no_valid_document" not in codes:
+                    codes.append("no_valid_document")
+            scope_review = self._policy_scope_requires_review(request["message"], evidence)
+            if scope_review and "insufficient_evidence" not in codes:
+                codes.append("insufficient_evidence")
         documents = []
         for index, item in enumerate(evidence, 1):
             original = next((document for document in self.retriever.eligible_versions if document.doc_id == item["document_id"] and str(document.version) == str(item["version"])), None)
@@ -58,11 +159,34 @@ class Engine:
                               "snippet": item["excerpt"], "score": item.get("score"), "rank": index, "validity": "valid",
                               "effective_from": str(original.metadata.valid_from) if original else None,
                               "effective_to": str(original.metadata.valid_to) if original and original.metadata.valid_to else None})
-        recommendation = "escalate" if "human_agent_requested" in codes else "abstain" if set(codes) & {"low_confidence", "out_of_scope_intent", "no_valid_document", "conflicting_sources"} else "draft"
-        analysis = {"intent": {"label": label, "probability": probability, "confidence_band": "low" if (low or "low_confidence" in codes) else "high" if probability >= .9 else "medium", "source": "staff" if override else "model", "score_kind": "staff_choice" if override else prediction.get("score_kind", "unknown")},
+        recommendation = (
+            "escalate"
+            if (
+                "human_agent_requested" in codes
+                or explicit_authority
+                or scope_review
+                or is_retrieval_fault
+                or recognized_outside_scope
+                or explicit_outside_scope_action
+            )
+            else "abstain"
+            if set(codes) & {"low_confidence", "out_of_scope_intent", "no_valid_document", "conflicting_sources"}
+            else "draft"
+        )
+        routing_payload = {"recommendation": recommendation, "reason_codes": codes}
+        for rej_key in (
+            "selective_accepted",
+            "selective_score",
+            "selective_threshold",
+            "rejected_by_experimental_adapter",
+            "rejector_decision",
+        ):
+            if rej_key in prediction and prediction[rej_key] is not None:
+                routing_payload[rej_key] = prediction[rej_key]
+        analysis = {"intent": {"label": label, "probability": probability, "confidence_band": "low" if (low or "low_confidence" in codes) else "high" if probability >= .9 else "medium", "source": "staff" if override else "model", "score_kind": "staff_choice" if override else prediction.get("score_kind", "unknown"), "model_mode": "override" if override else prediction.get("model_mode", "unknown"), "verified": False if override else bool(prediction.get("verified", False))},
                     "alternatives": [{"label": item["intent"], "probability": item["probability"], "confidence_band": "low"} for item in candidates if item["intent"] != label][:4],
                     "is_in_scope": label in self.policy["supported_12_intents"], "documents": documents,
-                    "routing": {"recommendation": recommendation, "reason_codes": codes}, "warnings": warnings, "versions": self.versions,
+                    "routing": routing_payload, "warnings": warnings, "versions": self.versions,
                     "step_latency_ms": {"analysis": round((time.perf_counter() - started) * 1000)}}
         return analysis, evidence
 
@@ -75,7 +199,9 @@ class Engine:
         result = {"analysis": analysis, "reason_codes": codes, "versions": self.versions, "step_latency_ms": analysis["step_latency_ms"], "mask_count_by_type": {}}
         if analysis["routing"]["recommendation"] != "draft":
             result["status"] = "escalation_recommended" if analysis["routing"]["recommendation"] == "escalate" else "abstained"
-            if "low_confidence" in codes:
+            if result['status'] == 'escalation_recommended':
+                result['staff_note'] = 'Escalate this request to authorized staff to resolve the policy or authority issue before replying.'
+            elif "low_confidence" in codes:
                 result["staff_note"] = "The model score or margin is below the routing threshold. Confirm or correct the intent before drafting."
             return result
         try:
@@ -84,16 +210,63 @@ class Engine:
         except Exception as error:
             code = getattr(error, 'code', 'llm_unavailable')
             failure = 'grounding_failed' if code in ('llm_insufficient_evidence', 'llm_invalid_citations') else 'llm_invalid_output' if code in ('llm_invalid_response',) else 'llm_unavailable'
-            return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {failure}), "failure_code": code if code.startswith("llm_") else "llm_unavailable", "staff_note": "The LLM timed out after a bounded retry. Try AI again or use the retrieved sources to write a reply." if code == "llm_timeout" else "Draft generation is unavailable. Review the retrieved sources and write a reply manually."}
+            err_result = {
+                **result,
+                "status": "escalation_recommended" if code == 'llm_insufficient_evidence' else "llm_unavailable",
+                "reason_codes": list(set(codes) | {failure} | ({'insufficient_evidence'} if code == 'llm_insufficient_evidence' else set())),
+                "failure_code": code if code.startswith("llm_") else "llm_unavailable",
+                "staff_note": "The LLM timed out after a bounded retry. Try AI again or use the retrieved sources to write a reply." if code == "llm_timeout" else "Draft generation is unavailable. Review the retrieved sources and write a reply manually.",
+            }
+            if code == 'llm_insufficient_evidence':
+                err_result['staff_note'] = 'The retrieved sources cannot answer this request. Escalate for policy clarification before replying.'
+            err_usage_dict = getattr(error, "usage", {}) or {}
+            err_meta_dict = getattr(error, "metadata", {}) or {}
+            err_latency = getattr(error, "latency_seconds", None)
+            err_attempts = getattr(error, "attempts", []) or []
+            if err_usage_dict or err_meta_dict or err_attempts:
+                err_bundle = {"usage": err_usage_dict, "attempts": err_attempts, **err_meta_dict}
+                err_usage, err_metadata = self._extract_llm_usage_and_metadata(err_bundle)
+                if err_usage:
+                    err_result["llm_usage"] = err_usage
+                if err_metadata:
+                    err_result["llm_metadata"] = err_metadata
+            if err_latency is not None:
+                err_result["step_latency_ms"] = {
+                    **analysis["step_latency_ms"],
+                    "llm": round(err_latency * 1000),
+                }
+            return err_result
+
+        # Preserve complete LLM usage and provenance even if post-generation grounding fails
+        llm_usage, llm_metadata = self._extract_llm_usage_and_metadata(generated)
+        result["step_latency_ms"] = {**analysis["step_latency_ms"], "llm": round(generated.get("latency_seconds", 0) * 1000)}
+        result["llm_usage"] = llm_usage
+        if llm_metadata:
+            result["llm_metadata"] = llm_metadata
+
         text = generated["body"]
         allowed_placeholders = {match.group() for match in PLACEHOLDER.finditer(request["message"])}
         if any(match.group() not in allowed_placeholders for match in PLACEHOLDER.finditer(text)):
             return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"llm_invalid_output"})}
+
+        # Grounding Guardrail 1: Cosmetics / restricted categories must not overgeneralize.
+        # POL-RET-003 excludes cosmetics and chemicals only when protective packaging/seal is unsealed or opened.
+        if has_unqualified_cosmetics_refusal(text):
+            return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
+
+        # Grounding Guardrail 2: Chargeback / unauthorized payment must NOT receive generic duplicate-charge advice.
+        if has_unauthorized_duplicate_advice(
+            request["message"],
+            text,
+            generated.get("input_snapshot", {}).get("sources", []),
+        ):
+            return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
+
         sources = {source["source_id"]: source for source in generated["input_snapshot"]["sources"]}
         citations, segments = {}, []
         for paragraph_index, paragraph in enumerate(re.split(r"\n\s*\n", text.strip())):
             source_ids = re.findall(r"\[(S\d+)\]", paragraph)
-            if not source_ids and len(paragraph) > 40:
+            if not source_ids and (len(paragraph) > 40 or FACTUAL_COMMITMENT.search(paragraph)):
                 return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
             citation_ids = []
             for identifier in source_ids:
@@ -109,12 +282,12 @@ class Engine:
                             order_id = identifier + "_" + field
                             citations[order_id] = {"citation_id": order_id, "source_type": "order_context", "field": field}
                             citation_ids.append(order_id)
+            if source_ids and not citation_ids:
+                return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
             segments.append({"segment_id": f"segment-{paragraph_index}", "paragraph_index": paragraph_index,
                              "text": re.sub(r"\s*\[S\d+\]", "", paragraph).strip(), "citation_ids": list(dict.fromkeys(citation_ids))})
         if not segments or not citations:
             return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
-        result['step_latency_ms'] = {**analysis['step_latency_ms'], 'llm': round(generated.get('latency_seconds', 0) * 1000)}
-        result['llm_usage'] = {'input_tokens': generated.get('usage', {}).get('promptTokenCount'), 'output_tokens': generated.get('usage', {}).get('candidatesTokenCount')}
         is_clarification = generated.get("is_clarification", False)
         final_codes = list(set(codes) | ({"missing_information"} if is_clarification else set()))
         staff_note = (

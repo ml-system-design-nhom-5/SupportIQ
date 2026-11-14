@@ -1,0 +1,577 @@
+{
+  "report_type": "bounded_live_oracle_intent_provider_verification",
+  "verification_scope": "oracle_intent_grounded_provider_component_verification",
+  "scope_boundary": "Diagnostic component check using expected-intent oracle override and approved KB sources on 4 cases. NOT automatic end-to-end classifier coverage, and does NOT claim whole-system live acceptance.",
+  "generated_at": "2026-11-13T02:15:25.918467+00:00",
+  "source_commit": "ff0e147d0181317d1550cec8df53420d8eddf771",
+  "configured_provider": {
+    "provider": "google_ai_studio",
+    "model": "gemini-3.1-flash-lite",
+    "prompt_version": "grounded-v3",
+    "configured_timeout_env": "15",
+    "enforced_attempt_timeout_seconds": 5.0,
+    "enforced_budget_seconds": 10.0
+  },
+  "provenance_hashes": {
+    "approved_kb_v2_sha256": "aaa924c4b48dcd53a14269045b278b66f6e5e8ae9d1b614cd59b757102b78594",
+    "kb_release_sha256": "33cf05b50c25384fbb208cd0c0c5cae71991d29a0f754cb1b20a1d6d7285cdaa",
+    "intent_policy_v2_sha256": "8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+    "final_acceptance_cases_sha256": "fcb1007bf026e7406f3270ccf54770f262ed22a708c2fcf3aae3600195641b9b"
+  },
+  "preflight": {
+    "preflight_budget": "0/8",
+    "requests_attempted_before_first_call": 0,
+    "max_requests": 8,
+    "max_top_level_generations": 4,
+    "transport_retries_configured": 0,
+    "trust_env": false,
+    "follow_redirects": false,
+    "attempt_timeout_seconds": 5.0,
+    "budget_seconds": 10.0,
+    "provider": "google_ai_studio",
+    "model": "gemini-3.1-flash-lite",
+    "prompt_version": "grounded-v3"
+  },
+  "budget_accounting": {
+    "authorized_max_http_requests": 8,
+    "actual_http_requests_made": 8,
+    "rejected_before_network_count": 0,
+    "budget_enforced_within_cap": true,
+    "transport_retries_configured": 0
+  },
+  "summary": {
+    "cases_executed": 4,
+    "draft_ready_count": 2,
+    "fallback_count": 2,
+    "no_auto_send_all": true,
+    "wall_elapsed_p50_seconds": 9.9265,
+    "wall_elapsed_max_seconds": 10.1452
+  },
+  "tokens_and_cost": {
+    "total_attempts_counted": 8,
+    "attempts_missing_usage": 6,
+    "complete_token_coverage": false,
+    "observed_prompt_tokens": 3446,
+    "observed_candidate_tokens": 250,
+    "observed_thought_tokens": 0,
+    "observed_reported_total_tokens": null,
+    "observed_partial_total_tokens": 3696,
+    "complete_cost_known": false,
+    "invoice_verified": false,
+    "cost_status": "incomplete_token_coverage",
+    "conditional_observed_list_price_usd": 0.00033345,
+    "list_price_reference_used": {
+      "model": "gemini-3.1-flash-lite",
+      "input_cost_per_million": 0.075,
+      "output_cost_per_million": 0.3,
+      "note": "Conditional reference list-price rates only; actual account billing tier/invoice is unverified.",
+      "configured_model": "gemini-3.1-flash-lite"
+    },
+    "complete_cost_usd": null,
+    "cost_note": "One or more attempts lacked complete provider usage (e.g., timeout/error); total tokens and complete cost are UNKNOWN."
+  },
+  "transport_calls": [
+    {
+      "transport_call_index": 0,
+      "rejected_before_network": false,
+      "scheme": "https",
+      "host": "generativelanguage.googleapis.com",
+      "path": "/v1beta/models/gemini-3.1-flash-lite:generateContent",
+      "requested_read_timeout": 5.0,
+      "requested_connect_timeout": 3.0,
+      "outcome": "http_response",
+      "http_status": 503,
+      "duration_seconds": 4.6539
+    },
+    {
+      "transport_call_index": 1,
+      "rejected_before_network": false,
+      "scheme": "https",
+      "host": "generativelanguage.googleapis.com",
+      "path": "/v1beta/models/gemini-3.1-flash-lite:generateContent",
+      "requested_read_timeout": 5.0,
+      "requested_connect_timeout": 3.0,
+      "outcome": "ReadTimeout",
+      "http_status": null,
+      "duration_seconds": 5.0049
+    },
+    {
+      "transport_call_index": 2,
+      "rejected_before_network": false,
+      "scheme": "https",
+      "host": "generativelanguage.googleapis.com",
+      "path": "/v1beta/models/gemini-3.1-flash-lite:generateContent",
+      "requested_read_timeout": 5.0,
+      "requested_connect_timeout": 3.0,
+      "outcome": "ReadTimeout",
+      "http_status": null,
+      "duration_seconds": 5.1051
+    },
+    {
+      "transport_call_index": 3,
+      "rejected_before_network": false,
+      "scheme": "https",
+      "host": "generativelanguage.googleapis.com",
+      "path": "/v1beta/models/gemini-3.1-flash-lite:generateContent",
+      "requested_read_timeout": 4.891000000000531,
+      "requested_connect_timeout": 3.0,
+      "outcome": "ReadTimeout",
+      "http_status": null,
+      "duration_seconds": 5.0038
+    },
+    {
+      "transport_call_index": 4,
+      "rejected_before_network": false,
+      "scheme": "https",
+      "host": "generativelanguage.googleapis.com",
+      "path": "/v1beta/models/gemini-3.1-flash-lite:generateContent",
+      "requested_read_timeout": 5.0,
+      "requested_connect_timeout": 3.0,
+      "outcome": "ReadTimeout",
+      "http_status": null,
+      "duration_seconds": 5.1041
+    },
+    {
+      "transport_call_index": 5,
+      "rejected_before_network": false,
+      "scheme": "https",
+      "host": "generativelanguage.googleapis.com",
+      "path": "/v1beta/models/gemini-3.1-flash-lite:generateContent",
+      "requested_read_timeout": 4.891000000000531,
+      "requested_connect_timeout": 3.0,
+      "outcome": "http_response",
+      "http_status": 200,
+      "duration_seconds": 1.3846
+    },
+    {
+      "transport_call_index": 6,
+      "rejected_before_network": false,
+      "scheme": "https",
+      "host": "generativelanguage.googleapis.com",
+      "path": "/v1beta/models/gemini-3.1-flash-lite:generateContent",
+      "requested_read_timeout": 5.0,
+      "requested_connect_timeout": 3.0,
+      "outcome": "ReadTimeout",
+      "http_status": null,
+      "duration_seconds": 5.0162
+    },
+    {
+      "transport_call_index": 7,
+      "rejected_before_network": false,
+      "scheme": "https",
+      "host": "generativelanguage.googleapis.com",
+      "path": "/v1beta/models/gemini-3.1-flash-lite:generateContent",
+      "requested_read_timeout": 4.984999999999673,
+      "requested_connect_timeout": 3.0,
+      "outcome": "http_response",
+      "http_status": 200,
+      "duration_seconds": 1.3283
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "final-case-02",
+      "expected_intent": "return_product",
+      "expected_docs": [
+        "POL-RET-002:2.0"
+      ],
+      "serving_raw_prediction": "return_policy",
+      "serving_raw_confidence": 0.769932,
+      "diagnostic_intent_override": "return_product",
+      "terminal_status": "llm_unavailable",
+      "failure_code": "llm_timeout",
+      "reason_codes": [
+        "llm_unavailable",
+        "requires_authority"
+      ],
+      "staff_note": "The LLM timed out after a bounded retry. Try AI again or use the retrieved sources to write a reply.",
+      "no_auto_send_verified": true,
+      "http_requests_this_case": 2,
+      "attempt_count": 2,
+      "wall_elapsed_seconds": 9.9265,
+      "reported_llm_latency_seconds": 9.913,
+      "sum_attempt_transport_seconds": 9.663,
+      "step_latency_ms": {
+        "analysis": 12,
+        "llm": 9913
+      },
+      "llm_usage_mapped": {},
+      "attempts": [
+        {
+          "attempt_index": 0,
+          "status": "llm_unavailable",
+          "latency_seconds": 4.6577,
+          "stage": "http_response",
+          "http_status": 503,
+          "exception_category": "http_status",
+          "usage": {},
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        },
+        {
+          "attempt_index": 1,
+          "status": "llm_timeout",
+          "latency_seconds": 5.0053,
+          "stage": "transport",
+          "http_status": null,
+          "exception_category": "timeout",
+          "usage": {},
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        }
+      ],
+      "retrieved_sources": [
+        {
+          "document_id": "POL-RET-002",
+          "version": "2.0",
+          "score": 0.9809,
+          "kb_recorded_content_hash": "2deef738f75b3f0cd7c6dd4f942b6fd98272d36d9db67f73b07912125aab410a",
+          "source_content_sha256": "2deef738f75b3f0cd7c6dd4f942b6fd98272d36d9db67f73b07912125aab410a",
+          "valid_from": "2026-01-01T00:00:00Z",
+          "valid_to": "2026-12-31T23:59:59Z"
+        },
+        {
+          "document_id": "POL-SHIP-004",
+          "version": "1.0",
+          "score": 0.7866,
+          "kb_recorded_content_hash": "ea5d0d68a1c2e927cfc5aba386bacbc3a3e2ed14cfa9cf132fd46bfff0370bbe",
+          "source_content_sha256": "ea5d0d68a1c2e927cfc5aba386bacbc3a3e2ed14cfa9cf132fd46bfff0370bbe",
+          "valid_from": "2026-01-01T00:00:00Z",
+          "valid_to": "2026-12-31T23:59:59Z"
+        },
+        {
+          "document_id": "POL-ORD-002",
+          "version": "1.0",
+          "score": 0.763,
+          "kb_recorded_content_hash": "b1cf02ac170e19895e5f685fec15a6a8e6ade325a43640fb2d001be551cfd380",
+          "source_content_sha256": "b1cf02ac170e19895e5f685fec15a6a8e6ade325a43640fb2d001be551cfd380",
+          "valid_from": "2026-01-01T00:00:00Z",
+          "valid_to": "2026-12-31T23:59:59Z"
+        }
+      ],
+      "draft": null
+    },
+    {
+      "case_id": "final-case-03",
+      "expected_intent": "refund_policy",
+      "expected_docs": [
+        "POL-REFUND-001:1.0"
+      ],
+      "serving_raw_prediction": "payment_issue",
+      "serving_raw_confidence": 0.44162,
+      "diagnostic_intent_override": "refund_policy",
+      "terminal_status": "llm_unavailable",
+      "failure_code": "llm_timeout",
+      "reason_codes": [
+        "llm_unavailable",
+        "requires_authority"
+      ],
+      "staff_note": "The LLM timed out after a bounded retry. Try AI again or use the retrieved sources to write a reply.",
+      "no_auto_send_verified": true,
+      "http_requests_this_case": 2,
+      "attempt_count": 2,
+      "wall_elapsed_seconds": 10.1452,
+      "reported_llm_latency_seconds": 10.11,
+      "sum_attempt_transport_seconds": 10.1098,
+      "step_latency_ms": {
+        "analysis": 34,
+        "llm": 10110
+      },
+      "llm_usage_mapped": {},
+      "attempts": [
+        {
+          "attempt_index": 0,
+          "status": "llm_timeout",
+          "latency_seconds": 5.1053,
+          "stage": "transport",
+          "http_status": null,
+          "exception_category": "timeout",
+          "usage": {},
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        },
+        {
+          "attempt_index": 1,
+          "status": "llm_timeout",
+          "latency_seconds": 5.0045,
+          "stage": "transport",
+          "http_status": null,
+          "exception_category": "timeout",
+          "usage": {},
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        }
+      ],
+      "retrieved_sources": [
+        {
+          "document_id": "POL-REFUND-001",
+          "version": "1.0",
+          "score": 0.8955,
+          "kb_recorded_content_hash": "e925c3cbfe7ad12063e1fbd2499b8867f29160a8ad53c5c42155b9d74be0776c",
+          "source_content_sha256": "e925c3cbfe7ad12063e1fbd2499b8867f29160a8ad53c5c42155b9d74be0776c",
+          "valid_from": "2026-01-01T00:00:00Z",
+          "valid_to": "2026-12-31T23:59:59Z"
+        },
+        {
+          "document_id": "POL-ORD-002",
+          "version": "1.0",
+          "score": 0.6656,
+          "kb_recorded_content_hash": "b1cf02ac170e19895e5f685fec15a6a8e6ade325a43640fb2d001be551cfd380",
+          "source_content_sha256": "b1cf02ac170e19895e5f685fec15a6a8e6ade325a43640fb2d001be551cfd380",
+          "valid_from": "2026-01-01T00:00:00Z",
+          "valid_to": "2026-12-31T23:59:59Z"
+        },
+        {
+          "document_id": "POL-RET-003",
+          "version": "2.0",
+          "score": 0.6502,
+          "kb_recorded_content_hash": "94bdfee5529f268548ee30c7537c47403b8a2a6f5fd2622dd2a877c797ee6bc5",
+          "source_content_sha256": "94bdfee5529f268548ee30c7537c47403b8a2a6f5fd2622dd2a877c797ee6bc5",
+          "valid_from": "2026-01-01T00:00:00Z",
+          "valid_to": "2026-12-31T23:59:59Z"
+        }
+      ],
+      "draft": null
+    },
+    {
+      "case_id": "final-case-10",
+      "expected_intent": "delivery_issue",
+      "expected_docs": [
+        "POL-SHIP-004:1.0"
+      ],
+      "serving_raw_prediction": "delivery_issue",
+      "serving_raw_confidence": 0.261754,
+      "diagnostic_intent_override": "delivery_issue",
+      "terminal_status": "draft_ready",
+      "failure_code": null,
+      "reason_codes": [],
+      "staff_note": "Review every claim against its cited source. AI output is supporting information; a person decides what to send.",
+      "no_auto_send_verified": true,
+      "http_requests_this_case": 2,
+      "attempt_count": 2,
+      "wall_elapsed_seconds": 6.6006,
+      "reported_llm_latency_seconds": 6.494,
+      "sum_attempt_transport_seconds": 6.4938,
+      "step_latency_ms": {
+        "analysis": 101,
+        "llm": 6494
+      },
+      "llm_usage_mapped": {
+        "input_tokens": 1742,
+        "output_tokens": 122,
+        "total_tokens_partial": 1864
+      },
+      "attempts": [
+        {
+          "attempt_index": 0,
+          "status": "llm_timeout",
+          "latency_seconds": 5.1047,
+          "stage": "transport",
+          "http_status": null,
+          "exception_category": "timeout",
+          "usage": {},
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        },
+        {
+          "attempt_index": 1,
+          "status": "success",
+          "latency_seconds": 1.3891,
+          "stage": "complete",
+          "http_status": 200,
+          "exception_category": null,
+          "usage": {
+            "promptTokenCount": 1742,
+            "candidatesTokenCount": 122,
+            "totalTokenCount": 1864
+          },
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "model_version": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        }
+      ],
+      "retrieved_sources": [
+        {
+          "document_id": "POL-SHIP-004",
+          "version": "1.0",
+          "score": 0.8283,
+          "kb_recorded_content_hash": "ea5d0d68a1c2e927cfc5aba386bacbc3a3e2ed14cfa9cf132fd46bfff0370bbe",
+          "source_content_sha256": "ea5d0d68a1c2e927cfc5aba386bacbc3a3e2ed14cfa9cf132fd46bfff0370bbe",
+          "valid_from": "2026-01-01T00:00:00Z",
+          "valid_to": "2026-12-31T23:59:59Z"
+        },
+        {
+          "document_id": "POL-ORD-001",
+          "version": "1.0",
+          "score": 0.6589,
+          "kb_recorded_content_hash": "cfecb27c7546ff35f2b47b0803b86fea6cd8d866c96096733cb412e9aae2c679",
+          "source_content_sha256": "cfecb27c7546ff35f2b47b0803b86fea6cd8d866c96096733cb412e9aae2c679",
+          "valid_from": "2026-01-01T00:00:00Z",
+          "valid_to": "2026-12-31T23:59:59Z"
+        },
+        {
+          "document_id": "POL-ORD-003",
+          "version": "1.0",
+          "score": 0.6297,
+          "kb_recorded_content_hash": "96a3d87bc7a88dd4f52f2a46cabf1e1e177bb86ae8385c0e2db6378e36c885db",
+          "source_content_sha256": "96a3d87bc7a88dd4f52f2a46cabf1e1e177bb86ae8385c0e2db6378e36c885db",
+          "valid_from": "2026-01-01T00:00:00Z",
+          "valid_to": "2026-12-31T23:59:59Z"
+        }
+      ],
+      "draft": {
+        "segments": [
+          {
+            "segment_id": "segment-0",
+            "text": "If a courier marks an order as 'Successfully Delivered' when you have not received the parcel, you must contact Tiki Customer Support within 24-48 hours via our hotline at 1900 6035. Our dispatch team will then verify the courier's GPS logs, coordinate with the delivery hub, and work to resolve your complaint.",
+            "citation_ids": [
+              "S1"
+            ]
+          }
+        ],
+        "citations": [
+          {
+            "citation_id": "S1",
+            "source_type": "kb_document",
+            "document_id": "POL-SHIP-004",
+            "version": "1.0",
+            "snippet": "Handling Delayed, Lost, or Discrepant Delivery Statuses\nIn the event a Tiki order exceeds its estimated delivery date without arrival, or if a courier marks an order as 'Successfully Delivered' when the customer has not received the parcel, the customer must contact Tiki Customer Support within 24-48 hours via hotline 1900 6035. Tiki's dispatch team will verify courier GPS logs, coordinate with the delivery hub, and resolve the complaint. If an order is lost, Tiki will dispatch a replacement or issue a 100% refund."
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "final-case-12",
+      "expected_intent": "payment_issue",
+      "expected_docs": [
+        "POL-PAY-001:1.0"
+      ],
+      "serving_raw_prediction": "track_order",
+      "serving_raw_confidence": 0.563562,
+      "diagnostic_intent_override": "payment_issue",
+      "terminal_status": "draft_ready",
+      "failure_code": null,
+      "reason_codes": [
+        "requires_authority"
+      ],
+      "staff_note": "Review every claim against its cited source. AI output is supporting information; a person decides what to send.",
+      "no_auto_send_verified": true,
+      "http_requests_this_case": 2,
+      "attempt_count": 2,
+      "wall_elapsed_seconds": 6.4771,
+      "reported_llm_latency_seconds": 6.349,
+      "sum_attempt_transport_seconds": 6.3492,
+      "step_latency_ms": {
+        "analysis": 124,
+        "llm": 6349
+      },
+      "llm_usage_mapped": {
+        "input_tokens": 1704,
+        "output_tokens": 128,
+        "total_tokens_partial": 1832
+      },
+      "attempts": [
+        {
+          "attempt_index": 0,
+          "status": "llm_timeout",
+          "latency_seconds": 5.0171,
+          "stage": "transport",
+          "http_status": null,
+          "exception_category": "timeout",
+          "usage": {},
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        },
+        {
+          "attempt_index": 1,
+          "status": "success",
+          "latency_seconds": 1.3321,
+          "stage": "complete",
+          "http_status": 200,
+          "exception_category": null,
+          "usage": {
+            "promptTokenCount": 1704,
+            "candidatesTokenCount": 128,
+            "totalTokenCount": 1832
+          },
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "model_version": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        }
+      ],
+      "retrieved_sources": [
+        {
+          "document_id": "POL-PAY-001",
+          "version": "1.0",
+          "score": 1.0023,
+          "kb_recorded_content_hash": "73825384b0db5224039de9e478ad19756c948d641ec5667079509db6bea0eda4",
+          "source_content_sha256": "73825384b0db5224039de9e478ad19756c948d641ec5667079509db6bea0eda4",
+          "valid_from": "2026-01-01T00:00:00Z",
+          "valid_to": "2026-12-31T23:59:59Z"
+        },
+        {
+          "document_id": "POL-REFUND-007",
+          "version": "1.0",
+          "score": 0.7857,
+          "kb_recorded_content_hash": "5117530806c7506651c72e1d91249047a832da1f95caae4d0c18482ec2392331",
+          "source_content_sha256": "5117530806c7506651c72e1d91249047a832da1f95caae4d0c18482ec2392331",
+          "valid_from": "2026-01-01T00:00:00Z",
+          "valid_to": "2026-12-31T23:59:59Z"
+        },
+        {
+          "document_id": "POL-ORD-001",
+          "version": "1.0",
+          "score": 0.7708,
+          "kb_recorded_content_hash": "cfecb27c7546ff35f2b47b0803b86fea6cd8d866c96096733cb412e9aae2c679",
+          "source_content_sha256": "cfecb27c7546ff35f2b47b0803b86fea6cd8d866c96096733cb412e9aae2c679",
+          "valid_from": "2026-01-01T00:00:00Z",
+          "valid_to": "2026-12-31T23:59:59Z"
+        }
+      ],
+      "draft": {
+        "segments": [
+          {
+            "segment_id": "segment-0",
+            "text": "If your bank account has been debited but your order status on Tiki remains 'Awaiting Payment', this is typically due to transmission latency from the payment gateway. Our system and the payment gateway usually reconcile and update the order within 15-30 minutes. If your order remains unconfirmed after 1 hour, the system will automatically refund your original payment account within 24-72 business hours.",
+            "citation_ids": [
+              "S1"
+            ]
+          }
+        ],
+        "citations": [
+          {
+            "citation_id": "S1",
+            "source_type": "kb_document",
+            "document_id": "POL-PAY-001",
+            "version": "1.0",
+            "snippet": "Handling Payment Incidents and Banking Transactions on Tiki\nIf a customer's bank account or e-wallet is debited but the order on Tiki remains in 'Awaiting Payment' status or fails to display, this is typically due to transmission latency from the payment gateway. The Tiki system and payment gateway automatically reconcile and update the order within 15-30 minutes. If the order remains unconfirmed after 1 hour, the system will automatically refund the original payment account within 24-72 business hours."
+          }
+        ]
+      }
+    }
+  ]
+}

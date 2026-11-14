@@ -1,0 +1,15 @@
+{
+  "run_id": "03-11-2026-02",
+  "metadata": {
+    "dataset_version": "03-11-2026-02",
+    "split_version": "03-11-2026-02",
+    "cleaned_samples": 44601,
+    "train_samples": 37911,
+    "test_samples": 6690
+  },
+  "output_artifacts": {
+    "cleaned_csv": "C:/Users/PC/orca/workspaces/SupportIQ/supportiq-final-routing/data/datasets/processed/03-11-2026-02/cleaned.csv",
+    "split_assignments": "C:/Users/PC/orca/workspaces/SupportIQ/supportiq-final-routing/data/datasets/splits/03-11-2026-02/split_assignments.csv",
+    "split_report": "F:/Năm 3/SD/project/SupportIQ/artifacts/preparation/03-11-2026-02/split_report.json"
+  }
+}

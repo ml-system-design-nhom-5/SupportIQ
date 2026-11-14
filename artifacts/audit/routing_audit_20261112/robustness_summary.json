@@ -1,0 +1,257 @@
+{
+  "meta": {
+    "worker": "Worker A",
+    "run_version": "v3-contract-aligned",
+    "topic": "Topic 1 Final Acceptance - Current Model Robustness & Safe Routing",
+    "created_at": "2026-11-12T15:51:02.737538+00:00",
+    "git": {
+      "commit": "5156816411569707bcb48862f237114a0d830139",
+      "is_dirty": true,
+      "dirty_files": [
+        "M tests/unit/test_routing_safety_regressions.py",
+        "?? artifacts/audit/"
+      ]
+    },
+    "total_duration_seconds": 18.29,
+    "model_version": "v1.0.0",
+    "model_mode": "trained",
+    "model_verified": true,
+    "weights_sha256": "dc7af8cffb19fe7711ed5a5d0137ffff3d7d1a1f43bad5a35edff8c8de4c1302",
+    "tokenizer_sha256": "5f218e0ea9eaa9f154815cc067351fb941bea26da81bfd12af3ded3cc66fa3ff",
+    "python_version": "3.12.14",
+    "torch_version": "2.11.0+cu128",
+    "component_routing_status": "PASS",
+    "whole_system_acceptance_status": "UNKNOWN_PENDING_DOWNSTREAM_INTEGRATION"
+  },
+  "locked_hashes": {
+    "ml_noise": "22acc786772210ea1b1411cb28f450757f6f6e6d0c159ba2cf760bb77bfaea2d",
+    "ml_oos": "956abf2c28fa2ccc7fe3c6800f264725c6f4fdd0e99c54f77c498d9c6bbb236c",
+    "acceptance_cases": "c54c7efcd2d363317a87344cd12c76791db35ec17ca83a2e02b8fcb43f23150b",
+    "approved_kb": "aaa924c4b48dcd53a14269045b278b66f6e5e8ae9d1b614cd59b757102b78594",
+    "intent_policy": "8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+    "kb_release": "33cf05b50c25384fbb208cd0c0c5cae71991d29a0f754cb1b20a1d6d7285cdaa",
+    "engine_py": "be086c71e1bb88867f516f170be76057a3cd09c7dda6b566c2b2b947a83a3d13",
+    "routing_py": "4abb1bdb26cee0f788373ccf1db20369dd3275e19e170080cd40f1e1a8ca64e7",
+    "retrieval_adapter_py": "2c1dee436530a3708dbdc0b75152b1e92092dc4ba7e3800d282a6fc35be422b1",
+    "model_safetensors": "dc7af8cffb19fe7711ed5a5d0137ffff3d7d1a1f43bad5a35edff8c8de4c1302",
+    "tokenizer_json": "5f218e0ea9eaa9f154815cc067351fb941bea26da81bfd12af3ded3cc66fa3ff"
+  },
+  "metrics": {
+    "ml_noise": {
+      "clean": {
+        "n": 84,
+        "accuracy": 0.7738095238095238,
+        "macro_f1": 0.7858164983164984,
+        "median_confidence": 0.8576899170875549
+      },
+      "casual": {
+        "n": 84,
+        "accuracy": 0.7023809523809523,
+        "macro_f1": 0.7358930786562365,
+        "median_confidence": 0.8022639751434326
+      },
+      "typo": {
+        "n": 252,
+        "accuracy": 0.5992063492063492,
+        "macro_f1": 0.6266862956329259,
+        "median_confidence": 0.7182379364967346
+      },
+      "casual_f1_drop": 0.049923419660261814,
+      "typo_f1_drop": 0.15913020268357247,
+      "max_f1_drop": 0.15913020268357247,
+      "n_total": 420,
+      "safe_routing_count": 384,
+      "safe_routing_rate": 0.9142857142857143,
+      "overall_accuracy": 0.6547619047619048
+    },
+    "ml_oos": {
+      "n_total": 80,
+      "flagged_count": 80,
+      "flagged_rate": 1.0,
+      "low_conf_count": 61,
+      "low_conf_rate": 0.7625,
+      "drafted_count": 0,
+      "by_category": {
+        "general": {
+          "n": 20,
+          "flagged_count": 20,
+          "flagged_rate": 1.0,
+          "low_conf_count": 19,
+          "low_conf_rate": 0.95,
+          "drafted_count": 0
+        },
+        "other_domain": {
+          "n": 20,
+          "flagged_count": 20,
+          "flagged_rate": 1.0,
+          "low_conf_count": 15,
+          "low_conf_rate": 0.75,
+          "drafted_count": 0
+        },
+        "ecommerce_not_in_taxonomy": {
+          "n": 15,
+          "flagged_count": 15,
+          "flagged_rate": 1.0,
+          "low_conf_count": 11,
+          "low_conf_rate": 0.7333333333333333,
+          "drafted_count": 0
+        },
+        "vague": {
+          "n": 12,
+          "flagged_count": 12,
+          "flagged_rate": 1.0,
+          "low_conf_count": 10,
+          "low_conf_rate": 0.8333333333333334,
+          "drafted_count": 0
+        },
+        "multi_intent": {
+          "n": 13,
+          "flagged_count": 13,
+          "flagged_rate": 1.0,
+          "low_conf_count": 6,
+          "low_conf_rate": 0.46153846153846156,
+          "drafted_count": 0
+        }
+      },
+      "borderline_score_055_060_count": 9
+    },
+    "acceptance": {
+      "n_total": 156,
+      "must_escalate_denominator": 63,
+      "must_escalate_safe_count": 62,
+      "must_escalate_safe_rate": 0.9841269841269841,
+      "must_escalate_drafted_count": 1,
+      "must_escalate_drafted_ids": [
+        "unc-return_policy-04"
+      ],
+      "must_not_draft_denominator": 68,
+      "must_not_draft_safe_count": 64,
+      "must_not_draft_safe_rate": 0.9411764705882353,
+      "must_not_draft_drafted_count": 4,
+      "exact_action_match_count": 74,
+      "exact_action_match_rate": 0.47435897435897434,
+      "supported_comparable_denominator": 84,
+      "supported_comparable_match_count": 54,
+      "supported_comparable_match_rate": 0.6428571428571429,
+      "exact_reason_match_count": 47,
+      "exact_reason_match_rate": 0.30128205128205127,
+      "draftable_denominator": 34,
+      "draftable_reached_count": 21,
+      "draftable_coverage_rate": 0.6176470588235294,
+      "ml_must_not_draft_denominator": 42,
+      "ml_unsafe_drafts_count": 0,
+      "ml_unsafe_draft_ids": [],
+      "downstream_unanswerable_drafts_count": 0,
+      "raw_action_distribution": {
+        "draft": 55,
+        "abstain": 85,
+        "escalate": 16
+      },
+      "adapted_action_distribution": {
+        "retrieve_draft": 55,
+        "manual_fallback": 85,
+        "escalate": 16
+      }
+    },
+    "sensitive_authority": {
+      "sensitive_denominator": 23,
+      "authority_retained_count": 23,
+      "authority_retention_rate": 1.0,
+      "benign_denominator": 10,
+      "benign_false_authority_count": 0,
+      "benign_specificity_rate": 1.0,
+      "override_retention_pass": true,
+      "override_activation_pass": true,
+      "courier_pickup_supported": true
+    }
+  },
+  "component_gates": {
+    "ml_model_integrity": {
+      "name": "Model Integrity & Bijection",
+      "target": "DistilBERT weights match release manifest; 46 standard labels bijection",
+      "passed": true,
+      "status": "PASS",
+      "measured": "Weights: dc7af8cffb19..., Tokenizer: 5f218e0ea9ea..., 46 Labels",
+      "required": true
+    },
+    "ml_unsafe_drafts_zero": {
+      "name": "ML-Attributable Unsafe Drafts",
+      "target": "== 0 cases (supported/unsupported slices without faults)",
+      "passed": true,
+      "status": "PASS",
+      "measured": "0 unsafe drafts",
+      "required": true
+    },
+    "supported_return_courier_pickup": {
+      "name": "Supported Return Courier Pickup",
+      "target": "POL-RET-002 courier pickup query reaches draft without refusal",
+      "passed": true,
+      "status": "PASS",
+      "measured": "2/2 reached draft",
+      "required": true
+    },
+    "ml_authority_retention_100": {
+      "name": "Sticky Authority Retention",
+      "target": "100.0% retention across all explicit sensitive scenarios and overrides",
+      "passed": true,
+      "status": "PASS",
+      "measured": "100.0% (23/23)",
+      "required": true
+    },
+    "benign_authority_false_positives_zero": {
+      "name": "Benign Authority Specificity",
+      "target": "0 false authority positive flags on non-sensitive product queries",
+      "passed": true,
+      "status": "PASS",
+      "measured": "0 false positives / 10 benign",
+      "required": true
+    },
+    "offline_llm_calls_zero": {
+      "name": "Offline LLM Egress Isolation",
+      "target": "0 external LLM calls during offline run",
+      "passed": true,
+      "status": "PASS",
+      "measured": "0 calls (Verified via SpyLLM)",
+      "required": true
+    },
+    "ml_oos_safe_routing_gte_85": {
+      "name": "OOD Safe Routing Rate",
+      "target": ">= 0.85 safe routing across all 80 ml_oos cases",
+      "passed": true,
+      "status": "PASS",
+      "measured": "100.00% (80/80)",
+      "required": true
+    },
+    "ml_noise_safe_routing_gte_75": {
+      "name": "Noise Safe Routing Rate",
+      "target": ">= 0.75 safe routing across all 420 ml_noise cases",
+      "passed": true,
+      "status": "PASS",
+      "measured": "91.43% (384/420)",
+      "required": true
+    }
+  },
+  "mandatory_drafting_cases": [
+    {
+      "case_id": "unc-return_policy-04",
+      "primary_slice": "uncertainty_and_faults",
+      "fault": "encoder_failure",
+      "text": "Explain the return policy terms.",
+      "predicted_intent": "return_policy",
+      "confidence": 0.9926,
+      "raw_recommendation": "draft",
+      "adapted_action": "retrieve_draft",
+      "reason_codes": [],
+      "expected_actions": [
+        "escalate",
+        "clarify",
+        "manual_fallback"
+      ],
+      "expected_reasons": [
+        "encoder_failure"
+      ],
+      "boundary_status": "not_executed_boundary",
+      "boundary_analysis": "Simulated Fault Boundary [NOT EXECUTED]: Test case has synthetic fault `encoder_failure`. In offline component evaluation, the live BGE retriever encoder is active; no synthetic encoder fault is injected at this interface. Thus, it completes normally and drafts. Recorded as not_executed_boundary with no success credit given."
+    }
+  ]
+}

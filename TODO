@@ -1,0 +1,59 @@
+Then this is an architecture refinement, not a rebuild. Keep the existing pipeline and make the responsibilities of its components more explicit. The main addition is Agent Evaluator as an automatic evaluation stage.
+
+### SupportIQ — Architecture Refinement TODO
+
+1\. Make RAG visible
+
+- Clearly separate retrieval, ranking, evidence validation, and context construction.
+- Keep intent as a ranking signal, not a retrieval gate.
+- Expose retrieved sources, relevance, and source validity.
+
+2\. Make Agent Adapter visible
+
+- Explicitly define the interfaces between the LLM and existing retrieval/business-data services.
+- Ensure the LLM never accesses the database directly.
+
+3\. Make Multimodal Guardrails visible
+
+- Explicitly show input validation, output validation, grounding checks, and safety constraints.
+- Keep deterministic safety checks separate from LLM evaluation.
+
+4\. Add Agent Evaluator to the pipeline
+
+- Automatically evaluate every generated draft.
+- Check factual correctness, evidence grounding, relevance, completeness, citations, and policy compliance.
+- Return `PASS`, `FLAG`, `FAIL`, or `INSUFFICIENT`, with reasons.
+- Send failed or flagged drafts for appropriate handling; never automatically approve or send them.
+- Log evaluation results for later analysis.
+
+5\. Make Human Reflection visible
+
+- Show employees the draft, retrieved evidence, and evaluator results together.
+- Preserve approve, edit, reject, and escalate actions.
+- Keep human approval mandatory.
+
+### Updated pipeline
+
+Customer Request
+
+Intent Classification
+
+Ranking signal
+
+RAG + Agent Adapter
+
+Retrieve policies and business data
+
+LLM Response Generation
+
+Guardrails + Agent Evaluator
+
+Validate safety and automatically evaluate quality
+
+Human Review
+
+Approve · Edit · Reject · Escalate
+
+Approved Response
+
+The key change: Agent Evaluator becomes a first-class pipeline component, while the other four areas are made explicit in the architecture and documentation without necessarily introducing new implementations.

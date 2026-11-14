@@ -13,6 +13,8 @@ from .privacy import PLACEHOLDER, pseudonymize, restore
 
 STAFF_REASONS = {"wrong_intent", "wrong_source", "unsupported_claim", "kb_gap", "missing_case_info", "tone_or_clarity", "case_exception", "other"}
 INTENTS = {"add_product", "availability", "availability_in_store", "availability_online", "cancel_order", "change_account", "change_order", "close_account", "customer_service", "damaged_delivery", "delivery_issue", "delivery_time", "exchange_product", "exchange_product_in_store", "human_agent", "missing_item", "open_account", "order_history", "pay", "payment_issue", "payment_methods", "product_information", "product_issue", "recover_password", "refund_policy", "refund_status", "remove_product", "request_invoice", "request_refund", "request_right_to_rectification", "return_policy", "return_product", "return_product_in_store", "return_product_online", "sales_period", "shipping_costs", "store_location", "store_opening_hours", "submit_feedback", "submit_product_feedback", "submit_product_idea", "technical_issue", "track_delivery", "track_order", "use_app", "wrong_item"}
+SENSITIVE_KEYWORDS = re.compile(r"\b(fraud|lawsuit|legal action|chargeback|unauthorized transaction|policy exception)\b", re.I)
+SENSITIVE_ACTION_INTENTS = {"cancel_order", "request_refund", "return_product", "payment_issue"}
 
 
 def require_ticket(session, ticket_id, customer_id=None, lock=False):
@@ -117,7 +119,8 @@ def create_suggestion(session, ticket, settings, trace_id, intent_override=None,
     if available:
         session.add(SuggestionJob(suggestion_id=identifier))
     ticket.current_suggestion_id = identifier
-    if intent_override == "request_refund":
+    body_text = (session.get(CustomerMessage, ticket.ticket_id).body if session.get(CustomerMessage, ticket.ticket_id) else "")
+    if intent_override in SENSITIVE_ACTION_INTENTS or SENSITIVE_KEYWORDS.search(body_text):
         ticket.is_authority_required = True
     metrics.record_pii({"entities": len(mapping)}, blocked=privacy_failed)
     audit(session, "message.pseudonymized", None, trace_id, ticket.ticket_id, outcome="failed" if privacy_failed else "ready", pseudonym_count=len(mapping))
@@ -138,7 +141,8 @@ def create_ticket(session, actor, order_id, message, settings, trace_id):
     else:
         max_id = session.scalar(text("SELECT MAX(CAST(SUBSTR(ticket_id, 5) AS INTEGER)) FROM tickets"))
         number = (max_id or 1000) + 1
-    ticket = Ticket(ticket_id=f"TCK-{number}", customer_id=actor.customer_id, order_id=order_id, created_at=utcnow(), status="open", handling_mode="assisted", is_authority_required=False)
+    message_requires_authority = bool(SENSITIVE_KEYWORDS.search(message))
+    ticket = Ticket(ticket_id=f"TCK-{number}", customer_id=actor.customer_id, order_id=order_id, created_at=utcnow(), status="open", handling_mode="assisted", is_authority_required=message_requires_authority)
     session.add(ticket)
     session.flush()
     session.add(CustomerMessage(ticket_id=ticket.ticket_id, body=message))
@@ -215,6 +219,8 @@ def act(session, actor, ticket_id, action, body, settings, trace_id):
             raise Problem(409 if pending(suggestion) else 422, "suggestion-pending" if pending(suggestion) else "invalid-request", "Wait until an intent is available before correcting it.")
         if not override and "retry_suggestion" not in actions:
             raise Problem(422, "invalid-request", "There is no failed suggestion to retry.")
+        if not override and suggestion and suggestion.payload.get("intent_override"):
+            override = suggestion.payload.get("intent_override")
         result = create_suggestion(session, ticket, settings, trace_id, override, "intent_override" if override else "retry")
         if override:
             audit(session, "intent.overridden", actor.account_id, trace_id, ticket.ticket_id, chosen_intent=override)

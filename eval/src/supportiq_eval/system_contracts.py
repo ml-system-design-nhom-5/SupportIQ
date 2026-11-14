@@ -553,3 +553,241 @@ def validate_expected_outcomes(
         "missing_evidence": missing_evidence,
         "coverage_by_intent": coverage_by_intent,
     }
+
+
+# ---------------------------------------------------------------------------
+# Task 3 / IMP-10 & IMP-11 Contracts: Provenance, Manifest, and Comparability
+# ---------------------------------------------------------------------------
+
+class MetricProvenance(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    metric: str
+    value: Optional[float] = None
+    status: str = "NOT_EVALUATED"  # "PASS", "FAIL", "OBSERVE", "NOT_EVALUATED", "INSUFFICIENT_EVIDENCE"
+    evidence_ref: Optional[str] = None
+    evidence_kind: str = "simulated"
+    model_mode: Optional[str] = None
+    evaluator_type: Optional[str] = None  # "human", "ai", "none"
+    study_type: Optional[str] = None      # "user_study", "agent_simulation", "none"
+    target: Optional[float] = None
+    operator: Optional[str] = None
+    previous: Optional[float] = None
+    delta: Optional[float] = None
+    regressed: bool = False
+    diagnosis: Optional[str] = None
+    recommendation: Optional[str] = None
+
+
+class EvaluationManifest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    schema_version: str = "v1.1"
+    run_id: str
+    created_at: str
+    git_commit: Optional[str] = None
+    evidence_kind: str = "simulated"  # "live", "simulated", "cached", "live_experimental", "mixed"
+    model_mode: str = "trained"       # "trained", "heuristic_demo", "unavailable", "synthetic"
+    evaluator_type: str = "none"      # "human", "ai", "none"
+    study_type: str = "none"          # "user_study", "agent_simulation", "none"
+    execution_mode: str = "new_execution"  # "new_execution", "cached_only"
+    hashes: Dict[str, Optional[str]] = Field(default_factory=dict)
+    config: Dict[str, Any] = Field(default_factory=dict)
+    counts: Dict[str, int] = Field(default_factory=dict)
+    environment: Dict[str, Any] = Field(default_factory=dict)
+    metrics: Dict[str, MetricProvenance] = Field(default_factory=dict)
+    files: Dict[str, Dict[str, str]] = Field(default_factory=dict)
+    numeric_targets_passed: bool = False
+    all_mandatory_passed: bool = False
+    summary_reason: Optional[str] = None
+
+
+def check_regression_comparability(
+    run_a: Dict[str, Any],
+    run_b: Dict[str, Any],
+) -> Tuple[bool, List[str]]:
+    """Determine whether two evaluation runs share identical KB, dataset split, model, prompt, and config.
+    Requires complete, non-empty provenance for both runs.
+    Returns (True, []) if comparable under identical conditions, or (False, reasons) if configurations differ or provenance is missing.
+    """
+    reasons: List[str] = []
+
+    def _extract_provenance(r: Dict[str, Any]) -> Dict[str, Optional[str]]:
+        h = dict(r.get("hashes", {}))
+        manifest = r.get("manifest", {})
+        if isinstance(manifest, dict):
+            h.update(manifest.get("hashes", {}))
+            files = manifest.get("files", {})
+            if "kb" in files and "kb_hash" not in h:
+                h["kb_hash"] = files["kb"].get("sha256")
+            if "cases" in files and "split_hash" not in h:
+                h["split_hash"] = files["cases"].get("sha256")
+            if "model" in files and "model_hash" not in h:
+                h["model_hash"] = files["model"].get("sha256")
+            if "prompt" in files and "prompt_hash" not in h:
+                h["prompt_hash"] = files["prompt"].get("sha256")
+            if "config" in files and "config_hash" not in h:
+                h["config_hash"] = files["config"].get("sha256")
+            if "prompt_hash" in manifest and "prompt_hash" not in h:
+                h["prompt_hash"] = manifest.get("prompt_hash")
+            if "config_hash" in manifest and "config_hash" not in h:
+                h["config_hash"] = manifest.get("config_hash")
+
+        meta = r.get("metadata", {})
+        if "kb_hash" not in h and "kb_sha256" in meta:
+            h["kb_hash"] = meta["kb_sha256"]
+        if "split_hash" not in h and "suite_sha256" in meta:
+            h["split_hash"] = meta["suite_sha256"]
+        if "model_hash" not in h and "weights_sha256" in meta:
+            h["model_hash"] = meta["weights_sha256"]
+        if "prompt_hash" not in h and "prompt_sha256" in meta:
+            h["prompt_hash"] = meta["prompt_sha256"]
+        if "config_hash" not in h and "config_sha256" in meta:
+            h["config_hash"] = meta["config_sha256"]
+
+        summary = r.get("summary", {})
+        if isinstance(summary, dict):
+            s_meta = summary.get("metadata", {})
+            if "kb_hash" not in h and "kb_sha256" in s_meta:
+                h["kb_hash"] = s_meta["kb_sha256"]
+            if "split_hash" not in h and "suite_sha256" in s_meta:
+                h["split_hash"] = s_meta["suite_sha256"]
+            if "model_hash" not in h and "weights_sha256" in s_meta:
+                h["model_hash"] = s_meta["weights_sha256"]
+
+        return h
+
+    h_a = _extract_provenance(run_a)
+    h_b = _extract_provenance(run_b)
+
+    # Required provenance: KB, split, and model hashes must be non-empty in BOTH runs
+    required_hashes = ("kb_hash", "split_hash", "model_hash")
+    for key in required_hashes:
+        val_a = h_a.get(key)
+        val_b = h_b.get(key)
+        if not val_a:
+            reasons.append(f"Missing required hash '{key}' in current run")
+        if not val_b:
+            reasons.append(f"Missing required hash '{key}' in baseline run")
+        if val_a and val_b and val_a != val_b:
+            reasons.append(f"{key} mismatch: {val_a} != {val_b}")
+
+    # Prompt hash must be present and match in both runs
+    prompt_a = h_a.get("prompt_hash")
+    prompt_b = h_b.get("prompt_hash")
+    if not prompt_a:
+        reasons.append("Missing required hash 'prompt_hash' in current run")
+    if not prompt_b:
+        reasons.append("Missing required hash 'prompt_hash' in baseline run")
+    if prompt_a and prompt_b and prompt_a != prompt_b:
+        reasons.append(f"prompt_hash mismatch: {prompt_a} != {prompt_b}")
+
+    # Config identity: check config_hash or compute canonical hash of config dict
+    def _extract_canonical_config_hash(r: Dict[str, Any], extracted_h: Dict[str, Any]) -> Optional[str]:
+        if extracted_h.get("config_hash"):
+            return extracted_h["config_hash"]
+        cfg = r.get("config")
+        if not cfg and isinstance(r.get("manifest"), dict):
+            cfg = r["manifest"].get("config")
+        if not cfg and isinstance(r.get("summary"), dict):
+            cfg = r["summary"].get("config")
+        if cfg and isinstance(cfg, dict):
+            import hashlib
+            norm = json.dumps({k: v for k, v in cfg.items() if k not in ("run_id", "timestamp", "started_at", "completed_at")}, sort_keys=True, default=str)
+            return hashlib.sha256(norm.encode("utf-8")).hexdigest().upper()
+        return None
+
+    cfg_a = _extract_canonical_config_hash(run_a, h_a)
+    cfg_b = _extract_canonical_config_hash(run_b, h_b)
+    if not cfg_a:
+        reasons.append("Missing required 'config' or 'config_hash' in current run")
+    if not cfg_b:
+        reasons.append("Missing required 'config' or 'config_hash' in baseline run")
+    if cfg_a and cfg_b and cfg_a != cfg_b:
+        reasons.append(f"config identity mismatch: {cfg_a} != {cfg_b}")
+
+    # Evidence kind must match between runs
+    def _extract_kind(r: Dict[str, Any]) -> Optional[str]:
+        if not isinstance(r, dict):
+            return None
+        if r.get("evidence_kind"):
+            return r.get("evidence_kind")
+        manifest = r.get("manifest")
+        if isinstance(manifest, dict) and manifest.get("evidence_kind"):
+            return manifest.get("evidence_kind")
+        summary = r.get("summary")
+        if isinstance(summary, dict) and summary.get("evidence_kind"):
+            return summary.get("evidence_kind")
+        return None
+
+    kind_a = _extract_kind(run_a)
+    kind_b = _extract_kind(run_b)
+    if kind_a and kind_b and kind_a != kind_b:
+        reasons.append(f"evidence_kind mismatch: '{kind_a}' vs '{kind_b}'")
+
+    return (len(reasons) == 0, reasons)
+
+
+def check_mixed_evidence(manifest_data: Dict[str, Any]) -> Tuple[bool, List[str]]:
+    """Verify that a live certification run or manifest does not mix mock components, unverified heuristics,
+    or inconsistent evidence kinds across metrics.
+    Returns (True, reasons) if mixed evidence is detected, or (False, []) if pure/consistent.
+    """
+    reasons: List[str] = []
+    evidence_kind = manifest_data.get("evidence_kind", "simulated")
+    model_mode = manifest_data.get("model_mode")
+    profile = manifest_data.get("profile")
+
+    metrics = manifest_data.get("metrics", {})
+    if isinstance(metrics, dict):
+        kinds_present = set()
+        for m_name, m_val in metrics.items():
+            m_dict = m_val if isinstance(m_val, dict) else (m_val.model_dump() if hasattr(m_val, "model_dump") else {})
+            k = m_dict.get("evidence_kind")
+            if k:
+                kinds_present.add(k)
+            mode = m_dict.get("model_mode")
+            if mode in ("heuristic_demo", "synthetic", "unverified", "unknown") and evidence_kind == "live":
+                reasons.append(f"Metric '{m_name}' has unverified model mode: '{mode}'")
+
+        if len(kinds_present) > 1:
+            reasons.append(f"Inconsistent evidence kinds across metrics: {sorted(kinds_present)}")
+
+        if evidence_kind == "live":
+            for m_name, m_val in metrics.items():
+                m_dict = m_val if isinstance(m_val, dict) else (m_val.model_dump() if hasattr(m_val, "model_dump") else {})
+                if m_dict.get("evidence_kind") in ("simulated", "mock", "cached", "unverified"):
+                    reasons.append(f"Metric '{m_name}' has non-live evidence kind: '{m_dict.get('evidence_kind')}'")
+
+    if evidence_kind == "live":
+        if model_mode in ("heuristic_demo", "unavailable", "synthetic", "unverified", "unknown", None):
+            reasons.append(f"Live evidence declared with unverified/non-live model_mode: '{model_mode}'")
+        if profile in ("mock", "simulated"):
+            reasons.append(f"Live evidence declared with mock execution profile: '{profile}'")
+
+    return (len(reasons) > 0, reasons)
+
+
+def audit_synthetic_benchmark(summary: Dict[str, Any]) -> Tuple[bool, List[str]]:
+    """Audit anomaly heuristic: checks whether benchmark metrics match known static/synthetic templates.
+    NOTE: Absence of synthetic signatures is NOT positive evidence authentication. Positive certification
+    requires a cryptographically verified manifest, valid model hashes, and raw inference records.
+    """
+    reasons: List[str] = []
+
+    grounding = summary.get("grounding", {}) or summary.get("llm_grounding", {})
+    total_claims = grounding.get("total_claims")
+    grounded_claims = grounding.get("grounded_claims")
+    claim_rate = grounding.get("claim_grounding_rate")
+    hallucination_rate = grounding.get("hallucination_rate")
+
+    # Signature of static synthetic grounding benchmark in run_benchmarks.py: lines 506-535
+    if total_claims == 68 and grounded_claims == 68 and claim_rate == 1.0 and hallucination_rate == 0.0:
+        reasons.append("Detected static synthetic grounding signature (68/68 hardcoded claims, 0.0 hallucination rate)")
+
+    intent = summary.get("intent_classification", {})
+    # Exact accuracy from regex-fallback matching on 156 acceptance cases
+    if intent.get("accuracy") == 0.9679 and intent.get("total_cases") == 156:
+        reasons.append("Detected static keyword-fallback intent accuracy (0.9679 on 156 cases)")
+
+    return (len(reasons) > 0, reasons)

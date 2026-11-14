@@ -1,0 +1,248 @@
+{
+  "generated_at": "2026-11-13T03:00:42.591480+00:00",
+  "worker_a_commit": "028ed764ff0adf59dc1d456d2067017d3a8bdd37",
+  "worker_b_commit": "23767a70620b58f1374867c741a2d8be91c61773",
+  "gate_decision": "REJECT",
+  "failure_reasons": [
+    "mandatory_escalation_unsafe_draft_leak",
+    "oos_draft_leak"
+  ],
+  "calibration_selection_review": {
+    "selected_winner": "fit1_selective_head",
+    "selection_policy": "Selected solely on isolated calibration split before any holdout/regression eval.",
+    "total_training_elapsed_seconds": 38.34,
+    "budget_cap_seconds": 1800.0,
+    "fit1_utility": 1.00205,
+    "fit2_utility": 0.9725,
+    "verified_calibration_only_within_budget": true
+  },
+  "candidate_provenance_hashes": {
+    "model.safetensors": "5eb713e430c18978dd007c8417874887ad8b1f7dda3ce6a9722ef8b61b2e1445",
+    "tokenizer.json": "41b9d12a4c559e4098f30173bc0f76d092c43d7b1f873e7027da45a256f30f87",
+    "config.json": "6fa1fa9cc6a94063a977b0adaf2c9c3b296cf296d4ad9dcc6f2c52ca3bac9cb2",
+    "calibration_manifest.json": "fc0d0ff98ce847b9102feb5b216b9b857ce6797d7eb3fe016181bfafbf16ffbb",
+    "provenance_base_commit_recorded": "3b66bc3e5ee0fd074ba1bf0fd2eab8543074b6fa"
+  },
+  "held_out_domain_negatives_27": {
+    "isolation_and_contamination": {
+      "passed": true,
+      "failure_reasons": [],
+      "counts": {
+        "train": 150,
+        "calibration": 63,
+        "eval": 27
+      },
+      "group_counts": {
+        "train": 50,
+        "calibration": 21,
+        "eval": 9
+      },
+      "group_overlaps": {
+        "train_vs_calibration": [],
+        "train_vs_eval": [],
+        "calibration_vs_eval": []
+      },
+      "text_overlaps": {
+        "train_vs_calibration": 0,
+        "train_vs_eval": 0,
+        "calibration_vs_eval": 0
+      },
+      "gold_exact_matches": [],
+      "gold_high_jaccard_matches": []
+    },
+    "serving_baseline_raw": {
+      "n": 27,
+      "raw_router_draft_count": 0,
+      "effective_false_draft_count": 0,
+      "effective_false_draft_rate": 0.0,
+      "adapter_vetoes_from_draft_count": 0,
+      "action_counts": {
+        "retrieve_draft": 0,
+        "manual_fallback": 0,
+        "escalate": 14,
+        "clarify": 13
+      },
+      "false_draft_cases": [],
+      "vetoed_cases": []
+    },
+    "candidate_raw_no_rejector": {
+      "n": 27,
+      "raw_router_draft_count": 1,
+      "effective_false_draft_count": 1,
+      "effective_false_draft_rate": 0.037037,
+      "adapter_vetoes_from_draft_count": 0,
+      "action_counts": {
+        "retrieve_draft": 1,
+        "manual_fallback": 0,
+        "escalate": 4,
+        "clarify": 22
+      },
+      "false_draft_cases": [
+        {
+          "id": null,
+          "intent": "return_product",
+          "confidence": 0.840859
+        }
+      ],
+      "vetoed_cases": []
+    },
+    "candidate_calibrated_no_rejector": {
+      "n": 27,
+      "raw_router_draft_count": 0,
+      "effective_false_draft_count": 0,
+      "effective_false_draft_rate": 0.0,
+      "adapter_vetoes_from_draft_count": 0,
+      "action_counts": {
+        "retrieve_draft": 0,
+        "manual_fallback": 0,
+        "escalate": 4,
+        "clarify": 23
+      },
+      "false_draft_cases": [],
+      "vetoed_cases": []
+    },
+    "candidate_calibrated_with_rejector": {
+      "n": 27,
+      "raw_router_draft_count": 0,
+      "effective_false_draft_count": 0,
+      "effective_false_draft_rate": 0.0,
+      "adapter_vetoes_from_draft_count": 0,
+      "action_counts": {
+        "retrieve_draft": 0,
+        "manual_fallback": 0,
+        "escalate": 4,
+        "clarify": 23
+      },
+      "false_draft_cases": [],
+      "vetoed_cases": []
+    }
+  },
+  "bitext_46_test_retention": {
+    "cleaned_csv_sha256": "8BC10CFA056371BDECB3394BFD4C75EEE7E10022ACE5071833ECD140B2D75846",
+    "split_assignments_csv_sha256": "1D366E898F6BA68BE46C5CA0F9059E9862FAD1D7BAFE350D9CDD310DD3E0A04C",
+    "n_test": 6690,
+    "serving_distilbert_supportiq": {
+      "n_total": 6690,
+      "accuracy_46": 0.995366,
+      "macro_f1_46": 0.995403,
+      "other_34_n": 4928,
+      "other_34_accuracy": 0.996753,
+      "other_34_macro_f1": 0.997015,
+      "supported_12_n": 1762,
+      "supported_12_accuracy": 0.991487,
+      "supported_12_macro_f1": 0.994825
+    },
+    "candidate_028ed76_calibrated": {
+      "n_total": 6690,
+      "accuracy_46": 0.993274,
+      "macro_f1_46": 0.993374,
+      "other_34_n": 4928,
+      "other_34_accuracy": 0.994927,
+      "other_34_macro_f1": 0.995634,
+      "supported_12_n": 1762,
+      "supported_12_accuracy": 0.988649,
+      "supported_12_macro_f1": 0.992502
+    }
+  },
+  "worker_b_ce98424_runtime_parity": {
+    "worker_b_commit": "23767a70620b58f1374867c741a2d8be91c61773",
+    "serving_raw_parity": {
+      "probe_count": 6,
+      "intent_mismatches": 0,
+      "score_kind_mismatches": 0,
+      "max_confidence_abs_diff": 0.0,
+      "max_margin_abs_diff": 0.0,
+      "passed": true
+    },
+    "serving_calibrated_parity": {
+      "probe_count": 6,
+      "intent_mismatches": 0,
+      "score_kind_mismatches": 0,
+      "max_confidence_abs_diff": 0.0,
+      "max_margin_abs_diff": 0.0,
+      "passed": true
+    },
+    "candidate_028ed76_calibrated_plus_rejector_parity": {
+      "probe_count": 6,
+      "intent_mismatches": 0,
+      "score_kind_mismatches": 0,
+      "max_confidence_abs_diff": 0.0,
+      "max_margin_abs_diff": 0.0,
+      "rejector_decision_mismatches": 0,
+      "max_selective_score_abs_diff": 5.274e-07,
+      "passed": true
+    },
+    "fail_closed_checks": {
+      "unpinned_candidate_rejected_without_cal_manifest": true,
+      "bad_calibration_manifest_rejected": true,
+      "bad_predict_temperature_rejected": true
+    }
+  },
+  "engine_rejection_enforcement_audit": {
+    "checked": true,
+    "raw_engine_recommendation_on_rejected_spy": "draft",
+    "raw_engine_action_on_rejected_spy": "retrieve_draft",
+    "engine_enforces_experimental_rejection": false,
+    "harness_guarded_action_on_rejected_spy": "manual_fallback",
+    "harness_guard_vetoed": true,
+    "distinction_note": "ModelContainer parity verifies tokenization, 46-label bijection, temperature scaling, and score_kind. Engine._analyse enforcement of rejected_by_experimental_adapter/selective_accepted is measured separately from score parity; when False, experimental rejector vetoes occur only in Task C's _apply_adapter_routing_guard."
+  },
+  "immutable_history_and_serving": {
+    "serving_model_safetensors_sha256": "dc7af8cffb19fe7711ed5a5d0137ffff3d7d1a1f43bad5a35edff8c8de4c1302",
+    "first_gate_report_sha256": "53ae375d28a08d77f4865c5efb3d12a101cc4b3ae6bf5afb3d2fe58eb99b8d70",
+    "followup_gate_report_sha256": "ebdb2ef95a40f81b26b3fb9cce02f9de05ec0e8f914e7db41a7a3fb59ac7a574"
+  },
+  "worker_b_23767a7_engine_enforcement_audit": {
+    "rejected_analyse_recommendation": "abstain",
+    "rejected_analyse_reason_codes": [
+      "low_confidence",
+      "out_of_scope_intent"
+    ],
+    "rejected_intent_probability_preserved": 0.95,
+    "rejected_draft_status": "abstained",
+    "llm_calls": 0,
+    "sensitive_escalate_still_wins": true,
+    "routing_metadata_present_in_engine": {
+      "selective_accepted": false,
+      "selective_score": 0.18,
+      "selective_threshold": 0.5,
+      "rejected_by_experimental_adapter": true
+    },
+    "worker_b_commit": "23767a70620b58f1374867c741a2d8be91c61773",
+    "engine_enforces_experimental_rejection": true
+  },
+  "core_backend_metadata_gap_audit": {
+    "intent_prediction_fields": [
+      "confidence",
+      "error",
+      "intent",
+      "margin",
+      "model_version",
+      "score_kind",
+      "top_k"
+    ],
+    "ml_predict_extra_fields_sent": [
+      "selective_accepted",
+      "selective_score",
+      "selective_threshold",
+      "rejected_by_experimental_adapter",
+      "raw_confidence",
+      "raw_score_kind",
+      "calibration_temperature",
+      "calibration_schema_version"
+    ],
+    "dropped_by_intent_client_and_schema": [
+      "selective_accepted",
+      "selective_score",
+      "selective_threshold",
+      "rejected_by_experimental_adapter",
+      "raw_confidence",
+      "raw_score_kind",
+      "calibration_temperature",
+      "calibration_schema_version"
+    ],
+    "all_rejector_and_raw_fields_dropped": true,
+    "backend_route_promotion_blocker": true,
+    "coordinator_note": "Untouched apps/core_backend/intent/{schemas.py,client.py,routing.py} drops selective_accepted/rejector/raw/calibration fields; separate backend follow-up ctx_ee504bee728d failed readiness startup and remains unverified."
+  }
+}

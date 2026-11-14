@@ -1,0 +1,66 @@
+{
+  "run_id": "orchestrator-20261112-live-smoke",
+  "git_commit": "f62f4c432ce8c7c928d1bdd26a3ead72065762c7",
+  "created_at": "2026-11-12T07:03:19.381080+00:00",
+  "versions": {
+    "release_id": "local-e3d8cc1c94076875",
+    "versions": {
+      "release_id": "local-e3d8cc1c94076875",
+      "model_version": "v1.0.0",
+      "model_mode": "trained",
+      "verified": true,
+      "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+      "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+      "prompt_version": "grounded-v2",
+      "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+      "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+    }
+  },
+  "evidence_kind": "mixed",
+  "files": {
+    "agent_paired_study.json": {
+      "path": "agent_paired_study.json",
+      "sha256": "89752d885e9012340a5517a686032d1334c5bdce18e9dbe0f346a4803b01c2c8"
+    },
+    "ai_claim_annotations.json": {
+      "path": "ai_claim_annotations.json",
+      "sha256": "e4fccd7047c18cad1349669c89848206674c218df85f8f353800d5799486c0fb"
+    },
+    "historical_ml_recomputed.json": {
+      "path": "historical_ml_recomputed.json",
+      "sha256": "6f8474796563284620130c30a407085f4570418c871a0e4cb68cfb9fceb19b4f"
+    },
+    "raw_cases.jsonl": {
+      "path": "raw_cases.jsonl",
+      "sha256": "700f701f6b8c36eb71dd7c67558d31ba29f135065e78f665ccf51bd036112cdd"
+    },
+    "retrieval_benchmark_compatibility.json": {
+      "path": "retrieval_benchmark_compatibility.json",
+      "sha256": "42be833c0dde62bec8bdd7a40cff31629570af995c5c9e7af855a425b9ee3655"
+    },
+    "summary.json": {
+      "path": "summary.json",
+      "sha256": "3294ab3bc848a17b20196c56cfcfeb9f5c6d4f48d6920ea15d46ea71b0afa3e5"
+    }
+  },
+  "llm_enabled": true,
+  "all_mandatory_passed": false,
+  "component_evidence": {
+    "gateway_smoke": "live_experimental",
+    "ai_claim_annotations": "ai_graded",
+    "agent_paired_study": "agent_simulation",
+    "historical_ml": "cached_recomputed",
+    "shared_retrieval": "incompatible_benchmark_kb"
+  },
+  "model_mode": "trained",
+  "evaluator_type": "ai",
+  "study_type": "agent_simulation",
+  "source_artifact_hashes": {
+    "artifacts\\models\\trained\\distilbert-supportiq\\model.safetensors": {
+      "sha256": "dc7af8cffb19fe7711ed5a5d0137ffff3d7d1a1f43bad5a35edff8c8de4c1302"
+    },
+    "artifacts\\models\\trained\\distilbert-supportiq\\tokenizer.json": {
+      "sha256": "5f218e0ea9eaa9f154815cc067351fb941bea26da81bfd12af3ded3cc66fa3ff"
+    }
+  }
+}
