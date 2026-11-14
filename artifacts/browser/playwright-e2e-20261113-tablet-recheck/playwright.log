@@ -1,6 +1,0 @@
-
-Running 1 test using 1 worker
-
-  ok 1 [tablet] › e2e\application.spec.ts:30:1 › customer request, human reply and customer receipt (5.8s)
-
-  1 passed (6.8s)

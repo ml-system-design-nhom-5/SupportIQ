@@ -1,9 +1,0 @@
-{
-  "latest_run_id": "accept-20261112-123928-2802bd",
-  "run_dir": "artifacts\\evaluation\\coordinator-integrated-20261112-live\\runs\\accept-20261112-123928-2802bd",
-  "timestamp": "2026-11-12T12:39:28.179297+00:00",
-  "runner_checks_passed": true,
-  "mode": "live",
-  "boundary_kind": "in_process_asgi_testclient",
-  "raw_records_sha256": "1835908A87B8F1A28B9B4478CCE9FBC77F8BC79049C6ED754EFD10A40B0CF906"
-}
