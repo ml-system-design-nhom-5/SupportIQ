@@ -33,6 +33,16 @@ describe("requireMembers", () => {
       requireMembers({ order_id: value }, ["order_id"]);
     }).toThrow("The response has no order_id.");
   });
+
+  it("types the members as present after the call, so they read without a check", () => {
+    const body: { readonly kb_version?: string | null } = { kb_version: "kb-2026.11" };
+
+    requireMembers(body, ["kb_version"]);
+    // The type check fails here if requireMembers does not narrow the body.
+    const kbVersion: string = body.kb_version;
+
+    expect(kbVersion).toBe("kb-2026.11");
+  });
 });
 
 describe("countContractCharacters", () => {

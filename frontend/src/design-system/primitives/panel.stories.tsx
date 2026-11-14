@@ -57,6 +57,21 @@ export const WithTrailingHeaderContent: Story = {
   },
 };
 
+export const HeaderWithoutIcon: Story = {
+  args: {
+    as: "section",
+    label: "ai-service",
+    children: (
+      <>
+        <PanelHeader level={2} title="ai-service" trailing={<Text tone="muted">Available</Text>} />
+        <PanelSection>
+          <Text>Content</Text>
+        </PanelSection>
+      </>
+    ),
+  },
+};
+
 export const CenteredSection: Story = {
   args: {
     children: (

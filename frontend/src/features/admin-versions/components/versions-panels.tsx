@@ -10,12 +10,11 @@ import type { ReactNode } from "react";
 import {
   type DescriptionItem,
   DescriptionList,
-  Heading,
   Identifier,
   Panel,
+  PanelHeader,
   PanelSection,
   presentationByAiServiceStatus,
-  Stack,
   StatusBadge,
   StatusBanner,
   Text,
@@ -81,14 +80,7 @@ export function VersionsPanels({ versions }: VersionsPanelsProps) {
 function VersionPanel({ title, status, items }: VersionPanelProps) {
   return (
     <Panel as="section" label={title}>
-      <PanelSection>
-        <Stack direction="row" justify="between" align="center" gap="3">
-          <Heading level={2} size="item">
-            {title}
-          </Heading>
-          {status}
-        </Stack>
-      </PanelSection>
+      <PanelHeader level={2} title={title} trailing={status} />
       <PanelSection>
         <DescriptionList items={items} />
       </PanelSection>

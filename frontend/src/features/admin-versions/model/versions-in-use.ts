@@ -23,11 +23,6 @@ const assetTerms: readonly (readonly [keyof AssetVersions, string])[] = [
   ["indexVersion", "Retrieval index"],
 ];
 
-/** An `AdminVersionsView` with `ai_service_versions`, as the contract sends it when available. */
-type AvailableVersionsContract = AdminVersionsContract & {
-  readonly ai_service_versions: AssetVersionsContract;
-};
-
 /** The release and asset versions that `ai-service` serves (`AssetVersions`). */
 export type AssetVersions = {
   readonly releaseId: string;
@@ -102,27 +97,15 @@ export function buildAssetVersionRows(aiService: AiServiceVersions): readonly As
  *
  * @param view - An `AdminVersionsView` with its required members.
  * @returns The versions when the status is `available`, and nothing otherwise.
- * @throws TypeError when the status is `available` and the versions are missing.
+ * @throws TypeError when the status is `available` and the versions are missing: the contract
+ *   sends them exactly when the status is `available`.
  */
 function toAiServiceVersions(view: AdminVersionsContract): AiServiceVersions {
   if (toAiServiceStatus(view.ai_service_status) === "unavailable") {
     return { status: "unavailable" };
   }
-  requireAssetVersions(view);
-  return { status: "available", assetVersions: toAssetVersions(view.ai_service_versions) };
-}
-
-/**
- * Stop at an `available` body without `ai_service_versions`: the contract sends them exactly when
- * the status is `available`.
- *
- * @param view - An `AdminVersionsView` whose status is `available`.
- * @throws TypeError naming `ai_service_versions` when the body lacks it.
- */
-function requireAssetVersions(
-  view: AdminVersionsContract,
-): asserts view is AvailableVersionsContract {
   requireMembers(view, ["ai_service_versions"]);
+  return { status: "available", assetVersions: toAssetVersions(view.ai_service_versions) };
 }
 
 /**

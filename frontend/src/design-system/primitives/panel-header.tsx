@@ -1,7 +1,7 @@
 /**
- * The header row of a {@link Panel}: an icon, a heading, and optional trailing content. A heading
- * with a focus target ID can take the focus from a script and, like the ticket heading, shows no
- * outline then.
+ * The header row of a {@link Panel}: an optional icon, a heading, and optional trailing content. A
+ * heading with a focus target ID can take the focus from a script and, like the ticket heading,
+ * shows no outline then.
  */
 import { cva } from "class-variance-authority";
 import type { LucideIcon } from "lucide-react";
@@ -22,7 +22,8 @@ const headingVariants = cva("font-semibold outline-none", {
 
 /** Props of {@link PanelHeader}. */
 export type PanelHeaderProps = {
-  readonly icon: LucideIcon;
+  /** Absent for a panel whose design shows no icon, such as the panels of the Versions screen. */
+  readonly icon?: LucideIcon;
   /** The heading level in the page outline. */
   readonly level: 2 | 3;
   readonly title: string;
@@ -46,7 +47,7 @@ export function PanelHeader({ icon, level, title, trailing, focusTargetId }: Pan
   const density = use(PanelDensityContext);
   return (
     <div className={headerVariants({ density })}>
-      <Icon icon={icon} />
+      {icon === undefined ? null : <Icon icon={icon} />}
       <Heading
         id={focusTargetId}
         tabIndex={focusTargetId === undefined ? undefined : -1}

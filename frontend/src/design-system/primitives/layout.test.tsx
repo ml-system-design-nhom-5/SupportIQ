@@ -66,6 +66,30 @@ describe("Panel", () => {
 
     expect(screen.getByRole("heading", { level: 3, name: "Lines" })).toBeVisible();
   });
+
+  it("shows the icon of the header, hidden from assistive technology", () => {
+    renderUi(
+      <Panel as="section" label="Lines">
+        <PanelHeader icon={LifeBuoy} level={2} title="Lines" />
+      </Panel>,
+    );
+
+    expect(screen.getByRole("region", { name: "Lines" }).querySelector("svg")).toHaveAttribute(
+      "aria-hidden",
+      "true",
+    );
+  });
+
+  it("shows no icon in a header without an icon", () => {
+    renderUi(
+      <Panel as="section" label="backend">
+        <PanelHeader level={2} title="backend" />
+      </Panel>,
+    );
+
+    expect(screen.getByRole("heading", { level: 2, name: "backend" })).toBeVisible();
+    expect(screen.getByRole("region", { name: "backend" }).querySelector("svg")).toBeNull();
+  });
 });
 
 describe("PageColumn", () => {
