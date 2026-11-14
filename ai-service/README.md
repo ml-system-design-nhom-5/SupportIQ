@@ -44,7 +44,7 @@ These steps work from a fresh clone, on Linux, macOS, and Windows. Only Linux ge
    cp .env.example .env
    ```
 
-`ai-service serve` validates the settings first. A missing or invalid setting stops it with exit status 2 and a `settings.invalid` line that names the setting, never its value ([ARCH-34](../docs/rules/architecture.md)).
+`ai-service serve` validates the settings first. A missing or invalid setting stops it with exit status 2 and a `settings.invalid` line that names the setting, never its value ([ARCH-34](../docs/rules/architecture.md)). It then reads the egress allow-list, and a missing or invalid file stops it the same way, with an `egress_allow_list.invalid` line that names the file ([Egress and secrets](#egress-and-secrets)).
 
 Docker is not part of local development. CI builds the [`Dockerfile`](Dockerfile), which installs the `torch` group.
 
@@ -76,7 +76,7 @@ uv run datamodel-codegen
 ```text
 ai-service/
 ├── src/supportiq_ai_service/
-│   ├── platform/           # Clock, errors, events, settings, logging, trace context, the service token, web
+│   ├── platform/           # Clock, errors, events, settings, logging, trace context, egress, the service token, web
 │   ├── release/            # The release manifest: loading, checksums, the asset versions, readiness
 │   ├── suggestions/        # For now createAnalysis and createDraft: use cases, results, the pipeline port
 │   ├── intent/             # For now only the adapters of the intent model
@@ -84,7 +84,6 @@ ai-service/
 │   ├── drafting/           # For now only the adapters of the LLM client and its budget
 │   ├── composition_root/   # The only place that wires everything: the app and its command
 │   └── generated/          # Models generated from the contract; never edited by hand
-├── config/                 # Versioned configuration files, such as the egress allow-list
 ├── tests/
 │   ├── unit/               # Domain and application, with fakes; the network is blocked
 │   ├── integration/        # The app over HTTP with fakes, and guardrails/
@@ -93,7 +92,7 @@ ai-service/
 └── pyproject.toml          # Dependencies and the configuration of every tool
 ```
 
-`platform/`, `release/`, `composition_root/`, `generated/`, `config/`, and the test folders are fixed. `suggestions/` is an interim feature named after the tag of its two operations in the contract: it holds their use cases, the types of their results in the shape of the contract, and the port of the pipeline, which computes nothing itself. `intent/`, `retrieval/`, and `drafting/` hold the adapters taken over from `main`. The pipeline design decides the features of the pipeline and replaces this split ([Open questions](#open-questions)).
+`platform/`, `release/`, `composition_root/`, `generated/`, and the test folders are fixed. `suggestions/` is an interim feature named after the tag of its two operations in the contract: it holds their use cases, the types of their results in the shape of the contract, and the port of the pipeline, which computes nothing itself. `intent/`, `retrieval/`, and `drafting/` hold the adapters taken over from `main`. The pipeline design decides the features of the pipeline and replaces this split ([Open questions](#open-questions)).
 
 Each feature has the layers of [ARCH-16](../docs/rules/architecture.md):
 
@@ -108,7 +107,14 @@ Features depend on each other in one direction and only through the `__init__.py
 
 ## Egress and secrets
 
-- `ai-service` calls outside the system only the hosts of the egress allow-list, a versioned file in `config/` that holds only the Gemini host ([ADR-0010, Egress control](../docs/decisions/0010-pseudonymization-and-egress-control.md#egress-control)). The LLM client enforces it with `AllowListedTransport`, which allows only HTTPS to an allow-listed host and refuses every other host before it connects ([ADR-0018, Egress](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#egress)).
+- `ai-service` calls outside the system only the hosts of the egress allow-list ([ADR-0010, Egress control](../docs/decisions/0010-pseudonymization-and-egress-control.md#egress-control)). The list is [`egress-allow-list.v1.json`](src/supportiq_ai_service/platform/adapters/egress-allow-list.v1.json), version `1`, and holds only `generativelanguage.googleapis.com`. It ships inside the package and is read with `importlib.resources`. It is not a setting, so no environment can change it: only a change in the repository with the approval of [SEC-35](../docs/rules/security-and-privacy.md#security-review) can. At startup it is read strictly: an unknown field, another version, an empty or repeated host, or a host that is not a lowercase DNS name stops the replica.
+- Egress is enforced in code, because the hosting has no outbound filter ([ADR-0018, Egress](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#egress)). [`platform/adapters/egress.py`](src/supportiq_ai_service/platform/adapters/egress.py) is the only module that creates an HTTP client or transport ([ARCH-19](../docs/rules/architecture.md)). Its `AllowListedTransport` refuses, before it connects, every request that is not HTTPS on the default port to an allow-listed host, and the LLM client handles a refusal like any failed call: `llm_unavailable` ([ADR-0010, Failure handling](../docs/decisions/0010-pseudonymization-and-egress-control.md#failure-handling)). The client reads no proxy setting from the environment (`trust_env=False`) and follows no redirect (`follow_redirects=False`). `ai-service serve` creates the one client in the composition root, right after it reads the allow-list and before the server starts, which does no I/O; the lifespan of the app closes it at shutdown ([ARCH-21](../docs/rules/architecture.md), [ARCH-24](../docs/rules/architecture.md)). No other place creates one.
+- The guardrail [`tests/integration/guardrails/test_egress_allow_list.py`](tests/integration/guardrails/test_egress_allow_list.py) fails when the packaged list holds another host, when the client of a replica sends a request outside the list or stays open after shutdown, and when another module of `src/` does one of these, in any import form:
+  - calls `httpx.Client`, `httpx.AsyncClient`, `httpx.HTTPTransport`, `httpx.AsyncHTTPTransport`, or one of the request functions of `httpx` (`get`, `post`, `put`, `patch`, `delete`, `head`, `options`, `request`, `stream`);
+  - calls `socket.socket` or `socket.create_connection`;
+  - imports `urllib.request`, `http.client`, `requests`, `urllib3`, `httpcore`, `aiohttp`, or `huggingface_hub`, which downloads models while `ai-service` downloads nothing when it runs.
+
+  Type annotations do not count ([SEC-40](../docs/rules/security-and-privacy.md#transport-and-runtime)).
 - The intent model and the BGE encoder ship with each release, and Hugging Face runs offline, so `ai-service` downloads nothing when it starts.
 - Every operation except `/health/live` and `/health/ready` checks the service token ([ADR-0018, Access](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#access)).
 - Provider responses, prompts, and keys are never logged ([LOG-29](../docs/rules/logging-and-observability.md#privacy-in-telemetry)). The Gemini API key and the service token are Modal Secrets ([ADR-0018, Secrets](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#secrets)).
@@ -121,6 +127,7 @@ Every log line is one JSON object on standard output, with the attributes of an 
 |---|---|
 | `startup.completed`, `shutdown.started` | A replica starts or stops |
 | `settings.loaded`, `settings.invalid` | The settings are read; `settings.invalid` names the settings, never a value |
+| `egress_allow_list.invalid` | The egress allow-list is missing or invalid, so the replica stops; it names the file, never its content |
 | `request.completed` | Every request ends, with the route template, the method, the status, and the duration |
 | `request.failed` | A request fails unexpectedly, with the error type |
 | `request.refused` | A request answers `503 not-ready`, because no verified release is loaded |
@@ -151,6 +158,8 @@ Every request continues the trace of a valid `traceparent` or starts a new one, 
 - The intent model of `main` reports uncalibrated softmax scores. Calibrated probabilities (FR-01) wait for the pipeline design and a calibration on validation data ([contracts v1 design, Work for the join](../docs/design/contracts-v1.md#work-for-the-join-with-the-ai-and-ml-code)).
 - The first release serves no KB document, so every policy question leads to abstention (ESC-04) until a new KB version arrives ([ADR-0021, KB ingestion](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#kb-ingestion)).
 - The masks that `ai-service` writes before an LLM call come from patterns. A personal value that no pattern matches, such as an address written in slang, can remain ([ADR-0010, Detection](../docs/decisions/0010-pseudonymization-and-egress-control.md#detection)).
+- No adapter sends a request with the client of the egress allow-list yet: the pipeline of `main` is not wired into the app.
+- The static scan of the egress guardrail covers only the code of `ai-service`. A dependency that opens its own connection is caught only when a test runs it under the network block of pytest-socket ([ADR-0018, Consequences](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#consequences)).
 - The Gemini API has rate limits. When a call fails or the budget runs out, a draft returns `llm_unavailable` with a reason code, and staff handle the ticket manually (ESC-05).
 - Structural checks on a draft, such as citation identity and placeholder provenance, do not prove that a cited source supports a claim. Staff verify every claim before they send a reply (FR-04).
 - The cold start, the latency from `backend`, and the memory in use are not measured yet ([ADR-0018, Validation](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#validation)).

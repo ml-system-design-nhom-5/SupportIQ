@@ -1,1 +1,1 @@
-"""Adapters of platform: the clock, the logging setup, and the trace context."""
+"""Adapters of platform: the clock, the logging setup, the trace context, and egress."""

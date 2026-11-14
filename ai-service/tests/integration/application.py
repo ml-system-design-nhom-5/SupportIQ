@@ -8,11 +8,15 @@ import httpx
 from fastapi import FastAPI
 
 from supportiq_ai_service.composition_root import ServicePorts, create_app
+from supportiq_ai_service.platform.adapters.egress import (
+    create_egress_client,
+    packaged_egress_allow_list,
+)
 from supportiq_ai_service.platform.settings import Settings
 from supportiq_ai_service.release import ReleaseSource
 from supportiq_ai_service.retrieval import KbDocumentSource
 from supportiq_ai_service.suggestions import SuggestionPipeline
-from tests.unit.platform.fakes import FakeClock, RecordingEventRecorder
+from tests.unit.platform.fakes import FakeClock, RecordingEventRecorder, RecordingNetwork
 from tests.unit.release.fakes import StaticReleaseSource
 from tests.unit.retrieval.fakes import StaticKbDocuments
 from tests.unit.suggestions.fakes import FakePipeline
@@ -69,6 +73,9 @@ def build_ports(
 def build_app(ports: ServicePorts, events: RecordingEventRecorder) -> FastAPI:
     """Create the wired application for tests.
 
+    Its egress client has the packaged allow-list and a recording network, so nothing it
+    could send would connect.
+
     Args:
         ports: The ports of the replica.
         events: Where the application records events.
@@ -76,7 +83,8 @@ def build_app(ports: ServicePorts, events: RecordingEventRecorder) -> FastAPI:
     Returns:
         The application.
     """
-    return create_app(build_settings(), events, FakeClock(), ports)
+    egress_client = create_egress_client(packaged_egress_allow_list(), RecordingNetwork())
+    return create_app(build_settings(), events, FakeClock(), ports, egress_client)
 
 
 @asynccontextmanager

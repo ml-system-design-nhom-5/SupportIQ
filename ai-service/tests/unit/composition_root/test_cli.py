@@ -11,12 +11,19 @@ import pytest
 from fastapi import FastAPI
 
 from supportiq_ai_service.composition_root import cli
+from supportiq_ai_service.platform.adapters.egress import (
+    ALLOW_LIST_FILE_NAME,
+    EgressAllowList,
+    EgressAllowListInvalidError,
+    packaged_egress_allow_list,
+)
 from supportiq_ai_service.platform.adapters.system_clock import SystemClock
 from supportiq_ai_service.release import ReleaseNotLoadedError
 from supportiq_ai_service.release.adapters import NoReleaseSource
 from supportiq_ai_service.retrieval.adapters.no_kb_documents import NoKbDocuments
 from supportiq_ai_service.suggestions import SuggestionInput
 from supportiq_ai_service.suggestions.adapters import UnavailablePipeline
+from tests.unit.platform.fakes import RecordingEgressClientFactory
 from tests.unit.release.fakes import EXAMPLE_RELEASE
 
 SERVE_ARGUMENTS = ["serve", "--host", "127.0.0.1", "--port", "8000"]
@@ -86,9 +93,43 @@ def test_invalid_settings_stop_with_status_2_before_the_server_starts(
 
     status = cli.main(SERVE_ARGUMENTS)
 
-    assert status == cli.EXIT_SETTINGS_INVALID
+    assert status == cli.EXIT_CONFIGURATION_INVALID
     assert not server.runs
     assert '"event":"settings.invalid"' in capsys.readouterr().out
+
+
+def test_an_invalid_egress_allow_list_stops_with_status_2_before_the_server_starts(
+    monkeypatch: pytest.MonkeyPatch, server: RecordingServer, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("SERVICE_TOKEN", SERVICE_TOKEN)
+
+    def invalid_allow_list() -> EgressAllowList:
+        raise EgressAllowListInvalidError(ALLOW_LIST_FILE_NAME)
+
+    monkeypatch.setattr(cli, "packaged_egress_allow_list", invalid_allow_list)
+
+    status = cli.main(SERVE_ARGUMENTS)
+
+    assert status == cli.EXIT_CONFIGURATION_INVALID
+    assert not server.runs
+    output = capsys.readouterr().out
+    assert '"event":"egress_allow_list.invalid"' in output
+    assert f'"file_name":"{ALLOW_LIST_FILE_NAME}"' in output
+
+
+def test_serve_creates_one_client_of_the_packaged_allow_list_before_the_server_starts(
+    monkeypatch: pytest.MonkeyPatch, server: RecordingServer
+) -> None:
+    monkeypatch.setenv("SERVICE_TOKEN", SERVICE_TOKEN)
+    factory = RecordingEgressClientFactory()
+    monkeypatch.setattr(cli, "create_egress_client", factory)
+
+    cli.main(SERVE_ARGUMENTS)
+
+    ((allow_list, client),) = factory.created
+    assert allow_list == packaged_egress_allow_list()
+    assert not client.is_closed
+    assert len(server.runs) == 1
 
 
 def test_serve_needs_a_host_and_a_port() -> None:

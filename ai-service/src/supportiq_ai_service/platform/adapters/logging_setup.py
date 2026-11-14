@@ -44,6 +44,7 @@ ALLOWED_ATTRIBUTES = frozenset(
         "http_route",
         "http_status_code",
         "setting_names",
+        "file_name",
         "logger_name",
     }
 )

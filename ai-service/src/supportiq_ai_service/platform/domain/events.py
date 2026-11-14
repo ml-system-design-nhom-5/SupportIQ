@@ -20,6 +20,7 @@ class EventName(StrEnum):
     STARTUP_COMPLETED = "startup.completed"
     SETTINGS_LOADED = "settings.loaded"
     SETTINGS_INVALID = "settings.invalid"
+    EGRESS_ALLOW_LIST_INVALID = "egress_allow_list.invalid"
     SHUTDOWN_STARTED = "shutdown.started"
     REQUEST_COMPLETED = "request.completed"
     REQUEST_FAILED = "request.failed"
@@ -56,6 +57,9 @@ EVENT_DESCRIPTIONS: Mapping[EventName, EventDescription] = MappingProxyType(
         EventName.SETTINGS_LOADED: EventDescription(EventLevel.INFO, "Settings loaded"),
         EventName.SETTINGS_INVALID: EventDescription(
             EventLevel.ERROR, "Settings are missing or invalid, so ai-service stops"
+        ),
+        EventName.EGRESS_ALLOW_LIST_INVALID: EventDescription(
+            EventLevel.ERROR, "The egress allow-list is missing or invalid, so ai-service stops"
         ),
         EventName.SHUTDOWN_STARTED: EventDescription(
             EventLevel.INFO, "ai-service is shutting down"

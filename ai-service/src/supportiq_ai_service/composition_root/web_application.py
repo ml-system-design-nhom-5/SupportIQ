@@ -2,13 +2,17 @@
 
 Creating the application does no I/O. Every operation except the health checks checks the
 service token (ADR-0018, Access), and every request continues or starts its trace (LOG-05).
+The command creates the one HTTP client that leaves the system, and the lifespan closes it at
+shutdown (ARCH-24, SEC-40).
 """
 
 from collections.abc import AsyncGenerator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 
+import httpx
 from fastapi import Depends, FastAPI
+from starlette.concurrency import run_in_threadpool
 
 from supportiq_ai_service.platform import CheckReadiness, Clock, EventName, EventRecorder
 from supportiq_ai_service.platform.adapters.trace_context import (
@@ -46,7 +50,11 @@ class ServicePorts:
 
 
 def create_app(
-    settings: Settings, events: EventRecorder, clock: Clock, ports: ServicePorts
+    settings: Settings,
+    events: EventRecorder,
+    clock: Clock,
+    ports: ServicePorts,
+    egress_client: httpx.Client,
 ) -> FastAPI:
     """Create the application with every route of the contract and the health checks.
 
@@ -55,12 +63,13 @@ def create_app(
         events: Where events are recorded.
         clock: The clock of the process.
         ports: The ports that the operations run on.
+        egress_client: The client of the egress allow-list, which the lifespan closes.
 
     Returns:
         The application, ready for an ASGI server.
     """
     app = FastAPI(
-        lifespan=_build_lifespan(events),
+        lifespan=_build_lifespan(events, egress_client),
         openapi_url=None,
         docs_url=None,
         redoc_url=None,
@@ -86,12 +95,16 @@ def create_app(
 
 
 def _build_lifespan(
-    events: EventRecorder,
+    events: EventRecorder, egress_client: httpx.Client
 ) -> Callable[[FastAPI], AbstractAsyncContextManager[None]]:
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
         events.record(EventName.STARTUP_COMPLETED)
         yield
         events.record(EventName.SHUTDOWN_STARTED)
+        # The command created this client once, before the server started. No adapter sends a
+        # request with it yet, because the pipeline of `main` is not wired in. Closing it may
+        # close sockets, so it runs off the event loop.
+        await run_in_threadpool(egress_client.close)
 
     return lifespan

@@ -5,10 +5,14 @@ import hashlib
 import json
 from pathlib import Path
 
-import httpx
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from supportiq_ai_service.platform.adapters.egress import (
+    create_egress_client,
+    packaged_egress_allow_list,
+)
 
 from .engine import Engine
 from .drafting import BudgetedDraftClient
@@ -49,19 +53,6 @@ class SuggestionRequest(BaseModel):
             dt = dt.replace(tzinfo=timezone.utc)
             self.as_of = dt.isoformat()
         return self
-
-
-class AllowListedTransport(httpx.BaseTransport):
-    def __init__(self):
-        self.transport = httpx.HTTPTransport()
-
-    def handle_request(self, request):
-        if request.url.scheme != "https" or request.url.host != "generativelanguage.googleapis.com":
-            raise httpx.RequestError("Egress host is not allowed")
-        return self.transport.handle_request(request)
-
-    def close(self):
-        self.transport.close()
 
 
 _BOUNDED_GATEWAY_CODES = frozenset({
@@ -131,7 +122,7 @@ def create_app():
         release = json.loads(release_path.read_text(encoding="utf-8"))
         allowed = {(document["document_id"], document["version"]) for document in release["documents"]}
         retriever = RetrievalAdapter(allowed_document_versions=allowed)
-        client = httpx.Client(transport=AllowListedTransport(), trust_env=False)
+        client = create_egress_client(packaged_egress_allow_list())
         llm = GeminiDraftClient(api_key=settings.gemini_api_key.get_secret_value() if settings.supportiq_enable_llm else "", model=settings.gemini_model, http_client=client)
         root = Path(__file__).resolve().parents[2]
         kb = root / "data/knowledge/approved_kb.v2.json"

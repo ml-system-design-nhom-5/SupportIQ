@@ -484,32 +484,13 @@ def prepare_llm_input(question: str, intent: str, evidence: list[dict], business
 
 
 class GeminiDraftClient:
-    def __init__(self, api_key: str | None = None, model: str | None = None,
-                 http_client: httpx.Client | None = None):
+    def __init__(self, api_key: str | None = None, model: str | None = None, *,
+                 http_client: httpx.Client):
+        # The composition root creates `http_client` with the egress allow-list and closes it
+        # at shutdown, so this adapter never creates or closes a client (ARCH-21, ARCH-24, SEC-40).
         self._api_key = (api_key if api_key is not None else os.getenv("GEMINI_API_KEY", "")).strip()
         self.model = model or os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
         self._http = http_client
-        self._owns_http = http_client is None
-
-    def _get_http_client(self, timeout: httpx.Timeout) -> httpx.Client:
-        if self._http is None:
-            self._http = httpx.Client(timeout=timeout, follow_redirects=False)
-            self._owns_http = True
-        return self._http
-
-    def close(self) -> None:
-        if self._owns_http and self._http is not None:
-            try:
-                self._http.close()
-            except Exception:
-                pass
-            self._http = None
-
-    def __enter__(self) -> "GeminiDraftClient":
-        return self
-
-    def __exit__(self, exc_type, exc, tb) -> None:
-        self.close()
 
     @property
     def configured(self) -> bool:
@@ -557,9 +538,8 @@ class GeminiDraftClient:
             "prompt_version": PROMPT_VERSION,
         }
         try:
-            client = self._get_http_client(timeout)
-            response = client.post(url, headers={"x-goog-api-key": self._api_key}, json=payload,
-                                   timeout=timeout)
+            response = self._http.post(url, headers={"x-goog-api-key": self._api_key}, json=payload,
+                                       timeout=timeout)
         except httpx.ConnectTimeout:
             latency_sec = round(time.perf_counter() - started, 4)
             att = [{
