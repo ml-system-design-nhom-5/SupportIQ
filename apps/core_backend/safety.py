@@ -379,7 +379,7 @@ _MONTH_MAP = {
     "aug": 8, "august": 8, "sep": 9, "sept": 9, "september": 9,
     "oct": 10, "october": 10, "nov": 11, "november": 11, "dec": 12, "december": 12,
 }
-_ISO_DATE = re.compile(r"\b((?:19|20)\d{2})-(\d{2})-(\d{2})\b")
+_ISO_DATE = re.compile(r"\b((?:19|20)\d{2})-(\d{2})-(\d{2})(?=\b|T\d{2}:\d{2})")
 _MDY_DATE = re.compile(
     r"\b(January|February|March|April|May|June|July|August|September|October|November|December|"
     r"Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\.?\s+(\d{1,2}),?\s+((?:19|20)\d{2})\b",

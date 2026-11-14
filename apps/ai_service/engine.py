@@ -5,6 +5,11 @@ import math
 import re
 import time
 
+from apps.core_backend.llm.gemini import (
+    ORDER_CONTEXT_ALLOWED_FIELDS,
+    ORDER_CONTEXT_ALLOWED_SET,
+    extract_order_facts,
+)
 from apps.core_backend.safety import (
     FACTUAL_COMMITMENT,
     PLACEHOLDER,
@@ -263,6 +268,12 @@ class Engine:
             return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
 
         sources = {source["source_id"]: source for source in generated["input_snapshot"]["sources"]}
+        supplied_facts = extract_order_facts(
+            request.get("order_context"),
+            allowed_fields=ORDER_CONTEXT_ALLOWED_SET,
+            include_order_identifiers=False,
+        )
+        supplied_fields = [field for field in ORDER_CONTEXT_ALLOWED_FIELDS if field in supplied_facts]
         citations, segments = {}, []
         for paragraph_index, paragraph in enumerate(re.split(r"\n\s*\n", text.strip())):
             source_ids = re.findall(r"\[(S\d+)\]", paragraph)
@@ -276,12 +287,16 @@ class Engine:
                 if source["source_type"] == "policy":
                     citations[identifier] = {"citation_id": identifier, "source_type": "kb_document", "document_id": source["document_id"], "version": str(source["version"]), "snippet": source["excerpt"]}
                     citation_ids.append(identifier)
-                else:
-                    for field in ("order_status", "refund_status"):
-                        if field in request.get("order_context", {}):
-                            order_id = identifier + "_" + field
-                            citations[order_id] = {"citation_id": order_id, "source_type": "order_context", "field": field}
-                            citation_ids.append(order_id)
+                elif supplied_fields:
+                    cit_entry = {
+                        "citation_id": identifier,
+                        "source_type": "order_context",
+                        "fields": list(supplied_fields),
+                    }
+                    if len(supplied_fields) == 1:
+                        cit_entry["field"] = supplied_fields[0]
+                    citations[identifier] = cit_entry
+                    citation_ids.append(identifier)
             if source_ids and not citation_ids:
                 return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
             segments.append({"segment_id": f"segment-{paragraph_index}", "paragraph_index": paragraph_index,

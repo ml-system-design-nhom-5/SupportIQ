@@ -174,7 +174,19 @@ class SuggestionWorker:
                             raise ValueError("Empty draft")
                         for citation in result["draft"]["citations"]:
                             if citation["source_type"] == "order_context":
-                                citation["value"] = payload["order_context"][citation["field"]]
+                                fields = citation.get("fields")
+                                if fields is not None:
+                                    if (
+                                        not isinstance(fields, list)
+                                        or not fields
+                                        or any(not isinstance(field_name, str) or field_name not in payload["order_context"] for field_name in fields)
+                                    ):
+                                        raise ValueError("Invalid order_context citation fields")
+                                    citation["values"] = {field_name: payload["order_context"][field_name] for field_name in fields}
+                                if "field" in citation:
+                                    citation["value"] = payload["order_context"][citation["field"]]
+                                elif not fields:
+                                    raise ValueError("Invalid order_context citation")
                 return part, result, round((time.perf_counter() - started) * 1000), None
             except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError) as exc:
                 return part, None, round((time.perf_counter() - started) * 1000), _classify_http_failure(exc)

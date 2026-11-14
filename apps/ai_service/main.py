@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from apps.core_backend.llm.gemini import ORDER_CONTEXT_ALLOWED_SET, extract_order_facts
 from .engine import Engine
 from .drafting import BudgetedDraftClient
 
@@ -36,9 +37,9 @@ class SuggestionRequest(BaseModel):
 
     @model_validator(mode="after")
     def check_context(self):
-        allowed = {"order_status", "placed_at", "order_total", "shipping_cost", "shipment_status", "estimated_delivery_at", "delivered_at", "refund_status", "refund_amount", "refund_requested_at"}
-        if not self.order_context.keys() <= allowed:
+        if not self.order_context.keys() <= ORDER_CONTEXT_ALLOWED_SET:
             raise ValueError("Order context must not contain identifiers or personal data")
+        extract_order_facts(self.order_context, allowed_fields=ORDER_CONTEXT_ALLOWED_SET, strict=True)
         from datetime import datetime, timezone
         as_of_clean = self.as_of.replace("Z", "+00:00")
         try:

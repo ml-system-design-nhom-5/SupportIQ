@@ -13,7 +13,7 @@ export interface Order {
 export interface ShopTicket { ticket_id: string; order_id: string | null; message: string; created_at: string; customer_status: string; reply: {body: string; sent_at: string} | null }
 export interface Intent { label: string; probability: number; confidence_band: string; source?: string; score_kind?: string; model_mode?: string; verified?: boolean }
 export interface Source { document_id: string; version: string; title: string; snippet: string; effective_from?: string; effective_to?: string; validity: string; rank: number }
-export interface Citation { citation_id: string; source_type: 'kb_document' | 'order_context'; document_id?: string; version?: string; snippet?: string; field?: string; value?: unknown }
+export interface Citation { citation_id: string; source_type: 'kb_document' | 'order_context'; document_id?: string; version?: string; snippet?: string; field?: string; value?: unknown; fields?: string[]; values?: Record<string, unknown> }
 export interface Draft { text: string; segments: {segment_id: string; paragraph_index: number; text: string; citation_ids: string[]}[]; citations: Citation[] }
 export interface Suggestion {
   suggestion_id: string; created_at: string; trigger: string; analysis_status: string; draft_status: string; intent_override?: string;

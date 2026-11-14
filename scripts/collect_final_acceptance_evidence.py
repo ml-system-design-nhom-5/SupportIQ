@@ -675,6 +675,73 @@ class AcceptanceEvidenceCollector:
                         raise RuntimeError(f"Failed to load both real and mock encoders: {mock_e}")
         return self._shared_encoder
 
+    @staticmethod
+    def _verify_order_context_citation(cit: Dict[str, Any], executed_order_context: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        """Verify order_context citation field(s) and typed value equality against executed order_context."""
+        ctx = executed_order_context or {}
+        if "fields" in cit:
+            fields_list = cit.get("fields")
+            vals_map = cit.get("values")
+            if not isinstance(fields_list, list) or not fields_list or not all(isinstance(f, str) for f in fields_list):
+                return {
+                    "source_type": "order_context",
+                    "fields": fields_list,
+                    "values": vals_map,
+                    "field_present_in_executed_context": False,
+                    "value_matches_executed_context": False,
+                    "is_verified": False,
+                    "verification_error": "ORDER_CONTEXT_FIELD_MISSING: invalid or empty fields list",
+                }
+            all_present = all(f in ctx for f in fields_list)
+            vals_match = (
+                all_present
+                and isinstance(vals_map, dict)
+                and set(vals_map.keys()) == set(fields_list)
+                and all(ctx[f] == vals_map[f] for f in fields_list)
+                and ("field" not in cit or (cit.get("field") in fields_list and cit.get("value") == ctx.get(cit.get("field"))))
+            )
+            v_ok = all_present and vals_match
+            err = None
+            if not v_ok:
+                missing = [f for f in fields_list if f not in ctx]
+                err = (
+                    f"ORDER_CONTEXT_FIELD_MISSING: fields {missing} not in executed context"
+                    if missing
+                    else "ORDER_CONTEXT_VALUE_MISMATCH: cited values do not match executed context"
+                )
+            out = {
+                "source_type": "order_context",
+                "fields": fields_list,
+                "values": vals_map,
+                "field_present_in_executed_context": all_present,
+                "value_matches_executed_context": vals_match,
+                "is_verified": v_ok,
+                "verification_error": err,
+            }
+            if "field" in cit:
+                out["field"] = cit.get("field")
+                out["value"] = cit.get("value")
+            return out
+
+        f_name = cit.get("field")
+        f_val = cit.get("value")
+        field_present = (executed_order_context is not None and f_name in executed_order_context)
+        val_matches = field_present and (executed_order_context[f_name] == f_val)
+        v_ok = field_present and val_matches
+        return {
+            "source_type": "order_context",
+            "field": f_name,
+            "value": f_val,
+            "field_present_in_executed_context": field_present,
+            "value_matches_executed_context": val_matches,
+            "is_verified": v_ok,
+            "verification_error": None if v_ok else (
+                f"ORDER_CONTEXT_FIELD_MISSING: field '{f_name}' not in executed context"
+                if not field_present else
+                f"ORDER_CONTEXT_VALUE_MISMATCH: expected '{executed_order_context[f_name]}', got '{f_val}'"
+            ),
+        }
+
     def _build_source_snapshot(
         self,
         doc_id: Optional[str],
@@ -1231,25 +1298,7 @@ class AcceptanceEvidenceCollector:
                     for cit in raw_citations:
                         src_type = cit.get("source_type")
                         if src_type in ("order_context", "order"):
-                            f_name = cit.get("field")
-                            f_val = cit.get("value")
-                            # Require actual field present in executed context AND typed equality
-                            field_present = (executed_order_context is not None and f_name in executed_order_context)
-                            val_matches = field_present and (executed_order_context[f_name] == f_val)
-                            v_ok = field_present and val_matches
-                            parsed_citations.append({
-                                "source_type": "order_context",
-                                "field": f_name,
-                                "value": f_val,
-                                "field_present_in_executed_context": field_present,
-                                "value_matches_executed_context": val_matches,
-                                "is_verified": v_ok,
-                                "verification_error": None if v_ok else (
-                                    f"ORDER_CONTEXT_FIELD_MISSING: field '{f_name}' not in executed context"
-                                    if not field_present else
-                                    f"ORDER_CONTEXT_VALUE_MISMATCH: expected '{executed_order_context[f_name]}', got '{f_val}'"
-                                ),
-                            })
+                            parsed_citations.append(self._verify_order_context_citation(cit, executed_order_context))
                         else:
                             d_id = cit.get("doc_id") or cit.get("document_id")
                             d_ver = cit.get("version")

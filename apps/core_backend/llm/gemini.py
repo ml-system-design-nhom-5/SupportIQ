@@ -7,6 +7,7 @@ import re
 import time
 import math
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from email.utils import parsedate_to_datetime
 from typing import Any
 
@@ -414,6 +415,140 @@ _CONTEXT_SECRET_KEYS = (
     "customer_name",
 )
 
+ORDER_CONTEXT_ALLOWED_FIELDS: tuple[str, ...] = (
+    "order_status",
+    "placed_at",
+    "order_total",
+    "shipping_cost",
+    "shipment_status",
+    "estimated_delivery_at",
+    "delivered_at",
+    "refund_status",
+    "refund_amount",
+    "refund_requested_at",
+)
+ORDER_CONTEXT_ALLOWED_SET: frozenset[str] = frozenset(ORDER_CONTEXT_ALLOWED_FIELDS)
+_LEGACY_SAFE_ORDER_FIELDS: frozenset[str] = frozenset({
+    "payment_status",
+    "delivery_date",
+    "estimated_delivery",
+    "expected_refund_time",
+    "can_cancel",
+    "eligible_for_return",
+    "carrier",
+})
+_PROMPT_SAFE_ORDER_FIELDS: frozenset[str] = ORDER_CONTEXT_ALLOWED_SET | _LEGACY_SAFE_ORDER_FIELDS
+_ORDER_CONTEXT_MONEY_FIELDS: frozenset[str] = frozenset({"order_total", "shipping_cost", "refund_amount"})
+_ORDER_CONTEXT_DATE_FIELDS: frozenset[str] = frozenset({
+    "placed_at",
+    "estimated_delivery_at",
+    "delivered_at",
+    "refund_requested_at",
+    "delivery_date",
+})
+_ORDER_CONTEXT_BOOL_FIELDS: frozenset[str] = frozenset({"can_cancel", "eligible_for_return"})
+_ZERO_DECIMAL_CURRENCIES: frozenset[str] = frozenset({"VND", "JPY", "KRW"})
+_ISO_TIMESTAMP_VALUE_RE = re.compile(
+    r"^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?(?:Z|[+-]\d{2}:\d{2})?)?$"
+)
+
+
+def _format_order_money(value: Any) -> str:
+    """Validate and format a nested {amount_minor, currency} object without forwarding extra keys."""
+    if not isinstance(value, dict) or set(value.keys()) != {"amount_minor", "currency"}:
+        raise ValueError("Money field must contain only amount_minor and currency")
+    amount_minor = value["amount_minor"]
+    currency = value["currency"]
+    if type(amount_minor) is not int or amount_minor < 0:
+        raise ValueError("Money amount_minor must be a non-negative integer")
+    if not isinstance(currency, str) or not re.fullmatch(r"[A-Za-z]{3}", currency.strip()):
+        raise ValueError("Money currency must be a 3-letter ISO code")
+    code = currency.strip().upper()
+    if code in _ZERO_DECIMAL_CURRENCIES:
+        return f"{amount_minor:,} {code}"
+    major = (Decimal(amount_minor) / Decimal(100)).quantize(Decimal("0.01"))
+    return f"{major:,.2f} {code}"
+
+
+def _validate_iso_date_or_timestamp(value: Any) -> str:
+    """Validate ISO-8601 date or timestamp strings so arbitrary text cannot leak through date fields."""
+    if not isinstance(value, str):
+        raise ValueError("Date field must be a string")
+    text = value.strip()
+    if not text or not _ISO_TIMESTAMP_VALUE_RE.fullmatch(text):
+        raise ValueError("Date field must be a valid ISO-8601 date or timestamp")
+    if len(text) == 10:
+        date.fromisoformat(text)
+    else:
+        datetime.fromisoformat(text.replace("Z", "+00:00"))
+    return text
+
+
+def _validate_and_format_order_field(
+    field: str,
+    value: Any,
+    raw_context: dict[str, Any],
+    *,
+    include_order_identifiers: bool = False,
+) -> Any:
+    """Validate one allowlisted order_context value and return its sanitized representation."""
+    if field in _ORDER_CONTEXT_MONEY_FIELDS:
+        return _format_order_money(value)
+    if field in _ORDER_CONTEXT_DATE_FIELDS:
+        return _validate_iso_date_or_timestamp(value)
+    if field in _ORDER_CONTEXT_BOOL_FIELDS:
+        if type(value) is not bool:
+            raise ValueError(f"Field '{field}' must be a boolean")
+        return value
+    if not isinstance(value, str):
+        raise ValueError(f"Field '{field}' must be a non-empty string")
+    stripped = value.strip()
+    if not stripped:
+        raise ValueError(f"Field '{field}' must not be empty")
+    sanitized = redact_contacts(stripped)
+    if not include_order_identifiers:
+        sanitized = _redact_known_context_identifiers(sanitized, raw_context)
+    return sanitized
+
+
+def extract_order_facts(
+    business_context: Any,
+    *,
+    allowed_fields: frozenset[str] = _PROMPT_SAFE_ORDER_FIELDS,
+    include_order_identifiers: bool = False,
+    strict: bool = False,
+) -> dict[str, Any]:
+    """Extract validated, formatted, identifier-free order facts using one shared allowlist path."""
+    if business_context is None:
+        return {}
+    if not isinstance(business_context, dict):
+        if strict:
+            raise ValueError("Order context must be a mapping")
+        return {}
+
+    effective_fields = set(allowed_fields)
+    if include_order_identifiers:
+        effective_fields.update({"order_id", "tracking_code"})
+
+    facts: dict[str, Any] = {}
+    for key in sorted(effective_fields):
+        if key not in business_context:
+            continue
+        raw_val = business_context[key]
+        if raw_val is None:
+            continue
+        try:
+            facts[key] = _validate_and_format_order_field(
+                key,
+                raw_val,
+                business_context,
+                include_order_identifiers=include_order_identifiers,
+            )
+        except ValueError:
+            if strict:
+                raise
+    return facts
+
 
 def _redact_known_context_identifiers(text: str, business_context: dict | None) -> str:
     """Mask explicit customer/order identifier literals from business_context without blanket number redaction."""
@@ -482,30 +617,19 @@ def build_grounded_sources(
 
     # 2. Format authorized order facts source if present
     if authorized_facts:
-        allowed_fields = {
-            "order_status",
-            "payment_status",
-            "refund_status",
-            "delivery_date",
-            "estimated_delivery",
-            "expected_refund_time",
-            "can_cancel",
-            "eligible_for_return",
-            "carrier",
-        }
-        if include_order_identifiers:
-            allowed_fields.update({"order_id", "tracking_code"})
         order_lines = []
         raw_order_id = str(authorized_facts.get("order_id", "ORDER-FACTS"))
         source_doc_id = raw_order_id if include_order_identifiers else "ORDER-FACTS"
         source_title = f"Verified Order {raw_order_id} Details" if include_order_identifiers else "Verified Order Details"
-        for k in sorted(allowed_fields):
-            if k in authorized_facts and k != "order_id":
-                val = authorized_facts[k]
-                sanitized_val = redact_contacts(str(val))
-                if not include_order_identifiers:
-                    sanitized_val = _redact_known_context_identifiers(sanitized_val, authorized_facts)
-                order_lines.append(f"{k}: {sanitized_val}")
+        formatted_facts = extract_order_facts(
+            authorized_facts,
+            allowed_fields=_PROMPT_SAFE_ORDER_FIELDS,
+            include_order_identifiers=include_order_identifiers,
+        )
+        for k, formatted_val in formatted_facts.items():
+            if k == "order_id":
+                continue
+            order_lines.append(f"{k}: {formatted_val}")
         if not order_lines and not include_order_identifiers and "tracking_code" in authorized_facts:
             order_lines.append("tracking: [IDENTIFIER]")
 
@@ -532,17 +656,11 @@ def prepare_llm_input(question: str, intent: str, evidence: list[dict], business
     import hashlib
     internal_sources = build_grounded_sources(evidence, business_context, include_order_identifiers=True)
     prompt_sources = build_grounded_sources(evidence, business_context, include_order_identifiers=False)
-    allowed = {'order_status', 'payment_status', 'refund_status', 'delivery_date',
-               'estimated_delivery', 'expected_refund_time', 'can_cancel', 'eligible_for_return'}
-    facts = {
-        k: (
-            _redact_known_context_identifiers(redact_contacts(v), business_context)
-            if isinstance(v, str)
-            else v
-        )
-        for k, v in (business_context or {}).items()
-        if k in allowed
-    }
+    facts = extract_order_facts(
+        business_context,
+        allowed_fields=_PROMPT_SAFE_ORDER_FIELDS,
+        include_order_identifiers=False,
+    )
     redacted_q = _redact_known_context_identifiers(redact_contacts(question), business_context)
     prompt = json.dumps({'question': redacted_q, 'intent': intent,
                          'sources': prompt_sources, 'order_facts': facts}, ensure_ascii=False)
