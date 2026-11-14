@@ -30,6 +30,24 @@ const openMenu: Story["play"] = async ({ canvas, userEvent, args }) => {
   await expect(screen.getByRole("menuitem", { name: "Sign out" })).toBeVisible();
 };
 
+/**
+ * Open the menu with the dev mode item, and check that it announces the state of dev mode.
+ *
+ * @param isOn - The state that the item announces.
+ * @returns The play function of the story.
+ */
+function openMenuWithDevMode(isOn: boolean): NonNullable<Story["play"]> {
+  return async ({ canvas, userEvent, args }) => {
+    await userEvent.click(
+      canvas.getByRole("button", { name: `${args.displayName} · ${args.roleLabel}` }),
+    );
+
+    const devModeItem = await screen.findByRole("menuitemcheckbox", { name: "Dev mode" });
+    await expect(devModeItem).toBeVisible();
+    await expect(devModeItem).toHaveAttribute("aria-checked", String(isOn));
+  };
+}
+
 const customer = { variant: "shop", displayName: "Lan Tran", roleLabel: "Customer" } as const;
 const staff = { variant: "console", displayName: "Mai Nguyen", roleLabel: "Staff" } as const;
 const manager = { variant: "console", displayName: "Hoa Pham", roleLabel: "Manager" } as const;
@@ -43,3 +61,12 @@ export const ManagerClosed: Story = { args: manager };
 export const ManagerOpen: Story = { args: manager, play: openMenu };
 export const AdminClosed: Story = { args: admin };
 export const AdminOpen: Story = { args: admin, play: openMenu };
+/** Where dev mode is available (UI-35), the menu holds its switch; here it is off. */
+export const DevModeOff: Story = {
+  args: { ...staff, devMode: { isOn: false, onChange: fn() } },
+  play: openMenuWithDevMode(false),
+};
+export const DevModeOn: Story = {
+  args: { ...staff, devMode: { isOn: true, onChange: fn() } },
+  play: openMenuWithDevMode(true),
+};

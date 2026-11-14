@@ -4,10 +4,9 @@
  * state with Try again (state-error.png). Each says what to do next and offers the copyable trace
  * ID.
  */
-import { Lock } from "lucide-react";
-
-import { CenteredContent, StateMessage } from "@/design-system";
+import { CenteredContent } from "@/design-system";
 import { describeFailure, FailureState, type RequestFailure } from "@/features/backend-requests";
+import { ConsolePermissionDenied } from "@/features/console-tickets/components/console-permission-denied";
 
 /** Props of {@link WorkspaceLoadFailure}. */
 type WorkspaceLoadFailureProps = {
@@ -29,13 +28,7 @@ export function WorkspaceLoadFailure({ failure, isRetrying, onRetry }: Workspace
     <CenteredContent>
       <title>Ticket · Console · SupportIQ</title>
       {category === "permission_denied" || category === "not_found" ? (
-        <StateMessage
-          icon={Lock}
-          headingLevel={1}
-          title="You cannot open this page"
-          description="Your role does not allow it. Ask a manager if you need it."
-          {...traceIdProps}
-        />
+        <ConsolePermissionDenied {...traceIdProps} />
       ) : (
         <FailureState
           title="This ticket could not be loaded"

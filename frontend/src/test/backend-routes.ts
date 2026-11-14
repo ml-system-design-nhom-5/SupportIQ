@@ -66,3 +66,4 @@ export const createEscalationRoute: FakeRoute = {
   method: "POST",
   path: /^\/v1\/console\/tickets\/[^/]+\/escalations$/,
 };
+export const getConsoleReportRoute: FakeRoute = { method: "GET", path: "/v1/console/reports" };

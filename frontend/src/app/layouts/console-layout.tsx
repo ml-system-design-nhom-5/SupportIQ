@@ -5,17 +5,12 @@
  * answers every console operation with `403`, and the screen shows the permission-denied state
  * with Sign out (UI-40).
  */
-import { Inbox } from "lucide-react";
 import { Outlet } from "react-router";
 
 import { PRODUCT_NAME } from "@/app/area-names";
-import { AppBar, ConsoleShell, NavItem } from "@/design-system";
-import {
-  getRoleArea,
-  RequireSession,
-  rootPathByArea,
-  SessionAccountMenu,
-} from "@/features/session";
+import { ConsoleNavigation } from "@/app/layouts/console-navigation";
+import { AppBar, ConsoleShell } from "@/design-system";
+import { getRoleArea, RequireSession, SessionAccountMenu } from "@/features/session";
 
 /**
  * Render the console shell around the current console screen.
@@ -33,11 +28,7 @@ export function ConsoleLayout() {
                 variant="console"
                 brandName={PRODUCT_NAME}
                 areaName="Console"
-                navigation={
-                  <NavItem to={rootPathByArea.console} icon={Inbox}>
-                    Tickets
-                  </NavItem>
-                }
+                navigation={<ConsoleNavigation role={session.role} />}
                 account={<SessionAccountMenu session={session} variant="console" />}
               />
             ) : (

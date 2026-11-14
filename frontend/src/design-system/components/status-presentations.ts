@@ -122,6 +122,22 @@ export const presentationByAiStatus: Readonly<Record<AiStatusName, StatusPresent
   manual: manualHandlingPresentation,
 };
 
+/**
+ * The status of a completed draft part (`CompletedDraftStatus` of the contract), as the reports
+ * count it (FR-10, UI-44). Unlike {@link presentationByAiStatus}, a draft that is `llm_unavailable`
+ * keeps its own label, because the report counts it apart from `unavailable`.
+ */
+export const presentationByCompletedDraftStatus: Readonly<
+  Record<CompletedDraftStatusName, StatusPresentation>
+> = {
+  draft_ready: presentationByAiStatus.draft_ready,
+  abstained: presentationByAiStatus.abstained,
+  escalation_recommended: presentationByAiStatus.escalation_recommended,
+  llm_unavailable: { tone: "danger", icon: CircleX, label: "LLM unavailable" },
+  unavailable: presentationByAiStatus.unavailable,
+  unknown: unknownStatusPresentation,
+};
+
 /** Handling modes: console UI design, Status presentations and the ticket header. */
 export const presentationByHandlingMode: Readonly<Record<HandlingModeName, StatusPresentation>> = {
   assisted: { tone: "neutral", icon: Sparkles, label: "Assisted" },
@@ -182,6 +198,15 @@ export type ConsoleTicketStatusName =
 /** What the AI produced for a ticket, as {@link presentationByAiStatus} lists it. */
 export type AiStatusName =
   "pending" | "draft_ready" | "abstained" | "escalation_recommended" | "unavailable" | "manual";
+
+/** The status of a completed draft part (`CompletedDraftStatus` of the contract). */
+export type CompletedDraftStatusName =
+  | "draft_ready"
+  | "abstained"
+  | "escalation_recommended"
+  | "llm_unavailable"
+  | "unavailable"
+  | "unknown";
 
 /** Handling modes (`HandlingMode` of the contract; an unknown value is `manual`). */
 export type HandlingModeName = "assisted" | "manual";

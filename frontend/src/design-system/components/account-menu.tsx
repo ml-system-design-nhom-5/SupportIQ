@@ -3,19 +3,31 @@
  * (UI-31). Enter, Space, or the down arrow opens it, the arrow keys move between its items, Escape
  * closes it, and the focus returns to the trigger. The trigger shows the person icon, the display
  * name, the role label, and a chevron; in the shop at phone width, the text is visually hidden, so
- * the accessible name stays the same. The display name is Confidential: it is only rendered, never
+ * the accessible name stays the same. Where dev mode is available, the menu also holds the dev
+ * mode switch of the person, between Change password and Sign out (UI-35); choosing it closes the
+ * menu, as every other item does. The display name is Confidential: it is only rendered, never
  * logged (SEC-01).
  */
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
-import { ChevronDown, KeyRound, LogOut, User } from "lucide-react";
+import { Check, ChevronDown, Code, KeyRound, LogOut, User } from "lucide-react";
 
 import { cn } from "@/design-system/primitives/class-names";
 import { FOCUS_RING_CLASSES } from "@/design-system/primitives/focus-ring";
 import { Icon } from "@/design-system/primitives/icon";
 import { MENU_CONTENT_CLASSES, MENU_ITEM_CLASSES } from "@/design-system/primitives/menu-item";
 
+/** The classes of a separator between the groups of the menu. */
+const SEPARATOR_CLASSES = "my-1 border-t border-border";
+
 /** `shop` hides the trigger text at phone width; `console` is the desktop bar (UI-33). */
 export type AccountMenuVariant = "shop" | "console";
+
+/** The dev mode switch of the person (UI-35): whether it is on, and what changes it. */
+export type AccountMenuDevMode = {
+  readonly isOn: boolean;
+  /** Called with the new state when the person chooses the item. */
+  readonly onChange: (isOn: boolean) => void;
+};
 
 /** Props of {@link AccountMenu}. */
 export type AccountMenuProps = {
@@ -27,12 +39,15 @@ export type AccountMenuProps = {
   readonly isSigningOut: boolean;
   readonly onChangePassword: () => void;
   readonly onSignOut: () => void;
+  /** Given only where dev mode is available and the role may use it; the item is absent without. */
+  readonly devMode?: AccountMenuDevMode;
 };
 
 /**
  * Render the menu button and its menu.
  *
- * @param props - The variant, the account, the sign-out state, and the handlers of the items.
+ * @param props - The variant, the account, the sign-out state, the handlers of the items, and the
+ *   dev mode switch when dev mode is available.
  * @returns The trigger; the menu opens in a portal.
  */
 export function AccountMenu({
@@ -42,6 +57,7 @@ export function AccountMenu({
   isSigningOut,
   onChangePassword,
   onSignOut,
+  devMode,
 }: AccountMenuProps) {
   return (
     // Not modal, as in the WAI-ARIA menu button pattern: the page is never hidden from assistive
@@ -75,11 +91,12 @@ export function AccountMenu({
             <span className="font-semibold wrap-anywhere text-text">{displayName}</span>
             <span className="text-text-muted">{roleLabel}</span>
           </DropdownMenuPrimitive.Label>
-          <DropdownMenuPrimitive.Separator className="my-1 border-t border-border" />
+          <DropdownMenuPrimitive.Separator className={SEPARATOR_CLASSES} />
           <DropdownMenuPrimitive.Item className={MENU_ITEM_CLASSES} onSelect={onChangePassword}>
             <Icon icon={KeyRound} />
             Change password
           </DropdownMenuPrimitive.Item>
+          {devMode === undefined ? null : <DevModeItem devMode={devMode} />}
           <DropdownMenuPrimitive.Item
             className={MENU_ITEM_CLASSES}
             disabled={isSigningOut}
@@ -91,5 +108,40 @@ export function AccountMenu({
         </DropdownMenuPrimitive.Content>
       </DropdownMenuPrimitive.Portal>
     </DropdownMenuPrimitive.Root>
+  );
+}
+
+/** Props of {@link DevModeItem}. */
+type DevModeItemProps = {
+  readonly devMode: AccountMenuDevMode;
+};
+
+/**
+ * Render the dev mode switch as its own group: a checkbox item between two separators, because it
+ * is a display preference, not an account action. Its state is `aria-checked`, and the check mark
+ * at its end shows it, so color is not the only signal (UI-30).
+ *
+ * @param props - The dev mode switch.
+ * @returns The separators and the checkbox item.
+ */
+function DevModeItem({ devMode }: DevModeItemProps) {
+  return (
+    <>
+      <DropdownMenuPrimitive.Separator className={SEPARATOR_CLASSES} />
+      <DropdownMenuPrimitive.CheckboxItem
+        className={MENU_ITEM_CLASSES}
+        checked={devMode.isOn}
+        onCheckedChange={devMode.onChange}
+      >
+        <Icon icon={Code} />
+        Dev mode
+        <span className="ml-auto flex size-4 items-center justify-center">
+          <DropdownMenuPrimitive.ItemIndicator>
+            <Icon icon={Check} />
+          </DropdownMenuPrimitive.ItemIndicator>
+        </span>
+      </DropdownMenuPrimitive.CheckboxItem>
+      <DropdownMenuPrimitive.Separator className={SEPARATOR_CLASSES} />
+    </>
   );
 }

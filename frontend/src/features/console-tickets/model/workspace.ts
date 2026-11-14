@@ -11,6 +11,10 @@ import type {
   TicketWorkspaceContract,
 } from "@/features/console-tickets/api/contract-types";
 import { type AnalysisPart, toAnalysisPart } from "@/features/console-tickets/model/analysis";
+import {
+  type DeveloperDetails,
+  toDeveloperDetails,
+} from "@/features/console-tickets/model/developer-details";
 import { type DraftPart, toDraftPart } from "@/features/console-tickets/model/draft";
 import { type Intent, toIntent } from "@/features/console-tickets/model/intent";
 import {
@@ -39,6 +43,8 @@ export type Suggestion = {
   readonly intentOverride?: Intent;
   readonly analysis: AnalysisPart;
   readonly draft: DraftPart;
+  /** What dev mode shows of the suggestion (UI-35). */
+  readonly developerDetails: DeveloperDetails;
 };
 
 /** The reply that staff or a manager sent. */
@@ -119,7 +125,14 @@ export function toTicketWorkspace(workspace: TicketWorkspaceContract): TicketWor
  * @returns The view model.
  */
 export function toSuggestion(suggestion: SuggestionContract): Suggestion {
-  requireMembers(suggestion, ["suggestion_id", "created_at", "analysis", "draft"]);
+  requireMembers(suggestion, [
+    "suggestion_id",
+    "trigger",
+    "created_at",
+    "trace_id",
+    "analysis",
+    "draft",
+  ]);
   return {
     suggestionId: suggestion.suggestion_id,
     createdAt: suggestion.created_at,
@@ -128,6 +141,7 @@ export function toSuggestion(suggestion: SuggestionContract): Suggestion {
       : { intentOverride: toIntent(suggestion.intent_override) }),
     analysis: toAnalysisPart(suggestion.analysis),
     draft: toDraftPart(suggestion.draft),
+    developerDetails: toDeveloperDetails(suggestion),
   };
 }
 

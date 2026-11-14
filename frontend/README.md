@@ -1,6 +1,6 @@
 # Frontend
 
-This folder holds the SupportIQ web app: sign-in, the own password change at `/change-password`, the demo shop for customers at `/shop`, the Accounts screen of the admin area at `/admin`, and the ticket inbox and the ticket workspace of the console at `/console`, where staff correct the intent, try the AI again, edit, reject, and send replies, submit replies for approval, and escalate tickets, and where managers send or edit the proposals and handle escalated tickets. It is a React single-page app that talks to `backend` only through the [backend contract](../contracts/README.md) with a generated client, and it runs against the Prism mock until `backend` is ready. What each screen does is defined in the [shop UI design](../docs/design/shop-ui.md), the [admin UI design](../docs/design/admin-ui.md), the [console UI design](../docs/design/console-ui.md), and the [account management design](../docs/design/account-management.md); the rules are in [typescript.md](../docs/rules/typescript.md) and [ui.md](../docs/rules/ui.md). The Reports page and the developer details of the console, and the Versions page of the admin area, are not built yet.
+This folder holds the SupportIQ web app: sign-in, the own password change at `/change-password`, the demo shop for customers at `/shop`, the Accounts screen of the admin area at `/admin`, and the ticket inbox and the ticket workspace of the console at `/console`, where staff correct the intent, try the AI again, edit, reject, and send replies, submit replies for approval, and escalate tickets, and where managers send or edit the proposals, handle escalated tickets, and read the reports at `/console/reports`. Where dev mode is available, staff, managers, and admins can switch on developer details for themselves. It is a React single-page app that talks to `backend` only through the [backend contract](../contracts/README.md) with a generated client, and it runs against the Prism mock until `backend` is ready. What each screen does is defined in the [shop UI design](../docs/design/shop-ui.md), the [admin UI design](../docs/design/admin-ui.md), the [console UI design](../docs/design/console-ui.md), and the [account management design](../docs/design/account-management.md); the rules are in [typescript.md](../docs/rules/typescript.md) and [ui.md](../docs/rules/ui.md). The Reports page and the developer details of the console, and the Versions page of the admin area, are not built yet.
 
 ## Set up
 
@@ -80,6 +80,8 @@ Every setting has a safe default. [`.env.example`](.env.example) lists them.
 | `VITE_REQUEST_TIMEOUT_MS` | `10000` | How long the app waits for each `backend` response, in ms |
 | `VITE_REQUEST_RETRY_MAX_COUNT` | `2` | How many times a retryable request is sent again |
 | `VITE_REQUEST_RETRY_BASE_DELAY_MS` | `500` | The first retry delay in ms, doubled for each later attempt, with jitter |
+| `VITE_DEV_MODE` | `on` with the dev server, `off` in a production build | Whether dev mode is available: `on` or `off` ([UI-35](../docs/rules/ui.md#developer-views)). Where it is, each `staff`, `manager`, and `admin` user switches it on in the account menu, and the browser keeps the choice per account. Keep it `off` in the demo deployment |
+| `VITE_GRAFANA_TRACE_URL` | Not set | The link to a trace in Grafana, with `{trace_id}` once where the trace ID goes: https, or http on `localhost`. Not set: the developer details show the trace ID without a link |
 
 `VITE_` settings are built into the page, so they never hold a secret. An invalid value stops the app at startup with the name of the setting.
 
@@ -90,7 +92,7 @@ Every setting has a safe default. [`.env.example`](.env.example) lists them.
 | `src/api/` | The generated client and the code that creates it. Nothing outside `api/` folders calls it |
 | `src/app/` | The composition root, the settings, the router, the area layouts, and the error boundaries |
 | `src/design-system/` | Tokens, formatters, primitives, and domain components, each with its stories ([ADR-0008](../docs/decisions/0008-ui-design-system.md)). It imports no feature |
-| `src/features/` | One folder per feature: `session`, `shop-catalog`, `shop-orders`, `shop-support`, `admin-accounts`, `console-tickets`, and the shared `backend-requests`. Other code imports a feature only through its `index.ts` |
+| `src/features/` | One folder per feature: `session`, `shop-catalog`, `shop-orders`, `shop-support`, `admin-accounts`, `console-tickets`, `console-reports`, and the shared `backend-requests`. Other code imports a feature only through its `index.ts` |
 | `src/features/*/api/` | Query and mutation hooks, with one query key factory per feature, and `contract-types.ts`, the only file that `model/` may import from here |
 | `src/features/*/model/` | View models, mappings, and rules, without React or the client. Unknown enum values map to a safe default |
 | `src/features/*/components/` | The screens and their parts, with tests and stories |

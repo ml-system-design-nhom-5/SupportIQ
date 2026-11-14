@@ -16,6 +16,7 @@ import { ProductRoute } from "@/app/routes/product-route";
 import { TicketRoute } from "@/app/routes/ticket-route";
 import { ScreenErrorBoundary } from "@/app/screen-error-boundary";
 import { ACCOUNTS_ROUTE, AccountsPage } from "@/features/admin-accounts";
+import { REPORTS_ROUTE, ReportsPage } from "@/features/console-reports";
 import { NoTicketSelected, TICKET_ROUTE } from "@/features/console-tickets";
 import {
   CHANGE_PASSWORD_PATH,
@@ -63,6 +64,7 @@ export const appRoutes: RouteObject[] = [
           { path: TICKET_ROUTE, element: <TicketRoute />, errorElement: <ScreenErrorBoundary /> },
         ],
       },
+      { path: REPORTS_ROUTE, element: <ReportsPage />, errorElement: <ScreenErrorBoundary /> },
     ],
   },
   {

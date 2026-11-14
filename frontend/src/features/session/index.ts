@@ -1,9 +1,21 @@
 /**
  * The public API of the session feature: sign-in, sign-out, the account menu, the own password
- * change, the signed-in account, and the end of a session (ADR-0009, ADR-0015).
+ * change, the signed-in account, the end of a session (ADR-0009, ADR-0015), and dev mode (UI-35).
  */
+export type {
+  DevModePreferences,
+  DevModeSetup,
+  PreferenceStorage,
+} from "@/features/session/api/dev-mode-preferences";
+export {
+  createDevModePreferences,
+  DevModeContext,
+  whenStorageAllows,
+} from "@/features/session/api/dev-mode-preferences";
 export { endSession } from "@/features/session/api/session-cache";
 export { useSignedInAccountId, useSignedInRole } from "@/features/session/api/use-current-session";
+export type { DevMode } from "@/features/session/api/use-dev-mode";
+export { useDevMode } from "@/features/session/api/use-dev-mode";
 export type { SignInCredentials } from "@/features/session/api/use-sign-in";
 export type { AreaLoadFailureProps } from "@/features/session/components/area-load-failure";
 export { AreaLoadFailure } from "@/features/session/components/area-load-failure";
@@ -19,6 +31,7 @@ export type { SessionAccountMenuProps } from "@/features/session/components/sess
 export { SessionAccountMenu } from "@/features/session/components/session-account-menu";
 export { SignInPage } from "@/features/session/components/sign-in-page";
 export { StartPage } from "@/features/session/components/start-page";
+export { TRACE_ID_SLOT } from "@/features/session/model/dev-mode";
 export type { PasswordLength } from "@/features/session/model/password";
 export { classifyPasswordLength, PASSWORD_TOO_LONG_TEXT } from "@/features/session/model/password";
 export { CHANGE_PASSWORD_PATH } from "@/features/session/model/password-change";

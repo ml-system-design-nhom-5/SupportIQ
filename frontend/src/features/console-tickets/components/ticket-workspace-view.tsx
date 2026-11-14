@@ -15,6 +15,7 @@ import type { RequestFailure } from "@/features/backend-requests";
 import { useCreateSuggestion } from "@/features/console-tickets/api/use-create-suggestion";
 import { AiSidebar } from "@/features/console-tickets/components/ai-sidebar";
 import { CustomerMessagePanel } from "@/features/console-tickets/components/customer-message-panel";
+import { DeveloperDetailsPanel } from "@/features/console-tickets/components/developer-details-panel";
 import { ESCALATED_HEADING_ID } from "@/features/console-tickets/components/escalated-panel";
 import {
   IntentSection,
@@ -169,13 +170,16 @@ export function TicketWorkspaceView({
           </>
         }
         sidebar={
-          <AiSidebar
-            state={regions.sidebar}
-            sources={regions.sources}
-            onOpenSource={(source, opener) => {
-              openSource(toSourceSelection(source, source), opener);
-            }}
-          />
+          <>
+            <AiSidebar
+              state={regions.sidebar}
+              sources={regions.sources}
+              onOpenSource={(source, opener) => {
+                openSource(toSourceSelection(source, source), opener);
+              }}
+            />
+            <DeveloperDetailsPanel suggestion={workspace.suggestion} />
+          </>
         }
       />
       <ReplyDialogs composer={composer} ticket={workspace} fallbackId={WORKSPACE_HEADING_ID} />

@@ -4,6 +4,7 @@ import {
   authorityRequiredPresentation,
   presentationByAccountStatus,
   presentationByAiStatus,
+  presentationByCompletedDraftStatus,
   presentationByConsoleTicketStatus,
   presentationByDocumentValidity,
   presentationByHandlingMode,
@@ -118,4 +119,20 @@ describe("console status presentations (UI-12, console UI design)", () => {
       label: "Authority required",
     });
   });
+});
+
+describe("report status presentations (UI-12, UI-44)", () => {
+  it.each([
+    ["draft_ready", "ai", "Draft ready"],
+    ["abstained", "warning", "AI abstained"],
+    ["escalation_recommended", "warning", "Escalation recommended"],
+    ["llm_unavailable", "danger", "LLM unavailable"],
+    ["unavailable", "danger", "AI unavailable"],
+    ["unknown", "neutral", "Status unknown"],
+  ] as const)(
+    "presents the completed draft status %s in the %s tone as %s",
+    (status, tone, label) => {
+      expect(presentationByCompletedDraftStatus[status]).toMatchObject({ tone, label });
+    },
+  );
 });

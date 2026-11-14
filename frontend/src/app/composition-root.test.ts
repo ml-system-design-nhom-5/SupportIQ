@@ -29,6 +29,7 @@ function createQueryClient() {
       requestTimeoutMs: 1000,
       requestRetryMaxCount: RETRY_MAX_COUNT,
       requestRetryBaseDelayMs: RETRY_BASE_DELAY_MS,
+      isDevModeAvailable: false,
     },
     baseUrl: TEST_BASE_URL,
     fetch: () => Promise.reject(new Error("not used")),
@@ -36,6 +37,7 @@ function createQueryClient() {
     clock: () => testNow,
     createIdempotencyKey: () => "00000000-0000-4000-8000-000000000000",
     randomBytes: fixedRandomBytes,
+    preferenceStorage: undefined,
   }).queryClient;
 }
 

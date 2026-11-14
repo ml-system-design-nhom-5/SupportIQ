@@ -1,8 +1,8 @@
 /**
  * The AI sidebar (console UI design, Workspace regions): the recommendation with its reason codes,
  * the staff note, and the sources; "AI unavailable" with the reason after an AI failure; and the
- * manual-handling panel in manual mode, so the layout does not move (UI-15). Developer details come
- * with dev mode.
+ * manual-handling panel in manual mode, so the layout does not move (UI-15). The workspace adds
+ * the developer details below them in dev mode (developer-details-panel.tsx).
  */
 import { CircleX, User } from "lucide-react";
 

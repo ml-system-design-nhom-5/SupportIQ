@@ -14,6 +14,7 @@ import {
 } from "@/features/console-tickets/model/composer-ticket";
 import { toTicketWorkspace } from "@/features/console-tickets/model/workspace";
 import { buildWorkspaceRegions } from "@/features/console-tickets/model/workspace-regions";
+import type { PreferenceStorage } from "@/features/session";
 import {
   createEscalationRoute,
   createReplyProposalRoute,
@@ -58,6 +59,8 @@ export type ConsoleAnswers = {
   /** The answers of `createEscalation`; the `escalated` example by default. */
   readonly escalation?: readonly FakeAnswer[];
   readonly settings?: typeof testSettings;
+  /** The browser storage of display preferences, such as dev mode; none by default. */
+  readonly preferenceStorage?: PreferenceStorage;
 };
 
 /**
@@ -153,7 +156,7 @@ function readDefaultAnswers() {
     reply: [exampleAnswer(201, "sendReply", "from-ai-draft")],
     proposal: [exampleAnswer(201, "createReplyProposal", "from-ai-draft")],
     escalation: [exampleAnswer(201, "createEscalation", "escalated")],
-  } satisfies Required<Omit<ConsoleAnswers, "session" | "settings">>;
+  } satisfies Required<Omit<ConsoleAnswers, "session" | "settings" | "preferenceStorage">>;
 }
 
 /**
@@ -180,6 +183,9 @@ export function openConsole(path: string, answers: ConsoleAnswers = {}) {
     path,
     backend: createConsoleBackend(answers),
     settings: answers.settings ?? testSettings,
+    ...(answers.preferenceStorage === undefined
+      ? {}
+      : { preferenceStorage: answers.preferenceStorage }),
   });
 }
 

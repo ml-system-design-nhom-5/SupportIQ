@@ -37,6 +37,7 @@ const preview: Preview = {
             requestTimeoutMs: 10_000,
             requestRetryMaxCount: 0,
             requestRetryBaseDelayMs: 1,
+            isDevModeAvailable: false,
           },
           baseUrl: window.location.origin,
           fetch: () => Promise.reject(new TypeError("Stories have no backend.")),
@@ -44,6 +45,7 @@ const preview: Preview = {
           createIdempotencyKey: () => "00000000-0000-4000-8000-000000000000",
           randomBytes: fixedRandomBytes,
           clock: () => storyNow,
+          preferenceStorage: undefined,
         })}
       >
         {parameters["hasOwnRouter"] === true ? (

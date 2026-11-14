@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatMoney } from "@/design-system/format/money";
+import { formatMicroUsd, formatMoney } from "@/design-system/format/money";
 
 describe("formatMoney", () => {
   it.each([
@@ -28,5 +28,35 @@ describe("formatMoney", () => {
 
   it("rejects an amount that is not an integer", () => {
     expect(() => formatMoney({ amountMinor: 1.5, currency: "USD" })).toThrow(RangeError);
+  });
+});
+
+describe("formatMicroUsd", () => {
+  it.each([
+    [0, "$0.00"],
+    [1, "$0.0000010"],
+    [420, "$0.00042"],
+    [9_999, "$0.010"],
+    [10_000, "$0.010"],
+    [12_345, "$0.012"],
+    [4_200_000, "$4.20"],
+    [123_456_789, "$123.46"],
+  ])(
+    "formats %i micro-USD with at least two decimals and two significant digits as %s",
+    (amountMicroUsd, text) => {
+      expect(formatMicroUsd(amountMicroUsd)).toBe(text);
+    },
+  );
+
+  it("formats the largest amount of the contract exactly, without floating-point loss", () => {
+    expect(formatMicroUsd(9_007_199_254_740_991)).toBe("$9,007,199,254.74");
+  });
+
+  it("rejects a negative amount, which the contract forbids", () => {
+    expect(() => formatMicroUsd(-1)).toThrow(RangeError);
+  });
+
+  it("rejects an amount that is not an integer", () => {
+    expect(() => formatMicroUsd(420.5)).toThrow(RangeError);
   });
 });

@@ -62,6 +62,7 @@ describe("a defect while data loads", () => {
       clock: () => testNow,
       createIdempotencyKey: () => "00000000-0000-4000-8000-000000000000",
       randomBytes: fixedRandomBytes,
+      preferenceStorage: undefined,
     });
 
     render(
@@ -99,6 +100,7 @@ describe("a defect in a write", () => {
       clock: () => testNow,
       createIdempotencyKey: () => "00000000-0000-4000-8000-000000000000",
       randomBytes: fixedRandomBytes,
+      preferenceStorage: undefined,
     });
     render(
       <AppProviders dependencies={dependencies}>

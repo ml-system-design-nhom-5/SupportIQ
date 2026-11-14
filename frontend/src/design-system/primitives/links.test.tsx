@@ -47,4 +47,33 @@ describe("NavItem", () => {
 
     expect(screen.getByRole("link", { name: "Products" })).not.toHaveAttribute("aria-current");
   });
+
+  it("is not current on a path below it when the area says so", () => {
+    render(
+      <MemoryRouter initialEntries={["/console/reports"]}>
+        <NavItem to="/console" icon={LayoutGrid} isCurrent={false}>
+          Tickets
+        </NavItem>
+      </MemoryRouter>,
+    );
+
+    const link = screen.getByRole("link", { name: "Tickets" });
+    expect(link).not.toHaveAttribute("aria-current");
+    expect(link).not.toHaveClass("bg-background");
+  });
+
+  it("is current on another path when the area says so", () => {
+    render(
+      <MemoryRouter initialEntries={["/console/tickets/TCK-1045"]}>
+        <NavItem to="/console" icon={LayoutGrid} isExactMatch isCurrent>
+          Tickets
+        </NavItem>
+      </MemoryRouter>,
+    );
+
+    const link = screen.getByRole("link", { name: "Tickets" });
+    expect(link).toHaveAttribute("aria-current", "page");
+    expect(link).toHaveAttribute("href", "/console");
+    expect(link).toHaveClass("bg-background");
+  });
 });

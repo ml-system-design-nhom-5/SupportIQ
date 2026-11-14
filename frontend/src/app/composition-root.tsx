@@ -24,7 +24,13 @@ import {
   isUnauthenticatedError,
   shouldRetryRequest,
 } from "@/features/backend-requests";
-import { endSession } from "@/features/session";
+import {
+  createDevModePreferences,
+  DevModeContext,
+  type DevModeSetup,
+  endSession,
+  type PreferenceStorage,
+} from "@/features/session";
 
 /** Everything the app receives from its composition root. */
 export type AppDependencies = {
@@ -33,6 +39,7 @@ export type AppDependencies = {
   readonly clock: Clock;
   readonly createIdempotencyKey: () => string;
   readonly randomBytes: RandomBytes;
+  readonly devMode: DevModeSetup;
 };
 
 /** What the composition root needs from its caller. */
@@ -48,6 +55,11 @@ export type AppDependencyOptions = {
   readonly createIdempotencyKey: () => string;
   /** The random source of suggested passwords: `crypto.getRandomValues` in the browser. */
   readonly randomBytes: RandomBytes;
+  /**
+   * Where display preferences such as dev mode are kept: `localStorage` in the browser, or
+   * undefined when the browser refuses storage (UI-35).
+   */
+  readonly preferenceStorage: PreferenceStorage | undefined;
 };
 
 /** Props of {@link AppProviders}. */
@@ -59,12 +71,14 @@ export type AppProvidersProps = {
 /**
  * Create the dependencies of the app.
  *
- * @param options - The settings, the base URL, the fetch implementation, and the sources of
- *   randomness, time, and identifiers.
- * @returns The client, the query client, the clock, the key factory, and the random bytes.
+ * @param options - The settings, the base URL, the fetch implementation, the sources of
+ *   randomness, time, and identifiers, and the preference storage.
+ * @returns The client, the query client, the clock, the key factory, the random bytes, and dev
+ *   mode.
  */
 export function createAppDependencies(options: AppDependencyOptions): AppDependencies {
   listenToWindowFocus();
+  const { isDevModeAvailable, grafanaTraceUrl } = options.settings;
   return {
     backendClient: createBackendClient({
       baseUrl: options.baseUrl,
@@ -75,6 +89,11 @@ export function createAppDependencies(options: AppDependencyOptions): AppDepende
     clock: options.clock,
     createIdempotencyKey: options.createIdempotencyKey,
     randomBytes: options.randomBytes,
+    devMode: {
+      isAvailable: isDevModeAvailable,
+      ...(grafanaTraceUrl === undefined ? {} : { grafanaTraceUrl }),
+      preferences: createDevModePreferences(options.preferenceStorage),
+    },
   };
 }
 
@@ -90,7 +109,9 @@ export function AppProviders({ dependencies, children }: AppProvidersProps) {
       <BackendClientContext value={dependencies.backendClient}>
         <ClockContext value={dependencies.clock}>
           <IdempotencyKeyFactoryContext value={dependencies.createIdempotencyKey}>
-            <RandomBytesContext value={dependencies.randomBytes}>{children}</RandomBytesContext>
+            <RandomBytesContext value={dependencies.randomBytes}>
+              <DevModeContext value={dependencies.devMode}>{children}</DevModeContext>
+            </RandomBytesContext>
           </IdempotencyKeyFactoryContext>
         </ClockContext>
       </BackendClientContext>

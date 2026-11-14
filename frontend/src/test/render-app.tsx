@@ -11,6 +11,7 @@ import { type AppDependencies, AppProviders, createAppDependencies } from "@/app
 import { appRoutes } from "@/app/router";
 import type { FrontendSettings } from "@/app/settings";
 import { ClockContext } from "@/design-system";
+import type { PreferenceStorage } from "@/features/session";
 import { createFakeBackend, type FakeBackend } from "@/test/fake-backend";
 
 /** The time that every test treats as now (TEST-14). */
@@ -46,6 +47,7 @@ export const testSettings: FrontendSettings = {
   requestTimeoutMs: 10_000,
   requestRetryMaxCount: 0,
   requestRetryBaseDelayMs: 1,
+  isDevModeAvailable: false,
 };
 
 /** What a rendering helper returns. */
@@ -62,27 +64,33 @@ export type RenderAppOptions = {
   /** The fake backend; a new one by default. */
   readonly backend?: FakeBackend;
   readonly settings?: FrontendSettings;
+  /** The browser storage of display preferences, such as dev mode; none by default. */
+  readonly preferenceStorage?: PreferenceStorage;
 };
+
+/** The settings and the storage of {@link createTestDependencies}. */
+export type TestDependencyOptions = Pick<RenderAppOptions, "settings" | "preferenceStorage">;
 
 /**
  * Create the dependencies of a test, with the fake backend and the fixed clock.
  *
  * @param backend - The fake backend.
- * @param settings - The settings.
+ * @param options - The settings, {@link testSettings} by default, and the preference storage.
  * @returns The dependencies.
  */
 export function createTestDependencies(
   backend: FakeBackend,
-  settings: FrontendSettings = testSettings,
+  options: TestDependencyOptions = {},
 ): AppDependencies {
   let keyCount = 0;
   return createAppDependencies({
-    settings,
+    settings: options.settings ?? testSettings,
     baseUrl: TEST_BASE_URL,
     fetch: backend.fetch,
     random: () => 0,
     clock: () => testNow,
     randomBytes: fixedRandomBytes,
+    preferenceStorage: options.preferenceStorage,
     createIdempotencyKey: () => {
       keyCount += 1;
       return `00000000-0000-4000-8000-${String(keyCount).padStart(12, "0")}`;
@@ -100,7 +108,7 @@ export function renderApp(options: RenderAppOptions): RenderedApp & {
   readonly router: ReturnType<typeof createMemoryRouter>;
 } {
   const backend = options.backend ?? createFakeBackend();
-  const dependencies = createTestDependencies(backend, options.settings);
+  const dependencies = createTestDependencies(backend, options);
   const router = createMemoryRouter(appRoutes, { initialEntries: [options.path] });
   const user = userEvent.setup();
   const result = render(
@@ -120,7 +128,7 @@ export function renderApp(options: RenderAppOptions): RenderedApp & {
  */
 export function renderWithDependencies(ui: ReactNode, options: RenderAppOptions): RenderedApp {
   const backend = options.backend ?? createFakeBackend();
-  const dependencies = createTestDependencies(backend, options.settings);
+  const dependencies = createTestDependencies(backend, options);
   const user = userEvent.setup();
   const result = render(
     <AppProviders dependencies={dependencies}>
