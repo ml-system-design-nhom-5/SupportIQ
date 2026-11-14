@@ -1,0 +1,12 @@
+{
+  "schema_version": "worker_c_det_kl_review_manifest.v1",
+  "task_id": "task_a72dfe0c6b5d",
+  "dispatch_id": "ctx_0e96a89c8396",
+  "git_branch": "minh",
+  "git_head": "6b54be18b63c29f9753666ba3068877d7932df3c",
+  "elapsed_seconds": 20.88,
+  "outputs": {
+    "det_kl_cal_and_head_feasibility.json": "84a4c93e8791509aed22eeb89b8b8e23d6d9f1261e4d6a362570e31e2d1bbcc6",
+    "verify_det_kl_cal.py": "679d21d08695ee3e60ea4f4938b7613eac20d3a067bddd81ecc3dda3db4893e4"
+  }
+}
