@@ -364,7 +364,10 @@ def has_unauthorized_duplicate_advice(
 
 
 _CITATION_TAG = re.compile(r"\[(S\d+)\]")
-_SENTENCE_BOUNDARY = re.compile(r"([.!?])((?:\s*\[S\d+\])*)(?=\s+(?=[A-Za-z0-9\"'(\[])|\s*$)")
+_SENTENCE_BOUNDARY = re.compile(
+    r"([.!?;])((?:\s*\[S\d+\])*)"
+    r"(?=\s+(?=[A-Za-z0-9\"'(\[])|(?<=\][.!?;])(?=[A-Za-z0-9\"'(\[])|(?<=\])(?=[A-Za-z0-9\"'(\[])|(?<=;)(?=[A-Za-z0-9\"'(\[])|\s*$)"
+)
 _ABBREVIATION_PREFIX = re.compile(
     r"(?:^|[\s(,])(?:e\.g|i\.e|approx|etc|vs|no|mr|mrs|ms|dr|prof|inc|ltd|dept|est|min|max|avg)$",
     re.I,
@@ -423,6 +426,18 @@ _POLITE_NON_CLAIM = re.compile(
 _UNSAFE_UNCITED_TOKENS = re.compile(
     r"(?:[$€£¥₫đ]|\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|"
     r"tomorrow|yesterday|tonight|days?|hours?|weeks?|months?|years?|minutes?)\b)",
+    re.I,
+)
+_SAFE_CLARIFICATION_TOPIC = (
+    r"(?:your\s+)?(?:order\s+(?:id|number|code)|tracking\s+(?:id|number|code)|"
+    r"transaction\s+(?:id|number|reference)|item|product|issue|details?|information|"
+    r"which\s+(?:order|item|product))"
+)
+_SAFE_CLARIFICATION_QUESTION = re.compile(
+    rf"^(?:(?:could|can|would)\s+you\s+(?:please\s+)?|please\s+)"
+    rf"(?:provide|share|confirm|send|clarify|specify|let\s+us\s+know)\s+"
+    rf"{_SAFE_CLARIFICATION_TOPIC}"
+    rf"(?:\s+(?:so\s+(?:i|we)\s+can\s+(?:assist|help|check)(?:\s+you)?|for\s+us))?\s*[.?]$",
     re.I,
 )
 
@@ -511,7 +526,7 @@ def _strip_citations_and_placeholders(text: str) -> str:
     return PLACEHOLDER.sub(" ", cleaned)
 
 
-def _is_safe_uncited_sentence(sentence: str) -> bool:
+def _is_safe_uncited_sentence(sentence: str, *, allow_clarification: bool = False) -> bool:
     stripped = sentence.strip()
     if not stripped:
         return True
@@ -526,15 +541,20 @@ def _is_safe_uncited_sentence(sentence: str) -> bool:
         return False
     if _SAFE_POLITE_FRAMING.match(cleaned):
         return True
+    if allow_clarification and _SAFE_CLARIFICATION_QUESTION.match(cleaned):
+        return True
     if FACTUAL_COMMITMENT.search(cleaned) or _UNCITED_CLAIM_TERMS.search(cleaned):
         return False
     return bool(_POLITE_NON_CLAIM.match(cleaned))
 
 
-def is_safe_uncited_paragraph(paragraph: str) -> bool:
+def is_safe_uncited_paragraph(paragraph: str, *, allow_clarification: bool = False) -> bool:
     """Return True when every sentence in an uncited paragraph is non-factual polite framing."""
     sentences = split_draft_sentences(paragraph)
-    return bool(sentences) and all(_is_safe_uncited_sentence(sentence) for sentence in sentences)
+    return bool(sentences) and all(
+        _is_safe_uncited_sentence(sentence, allow_clarification=allow_clarification)
+        for sentence in sentences
+    )
 
 
 def _extract_dates_and_strip(text: str) -> tuple[set[str], str]:
@@ -695,6 +715,8 @@ def find_draft_grounding_violation(
     customer_text: str,
     draft_body: str,
     snapshot_sources: Sequence[Dict[str, Any]],
+    *,
+    allow_clarification_questions: bool = False,
 ) -> Optional[str]:
     """Validate sentence-level citations, evidence-constrained numbers, and transaction commitments."""
     sources_by_id: Dict[str, Dict[str, Any]] = {
@@ -710,7 +732,7 @@ def find_draft_grounding_violation(
     for sentence in sentences:
         sent_ids = _CITATION_TAG.findall(sentence)
         if not sent_ids:
-            if not _is_safe_uncited_sentence(sentence):
+            if not _is_safe_uncited_sentence(sentence, allow_clarification=allow_clarification_questions):
                 return "uncited_claim"
             continue
         if any(sid not in sources_by_id for sid in sent_ids):
@@ -736,6 +758,8 @@ def validate_generated_draft(
     customer_text: str,
     llm_result: Any,
     snapshot_sources: Sequence[Dict[str, Any]],
+    *,
+    allow_clarification_questions: bool = False,
 ) -> tuple[bool, list[str], Dict[str, Any]]:
     """Validate LLM client output against the grounded GeminiDraftClient body/citations/snapshot contract.
 
@@ -806,7 +830,12 @@ def validate_generated_draft(
     if not all_inline or not all_inline.issubset(known_by_id) or cited_ids != all_inline:
         return (False, ["grounding_failed"], {})
 
-    if find_draft_grounding_violation(customer_text, body, snapshot_sources) is not None:
+    if find_draft_grounding_violation(
+        customer_text,
+        body,
+        snapshot_sources,
+        allow_clarification_questions=allow_clarification_questions,
+    ) is not None:
         return (False, ["grounding_failed"], {})
 
     provenance = {

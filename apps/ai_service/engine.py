@@ -16,11 +16,10 @@ from apps.core_backend.safety import (
     SENSITIVE_AUTHORITY_PATTERN,
     classify_retrieval_fault,
     evaluate_text_safety,
-    has_unauthorized_duplicate_advice,
+    find_draft_grounding_violation,
     has_uncovered_cross_border_shipping,
-    has_unqualified_cosmetics_refusal,
-    is_safe_uncited_paragraph,
     policy_scope_requires_review,
+    validate_generated_draft,
 )
 
 
@@ -250,25 +249,40 @@ class Engine:
         if llm_metadata:
             result["llm_metadata"] = llm_metadata
 
-        text = generated["body"]
+        text = generated.get("body")
+        if not isinstance(text, str) or not text.strip():
+            return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
         allowed_placeholders = {match.group() for match in PLACEHOLDER.finditer(request["message"])}
         if any(match.group() not in allowed_placeholders for match in PLACEHOLDER.finditer(text)):
             return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"llm_invalid_output"})}
 
-        # Grounding Guardrail 1: Cosmetics / restricted categories must not overgeneralize.
-        # POL-RET-003 excludes cosmetics and chemicals only when protective packaging/seal is unsealed or opened.
-        if has_unqualified_cosmetics_refusal(text):
-            return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
-
-        # Grounding Guardrail 2: Chargeback / unauthorized payment must NOT receive generic duplicate-charge advice.
-        if has_unauthorized_duplicate_advice(
-            request["message"],
-            text,
-            generated.get("input_snapshot", {}).get("sources", []),
+        snapshot = generated.get("input_snapshot")
+        raw_sources = snapshot.get("sources") if isinstance(snapshot, dict) else None
+        if not isinstance(raw_sources, list) or not raw_sources or not all(
+            isinstance(s, dict) and (s.get("source_id") or s.get("id")) for s in raw_sources
         ):
             return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
 
-        sources = {source["source_id"]: source for source in generated["input_snapshot"]["sources"]}
+        is_clarification = bool(generated.get("is_clarification", False))
+        if find_draft_grounding_violation(
+            request["message"],
+            text,
+            raw_sources,
+            allow_clarification_questions=is_clarification,
+        ) is not None:
+            return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
+
+        if "citations" in generated:
+            valid_draft, _, _ = validate_generated_draft(
+                request["message"],
+                generated,
+                raw_sources,
+                allow_clarification_questions=is_clarification,
+            )
+            if not valid_draft:
+                return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
+
+        sources = {str(source.get("source_id") or source.get("id")): source for source in raw_sources}
         supplied_facts = extract_order_facts(
             request.get("order_context"),
             allowed_fields=ORDER_CONTEXT_ALLOWED_SET,
@@ -278,19 +292,20 @@ class Engine:
         citations, segments = {}, []
         for paragraph_index, paragraph in enumerate(re.split(r"\n\s*\n", text.strip())):
             source_ids = re.findall(r"\[(S\d+)\]", paragraph)
-            if not source_ids and not is_safe_uncited_paragraph(paragraph) and (
-                len(paragraph) > 40 or FACTUAL_COMMITMENT.search(paragraph)
-            ):
-                return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
             citation_ids = []
             for identifier in source_ids:
                 if identifier not in sources:
                     return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
                 source = sources[identifier]
-                if source["source_type"] == "policy":
-                    citations[identifier] = {"citation_id": identifier, "source_type": "kb_document", "document_id": source["document_id"], "version": str(source["version"]), "snippet": source["excerpt"]}
+                src_type = source.get("source_type")
+                if src_type == "policy":
+                    doc_id = str(source.get("document_id") or "")
+                    doc_ver = str(source.get("version") or "")
+                    if not doc_id or not doc_ver:
+                        return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
+                    citations[identifier] = {"citation_id": identifier, "source_type": "kb_document", "document_id": doc_id, "version": doc_ver, "snippet": source.get("excerpt", "")}
                     citation_ids.append(identifier)
-                elif supplied_fields:
+                elif src_type in ("order_facts", "order", "order_context") and supplied_fields:
                     cit_entry = {
                         "citation_id": identifier,
                         "source_type": "order_context",
@@ -308,7 +323,6 @@ class Engine:
                              "text": re.sub(r"\s*\[S\d+\]", "", paragraph).strip(), "citation_ids": list(dict.fromkeys(citation_ids))})
         if not segments or not citations:
             return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
-        is_clarification = generated.get("is_clarification", False)
         final_codes = list(set(codes) | ({"missing_information"} if is_clarification else set()))
         staff_note = (
             "Customer request lacks required details. A polite clarification draft has been prepared with relevant policy citations for review."

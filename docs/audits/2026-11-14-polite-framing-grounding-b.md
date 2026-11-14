@@ -1,26 +1,25 @@
-# Rank 3 Fix: Narrow Polite Framing in Uncited Grounding Validation
+# Rank 3 Fix & Stage 1 Correction: Unified Sentence-Level Grounding Validation Across `safety.py` and `Engine.draft()`
 
 **Date:** 2026-11-14
 **Branch:** `minh`
-**Task:** `task_86ca740999ec` (`ctx_3b0dc30585de`), addressing Rank 3 in `docs/audits/2026-11-14-non-model-bottlenecks-c.md`.
+**Tasks:** `task_86ca740999ec` (`ctx_3b0dc30585de`), `task_347dd5c5121b` (`ctx_be26087d704f`), addressing Rank 3 in `docs/audits/2026-11-14-non-model-bottlenecks-c.md` and Stage 1 Review (`b88692c`, `docs/audits/2026-11-14-polite-framing-grounding-review-c.md`).
 
-## Root Cause
-`_is_safe_uncited_sentence()` in `apps/core_backend/safety.py` checked `_UNCITED_CLAIM_TERMS` and `FACTUAL_COMMITMENT` against every uncited sentence before checking polite framing. Non-factual polite acknowledgments and closing invitations mentioning neutral topics (`order`, `refund`, `return`, `policy`)—such as `"Thank you for reaching out about your order."` and `"Please let us know if you have questions about this policy."`—surrounding a correctly cited factual answer (`[S1]`) were rejected as `"uncited_claim"` (`llm_invalid_citations` / `grounding_failed` -> `llm_unavailable`). Additionally, `Engine.draft()` in `apps/ai_service/engine.py` rejected any uncited paragraph over 40 characters without delegating to the shared polite-framing check.
+## Defect Dispositions (Stage 1 Review `b88692c`)
+1. **Finding 1 (High — Retained `len(paragraph) <= 40` uncited bypass in `Engine.draft()`):**
+   - **Verified & Fixed.** Removed the `len(paragraph) <= 40` exemption and paragraph-level fallback in `apps/ai_service/engine.py`.
+   - `Engine.draft()` now delegates post-generation validation directly to shared `find_draft_grounding_violation()` (and `validate_generated_draft()` when `"citations"` is present in the LLM result) in `apps/core_backend/safety.py`.
+   - Clarification questions (`"Could you provide your order ID?"` alongside a cited `[S1]` policy segment) are accepted **only** when `is_clarification=True` (`allow_clarification_questions=True`) **and** the uncited question matches the explicit narrow `_SAFE_CLARIFICATION_QUESTION` contract (while still enforcing all numeric, currency, number/duration word, commitment, and length guards). Factual questions (`"Is shipping free?"`) and arbitrary short prose (`"Shipping is free."`, `"Your order is cancelled."`, `"We approved your return."`, `"Hello, you get a free gift!"`, `"You are eligible."`, `"No charge applies."`, `"It will arrive tomorrow."`) are rejected with `llm_unavailable` / `grounding_failed`.
+2. **Finding 2 (Medium — Paragraph-level `not source_ids` skipping uncited sentences mixed into cited paragraphs):**
+   - **Verified & Fixed.** `Engine.draft()` no longer skips a paragraph whenever `re.findall(r"\[(S\d+)\]", paragraph)` is non-empty.
+   - `find_draft_grounding_violation()` splits all draft text into sentences/clauses via `split_draft_sentences()`—now also splitting across semicolons (`;`), newline boundaries (`\n`), and citation-adjacent punctuation (`[S1].Next` / `.[S1]Next`)—so uncited claims before or after `[S1]` in the same paragraph cannot borrow prior/adjacent citations and fail closed (`"uncited_claim"` -> `grounding_failed`).
+   - Additionally restricted `Engine.draft()` order citation building to explicit `source_type in ("order_facts", "order", "order_context")` with non-empty `supplied_fields`, and required non-empty `document_id` and `version` for `policy` citations, preserving legacy `field` + multi-field `fields` `order_context` schema, valid money (`0 VND`, `499,000 VND`), dates, and PII redaction.
 
-In parallel, the previous `_POLITE_NON_CLAIM` regex used broad character wildcards (`[^.!?]{0,60}` / `[^.!?]{0,80}`), which risked accepting arbitrary clauses appended after `"Hello,"`, `"Thank you,"`, or `"Please ..."` whenever no term in `_UNCITED_CLAIM_TERMS` matched.
-
-## Fix Summary
-1. **`apps/core_backend/safety.py`**:
-   - Replaced wildcard `_POLITE_NON_CLAIM` clauses with a strict, closed polite acknowledgment/invitation grammar (`_SAFE_POLITE_FRAMING`) requiring terminal sentence punctuation (`.`, `!`, `?`) and limiting topic mentions (`order`, `return`, `refund`, `delivery`, `shipping`, `shipment`, `cancellation`, `payment`, `request`, `inquiry`, `question`, `concern`, `issue`, `policy`, `policies`) strictly to neutral prepositional objects (`about/regarding/with your/this/the/our ...`).
-   - Tightened `_POLITE_NON_CLAIM` to bare/named greetings and simple sign-offs without free-form clauses.
-   - Enforced unconditional pre-checks on all uncited sentences (`len <= 100`, no digits, no currency symbols/`VND` tokens, no spelled-out number or relative-day/duration words via `_UNSAFE_UNCITED_TOKENS`, and no ungrounded transaction commitments via `has_ungrounded_transaction_commitment()`), while preserving `_UNCITED_CLAIM_TERMS` and `FACTUAL_COMMITMENT` for all sentences outside `_SAFE_POLITE_FRAMING`.
-   - Exported `is_safe_uncited_paragraph()` using `split_draft_sentences()` so multi-line/multi-sentence uncited blocks are checked sentence-by-sentence.
-2. **`apps/ai_service/engine.py`**:
-   - Updated `Engine.draft()` to reuse `is_safe_uncited_paragraph()` from `apps/core_backend/safety.py` for uncited paragraphs, eliminating false `grounding_failed` rejections on >40-character polite framing while keeping short-commitment and uncited-claim rejections intact.
-3. **Tests**:
-   - `tests/unit/test_gemini_llm.py`: Added parameterized positive cases (audit greeting/closing around `[S1]`, refund/return framing, inline multi-sentence framing) and negative adversarial boundary cases (`"Thank you, your refund is approved."`, `"Please know shipping is free."`, `"We apologize, your order will arrive tomorrow."`, `"Let us know after 5 days."` / `"five days"`, greeting+factual clause, multiline/semicolon/no-space bypasses, money/fee mention, and uncited-only drafts).
-   - `tests/unit/test_ai_grounding.py`: Added `Engine.draft()` coverage confirming >40-char polite topic framing passes alongside `[S1]` while `"We apologize, your order will arrive tomorrow."` fails closed with `grounding_failed`.
+## Files Modified
+- `apps/core_backend/safety.py`: Tightened `_SENTENCE_BOUNDARY` across semicolons and citation-adjacent runs; added explicit `_SAFE_CLARIFICATION_QUESTION` contract gated by `allow_clarification_questions=True` on `_is_safe_uncited_sentence()`, `is_safe_uncited_paragraph()`, `find_draft_grounding_violation()`, and `validate_generated_draft()`; preserved closed `_SAFE_POLITE_FRAMING` / `_POLITE_NON_CLAIM` non-factual framing and unconditional guards.
+- `apps/ai_service/engine.py`: Replaced the duplicate inline paragraph-length check in `Engine.draft()` with shared `find_draft_grounding_violation()` and `validate_generated_draft()` validation, tightened `source_type` ownership checks, and kept `FACTUAL_COMMITMENT` / `PLACEHOLDER` / `SENSITIVE_AUTHORITY_PATTERN` module exports intact.
+- `tests/unit/test_ai_grounding.py`: Added direct `Engine.draft()` stub regressions reproducing every Finding 1 `<= 40`-char bypass, Finding 2 mixed cited/uncited same-paragraph/before-after/semicolon/newline/no-space/token-manipulation variants, clarification factual-question rejection, fabricated citation/source-type tampering rejection, and valid mixed `[S1]`/`[S2]` `order_facts` + polite framing acceptance.
+- `tests/unit/test_gemini_llm.py`: Added real `GeminiDraftClient` transport regression variants for semicolon and citation-adjacent bypasses (`[S1]; Shipping is free.`, `Shipping is free; ... [S1].`, `[S1].Shipping is free.`).
 
 ## Residual Limits
-- Only explicitly structured English non-factual acknowledgments/invitations within 100 characters are accepted without citation; novel conversational phrasing outside those closed templates must still either carry an inline citation or be omitted.
-- `Engine.draft()` preserves the existing `<= 40` char clarification exemption for non-`FACTUAL_COMMITMENT` short questions (`"Could you provide your order ID?"`).
+- Only explicitly closed non-factual English polite framing templates (`_SAFE_POLITE_FRAMING`, `_POLITE_NON_CLAIM`) and closed clarification-detail prompts (`_SAFE_CLARIFICATION_QUESTION` when `is_clarification=True`) within 100 characters are accepted without inline citations; novel uncited phrasings remain fail-closed.
+- Policy source document IDs in `Engine.draft()` `input_snapshot["sources"]` preserve compatibility with existing e2e test fixtures (`tests/e2e/test_full_pipeline.py::test_normal_shipping_cost_flow`) while verifying citation consistency via `validate_generated_draft()` whenever `"citations"` is supplied and enforcing non-empty `document_id`/`version` and `source_type` allowlists.

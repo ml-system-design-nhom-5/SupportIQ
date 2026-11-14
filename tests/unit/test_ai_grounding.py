@@ -176,6 +176,106 @@ def test_polite_topic_framing_allowed_and_adversarial_framing_rejected_in_engine
     assert "grounding_failed" in bad_res["reason_codes"]
 
 
+@pytest.mark.parametrize("body", [
+    "Shipping is free.\n\nStandard delivery takes 3 to 5 business days. [S1]",
+    "Your order is cancelled.\n\nStandard delivery takes 3 to 5 business days. [S1]",
+    "We approved your return.\n\nStandard delivery takes 3 to 5 business days. [S1]",
+    "Hello, you get a free gift!\n\nStandard delivery takes 3 to 5 business days. [S1]",
+    "You are eligible.\n\nStandard delivery takes 3 to 5 business days. [S1]",
+    "No charge applies.\n\nStandard delivery takes 3 to 5 business days. [S1]",
+    "It will arrive tomorrow.\n\nStandard delivery takes 3 to 5 business days. [S1]",
+    "Shipping is free.",
+    "Could you provide your order ID?\n\nStandard delivery takes 3 to 5 business days. [S1]",
+    "Standard delivery takes 3 to 5 business days [S1]. Shipping is free.",
+    "Shipping is free. Standard delivery takes 3 to 5 business days [S1].",
+    "Standard delivery takes 3 to 5 business days [S1]; Shipping is free.",
+    "Shipping is free; Standard delivery takes 3 to 5 business days [S1].",
+    "Standard delivery takes 3 to 5 business days [S1].\nShipping is free.",
+    "Standard delivery takes 3 to 5 business days [S1].Shipping is free.",
+    "Standard delivery takes 7 business days [S1].",
+    "We have refunded your order [S1].",
+    "Standard delivery takes 3 to 5 business days [s1].",
+    "Standard delivery takes 3 to 5 business days [S1, S2].",
+])
+def test_engine_direct_stub_rejects_short_uncited_claims_and_mixed_citation_bypasses(body):
+    """Engine.draft must reject <=40 char factual claims and uncited claims mixed into [S1] paragraphs."""
+    res = make_engine(llm=MockLLM(body=body)).draft(make_request())
+    assert res["status"] == "llm_unavailable"
+    assert "grounding_failed" in res["reason_codes"]
+
+
+def test_engine_direct_stub_rejects_clarification_with_factual_question_and_source_tampering():
+    """Clarification flag must not pass factual questions, and fabricated/unowned sources must fail closed."""
+    clarify_bad = MockLLM(
+        body="Is shipping free?\n\nStandard delivery takes 3 to 5 business days. [S1]",
+        is_clarification=True,
+    )
+    res_q = make_engine(llm=clarify_bad).draft(make_request())
+    assert res_q["status"] == "llm_unavailable"
+    assert "grounding_failed" in res_q["reason_codes"]
+
+    class CitationsTamperLLM(MockLLM):
+        def generate(self, message, intent, evidence, business_context=None):
+            payload = super().generate(message, intent, evidence, business_context=business_context)
+            payload["citations"] = ["S1"]
+            return payload
+
+    res_list = make_engine(
+        llm=CitationsTamperLLM(body="Standard delivery takes 3 to 5 business days [S1]. Shipping is free.")
+    ).draft(make_request())
+    assert res_list["status"] == "llm_unavailable"
+    assert "grounding_failed" in res_list["reason_codes"]
+
+    class MismatchedCitationDocLLM(MockLLM):
+        def generate(self, message, intent, evidence, business_context=None):
+            payload = super().generate(message, intent, evidence, business_context=business_context)
+            payload["citations"] = [{"source_id": "S1", "document_id": "POL-FORGED", "version": "1"}]
+            return payload
+
+    res_forged = make_engine(
+        llm=MismatchedCitationDocLLM(body="Standard delivery takes 3 to 5 business days. [S1]")
+    ).draft(make_request())
+    assert res_forged["status"] == "llm_unavailable"
+    assert "grounding_failed" in res_forged["reason_codes"]
+
+    bad_type_sources = [
+        {"source_id": "S1", "source_type": "policy", "document_id": "policy-shipping-v1", "version": "1", "excerpt": "Delivery takes 3 to 5 business days."},
+        {"source_id": "S2", "source_type": "arbitrary_source", "document_id": "order-1", "version": "1", "excerpt": "order_status: shipped"},
+    ]
+    res_type = make_engine(
+        llm=MockLLM(body="Delivery takes 3 to 5 business days [S1]. Order is shipped [S2].", sources=bad_type_sources)
+    ).draft(make_request())
+    assert res_type["status"] == "llm_unavailable"
+    assert "grounding_failed" in res_type["reason_codes"]
+
+
+def test_engine_direct_stub_accepts_mixed_policy_and_order_facts_with_polite_framing():
+    """Engine.draft preserves valid polite framing alongside mixed S1 policy and S2 order_facts."""
+    sources = [
+        {"source_id": "S1", "source_type": "policy", "document_id": "policy-shipping-v1", "version": "1", "excerpt": "Delivery takes 3 to 5 business days."},
+        {"source_id": "S2", "source_type": "order_facts", "document_id": "order-1", "version": "1",
+         "excerpt": "shipment_status: delayed\nshipping_cost: 0 VND\nrefund_amount: 499,000 VND"},
+    ]
+    body = (
+        "Thank you for reaching out about your order.\n\n"
+        "Standard delivery takes 3 to 5 business days. [S1]\n\n"
+        "Your shipment is delayed with 0 VND shipping and 499,000 VND refund [S2].\n\n"
+        "Please let us know if you have questions about this policy."
+    )
+    req = make_request(
+        order_context={
+            "order_status": "shipped",
+            "shipment_status": "delayed",
+            "shipping_cost": {"amount_minor": 0, "currency": "VND"},
+            "refund_amount": {"amount_minor": 499000, "currency": "VND"},
+        }
+    )
+    res = make_engine(llm=MockLLM(body=body, sources=sources)).draft(req)
+    assert res["status"] == "draft_ready"
+    assert set(res["draft"]["citations"][1]["fields"]) >= {"shipment_status", "shipping_cost", "refund_amount"}
+    assert [seg["citation_ids"] for seg in res["draft"]["segments"]] == [[], ["S1"], ["S2"], []]
+
+
 def test_short_clarification_without_citation_allowed():
     """Short clarification question asking for missing details alongside cited policy is allowed."""
     llm = MockLLM(
