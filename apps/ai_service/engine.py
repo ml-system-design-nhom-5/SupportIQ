@@ -19,6 +19,7 @@ from apps.core_backend.safety import (
     has_unauthorized_duplicate_advice,
     has_uncovered_cross_border_shipping,
     has_unqualified_cosmetics_refusal,
+    is_safe_uncited_paragraph,
     policy_scope_requires_review,
 )
 
@@ -277,7 +278,9 @@ class Engine:
         citations, segments = {}, []
         for paragraph_index, paragraph in enumerate(re.split(r"\n\s*\n", text.strip())):
             source_ids = re.findall(r"\[(S\d+)\]", paragraph)
-            if not source_ids and (len(paragraph) > 40 or FACTUAL_COMMITMENT.search(paragraph)):
+            if not source_ids and not is_safe_uncited_paragraph(paragraph) and (
+                len(paragraph) > 40 or FACTUAL_COMMITMENT.search(paragraph)
+            ):
                 return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
             citation_ids = []
             for identifier in source_ids:

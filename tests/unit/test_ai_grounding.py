@@ -152,6 +152,30 @@ def test_harmless_greeting_without_citation_allowed_when_grounded():
     assert res["draft"]["segments"][1]["citation_ids"] == ["S1"]
 
 
+def test_polite_topic_framing_allowed_and_adversarial_framing_rejected_in_engine():
+    """Non-factual polite framing >40 chars passes alongside cited policy while uncited claims fail."""
+    ok_llm = MockLLM(
+        body=(
+            "Thank you for reaching out about your order.\n\n"
+            "Standard delivery takes 3 to 5 business days. [S1]\n\n"
+            "Please let us know if you have questions about this policy."
+        )
+    )
+    ok_res = make_engine(llm=ok_llm).draft(make_request())
+    assert ok_res["status"] == "draft_ready"
+    assert [seg["citation_ids"] for seg in ok_res["draft"]["segments"]] == [[], ["S1"], []]
+
+    bad_llm = MockLLM(
+        body=(
+            "We apologize, your order will arrive tomorrow.\n\n"
+            "Standard delivery takes 3 to 5 business days. [S1]"
+        )
+    )
+    bad_res = make_engine(llm=bad_llm).draft(make_request())
+    assert bad_res["status"] == "llm_unavailable"
+    assert "grounding_failed" in bad_res["reason_codes"]
+
+
 def test_short_clarification_without_citation_allowed():
     """Short clarification question asking for missing details alongside cited policy is allowed."""
     llm = MockLLM(

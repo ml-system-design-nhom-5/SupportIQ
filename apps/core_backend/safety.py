@@ -391,15 +391,38 @@ _DMY_DATE = re.compile(
     re.I,
 )
 
+_POLITE_SUBJECT_MOD = r"(?:(?:return|refund|shipping|delivery|cancellation|payment|exchange)\s+)?"
+_POLITE_TOPIC_NP = (
+    rf"(?:support|us"
+    rf"|(?:your|this|the|our)\s+{_POLITE_SUBJECT_MOD}"
+    rf"(?:order|return|refund|delivery|shipping|shipment|cancellation|payment|request|inquiry|question|concern|issue|policy|policies)"
+    rf"(?:\s+(?:inquiry|question|concern|issue|request|details|information))?"
+    rf")"
+)
+_SAFE_POLITE_FRAMING = re.compile(
+    rf"^(?:"
+    rf"(?:thank\s+you(?:\s+(?:very|so)\s+much)?|thanks)"
+    rf"(?:\s+for\s+(?:reaching\s+out|contacting\s+(?:us|support)|getting\s+in\s+touch|writing(?:\s+to\s+us)?|your\s+(?:message|inquiry|question|patience))"
+    rf"(?:\s+(?:to\s+us\s+)?(?:about|regarding|concerning|with)\s+{_POLITE_TOPIC_NP})?"
+    rf"(?:\s+today)?)?[.!]"
+    rf"|(?:please\s+)?(?:let\s+us\s+know|feel\s+free\s+to\s+(?:reach\s+out(?:\s+to\s+us)?|contact\s+us|ask)|reach\s+out(?:\s+to\s+us)?|contact\s+us)"
+    rf"\s+if\s+you\s+(?:have\s+(?:any\s+)?(?:further\s+|additional\s+|more\s+)?questions?(?:\s+(?:about|regarding|concerning)\s+{_POLITE_TOPIC_NP})?"
+    rf"|need\s+(?:any\s+)?(?:further\s+|additional\s+|more\s+)?(?:help|assistance)(?:\s+(?:with|about|regarding)\s+{_POLITE_TOPIC_NP})?)[.!?]"
+    rf"|we(?:'re|\s+are)\s+happy\s+to\s+help(?:\s+(?:with|about|regarding)\s+{_POLITE_TOPIC_NP})?[.!]"
+    rf"|i\s+understand\s+(?:your|this)\s+concern(?:\s+(?:about|regarding)\s+{_POLITE_TOPIC_NP})?[.!]"
+    rf"|we\s+(?:apologize|are\s+sorry)\s+for\s+(?:the|any)\s+inconvenience(?:\s+(?:with\s+{_POLITE_TOPIC_NP}))?[.!]"
+    rf")$",
+    re.I,
+)
 _POLITE_NON_CLAIM = re.compile(
     r"^(?:"
-    r"(?:hi|hello|dear|good\s+(?:morning|afternoon|evening))(?:\s+[^.!?]{0,40})?[!,.]?"
-    r"|(?:thank\s+you|thanks)(?:\s+(?:for|so\s+much))?[^.!?]{0,60}[.!]?"
-    r"|please\s+(?:let\s+us\s+know|reach\s+out|feel\s+free|share|provide|confirm)[^.!?]{0,80}[.!?]?"
-    r"|we(?:'re|\s+are)\s+happy\s+to\s+help[^.!?]{0,40}[.!]?"
-    r"|(?:best\s+regards|kind\s+regards|warm\s+regards|sincerely)[,.!]?"
-    r"|i\s+understand(?:\s+your\s+concern)?[^.!?]{0,50}[.!]?"
-    r")$",
+    r"(?i:hi|hello|dear|good\s+(?:morning|afternoon|evening))(?:\s*,?\s*(?:(?i:there|(?:valued\s+)?customer|friend|sir(?:\s+or\s+madam)?|madam|ma'am|everyone|team)|[A-Z][a-zA-Z'-]{1,20}(?:\s+[A-Z][a-zA-Z'-]{1,20})?))?\s*[!,.]?"
+    r"|(?i:(?:best|kind|warm)\s+regards|sincerely|warmly)\s*[,.!]?"
+    r")$"
+)
+_UNSAFE_UNCITED_TOKENS = re.compile(
+    r"(?:[$€£¥₫đ]|\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|"
+    r"tomorrow|yesterday|tonight|days?|hours?|weeks?|months?|years?|minutes?)\b)",
     re.I,
 )
 
@@ -492,16 +515,26 @@ def _is_safe_uncited_sentence(sentence: str) -> bool:
     stripped = sentence.strip()
     if not stripped:
         return True
-    cleaned = _strip_citations_and_placeholders(stripped).strip()
+    cleaned = re.sub(r"\s+", " ", _strip_citations_and_placeholders(stripped)).strip()
     if not cleaned:
         return True
     if len(cleaned) > 100:
         return False
-    if re.search(r"\d", cleaned) or FACTUAL_COMMITMENT.search(cleaned) or _UNCITED_CLAIM_TERMS.search(cleaned):
+    if re.search(r"\d", cleaned) or _UNSAFE_UNCITED_TOKENS.search(cleaned) or _VND_CURRENCY.search(cleaned):
         return False
     if has_ungrounded_transaction_commitment(cleaned):
         return False
+    if _SAFE_POLITE_FRAMING.match(cleaned):
+        return True
+    if FACTUAL_COMMITMENT.search(cleaned) or _UNCITED_CLAIM_TERMS.search(cleaned):
+        return False
     return bool(_POLITE_NON_CLAIM.match(cleaned))
+
+
+def is_safe_uncited_paragraph(paragraph: str) -> bool:
+    """Return True when every sentence in an uncited paragraph is non-factual polite framing."""
+    sentences = split_draft_sentences(paragraph)
+    return bool(sentences) and all(_is_safe_uncited_sentence(sentence) for sentence in sentences)
 
 
 def _extract_dates_and_strip(text: str) -> tuple[set[str], str]:

@@ -351,3 +351,57 @@ def test_validator_allows_safe_positive_controls_formats_and_quotations():
         dot_sources,
     )
     assert (ok_dot, codes_dot) == (True, [])
+
+
+@pytest.mark.parametrize('answer', [
+    'Thank you for reaching out about your order.\n\nProducts may be returned within 30 days in original packaging [S1].',
+    'Products may be returned within 30 days in original packaging [S1].\n\nPlease let us know if you have questions about this policy.',
+    'Hello [NAME_1],\n\nThank you for reaching out about your order.\n\nProducts may be returned within 30 days in original packaging [S1].\n\nPlease let us know if you have questions about this policy.',
+    'Thank you for contacting us regarding your return request.\n\nProducts may be returned within 30 days in original packaging [S1].\n\nPlease feel free to reach out if you have any questions about our return policy.',
+    'Thank you for reaching out about your refund.\n\nProducts may be returned within 30 days in original packaging [S1].',
+    'Thank you for reaching out about your order. Products may be returned within 30 days in original packaging [S1]. Please let us know if you have questions about this policy.',
+])
+def test_validator_allows_narrow_nonfactual_polite_framing_around_cited_policy(answer):
+    from apps.core_backend.safety import validate_generated_draft
+
+    question = 'Hello [NAME_1], what is your return policy?'
+    res = client_for(lambda r: httpx.Response(200, json=response_payload(answer=answer, citations=['S1']))).generate(
+        question, 'return_policy', EVIDENCE
+    )
+    ok, codes, _ = validate_generated_draft(question, res, res['input_snapshot']['sources'])
+    assert (ok, codes) == (True, [])
+
+
+@pytest.mark.parametrize('answer', [
+    'Thank you, your refund is approved.\n\nProducts may be returned within 30 days in original packaging [S1].',
+    'Please know shipping is free.\n\nProducts may be returned within 30 days in original packaging [S1].',
+    'We apologize, your order will arrive tomorrow.\n\nProducts may be returned within 30 days in original packaging [S1].',
+    'Products may be returned within 30 days in original packaging [S1].\n\nLet us know after 5 days.',
+    'Products may be returned within 30 days in original packaging [S1].\n\nLet us know after five days.',
+    'Hello, I promise you will get money back.\n\nProducts may be returned within 30 days in original packaging [S1].',
+    'Hello, your order ships free.\n\nProducts may be returned within 30 days in original packaging [S1].',
+    'Thank you for reaching out about your order.\nYour refund is approved.\n\nProducts may be returned within 30 days in original packaging [S1].',
+    'Thank you for reaching out about your order; shipping is free.\n\nProducts may be returned within 30 days in original packaging [S1].',
+    'Thank you for reaching out about your order.your refund is approved.\n\nProducts may be returned within 30 days in original packaging [S1].',
+    'Please let us know if you have questions about our $5 fee.\n\nProducts may be returned within 30 days in original packaging [S1].',
+    'Thank you for reaching out about your order.\n\nPlease let us know if you have questions about this policy.',
+])
+def test_validator_rejects_adversarial_polite_framing_and_multiline_bypasses(answer):
+    from apps.core_backend.safety import validate_generated_draft
+
+    sources = [{'source_id': 'S1', 'source_type': 'policy', 'document_id': 'returns', 'version': '1',
+                'excerpt': 'Products may be returned within 30 days in original packaging.'}]
+    has_cite = '[S1]' in answer
+    cites = ['S1'] if has_cite else []
+    with pytest.raises(LLMError) as caught:
+        client_for(lambda r: httpx.Response(200, json=response_payload(answer=answer, citations=cites))).generate(
+            'What is your return policy?', 'return_policy', EVIDENCE
+        )
+    assert caught.value.code == 'llm_invalid_citations'
+
+    ok, codes, _ = validate_generated_draft(
+        'What is your return policy?',
+        {'body': answer, 'citations': cites, 'input_snapshot': {'sources': sources}},
+        sources,
+    )
+    assert (ok, codes) == (False, ['grounding_failed'])
