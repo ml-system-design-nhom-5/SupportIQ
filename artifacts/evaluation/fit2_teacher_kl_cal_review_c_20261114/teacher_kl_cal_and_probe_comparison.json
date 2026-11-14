@@ -1,0 +1,1166 @@
+{
+  "schema_version": "worker_c_teacher_kl_review.v1",
+  "device_used": "cuda",
+  "git_branch": "minh",
+  "git_head": "1319d3cc271f9abd3720c77d50aa2613ed4b032a",
+  "top_level_hashes": {
+    "tkl_weights": "3994af2c461cd029f4d03dbec38a75b2bb103a78d8550f4f3a20078b354bca06",
+    "tkl_cal": "4e06df8f2ecd11fb72d9e8163525eafe06ca0feebba87310e808cdfbd7b88db8",
+    "tkl_prov": "ceacdb9f00f8f1d3e5a588080cdb747543db0d71446fa4b89b99d0c9ef592bcc",
+    "tkl_cal_guard": "34967831ff85a4d8a1da611f3c49cd5bda8d4d916a6428adc2448a4cd2eaeb8e",
+    "tkl_prep_manifest": "3234e31bea47402b4d6ef2da1ceb0fe3434e470c707c848dbc538918b2049286",
+    "orig_weights": "f695b1fe514aba81aafc968823047d496b03474a0b47199c65eaac6bd93c6dfa",
+    "ctrl_weights": "904188aab6cb45d1150cbd5f0890ee06a1732177d0c7b2c62e43d54a05ffc0ee",
+    "prior_2e5_weights": "dc3e88e713c71fe0e521a1dc5bec5831d9a0a91a83d4c3d1b413d3b1cd68e44d",
+    "lr5e6_weights": "b7a285479b853b5bed9ad1c67caaeed1b45107bd78bf8e53e23f6ec4f332feb2",
+    "serving_weights": "dc7af8cffb19fe7711ed5a5d0137ffff3d7d1a1f43bad5a35edff8c8de4c1302",
+    "fit1_weights": "95a940b630f44bf8d11882a26062c857839baa2d80d188f5451d52cecc2158a6"
+  },
+  "inventories_verified": {
+    "archive_files_checked": 6,
+    "archive_mismatches": [],
+    "sidecar_files_checked": 41,
+    "sidecar_mismatches": [],
+    "prep_files_checked": 39,
+    "prep_mismatches": []
+  },
+  "input_parity": {
+    "rec_vs_prep_diffs": [],
+    "prep_vs_v4_shared_data_diffs": []
+  },
+  "source_snapshot": {
+    "snapshot_vs_run_config_diffs": [],
+    "snapshot_vs_prep_diffs": [],
+    "snapshot_vs_disk_diffs": []
+  },
+  "overlap_audit": {
+    "noisy_vs_cal": 0,
+    "noisy_vs_eval_total": 3,
+    "noisy_vs_bitext_test": 3,
+    "clean_vs_cal": 0,
+    "clean_vs_eval_total": 0
+  },
+  "mc_parity_teacher_kl": {
+    "checked_rows": 134,
+    "intent_mismatches": 0,
+    "max_confidence_abs_diff": 2.7204578449957495e-06
+  },
+  "max_guard_float_diff_vs_recorded": 0.0,
+  "recomputed_teacher_kl_cal_guard": {
+    "schema_version": "orig_fit2_cal_guard_report.v1",
+    "cal_guard_mode": "candidate_12_checks",
+    "is_promotion_candidate": true,
+    "read_only_post_fit_guard": true,
+    "float_tolerance": 3e-06,
+    "passed": false,
+    "recommended_status": "CAL_GUARD_REJECT_DO_NOT_PROMOTE",
+    "failed_checks": [
+      "boundary_pos_cal_correct_count",
+      "boundary_pos_cal_sup12_correct_count",
+      "boundary_neg_cal_pred_sup12_count",
+      "boundary_pos_cal_delta_mean_max_prob",
+      "boundary_pos_cal_esc34_delta_mean_max_prob",
+      "boundary_pos_cal_esc34_max_sup12_mass",
+      "boundary_neg_cal_max_sup12_mass",
+      "boundary_neg_cal_max_single_sup12_prob"
+    ],
+    "checks": [
+      {
+        "name": "boundary_pos_cal_correct_count",
+        "kind": "integer",
+        "actual": 67,
+        "rule": ">= 68",
+        "passed": false
+      },
+      {
+        "name": "boundary_pos_cal_sup12_correct_count",
+        "kind": "integer",
+        "actual": 37,
+        "rule": ">= 38",
+        "passed": false
+      },
+      {
+        "name": "bitext_cal_correct_count",
+        "kind": "integer",
+        "actual": 689,
+        "rule": ">= 687",
+        "passed": true
+      },
+      {
+        "name": "pos_train_added_18_correct_count",
+        "kind": "integer",
+        "actual": 18,
+        "rule": ">= 15",
+        "passed": true
+      },
+      {
+        "name": "boundary_pos_cal_sup12_conf_ge_070_count",
+        "kind": "integer",
+        "actual": 34,
+        "rule": ">= 26",
+        "passed": true
+      },
+      {
+        "name": "boundary_pos_cal_sup12_conf_ge_080_count",
+        "kind": "integer",
+        "actual": 32,
+        "rule": ">= 24",
+        "passed": true
+      },
+      {
+        "name": "boundary_neg_cal_pred_sup12_count",
+        "kind": "integer",
+        "actual": 10,
+        "rule": "<= 9",
+        "passed": false
+      },
+      {
+        "name": "boundary_pos_cal_delta_mean_max_prob",
+        "kind": "float",
+        "actual": 0.05583083820609369,
+        "limit": 0.015,
+        "tolerance": 3e-06,
+        "passed": false
+      },
+      {
+        "name": "boundary_pos_cal_esc34_delta_mean_max_prob",
+        "kind": "float",
+        "actual": 0.06060174472627833,
+        "limit": 0.015,
+        "tolerance": 3e-06,
+        "passed": false
+      },
+      {
+        "name": "boundary_pos_cal_esc34_max_sup12_mass",
+        "kind": "float",
+        "actual": 0.6713301908875379,
+        "limit": 0.55,
+        "tolerance": 3e-06,
+        "passed": false
+      },
+      {
+        "name": "boundary_neg_cal_max_sup12_mass",
+        "kind": "float",
+        "actual": 0.7649549048383082,
+        "limit": 0.7156928153564155,
+        "tolerance": 3e-06,
+        "passed": false
+      },
+      {
+        "name": "boundary_neg_cal_max_single_sup12_prob",
+        "kind": "float",
+        "actual": 0.6116277361934712,
+        "limit": 0.5576920642670788,
+        "tolerance": 3e-06,
+        "passed": false
+      }
+    ],
+    "deltas": {
+      "boundary_pos_cal_delta_mean_max_prob": 0.05583083820609369,
+      "boundary_pos_cal_allowed_delta_mean_max_prob": 0.015,
+      "boundary_pos_cal_esc34_delta_mean_max_prob": 0.06060174472627833
+    },
+    "attribution_deltas": {
+      "boundary_pos_cal": {
+        "delta_correct_count": -1,
+        "delta_all_mean_max_prob": 0.05583083820609369,
+        "delta_correct_mean_max_prob": 0.05244650515640603,
+        "delta_incorrect_mean_max_prob": 0.07945670769128887,
+        "delta_mean_true_class_prob": 0.030437858950097207
+      },
+      "boundary_pos_cal_sup12": {
+        "delta_correct_count": -1,
+        "delta_all_mean_max_prob": 0.05205387054428057,
+        "delta_correct_mean_max_prob": 0.06843086361960138,
+        "delta_incorrect_mean_max_prob": 0.014876331812872512,
+        "delta_mean_true_class_prob": 0.03588312001203442
+      },
+      "boundary_pos_cal_esc34": {
+        "delta_correct_count": 0,
+        "delta_all_mean_max_prob": 0.06060174472627833,
+        "delta_correct_mean_max_prob": 0.03295657441551436,
+        "delta_incorrect_mean_max_prob": 0.16427113339164345,
+        "delta_mean_true_class_prob": 0.023559634450807887
+      },
+      "bitext_cal": {
+        "delta_correct_count": 0,
+        "delta_all_mean_max_prob": 0.001858158246329511,
+        "delta_correct_mean_max_prob": 0.0018918235871471234,
+        "delta_incorrect_mean_max_prob": -0.02133726157701199,
+        "delta_mean_true_class_prob": 0.001918775922850502
+      }
+    },
+    "candidate_metrics": {
+      "temperature": 1.0,
+      "boundary_pos_cal": {
+        "count": 86,
+        "correct_count": 67,
+        "accuracy": 0.7790697674418605,
+        "mean_max_prob": 0.7421750333651249
+      },
+      "boundary_pos_cal_sup12": {
+        "count": 48,
+        "correct_count": 37,
+        "accuracy": 0.7708333333333334,
+        "mean_max_prob": 0.7505752822521651,
+        "conf_ge_070_count": 34,
+        "conf_ge_080_count": 32
+      },
+      "boundary_pos_cal_esc34": {
+        "count": 38,
+        "correct_count": 30,
+        "accuracy": 0.7894736842105263,
+        "mean_max_prob": 0.7315641926657056,
+        "max_sup12_mass": 0.6713301908875379
+      },
+      "bitext_cal": {
+        "count": 690,
+        "correct_count": 689,
+        "accuracy": 0.9985507246376811,
+        "mean_max_prob": 0.9796584620651432
+      },
+      "pos_train_added_18": {
+        "count": 18,
+        "correct_count": 18,
+        "accuracy": 1.0,
+        "mean_max_prob": 0.9815482591763529
+      },
+      "boundary_neg_cal": {
+        "count": 48,
+        "pred_sup12_count": 10,
+        "max_sup12_mass": 0.7649549048383082,
+        "mean_sup12_mass": 0.25440361080196977,
+        "max_single_sup12_prob": 0.6116277361934712,
+        "mean_kl_vs_orig_fit2": 0.01649458380205085
+      },
+      "attribution_breakdown": {
+        "boundary_pos_cal": {
+          "count": 86,
+          "correct_count": 67,
+          "incorrect_count": 19,
+          "all_mean_max_prob": 0.7421750333651249,
+          "correct_mean_max_prob": 0.7852853713155936,
+          "incorrect_mean_max_prob": 0.5901543679608402,
+          "mean_true_class_prob": 0.6226592458165959,
+          "mean_sup12_mass": 0.48069123868647856,
+          "max_sup12_mass": 0.9860571623293134,
+          "pred_sup12_count": 45,
+          "mean_kl_vs_orig_fit2": 0.06162128007251248
+        },
+        "boundary_pos_cal_sup12": {
+          "count": 48,
+          "correct_count": 37,
+          "incorrect_count": 11,
+          "all_mean_max_prob": 0.7505752822521651,
+          "correct_mean_max_prob": 0.8079930706902722,
+          "incorrect_mean_max_prob": 0.5574427211421679,
+          "mean_true_class_prob": 0.6271779520084483,
+          "mean_sup12_mass": 0.7987852444504631,
+          "max_sup12_mass": 0.9860571623293134,
+          "pred_sup12_count": 44,
+          "mean_kl_vs_orig_fit2": 0.0478780740613457
+        },
+        "boundary_pos_cal_esc34": {
+          "count": 38,
+          "correct_count": 30,
+          "incorrect_count": 8,
+          "all_mean_max_prob": 0.7315641926657056,
+          "correct_mean_max_prob": 0.7572792087534899,
+          "incorrect_mean_max_prob": 0.6351328823365148,
+          "mean_true_class_prob": 0.616951406416361,
+          "mean_sup12_mass": 0.07888828403723509,
+          "max_sup12_mass": 0.6713301908875379,
+          "pred_sup12_count": 1,
+          "mean_kl_vs_orig_fit2": 0.0789811192445126
+        },
+        "bitext_cal": {
+          "count": 690,
+          "correct_count": 689,
+          "incorrect_count": 1,
+          "all_mean_max_prob": 0.9796584620651432,
+          "correct_mean_max_prob": 0.9797700594580814,
+          "incorrect_mean_max_prob": 0.902767858330704,
+          "mean_true_class_prob": 0.9784533922803849,
+          "mean_sup12_mass": 0.2602512754507804,
+          "max_sup12_mass": 0.9890387449271675,
+          "pred_sup12_count": 179,
+          "mean_kl_vs_orig_fit2": 0.0008001718733393087
+        }
+      }
+    },
+    "baseline_metrics": {
+      "temperature": 1.0,
+      "boundary_pos_cal": {
+        "count": 86,
+        "correct_count": 68,
+        "accuracy": 0.7906976744186046,
+        "mean_max_prob": 0.6863441951590312
+      },
+      "boundary_pos_cal_sup12": {
+        "count": 48,
+        "correct_count": 38,
+        "accuracy": 0.7916666666666666,
+        "mean_max_prob": 0.6985214117078845,
+        "conf_ge_070_count": 28,
+        "conf_ge_080_count": 28
+      },
+      "boundary_pos_cal_esc34": {
+        "count": 38,
+        "correct_count": 30,
+        "accuracy": 0.7894736842105263,
+        "mean_max_prob": 0.6709624479394273,
+        "max_sup12_mass": 0.4673615502178657
+      },
+      "bitext_cal": {
+        "count": 690,
+        "correct_count": 689,
+        "accuracy": 0.9985507246376811,
+        "mean_max_prob": 0.9778003038188137
+      },
+      "pos_train_added_18": {
+        "count": 18,
+        "correct_count": 8,
+        "accuracy": 0.4444444444444444,
+        "mean_max_prob": 0.5045588112063999
+      },
+      "boundary_neg_cal": {
+        "count": 48,
+        "pred_sup12_count": 9,
+        "max_sup12_mass": 0.7156928153564155,
+        "mean_sup12_mass": 0.2484005192110247,
+        "max_single_sup12_prob": 0.5576920642670788,
+        "mean_kl_vs_orig_fit2": 0.0
+      },
+      "attribution_breakdown": {
+        "boundary_pos_cal": {
+          "count": 86,
+          "correct_count": 68,
+          "incorrect_count": 18,
+          "all_mean_max_prob": 0.6863441951590312,
+          "correct_mean_max_prob": 0.7328388661591876,
+          "incorrect_mean_max_prob": 0.5106976602695513,
+          "mean_true_class_prob": 0.5922213868664987,
+          "mean_sup12_mass": 0.46666006478924366,
+          "max_sup12_mass": 0.9845775844038844,
+          "pred_sup12_count": 46,
+          "mean_kl_vs_orig_fit2": 0.0
+        },
+        "boundary_pos_cal_sup12": {
+          "count": 48,
+          "correct_count": 38,
+          "incorrect_count": 10,
+          "all_mean_max_prob": 0.6985214117078845,
+          "correct_mean_max_prob": 0.7395622070706708,
+          "incorrect_mean_max_prob": 0.5425663893292954,
+          "mean_true_class_prob": 0.5912948319964139,
+          "mean_sup12_mass": 0.7658830509685389,
+          "max_sup12_mass": 0.9845775844038844,
+          "pred_sup12_count": 45,
+          "mean_kl_vs_orig_fit2": 0.0
+        },
+        "boundary_pos_cal_esc34": {
+          "count": 38,
+          "correct_count": 30,
+          "incorrect_count": 8,
+          "all_mean_max_prob": 0.6709624479394273,
+          "correct_mean_max_prob": 0.7243226343379755,
+          "incorrect_mean_max_prob": 0.4708617489448713,
+          "mean_true_class_prob": 0.5933917719655531,
+          "mean_sup12_mass": 0.08869418751013373,
+          "max_sup12_mass": 0.4673615502178657,
+          "pred_sup12_count": 1,
+          "mean_kl_vs_orig_fit2": 0.0
+        },
+        "bitext_cal": {
+          "count": 690,
+          "correct_count": 689,
+          "incorrect_count": 1,
+          "all_mean_max_prob": 0.9778003038188137,
+          "correct_mean_max_prob": 0.9778782358709343,
+          "incorrect_mean_max_prob": 0.924105119907716,
+          "mean_true_class_prob": 0.9765346163575344,
+          "mean_sup12_mass": 0.26009786730670775,
+          "max_sup12_mass": 0.9907848594310964,
+          "pred_sup12_count": 179,
+          "mean_kl_vs_orig_fit2": 0.0
+        }
+      }
+    }
+  },
+  "models": {
+    "orig_fit2": {
+      "weights_sha256": "f695b1fe514aba81aafc968823047d496b03474a0b47199c65eaac6bd93c6dfa",
+      "calibration_manifest_sha256": "782c88db3fcd80615c3dceabbdb96ea2be7aa769119201f94229535becc7ae39",
+      "rejector_enabled": false,
+      "cal_guard_metrics": {
+        "temperature": 1.0,
+        "boundary_pos_cal": {
+          "count": 86,
+          "correct_count": 68,
+          "accuracy": 0.7906976744186046,
+          "mean_max_prob": 0.6863441951590312
+        },
+        "boundary_pos_cal_sup12": {
+          "count": 48,
+          "correct_count": 38,
+          "accuracy": 0.7916666666666666,
+          "mean_max_prob": 0.6985214117078845,
+          "conf_ge_070_count": 28,
+          "conf_ge_080_count": 28
+        },
+        "boundary_pos_cal_esc34": {
+          "count": 38,
+          "correct_count": 30,
+          "accuracy": 0.7894736842105263,
+          "mean_max_prob": 0.6709624479394273,
+          "max_sup12_mass": 0.4673615502178657
+        },
+        "bitext_cal": {
+          "count": 690,
+          "correct_count": 689,
+          "accuracy": 0.9985507246376811,
+          "mean_max_prob": 0.9778003038188137
+        },
+        "pos_train_added_18": {
+          "count": 18,
+          "correct_count": 8,
+          "accuracy": 0.4444444444444444,
+          "mean_max_prob": 0.5045588112063999
+        },
+        "boundary_neg_cal": {
+          "count": 48,
+          "pred_sup12_count": 9,
+          "max_sup12_mass": 0.7156928153564155,
+          "mean_sup12_mass": 0.2484005192110247,
+          "max_single_sup12_prob": 0.5576920642670788,
+          "mean_kl_vs_orig_fit2": 0.0
+        },
+        "attribution_breakdown": {
+          "boundary_pos_cal": {
+            "count": 86,
+            "correct_count": 68,
+            "incorrect_count": 18,
+            "all_mean_max_prob": 0.6863441951590312,
+            "correct_mean_max_prob": 0.7328388661591876,
+            "incorrect_mean_max_prob": 0.5106976602695513,
+            "mean_true_class_prob": 0.5922213868664987,
+            "mean_sup12_mass": 0.46666006478924366,
+            "max_sup12_mass": 0.9845775844038844,
+            "pred_sup12_count": 46,
+            "mean_kl_vs_orig_fit2": 0.0
+          },
+          "boundary_pos_cal_sup12": {
+            "count": 48,
+            "correct_count": 38,
+            "incorrect_count": 10,
+            "all_mean_max_prob": 0.6985214117078845,
+            "correct_mean_max_prob": 0.7395622070706708,
+            "incorrect_mean_max_prob": 0.5425663893292954,
+            "mean_true_class_prob": 0.5912948319964139,
+            "mean_sup12_mass": 0.7658830509685389,
+            "max_sup12_mass": 0.9845775844038844,
+            "pred_sup12_count": 45,
+            "mean_kl_vs_orig_fit2": 0.0
+          },
+          "boundary_pos_cal_esc34": {
+            "count": 38,
+            "correct_count": 30,
+            "incorrect_count": 8,
+            "all_mean_max_prob": 0.6709624479394273,
+            "correct_mean_max_prob": 0.7243226343379755,
+            "incorrect_mean_max_prob": 0.4708617489448713,
+            "mean_true_class_prob": 0.5933917719655531,
+            "mean_sup12_mass": 0.08869418751013373,
+            "max_sup12_mass": 0.4673615502178657,
+            "pred_sup12_count": 1,
+            "mean_kl_vs_orig_fit2": 0.0
+          },
+          "bitext_cal": {
+            "count": 690,
+            "correct_count": 689,
+            "incorrect_count": 1,
+            "all_mean_max_prob": 0.9778003038188137,
+            "correct_mean_max_prob": 0.9778782358709343,
+            "incorrect_mean_max_prob": 0.924105119907716,
+            "mean_true_class_prob": 0.9765346163575344,
+            "mean_sup12_mass": 0.26009786730670775,
+            "max_sup12_mass": 0.9907848594310964,
+            "pred_sup12_count": 179,
+            "mean_kl_vs_orig_fit2": 0.0
+          }
+        }
+      },
+      "train_metrics": {
+        "boundary_pos_train": {
+          "count": 199,
+          "correct_count": 189,
+          "incorrect_count": 10,
+          "all_mean_max_prob": 0.9362061670506268,
+          "correct_mean_max_prob": 0.9628707697875437,
+          "incorrect_mean_max_prob": 0.43224517532289786,
+          "mean_true_class_prob": 0.9153052148137998,
+          "mean_sup12_mass": 0.717054539792129,
+          "max_sup12_mass": 0.9923281657709068,
+          "pred_sup12_count": 149,
+          "mean_kl_vs_orig_fit2": 0.0
+        },
+        "boundary_pos_train_sup12": {
+          "count": 143,
+          "correct_count": 141,
+          "incorrect_count": 2,
+          "all_mean_max_prob": 0.9555423907539435,
+          "correct_mean_max_prob": 0.9576384577104989,
+          "incorrect_mean_max_prob": 0.8077696703167819,
+          "mean_true_class_prob": 0.9444548715369586,
+          "mean_sup12_mass": 0.9684184448477792,
+          "max_sup12_mass": 0.9923281657709068,
+          "pred_sup12_count": 143,
+          "mean_kl_vs_orig_fit2": 0.0
+        },
+        "boundary_pos_train_esc34": {
+          "count": 56,
+          "correct_count": 48,
+          "incorrect_count": 8,
+          "all_mean_max_prob": 0.8868297386653714,
+          "correct_mean_max_prob": 0.9782406865138623,
+          "incorrect_mean_max_prob": 0.3383640515744269,
+          "mean_true_class_prob": 0.8408694842528764,
+          "mean_sup12_mass": 0.07517885366787909,
+          "max_sup12_mass": 0.9698034429899297,
+          "pred_sup12_count": 6,
+          "mean_kl_vs_orig_fit2": 0.0
+        },
+        "boundary_neg_train": {
+          "count": 99,
+          "pred_sup12_count": 0,
+          "max_sup12_mass": 0.222151136419005,
+          "mean_sup12_mass": 0.21767748366710551,
+          "max_single_sup12_prob": 0.019307524952549972,
+          "mean_kl_vs_orig_fit2": 0.0
+        },
+        "pos_train_added_18": {
+          "count": 18,
+          "correct_count": 8,
+          "incorrect_count": 10,
+          "all_mean_max_prob": 0.5045588112063999,
+          "correct_mean_max_prob": 0.5949508624599078,
+          "incorrect_mean_max_prob": 0.4322451702035936,
+          "mean_true_class_prob": 0.27348717481564894,
+          "mean_sup12_mass": 0.6320205776405552,
+          "max_sup12_mass": 0.9806950700650948,
+          "pred_sup12_count": 16,
+          "mean_kl_vs_orig_fit2": 0.0
+        }
+      }
+    },
+    "zero_delta_control": {
+      "weights_sha256": "904188aab6cb45d1150cbd5f0890ee06a1732177d0c7b2c62e43d54a05ffc0ee",
+      "calibration_manifest_sha256": "70e86f044d3f2f496bc5682e472a35e64d60ab4b51a2e6ade2757b75140c2c5e",
+      "rejector_enabled": false,
+      "cal_guard_metrics": {
+        "temperature": 1.0,
+        "boundary_pos_cal": {
+          "count": 86,
+          "correct_count": 68,
+          "accuracy": 0.7906976744186046,
+          "mean_max_prob": 0.7119660032082937
+        },
+        "boundary_pos_cal_sup12": {
+          "count": 48,
+          "correct_count": 38,
+          "accuracy": 0.7916666666666666,
+          "mean_max_prob": 0.7285580399805526,
+          "conf_ge_070_count": 31,
+          "conf_ge_080_count": 29
+        },
+        "boundary_pos_cal_esc34": {
+          "count": 38,
+          "correct_count": 30,
+          "accuracy": 0.7894736842105263,
+          "mean_max_prob": 0.6910076409696506,
+          "max_sup12_mass": 0.60755485796946
+        },
+        "bitext_cal": {
+          "count": 690,
+          "correct_count": 689,
+          "accuracy": 0.9985507246376811,
+          "mean_max_prob": 0.9770432378567615
+        },
+        "pos_train_added_18": {
+          "count": 18,
+          "correct_count": 7,
+          "accuracy": 0.3888888888888889,
+          "mean_max_prob": 0.48936061719377055
+        },
+        "boundary_neg_cal": {
+          "count": 48,
+          "pred_sup12_count": 9,
+          "max_sup12_mass": 0.7346201406401383,
+          "mean_sup12_mass": 0.247651294016162,
+          "max_single_sup12_prob": 0.6093085283593994,
+          "mean_kl_vs_orig_fit2": 0.01485091655586456
+        },
+        "attribution_breakdown": {
+          "boundary_pos_cal": {
+            "count": 86,
+            "correct_count": 68,
+            "incorrect_count": 18,
+            "all_mean_max_prob": 0.7119660032082937,
+            "correct_mean_max_prob": 0.767703303616882,
+            "incorrect_mean_max_prob": 0.5014028683314041,
+            "mean_true_class_prob": 0.6152443634173067,
+            "mean_sup12_mass": 0.4762188701719559,
+            "max_sup12_mass": 0.9837679357906944,
+            "pred_sup12_count": 46,
+            "mean_kl_vs_orig_fit2": 0.024526504235299788
+          },
+          "boundary_pos_cal_sup12": {
+            "count": 48,
+            "correct_count": 38,
+            "incorrect_count": 10,
+            "all_mean_max_prob": 0.7285580399805526,
+            "correct_mean_max_prob": 0.7721205077857803,
+            "incorrect_mean_max_prob": 0.5630206623206865,
+            "mean_true_class_prob": 0.6147585974865614,
+            "mean_sup12_mass": 0.7830134887168589,
+            "max_sup12_mass": 0.9837679357906944,
+            "pred_sup12_count": 45,
+            "mean_kl_vs_orig_fit2": 0.022920458998741112
+          },
+          "boundary_pos_cal_esc34": {
+            "count": 38,
+            "correct_count": 30,
+            "incorrect_count": 8,
+            "all_mean_max_prob": 0.6910076409696506,
+            "correct_mean_max_prob": 0.7621081783362772,
+            "incorrect_mean_max_prob": 0.4243806258448011,
+            "mean_true_class_prob": 0.6158579624877218,
+            "mean_sup12_mass": 0.0886888256941839,
+            "max_sup12_mass": 0.60755485796946,
+            "pred_sup12_count": 1,
+            "mean_kl_vs_orig_fit2": 0.026555192955163374
+          },
+          "bitext_cal": {
+            "count": 690,
+            "correct_count": 689,
+            "incorrect_count": 1,
+            "all_mean_max_prob": 0.9770432378567615,
+            "correct_mean_max_prob": 0.9770944611844978,
+            "incorrect_mean_max_prob": 0.9417503650464696,
+            "mean_true_class_prob": 0.9757289053858668,
+            "mean_sup12_mass": 0.2601935452518693,
+            "max_sup12_mass": 0.987368470604605,
+            "pred_sup12_count": 179,
+            "mean_kl_vs_orig_fit2": 0.001547860477472847
+          }
+        }
+      },
+      "train_metrics": {
+        "boundary_pos_train": {
+          "count": 199,
+          "correct_count": 188,
+          "incorrect_count": 11,
+          "all_mean_max_prob": 0.9354290423121199,
+          "correct_mean_max_prob": 0.9684893265167723,
+          "incorrect_mean_max_prob": 0.37039873045078586,
+          "mean_true_class_prob": 0.9162942121646189,
+          "mean_sup12_mass": 0.7154495120683045,
+          "max_sup12_mass": 0.9892755397333592,
+          "pred_sup12_count": 149,
+          "mean_kl_vs_orig_fit2": 0.004622403337808841
+        },
+        "boundary_pos_train_sup12": {
+          "count": 143,
+          "correct_count": 140,
+          "incorrect_count": 3,
+          "all_mean_max_prob": 0.9542275880262013,
+          "correct_mean_max_prob": 0.9647636604505708,
+          "incorrect_mean_max_prob": 0.4625442082222921,
+          "mean_true_class_prob": 0.94554620485118,
+          "mean_sup12_mass": 0.9665303123661483,
+          "max_sup12_mass": 0.9892755397333592,
+          "pred_sup12_count": 143,
+          "mean_kl_vs_orig_fit2": 0.004582672190595955
+        },
+        "boundary_pos_train_esc34": {
+          "count": 56,
+          "correct_count": 48,
+          "incorrect_count": 8,
+          "all_mean_max_prob": 0.887425613077947,
+          "correct_mean_max_prob": 0.979355852543193,
+          "incorrect_mean_max_prob": 0.335844176286471,
+          "mean_true_class_prob": 0.8415971594114365,
+          "mean_sup12_mass": 0.0742967541648821,
+          "max_sup12_mass": 0.9693369623332506,
+          "pred_sup12_count": 6,
+          "mean_kl_vs_orig_fit2": 0.004723859660156036
+        },
+        "boundary_neg_train": {
+          "count": 99,
+          "pred_sup12_count": 0,
+          "max_sup12_mass": 0.21865415910469146,
+          "mean_sup12_mass": 0.21647864282812537,
+          "max_single_sup12_prob": 0.018564571402800174,
+          "mean_kl_vs_orig_fit2": 0.0001200513503979024
+        },
+        "pos_train_added_18": {
+          "count": 18,
+          "correct_count": 7,
+          "incorrect_count": 11,
+          "all_mean_max_prob": 0.48936061719377055,
+          "correct_mean_max_prob": 0.6763007275525234,
+          "incorrect_mean_max_prob": 0.37039872878365504,
+          "mean_true_class_prob": 0.27781443952295937,
+          "mean_sup12_mass": 0.6153719842106055,
+          "max_sup12_mass": 0.9799273218438095,
+          "pred_sup12_count": 16,
+          "mean_kl_vs_orig_fit2": 0.036531387739697836
+        }
+      }
+    },
+    "prior_2e5": {
+      "weights_sha256": "dc3e88e713c71fe0e521a1dc5bec5831d9a0a91a83d4c3d1b413d3b1cd68e44d",
+      "calibration_manifest_sha256": "e0d1bfd63f65e2e055af46a2e023ec398240008e166c2df91eb1fa5d111bb56c",
+      "rejector_enabled": false,
+      "cal_guard_metrics": {
+        "temperature": 1.0,
+        "boundary_pos_cal": {
+          "count": 86,
+          "correct_count": 68,
+          "accuracy": 0.7906976744186046,
+          "mean_max_prob": 0.7224391229709458
+        },
+        "boundary_pos_cal_sup12": {
+          "count": 48,
+          "correct_count": 38,
+          "accuracy": 0.7916666666666666,
+          "mean_max_prob": 0.7346296615436455,
+          "conf_ge_070_count": 34,
+          "conf_ge_080_count": 29
+        },
+        "boundary_pos_cal_esc34": {
+          "count": 38,
+          "correct_count": 30,
+          "accuracy": 0.7894736842105263,
+          "mean_max_prob": 0.7070405479317463,
+          "max_sup12_mass": 0.6822182090509582
+        },
+        "bitext_cal": {
+          "count": 690,
+          "correct_count": 689,
+          "accuracy": 0.9985507246376811,
+          "mean_max_prob": 0.9766763325486254
+        },
+        "pos_train_added_18": {
+          "count": 18,
+          "correct_count": 18,
+          "accuracy": 1.0,
+          "mean_max_prob": 0.9796458406223894
+        },
+        "boundary_neg_cal": {
+          "count": 48,
+          "pred_sup12_count": 10,
+          "max_sup12_mass": 0.7339925073067534,
+          "mean_sup12_mass": 0.25061020306174653,
+          "max_single_sup12_prob": 0.5826426842333712,
+          "mean_kl_vs_orig_fit2": 0.021492488105867347
+        },
+        "attribution_breakdown": {
+          "boundary_pos_cal": {
+            "count": 86,
+            "correct_count": 68,
+            "incorrect_count": 18,
+            "all_mean_max_prob": 0.7224391229709458,
+            "correct_mean_max_prob": 0.7539070422918969,
+            "incorrect_mean_max_prob": 0.6035603166473528,
+            "mean_true_class_prob": 0.6063380563174859,
+            "mean_sup12_mass": 0.47655429565670815,
+            "max_sup12_mass": 0.9830879499754624,
+            "pred_sup12_count": 46,
+            "mean_kl_vs_orig_fit2": 0.054162236039027874
+          },
+          "boundary_pos_cal_sup12": {
+            "count": 48,
+            "correct_count": 38,
+            "incorrect_count": 10,
+            "all_mean_max_prob": 0.7346296615436455,
+            "correct_mean_max_prob": 0.7723544289729711,
+            "incorrect_mean_max_prob": 0.591275545312208,
+            "mean_true_class_prob": 0.6147733012449083,
+            "mean_sup12_mass": 0.7858171150436662,
+            "max_sup12_mass": 0.9830879499754624,
+            "pred_sup12_count": 45,
+            "mean_kl_vs_orig_fit2": 0.038873137858614536
+          },
+          "boundary_pos_cal_esc34": {
+            "count": 38,
+            "correct_count": 30,
+            "incorrect_count": 8,
+            "all_mean_max_prob": 0.7070405479317463,
+            "correct_mean_max_prob": 0.7305403524958692,
+            "incorrect_mean_max_prob": 0.618916280816284,
+            "mean_true_class_prob": 0.5956830100933735,
+            "mean_sup12_mass": 0.0859065237994977,
+            "max_sup12_mass": 0.6822182090509582,
+            "pred_sup12_count": 1,
+            "mean_kl_vs_orig_fit2": 0.0734747811090237
+          },
+          "bitext_cal": {
+            "count": 690,
+            "correct_count": 689,
+            "incorrect_count": 1,
+            "all_mean_max_prob": 0.9766763325486254,
+            "correct_mean_max_prob": 0.9767303689380201,
+            "incorrect_mean_max_prob": 0.9394452602557128,
+            "mean_true_class_prob": 0.9753676110761897,
+            "mean_sup12_mass": 0.2600467372828794,
+            "max_sup12_mass": 0.9865029379213393,
+            "pred_sup12_count": 179,
+            "mean_kl_vs_orig_fit2": 0.0011731582128085638
+          }
+        }
+      },
+      "train_metrics": {
+        "boundary_pos_train": {
+          "count": 199,
+          "correct_count": 199,
+          "incorrect_count": 0,
+          "all_mean_max_prob": 0.9795413598210525,
+          "correct_mean_max_prob": 0.9795413598210525,
+          "incorrect_mean_max_prob": null,
+          "mean_true_class_prob": 0.9795413598210525,
+          "mean_sup12_mass": 0.7092770346896009,
+          "max_sup12_mass": 0.9883569974498715,
+          "pred_sup12_count": 143,
+          "mean_kl_vs_orig_fit2": 0.3059381268169502
+        },
+        "boundary_pos_train_sup12": {
+          "count": 143,
+          "correct_count": 143,
+          "incorrect_count": 0,
+          "all_mean_max_prob": 0.9795955742087343,
+          "correct_mean_max_prob": 0.9795955742087343,
+          "incorrect_mean_max_prob": null,
+          "mean_true_class_prob": 0.9795955742087343,
+          "mean_sup12_mass": 0.984884562452551,
+          "max_sup12_mass": 0.9883569974498715,
+          "pred_sup12_count": 143,
+          "mean_kl_vs_orig_fit2": 0.15985863116149407
+        },
+        "boundary_pos_train_esc34": {
+          "count": 56,
+          "correct_count": 56,
+          "incorrect_count": 0,
+          "all_mean_max_prob": 0.97940291950965,
+          "correct_mean_max_prob": 0.97940291950965,
+          "incorrect_mean_max_prob": null,
+          "mean_true_class_prob": 0.97940291950965,
+          "mean_sup12_mass": 0.005493526294925698,
+          "max_sup12_mass": 0.006828624238726149,
+          "pred_sup12_count": 0,
+          "mean_kl_vs_orig_fit2": 0.6789625532228472
+        },
+        "boundary_neg_train": {
+          "count": 99,
+          "pred_sup12_count": 0,
+          "max_sup12_mass": 0.21964879532211443,
+          "mean_sup12_mass": 0.2168407167572033,
+          "max_single_sup12_prob": 0.01853783459361859,
+          "mean_kl_vs_orig_fit2": 0.00012002798908674008
+        },
+        "pos_train_added_18": {
+          "count": 18,
+          "correct_count": 18,
+          "incorrect_count": 0,
+          "all_mean_max_prob": 0.9796458406223894,
+          "correct_mean_max_prob": 0.9796458406223894,
+          "incorrect_mean_max_prob": null,
+          "mean_true_class_prob": 0.9796458406223894,
+          "mean_sup12_mass": 0.5494228970592796,
+          "max_sup12_mass": 0.9868373971237794,
+          "pred_sup12_count": 10,
+          "mean_kl_vs_orig_fit2": 3.36906965225817
+        }
+      }
+    },
+    "teacher_kl": {
+      "weights_sha256": "3994af2c461cd029f4d03dbec38a75b2bb103a78d8550f4f3a20078b354bca06",
+      "calibration_manifest_sha256": "4e06df8f2ecd11fb72d9e8163525eafe06ca0feebba87310e808cdfbd7b88db8",
+      "rejector_enabled": false,
+      "cal_guard_metrics": {
+        "temperature": 1.0,
+        "boundary_pos_cal": {
+          "count": 86,
+          "correct_count": 67,
+          "accuracy": 0.7790697674418605,
+          "mean_max_prob": 0.7421750333651249
+        },
+        "boundary_pos_cal_sup12": {
+          "count": 48,
+          "correct_count": 37,
+          "accuracy": 0.7708333333333334,
+          "mean_max_prob": 0.7505752822521651,
+          "conf_ge_070_count": 34,
+          "conf_ge_080_count": 32
+        },
+        "boundary_pos_cal_esc34": {
+          "count": 38,
+          "correct_count": 30,
+          "accuracy": 0.7894736842105263,
+          "mean_max_prob": 0.7315641926657056,
+          "max_sup12_mass": 0.6713301908875379
+        },
+        "bitext_cal": {
+          "count": 690,
+          "correct_count": 689,
+          "accuracy": 0.9985507246376811,
+          "mean_max_prob": 0.9796584620651432
+        },
+        "pos_train_added_18": {
+          "count": 18,
+          "correct_count": 18,
+          "accuracy": 1.0,
+          "mean_max_prob": 0.9815482591763529
+        },
+        "boundary_neg_cal": {
+          "count": 48,
+          "pred_sup12_count": 10,
+          "max_sup12_mass": 0.7649549048383082,
+          "mean_sup12_mass": 0.25440361080196977,
+          "max_single_sup12_prob": 0.6116277361934712,
+          "mean_kl_vs_orig_fit2": 0.01649458380205085
+        },
+        "attribution_breakdown": {
+          "boundary_pos_cal": {
+            "count": 86,
+            "correct_count": 67,
+            "incorrect_count": 19,
+            "all_mean_max_prob": 0.7421750333651249,
+            "correct_mean_max_prob": 0.7852853713155936,
+            "incorrect_mean_max_prob": 0.5901543679608402,
+            "mean_true_class_prob": 0.6226592458165959,
+            "mean_sup12_mass": 0.48069123868647856,
+            "max_sup12_mass": 0.9860571623293134,
+            "pred_sup12_count": 45,
+            "mean_kl_vs_orig_fit2": 0.06162128007251248
+          },
+          "boundary_pos_cal_sup12": {
+            "count": 48,
+            "correct_count": 37,
+            "incorrect_count": 11,
+            "all_mean_max_prob": 0.7505752822521651,
+            "correct_mean_max_prob": 0.8079930706902722,
+            "incorrect_mean_max_prob": 0.5574427211421679,
+            "mean_true_class_prob": 0.6271779520084483,
+            "mean_sup12_mass": 0.7987852444504631,
+            "max_sup12_mass": 0.9860571623293134,
+            "pred_sup12_count": 44,
+            "mean_kl_vs_orig_fit2": 0.0478780740613457
+          },
+          "boundary_pos_cal_esc34": {
+            "count": 38,
+            "correct_count": 30,
+            "incorrect_count": 8,
+            "all_mean_max_prob": 0.7315641926657056,
+            "correct_mean_max_prob": 0.7572792087534899,
+            "incorrect_mean_max_prob": 0.6351328823365148,
+            "mean_true_class_prob": 0.616951406416361,
+            "mean_sup12_mass": 0.07888828403723509,
+            "max_sup12_mass": 0.6713301908875379,
+            "pred_sup12_count": 1,
+            "mean_kl_vs_orig_fit2": 0.0789811192445126
+          },
+          "bitext_cal": {
+            "count": 690,
+            "correct_count": 689,
+            "incorrect_count": 1,
+            "all_mean_max_prob": 0.9796584620651432,
+            "correct_mean_max_prob": 0.9797700594580814,
+            "incorrect_mean_max_prob": 0.902767858330704,
+            "mean_true_class_prob": 0.9784533922803849,
+            "mean_sup12_mass": 0.2602512754507804,
+            "max_sup12_mass": 0.9890387449271675,
+            "pred_sup12_count": 179,
+            "mean_kl_vs_orig_fit2": 0.0008001718733393087
+          }
+        }
+      },
+      "train_metrics": {
+        "boundary_pos_train": {
+          "count": 199,
+          "correct_count": 199,
+          "incorrect_count": 0,
+          "all_mean_max_prob": 0.9823914590358512,
+          "correct_mean_max_prob": 0.9823914590358512,
+          "incorrect_mean_max_prob": null,
+          "mean_true_class_prob": 0.9823914590358512,
+          "mean_sup12_mass": 0.7108106564066274,
+          "max_sup12_mass": 0.9904791943773589,
+          "pred_sup12_count": 143,
+          "mean_kl_vs_orig_fit2": 0.3077630129996979
+        },
+        "boundary_pos_train_sup12": {
+          "count": 143,
+          "correct_count": 143,
+          "incorrect_count": 0,
+          "all_mean_max_prob": 0.9826478830735931,
+          "correct_mean_max_prob": 0.9826478830735931,
+          "incorrect_mean_max_prob": null,
+          "mean_true_class_prob": 0.9826478830735931,
+          "mean_sup12_mass": 0.9872622059569026,
+          "max_sup12_mass": 0.9904791943773589,
+          "pred_sup12_count": 143,
+          "mean_kl_vs_orig_fit2": 0.1623285254708847
+        },
+        "boundary_pos_train_esc34": {
+          "count": 56,
+          "correct_count": 56,
+          "incorrect_count": 0,
+          "all_mean_max_prob": 0.9817366619394748,
+          "correct_mean_max_prob": 0.9817366619394748,
+          "incorrect_mean_max_prob": null,
+          "mean_true_class_prob": 0.9817366619394748,
+          "mean_sup12_mass": 0.004871878090745081,
+          "max_sup12_mass": 0.006428790208694452,
+          "pred_sup12_count": 0,
+          "mean_kl_vs_orig_fit2": 0.6791403650822032
+        },
+        "boundary_neg_train": {
+          "count": 99,
+          "pred_sup12_count": 0,
+          "max_sup12_mass": 0.2200746427915601,
+          "mean_sup12_mass": 0.21701352747181937,
+          "max_single_sup12_prob": 0.01861480591936246,
+          "mean_kl_vs_orig_fit2": 0.00010883218795399993
+        },
+        "pos_train_added_18": {
+          "count": 18,
+          "correct_count": 18,
+          "incorrect_count": 0,
+          "all_mean_max_prob": 0.9815482591763529,
+          "correct_mean_max_prob": 0.9815482591763529,
+          "incorrect_mean_max_prob": null,
+          "mean_true_class_prob": 0.9815482591763529,
+          "mean_sup12_mass": 0.5506783921787446,
+          "max_sup12_mass": 0.9892505115922416,
+          "pred_sup12_count": 10,
+          "mean_kl_vs_orig_fit2": 3.391798731570218
+        }
+      }
+    }
+  },
+  "flips_vs_orig_fit2": {
+    "zero_delta_control": {
+      "pos_cal": {
+        "gained": [
+          "cls_e34_wrng_cal_2_5c8e5d9cd3e0"
+        ],
+        "lost": [
+          "cls_e34_avonl_cal_1_af025937dd54"
+        ],
+        "net": 0
+      },
+      "neg_cal": {
+        "entered_sup12": [
+          "cls_neg_off_cal_finance_1_c16b2323f38a",
+          "bnd_neg_homonym_cal_0_b32c79aceec4"
+        ],
+        "exited_sup12": [
+          "cls_neg_cmi_cal_rpo_shp_hum_0_ec38e6e4895f",
+          "cls_neg_cmi_cal_pay_inv_pinfo_2_ed26ede4b742"
+        ],
+        "net": 0
+      }
+    },
+    "prior_2e5": {
+      "pos_cal": {
+        "gained": [
+          "cls_dtm_pre_order_eta_0_0ab138c43752",
+          "cls_e34_chg_cal_0_c36a18761dec"
+        ],
+        "lost": [
+          "cls_hum_escalate_now_1_58df76a91338",
+          "cls_e34_avonl_cal_1_af025937dd54"
+        ],
+        "net": 0
+      },
+      "neg_cal": {
+        "entered_sup12": [
+          "cls_neg_off_cal_finance_1_c16b2323f38a",
+          "bnd_neg_homonym_cal_0_b32c79aceec4"
+        ],
+        "exited_sup12": [
+          "cls_neg_cmi_cal_pay_inv_pinfo_2_ed26ede4b742"
+        ],
+        "net": 1
+      }
+    },
+    "teacher_kl": {
+      "pos_cal": {
+        "gained": [
+          "cls_e34_chg_cal_0_c36a18761dec"
+        ],
+        "lost": [
+          "cls_hum_escalate_now_1_58df76a91338",
+          "cls_e34_avonl_cal_1_af025937dd54"
+        ],
+        "net": -1
+      },
+      "neg_cal": {
+        "entered_sup12": [
+          "cls_neg_off_cal_finance_1_c16b2323f38a",
+          "bnd_neg_homonym_cal_0_b32c79aceec4"
+        ],
+        "exited_sup12": [
+          "cls_neg_cmi_cal_pay_inv_pinfo_2_ed26ede4b742"
+        ],
+        "net": 1
+      }
+    }
+  },
+  "objective_probes": {
+    "anchor_mask_summary": {
+      "extension_raw_count": 18,
+      "canonical_pos_raw_count": 181,
+      "canonical_pos_effective_count": 772,
+      "bitext_effective_count": 11040,
+      "neg_effective_count": 1188,
+      "anchor_effective_total": 13000,
+      "excluded_effective_total": 80
+    },
+    "step0_orig_fit2_probe": {
+      "checkpoint": "orig_fit2_step0",
+      "batches_probed": 16,
+      "mean_eval_kl": 1.1920468015458319e-09,
+      "mean_train_dropout_kl": 0.00489165130420588,
+      "dropout_kl_share": 0.004891650112159078,
+      "mean_l_pos_train": 0.2675876021385193,
+      "mean_l_sc_train": 0.08552793657872826,
+      "mean_l_neg_train": 0.009385266457684338,
+      "mean_teacher_entropy_eval": 0.4923392217606306,
+      "mean_student_entropy_eval": 0.4923392217606306,
+      "mean_student_entropy_train": 0.5574603378772736,
+      "mean_grad_norm_base": 0.9392277472652495,
+      "mean_grad_norm_tkl": 0.3759479243308306,
+      "grad_norm_ratio_tkl_over_base": 0.4002734431829538,
+      "mean_grad_cosine_base_vs_tkl": 0.47592911892570555
+    },
+    "final_teacher_kl_probe": {
+      "checkpoint": "fit2_orig_teacher_kl_v1",
+      "batches_probed": 16,
+      "mean_eval_kl": 0.0012040777910442557,
+      "mean_train_dropout_kl": 0.0033479063495178707,
+      "dropout_kl_share": 0.002143828558473615,
+      "mean_l_pos_train": 0.2538294205442071,
+      "mean_l_sc_train": 0.08099244351615198,
+      "mean_l_neg_train": 0.009032393398229033,
+      "mean_teacher_entropy_eval": 0.4923392217606306,
+      "mean_student_entropy_eval": 0.4784716498106718,
+      "mean_student_entropy_train": 0.5270114373415709,
+      "mean_grad_norm_base": 0.587365368148312,
+      "mean_grad_norm_tkl": 0.26071546180173755,
+      "grad_norm_ratio_tkl_over_base": 0.4438727169489944,
+      "mean_grad_cosine_base_vs_tkl": 0.2911909931572154
+    }
+  }
+}
