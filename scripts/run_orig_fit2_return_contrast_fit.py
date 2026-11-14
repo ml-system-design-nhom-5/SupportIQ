@@ -28,6 +28,7 @@ from pipeline.evaluation.classifier_acceptance_gate import (
     audit_candidate_provenance,
     validate_calibration_manifest,
 )
+from pipeline.training.orig_fit2_return_contrast_data import EXPECTED_ORIG_STAGE2_LOCKED_FILES
 from pipeline.training.train_boundary_candidate import (
     run_fit_and_lock_candidate,
     verify_reload_from_archive,
@@ -61,6 +62,7 @@ EXPECTED_PREP_SCHEMAS: Tuple[str, ...] = (
     "orig_fit2_return_contrast_prep.v2",
     "orig_fit2_return_contrast_prep.v3",
     "orig_fit2_return_contrast_prep.v4",
+    "orig_fit2_zero_delta_control_prep.v1",
 )
 
 OPTION_A_LOCKED: Dict[str, Any] = dict(AUTHORIZED_FIT_PROFILES["option_a"])
@@ -161,21 +163,45 @@ def verify_locked_prep_bundle(
             f"Unexpected prep_manifest schema_version {schema_version!r}; expected one of {expected_prep_schemas!r}"
         )
 
+    is_control = schema_version == "orig_fit2_zero_delta_control_prep.v1"
     preflight = manifest.get("preflight") or {}
-    if preflight.get("extension_version") != "orig_fit2_return_channel_contrast_v2":
-        raise ValueError(f"Unexpected extension_version in prep_manifest: {preflight.get('extension_version')!r}")
-    if (preflight.get("counts") or {}).get("extension_pos_train_added") != 18:
-        raise ValueError(f"Unexpected extension row count in prep_manifest: {preflight.get('counts')}")
+    counts = preflight.get("counts") or {}
+    if is_control:
+        if preflight.get("extension_version") != "orig_fit2_zero_delta_control_v1":
+            raise ValueError(
+                f"Unexpected extension_version in zero-delta control prep_manifest: {preflight.get('extension_version')!r}"
+            )
+        if preflight.get("delta_absent") is not True or counts.get("extension_pos_train_added") != 0:
+            raise ValueError(f"Zero-delta control prep_manifest must have delta_absent=True and added=0: {counts}")
+        if counts.get("domain_pos_train") != 181 or counts.get("full_train_split_rows") != 11320 or counts.get("effective_train_total") != 13000:
+            raise ValueError(f"Unexpected zero-delta control split counts in prep_manifest: {counts}")
+        if (prep_dir / "datasets" / "orig_fit2_return_contrast_extension.jsonl").exists() or (
+            prep_dir / "orig_fit2_return_contrast_extension.jsonl"
+        ).exists():
+            raise ValueError("Zero-delta control prep bundle unexpectedly contains orig_fit2_return_contrast_extension.jsonl")
+    else:
+        if preflight.get("extension_version") != "orig_fit2_return_channel_contrast_v2":
+            raise ValueError(f"Unexpected extension_version in prep_manifest: {preflight.get('extension_version')!r}")
+        if counts.get("extension_pos_train_added") != 18:
+            raise ValueError(f"Unexpected extension row count in prep_manifest: {counts}")
+
     if (manifest.get("unchanged_original_recipe_parameters") or {}) != UNCHANGED_ORIGINAL_RECIPE_PARAMETERS:
         raise ValueError("prep_manifest unchanged_original_recipe_parameters drifted from expected Fit2 constants")
 
-    if schema_version == "orig_fit2_return_contrast_prep.v4":
+    if schema_version in ("orig_fit2_return_contrast_prep.v4", "orig_fit2_zero_delta_control_prep.v1"):
         auth_profile = manifest.get("authorized_fit_profile") or {}
         prep_profile = str(auth_profile.get("profile") or "")
         if prep_profile not in AUTHORIZED_FIT_PROFILES:
-            raise ValueError(f"Invalid authorized_fit_profile in v4 prep_manifest: {auth_profile}")
+            raise ValueError(f"Invalid authorized_fit_profile in prep_manifest: {auth_profile}")
+        if is_control and prep_profile != "option_a":
+            raise ValueError(f"Zero-delta control requires authorized_fit_profile='option_a'; got {prep_profile!r}")
         expected_cfg = AUTHORIZED_FIT_PROFILES[prep_profile]
         plan = manifest.get("execution_plan") or {}
+        if is_control and (
+            plan.get("experiment_mode") != "matched_zero_delta_control"
+            or plan.get("is_promotion_candidate") is not False
+        ):
+            raise ValueError(f"Invalid zero-delta control execution_plan metadata: {plan}")
         for holder_name, holder in (("authorized_fit_profile", auth_profile), ("execution_plan", plan)):
             if (
                 holder.get("profile") != prep_profile
@@ -187,19 +213,25 @@ def verify_locked_prep_bundle(
                 or bool(holder.get("enable_selective_rejector", True)) is not False
                 or str(holder.get("init_weights_sha256", "")).lower() != EXPECTED_FIT2_SHA256
             ):
-                raise ValueError(f"Invalid {holder_name} in v4 prep_manifest: {holder}")
+                raise ValueError(f"Invalid {holder_name} in prep_manifest: {holder}")
 
         base_cal_ref = manifest.get("baseline_cal_reference") or {}
         base_metrics = base_cal_ref.get("metrics") or {}
-        missing_surfaces = [k for k in CAL_GUARD_DENOMINATORS if k not in base_metrics]
+        expected_surfaces = (
+            [k for k in CAL_GUARD_DENOMINATORS if k != "pos_train_added_18"]
+            if is_control
+            else list(CAL_GUARD_DENOMINATORS)
+        )
+        missing_surfaces = [k for k in expected_surfaces if k not in base_metrics]
         if (
             str(base_cal_ref.get("baseline_weights_sha256", "")).lower() != EXPECTED_FIT2_SHA256
             or not base_cal_ref.get("baseline_calibration_manifest_sha256")
             or (base_cal_ref.get("dataset_hashes") or {}) != (preflight.get("dataset_hashes") or {})
             or missing_surfaces
+            or (is_control and "pos_train_added_18" in base_metrics)
         ):
             raise ValueError(
-                f"Invalid or incomplete baseline_cal_reference in v4 prep_manifest (missing={missing_surfaces})"
+                f"Invalid or incomplete baseline_cal_reference in prep_manifest (missing={missing_surfaces})"
             )
     else:
         prep_profile = "option_a"
@@ -214,7 +246,8 @@ def verify_locked_prep_bundle(
         )
 
     ds_dir = prep_dir / "datasets"
-    _verify_dir_matches_lock_hashes(ds_dir, preflight.get("dataset_hashes") or {})
+    ds_hashes = preflight.get("dataset_hashes") or {}
+    _verify_dir_matches_lock_hashes(ds_dir, ds_hashes)
     new_input_hashes = preflight.get("new_input_file_hashes") or {}
     if not new_input_hashes:
         raise ValueError("Missing new_input_file_hashes in prep_manifest")
@@ -225,6 +258,22 @@ def verify_locked_prep_bundle(
         actual = _sha256_lower(fp)
         if actual != str(exp_sha).lower():
             raise ValueError(f"Prep input SHA mismatch for {fname}: {actual} != {exp_sha}")
+    if is_control:
+        orig_ref_hashes = preflight.get("orig_fit2_stage2_reference_hashes") or {}
+        if set(new_input_hashes.keys()) != set(EXPECTED_ORIG_STAGE2_LOCKED_FILES):
+            raise ValueError(
+                f"Zero-delta control new_input_file_hashes must cover exact 13 orig files; "
+                f"got={sorted(new_input_hashes.keys())}"
+            )
+        bit_diffs = [
+            fname
+            for fname in EXPECTED_ORIG_STAGE2_LOCKED_FILES
+            if str(new_input_hashes.get(fname, "")).lower() != str(orig_ref_hashes.get(fname, "")).lower()
+        ]
+        if bit_diffs or len(orig_ref_hashes) != len(EXPECTED_ORIG_STAGE2_LOCKED_FILES):
+            raise ValueError(
+                f"Zero-delta control inputs not bit-identical to 13 Original Fit2 stage2 files: {bit_diffs}"
+            )
 
     expected_source_hashes = manifest.get("source_hashes") or {}
     if not isinstance(expected_source_hashes, dict) or not expected_source_hashes:
@@ -436,7 +485,12 @@ def run_authorized_fit(
         }
         (records_dir / "status.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
-    output_subdir = "candidate_model_option_a" if profile == "option_a" else f"candidate_model_{profile}"
+    is_control = prep_verified["prep_schema_version"] == "orig_fit2_zero_delta_control_prep.v1"
+    output_subdir = (
+        "candidate_model_zero_delta_control"
+        if is_control
+        else ("candidate_model_option_a" if profile == "option_a" else f"candidate_model_{profile}")
+    )
     _write_status("training", fits_started=1, fits_completed=0)
     _log(
         f"Starting authorized fit profile={profile} lr={_format_lr_cli(float(profile_cfg['lr']))} "
@@ -487,8 +541,16 @@ def run_authorized_fit(
 
         base_cal_ref = prep_verified.get("baseline_cal_reference")
         if base_cal_ref is not None:
-            cand_cal_metrics = evaluate_cal_guard_metrics_for_model(archive_dir, records_dir / "inputs")
-            cal_guard_report = evaluate_cal_guard_report(cand_cal_metrics, base_cal_ref["metrics"])
+            cand_cal_metrics = (
+                evaluate_cal_guard_metrics_for_model(archive_dir, records_dir / "inputs", include_added_18=False)
+                if is_control
+                else evaluate_cal_guard_metrics_for_model(archive_dir, records_dir / "inputs")
+            )
+            cal_guard_report = evaluate_cal_guard_report(
+                cand_cal_metrics,
+                base_cal_ref["metrics"],
+                cal_guard_mode="control" if is_control else "candidate",
+            )
             (records_dir / "cal_guard_report.json").write_text(
                 json.dumps(cal_guard_report, indent=2) + "\n", encoding="utf-8"
             )

@@ -9,8 +9,10 @@ import torch
 
 from pipeline.evaluation.classifier_acceptance_gate import STANDARD_INTENTS_46
 from pipeline.training.orig_fit2_return_contrast_data import (
+    EXPECTED_ORIG_STAGE2_LOCKED_FILES,
     ORIG_FIT2_STAGE2_REL,
     build_orig_fit2_return_contrast_rows,
+    prepare_and_lock_orig_fit2_zero_delta_control_splits,
 )
 from pipeline.training.train_boundary_candidate import classify_row_kb_semantics
 from scripts.run_boundary_contrast_fit import (
@@ -31,6 +33,7 @@ from scripts.run_orig_fit2_return_contrast_fit import (
 )
 from scripts.run_orig_fit2_return_contrast_prep import (
     AUTHORIZED_FIT_PROFILES,
+    CAL_GUARD_DENOMINATORS,
     CAL_GUARD_FLOAT_TOLERANCE,
     DEFAULT_PREP_RUN_ID,
     EXPECTED_FIT1_SHA256,
@@ -1009,3 +1012,394 @@ def test_live_readonly_cal_guard_against_baseline_and_rejected_fit_v1():
         "boundary_neg_cal_max_sup12_mass",
         "boundary_neg_cal_max_single_sup12_prob",
     }
+
+
+def test_zero_delta_control_splits_bit_identical_to_orig_stage2_and_blocks_optimizer(monkeypatch, tmp_path):
+    repo_root = Path(__file__).resolve().parents[2]
+    orig_stage2 = repo_root / ORIG_FIT2_STAGE2_REL
+    if not orig_stage2.is_dir():
+        pytest.skip("Archived faithful Fit2 stage2_inputs not present")
+
+    class _StubTok:
+        def encode(self, text, truncation=False, add_special_tokens=True):
+            return [1] * len(text.split())
+
+        def __call__(self, texts, truncation=False, max_length=64):
+            return {"input_ids": [[1] * min(len(t.split()), max_length) for t in texts]}
+
+    monkeypatch.setattr(
+        "torch.optim.AdamW",
+        lambda *a, **kw: (_ for _ in ()).throw(AssertionError("Optimizer forbidden in zero-delta prep")),
+    )
+    monkeypatch.setattr(
+        "pipeline.training.train_boundary_candidate.fit_temperature_on_calibration_logits",
+        lambda *a, **kw: (_ for _ in ()).throw(AssertionError("Calibrator forbidden in zero-delta prep")),
+    )
+    monkeypatch.setattr(
+        "pipeline.training.train_boundary_candidate.run_fit_and_lock_candidate",
+        lambda *a, **kw: (_ for _ in ()).throw(AssertionError("Training forbidden in zero-delta prep")),
+    )
+    monkeypatch.setattr(
+        "pipeline.training.train_boundary_candidate.AutoTokenizer.from_pretrained",
+        lambda *a, **kw: _StubTok(),
+    )
+
+    dryrun_root = tmp_path / "control_dryrun"
+    lock = prepare_and_lock_orig_fit2_zero_delta_control_splits(
+        worktree_root=repo_root,
+        data_repo_root=repo_root,
+        init_model_dir=FIT2_BASELINE_DIR if FIT2_BASELINE_DIR.is_dir() else repo_root,
+        artifact_root=dryrun_root,
+    )
+    assert lock["schema_version"] == "orig_fit2_zero_delta_control_lock.v1"
+    assert lock["extension_version"] == "orig_fit2_zero_delta_control_v1"
+    assert lock["delta_absent"] is True
+    assert lock["counts"]["domain_pos_train"] == 181
+    assert lock["counts"]["extension_pos_train_added"] == 0
+    assert lock["counts"]["full_train_split_rows"] == 11320
+    assert lock["counts"]["effective_train_total"] == 13000
+    assert lock["token_truncation_audit_max_length_64"]["train_all"]["count"] == 11320
+
+    ds_dir = dryrun_root / "datasets"
+    assert not (ds_dir / "orig_fit2_return_contrast_extension.jsonl").exists()
+    assert lock["new_input_file_hashes"] == lock["orig_fit2_stage2_reference_hashes"]
+    assert set(lock["new_input_file_hashes"].keys()) == set(EXPECTED_ORIG_STAGE2_LOCKED_FILES)
+    assert lock["baseline_vs_new_diff"]["changed_files"] == {}
+    assert lock["baseline_vs_new_diff"]["exposure_delta"]["effective_train_total_delta"] == 0
+
+    for fname in ("boundary_pos_train.jsonl", "full_train_split.jsonl"):
+        rows = [json.loads(line) for line in (ds_dir / fname).read_text(encoding="utf-8").splitlines() if line.strip()]
+        assert not any(str(r.get("sample_id", "")).startswith("orig_ret_ch_") for r in rows)
+
+    preflight = run_orig_fit2_preflight(repo_root, tmp_path / "preflight_ctl", zero_delta_control=True)
+    assert preflight["fits_executed"] == 0
+    assert preflight["optimizer_invoked"] is False
+    assert preflight["zero_delta_control"] is True
+    assert preflight["delta_absent"] is True
+    assert preflight["counts"]["extension_pos_train_added"] == 0
+
+
+def test_cal_guard_control_mode_omits_only_learning_floor_and_freezes_attribution_breakdown():
+    from pipeline.evaluation.classifier_acceptance_gate import ESCALATED_34_INTENTS
+
+    n_pos_cal, n_sup, n_esc = 86, 48, 38
+    assert n_sup + n_esc == n_pos_cal
+    bx_intent = next(x for x in STANDARD_INTENTS_46 if x not in ("return_policy", "return_product_in_store"))
+    other_esc_intent = next(
+        x for x in sorted(ESCALATED_34_INTENTS) if x not in ("return_product_in_store", bx_intent)
+    )
+
+    surfaces = {
+        "boundary_pos_cal": (
+            [{"sample_id": f"sup_{i}", "intent": "return_policy"} for i in range(n_sup)]
+            + [{"sample_id": f"esc_{i}", "intent": "return_product_in_store"} for i in range(n_esc)]
+        ),
+        "bitext_cal": [{"sample_id": f"bx_{i}", "intent": bx_intent} for i in range(690)],
+        "boundary_neg_cal": [{"sample_id": f"neg_{i}", "intent": "unsupported_x"} for i in range(48)],
+    }
+
+    sup_idx = STANDARD_INTENTS_46.index("return_policy")
+    esc_idx = STANDARD_INTENTS_46.index("return_product_in_store")
+    bx_idx = STANDARD_INTENTS_46.index(bx_intent)
+    other_esc_idx = STANDARD_INTENTS_46.index(other_esc_intent)
+    assert other_esc_idx != esc_idx and sup_idx != esc_idx
+
+    def _make_logits(esc_wrong_high_sup_conf: bool) -> dict[str, torch.Tensor]:
+        pos_logits = torch.full((n_pos_cal, len(STANDARD_INTENTS_46)), -8.0, dtype=torch.float32)
+        for i in range(n_sup):
+            target = sup_idx if i < 38 else other_esc_idx
+            pos_logits[i, target] = 1.1 if i < 38 else 0.5
+        for i in range(n_esc):
+            row = n_sup + i
+            if i < 30:
+                pos_logits[row, esc_idx] = 0.8
+            elif esc_wrong_high_sup_conf:
+                # Wrong ESC row predicting sup with inflated confidence -> spikes incorrect_mean_max_prob
+                pos_logits[row, sup_idx] = 2.5
+            else:
+                pos_logits[row, other_esc_idx] = 0.1
+                pos_logits[row, bx_idx] = 0.0
+        bx_logits = torch.full((690, len(STANDARD_INTENTS_46)), -8.0, dtype=torch.float32)
+        bx_logits[:, bx_idx] = 3.0
+        neg_logits = torch.full((48, len(STANDARD_INTENTS_46)), -8.0, dtype=torch.float32)
+        for i in range(9):
+            neg_logits[i, sup_idx] = 0.2
+        for i in range(9, 48):
+            neg_logits[i, other_esc_idx] = 1.0
+        return {
+            "boundary_pos_cal": pos_logits,
+            "bitext_cal": bx_logits,
+            "boundary_neg_cal": neg_logits,
+        }
+
+    base_metrics = compute_cal_guard_metrics_from_logits(
+        _make_logits(esc_wrong_high_sup_conf=False), surfaces, temperature=1.0, include_added_18=False
+    )
+    assert "pos_train_added_18" not in base_metrics
+    assert {
+        "schema_version",
+        "surface_note",
+        "boundary_pos_cal",
+        "boundary_pos_cal_sup12",
+        "boundary_pos_cal_esc34",
+        "bitext_cal",
+    }.issubset(base_metrics["attribution_breakdown"].keys())
+
+    # Identical logits pass all 11 control checks without pos_train_added_18
+    self_report = evaluate_cal_guard_report(base_metrics, base_metrics, cal_guard_mode="control")
+    assert self_report["cal_guard_mode"] == "matched_zero_delta_control_11_checks"
+    assert self_report["is_promotion_candidate"] is False
+    assert self_report["passed"] is True
+    assert self_report["recommended_status"] == "CONTROL_CAL_NO_REGRESSION_SCIENTIFIC_ONLY"
+    assert "pos_train_added_18_correct_count" not in {c["name"] for c in self_report["checks"]}
+    assert len(self_report["checks"]) == 11
+
+    # Inflated confidence on WRONG ESC rows raises incorrect_mean_max_prob and overall mean_max_prob even at same 30/38 accuracy
+    drift_metrics = compute_cal_guard_metrics_from_logits(
+        _make_logits(esc_wrong_high_sup_conf=True), surfaces, temperature=1.0, include_added_18=False
+    )
+    esc_base_attr = base_metrics["attribution_breakdown"]["boundary_pos_cal_esc34"]
+    esc_drift_attr = drift_metrics["attribution_breakdown"]["boundary_pos_cal_esc34"]
+    assert esc_base_attr["correct_count"] == esc_drift_attr["correct_count"] == 30
+    assert esc_base_attr["all_mean_max_prob"] == pytest.approx(
+        base_metrics["boundary_pos_cal_esc34"]["mean_max_prob"],
+        abs=1e-9,
+    )
+    assert esc_drift_attr["all_mean_max_prob"] == pytest.approx(
+        drift_metrics["boundary_pos_cal_esc34"]["mean_max_prob"], abs=1e-9
+    )
+    assert esc_drift_attr["incorrect_mean_max_prob"] > esc_base_attr["incorrect_mean_max_prob"] + 0.3
+
+    drift_report = evaluate_cal_guard_report(drift_metrics, base_metrics, cal_guard_mode="control")
+    assert drift_report["passed"] is False
+    assert drift_report["recommended_status"] == "CONTROL_CAL_DRIFT_OR_REGRESSION_DETECTED"
+    assert "boundary_pos_cal_esc34_delta_mean_max_prob" in drift_report["failed_checks"]
+    assert "boundary_pos_cal_esc34_max_sup12_mass" in drift_report["failed_checks"]
+    assert drift_report["attribution_deltas"]["boundary_pos_cal_esc34"]["delta_incorrect_mean_max_prob"] > 0.3
+
+
+def test_zero_delta_control_prep_and_fit_guards_reject_extension_and_wrong_profile(monkeypatch, tmp_path):
+    import hashlib
+    import sys
+
+    def _sha(p: Path) -> str:
+        return hashlib.sha256(p.read_bytes()).hexdigest().lower()
+
+    ctl_plan = _build_planned_execution_plan(
+        profile_name="option_a",
+        prep_records_dir=tmp_path / "run-records-fit2-orig-zero-delta-control-v1-prep",
+        planned_fit_run_id="fit2-orig-zero-delta-control-v1",
+        planned_future_paths={"archive_dir": "a", "records_dir": "r", "local_dir": "l"},
+        experiment_mode="zero_delta_control",
+    )
+    assert ctl_plan["experiment_mode"] == "matched_zero_delta_control"
+    assert ctl_plan["is_promotion_candidate"] is False
+    assert "--run-authorized-fit" in ctl_plan["planned_cli"]
+    assert "--profile" in ctl_plan["planned_cli"]
+
+    with pytest.raises(ValueError, match="requires profile_name='option_a'"):
+        _build_planned_execution_plan(
+            profile_name="lr5e6",
+            prep_records_dir=tmp_path / "x",
+            planned_fit_run_id="y",
+            planned_future_paths={"archive_dir": "a", "records_dir": "r", "local_dir": "l"},
+            experiment_mode="zero_delta_control",
+        )
+
+    repo_root = tmp_path / "repo"
+    for rel in RELEVANT_SOURCE_PATHS:
+        fp = repo_root / rel
+        fp.parent.mkdir(parents=True, exist_ok=True)
+        fp.write_text(f"# {rel}\n", encoding="utf-8")
+
+    prep_dir = tmp_path / "run-records-fit2-orig-zero-delta-control-v1-prep"
+    ds_dir = prep_dir / "datasets"
+    ds_dir.mkdir(parents=True)
+    ds_hashes = {}
+    new_hashes = {}
+    for fname in EXPECTED_ORIG_STAGE2_LOCKED_FILES:
+        fp = ds_dir / fname
+        fp.write_text('{"ok": true}\n' if fname.endswith(".json") else '{"sample_id": "x"}\n', encoding="utf-8")
+        digest = _sha(fp)
+        key = "boundary_split_manifest" if fname == "split_manifest.json" else fname[: -len(".jsonl")]
+        ds_hashes[key] = digest
+        new_hashes[fname] = digest
+    assert not (ds_dir / "orig_fit2_return_contrast_extension.jsonl").exists()
+
+    source_hashes = {rel: _sha(repo_root / rel) for rel in RELEVANT_SOURCE_PATHS}
+    for rel in RELEVANT_SOURCE_PATHS:
+        snap = prep_dir / "source_snapshot" / rel
+        snap.parent.mkdir(parents=True, exist_ok=True)
+        snap.write_text(f"# {rel}\n", encoding="utf-8")
+
+    base_metrics = {
+        "boundary_pos_cal": {"count": 86, "correct_count": 68, "mean_max_prob": 0.686},
+        "boundary_pos_cal_sup12": {"count": 48, "correct_count": 38, "conf_ge_070_count": 28, "conf_ge_080_count": 26},
+        "boundary_pos_cal_esc34": {"count": 38, "correct_count": 30, "mean_max_prob": 0.671, "max_sup12_mass": 0.48},
+        "bitext_cal": {"count": 690, "correct_count": 689},
+        "boundary_neg_cal": {"count": 48, "pred_sup12_count": 9, "max_sup12_mass": 0.72, "max_single_sup12_prob": 0.56},
+        "attribution_breakdown": {},
+    }
+    (prep_dir / "status.json").write_text(
+        json.dumps({"status": "complete", "fits_executed": 0, "prep_archive": True}), encoding="utf-8"
+    )
+    (prep_dir / "prep_manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "orig_fit2_zero_delta_control_prep.v1",
+                "experiment_mode": "matched_zero_delta_control",
+                "is_promotion_candidate": False,
+                "git_commit": "a" * 40,
+                "source_hashes": source_hashes,
+                "unchanged_original_recipe_parameters": UNCHANGED_ORIGINAL_RECIPE_PARAMETERS,
+                "authorized_fit_profile": AUTHORIZED_FIT_PROFILES["option_a"],
+                "execution_plan": ctl_plan,
+                "baseline_cal_reference": {
+                    "baseline_weights_sha256": EXPECTED_FIT2_SHA256,
+                    "baseline_calibration_manifest_sha256": "c" * 64,
+                    "dataset_hashes": ds_hashes,
+                    "metrics": base_metrics,
+                },
+                "preflight": {
+                    "extension_version": "orig_fit2_zero_delta_control_v1",
+                    "delta_absent": True,
+                    "counts": {
+                        "domain_pos_train": 181,
+                        "extension_pos_train_added": 0,
+                        "full_train_split_rows": 11320,
+                        "effective_train_total": 13000,
+                    },
+                    "dataset_hashes": ds_hashes,
+                    "orig_fit2_stage2_reference_hashes": dict(new_hashes),
+                    "new_input_file_hashes": dict(new_hashes),
+                },
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    _write_and_verify_sha_inventory(prep_dir, "sidecar_sha_inventory.json")
+
+    candidates_dir = tmp_path / "candidates"
+    local_base = tmp_path / "local"
+    init_dir = tmp_path / "init_f695"
+    serving_dir = tmp_path / "serving"
+    init_dir.mkdir()
+    serving_dir.mkdir()
+    (serving_dir / "model.safetensors").write_bytes(b"serving")
+
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit._sha256_lower",
+        lambda p: EXPECTED_SERVING_SHA256 if p == serving_dir / "model.safetensors" else _sha(p),
+    )
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.verify_fit2_starting_checkpoint",
+        lambda p: {"weights_sha256": EXPECTED_FIT2_SHA256, "temperature": 1.0, "rejector_enabled": False, "num_labels": 46},
+    )
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.verify_orig_relevant_source_provenance",
+        lambda root: {"git_commit": "b" * 40, "source_hashes": source_hashes},
+    )
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.verify_git_commit_ancestor",
+        lambda root, anc, desc="HEAD": "b" * 40,
+    )
+
+    with pytest.raises(ValueError, match="mismatches locked prep authorized_fit_profile"):
+        run_authorized_fit(
+            repo_root=repo_root,
+            prep_dir=prep_dir,
+            run_id="fit2-orig-zero-delta-control-v1",
+            profile="lr5e6",
+            epochs=3,
+            lr=5e-6,
+            execute_fit=False,
+            main_candidates_dir=candidates_dir,
+            local_root_base=local_base,
+            init_model_dir=init_dir,
+            serving_dir=serving_dir,
+        )
+
+    val_out = run_authorized_fit(
+        repo_root=repo_root,
+        prep_dir=prep_dir,
+        run_id="fit2-orig-zero-delta-control-v1",
+        profile="option_a",
+        epochs=3,
+        lr=2e-5,
+        execute_fit=False,
+        main_candidates_dir=candidates_dir,
+        local_root_base=local_base,
+        init_model_dir=init_dir,
+        serving_dir=serving_dir,
+    )
+    assert val_out["validated_only"] is True
+    assert val_out["prep_schema_version"] == "orig_fit2_zero_delta_control_prep.v1"
+
+    def _fake_fit(**kwargs):
+        cand_dir = kwargs["artifact_root"] / kwargs["output_subdir"]
+        cand_dir.mkdir(parents=True)
+        for fname in ("model.safetensors", "tokenizer.json", "tokenizer_config.json", "config.json"):
+            (cand_dir / fname).write_bytes(fname.encode("utf-8"))
+        (cand_dir / "calibration_manifest.json").write_text('{"valid": true}', encoding="utf-8")
+        (cand_dir / "candidate_provenance_manifest.json").write_text('{"provenance_status": "verified"}', encoding="utf-8")
+        return {"fit_mode": "fit2_supcon_energy", "temperature": 1.0}
+
+    monkeypatch.setattr("scripts.run_orig_fit2_return_contrast_fit.run_fit_and_lock_candidate", _fake_fit)
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.validate_calibration_manifest",
+        lambda d, p: {"valid": True, "temperature": 1.0, "rejector": {"enabled": False}},
+    )
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.audit_candidate_provenance",
+        lambda d, p: {"provenance_passed": True, "num_labels": 46},
+    )
+    monkeypatch.setattr(
+        "scripts.run_orig_fit2_return_contrast_fit.verify_reload_from_archive",
+        lambda d: {"reload_verified": True, "archive_dir": str(d), "num_labels": 46},
+    )
+    seen_include_added = []
+
+    def _fake_eval(model_dir, inputs_dir, *, include_added_18=True):
+        seen_include_added.append(include_added_18)
+        return dict(base_metrics)
+
+    monkeypatch.setattr("scripts.run_orig_fit2_return_contrast_fit.evaluate_cal_guard_metrics_for_model", _fake_eval)
+
+    fit_out = run_authorized_fit(
+        repo_root=repo_root,
+        prep_dir=prep_dir,
+        run_id="fit2-orig-zero-delta-control-v1",
+        profile="option_a",
+        epochs=3,
+        lr=2e-5,
+        execute_fit=True,
+        main_candidates_dir=candidates_dir,
+        local_root_base=local_base,
+        init_model_dir=init_dir,
+        serving_dir=serving_dir,
+    )
+    assert seen_include_added == [False]
+    assert fit_out["fits_executed"] == 1
+    assert fit_out["cal_guard_passed"] is True
+    assert fit_out["cal_guard_status"] == "CONTROL_CAL_NO_REGRESSION_SCIENTIFIC_ONLY"
+    report = json.loads((Path(fit_out["records_dir"]) / "cal_guard_report.json").read_text(encoding="utf-8"))
+    assert report["cal_guard_mode"] == "matched_zero_delta_control_11_checks"
+    assert "pos_train_added_18_correct_count" not in {c["name"] for c in report["checks"]}
+
+    # Leaked extension file in datasets/ fails closed against sidecar inventory + control guard
+    (ds_dir / "orig_fit2_return_contrast_extension.jsonl").write_text("{}\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="Prep bundle file set mismatch"):
+        run_authorized_fit(
+            repo_root=repo_root,
+            prep_dir=prep_dir,
+            run_id="fit2-orig-zero-delta-control-v1-bad",
+            profile="option_a",
+            epochs=3,
+            lr=2e-5,
+            execute_fit=False,
+            main_candidates_dir=candidates_dir,
+            local_root_base=local_base,
+            init_model_dir=init_dir,
+            serving_dir=serving_dir,
+        )

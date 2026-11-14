@@ -33,6 +33,7 @@ from pipeline.evaluation.classifier_acceptance_gate import (
 from pipeline.training.orig_fit2_return_contrast_data import (
     _read_jsonl,
     prepare_and_lock_orig_fit2_return_contrast_splits,
+    prepare_and_lock_orig_fit2_zero_delta_control_splits,
 )
 from pipeline.training.train_boundary_candidate import verify_original_46_label_lineage
 from scripts.run_boundary_contrast_fit import (
@@ -220,8 +221,13 @@ def verify_git_commit_ancestor(repo_root: Path, ancestor_sha: str, descendant_re
     return head_sha
 
 
-def run_orig_fit2_preflight(repo_root: Path, dryrun_root: Path) -> Dict[str, Any]:
-    """Fail-closed zero-fit preflight verifying baseline anchors, single-factor split diff, and isolation."""
+def run_orig_fit2_preflight(
+    repo_root: Path,
+    dryrun_root: Path,
+    *,
+    zero_delta_control: bool = False,
+) -> Dict[str, Any]:
+    """Fail-closed zero-fit preflight verifying baseline anchors, split parity/diff, and isolation."""
     serving_sha = _sha256_lower(SERVING_DIR / "model.safetensors")
     if serving_sha != EXPECTED_SERVING_SHA256:
         raise ValueError(f"Serving weights SHA mismatch: {serving_sha} != {EXPECTED_SERVING_SHA256}")
@@ -239,7 +245,12 @@ def run_orig_fit2_preflight(repo_root: Path, dryrun_root: Path) -> Dict[str, Any
     if (dryrun_root / "datasets").exists():
         shutil.rmtree(dryrun_root / "datasets")
 
-    lock = prepare_and_lock_orig_fit2_return_contrast_splits(
+    splitter = (
+        prepare_and_lock_orig_fit2_zero_delta_control_splits
+        if zero_delta_control
+        else prepare_and_lock_orig_fit2_return_contrast_splits
+    )
+    lock = splitter(
         worktree_root=repo_root,
         data_repo_root=repo_root,
         init_model_dir=FIT2_BASELINE_DIR,
@@ -260,6 +271,8 @@ def run_orig_fit2_preflight(repo_root: Path, dryrun_root: Path) -> Dict[str, Any
         "fits_executed": 0,
         "optimizer_invoked": False,
         "calibrator_invoked": False,
+        "zero_delta_control": zero_delta_control,
+        "delta_absent": bool(lock.get("delta_absent", False)),
         "serving_weights_sha256": serving_sha,
         "fit1_reference_weights_sha256": fit1_sha,
         "starting_checkpoint": init_info,
@@ -270,13 +283,14 @@ def run_orig_fit2_preflight(repo_root: Path, dryrun_root: Path) -> Dict[str, Any
         "extension_version": lock["extension_version"],
         "kb_version": lock["kb_version"],
         "policy_version": lock["policy_version"],
-        "kb_rationale": lock["kb_rationale"],
+        "kb_rationale": lock.get("kb_rationale"),
         "counts": lock["counts"],
         "dataset_hashes": lock["dataset_hashes"],
         "orig_fit2_stage2_reference_hashes": lock["orig_fit2_stage2_reference_hashes"],
         "new_input_file_hashes": lock["new_input_file_hashes"],
         "baseline_vs_new_diff": lock["baseline_vs_new_diff"],
-        "isolation_audit": lock["isolation_audit"],
+        "isolation_audit": lock.get("isolation_audit"),
+        "token_truncation_audit_max_length_64": lock.get("token_truncation_audit_max_length_64"),
         "historical_baseline_noisy_overlap_disclosure": lock["historical_baseline_noisy_overlap_disclosure"],
     }
 
@@ -293,8 +307,12 @@ def _softmax_float64(logits: np.ndarray, temperature: float) -> np.ndarray:
     return exp_vals / np.sum(exp_vals, axis=1, keepdims=True)
 
 
-def _load_cal_guard_surfaces(datasets_dir: Path) -> Dict[str, List[Dict[str, Any]]]:
-    """Load the exact unpseudonymized CAL/added-train surfaces and verify fixed denominators."""
+def _load_cal_guard_surfaces(
+    datasets_dir: Path,
+    *,
+    include_added_18: bool = True,
+) -> Dict[str, List[Dict[str, Any]]]:
+    """Load exact unpseudonymized CAL surfaces (plus optional added-18 train slice) and verify fixed counts."""
     pos_cal = _read_jsonl(datasets_dir / "boundary_pos_calibration.jsonl")
     neg_cal = _read_jsonl(datasets_dir / "boundary_neg_calibration.jsonl")
     bitext_cal = _read_jsonl(datasets_dir / "bitext_cal.jsonl")
@@ -306,26 +324,35 @@ def _load_cal_guard_surfaces(datasets_dir: Path) -> Dict[str, List[Dict[str, Any
     pos_cal_sup12 = [r for r in pos_cal if str(r.get("intent", "")) in sup12_set]
     pos_cal_esc34 = [r for r in pos_cal if str(r.get("intent", "")) in esc34_set]
 
+    expected_counts = {
+        k: v for k, v in CAL_GUARD_DENOMINATORS.items() if include_added_18 or k != "pos_train_added_18"
+    }
     actual_counts = {
         "boundary_pos_cal": len(pos_cal),
         "boundary_pos_cal_sup12": len(pos_cal_sup12),
         "boundary_pos_cal_esc34": len(pos_cal_esc34),
         "bitext_cal": len(bitext_cal),
         "boundary_neg_cal": len(neg_cal),
-        "pos_train_added_18": len(added_18),
     }
-    if actual_counts != CAL_GUARD_DENOMINATORS:
+    if include_added_18:
+        actual_counts["pos_train_added_18"] = len(added_18)
+    elif added_18:
         raise ValueError(
-            f"CAL guard surface denominators mismatch: {actual_counts} != {CAL_GUARD_DENOMINATORS}"
+            f"Zero-delta control CAL load found unexpected orig_ret_ch_* rows in boundary_pos_train: {len(added_18)}"
         )
+
+    if actual_counts != expected_counts:
+        raise ValueError(f"CAL guard surface denominators mismatch: {actual_counts} != {expected_counts}")
     if len(pos_cal_sup12) + len(pos_cal_esc34) != len(pos_cal):
         raise ValueError("boundary_pos_calibration contains intents outside SUPPORTED_12 union ESCALATED_34")
-    return {
+    surfaces: Dict[str, List[Dict[str, Any]]] = {
         "boundary_pos_cal": pos_cal,
         "boundary_neg_cal": neg_cal,
         "bitext_cal": bitext_cal,
-        "pos_train_added_18": added_18,
     }
+    if include_added_18:
+        surfaces["pos_train_added_18"] = added_18
+    return surfaces
 
 
 def _summarize_positive_surface(
@@ -357,16 +384,45 @@ def _summarize_positive_surface(
     return summary
 
 
+def _summarize_attribution_slice(
+    probs: np.ndarray,
+    rows: Sequence[Dict[str, Any]],
+    *,
+    idx_by_label: Dict[str, int],
+    sup12_indices: np.ndarray,
+) -> Dict[str, Any]:
+    """Freeze reproducible CAL-only confidence decomposition (all vs correct vs incorrect rows)."""
+    true_ids = np.array([idx_by_label[str(r["intent"])] for r in rows], dtype=np.int64)
+    preds = np.argmax(probs, axis=1)
+    corr_mask = preds == true_ids
+    incorr_mask = ~corr_mask
+    max_probs = np.max(probs, axis=1)
+    true_probs = probs[np.arange(len(rows)), true_ids]
+    sup12_mass = np.sum(probs[:, sup12_indices], axis=1)
+    return {
+        "count": len(rows),
+        "correct_count": int(np.sum(corr_mask)),
+        "incorrect_count": int(np.sum(incorr_mask)),
+        "all_mean_max_prob": float(np.mean(max_probs)),
+        "correct_mean_max_prob": float(np.mean(max_probs[corr_mask])) if np.any(corr_mask) else None,
+        "incorrect_mean_max_prob": float(np.mean(max_probs[incorr_mask])) if np.any(incorr_mask) else None,
+        "mean_true_class_prob": float(np.mean(true_probs)),
+        "mean_sup12_mass": float(np.mean(sup12_mass)),
+    }
+
+
 def compute_cal_guard_metrics_from_logits(
     logits_by_surface: Dict[str, Any],
     surfaces: Dict[str, List[Dict[str, Any]]],
     *,
     temperature: float = 1.0,
     label_order: Sequence[str] = STANDARD_INTENTS_46,
+    include_added_18: bool | None = None,
 ) -> Dict[str, Any]:
-    """Compute all read-only post-T softmax CAL guard metrics from raw logits."""
+    """Compute all read-only post-T softmax CAL guard metrics (and frozen CAL attribution breakdown)."""
     if list(label_order) != list(STANDARD_INTENTS_46):
         raise ValueError("CAL guard requires canonical 46-intent label ordering")
+    use_added_18 = ("pos_train_added_18" in surfaces) if include_added_18 is None else bool(include_added_18)
     idx_by_label = {label: i for i, label in enumerate(label_order)}
     sup12_indices = np.array([idx_by_label[label] for label in SUPPORTED_12_INTENTS], dtype=np.int64)
     sup12_idx_set = set(sup12_indices.tolist())
@@ -387,11 +443,6 @@ def compute_cal_guard_metrics_from_logits(
     if bit_probs.shape[0] != len(bit_rows):
         raise ValueError(f"bitext_cal logits/rows mismatch: {bit_probs.shape[0]} != {len(bit_rows)}")
 
-    added_rows = surfaces["pos_train_added_18"]
-    added_probs = _softmax_float64(np.asarray(logits_by_surface["pos_train_added_18"]), temperature)
-    if added_probs.shape[0] != len(added_rows):
-        raise ValueError(f"pos_train_added_18 logits/rows mismatch: {added_probs.shape[0]} != {len(added_rows)}")
-
     neg_rows = surfaces["boundary_neg_cal"]
     neg_probs = _softmax_float64(np.asarray(logits_by_surface["boundary_neg_cal"]), temperature)
     if neg_probs.shape[0] != len(neg_rows):
@@ -401,7 +452,7 @@ def compute_cal_guard_metrics_from_logits(
     neg_sup12_probs = neg_probs[:, sup12_indices]
     neg_sup12_mass = np.sum(neg_sup12_probs, axis=1)
 
-    return {
+    metrics: Dict[str, Any] = {
         "temperature": float(temperature),
         "boundary_pos_cal": _summarize_positive_surface(pos_probs, pos_rows, idx_by_label=idx_by_label, sup12_indices=sup12_indices),
         "boundary_pos_cal_sup12": _summarize_positive_surface(
@@ -419,7 +470,6 @@ def compute_cal_guard_metrics_from_logits(
             include_max_sup12_mass=True,
         ),
         "bitext_cal": _summarize_positive_surface(bit_probs, bit_rows, idx_by_label=idx_by_label, sup12_indices=sup12_indices),
-        "pos_train_added_18": _summarize_positive_surface(added_probs, added_rows, idx_by_label=idx_by_label, sup12_indices=sup12_indices),
         "boundary_neg_cal": {
             "count": len(neg_rows),
             "pred_sup12_count": int(sum(int(p) in sup12_idx_set for p in neg_preds)),
@@ -427,7 +477,35 @@ def compute_cal_guard_metrics_from_logits(
             "mean_sup12_mass": float(np.mean(neg_sup12_mass)),
             "max_single_sup12_prob": float(np.max(neg_sup12_probs)),
         },
+        "attribution_breakdown": {
+            "schema_version": "cal_attribution_breakdown.v1",
+            "surface_note": (
+                "Reproducible CAL-only confidence decomposition distinguishing all-rows mean_max_prob "
+                "from correct-only and incorrect-only mean_max_prob (addresses C mean_max_prob caveat)."
+            ),
+            "boundary_pos_cal": _summarize_attribution_slice(
+                pos_probs, pos_rows, idx_by_label=idx_by_label, sup12_indices=sup12_indices
+            ),
+            "boundary_pos_cal_sup12": _summarize_attribution_slice(
+                pos_probs[sup12_mask], sup12_rows, idx_by_label=idx_by_label, sup12_indices=sup12_indices
+            ),
+            "boundary_pos_cal_esc34": _summarize_attribution_slice(
+                pos_probs[esc34_mask], esc34_rows, idx_by_label=idx_by_label, sup12_indices=sup12_indices
+            ),
+            "bitext_cal": _summarize_attribution_slice(
+                bit_probs, bit_rows, idx_by_label=idx_by_label, sup12_indices=sup12_indices
+            ),
+        },
     }
+    if use_added_18:
+        added_rows = surfaces["pos_train_added_18"]
+        added_probs = _softmax_float64(np.asarray(logits_by_surface["pos_train_added_18"]), temperature)
+        if added_probs.shape[0] != len(added_rows):
+            raise ValueError(f"pos_train_added_18 logits/rows mismatch: {added_probs.shape[0]} != {len(added_rows)}")
+        metrics["pos_train_added_18"] = _summarize_positive_surface(
+            added_probs, added_rows, idx_by_label=idx_by_label, sup12_indices=sup12_indices
+        )
+    return metrics
 
 
 def evaluate_cal_guard_metrics_for_model(
@@ -435,8 +513,9 @@ def evaluate_cal_guard_metrics_for_model(
     datasets_dir: Path,
     *,
     batch_size: int = 128,
+    include_added_18: bool = True,
 ) -> Dict[str, Any]:
-    """Run strictly read-only forward inference over locked CAL/added-train raw texts."""
+    """Run strictly read-only forward inference over locked CAL (and optional added-train) raw texts."""
     cal_path = model_dir / "calibration_manifest.json"
     cal_manifest = json.loads(cal_path.read_text(encoding="utf-8"))
     cal_block = cal_manifest.get("calibration") or {}
@@ -453,7 +532,7 @@ def evaluate_cal_guard_metrics_for_model(
     if label_order != list(STANDARD_INTENTS_46):
         raise ValueError(f"calibration_manifest id2label does not match STANDARD_INTENTS_46 in {cal_path}")
 
-    surfaces = _load_cal_guard_surfaces(datasets_dir)
+    surfaces = _load_cal_guard_surfaces(datasets_dir, include_added_18=include_added_18)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     tokenizer = AutoTokenizer.from_pretrained(str(model_dir), local_files_only=True)
     model = AutoModelForSequenceClassification.from_pretrained(str(model_dir), local_files_only=True)
@@ -487,6 +566,7 @@ def evaluate_cal_guard_metrics_for_model(
         surfaces,
         temperature=temperature,
         label_order=label_order,
+        include_added_18=include_added_18,
     )
     metrics["evaluation_metadata"] = {
         "model_dir": str(model_dir),
@@ -498,19 +578,26 @@ def evaluate_cal_guard_metrics_for_model(
     return metrics
 
 
+def _opt_diff(a: float | None, b: float | None) -> float | None:
+    return None if (a is None or b is None) else float(a) - float(b)
+
+
 def evaluate_cal_guard_report(
     candidate_metrics: Dict[str, Any],
     baseline_metrics: Dict[str, Any],
     *,
     float_tolerance: float = CAL_GUARD_FLOAT_TOLERANCE,
+    cal_guard_mode: str = "candidate",
 ) -> Dict[str, Any]:
-    """Evaluate all exact integer and tolerance-bounded float Worker B CAL guard checks."""
+    """Evaluate CAL guard checks ('candidate': all 12 checks; 'control': same 11 non-extension checks)."""
+    if cal_guard_mode not in ("candidate", "control"):
+        raise ValueError(f"Unsupported cal_guard_mode={cal_guard_mode!r}; expected 'candidate' or 'control'")
+
     c_pos = candidate_metrics["boundary_pos_cal"]
     c_sup12 = candidate_metrics["boundary_pos_cal_sup12"]
     c_esc34 = candidate_metrics["boundary_pos_cal_esc34"]
     c_bit = candidate_metrics["bitext_cal"]
     c_neg = candidate_metrics["boundary_neg_cal"]
-    c_added = candidate_metrics["pos_train_added_18"]
 
     b_pos = baseline_metrics["boundary_pos_cal"]
     b_esc34 = baseline_metrics["boundary_pos_cal_esc34"]
@@ -547,86 +634,122 @@ def evaluate_cal_guard_report(
             "rule": ">= 687",
             "passed": int(c_bit["correct_count"]) >= 687,
         },
-        {
-            "name": "pos_train_added_18_correct_count",
-            "kind": "integer",
-            "actual": int(c_added["correct_count"]),
-            "rule": ">= 15",
-            "passed": int(c_added["correct_count"]) >= 15,
-        },
-        {
-            "name": "boundary_pos_cal_sup12_conf_ge_070_count",
-            "kind": "integer",
-            "actual": int(c_sup12["conf_ge_070_count"]),
-            "rule": ">= 26",
-            "passed": int(c_sup12["conf_ge_070_count"]) >= 26,
-        },
-        {
-            "name": "boundary_pos_cal_sup12_conf_ge_080_count",
-            "kind": "integer",
-            "actual": int(c_sup12["conf_ge_080_count"]),
-            "rule": ">= 24",
-            "passed": int(c_sup12["conf_ge_080_count"]) >= 24,
-        },
-        {
-            "name": "boundary_neg_cal_pred_sup12_count",
-            "kind": "integer",
-            "actual": int(c_neg["pred_sup12_count"]),
-            "rule": "<= 9",
-            "passed": int(c_neg["pred_sup12_count"]) <= 9,
-        },
-        {
-            "name": "boundary_pos_cal_delta_mean_max_prob",
-            "kind": "float",
-            "actual": pos_cal_delta,
-            "limit": pos_cal_allowed_delta,
-            "tolerance": float_tolerance,
-            "passed": pos_cal_delta <= pos_cal_allowed_delta + float_tolerance,
-        },
-        {
-            "name": "boundary_pos_cal_esc34_delta_mean_max_prob",
-            "kind": "float",
-            "actual": esc34_delta,
-            "limit": 0.015,
-            "tolerance": float_tolerance,
-            "passed": esc34_delta <= 0.015 + float_tolerance,
-        },
-        {
-            "name": "boundary_pos_cal_esc34_max_sup12_mass",
-            "kind": "float",
-            "actual": float(c_esc34["max_sup12_mass"]),
-            "limit": 0.55,
-            "tolerance": float_tolerance,
-            "passed": float(c_esc34["max_sup12_mass"]) <= 0.55 + float_tolerance,
-        },
-        {
-            "name": "boundary_neg_cal_max_sup12_mass",
-            "kind": "float",
-            "actual": float(c_neg["max_sup12_mass"]),
-            "limit": float(b_neg["max_sup12_mass"]),
-            "tolerance": float_tolerance,
-            "passed": float(c_neg["max_sup12_mass"]) <= float(b_neg["max_sup12_mass"]) + float_tolerance,
-        },
-        {
-            "name": "boundary_neg_cal_max_single_sup12_prob",
-            "kind": "float",
-            "actual": float(c_neg["max_single_sup12_prob"]),
-            "limit": float(b_neg["max_single_sup12_prob"]),
-            "tolerance": float_tolerance,
-            "passed": float(c_neg["max_single_sup12_prob"]) <= float(b_neg["max_single_sup12_prob"]) + float_tolerance,
-        },
     ]
+    if cal_guard_mode == "candidate":
+        c_added = candidate_metrics["pos_train_added_18"]
+        checks.append(
+            {
+                "name": "pos_train_added_18_correct_count",
+                "kind": "integer",
+                "actual": int(c_added["correct_count"]),
+                "rule": ">= 15",
+                "passed": int(c_added["correct_count"]) >= 15,
+            }
+        )
+    checks.extend(
+        [
+            {
+                "name": "boundary_pos_cal_sup12_conf_ge_070_count",
+                "kind": "integer",
+                "actual": int(c_sup12["conf_ge_070_count"]),
+                "rule": ">= 26",
+                "passed": int(c_sup12["conf_ge_070_count"]) >= 26,
+            },
+            {
+                "name": "boundary_pos_cal_sup12_conf_ge_080_count",
+                "kind": "integer",
+                "actual": int(c_sup12["conf_ge_080_count"]),
+                "rule": ">= 24",
+                "passed": int(c_sup12["conf_ge_080_count"]) >= 24,
+            },
+            {
+                "name": "boundary_neg_cal_pred_sup12_count",
+                "kind": "integer",
+                "actual": int(c_neg["pred_sup12_count"]),
+                "rule": "<= 9",
+                "passed": int(c_neg["pred_sup12_count"]) <= 9,
+            },
+            {
+                "name": "boundary_pos_cal_delta_mean_max_prob",
+                "kind": "float",
+                "actual": pos_cal_delta,
+                "limit": pos_cal_allowed_delta,
+                "tolerance": float_tolerance,
+                "passed": pos_cal_delta <= pos_cal_allowed_delta + float_tolerance,
+            },
+            {
+                "name": "boundary_pos_cal_esc34_delta_mean_max_prob",
+                "kind": "float",
+                "actual": esc34_delta,
+                "limit": 0.015,
+                "tolerance": float_tolerance,
+                "passed": esc34_delta <= 0.015 + float_tolerance,
+            },
+            {
+                "name": "boundary_pos_cal_esc34_max_sup12_mass",
+                "kind": "float",
+                "actual": float(c_esc34["max_sup12_mass"]),
+                "limit": 0.55,
+                "tolerance": float_tolerance,
+                "passed": float(c_esc34["max_sup12_mass"]) <= 0.55 + float_tolerance,
+            },
+            {
+                "name": "boundary_neg_cal_max_sup12_mass",
+                "kind": "float",
+                "actual": float(c_neg["max_sup12_mass"]),
+                "limit": float(b_neg["max_sup12_mass"]),
+                "tolerance": float_tolerance,
+                "passed": float(c_neg["max_sup12_mass"]) <= float(b_neg["max_sup12_mass"]) + float_tolerance,
+            },
+            {
+                "name": "boundary_neg_cal_max_single_sup12_prob",
+                "kind": "float",
+                "actual": float(c_neg["max_single_sup12_prob"]),
+                "limit": float(b_neg["max_single_sup12_prob"]),
+                "tolerance": float_tolerance,
+                "passed": float(c_neg["max_single_sup12_prob"]) <= float(b_neg["max_single_sup12_prob"]) + float_tolerance,
+            },
+        ]
+    )
 
     failed_checks = [c["name"] for c in checks if not c["passed"]]
     passed = len(failed_checks) == 0
+    if cal_guard_mode == "control":
+        recommended_status = (
+            "CONTROL_CAL_NO_REGRESSION_SCIENTIFIC_ONLY"
+            if passed
+            else "CONTROL_CAL_DRIFT_OR_REGRESSION_DETECTED"
+        )
+    else:
+        recommended_status = (
+            "CAL_GUARD_PASS_READY_FOR_C_EVAL" if passed else "CAL_GUARD_REJECT_DO_NOT_PROMOTE"
+        )
+
+    c_attr = candidate_metrics.get("attribution_breakdown") or {}
+    b_attr = baseline_metrics.get("attribution_breakdown") or {}
+    attribution_deltas: Dict[str, Any] = {}
+    for sname in ("boundary_pos_cal", "boundary_pos_cal_sup12", "boundary_pos_cal_esc34", "bitext_cal"):
+        cs = c_attr.get(sname)
+        bs = b_attr.get(sname)
+        if cs and bs:
+            attribution_deltas[sname] = {
+                "delta_correct_count": int(cs["correct_count"]) - int(bs["correct_count"]),
+                "delta_all_mean_max_prob": _opt_diff(cs.get("all_mean_max_prob"), bs.get("all_mean_max_prob")),
+                "delta_correct_mean_max_prob": _opt_diff(cs.get("correct_mean_max_prob"), bs.get("correct_mean_max_prob")),
+                "delta_incorrect_mean_max_prob": _opt_diff(
+                    cs.get("incorrect_mean_max_prob"), bs.get("incorrect_mean_max_prob")
+                ),
+                "delta_mean_true_class_prob": _opt_diff(cs.get("mean_true_class_prob"), bs.get("mean_true_class_prob")),
+            }
+
     return {
         "schema_version": "orig_fit2_cal_guard_report.v1",
+        "cal_guard_mode": "matched_zero_delta_control_11_checks" if cal_guard_mode == "control" else "candidate_12_checks",
+        "is_promotion_candidate": cal_guard_mode != "control",
         "read_only_post_fit_guard": True,
         "float_tolerance": float_tolerance,
         "passed": passed,
-        "recommended_status": (
-            "CAL_GUARD_PASS_READY_FOR_C_EVAL" if passed else "CAL_GUARD_REJECT_DO_NOT_PROMOTE"
-        ),
+        "recommended_status": recommended_status,
         "failed_checks": failed_checks,
         "checks": checks,
         "deltas": {
@@ -634,6 +757,7 @@ def evaluate_cal_guard_report(
             "boundary_pos_cal_allowed_delta_mean_max_prob": pos_cal_allowed_delta,
             "boundary_pos_cal_esc34_delta_mean_max_prob": esc34_delta,
         },
+        "attribution_deltas": attribution_deltas,
         "candidate_metrics": candidate_metrics,
         "baseline_metrics": baseline_metrics,
     }
@@ -653,12 +777,22 @@ def _build_planned_execution_plan(
     prep_records_dir: Path,
     planned_fit_run_id: str,
     planned_future_paths: Dict[str, str],
+    experiment_mode: str = "return_contrast",
 ) -> Dict[str, Any]:
     """Document the sole authorized runner CLI and locked profile hyperparameters."""
     if profile_name not in AUTHORIZED_FIT_PROFILES:
         raise ValueError(f"Unsupported profile {profile_name!r}; expected one of {sorted(AUTHORIZED_FIT_PROFILES)}")
+    if experiment_mode not in ("return_contrast", "zero_delta_control"):
+        raise ValueError(f"Unsupported experiment_mode {experiment_mode!r}")
+    if experiment_mode == "zero_delta_control" and profile_name != "option_a":
+        raise ValueError(f"zero_delta_control requires profile_name='option_a'; got {profile_name!r}")
+
     cfg = AUTHORIZED_FIT_PROFILES[profile_name]
-    run_flag = "--run-option-a-fit" if profile_name == "option_a" else "--run-authorized-fit"
+    run_flag = (
+        "--run-authorized-fit"
+        if (experiment_mode == "zero_delta_control" or profile_name != "option_a")
+        else "--run-option-a-fit"
+    )
     planned_cli = [
         ".venv/Scripts/python.exe",
         "-m",
@@ -681,7 +815,26 @@ def _build_planned_execution_plan(
         str(cfg["fit_mode"]),
         run_flag,
     ]
+    is_control = experiment_mode == "zero_delta_control"
+    caveat = (
+        (
+            "Matched zero-delta scientific control ONLY (is_promotion_candidate=False): warm-starts Original Fit2 "
+            "(f695b1fe...) for epochs=3, lr=2e-5 on bit-identical 13 original stage2_inputs (11,320 full_train rows, "
+            "181 boundary_pos_train rows, 13,000 effective rows; 0 added return-contrast rows) to isolate continuation "
+            "optimization drift from the +18-row data delta. NOT a promotion candidate."
+        )
+        if is_control
+        else (
+            f"Original Fit2 (f695b1fe...) was trained from Fit1 (95a940b6...) for epochs=3, lr=2e-5. "
+            f"Warm-starting {profile_name} continuation (lr={_format_lr_cli(float(cfg['lr']))}) from converged "
+            "Fit2 applies 3 additional full epochs over 13,080 effective rows on top of f695b1fe...; direct "
+            "comparison against untouched Original Fit2 is a comparative candidate evaluation, NOT a matched "
+            "causal control."
+        )
+    )
     return {
+        "experiment_mode": "matched_zero_delta_control" if is_control else "return_contrast",
+        "is_promotion_candidate": not is_control,
         "profile": profile_name,
         "selected_recipe": cfg["selected_recipe"],
         "epochs": cfg["epochs"],
@@ -696,13 +849,7 @@ def _build_planned_execution_plan(
         "planned_future_paths": planned_future_paths,
         "authorized_to_train_now": False,
         "requires_worker_b_re_review_pass_and_coordinator_release": True,
-        "causal_control_caveat": (
-            f"Original Fit2 (f695b1fe...) was trained from Fit1 (95a940b6...) for epochs=3, lr=2e-5. "
-            f"Warm-starting {profile_name} continuation (lr={_format_lr_cli(float(cfg['lr']))}) from converged "
-            "Fit2 applies 3 additional full epochs over 13,080 effective rows on top of f695b1fe...; direct "
-            "comparison against untouched Original Fit2 is a comparative candidate evaluation, NOT a matched "
-            "causal control (no matched no-added-data continuation fit is authorized)."
-        ),
+        "causal_control_caveat": caveat,
     }
 
 
@@ -732,11 +879,17 @@ def _archive_orig_fit2_prep_bundle(
     planned_fit_run_id: str,
     planned_future_paths: Dict[str, str],
     profile_name: str = DEFAULT_PREP_PROFILE,
+    experiment_mode: str = "return_contrast",
 ) -> None:
     """Write immutable zero-fit prep bundle with actual input snapshots, baseline CAL reference, and SHA inventory."""
     if profile_name not in AUTHORIZED_FIT_PROFILES:
         raise ValueError(f"Unsupported profile {profile_name!r}; expected one of {sorted(AUTHORIZED_FIT_PROFILES)}")
+    if experiment_mode not in ("return_contrast", "zero_delta_control"):
+        raise ValueError(f"Unsupported experiment_mode {experiment_mode!r}")
+    if experiment_mode == "zero_delta_control" and profile_name != "option_a":
+        raise ValueError(f"zero_delta_control requires profile_name='option_a'; got {profile_name!r}")
 
+    is_control = experiment_mode == "zero_delta_control"
     dest_dir.mkdir(parents=True, exist_ok=False)
     (dest_dir / "status.json").write_text(
         json.dumps({"status": "preparing", "fits_executed": 0}, indent=2) + "\n",
@@ -745,8 +898,15 @@ def _archive_orig_fit2_prep_bundle(
     try:
         shutil.copytree(dryrun_root / "datasets", dest_dir / "datasets")
         _verify_dir_matches_lock_hashes(dest_dir / "datasets", preflight["dataset_hashes"])
-        for root_copy in ("dataset_lock_manifest.json", "orig_fit2_return_contrast_extension.jsonl"):
+        root_copies = (
+            ("dataset_lock_manifest.json",)
+            if is_control
+            else ("dataset_lock_manifest.json", "orig_fit2_return_contrast_extension.jsonl")
+        )
+        for root_copy in root_copies:
             shutil.copy2(dest_dir / "datasets" / root_copy, dest_dir / root_copy)
+        if is_control and (dest_dir / "datasets" / "orig_fit2_return_contrast_extension.jsonl").exists():
+            raise ValueError("zero_delta_control datasets/ must NOT contain orig_fit2_return_contrast_extension.jsonl")
 
         snap_dir = dest_dir / "source_snapshot"
         for rel, exp_sha in source_prov["source_hashes"].items():
@@ -775,16 +935,53 @@ def _archive_orig_fit2_prep_bundle(
         orig_prov_path = FIT2_BASELINE_DIR / "candidate_provenance_manifest.json"
         orig_cal_path = FIT2_BASELINE_DIR / "calibration_manifest.json"
         orig_cal_sha = _sha256_lower(orig_cal_path)
-        baseline_cal_metrics = evaluate_cal_guard_metrics_for_model(FIT2_BASELINE_DIR, dest_dir / "datasets")
+        baseline_cal_metrics = evaluate_cal_guard_metrics_for_model(
+            FIT2_BASELINE_DIR,
+            dest_dir / "datasets",
+            include_added_18=not is_control,
+        )
 
         execution_plan = _build_planned_execution_plan(
             profile_name=profile_name,
             prep_records_dir=dest_dir,
             planned_fit_run_id=planned_fit_run_id,
             planned_future_paths=planned_future_paths,
+            experiment_mode=experiment_mode,
         )
+        if is_control:
+            cal_guard_def = {
+                "schema_version": "orig_fit2_zero_delta_control_cal_guard_def.v1",
+                "cal_guard_mode": "matched_zero_delta_control_11_checks",
+                "is_promotion_candidate": False,
+                "surface": CAL_GUARD_DEFINITION["surface"],
+                "denominators": {
+                    k: v for k, v in CAL_GUARD_DENOMINATORS.items() if k != "pos_train_added_18"
+                },
+                "float_tolerance": CAL_GUARD_FLOAT_TOLERANCE,
+                "float_tolerance_justification": CAL_GUARD_DEFINITION["float_tolerance_justification"],
+                "integer_count_gates": {
+                    k: v
+                    for k, v in CAL_GUARD_DEFINITION["integer_count_gates"].items()
+                    if k != "pos_train_added_18_correct_min"
+                },
+                "float_drift_and_ceiling_gates": dict(CAL_GUARD_DEFINITION["float_drift_and_ceiling_gates"]),
+                "omitted_check": "pos_train_added_18_correct_count (extension data strictly absent by design)",
+                "mean_max_prob_caveat": (
+                    "_summarize_positive_surface computes mean_max_prob over ALL rows regardless of prediction "
+                    "correctness; attribution_breakdown additionally records correct_mean_max_prob, "
+                    "incorrect_mean_max_prob, mean_true_class_prob, and mean_sup12_mass without changing "
+                    "the 11 non-extension CAL acceptance checks or thresholds."
+                ),
+            }
+        else:
+            cal_guard_def = CAL_GUARD_DEFINITION
+
         manifest = {
-            "schema_version": "orig_fit2_return_contrast_prep.v4",
+            "schema_version": (
+                "orig_fit2_zero_delta_control_prep.v1" if is_control else "orig_fit2_return_contrast_prep.v4"
+            ),
+            "experiment_mode": "matched_zero_delta_control" if is_control else "return_contrast",
+            "is_promotion_candidate": not is_control,
             "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
             "git_commit": source_prov["git_commit"],
             "source_hashes": source_prov["source_hashes"],
@@ -809,13 +1006,22 @@ def _archive_orig_fit2_prep_bundle(
                 "baseline_weights_sha256": EXPECTED_FIT2_SHA256,
                 "baseline_calibration_manifest_sha256": orig_cal_sha,
                 "dataset_hashes": preflight["dataset_hashes"],
-                "cal_guard_definition": CAL_GUARD_DEFINITION,
+                "cal_guard_definition": cal_guard_def,
                 "metrics": baseline_cal_metrics,
             },
             "unchanged_original_recipe_parameters": UNCHANGED_ORIGINAL_RECIPE_PARAMETERS,
             "execution_plan": execution_plan,
             "preflight": preflight,
         }
+        if is_control:
+            manifest["historical_token_truncation_audit_note"] = (
+                "For this zero-delta control, token_truncation_audit_max_length_64.train_all is truthfully 11320 "
+                "(matching full_train_split.jsonl=11320, boundary_pos_train.jsonl=181, effective=13000). "
+                "Sealed historical candidates fit-v1 and lr5e6-v1 logged token_truncation_audit.train_all=11320 "
+                "alongside 11338 actual input rows because train_boundary_candidate.py (line 1260) reads the static "
+                "token_truncation_audit_max_length_64 metadata inherited into dataset_lock_manifest.json (cosmetic "
+                "provenance mismatch only; training actually tokenized all 11338 rows; sealed archives untouched)."
+            )
         if profile_name == "option_a":
             manifest["option_a_execution_plan"] = execution_plan
         (dest_dir / "prep_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
@@ -839,13 +1045,21 @@ def main() -> None:
     ap.add_argument("--run-id", default=DEFAULT_PREP_RUN_ID)
     ap.add_argument("--fit-run-id", default=DEFAULT_PLANNED_FIT_RUN_ID)
     ap.add_argument("--profile", default=DEFAULT_PREP_PROFILE, choices=tuple(AUTHORIZED_FIT_PROFILES.keys()))
+    ap.add_argument(
+        "--experiment-mode",
+        default="return_contrast",
+        choices=("return_contrast", "zero_delta_control"),
+        help="Prep dataset mode: return_contrast (+18 rows) or zero_delta_control (bit-identical 13 orig stage2_inputs)",
+    )
     args = ap.parse_args()
 
     if not args.dry_run and not args.archive_prep:
         raise ValueError("Specify --dry-run and/or --archive-prep (this script performs zero training fits)")
+    if args.experiment_mode == "zero_delta_control" and args.profile != "option_a":
+        raise ValueError(f"--experiment-mode zero_delta_control requires --profile option_a (lr=2e-5); got {args.profile!r}")
 
     repo_root = Path(__file__).resolve().parents[1]
-    dryrun_root = LOCAL_ORIG_CONTRAST_ROOT / "dryrun"
+    dryrun_root = LOCAL_ORIG_CONTRAST_ROOT / f"dryrun-{args.run_id}" if args.experiment_mode == "zero_delta_control" else LOCAL_ORIG_CONTRAST_ROOT / "dryrun"
     prep_ns: Dict[str, Path] | None = None
     source_prov: Dict[str, Any] | None = None
 
@@ -858,7 +1072,11 @@ def main() -> None:
         )
         source_prov = verify_orig_relevant_source_provenance(repo_root)
 
-    preflight = run_orig_fit2_preflight(repo_root, dryrun_root)
+    preflight = run_orig_fit2_preflight(
+        repo_root,
+        dryrun_root,
+        zero_delta_control=(args.experiment_mode == "zero_delta_control"),
+    )
     if args.archive_prep:
         assert prep_ns is not None and source_prov is not None
         _archive_orig_fit2_prep_bundle(
@@ -870,6 +1088,7 @@ def main() -> None:
             prep_run_id=args.run_id,
             planned_fit_run_id=args.fit_run_id,
             profile_name=args.profile,
+            experiment_mode=args.experiment_mode,
             planned_future_paths={
                 "archive_dir": str(prep_ns["fit_archive_dir"]),
                 "records_dir": str(prep_ns["fit_records_dir"]),
@@ -877,7 +1096,18 @@ def main() -> None:
             },
         )
         print(f"ARCHIVED_ORIG_FIT2_PREP_BUNDLE: {prep_ns['prep_records_dir']}")
-    print(json.dumps({"fits_executed": 0, "dry_run": True, "profile": args.profile, "counts": preflight["counts"]}, indent=2))
+    print(
+        json.dumps(
+            {
+                "fits_executed": 0,
+                "dry_run": True,
+                "experiment_mode": args.experiment_mode,
+                "profile": args.profile,
+                "counts": preflight["counts"],
+            },
+            indent=2,
+        )
+    )
 
 
 if __name__ == "__main__":

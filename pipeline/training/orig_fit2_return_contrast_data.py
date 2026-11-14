@@ -770,3 +770,143 @@ def prepare_and_lock_orig_fit2_return_contrast_splits(
     lock_path = ds_dir / "dataset_lock_manifest.json"
     lock_path.write_text(json.dumps(lock_manifest, indent=2) + "\n", encoding="utf-8")
     return lock_manifest
+
+
+def prepare_and_lock_orig_fit2_zero_delta_control_splits(
+    *,
+    worktree_root: Path,
+    data_repo_root: Path,
+    init_model_dir: Path,
+    artifact_root: Path,
+    replay_per_class: int = 160,
+    noise_aug_per_class: int = 80,
+    bitext_cal_per_class: int = 15,
+    seed: int = 20261113,
+) -> Dict[str, Any]:
+    """Reproduce Original Fit2 Stage-2 splits bit-for-bit with strictly ZERO added TRAIN rows."""
+    base_lock = prepare_and_lock_splits(
+        worktree_root=worktree_root,
+        data_repo_root=data_repo_root,
+        init_model_dir=init_model_dir,
+        artifact_root=artifact_root,
+        replay_per_class=replay_per_class,
+        noise_aug_per_class=noise_aug_per_class,
+        bitext_cal_per_class=bitext_cal_per_class,
+        seed=seed,
+        apply_active_kb_audit=False,
+        exclude_noisy_test_overlap=False,
+    )
+    ds_dir = artifact_root / "datasets"
+    ext_artifact = ds_dir / "orig_fit2_return_contrast_extension.jsonl"
+    if ext_artifact.exists():
+        raise RuntimeError(f"Zero-delta control must not contain extension artifact: {ext_artifact}")
+
+    orig_stage2_dir = data_repo_root / ORIG_FIT2_STAGE2_REL
+    if not orig_stage2_dir.is_dir():
+        raise FileNotFoundError(f"Missing Original Fit2 stage2_inputs reference: {orig_stage2_dir}")
+
+    actual_files = {p.name for p in ds_dir.iterdir() if p.is_file()}
+    expected_set = set(EXPECTED_ORIG_STAGE2_LOCKED_FILES) | {"dataset_lock_manifest.json"}
+    if actual_files != expected_set:
+        raise ValueError(
+            f"Zero-delta control dataset files differ from Original Fit2 stage2 + dataset_lock_manifest.json: "
+            f"extra={sorted(actual_files - expected_set)}, missing={sorted(expected_set - actual_files)}"
+        )
+
+    baseline_file_hashes = _file_hashes(ds_dir, EXPECTED_ORIG_STAGE2_LOCKED_FILES)
+    orig_ref_hashes = _file_hashes(orig_stage2_dir, EXPECTED_ORIG_STAGE2_LOCKED_FILES)
+    hash_diffs_vs_orig = {
+        fname: {"prepared": baseline_file_hashes[fname], "orig_fit2_stage2": orig_ref_hashes[fname]}
+        for fname in EXPECTED_ORIG_STAGE2_LOCKED_FILES
+        if baseline_file_hashes[fname] != orig_ref_hashes[fname]
+    }
+    if hash_diffs_vs_orig:
+        raise ValueError(
+            "Zero-delta control splits diverged from archived "
+            f"run-records-faithful-fit2-20261113/stage2_inputs: {hash_diffs_vs_orig}"
+        )
+
+    pos_train = _read_jsonl(ds_dir / "boundary_pos_train.jsonl")
+    neg_train = _read_jsonl(ds_dir / "boundary_neg_train.jsonl")
+    bitext_clean = _read_jsonl(ds_dir / "bitext_train_clean.jsonl")
+    bitext_noisy = _read_jsonl(ds_dir / "bitext_train_noisy.jsonl")
+    pos_cal = _read_jsonl(ds_dir / "boundary_pos_calibration.jsonl")
+    neg_cal = _read_jsonl(ds_dir / "boundary_neg_calibration.jsonl")
+    pos_eval = _read_jsonl(ds_dir / "boundary_pos_evaluation.jsonl")
+    neg_eval = _read_jsonl(ds_dir / "boundary_neg_evaluation.jsonl")
+    bitext_test = _read_jsonl(ds_dir / "bitext_test_6690.jsonl")
+    full_train = _read_jsonl(ds_dir / "full_train_split.jsonl")
+    full_cal = _read_jsonl(ds_dir / "full_cal_split.jsonl")
+
+    leaked_ext_ids = [
+        str(r.get("sample_id"))
+        for r in (pos_train + full_train)
+        if str(r.get("sample_id", "")).startswith("orig_ret_ch_")
+    ]
+    if leaked_ext_ids:
+        raise ValueError(f"Unexpected return-contrast extension IDs in zero-delta control: {leaked_ext_ids}")
+
+    validate_boundary_split_taxonomy(pos_train, neg_train, "orig_fit2_zero_delta_control_train")
+    validate_boundary_split_taxonomy(pos_cal, neg_cal, "orig_fit2_zero_delta_control_cal")
+    validate_boundary_split_taxonomy(pos_eval, neg_eval, "orig_fit2_zero_delta_control_eval")
+
+    control_exposure = compute_effective_train_exposure(
+        pos_train=pos_train,
+        bitext_clean=bitext_clean,
+        bitext_noisy=bitext_noisy,
+        neg_train=neg_train,
+    )
+    if int(control_exposure["effective_train_total"]) != 13000 or len(full_train) != 11320 or len(pos_train) != 181:
+        raise RuntimeError(
+            f"Unexpected zero-delta control counts: pos_train={len(pos_train)}, "
+            f"full_train={len(full_train)}, exposure={control_exposure}"
+        )
+
+    historical_noisy_overlap = _measure_historical_noisy_overlap(
+        bitext_noisy=bitext_noisy,
+        bitext_clean=bitext_clean,
+        cal_rows=full_cal,
+        eval_rows=pos_eval + neg_eval + bitext_test,
+    )
+    trunc_audit = base_lock.get("token_truncation_audit_max_length_64") or {}
+    if int((trunc_audit.get("train_all") or {}).get("count", -1)) != len(full_train):
+        raise RuntimeError(
+            f"token_truncation_audit_max_length_64.train_all count mismatch: "
+            f"{trunc_audit.get('train_all')} != {len(full_train)}"
+        )
+
+    lock_manifest = dict(base_lock)
+    lock_manifest["schema_version"] = "orig_fit2_zero_delta_control_lock.v1"
+    lock_manifest["extension_version"] = "orig_fit2_zero_delta_control_v1"
+    lock_manifest["delta_absent"] = True
+    lock_manifest["kb_version"] = KB_VERSION
+    lock_manifest["policy_version"] = POLICY_VERSION
+    lock_manifest["counts"] = {
+        **base_lock["counts"],
+        "domain_pos_train": len(pos_train),
+        "extension_pos_train_added": 0,
+        "full_train_split_rows": len(full_train),
+        "effective_train_total": int(control_exposure["effective_train_total"]),
+    }
+    lock_manifest["orig_fit2_stage2_reference_hashes"] = orig_ref_hashes
+    lock_manifest["new_input_file_hashes"] = dict(baseline_file_hashes)
+    lock_manifest["baseline_vs_new_diff"] = {
+        "changed_files": {},
+        "unchanged_bit_identical_files": list(EXPECTED_ORIG_STAGE2_LOCKED_FILES),
+        "delta_absent": True,
+        "extension_file": None,
+        "extension_pos_train_added": 0,
+        "raw_and_effective_exposure_control": control_exposure,
+        "exposure_delta": {
+            "raw_domain_return_policy_delta": 0,
+            "raw_domain_return_product_in_store_delta": 0,
+            "effective_domain_return_policy_delta": 0,
+            "effective_domain_return_product_in_store_delta": 0,
+            "effective_train_total_delta": 0,
+        },
+    }
+    lock_manifest["historical_baseline_noisy_overlap_disclosure"] = historical_noisy_overlap
+    lock_path = ds_dir / "dataset_lock_manifest.json"
+    lock_path.write_text(json.dumps(lock_manifest, indent=2) + "\n", encoding="utf-8")
+    return lock_manifest
+
