@@ -3,9 +3,11 @@
 A replica runs with its claim loop, the logging setup and redactor of the process, and the
 redacting span processor (TEST-26, LOG-29). A customer writes a message with every value that
 backend holds for the ticket; its suggestion job pseudonymizes it and calls an in-memory
-ai-service that serves the contract's examples; staff then use every console operation built
-so far. No seeded value reaches a request to ai-service (FR-09, SEC-36), and no seeded value,
-message text, or AI text reaches a log line or a span.
+ai-service that serves the contract's examples; staff and a manager then use every console
+operation built so far: staff propose the reply and a manager sends it, and staff escalate a
+second ticket that a manager answers. Reply bodies and staff notes hold seeded values too. No
+seeded value reaches a request to ai-service (FR-09, SEC-36), and no seeded value, message
+text, staff note, or AI text reaches a log line or a span.
 
 The test waits for the events of the jobs, never for real time: the waits of the clock end
 only on a wake-up of the claim loop, and the bound fails the test instead of letting it hang
@@ -29,6 +31,7 @@ from supportiq_backend.platform.adapters.logging_setup import (
     StandardLibraryEventRecorder,
     configure_logging,
 )
+from tests.contract.calls import KB_DOCUMENT_VERSION
 from tests.integration.accounts.password_requests import sign_in
 from tests.integration.ai_service_doubles import (
     EXAMPLE_OF_PATH,
@@ -43,6 +46,7 @@ from tests.integration.builders import (
     OrderSpec,
     RefundSpec,
     ShipmentSpec,
+    TicketSpec,
 )
 from tests.integration.claim_loop_doubles import SignallingEventRecorder, WakeUpOnlyClock
 from tests.integration.database import WorkerDatabase
@@ -56,6 +60,7 @@ NAME_PARTS = ("Quynh", "Telemetria")
 CUSTOMER_LOGIN = "customer-workflow"
 STAFF_LOGIN = "staff-workflow"
 STAFF_DISPLAY_NAME = "Staff Workflowmember"
+MANAGER_LOGIN = "manager-workflow"
 UNKNOWN_TRACKING_CODE = "TRK-0000077777"
 PRIVATE_WORDS = "it holds a private gift"
 AI_TEXTS = ("thank you for your patience", "Check each statement against its cited source")
@@ -65,7 +70,10 @@ BOUND_MS = 10_000
 TICKET_KEY = "00000000-0000-4000-8000-0000000000b1"
 VIEW_KEY = "00000000-0000-4000-8000-0000000000a1"
 CORRECTION_KEY = "00000000-0000-4000-8000-0000000000a2"
-REPLY_KEY = "00000000-0000-4000-8000-0000000000a3"
+PROPOSAL_KEY = "00000000-0000-4000-8000-0000000000a3"
+REPLY_KEY = "00000000-0000-4000-8000-0000000000a4"
+ESCALATION_KEY = "00000000-0000-4000-8000-0000000000a5"
+ESCALATED_REPLY_KEY = "00000000-0000-4000-8000-0000000000a6"
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,11 +84,16 @@ class Scenario:
         order_id: The customer's order.
         seeded_values: Every personal value of the ticket that backend holds.
         message: The customer's message, with every seeded value in it.
+        escalated_ticket_id: A second ticket of the customer, without a suggestion, that staff
+            escalate.
+        phone: The customer's phone number, which the escalation note and its reply name.
     """
 
     order_id: str
     seeded_values: tuple[str, ...]
     message: str
+    escalated_ticket_id: str
+    phone: str
 
 
 async def column(builder: DatabaseBuilder, statement: str, **parameters: object) -> str:
@@ -114,7 +127,14 @@ async def scenario(builder: DatabaseBuilder, known_password_hash: PasswordHash) 
         f"{address}. Mail {email} or call {phone}; {PRIVATE_WORDS}."
     )
     seeded = (DISPLAY_NAME, *NAME_PARTS, email, phone, order_id, address, transaction_id)
-    return Scenario(order_id, (*seeded, tracking_code, UNKNOWN_TRACKING_CODE), message)
+    escalated_ticket_id = await builder.ticket(customer_id, order_id, TicketSpec(message=message))
+    return Scenario(
+        order_id,
+        (*seeded, tracking_code, UNKNOWN_TRACKING_CODE),
+        message,
+        escalated_ticket_id,
+        phone,
+    )
 
 
 async def insert_accounts(builder: DatabaseBuilder, password_hash: PasswordHash) -> UUID:
@@ -135,6 +155,9 @@ async def insert_accounts(builder: DatabaseBuilder, password_hash: PasswordHash)
             password_hash=password_hash,
         )
     )
+    await builder.account(
+        AccountSpec("manager", login_name=MANAGER_LOGIN, password_hash=password_hash)
+    )
     return customer_id
 
 
@@ -148,7 +171,8 @@ async def use_the_console(
     staff: httpx.Response,
     ticket_id: str,
     events: SignallingEventRecorder,
-) -> int:
+) -> str:
+    """Correct the intent, wait for the new draft, and return the corrected suggestion ID."""
     read = headers_of(staff)
     path = f"/v1/console/tickets/{ticket_id}"
     await client.get("/v1/console/tickets", params={"status": "open"}, headers=read)
@@ -162,17 +186,63 @@ async def use_the_console(
     corrected = created.json()["suggestion_id"]
     await events.wait_for(EventName.SUGGESTION_COMPLETED, suggestion_id=corrected)
     await client.get(path, headers=read)
+    await client.get(KB_DOCUMENT_VERSION, headers=read)
+    return corrected
+
+
+async def propose_and_send(
+    client: httpx.AsyncClient,
+    people: tuple[httpx.Response, httpx.Response],
+    ticket_id: str,
+    suggestion_id: str,
+) -> tuple[int, int]:
+    """Let staff propose an edited draft with a note, and a manager send the proposal."""
+    staff, manager = people
+    path = f"/v1/console/tickets/{ticket_id}"
+    body = f"Hello {DISPLAY_NAME}, your refund request is under review."
+    proposed = await client.post(
+        f"{path}/reply-proposals",
+        json={
+            "basis": "ai_draft",
+            "suggestion_id": suggestion_id,
+            "body": body,
+            "acknowledged_warning_ids": [],
+            "staff_reason_codes": ["other"],
+            "note": f"Customer wrote {PRIVATE_WORDS}.",
+        },
+        headers=headers_of(staff, PROPOSAL_KEY),
+    )
+    await client.get(path, headers=headers_of(manager))
     sent = await client.post(
         f"{path}/replies",
         json={
-            "basis": "ai_draft",
-            "suggestion_id": corrected,
-            "body": "Hello, your refund request is under review.",
-            "acknowledged_warning_ids": [],
+            "basis": "reply_proposal",
+            "body": body,
+            "proposal_id": proposed.json()["proposal_id"],
         },
-        headers=headers_of(staff, REPLY_KEY),
+        headers=headers_of(manager, REPLY_KEY),
     )
-    return sent.status_code
+    return proposed.status_code, sent.status_code
+
+
+async def escalate_and_send(
+    client: httpx.AsyncClient, people: tuple[httpx.Response, httpx.Response], scenario: Scenario
+) -> tuple[int, int]:
+    """Let staff escalate the second ticket with a note, and a manager answer it."""
+    staff, manager = people
+    path = f"/v1/console/tickets/{scenario.escalated_ticket_id}"
+    escalated = await client.post(
+        f"{path}/escalations",
+        json={"staff_reason_codes": ["other"], "note": f"Call {scenario.phone}."},
+        headers=headers_of(staff, ESCALATION_KEY),
+    )
+    await client.get(path, headers=headers_of(manager))
+    sent = await client.post(
+        f"{path}/replies",
+        json={"basis": "no_ai_draft", "body": f"We will call {scenario.phone}."},
+        headers=headers_of(manager, ESCALATED_REPLY_KEY),
+    )
+    return escalated.status_code, sent.status_code
 
 
 @pytest.mark.usefixtures("restored_root_logger")
@@ -201,17 +271,25 @@ async def test_no_personal_or_ai_text_reaches_telemetry_or_ai_service(
         )
         await events.wait_for(EventName.SUGGESTION_COMPLETED)
         staff = await sign_in(client, STAFF_LOGIN, KNOWN_PASSWORD)
-        reply_status = await use_the_console(client, staff, created.json()["ticket_id"], events)
+        manager = await sign_in(client, MANAGER_LOGIN, KNOWN_PASSWORD)
+        ticket_id = created.json()["ticket_id"]
+        corrected = await use_the_console(client, staff, ticket_id, events)
+        proposal_statuses = await propose_and_send(client, (staff, manager), ticket_id, corrected)
+        escalation_statuses = await escalate_and_send(client, (staff, manager), scenario)
 
     logs = log_stream.getvalue()
     spans = spans_as_text(exported_spans)
     forbidden = (*scenario.seeded_values, scenario.message, PRIVATE_WORDS, *AI_TEXTS)
-    assert reply_status == httpx.codes.CREATED
+    assert proposal_statuses == (httpx.codes.CREATED, httpx.codes.CREATED)
+    assert escalation_statuses == (httpx.codes.CREATED, httpx.codes.CREATED)
     sent_to_ai_service = ai_service.sent_text()
-    assert set(ai_service.paths()) == set(EXAMPLE_OF_PATH)
+    kb_read = KB_DOCUMENT_VERSION.replace("/v1/console/", "/v1/", 1)
+    assert set(ai_service.paths()) == {*EXAMPLE_OF_PATH, kb_read}
     assert [value for value in scenario.seeded_values if value in sent_to_ai_service] == []
     assert [value for value in forbidden if value in logs] == []
     assert [value for value in forbidden if value in spans] == []
     assert '"event":"suggestion.completed"' in logs
+    assert '"event":"reply_proposal.submitted"' in logs
+    assert '"event":"ticket.escalated"' in logs
     assert '"event":"reply.sent"' in logs
     assert "'run_suggestion_job'" in spans

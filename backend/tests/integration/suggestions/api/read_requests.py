@@ -1,0 +1,48 @@
+"""What the tests of the reads of ai-service share: sessions of each role and problem bodies."""
+
+from collections.abc import Awaitable, Callable
+
+import httpx
+
+from tests.integration.accounts.admin_requests import sign_in_as_new_admin
+from tests.integration.ai_service_doubles import read_example
+from tests.integration.application import session_headers
+from tests.integration.builders import DatabaseBuilder
+from tests.integration.tickets.console_requests import sign_in_as_support
+
+PROBLEM_MEDIA_TYPE = "application/problem+json"
+
+# Signs in a new account of one role and returns the headers of its requests.
+type SignIn = Callable[[DatabaseBuilder], Awaitable[dict[str, str]]]
+
+
+async def sign_in_as_customer(builder: DatabaseBuilder) -> dict[str, str]:
+    account_id, _ = await builder.customer_account()
+    return session_headers(await builder.session(account_id, "customer"))
+
+
+async def sign_in_as_staff(builder: DatabaseBuilder) -> dict[str, str]:
+    return (await sign_in_as_support(builder, "staff")).headers
+
+
+async def sign_in_as_manager(builder: DatabaseBuilder) -> dict[str, str]:
+    return (await sign_in_as_support(builder, "manager")).headers
+
+
+async def sign_in_as_admin(builder: DatabaseBuilder) -> dict[str, str]:
+    _, token = await sign_in_as_new_admin(builder)
+    return session_headers(token)
+
+
+def problem_of(response: httpx.Response) -> tuple[str, dict[str, object]]:
+    """Return the media type and the body of a problem response, without its `trace_id`."""
+    body: dict[str, object] = response.json()
+    del body["trace_id"]
+    return response.headers["content-type"], body
+
+
+def problem_example(name: str) -> tuple[str, dict[str, object]]:
+    """Return what `problem_of` returns for a problem example of the contracts."""
+    body = read_example(f"problems/{name}.json")
+    del body["trace_id"]
+    return PROBLEM_MEDIA_TYPE, body

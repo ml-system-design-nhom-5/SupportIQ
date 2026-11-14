@@ -1,14 +1,16 @@
-"""The wiring of suggestions and pseudonymization: the ai-service client and the job queue."""
+"""The wiring of suggestions and pseudonymization: the ai-service client, the queue, and reads."""
 
 from dataclasses import dataclass
 
 import httpx
+from fastapi import APIRouter
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from supportiq_backend.accounts import Authorizer
 from supportiq_backend.audit.adapters.audit_log import PostgresAuditLog
 from supportiq_backend.commerce.adapters.commerce_gateway import PostgresCommerceGateway
 from supportiq_backend.commerce.adapters.customer_records import PostgresCustomerRecords
+from supportiq_backend.composition_root.accounts_wiring import AccountsWiring
 from supportiq_backend.composition_root.shared_ports import SharedPorts
 from supportiq_backend.idempotency.adapters.idempotency_store import PostgresIdempotencyStore
 from supportiq_backend.platform.adapters.database import SqlAlchemyTransactionRunner
@@ -25,11 +27,14 @@ from supportiq_backend.pseudonymization.adapters.pseudonym_map_store import (
     PostgresPseudonymMapStore,
 )
 from supportiq_backend.suggestions import (
+    AiServiceReadPorts,
     ClaimLoop,
     ClaimStores,
     CreateSuggestion,
     CreateSuggestionPorts,
     CreateSuggestionStores,
+    GetAdminVersions,
+    GetConsoleKbDocumentVersion,
     JobRunnerPorts,
     JobStores,
     QueueSettings,
@@ -46,6 +51,11 @@ from supportiq_backend.suggestions.adapters.suggestion_store import (
     PostgresSuggestionJobStore,
     PostgresSuggestionStore,
 )
+from supportiq_backend.suggestions.api.admin import AdminVersionsRoutes, build_admin_versions_router
+from supportiq_backend.suggestions.api.console import (
+    ConsoleKbDocumentRoutes,
+    build_console_kb_documents_router,
+)
 from supportiq_backend.tickets.adapters.console_store import PostgresTicketLinks
 from supportiq_backend.tickets.api.console import render_created_suggestion
 
@@ -60,6 +70,7 @@ class SuggestionsWiring:
         claim_loop: The claim loop of this replica, run by the lifespan.
         starter: Starts suggestions.
         create_suggestion: The use case of `createSuggestion`.
+        routers: The routers of the console's KB document read and of the versions in use.
     """
 
     ai_client: httpx.AsyncClient
@@ -67,6 +78,7 @@ class SuggestionsWiring:
     claim_loop: ClaimLoop
     starter: SuggestionStarter
     create_suggestion: CreateSuggestion
+    routers: tuple[APIRouter, ...]
 
 
 def to_queue_settings(settings: Settings) -> QueueSettings:
@@ -155,10 +167,10 @@ def wire_suggestions(
     settings: Settings,
     session_factory: async_sessionmaker[AsyncSession],
     shared: SharedPorts,
-    authorizer: Authorizer,
+    accounts: AccountsWiring,
     ai_service_transport: httpx.AsyncBaseTransport | None,
 ) -> SuggestionsWiring:
-    """Create the ai-service client, pseudonymization, the claim loop, and the starter.
+    """Create the ai-service client, pseudonymization, the claim loop, the starter, and reads.
 
     Nothing here opens a connection: the client connects on the first call.
 
@@ -166,7 +178,7 @@ def wire_suggestions(
         settings: The validated settings.
         session_factory: The session factory of the replicas.
         shared: The shared ports.
-        authorizer: The role checks.
+        accounts: The role checks and the session dependency.
         ai_service_transport: The transport of the ai-service client; None for the network.
 
     Returns:
@@ -195,8 +207,17 @@ def wire_suggestions(
             queue=claim_loop,
         )
     )
-    create_suggestion = _build_create_suggestion(session_factory, shared, authorizer, starter)
-    return SuggestionsWiring(ai_client, ai_service, claim_loop, starter, create_suggestion)
+    create_suggestion = _build_create_suggestion(
+        session_factory, shared, accounts.authorizer, starter
+    )
+    return SuggestionsWiring(
+        ai_client,
+        ai_service,
+        claim_loop,
+        starter,
+        create_suggestion,
+        routers=_build_read_routers(settings, shared, accounts, ai_service),
+    )
 
 
 def _build_claim_loop(
@@ -245,6 +266,28 @@ def _build_create_suggestion(
             events=shared.events,
         ),
         render_created_suggestion,
+    )
+
+
+def _build_read_routers(
+    settings: Settings, shared: SharedPorts, accounts: AccountsWiring, ai_service: HttpAiService
+) -> tuple[APIRouter, ...]:
+    ports = AiServiceReadPorts(
+        authorizer=accounts.authorizer, ai_service=ai_service, events=shared.events
+    )
+    return (
+        build_console_kb_documents_router(
+            ConsoleKbDocumentRoutes(
+                get_document_version=GetConsoleKbDocumentVersion(ports),
+                current_session=accounts.current_session,
+            )
+        ),
+        build_admin_versions_router(
+            AdminVersionsRoutes(
+                get_versions=GetAdminVersions(ports, settings.backend_build_version),
+                current_session=accounts.current_session,
+            )
+        ),
     )
 
 

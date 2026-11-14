@@ -12,6 +12,7 @@ class AiServiceOperation(StrEnum):
     CREATE_ANALYSIS = "createAnalysis"
     CREATE_DRAFT = "createDraft"
     GET_ASSET_VERSIONS = "getAssetVersions"
+    GET_KB_DOCUMENT_VERSION = "getKbDocumentVersion"
 
 
 def record_ai_service_failure(

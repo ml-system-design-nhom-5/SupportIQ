@@ -1,4 +1,4 @@
-"""The console's reads: `listConsoleTickets` and `getConsoleTicket`, and their stores and ports.
+"""The console's reads: `listConsoleTickets` and `getConsoleTicket`.
 
 Every use case checks the role first, in the application layer (SEC-16), and an admin gets
 `403` on every one of them (SEC-41).
@@ -6,109 +6,48 @@ Every use case checks the role first, in the application layer (SEC-16), and an 
 
 from dataclasses import dataclass
 
-from supportiq_backend.accounts import (
-    Authorizer,
-    Principal,
-    StaffDirectory,
-    SupportPrincipal,
-)
-from supportiq_backend.audit import AuditLog
-from supportiq_backend.commerce import AddressedOrder, CustomerRecords, Order
-from supportiq_backend.idempotency import (
-    IdempotencyGuard,
-    IdempotencyStore,
-)
-from supportiq_backend.platform import (
-    Clock,
-    EventRecorder,
-    IdGenerator,
-    OperationId,
-    StepTracer,
-    TraceContext,
-    TransactionRunner,
-)
-from supportiq_backend.pseudonymization import MapTicketId
-from supportiq_backend.suggestions import (
-    AiService,
-    DraftReady,
-    PseudonymRestorer,
-    Suggestion,
-    SuggestionStarter,
-    SuggestionStore,
-    SuggestionTickets,
+from supportiq_backend.accounts import AccountId, Principal, SupportPrincipal
+from supportiq_backend.commerce import AddressedOrder, Order
+from supportiq_backend.platform import OperationId, TransactionRunner
+from supportiq_backend.tickets.application.console_ports import (
+    ConsolePorts,
+    ConsoleStores,
+    load_current_suggestion,
+    restore_suggestion,
 )
 from supportiq_backend.tickets.domain import (
     OTHER_ORDERS_LIMIT,
     ConsoleTicket,
     ConsoleTicketPosition,
-    ConsoleTicketStore,
-    HandlingMode,
+    Escalation,
+    EscalationRecord,
+    ProposalRecord,
+    ReplyProposal,
     ReplyRecord,
-    ReplyStore,
-    RestoredSuggestion,
+    SentReply,
     TicketId,
     TicketNotFoundError,
     TicketStatus,
     TicketSummary,
     TicketSummaryPage,
     TicketWorkspace,
-    build_draft_text,
     compute_allowed_actions,
 )
 
 
-@dataclass(frozen=True, slots=True)
-class ConsoleStores:
-    """The stores of the console use cases, all in one transaction.
+@dataclass(frozen=True, slots=True, repr=False)
+class _StaffActions:
+    """What staff and managers did on a ticket, with their display names.
 
     Attributes:
-        tickets: The tickets and their messages.
-        replies: The replies and staff decisions.
-        suggestions: The suggestions.
-        links: The ticket rows that suggestions reads and links.
-        records: The customers' commerce records, read-only.
-        staff: The display names of staff and managers.
-        restorer: Restores pseudonyms in AI text, in this transaction.
-        idempotency: The idempotency records.
-        audit: The audit log.
+        proposal: The reply proposal, once submitted.
+        escalation: The escalation, once escalated.
+        reply: The reply, once sent.
     """
 
-    tickets: ConsoleTicketStore
-    replies: ReplyStore
-    suggestions: SuggestionStore
-    links: SuggestionTickets
-    records: CustomerRecords
-    staff: StaffDirectory
-    restorer: PseudonymRestorer
-    idempotency: IdempotencyStore
-    audit: AuditLog
-
-
-@dataclass(frozen=True, slots=True)
-class ConsolePorts:
-    """The ports of the console use cases besides their stores.
-
-    Attributes:
-        authorizer: The role checks.
-        guard: The idempotency guard.
-        clock: The clock.
-        ids: Generates the IDs of new records.
-        traces: Tells the trace of the request.
-        events: Where events are recorded.
-        steps: Runs a step in its span.
-        starter: Starts suggestions.
-        ai_service: The client of ai-service, for the KB version of a first view.
-    """
-
-    authorizer: Authorizer
-    guard: IdempotencyGuard
-    clock: Clock
-    ids: IdGenerator
-    traces: TraceContext
-    events: EventRecorder
-    steps: StepTracer
-    starter: SuggestionStarter
-    ai_service: AiService
+    proposal: ProposalRecord | None
+    escalation: EscalationRecord | None
+    reply: ReplyRecord | None
 
 
 class ListConsoleTickets:
@@ -235,7 +174,7 @@ class GetConsoleTicket:
             orders = await stores.records.load_addressed_orders(
                 ticket.customer_id, ticket.order_id, OTHER_ORDERS_LIMIT
             )
-            reply = await self._load_reply(stores, ticket)
+            actions = await _load_staff_actions(stores, ticket)
         order, other_orders = _split_orders(ticket, orders)
         return TicketWorkspace(
             ticket=ticket,
@@ -244,71 +183,47 @@ class GetConsoleTicket:
             order=order,
             other_orders=other_orders,
             suggestion=restored,
-            reply=reply,
+            proposal=actions.proposal,
+            escalation=actions.escalation,
+            reply=actions.reply,
             allowed_actions=compute_allowed_actions(ticket, suggestion, support.role),
         )
 
-    async def _load_reply(self, stores: ConsoleStores, ticket: ConsoleTicket) -> ReplyRecord | None:
-        reply = await stores.replies.load_reply(ticket.ticket_id)
-        if reply is None:
-            return None
-        names = await stores.staff.load_display_names(frozenset({reply.sent_by}))
-        # The foreign key of `replies.sent_by_account_id` makes the name always present.
-        return ReplyRecord(reply, names[reply.sent_by])
 
-
-async def load_current_suggestion(
-    suggestions: SuggestionStore, ticket: ConsoleTicket
-) -> Suggestion | None:
-    """Load the current suggestion of a ticket in assisted mode.
-
-    Args:
-        suggestions: The suggestion store of the transaction.
-        ticket: The ticket.
-
-    Returns:
-        The suggestion, or None in manual mode or before the first one.
-    """
-    if ticket.handling_mode is HandlingMode.MANUAL or ticket.current_suggestion_id is None:
-        return None
-    return await suggestions.load_suggestion(ticket.current_suggestion_id)
-
-
-async def restore_suggestion(
-    restorer: PseudonymRestorer, suggestion: Suggestion
-) -> RestoredSuggestion:
-    """Restore the pseudonyms of a suggestion's draft and staff note (ADR-0010).
-
-    Args:
-        restorer: Restores pseudonyms in the caller's transaction.
-        suggestion: The suggestion as stored.
-
-    Returns:
-        The suggestion with its restored texts and the canonical draft text.
-    """
-    draft = suggestion.ready_draft
-    segments = () if draft is None else draft.draft.segments
-    note = suggestion.staff_note
-    texts = (*(segment.text for segment in segments), *(() if note is None else (note,)))
-    restored = await restorer.restore(MapTicketId(suggestion.ticket_id), texts)
-    segment_texts = restored[: len(segments)]
-    return RestoredSuggestion(
-        suggestion=suggestion,
-        segment_texts=segment_texts,
-        draft_text=_draft_text(draft, segment_texts),
-        staff_note=None if note is None else restored[len(segments)],
+async def _load_staff_actions(stores: ConsoleStores, ticket: ConsoleTicket) -> _StaffActions:
+    # An open ticket has no proposal, escalation, or reply yet (the state machine), so the
+    # workspace that the console polls while a part is pending reads none of them.
+    if ticket.status is TicketStatus.OPEN:
+        return _StaffActions(None, None, None)
+    proposal = await stores.proposals.load_proposal(ticket.ticket_id)
+    escalation = await stores.escalations.load_escalation(ticket.ticket_id)
+    reply = await stores.replies.load_reply(ticket.ticket_id)
+    names = await stores.staff.load_display_names(_actors_of(proposal, escalation, reply))
+    # The foreign keys to `accounts` make the name of every actor present.
+    return _StaffActions(
+        proposal=(
+            None if proposal is None else ProposalRecord(proposal, names[proposal.proposed_by])
+        ),
+        escalation=(
+            None
+            if escalation is None
+            else EscalationRecord(escalation, names[escalation.escalated_by])
+        ),
+        reply=None if reply is None else ReplyRecord(reply, names[reply.sent_by]),
     )
 
 
-def _draft_text(draft: DraftReady | None, segment_texts: tuple[str, ...]) -> str | None:
-    if draft is None:
-        return None
-    return build_draft_text(
-        tuple(
-            (segment.paragraph_index, text)
-            for segment, text in zip(draft.draft.segments, segment_texts, strict=True)
-        )
-    )
+def _actors_of(
+    proposal: ReplyProposal | None, escalation: Escalation | None, reply: SentReply | None
+) -> frozenset[AccountId]:
+    actors: set[AccountId] = set()
+    if proposal is not None:
+        actors.add(proposal.proposed_by)
+    if escalation is not None:
+        actors.add(escalation.escalated_by)
+    if reply is not None:
+        actors.add(reply.sent_by)
+    return frozenset(actors)
 
 
 def _split_orders(

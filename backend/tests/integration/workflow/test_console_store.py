@@ -18,11 +18,13 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from supportiq_backend.accounts import CustomerId
 from supportiq_backend.commerce import OrderId
+from supportiq_backend.platform import DatabaseOperationError
 from supportiq_backend.platform.adapters.database import create_session_factory
 from supportiq_backend.tickets import (
     ConsoleTicket,
     ConsoleTicketPosition,
     HandlingMode,
+    ManagerQueue,
     TicketId,
     TicketStatus,
 )
@@ -43,6 +45,7 @@ PAGE_LIMIT = 20
 MESSAGE = "Where is my parcel? It was due on Monday."
 UNKNOWN_TICKET_IDS = [TicketId("TCK-9999"), TicketId("TCK-\x00")]
 QUEUES_BY_CREATION = [TicketStatus.OPEN, TicketStatus.AWAITING_APPROVAL, TicketStatus.ESCALATED]
+MANAGER_QUEUES: list[ManagerQueue] = [TicketStatus.AWAITING_APPROVAL, TicketStatus.ESCALATED]
 HANDLING_STARTED_AT = "SELECT handling_started_at FROM tickets"
 
 
@@ -114,6 +117,14 @@ async def lock_and_commit(engine: AsyncEngine, ticket_id: TicketId) -> ConsoleTi
         ticket = await PostgresConsoleTicketStore(session).lock_console_ticket(ticket_id)
         await session.commit()
     return ticket
+
+
+async def move_to_manager_queue(
+    engine: AsyncEngine, ticket_id: TicketId, queue: ManagerQueue
+) -> None:
+    async with create_session_factory(engine)() as session:
+        await PostgresConsoleTicketStore(session).move_to_manager_queue(ticket_id, queue)
+        await session.commit()
 
 
 async def start_handling(engine: AsyncEngine, ticket_id: TicketId, started_at: datetime) -> None:
@@ -297,3 +308,35 @@ async def test_close_ticket_sets_the_ticket_closed_at_the_time_of_the_reply(
     closed = await load_ticket(app_engine, ticket_id)
     assert closed is not None
     assert (closed.status, closed.closed_at) == (TicketStatus.CLOSED, THIRD)
+
+
+@pytest.mark.parametrize("queue", MANAGER_QUEUES)
+async def test_move_to_manager_queue_moves_an_open_ticket_and_keeps_it_unclosed(
+    app_engine: AsyncEngine,
+    builder: DatabaseBuilder,
+    customer_order: CustomerOrder,
+    queue: ManagerQueue,
+) -> None:
+    ticket_id = await insert_ticket_at(builder, customer_order, FIRST)
+
+    await move_to_manager_queue(app_engine, ticket_id, queue)
+
+    moved = await load_ticket(app_engine, ticket_id)
+    assert moved is not None
+    assert (moved.status, moved.closed_at) == (queue, None)
+
+
+@pytest.mark.parametrize("queue", MANAGER_QUEUES)
+async def test_move_to_manager_queue_of_a_closed_ticket_is_refused_by_the_state_machine(
+    app_engine: AsyncEngine,
+    owner_engine: AsyncEngine,
+    builder: DatabaseBuilder,
+    customer_order: CustomerOrder,
+    queue: ManagerQueue,
+) -> None:
+    ticket_id = await insert_closed_ticket(owner_engine, builder, customer_order, SECOND)
+
+    with pytest.raises(DatabaseOperationError):
+        await move_to_manager_queue(app_engine, ticket_id, queue)
+
+    assert await builder.scalar("SELECT status FROM tickets") == "closed"

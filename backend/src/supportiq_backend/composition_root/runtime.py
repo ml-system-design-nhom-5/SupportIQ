@@ -107,7 +107,7 @@ def build_runtime(
     shared = build_shared_ports(settings, events, clock, tracer_provider)
     accounts = wire_accounts(settings, session_factory, shared)
     suggestions = wire_suggestions(
-        settings, session_factory, shared, accounts.authorizer, ai_service_transport
+        settings, session_factory, shared, accounts, ai_service_transport
     )
     return Runtime(
         tracer_provider=tracer_provider,
@@ -117,6 +117,7 @@ def build_runtime(
             *accounts.routers,
             wire_commerce(session_factory, accounts),
             *wire_tickets(settings, session_factory, shared, accounts, suggestions),
+            *suggestions.routers,
         ),
         ai_client=suggestions.ai_client,
         claim_loop=suggestions.claim_loop,

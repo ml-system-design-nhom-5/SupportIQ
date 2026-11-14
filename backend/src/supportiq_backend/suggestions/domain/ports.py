@@ -22,6 +22,11 @@ from supportiq_backend.suggestions.domain.ai_results import (
 )
 from supportiq_backend.suggestions.domain.completions import PartCompletion
 from supportiq_backend.suggestions.domain.jobs import ClaimedJob, LockedJob
+from supportiq_backend.suggestions.domain.kb_documents import (
+    KbDocumentId,
+    KbDocumentVersion,
+    KbDocumentVersionTag,
+)
 from supportiq_backend.suggestions.domain.labels import IntentLabel
 from supportiq_backend.suggestions.domain.suggestions import (
     Suggestion,
@@ -294,6 +299,24 @@ class AiService(Protocol):
         Raises:
             AiServiceUnavailableError: A timeout, a connection error, or a `5xx`.
             AiServiceContractError: A `4xx`, or a response outside the contract.
+        """
+        ...
+
+    async def fetch_kb_document_version(
+        self, document_id: KbDocumentId, version: KbDocumentVersionTag
+    ) -> KbDocumentVersion | None:
+        """Read one version of a KB document in full (`getKbDocumentVersion`).
+
+        Args:
+            document_id: The KB document.
+            version: The version of the document.
+
+        Returns:
+            The document version, or None when the loaded KB has no such version (`404`).
+
+        Raises:
+            AiServiceUnavailableError: A timeout, a connection error, or a `5xx`.
+            AiServiceContractError: Another `4xx`, or a response outside the contract.
         """
         ...
 

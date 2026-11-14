@@ -291,6 +291,7 @@ forbidden_modules = [
     "supportiq_backend.commerce.api",
     "supportiq_backend.tickets.adapters",
     "supportiq_backend.tickets.api",
+    "supportiq_backend.suggestions.api",
     "supportiq_backend.suggestions.adapters",
     "supportiq_backend.pseudonymization.adapters",
     "supportiq_backend.audit.adapters",
@@ -336,6 +337,7 @@ forbidden_modules = [
     "supportiq_backend.commerce.api",
     "supportiq_backend.tickets.application",
     "supportiq_backend.tickets.api",
+    "supportiq_backend.suggestions.api",
     "supportiq_backend.suggestions.application",
     "supportiq_backend.pseudonymization.application",
     "supportiq_backend.idempotency.application",
@@ -350,6 +352,7 @@ source_modules = [
     "supportiq_backend.accounts.api",
     "supportiq_backend.commerce.api",
     "supportiq_backend.tickets.api",
+    "supportiq_backend.suggestions.api",
     "supportiq_backend.platform.web",
 ]
 forbidden_modules = [
@@ -366,6 +369,7 @@ source_modules = [
     "supportiq_backend.accounts.api",
     "supportiq_backend.commerce.api",
     "supportiq_backend.tickets.api",
+    "supportiq_backend.suggestions.api",
     "supportiq_backend.platform.web",
 ]
 forbidden_modules = [
@@ -388,6 +392,7 @@ forbidden_modules = [
     "supportiq_backend.suggestions.domain",
     "supportiq_backend.suggestions.application",
     "supportiq_backend.suggestions.adapters",
+    "supportiq_backend.suggestions.api",
     "supportiq_backend.pseudonymization.domain",
     "supportiq_backend.pseudonymization.application",
     "supportiq_backend.pseudonymization.adapters",

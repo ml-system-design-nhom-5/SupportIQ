@@ -1,4 +1,4 @@
-"""Map the console's tickets to `backend` contract 1.2.0: queue summaries, workspace, reply.
+"""Map the console's tickets to `backend` contract 1.2.0: queues, workspace, and staff actions.
 
 Pseudonyms are already restored in the texts that reach this module (ADR-0010). The console's
 order views repeat the shop's order schemas, so they reuse the shop's order mapping, which
@@ -19,9 +19,12 @@ from supportiq_backend.generated import (
     ConsoleOtherOrderView,
     ConsoleReplyView,
     ConsoleTicketStatus,
+    EscalationView,
     MessageText,
     ReplyBody,
+    ReplyProposalView,
     StaffMemberView,
+    StaffNoteText,
     TicketSummaryIntent,
 )
 from supportiq_backend.generated import DraftStatus as ContractDraftStatus
@@ -29,7 +32,9 @@ from supportiq_backend.generated import HandlingMode as ContractHandlingMode
 from supportiq_backend.generated import IntentLabel as ContractIntentLabel
 from supportiq_backend.generated import RefundStatus as ContractRefundStatus
 from supportiq_backend.generated import ReplyBasis as ContractReplyBasis
+from supportiq_backend.generated import ReplyProposalBasis as ContractReplyProposalBasis
 from supportiq_backend.generated import ShipmentStatus as ContractShipmentStatus
+from supportiq_backend.generated import StaffReasonCode as ContractStaffReasonCode
 from supportiq_backend.generated import TicketAction as ContractTicketAction
 from supportiq_backend.generated import TicketSummary as ContractTicketSummary
 from supportiq_backend.generated import TicketWorkspace as ContractTicketWorkspace
@@ -37,7 +42,14 @@ from supportiq_backend.platform.web import format_timestamp
 from supportiq_backend.suggestions import get_part_status
 from supportiq_backend.tickets.api.console_suggestion_views import to_suggestion_view
 from supportiq_backend.tickets.api.order_views import OrderViewMappers
-from supportiq_backend.tickets.domain import ReplyRecord, TicketSummary, TicketWorkspace
+from supportiq_backend.tickets.domain import (
+    EscalationRecord,
+    ProposalRecord,
+    ReplyRecord,
+    StaffReasonCode,
+    TicketSummary,
+    TicketWorkspace,
+)
 
 
 def to_ticket_summary(summary: TicketSummary) -> ContractTicketSummary:
@@ -120,6 +132,10 @@ def to_workspace(
             if workspace.suggestion is None
             else to_suggestion_view(workspace.suggestion, order_views)
         ),
+        proposal=MISSING if workspace.proposal is None else to_proposal_view(workspace.proposal),
+        escalation=(
+            MISSING if workspace.escalation is None else to_escalation_view(workspace.escalation)
+        ),
         reply=MISSING if workspace.reply is None else to_reply_view(workspace.reply),
         allowed_actions=sorted(
             (ContractTicketAction(action.value) for action in workspace.allowed_actions),
@@ -146,6 +162,54 @@ def to_reply_view(record: ReplyRecord) -> ConsoleReplyView:
         proposal_id=MISSING if reply.proposal_id is None else str(reply.proposal_id),
         sent_by=StaffMemberView(account_id=reply.sent_by, display_name=record.sent_by_display_name),
         sent_at=format_timestamp(reply.sent_at),
+    )
+
+
+def to_proposal_view(record: ProposalRecord) -> ReplyProposalView:
+    """Map a reply proposal to the contract.
+
+    Args:
+        record: The proposal and the name of the staff member who submitted it.
+
+    Returns:
+        The contract model.
+    """
+    proposal = record.proposal
+    request = proposal.request
+    return ReplyProposalView(
+        proposal_id=str(proposal.proposal_id),
+        basis=ContractReplyProposalBasis(request.basis.value),
+        body=ReplyBody(MessageText(request.body)),
+        suggestion_id=MISSING if request.suggestion_id is None else request.suggestion_id,
+        staff_reason_codes=_to_reason_codes(request.staff_reason_codes),
+        note=_optional_note(request.note),
+        proposed_by=StaffMemberView(
+            account_id=proposal.proposed_by, display_name=record.proposed_by_display_name
+        ),
+        created_at=format_timestamp(proposal.created_at),
+    )
+
+
+def to_escalation_view(record: EscalationRecord) -> EscalationView:
+    """Map an escalation to the contract.
+
+    Args:
+        record: The escalation and the name of the staff member who escalated.
+
+    Returns:
+        The contract model.
+    """
+    escalation = record.escalation
+    request = escalation.request
+    return EscalationView(
+        escalation_id=str(escalation.escalation_id),
+        staff_reason_codes=_to_reason_codes(request.staff_reason_codes),
+        note=_optional_note(request.note),
+        suggestion_id=MISSING if request.suggestion_id is None else request.suggestion_id,
+        escalated_by=StaffMemberView(
+            account_id=escalation.escalated_by, display_name=record.escalated_by_display_name
+        ),
+        escalated_at=format_timestamp(escalation.escalated_at),
     )
 
 
@@ -181,3 +245,11 @@ def _to_other_order(order: Order, order_views: OrderViewMappers) -> ConsoleOther
 
 def _optional_time(moment: datetime | None) -> str | MISSING:
     return MISSING if moment is None else format_timestamp(moment)
+
+
+def _to_reason_codes(codes: tuple[StaffReasonCode, ...]) -> list[ContractStaffReasonCode]:
+    return [ContractStaffReasonCode(code.value) for code in codes]
+
+
+def _optional_note(note: str | None) -> StaffNoteText | MISSING:
+    return MISSING if note is None else StaffNoteText(note)

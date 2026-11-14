@@ -8,7 +8,7 @@ computed by the same rules, so the console never offers an action that a check w
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from typing import ClassVar
+from typing import ClassVar, Literal
 
 from supportiq_backend.accounts import CustomerId, ForbiddenRoleError, SupportRole
 from supportiq_backend.commerce import OrderId
@@ -24,6 +24,9 @@ from supportiq_backend.tickets.domain.tickets import HandlingMode, TicketId, Tic
 
 # How many characters of the message a ticket summary shows (backend contract 1.2.0).
 MESSAGE_EXCERPT_LENGTH = 160
+
+# The states in which a ticket waits for a manager: after a reply proposal, or an escalation.
+type ManagerQueue = Literal[TicketStatus.AWAITING_APPROVAL, TicketStatus.ESCALATED]
 
 
 class TicketAction(StrEnum):
@@ -131,8 +134,36 @@ def check_reply_allowed(
         raise ForbiddenRoleError
     if role is SupportRole.STAFF and ticket.is_authority_required:
         raise AuthorityRequiredError
-    if suggestion is not None and suggestion.has_pending_part:
-        raise SuggestionPendingError
+    _check_nothing_pending(suggestion)
+
+
+def check_proposal_allowed(ticket: ConsoleTicket, suggestion: Suggestion | None) -> None:
+    """Run steps 4 and 6 of the check order of `createReplyProposal`.
+
+    Step 5, authority, does not apply: staff propose exactly when a ticket requires it.
+
+    Args:
+        ticket: The ticket, locked by the transaction.
+        suggestion: Its current suggestion, when it has one.
+
+    Raises:
+        InvalidTicketStateError: The ticket is not `open`.
+        SuggestionPendingError: A part of the current suggestion is pending.
+    """
+    _check_open(ticket)
+    _check_nothing_pending(suggestion)
+
+
+def check_escalation_allowed(ticket: ConsoleTicket) -> None:
+    """Run step 4 of the check order of `createEscalation`; a pending part does not matter.
+
+    Args:
+        ticket: The ticket, locked by the transaction.
+
+    Raises:
+        InvalidTicketStateError: The ticket is not `open`.
+    """
+    _check_open(ticket)
 
 
 def check_suggestion_is_current(ticket: ConsoleTicket, suggestion_id: SuggestionId | None) -> None:
@@ -147,6 +178,16 @@ def check_suggestion_is_current(ticket: ConsoleTicket, suggestion_id: Suggestion
     """
     if suggestion_id is not None and suggestion_id != ticket.current_suggestion_id:
         raise SuggestionSupersededError
+
+
+def _check_open(ticket: ConsoleTicket) -> None:
+    if ticket.status is not TicketStatus.OPEN:
+        raise InvalidTicketStateError(ticket.status.value)
+
+
+def _check_nothing_pending(suggestion: Suggestion | None) -> None:
+    if suggestion is not None and suggestion.has_pending_part:
+        raise SuggestionPendingError
 
 
 def _may_act_on(ticket: ConsoleTicket, role: SupportRole) -> bool:

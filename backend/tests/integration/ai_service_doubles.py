@@ -18,6 +18,10 @@ EXAMPLE_OF_PATH = {
     "/v1/drafts": "createDraft/draft-ready.json",
     "/v1/asset-versions": "getAssetVersions/loaded.json",
 }
+KB_DOCUMENTS_PATH = "/v1/kb-documents/"
+# The one KB document version that the in-memory ai-service knows, and its answer to any other.
+KB_DOCUMENT_EXAMPLE = "getKbDocumentVersion/found.json"
+KB_DOCUMENT_NOT_FOUND_EXAMPLE = "problems/not-found.json"
 CONNECTION_REFUSED = "ai-service refused the connection"
 
 type Answer = Callable[[httpx.Request], Awaitable[httpx.Response]]
@@ -70,14 +74,18 @@ class FakeAiService(httpx.AsyncBaseTransport):
 async def serve_examples(request: httpx.Request) -> httpx.Response:
     """Answer with the example of the operation in `ai-service` contract 1.0.0.
 
+    A read of a KB document version gets the example document when it names that version, and
+    the `404` example for any other version, as an ai-service whose KB holds only it.
+
     Args:
         request: The request.
 
     Returns:
-        The example response, with status `200`.
+        The example response, with status `200`, or `404` for an unknown KB document version.
     """
-    example = json.loads((EXAMPLES / EXAMPLE_OF_PATH[request.url.path]).read_text())
-    return httpx.Response(httpx.codes.OK, json=example["value"])
+    if request.url.path.startswith(KB_DOCUMENTS_PATH):
+        return _serve_kb_document(request.url.path)
+    return httpx.Response(httpx.codes.OK, json=read_example(EXAMPLE_OF_PATH[request.url.path]))
 
 
 async def refuse_connection(request: httpx.Request) -> httpx.Response:
@@ -90,3 +98,42 @@ async def refuse_connection(request: httpx.Request) -> httpx.Response:
         httpx.ConnectError: Always.
     """
     raise httpx.ConnectError(CONNECTION_REFUSED, request=request)
+
+
+def read_example(name: str) -> dict[str, object]:
+    """Read the body of one example file of the contracts.
+
+    Args:
+        name: The file under `contracts/examples`, such as `getKbDocumentVersion/found.json`.
+
+    Returns:
+        The `value` of the example.
+    """
+    example: dict[str, dict[str, object]] = json.loads((EXAMPLES / name).read_text())
+    return example["value"]
+
+
+def answer_with(body: object, status: int = httpx.codes.OK) -> Answer:
+    """Return an answer that sends one body to every request, whatever its path.
+
+    Args:
+        body: The JSON body.
+        status: The status of the answer.
+
+    Returns:
+        The answer, for `FakeAiService`.
+    """
+
+    async def answer(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(status, json=body)
+
+    return answer
+
+
+def _serve_kb_document(path: str) -> httpx.Response:
+    document = read_example(KB_DOCUMENT_EXAMPLE)
+    known = f"{KB_DOCUMENTS_PATH}{document['document_id']}/versions/{document['version']}"
+    if path == known:
+        return httpx.Response(httpx.codes.OK, json=document)
+    return httpx.Response(httpx.codes.NOT_FOUND, json=read_example(KB_DOCUMENT_NOT_FOUND_EXAMPLE))

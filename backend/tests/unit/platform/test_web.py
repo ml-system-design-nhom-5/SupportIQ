@@ -6,7 +6,7 @@ exception handler is reached without a database (PY-38, ERR-21).
 
 from collections.abc import AsyncGenerator
 from http import HTTPStatus
-from typing import Annotated
+from typing import Annotated, ClassVar
 
 import anyio
 import httpx
@@ -19,9 +19,11 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 from starlette.types import Message, Scope
 
 from supportiq_backend.platform import (
+    BackendError,
     CheckReadiness,
     DatabaseOperationError,
     DatabaseUnavailableError,
+    ErrorCode,
     EventName,
     ResourceNotFoundError,
 )
@@ -59,6 +61,16 @@ REQUEST_THAT_FAILS_AFTER_THE_START: Scope = {
 }
 
 
+class DependencyNotReadyError(BackendError):
+    """A dependency other than the database cannot answer, as ai-service can."""
+
+    code: ClassVar[ErrorCode] = ErrorCode.NOT_READY
+
+    def __init__(self) -> None:
+        """Build the error with its fixed detail."""
+        super().__init__("A dependency is not available.")
+
+
 def build_app(
     events: RecordingEventRecorder,
     readiness: CheckReadiness,
@@ -80,6 +92,10 @@ def build_app(
     @app.get("/v1/failures/unexpected")
     async def handle_unexpected_failure() -> Response:
         raise RuntimeError(SECRET_DETAIL)
+
+    @app.get("/v1/failures/dependency")
+    async def handle_unavailable_dependency() -> Response:
+        raise DependencyNotReadyError
 
     @app.get("/v1/two-methods")
     async def handle_read_of_a_resource_with_two_methods() -> Response:
@@ -213,6 +229,16 @@ async def test_readiness_answers_503_and_logs_when_the_database_does_not_answer(
     assert unavailable.attributes == {"error_type": "DatabaseUnavailableError"}
 
 
+async def test_another_dependency_that_is_not_ready_is_left_to_the_code_that_handled_it(
+    events: RecordingEventRecorder,
+) -> None:
+    response = await send_get(events, "/v1/failures/dependency")
+
+    assert response.status_code == HTTPStatus.SERVICE_UNAVAILABLE
+    assert response.json()["type"] == "urn:supportiq:problem:not-ready"
+    assert events.names() == (EventName.REQUEST_COMPLETED,)
+
+
 async def test_liveness_answers_204_without_checking_dependencies(
     events: RecordingEventRecorder,
 ) -> None:
@@ -343,6 +369,16 @@ async def test_unavailable_database_is_recorded_on_the_span_of_the_request(
     spans = await spans_of_get(events, "/health/ready", readiness)
 
     assert exception_types_of(spans) == ["DatabaseUnavailableError"]
+
+
+async def test_another_dependency_that_is_not_ready_is_recorded_on_the_span_of_the_request(
+    events: RecordingEventRecorder,
+) -> None:
+    spans = await spans_of_get(
+        events, "/v1/failures/dependency", CheckReadiness((FakeReadinessProbe(),))
+    )
+
+    assert exception_types_of(spans) == ["DependencyNotReadyError"]
 
 
 async def test_refusal_is_not_recorded_as_a_failure(events: RecordingEventRecorder) -> None:

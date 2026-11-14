@@ -7,12 +7,14 @@
   a connection error, `502`, or `503` never makes a call last longer (ADR-0011, `ai-service`
   replicas, item 2; ERR-12). A timeout is never retried.
 - A `4xx` means that backend sent a request that `ai-service` refused: a defect. A `5xx`, a
-  timeout, and a connection error are dependency failures (ERR taxonomy).
+  timeout, and a connection error are dependency failures (ERR taxonomy). The one exception is
+  the `404` of a KB document version, which means that the loaded KB has no such version.
 """
 
 import asyncio
 from dataclasses import dataclass
 from http import HTTPStatus
+from urllib.parse import quote
 
 import httpx
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
@@ -22,12 +24,16 @@ from supportiq_backend.suggestions.adapters.ai_service_payloads import (
     parse_analysis_response,
     parse_asset_versions_response,
     parse_draft_response,
+    parse_kb_document_version_response,
     to_request_body,
 )
 from supportiq_backend.suggestions.domain import (
     AiServiceContractError,
     AiServiceUnavailableError,
     AssetVersions,
+    KbDocumentId,
+    KbDocumentVersion,
+    KbDocumentVersionTag,
     ReceivedAnalysis,
     ReceivedDraftOutcome,
     SuggestionRequest,
@@ -36,6 +42,7 @@ from supportiq_backend.suggestions.domain import (
 ANALYSES_PATH = "/v1/analyses"
 DRAFTS_PATH = "/v1/drafts"
 ASSET_VERSIONS_PATH = "/v1/asset-versions"
+KB_DOCUMENT_VERSION_PATH = "/v1/kb-documents/{document_id}/versions/{version}"
 AUTHORIZATION_HEADER = "Authorization"
 BEARER_PREFIX = "Bearer "
 JSON_CONTENT_TYPE = "application/json"
@@ -147,6 +154,32 @@ class HttpAiService:
         )
         return parse_asset_versions_response(body)
 
+    async def fetch_kb_document_version(
+        self, document_id: KbDocumentId, version: KbDocumentVersionTag
+    ) -> KbDocumentVersion | None:
+        """Read one version of a KB document in full (`getKbDocumentVersion`).
+
+        Reads are not retried (backend ticket workflow design, The `ai-service` client).
+
+        Args:
+            document_id: The KB document.
+            version: The version of the document.
+
+        Returns:
+            The document version, or None when the loaded KB has no such version (`404`).
+
+        Raises:
+            AiServiceUnavailableError: A timeout, a connection error, or a `5xx`.
+            AiServiceContractError: Another `4xx`, or a response outside the contract.
+        """
+        path = KB_DOCUMENT_VERSION_PATH.format(
+            document_id=_to_path_segment(document_id), version=_to_path_segment(version)
+        )
+        response = await self._exchange("GET", path, None, self._timeouts.read_ms, attempts=1)
+        if response.status_code == HTTPStatus.NOT_FOUND:
+            return None
+        return parse_kb_document_version_response(_read_success(response), document_id, version)
+
     async def _call(
         self,
         method: str,
@@ -156,6 +189,18 @@ class HttpAiService:
         *,
         attempts: int = _CALL_ATTEMPTS,
     ) -> bytes:
+        response = await self._exchange(method, path, body, timeout_ms, attempts=attempts)
+        return _read_success(response)
+
+    async def _exchange(
+        self,
+        method: str,
+        path: str,
+        body: str | None,
+        timeout_ms: int,
+        *,
+        attempts: int,
+    ) -> httpx.Response:
         headers: dict[str, str] = {}
         self._propagator.inject(headers)
         if body is not None:
@@ -172,7 +217,7 @@ class HttpAiService:
         except (TimeoutError, httpx.RequestError) as error:
             # Every other error of the library becomes the error of the port (ARCH-28).
             raise AiServiceUnavailableError from error
-        return _read_success(response)
+        return response
 
     async def _send(self, call: _Call, attempts: int) -> httpx.Response:
         for attempt in range(1, attempts + 1):
@@ -202,6 +247,13 @@ class _Call:
     body: str | None
     headers: dict[str, str]
     timeout: httpx.Timeout
+
+
+def _to_path_segment(identifier: str) -> str:
+    # Every reserved character is percent-encoded, so an identifier is always one segment of
+    # the path. The interface layer lets through only identifiers of the contract's pattern,
+    # which are never empty and never a dot segment that a URL would resolve.
+    return quote(identifier, safe="")
 
 
 def _read_success(response: httpx.Response) -> bytes:

@@ -1,7 +1,8 @@
-"""Tests of the role checks of the console: `require_support` and `require_manager` (SEC-41).
+"""Tests of the role checks of the console: support, staff, and manager (SEC-41).
 
-Only staff and managers reach a console operation, and only managers reach the queues and the
-reports that are theirs alone (ADR-0012). Every refusal is one `permission.denied` event.
+Only staff and managers reach a console operation, only staff hand a ticket to a manager, and
+only managers reach the queues and the reports that are theirs alone (ADR-0012). Every refusal
+is one `permission.denied` event.
 """
 
 import pytest
@@ -57,6 +58,34 @@ def test_require_support_refuses_customers_and_admins_and_records_the_refusal(
         "account_id": principal.account_id,
         "role": role,
         "operation_id": "sendReply",
+    }
+
+
+def test_require_staff_returns_staff_without_an_event() -> None:
+    events = RecordingEventRecorder()
+
+    staff = Authorizer(events).require_staff(STAFF, OperationId.CREATE_REPLY_PROPOSAL)
+
+    assert staff == SupportPrincipal(STAFF_ACCOUNT_ID, SupportRole.STAFF)
+    assert events.names() == ()
+
+
+@pytest.mark.parametrize(
+    ("principal", "role"), [(CUSTOMER, "customer"), (MANAGER, "manager"), (ADMIN, "admin")]
+)
+def test_require_staff_refuses_every_other_role_with_one_event(
+    principal: Principal, role: str
+) -> None:
+    events = RecordingEventRecorder()
+
+    with pytest.raises(ForbiddenRoleError):
+        Authorizer(events).require_staff(principal, OperationId.CREATE_ESCALATION)
+
+    (denied,) = events.of(EventName.PERMISSION_DENIED)
+    assert denied.attributes == {
+        "account_id": principal.account_id,
+        "role": role,
+        "operation_id": "createEscalation",
     }
 
 

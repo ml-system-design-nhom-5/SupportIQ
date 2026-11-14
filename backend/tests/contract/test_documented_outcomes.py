@@ -20,6 +20,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from supportiq_backend.accounts import PasswordHash
 from supportiq_backend.composition_root import BackgroundWork, create_app
+from tests.contract.call_changes import OTHER_KEY
 from tests.contract.calls import (
     KEY,
     NEW_ACCOUNT,
@@ -31,8 +32,12 @@ from tests.contract.calls import (
     valid_calls,
 )
 from tests.contract.documented import list_operations, validate_response
-from tests.contract.outcomes import OTHER_KEY, OUTCOMES, UNPROCESSABLE, Condition, Outcome
-from tests.integration.ai_service_doubles import FakeAiService, serve_examples
+from tests.contract.outcomes import OUTCOMES, UNPROCESSABLE, Condition, Outcome
+from tests.integration.ai_service_doubles import (
+    FakeAiService,
+    refuse_connection,
+    serve_examples,
+)
 from tests.integration.application import (
     RunningBackend,
     build_settings,
@@ -103,6 +108,13 @@ def client_under(
                 RecordingEventRecorder(),
                 FakeClock(),
                 ai_service=ai_service,
+            )
+        case Condition.NO_AI_SERVICE:
+            return running_client(
+                build_settings(worker_database),
+                RecordingEventRecorder(),
+                FakeClock(),
+                ai_service=FakeAiService(refuse_connection),
             )
         case _:
             assert_never(condition)

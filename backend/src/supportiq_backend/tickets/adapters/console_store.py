@@ -1,4 +1,4 @@
-"""The console ports of tickets on `tickets`, `customer_messages`, `replies`, and decisions.
+"""The console ports of tickets on `tickets` and `customer_messages`, and its links for suggestions.
 
 Every action locks the ticket row first with `SELECT ... FOR UPDATE`, so two actions on one
 ticket run one after the other, whatever replica answers (backend ticket workflow design).
@@ -7,10 +7,10 @@ ticket run one after the other, whatever replica answers (backend ticket workflo
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import Row, Select, and_, collate, insert, or_, select, update
+from sqlalchemy import Row, Select, and_, collate, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from supportiq_backend.accounts import AccountId, CustomerId
+from supportiq_backend.accounts import CustomerId
 from supportiq_backend.commerce import OrderId
 from supportiq_backend.platform import is_storable_text
 from supportiq_backend.platform.persistence import BYTE_ORDER_COLLATION
@@ -20,22 +20,13 @@ from supportiq_backend.suggestions import (
     TicketForSuggestion,
     TicketMessage,
 )
-from supportiq_backend.tickets.adapters.tables import (
-    CustomerMessageRow,
-    ReplyRow,
-    StaffDecisionRow,
-    TicketRow,
-)
+from supportiq_backend.tickets.adapters.identifiers import to_optional_suggestion_id
+from supportiq_backend.tickets.adapters.tables import CustomerMessageRow, TicketRow
 from supportiq_backend.tickets.domain import (
     ConsoleTicket,
     ConsoleTicketPosition,
     HandlingMode,
-    ProposalId,
-    RecordedDecision,
-    ReplyBasis,
-    ReplyId,
-    SentReply,
-    StaffReasonCode,
+    ManagerQueue,
     TicketId,
     TicketStatus,
 )
@@ -151,6 +142,17 @@ class PostgresConsoleTicketStore:
             .values(handling_started_at=started_at)
         )
 
+    async def move_to_manager_queue(self, ticket_id: TicketId, queue: ManagerQueue) -> None:
+        """Move an `open` ticket to a manager's queue; a trigger keeps to the state machine.
+
+        Args:
+            ticket_id: The ticket, locked and `open`.
+            queue: `awaiting_approval` or `escalated`.
+        """
+        await self._session.execute(
+            update(TicketRow).where(TicketRow.ticket_id == ticket_id).values(status=queue.value)
+        )
+
     async def close_ticket(self, ticket_id: TicketId, closed_at: datetime) -> None:
         """Set the ticket `closed`, when its reply is sent.
 
@@ -162,95 +164,6 @@ class PostgresConsoleTicketStore:
             update(TicketRow)
             .where(TicketRow.ticket_id == ticket_id)
             .values(status=TicketStatus.CLOSED.value, closed_at=closed_at)
-        )
-
-
-class PostgresReplyStore:
-    """Implement the `ReplyStore` port in the transaction of one session."""
-
-    def __init__(self, session: AsyncSession) -> None:
-        """Bind the store to the session of a transaction.
-
-        Args:
-            session: The session of the use case's transaction.
-        """
-        self._session = session
-
-    async def insert_reply(self, reply: SentReply) -> None:
-        """Insert the one reply of a ticket; the unique `ticket_id` refuses a second one.
-
-        Args:
-            reply: The reply.
-        """
-        await self._session.execute(
-            insert(ReplyRow).values(
-                reply_id=reply.reply_id,
-                ticket_id=reply.ticket_id,
-                basis=reply.basis.value,
-                suggestion_id=_optional_uuid(reply.suggestion_id),
-                proposal_id=reply.proposal_id,
-                acknowledged_warning_ids=list(reply.acknowledged_warning_ids),
-                staff_reason_codes=[code.value for code in reply.staff_reason_codes],
-                sent_by_account_id=UUID(reply.sent_by),
-                sent_at=reply.sent_at,
-                body=reply.body,
-                note=reply.note,
-            )
-        )
-
-    async def load_reply(self, ticket_id: TicketId) -> SentReply | None:
-        """Load the reply of a ticket.
-
-        Args:
-            ticket_id: The ticket.
-
-        Returns:
-            The reply, or None before it is sent.
-        """
-        row = await self._session.scalar(select(ReplyRow).where(ReplyRow.ticket_id == ticket_id))
-        if row is None:
-            return None
-        return SentReply(
-            reply_id=ReplyId(row.reply_id),
-            ticket_id=TicketId(row.ticket_id),
-            basis=ReplyBasis(row.basis),
-            body=row.body,
-            suggestion_id=None
-            if row.suggestion_id is None
-            else SuggestionId(str(row.suggestion_id)),
-            proposal_id=None if row.proposal_id is None else ProposalId(row.proposal_id),
-            acknowledged_warning_ids=tuple(row.acknowledged_warning_ids),
-            staff_reason_codes=tuple(StaffReasonCode(code) for code in row.staff_reason_codes),
-            note=row.note,
-            sent_by=AccountId(str(row.sent_by_account_id)),
-            sent_at=row.sent_at,
-        )
-
-    async def insert_decision(self, decision: RecordedDecision) -> None:
-        """Insert a staff decision; it holds no text (ADR-0006).
-
-        Args:
-            decision: The decision.
-        """
-        staff_decision = decision.decision
-        await self._session.execute(
-            insert(StaffDecisionRow).values(
-                decision_id=decision.decision_id,
-                ticket_id=decision.ticket_id,
-                suggestion_id=UUID(staff_decision.suggestion_id),
-                decision_type=staff_decision.decision_type.value,
-                staff_reason_codes=[code.value for code in staff_decision.staff_reason_codes],
-                change_ratio=staff_decision.change_ratio,
-                final_intent=(
-                    None
-                    if staff_decision.final_intent is None
-                    else staff_decision.final_intent.value
-                ),
-                decided_by_account_id=UUID(decision.decided_by),
-                proposed_by_account_id=_optional_uuid(decision.proposed_by),
-                is_proposal_changed=decision.is_proposal_changed,
-                decided_at=decision.decided_at,
-            )
         )
 
 
@@ -286,11 +199,7 @@ class PostgresTicketLinks:
         if row is None:
             return None
         return TicketForSuggestion(
-            current_suggestion_id=(
-                None
-                if row.current_suggestion_id is None
-                else SuggestionId(str(row.current_suggestion_id))
-            ),
+            current_suggestion_id=to_optional_suggestion_id(row.current_suggestion_id),
             is_open=TicketStatus(row.status) is TicketStatus.OPEN,
             is_assisted=HandlingMode(row.handling_mode) is HandlingMode.ASSISTED,
             status_name=row.status,
@@ -382,14 +291,6 @@ def _to_console_ticket(row: Row[_ConsoleColumns]) -> ConsoleTicket:
         closed_at=row.closed_at,
         customer_id=CustomerId(str(row.customer_id)),
         order_id=None if row.order_id is None else OrderId(row.order_id),
-        current_suggestion_id=(
-            None
-            if row.current_suggestion_id is None
-            else SuggestionId(str(row.current_suggestion_id))
-        ),
+        current_suggestion_id=to_optional_suggestion_id(row.current_suggestion_id),
         message=row.body,
     )
-
-
-def _optional_uuid(identifier: str | None) -> UUID | None:
-    return None if identifier is None else UUID(identifier)

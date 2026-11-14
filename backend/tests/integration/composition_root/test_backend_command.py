@@ -54,6 +54,7 @@ def build_environment(worker_database: WorkerDatabase) -> dict[str, str]:
         "SEED_PASSWORD_ADMIN": ADMIN_PASSWORD,
         "AI_SERVICE_BASE_URL": "http://ai-service.invalid",
         "AI_SERVICE_TOKEN": "command-test-ai-service-token",
+        "BACKEND_BUILD_VERSION": "command-test-build",
     }
 
 

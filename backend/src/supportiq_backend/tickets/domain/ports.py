@@ -1,12 +1,15 @@
-"""The port of the tickets tables (ARCH-13)."""
+"""The ports of the tickets tables (ARCH-13)."""
 
 from datetime import datetime
 from typing import Protocol
 
 from supportiq_backend.accounts import CustomerId
 from supportiq_backend.commerce import OrderId
-from supportiq_backend.tickets.domain.console import ConsoleTicket
-from supportiq_backend.tickets.domain.replies import RecordedDecision, SentReply
+from supportiq_backend.tickets.domain.console import ConsoleTicket, ManagerQueue
+from supportiq_backend.tickets.domain.decisions import RecordedDecision
+from supportiq_backend.tickets.domain.escalations import Escalation
+from supportiq_backend.tickets.domain.proposals import ReplyProposal
+from supportiq_backend.tickets.domain.replies import SentReply
 from supportiq_backend.tickets.domain.tickets import (
     ShopTicket,
     ShopTicketRecord,
@@ -119,6 +122,15 @@ class ConsoleTicketStore(Protocol):
         """
         ...
 
+    async def move_to_manager_queue(self, ticket_id: TicketId, queue: ManagerQueue) -> None:
+        """Move an `open` ticket to a manager's queue, after a reply proposal or an escalation.
+
+        Args:
+            ticket_id: The ticket, locked and `open`.
+            queue: `awaiting_approval` or `escalated`.
+        """
+        ...
+
     async def close_ticket(self, ticket_id: TicketId, closed_at: datetime) -> None:
         """Set the ticket `closed`, when its reply is sent.
 
@@ -156,5 +168,51 @@ class ReplyStore(Protocol):
 
         Args:
             decision: The decision.
+        """
+        ...
+
+
+class ReplyProposalStore(Protocol):
+    """Insert the reply proposal of a ticket once, and read it back."""
+
+    async def insert_proposal(self, proposal: ReplyProposal) -> None:
+        """Insert a proposal; it is never updated.
+
+        Args:
+            proposal: The proposal.
+        """
+        ...
+
+    async def load_proposal(self, ticket_id: TicketId) -> ReplyProposal | None:
+        """Load the proposal of a ticket.
+
+        Args:
+            ticket_id: The ticket.
+
+        Returns:
+            The proposal, or None before staff submit one.
+        """
+        ...
+
+
+class EscalationStore(Protocol):
+    """Insert the escalation of a ticket once, and read it back."""
+
+    async def insert_escalation(self, escalation: Escalation) -> None:
+        """Insert the one escalation of a ticket; it is never updated.
+
+        Args:
+            escalation: The escalation.
+        """
+        ...
+
+    async def load_escalation(self, ticket_id: TicketId) -> Escalation | None:
+        """Load the escalation of a ticket.
+
+        Args:
+            ticket_id: The ticket.
+
+        Returns:
+            The escalation, or None before staff escalate.
         """
         ...

@@ -51,8 +51,10 @@ class EventName(StrEnum):
     TICKET_VIEWED = "ticket.viewed"
     TICKET_MANUAL_HANDLING_STARTED = "ticket.manual_handling_started"
     INTENT_OVERRIDDEN = "intent.overridden"
+    REPLY_PROPOSAL_SUBMITTED = "reply_proposal.submitted"
     DECISION_RECORDED = "decision.recorded"
     REPLY_SENT = "reply.sent"
+    TICKET_ESCALATED = "ticket.escalated"
     ACCOUNT_ROLE_CHANGED = "account.role_changed"
     ACCOUNT_STATUS_CHANGED = "account.status_changed"
     ACCOUNT_CREATED = "account.created"
@@ -176,8 +178,14 @@ EVENT_DESCRIPTIONS: Mapping[EventName, EventDescription] = MappingProxyType(
         EventName.INTENT_OVERRIDDEN: EventDescription(
             EventLevel.INFO, "Intent confirmed or corrected by staff"
         ),
+        EventName.REPLY_PROPOSAL_SUBMITTED: EventDescription(
+            EventLevel.INFO, "Reply proposal submitted for a manager to send"
+        ),
         EventName.DECISION_RECORDED: EventDescription(EventLevel.INFO, "Staff decision recorded"),
         EventName.REPLY_SENT: EventDescription(EventLevel.INFO, "Reply sent to the customer"),
+        EventName.TICKET_ESCALATED: EventDescription(
+            EventLevel.INFO, "Ticket escalated to the manager queue"
+        ),
         EventName.ACCOUNT_ROLE_CHANGED: EventDescription(EventLevel.INFO, "Account role changed"),
         EventName.ACCOUNT_STATUS_CHANGED: EventDescription(
             EventLevel.INFO, "Account status changed"

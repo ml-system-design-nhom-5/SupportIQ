@@ -69,6 +69,23 @@ DRAFT_TEXT = (
     "This sample sentence stands for a policy statement from the cited document."
 )
 PENDING = "pending"
+OTHER_KEY = "00000000-0000-4000-8000-000000000002"
+MANAGER_NAME = "Manager One"
+PROPOSALS = "/reply-proposals"
+ESCALATIONS = "/escalations"
+REPLIES = "/replies"
+FORBIDDEN = "urn:supportiq:problem:forbidden"
+INVALID_TICKET_STATE = "urn:supportiq:problem:invalid-ticket-state"
+# The decision rows of the tests, without their IDs and times, as one JSON value per row.
+DECISION_ROWS = """
+    SELECT jsonb_agg(jsonb_build_object(
+        'decision_type', decision_type, 'suggestion_id', suggestion_id,
+        'staff_reason_codes', staff_reason_codes, 'change_ratio', change_ratio,
+        'final_intent', final_intent, 'decided_by', decided_by_account_id,
+        'proposed_by', proposed_by_account_id, 'is_proposal_changed', is_proposal_changed
+    ))
+    FROM staff_decisions
+"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,6 +158,23 @@ def key_headers(headers: dict[str, str], key: str = KEY) -> dict[str, str]:
 async def sign_in_as_support(builder: DatabaseBuilder, role: str = "staff") -> SupportSession:
     account_id = await builder.account(AccountSpec(role, display_name=STAFF_NAME))
     return SupportSession(account_id, session_headers(await builder.session(account_id, role)))
+
+
+async def sign_in_as_manager(builder: DatabaseBuilder) -> SupportSession:
+    """Sign in a new manager whose display name differs from that of staff."""
+    account_id = await builder.account(AccountSpec("manager", display_name=MANAGER_NAME))
+    return SupportSession(account_id, session_headers(await builder.session(account_id, "manager")))
+
+
+async def act_on_ticket(
+    client: httpx.AsyncClient,
+    session: SupportSession,
+    path: str,
+    body: object,
+    key: str = KEY,
+) -> httpx.Response:
+    """Send a state-changing console request with a key, such as a proposal on a ticket path."""
+    return await client.post(path, json=body, headers=key_headers(session.headers, key))
 
 
 async def open_ticket(builder: DatabaseBuilder, spec: TicketSpec | None = None) -> ConsoleTicket:

@@ -1,4 +1,4 @@
-"""The console's ticket operations: list, workspace, view, suggestion, and reply.
+"""The console's ticket operations: list, workspace, view, suggestion, and the staff actions.
 
 Handlers are thin: the role check runs before the request is parsed, so another role gets
 `403` whatever it sent; then each handler parses, calls one use case, and maps the result
@@ -13,7 +13,12 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import MISSING
 
 from supportiq_backend.accounts import AuthenticatedSession
-from supportiq_backend.generated import CreateSuggestionRequest, SendReplyRequest
+from supportiq_backend.generated import (
+    CreateEscalationRequest,
+    CreateReplyProposalRequest,
+    CreateSuggestionRequest,
+    SendReplyRequest,
+)
 from supportiq_backend.idempotency import StoredResponse, parse_idempotency_key
 from supportiq_backend.platform.web import (
     IDEMPOTENCY_KEY_HEADER,
@@ -31,22 +36,38 @@ from supportiq_backend.suggestions import (
     Suggestion,
     SuggestionTicketId,
 )
+from supportiq_backend.tickets.api.console_action_requests import (
+    parse_escalation_request,
+    parse_proposal_request,
+    parse_reply_request,
+)
 from supportiq_backend.tickets.api.console_queues import (
     parse_console_cursor,
     parse_status_filter,
     to_summary_page,
 )
-from supportiq_backend.tickets.api.console_reply_requests import parse_reply_request
 from supportiq_backend.tickets.api.console_suggestion_views import to_pending_suggestion_view
-from supportiq_backend.tickets.api.console_views import to_reply_view, to_workspace
+from supportiq_backend.tickets.api.console_views import (
+    to_escalation_view,
+    to_proposal_view,
+    to_reply_view,
+    to_workspace,
+)
 from supportiq_backend.tickets.api.order_views import OrderViewMappers
 from supportiq_backend.tickets.application import (
+    CreateEscalation,
+    CreateReplyProposal,
     GetConsoleTicket,
     ListConsoleTickets,
     RecordTicketView,
     SendReply,
 )
-from supportiq_backend.tickets.domain import ReplyRecord, TicketId
+from supportiq_backend.tickets.domain import (
+    EscalationRecord,
+    ProposalRecord,
+    ReplyRecord,
+    TicketId,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,7 +79,9 @@ class ConsoleTicketRoutes:
         get_ticket: The workspace.
         record_view: The views.
         create_suggestion: Intent corrections and retries.
+        create_proposal: Reply proposals.
         send_reply: Replies.
+        create_escalation: Escalations.
         check_origin: The `Origin` check of state-changing routes.
         current_session: The session of a request.
         order_views: The order mappings of commerce that the workspace reuses.
@@ -68,7 +91,9 @@ class ConsoleTicketRoutes:
     get_ticket: GetConsoleTicket
     record_view: RecordTicketView
     create_suggestion: CreateSuggestion
+    create_proposal: CreateReplyProposal
     send_reply: SendReply
+    create_escalation: CreateEscalation
     check_origin: RequestDependency[None]
     current_session: RequestDependency[AuthenticatedSession]
     order_views: OrderViewMappers
@@ -84,6 +109,30 @@ def render_sent_reply(record: ReplyRecord) -> StoredResponse:
         The status and the exact body text.
     """
     return StoredResponse(HTTPStatus.CREATED.value, render_json(to_reply_view(record)))
+
+
+def render_created_proposal(record: ProposalRecord) -> StoredResponse:
+    """Write the `201` response of `createReplyProposal`, the one that every repeat returns.
+
+    Args:
+        record: The proposal and its proposer's name.
+
+    Returns:
+        The status and the exact body text.
+    """
+    return StoredResponse(HTTPStatus.CREATED.value, render_json(to_proposal_view(record)))
+
+
+def render_created_escalation(record: EscalationRecord) -> StoredResponse:
+    """Write the `201` response of `createEscalation`, the one that every repeat returns.
+
+    Args:
+        record: The escalation and the name of the staff member who escalated.
+
+    Returns:
+        The status and the exact body text.
+    """
+    return StoredResponse(HTTPStatus.CREATED.value, render_json(to_escalation_view(record)))
 
 
 def render_created_suggestion(suggestion: Suggestion) -> StoredResponse:
@@ -113,7 +162,9 @@ def build_console_tickets_router(routes: ConsoleTicketRoutes) -> APIRouter:
     _add_read_routes(router, routes)
     _add_view_route(router, routes)
     _add_suggestion_route(router, routes)
+    _add_proposal_route(router, routes)
     _add_reply_route(router, routes)
+    _add_escalation_route(router, routes)
     return router
 
 
@@ -213,5 +264,53 @@ def _add_reply_route(router: APIRouter, routes: ConsoleTicketRoutes) -> None:
         body = await parse_json_body(request, SendReplyRequest)
         stored = await use_case.execute(
             support, TicketId(ticket_id), parse_reply_request(body.root), key
+        )
+        return stored_json_response(stored.status_code, stored.body)
+
+
+def _add_proposal_route(router: APIRouter, routes: ConsoleTicketRoutes) -> None:
+    current_session = Depends(routes.current_session)
+    create_proposal = Depends(provide(routes.create_proposal))
+
+    @router.post(
+        "/v1/console/tickets/{ticket_id}/reply-proposals",
+        status_code=HTTPStatus.CREATED,
+        dependencies=[Depends(routes.check_origin)],
+    )
+    async def handle_create_reply_proposal(
+        ticket_id: str,
+        request: Request,
+        session: Annotated[AuthenticatedSession, current_session],
+        use_case: Annotated[CreateReplyProposal, create_proposal],
+    ) -> Response:
+        support = use_case.authorize(session.principal)
+        key = parse_idempotency_key(request.headers.get(IDEMPOTENCY_KEY_HEADER))
+        body = await parse_json_body(request, CreateReplyProposalRequest)
+        stored = await use_case.execute(
+            support, TicketId(ticket_id), parse_proposal_request(body.root), key
+        )
+        return stored_json_response(stored.status_code, stored.body)
+
+
+def _add_escalation_route(router: APIRouter, routes: ConsoleTicketRoutes) -> None:
+    current_session = Depends(routes.current_session)
+    create_escalation = Depends(provide(routes.create_escalation))
+
+    @router.post(
+        "/v1/console/tickets/{ticket_id}/escalations",
+        status_code=HTTPStatus.CREATED,
+        dependencies=[Depends(routes.check_origin)],
+    )
+    async def handle_create_escalation(
+        ticket_id: str,
+        request: Request,
+        session: Annotated[AuthenticatedSession, current_session],
+        use_case: Annotated[CreateEscalation, create_escalation],
+    ) -> Response:
+        support = use_case.authorize(session.principal)
+        key = parse_idempotency_key(request.headers.get(IDEMPOTENCY_KEY_HEADER))
+        body = await parse_json_body(request, CreateEscalationRequest)
+        stored = await use_case.execute(
+            support, TicketId(ticket_id), parse_escalation_request(body), key
         )
         return stored_json_response(stored.status_code, stored.body)

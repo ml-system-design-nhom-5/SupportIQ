@@ -1,7 +1,8 @@
 """Adapter tests of `PostgresReplyStore` against PostgreSQL 17 (TEST-01).
 
 A ticket has one reply: the unique `ticket_id` of `replies` refuses a second one (ERR-16). A
-staff decision is inserted once and holds no text (ADR-0006).
+staff decision is inserted once and holds no text (ADR-0006); an escalation's decision may name
+no suggestion.
 """
 
 from datetime import timedelta
@@ -25,7 +26,7 @@ from supportiq_backend.tickets import (
     StaffReasonCode,
     TicketId,
 )
-from supportiq_backend.tickets.adapters.console_store import PostgresReplyStore
+from supportiq_backend.tickets.adapters.reply_store import PostgresReplyStore
 from tests.integration.builders import AccountSpec, DatabaseBuilder
 from tests.integration.workflow.workflow_rows import insert_ticket, start_suggestion, ticket_created
 from tests.unit.platform.fakes import FAKE_CLOCK_START
@@ -156,4 +157,42 @@ async def test_insert_decision_stores_every_field_of_the_decision(
         "decided_by": str(manager_id),
         "proposed_by": str(staff_id),
         "is_proposal_changed": True,
+    }
+
+
+async def test_insert_decision_stores_an_escalation_that_names_no_suggestion(
+    app_engine: AsyncEngine, builder: DatabaseBuilder
+) -> None:
+    ticket_id = await insert_ticket(builder)
+    staff_id = await builder.account(AccountSpec("staff"))
+    decision = RecordedDecision(
+        decision_id=DecisionId(builder.next_uuid()),
+        ticket_id=TicketId(ticket_id),
+        decision=StaffDecision(
+            decision_type=DecisionType.ESCALATE,
+            suggestion_id=None,
+            staff_reason_codes=(StaffReasonCode.CASE_EXCEPTION, StaffReasonCode.OTHER),
+            change_ratio=None,
+            final_intent=None,
+        ),
+        decided_by=AccountId(str(staff_id)),
+        proposed_by=None,
+        is_proposal_changed=None,
+        decided_at=SENT_AT,
+    )
+
+    async with create_session_factory(app_engine)() as session:
+        await PostgresReplyStore(session).insert_decision(decision)
+        await session.commit()
+
+    assert await builder.scalar(DECISION_COLUMNS) == {
+        "ticket_id": ticket_id,
+        "suggestion_id": None,
+        "decision_type": "escalate",
+        "staff_reason_codes": ["case_exception", "other"],
+        "change_ratio": None,
+        "final_intent": None,
+        "decided_by": str(staff_id),
+        "proposed_by": None,
+        "is_proposal_changed": None,
     }

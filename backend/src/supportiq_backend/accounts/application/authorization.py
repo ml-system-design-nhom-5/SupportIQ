@@ -62,6 +62,24 @@ class Authorizer:
             return SupportPrincipal(principal.account_id, SupportRole(principal.role.value))
         raise self._denied(principal, operation)
 
+    def require_staff(self, principal: Principal, operation: OperationId) -> SupportPrincipal:
+        """Allow only staff, for the actions that hand a ticket to a manager (FR-06).
+
+        Args:
+            principal: The caller.
+            operation: The operation, for the event.
+
+        Returns:
+            The caller as a member of support with the role `staff`.
+
+        Raises:
+            ForbiddenRoleError: The caller is a customer, an admin, or a manager.
+        """
+        support = self.require_support(principal, operation)
+        if support.role is SupportRole.STAFF:
+            return support
+        raise self._denied(principal, operation)
+
     def require_manager(
         self, principal: Principal | SupportPrincipal, operation: OperationId
     ) -> SupportPrincipal:

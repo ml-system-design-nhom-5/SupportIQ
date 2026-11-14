@@ -28,7 +28,7 @@ from supportiq_backend.suggestions import (
     choose_view_trigger,
     record_ai_service_failure,
 )
-from supportiq_backend.tickets.application.console import (
+from supportiq_backend.tickets.application.console_ports import (
     ConsolePorts,
     ConsoleStores,
     load_current_suggestion,

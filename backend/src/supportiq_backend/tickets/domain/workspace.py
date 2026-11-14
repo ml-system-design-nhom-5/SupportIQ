@@ -6,6 +6,8 @@ from datetime import datetime
 from supportiq_backend.commerce import AddressedOrder, Order
 from supportiq_backend.suggestions import Suggestion
 from supportiq_backend.tickets.domain.console import ConsoleTicket, TicketAction
+from supportiq_backend.tickets.domain.escalations import Escalation
+from supportiq_backend.tickets.domain.proposals import ReplyProposal
 from supportiq_backend.tickets.domain.replies import SentReply
 from supportiq_backend.tickets.domain.tickets import TicketId, TicketStatus
 
@@ -46,6 +48,32 @@ class ReplyRecord:
 
 
 @dataclass(frozen=True, slots=True, repr=False)
+class ProposalRecord:
+    """A reply proposal with the display name of the staff member who submitted it.
+
+    Attributes:
+        proposal: The proposal.
+        proposed_by_display_name: The name of the account that submitted it. Confidential.
+    """
+
+    proposal: ReplyProposal
+    proposed_by_display_name: str
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class EscalationRecord:
+    """An escalation with the display name of the staff member who escalated.
+
+    Attributes:
+        escalation: The escalation.
+        escalated_by_display_name: The name of the account that escalated. Confidential.
+    """
+
+    escalation: Escalation
+    escalated_by_display_name: str
+
+
+@dataclass(frozen=True, slots=True, repr=False)
 class TicketWorkspace:
     """Everything that staff and managers see of one ticket.
 
@@ -56,6 +84,8 @@ class TicketWorkspace:
         other_orders: The customer's other orders, newest first, at most
             `OTHER_ORDERS_LIMIT`. Never sent to ai-service.
         suggestion: The current suggestion, restored; absent in manual mode.
+        proposal: The reply proposal, once staff submitted one, also after `closed`.
+        escalation: The escalation, once staff escalated, also after `closed`.
         reply: The sent reply, when the ticket is closed.
         allowed_actions: What the caller may do now.
     """
@@ -65,6 +95,8 @@ class TicketWorkspace:
     order: AddressedOrder | None
     other_orders: tuple[Order, ...]
     suggestion: RestoredSuggestion | None
+    proposal: ProposalRecord | None
+    escalation: EscalationRecord | None
     reply: ReplyRecord | None
     allowed_actions: frozenset[TicketAction]
 

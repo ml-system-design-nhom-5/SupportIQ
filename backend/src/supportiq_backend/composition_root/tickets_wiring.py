@@ -23,6 +23,8 @@ from supportiq_backend.suggestions.adapters.suggestion_store import PostgresSugg
 from supportiq_backend.tickets import (
     ConsolePorts,
     ConsoleStores,
+    CreateEscalation,
+    CreateReplyProposal,
     CreateShopTicket,
     CreateShopTicketPorts,
     GetConsoleTicket,
@@ -36,13 +38,17 @@ from supportiq_backend.tickets import (
 )
 from supportiq_backend.tickets.adapters.console_store import (
     PostgresConsoleTicketStore,
-    PostgresReplyStore,
     PostgresTicketLinks,
 )
+from supportiq_backend.tickets.adapters.escalation_store import PostgresEscalationStore
+from supportiq_backend.tickets.adapters.proposal_store import PostgresReplyProposalStore
+from supportiq_backend.tickets.adapters.reply_store import PostgresReplyStore
 from supportiq_backend.tickets.adapters.ticket_store import PostgresTicketStore
 from supportiq_backend.tickets.api.console import (
     ConsoleTicketRoutes,
     build_console_tickets_router,
+    render_created_escalation,
+    render_created_proposal,
     render_sent_reply,
 )
 from supportiq_backend.tickets.api.order_views import OrderViewMappers
@@ -106,6 +112,8 @@ class ConsoleStoreBuilder:
         return ConsoleStores(
             tickets=PostgresConsoleTicketStore(session),
             replies=PostgresReplyStore(session),
+            proposals=PostgresReplyProposalStore(session),
+            escalations=PostgresEscalationStore(session),
             suggestions=PostgresSuggestionStore(session),
             links=PostgresTicketLinks(session),
             records=PostgresCustomerRecords(session),
@@ -197,7 +205,9 @@ def _wire_console(
             get_ticket=GetConsoleTicket(transactions, ports),
             record_view=RecordTicketView(transactions, ports),
             create_suggestion=suggestions.create_suggestion,
+            create_proposal=CreateReplyProposal(transactions, ports, render_created_proposal),
             send_reply=SendReply(transactions, ports, render_sent_reply),
+            create_escalation=CreateEscalation(transactions, ports, render_created_escalation),
             check_origin=accounts.check_origin,
             current_session=accounts.current_session,
             order_views=OrderViewMappers(to_order_view=to_order_view, to_money=to_money),

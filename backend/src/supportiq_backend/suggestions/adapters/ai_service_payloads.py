@@ -2,9 +2,10 @@
 
 Responses are parsed in strict mode with the generated models. A value outside the contract,
 such as an unknown status or reason code, is a contract error: the part becomes `unavailable`,
-because an unknown reason code could be one that requires authority (CON-22). Two rules of the
-contract that the generator cannot express are checked here: `ai-service` never sends the
-reason codes that only backend sets, and an outcome without a draft never carries `draft`.
+because an unknown reason code could be one that requires authority (CON-22). Three rules of
+the contract that the generator cannot express are checked here: `ai-service` never sends the
+reason codes that only backend sets, an outcome without a draft never carries `draft`, and a
+KB document version is the one that its path named.
 """
 
 import json
@@ -35,6 +36,9 @@ from supportiq_backend.suggestions.domain import (
     IntentAlternative,
     IntentLabel,
     KbDocumentCitation,
+    KbDocumentId,
+    KbDocumentVersion,
+    KbDocumentVersionTag,
     LlmUsage,
     MaskCounts,
     ModelIntent,
@@ -146,6 +150,40 @@ def parse_asset_versions_response(body: bytes) -> AssetVersions:
         AiServiceContractError: The body does not match the contract.
     """
     return _to_versions(_validate(contract.AssetVersions, body))
+
+
+def parse_kb_document_version_response(
+    body: bytes, document_id: KbDocumentId, version: KbDocumentVersionTag
+) -> KbDocumentVersion:
+    """Parse the `200` body of `getKbDocumentVersion`.
+
+    Args:
+        body: The response body.
+        document_id: The KB document that the path named.
+        version: The version that the path named.
+
+    Returns:
+        The document version.
+
+    Raises:
+        AiServiceContractError: The body does not match the contract, or it holds another
+            document version than the path named, which the citation view must never show.
+    """
+    model = _validate(contract.KbDocumentVersion, body)
+    if model.document_id.root != document_id or model.version.root != version:
+        raise AiServiceContractError
+    return KbDocumentVersion(
+        document_id=document_id,
+        version=version,
+        title=model.title,
+        body=model.body,
+        policy_key=model.policy_key,
+        effective_start_at=_to_time(model.effective_start_at),
+        effective_end_at=_optional(model.effective_end_at, _to_time),
+        owner=model.owner,
+        source=model.source,
+        last_reviewed_at=_optional(model.last_reviewed_at, _to_time),
+    )
 
 
 def parse_stored_analysis(result: object) -> Analysis:

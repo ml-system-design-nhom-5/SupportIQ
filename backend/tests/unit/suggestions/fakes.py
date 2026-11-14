@@ -19,6 +19,9 @@ from supportiq_backend.suggestions import (
     ClaimedJob,
     DraftState,
     JobState,
+    KbDocumentId,
+    KbDocumentVersion,
+    KbDocumentVersionTag,
     LockedJob,
     NewSuggestion,
     PartCompletion,
@@ -271,6 +274,12 @@ class FakeAiService:
     analysis_requests: list[SuggestionRequest] = field(default_factory=list[SuggestionRequest])
     draft_requests: list[SuggestionRequest] = field(default_factory=list[SuggestionRequest])
     version_reads: int = 0
+    kb_document_version: KbDocumentVersion | BackendError | None = field(
+        default_factory=AiServiceUnavailableError
+    )
+    kb_document_reads: list[tuple[KbDocumentId, KbDocumentVersionTag]] = field(
+        default_factory=list[tuple[KbDocumentId, KbDocumentVersionTag]]
+    )
 
     @property
     def requests(self) -> tuple[SuggestionRequest, ...]:
@@ -297,6 +306,15 @@ class FakeAiService:
         if isinstance(self.versions, BackendError):
             raise self.versions
         return self.versions
+
+    async def fetch_kb_document_version(
+        self, document_id: KbDocumentId, version: KbDocumentVersionTag
+    ) -> KbDocumentVersion | None:
+        """Keep the read of a KB document version and answer it; None stands for a `404`."""
+        self.kb_document_reads.append((document_id, version))
+        if isinstance(self.kb_document_version, BackendError):
+            raise self.kb_document_version
+        return self.kb_document_version
 
 
 @dataclass(slots=True)

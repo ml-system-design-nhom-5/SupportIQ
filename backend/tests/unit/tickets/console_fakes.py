@@ -26,9 +26,13 @@ from supportiq_backend.tickets import (
     ConsolePorts,
     ConsoleStores,
     ConsoleTicket,
+    CreateEscalation,
+    CreateReplyProposal,
+    EscalationRecord,
     GetConsoleTicket,
     HandlingMode,
     ListConsoleTickets,
+    ProposalRecord,
     RecordTicketView,
     ReplyRecord,
     SendReply,
@@ -55,17 +59,24 @@ from tests.unit.suggestions.fakes import (
     FakeTicketLinks,
     RecordingSuggestionQueue,
 )
-from tests.unit.tickets.fakes import FakeConsoleTicketStore, FakeReplyStore, FakeStaffDirectory
+from tests.unit.tickets.fakes import (
+    MANAGER_ACCOUNT_ID,
+    FakeConsoleTicketStore,
+    FakeEscalationStore,
+    FakeReplyProposalStore,
+    FakeReplyStore,
+    FakeStaffDirectory,
+)
 
 RETENTION_MS = 86_400_000
 TICKET_ID = TicketId("TCK-1042")
 KEY = IdempotencyKey(UUID("00000000-0000-4000-8000-000000000123"))
 # The callers after the role check of a console use case.
 STAFF = SupportPrincipal(STAFF_ACCOUNT_ID, SupportRole.STAFF)
-MANAGER = SupportPrincipal(STAFF_ACCOUNT_ID, SupportRole.MANAGER)
+MANAGER = SupportPrincipal(MANAGER_ACCOUNT_ID, SupportRole.MANAGER)
 # The callers as signed in, before any role check.
 SIGNED_IN_STAFF = InternalPrincipal(STAFF_ACCOUNT_ID, InternalRole.STAFF)
-SIGNED_IN_MANAGER = InternalPrincipal(STAFF_ACCOUNT_ID, InternalRole.MANAGER)
+SIGNED_IN_MANAGER = InternalPrincipal(MANAGER_ACCOUNT_ID, InternalRole.MANAGER)
 CUSTOMER = CustomerPrincipal(AccountId("00000000-0000-4000-8000-0000000000cc"), CUSTOMER_ID)
 ADMIN = InternalPrincipal(AccountId("00000000-0000-4000-8000-0000000000ad"), InternalRole.ADMIN)
 
@@ -76,6 +87,8 @@ class ConsoleHarness:
 
     tickets: FakeConsoleTicketStore
     replies: FakeReplyStore
+    proposals: FakeReplyProposalStore
+    escalations: FakeEscalationStore
     suggestions: FakeSuggestionStore
     links: FakeTicketLinks
     records: FakeCustomerRecords
@@ -99,6 +112,8 @@ def build_console_harness(
     return ConsoleHarness(
         tickets=fakes.tickets,
         replies=fakes.replies,
+        proposals=fakes.proposals,
+        escalations=fakes.escalations,
         suggestions=fakes.suggestions,
         links=fakes.links,
         records=fakes.records,
@@ -167,12 +182,24 @@ def build_send(harness: ConsoleHarness) -> SendReply:
     return SendReply(harness.transactions, harness.ports, _render_reply)
 
 
+def build_propose(harness: ConsoleHarness) -> CreateReplyProposal:
+    """Build `createReplyProposal` on the harness, with a response that names the proposal."""
+    return CreateReplyProposal(harness.transactions, harness.ports, _render_proposal)
+
+
+def build_escalate(harness: ConsoleHarness) -> CreateEscalation:
+    """Build `createEscalation` on the harness, with a response that names the escalation."""
+    return CreateEscalation(harness.transactions, harness.ports, _render_escalation)
+
+
 @dataclass(frozen=True, slots=True)
 class _FakeStores:
     """The fakes that the tests of the console inspect."""
 
     tickets: FakeConsoleTicketStore
     replies: FakeReplyStore
+    proposals: FakeReplyProposalStore
+    escalations: FakeEscalationStore
     suggestions: FakeSuggestionStore
     links: FakeTicketLinks
     records: FakeCustomerRecords
@@ -184,6 +211,8 @@ class _FakeStores:
         return cls(
             tickets=FakeConsoleTicketStore({ticket.ticket_id: ticket for ticket in tickets}),
             replies=FakeReplyStore(),
+            proposals=FakeReplyProposalStore(),
+            escalations=FakeEscalationStore(),
             suggestions=FakeSuggestionStore(),
             links=FakeTicketLinks(
                 tickets={
@@ -199,6 +228,8 @@ class _FakeStores:
         return ConsoleStores(
             tickets=self.tickets,
             replies=self.replies,
+            proposals=self.proposals,
+            escalations=self.escalations,
             suggestions=self.suggestions,
             links=self.links,
             records=self.records,
@@ -240,3 +271,11 @@ def _link_of(ticket: ConsoleTicket) -> TicketForSuggestion:
 
 def _render_reply(record: ReplyRecord) -> StoredResponse:
     return StoredResponse(201, json.dumps({"reply_id": str(record.reply.reply_id)}))
+
+
+def _render_proposal(record: ProposalRecord) -> StoredResponse:
+    return StoredResponse(201, json.dumps({"proposal_id": str(record.proposal.proposal_id)}))
+
+
+def _render_escalation(record: EscalationRecord) -> StoredResponse:
+    return StoredResponse(201, json.dumps({"escalation_id": str(record.escalation.escalation_id)}))

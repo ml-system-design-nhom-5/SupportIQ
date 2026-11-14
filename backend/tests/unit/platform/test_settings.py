@@ -9,6 +9,7 @@ from tests.unit.platform.settings_builders import (
     TEST_AI_SERVICE_TOKEN,
     TEST_AI_SERVICE_URL,
     TEST_APP_URL,
+    TEST_BUILD_VERSION,
     TEST_ORIGIN,
     SettingsWithoutEnvironment,
     build_test_settings,
@@ -20,6 +21,7 @@ REQUIRED_VALUES: dict[str, object] = {
     "allowed_origins": (TEST_ORIGIN,),
     "ai_service_base_url": TEST_AI_SERVICE_URL,
     "ai_service_token": TEST_AI_SERVICE_TOKEN,
+    "backend_build_version": TEST_BUILD_VERSION,
 }
 SEED_PASSWORD = "seed-test-password"
 IDLE_TIMEOUT_MS = 60_000
@@ -84,6 +86,7 @@ def test_settings_name_every_required_setting_when_they_are_missing() -> None:
         "allowed_origins",
         "ai_service_base_url",
         "ai_service_token",
+        "backend_build_version",
     )
 
 
@@ -140,6 +143,8 @@ def test_the_service_token_stays_out_of_the_repr_of_the_settings() -> None:
         ("seed_password_admin", ""),
         ("ai_service_token", ""),
         ("ai_service_base_url", "not a url"),
+        ("backend_build_version", ""),
+        ("backend_build_version", "x" * 65),
         ("seed_password_staff", "x" * 129),
         ("trace_exporter", "zipkin"),
         ("otlp_traces_endpoint", "not a url"),
@@ -215,6 +220,7 @@ def test_settings_decode_the_origins_of_the_environment(
     monkeypatch.setenv("DATABASE_URL_APP", TEST_APP_URL)
     monkeypatch.setenv("AI_SERVICE_BASE_URL", TEST_AI_SERVICE_URL)
     monkeypatch.setenv("AI_SERVICE_TOKEN", TEST_AI_SERVICE_TOKEN)
+    monkeypatch.setenv("BACKEND_BUILD_VERSION", TEST_BUILD_VERSION)
     monkeypatch.setenv("ALLOWED_ORIGINS", '["http://localhost:5173", "https://shop.example"]')
 
     settings = Settings.model_validate({})
@@ -229,6 +235,7 @@ def test_malformed_origins_of_the_environment_name_their_setting(
     monkeypatch.setenv("DATABASE_URL_APP", TEST_APP_URL)
     monkeypatch.setenv("AI_SERVICE_BASE_URL", TEST_AI_SERVICE_URL)
     monkeypatch.setenv("AI_SERVICE_TOKEN", TEST_AI_SERVICE_TOKEN)
+    monkeypatch.setenv("BACKEND_BUILD_VERSION", TEST_BUILD_VERSION)
     monkeypatch.setenv("ALLOWED_ORIGINS", value)
 
     with pytest.raises(ValidationError) as caught:

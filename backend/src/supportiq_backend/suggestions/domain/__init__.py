@@ -41,6 +41,7 @@ from supportiq_backend.suggestions.domain.errors import (
     AiServiceContractError,
     AiServiceUnavailableError,
     InvalidTicketStateError,
+    KbDocumentVersionNotFoundError,
     NoIntentKnownError,
     NothingToRetryError,
     SuggestionPendingError,
@@ -51,6 +52,11 @@ from supportiq_backend.suggestions.domain.jobs import (
     JobState,
     LockedJob,
     QueueSettings,
+)
+from supportiq_backend.suggestions.domain.kb_documents import (
+    KbDocumentId,
+    KbDocumentVersion,
+    KbDocumentVersionTag,
 )
 from supportiq_backend.suggestions.domain.labels import (
     AiReasonCode,
@@ -126,6 +132,10 @@ __all__ = [
     "InvalidTicketStateError",
     "JobState",
     "KbDocumentCitation",
+    "KbDocumentId",
+    "KbDocumentVersion",
+    "KbDocumentVersionNotFoundError",
+    "KbDocumentVersionTag",
     "LlmUsage",
     "LockedJob",
     "MaskCounts",

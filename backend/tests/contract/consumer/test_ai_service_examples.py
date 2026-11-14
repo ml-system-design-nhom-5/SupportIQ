@@ -1,9 +1,10 @@
 """Consumer tests: the ai-service client reads every example of `ai-service` contract 1.0.0.
 
-Each `200` example of `createAnalysis`, `createDraft`, and `getAssetVersions` is served as is,
-and each problem example with its status (CON-28). Unknown statuses and reason codes, the
-reason codes that only backend sets, and a draft on an outcome without one are refused as
-responses outside the contract, which makes the part unavailable (CON-22).
+Each `200` example of `createAnalysis`, `createDraft`, `getAssetVersions`, and
+`getKbDocumentVersion` is served as is, and each problem example with its status (CON-28).
+Unknown statuses and reason codes, the reason codes that only backend sets, and a draft on an
+outcome without one are refused as responses outside the contract, which makes the part
+unavailable (CON-22).
 """
 
 import json
@@ -19,6 +20,8 @@ from supportiq_backend.suggestions import (
     AiServiceContractError,
     AiServiceUnavailableError,
     DraftReady,
+    KbDocumentId,
+    KbDocumentVersionTag,
     NoDraft,
     StaffIntent,
     SuggestionRequest,
@@ -108,6 +111,34 @@ async def test_the_client_reads_the_asset_versions_example() -> None:
     versions = await serving(value).fetch_asset_versions()
 
     assert versions.release_id == value["release_id"]
+
+
+@pytest.mark.anyio
+async def test_the_client_reads_the_kb_document_version_example() -> None:
+    value = example_value(EXAMPLES / "getKbDocumentVersion" / "found.json")
+    document_id = KbDocumentId(str(value["document_id"]))
+    version = KbDocumentVersionTag(str(value["version"]))
+
+    document = await serving(value).fetch_kb_document_version(document_id, version)
+
+    assert document is not None
+    assert (document.document_id, document.version, document.body, document.effective_end_at) == (
+        value["document_id"],
+        value["version"],
+        value["body"],
+        None,
+    )
+
+
+@pytest.mark.anyio
+async def test_the_not_found_problem_of_a_kb_document_version_means_no_document() -> None:
+    value = example_value(EXAMPLES / "problems" / "not-found.json")
+
+    document = await serving(value, HTTPStatus.NOT_FOUND).fetch_kb_document_version(
+        KbDocumentId("SAMPLE-REFUND-001"), KbDocumentVersionTag("9.9")
+    )
+
+    assert document is None
 
 
 @pytest.mark.anyio

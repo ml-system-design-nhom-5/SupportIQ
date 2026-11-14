@@ -10,7 +10,10 @@ from supportiq_backend.platform import BackendError
 from supportiq_backend.tickets import (
     ConsoleTicket,
     ConsoleTicketPosition,
+    Escalation,
+    ManagerQueue,
     RecordedDecision,
+    ReplyProposal,
     SentReply,
     ShopTicket,
     ShopTicketRecord,
@@ -22,6 +25,9 @@ from tests.unit.suggestions.builders import STAFF_ACCOUNT_ID
 
 FIRST_TICKET_ID = TicketId("TCK-1001")
 STAFF_NAME = DisplayName("Staff One")
+MANAGER_ACCOUNT_ID = AccountId("00000000-0000-4000-8000-0000000000bb")
+MANAGER_NAME = DisplayName("Manager One")
+_NAME_BY_ACCOUNT = {STAFF_ACCOUNT_ID: STAFF_NAME, MANAGER_ACCOUNT_ID: MANAGER_NAME}
 
 
 @dataclass(slots=True)
@@ -98,6 +104,10 @@ class FakeConsoleTicketStore:
         """Start the handling clock."""
         self.tickets[ticket_id] = replace(self.tickets[ticket_id], handling_started_at=started_at)
 
+    async def move_to_manager_queue(self, ticket_id: TicketId, queue: ManagerQueue) -> None:
+        """Move the ticket to the queue."""
+        self.tickets[ticket_id] = replace(self.tickets[ticket_id], status=queue)
+
     async def close_ticket(self, ticket_id: TicketId, closed_at: datetime) -> None:
         """Close the ticket."""
         self.tickets[ticket_id] = replace(
@@ -127,11 +137,47 @@ class FakeReplyStore:
 
 
 @dataclass(slots=True)
+class FakeReplyProposalStore:
+    """Keep the proposal of each ticket."""
+
+    proposals: dict[TicketId, ReplyProposal] = field(default_factory=dict[TicketId, ReplyProposal])
+
+    async def insert_proposal(self, proposal: ReplyProposal) -> None:
+        """Keep the one proposal of a ticket."""
+        assert proposal.ticket_id not in self.proposals
+        self.proposals[proposal.ticket_id] = proposal
+
+    async def load_proposal(self, ticket_id: TicketId) -> ReplyProposal | None:
+        """Return the proposal of a ticket."""
+        return self.proposals.get(ticket_id)
+
+
+@dataclass(slots=True)
+class FakeEscalationStore:
+    """Keep the escalation of each ticket."""
+
+    escalations: dict[TicketId, Escalation] = field(default_factory=dict[TicketId, Escalation])
+
+    async def insert_escalation(self, escalation: Escalation) -> None:
+        """Keep the one escalation of a ticket."""
+        assert escalation.ticket_id not in self.escalations
+        self.escalations[escalation.ticket_id] = escalation
+
+    async def load_escalation(self, ticket_id: TicketId) -> Escalation | None:
+        """Return the escalation of a ticket."""
+        return self.escalations.get(ticket_id)
+
+
+@dataclass(slots=True)
 class FakeStaffDirectory:
-    """Name the one staff account of the tests."""
+    """Name the staff account and the manager account of the tests."""
 
     async def load_display_names(
         self, account_ids: frozenset[AccountId]
     ) -> Mapping[AccountId, DisplayName]:
-        """Return the name of the known account."""
-        return {STAFF_ACCOUNT_ID: STAFF_NAME} if STAFF_ACCOUNT_ID in account_ids else {}
+        """Return the names of the known accounts among those asked for."""
+        return {
+            account_id: name
+            for account_id, name in _NAME_BY_ACCOUNT.items()
+            if account_id in account_ids
+        }

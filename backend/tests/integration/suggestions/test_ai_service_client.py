@@ -16,6 +16,9 @@ from opentelemetry.sdk.trace import TracerProvider
 from supportiq_backend.suggestions import (
     AiServiceContractError,
     AiServiceUnavailableError,
+    KbDocumentId,
+    KbDocumentVersion,
+    KbDocumentVersionTag,
     SuggestionRequest,
 )
 from supportiq_backend.suggestions.adapters.ai_service_client import (
@@ -35,6 +38,10 @@ REQUEST = SuggestionRequest(
     as_of=datetime(2026, 11, 5, 8, 12, 30, tzinfo=UTC),
     intent_override=None,
 )
+# The document version of the example `getKbDocumentVersion/found.json`.
+DOCUMENT_ID = KbDocumentId("SAMPLE-REFUND-001")
+DOCUMENT_VERSION = KbDocumentVersionTag("1.0")
+DOCUMENT_PATH = "/v1/kb-documents/SAMPLE-REFUND-001/versions/1.0"
 
 
 def example_body(operation: str, name: str) -> bytes:
@@ -204,3 +211,123 @@ async def test_the_read_of_the_versions_returns_the_loaded_kb_version() -> None:
     versions = await build_client(script).fetch_asset_versions()
 
     assert versions.kb_version == "kb-sample-1"
+
+
+def found_document(**changes: object) -> httpx.Response:
+    example = json.loads(example_body("getKbDocumentVersion", "found"))
+    return httpx.Response(HTTPStatus.OK, content=json.dumps(example | changes).encode())
+
+
+async def read_document(script: ScriptedAiService) -> KbDocumentVersion | None:
+    return await build_client(script).fetch_kb_document_version(DOCUMENT_ID, DOCUMENT_VERSION)
+
+
+@pytest.mark.anyio
+async def test_the_read_of_a_kb_document_version_gets_its_path_and_parses_every_field() -> None:
+    script = ScriptedAiService([found_document(last_reviewed_at="2026-06-30T12:00:00.125Z")])
+
+    document = await read_document(script)
+
+    (sent,) = script.requests
+    assert (sent.method, sent.url.path, sent.content) == ("GET", DOCUMENT_PATH, b"")
+    assert document == KbDocumentVersion(
+        document_id=DOCUMENT_ID,
+        version=DOCUMENT_VERSION,
+        title="Sample refund document",
+        body=(
+            "This is sample text. It is not KB content and not a policy. The document version"
+            " opens here in full, so staff can check a citation against its source."
+        ),
+        policy_key="sample_refund_review",
+        effective_start_at=datetime(2026, 1, 1, tzinfo=UTC),
+        effective_end_at=None,
+        owner="Policy owner",
+        source="Sample source document",
+        last_reviewed_at=datetime(2026, 6, 30, 12, 0, 0, 125_000, tzinfo=UTC),
+    )
+
+
+@pytest.mark.anyio
+async def test_the_kb_read_sends_the_service_token_and_its_traceparent() -> None:
+    script = ScriptedAiService([found_document()])
+    tracer = TracerProvider().get_tracer("test")
+
+    with tracer.start_as_current_span("get_console_kb_document_version"):
+        await read_document(script)
+
+    (sent,) = script.requests
+    assert sent.headers["Authorization"] == f"Bearer {SERVICE_TOKEN}"
+    assert sent.headers["traceparent"].startswith("00-")
+
+
+@pytest.mark.anyio
+async def test_a_404_of_the_kb_read_means_that_the_loaded_kb_has_no_such_version() -> None:
+    not_found = example_body("problems", "not-found")
+    script = ScriptedAiService([httpx.Response(HTTPStatus.NOT_FOUND, content=not_found)])
+
+    assert await read_document(script) is None
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "failure",
+    [
+        httpx.Response(HTTPStatus.SERVICE_UNAVAILABLE),
+        httpx.ConnectError("refused"),
+        httpx.ReadTimeout("slow"),
+    ],
+    ids=["503", "connection-error", "timeout"],
+)
+async def test_a_failed_kb_read_is_unavailable_and_never_retried(
+    failure: httpx.Response | httpx.RequestError,
+) -> None:
+    script = ScriptedAiService([failure, found_document()])
+
+    with pytest.raises(AiServiceUnavailableError) as caught:
+        await read_document(script)
+
+    assert not isinstance(caught.value, AiServiceContractError)
+    assert len(script.requests) == 1
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("status", [HTTPStatus.UNAUTHORIZED, HTTPStatus.UNPROCESSABLE_CONTENT])
+async def test_another_4xx_of_the_kb_read_is_a_contract_error(status: HTTPStatus) -> None:
+    script = ScriptedAiService(
+        [httpx.Response(status, content=example_body("problems", "invalid-request"))]
+    )
+
+    with pytest.raises(AiServiceContractError):
+        await read_document(script)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"body": ""},
+        {"title": 7},
+        {"effective_start_at": "2026-01-01T07:00:00+07:00"},
+        {"document_id": "SAMPLE-REFUND-002"},
+        {"version": "2.0"},
+    ],
+    ids=["empty-body", "number-title", "offset-time", "other-document", "other-version"],
+)
+async def test_a_kb_document_version_outside_the_contract_is_a_contract_error(
+    change: dict[str, object],
+) -> None:
+    script = ScriptedAiService([found_document(**change)])
+
+    with pytest.raises(AiServiceContractError):
+        await read_document(script)
+
+
+@pytest.mark.anyio
+async def test_each_identifier_of_the_kb_read_stays_one_segment_of_the_path() -> None:
+    script = ScriptedAiService([httpx.Response(HTTPStatus.NOT_FOUND)])
+
+    await build_client(script).fetch_kb_document_version(
+        KbDocumentId("a/b?c#d"), KbDocumentVersionTag("1 0")
+    )
+
+    assert script.requests[0].url.raw_path == b"/v1/kb-documents/a%2Fb%3Fc%23d/versions/1%200"

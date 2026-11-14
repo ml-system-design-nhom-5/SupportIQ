@@ -82,6 +82,8 @@ class Settings(BaseSettings):
     ai_service_analysis_timeout_ms: PositiveInt = 3_000
     ai_service_draft_timeout_ms: PositiveInt = 11_000
     ai_service_read_timeout_ms: PositiveInt = 3_000
+    # The `backend_version` of `getAdminVersions`, from 1 to 64 characters (backend contract).
+    backend_build_version: Annotated[str, Field(min_length=1, max_length=64)]
     suggestion_workers_per_replica: PositiveInt = 5
     suggestion_job_lease_ms: PositiveInt = 15_000
     suggestion_job_max_attempts: PositiveInt = 3

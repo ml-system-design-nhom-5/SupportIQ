@@ -5,7 +5,12 @@ Each detail is the one of its contract example in `contracts/examples/problems/`
 
 from typing import ClassVar
 
-from supportiq_backend.platform import BackendError, ErrorCode, InvalidRequestError
+from supportiq_backend.platform import (
+    BackendError,
+    ErrorCode,
+    InvalidRequestError,
+    ResourceNotFoundError,
+)
 
 # The state that refuses a suggestion on a ticket in manual mode (contract `SuggestionConflict`).
 MANUAL_MODE_STATE = "in manual mode"
@@ -67,18 +72,22 @@ class NothingToRetryError(InvalidRequestError):
         super().__init__("The current suggestion has no part that a retry can fix.")
 
 
+class KbDocumentVersionNotFoundError(ResourceNotFoundError):
+    """The loaded KB has no such document version, or a path parameter names none (404)."""
+
+
 class AiServiceUnavailableError(BackendError):
     """`ai-service` timed out, was unreachable, or answered `5xx` (ERR-08).
 
     A suggestion part becomes `unavailable` with `ai_service_unavailable`; a read of the
-    console answers `503 not-ready`.
+    console answers `503 not-ready`, with the detail of the example `ai-service-not-ready`.
     """
 
     code: ClassVar[ErrorCode] = ErrorCode.NOT_READY
 
     def __init__(self) -> None:
         """Build the error with its fixed detail."""
-        super().__init__("ai-service is not available.")
+        super().__init__("ai-service did not answer in time.")
 
 
 class AiServiceContractError(AiServiceUnavailableError):

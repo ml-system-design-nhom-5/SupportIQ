@@ -1,26 +1,43 @@
 """The table of documented outcomes: one row for each status of each operation (CON-27).
 
-Each row names the state of the replica and the change that turns the valid call of
-`tests.contract.calls` into the request that gets this status.
+Each row names the state of the replica and the change of `tests.contract.call_changes` that
+turns the valid call of `tests.contract.calls` into the request that gets this status.
 """
 
-from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from enum import StrEnum
 from http import HTTPStatus
 
-from tests.contract.calls import (
-    NEW_ACCOUNT,
-    NEW_PASSWORD,
-    REPLY_WITHOUT_A_DRAFT,
-    Call,
-    World,
-    valid_calls,
+from tests.contract.call_changes import (
+    ChangeCall,
+    after_the_reply,
+    as_admin,
+    as_customer,
+    as_staff_on_the_closed_queue,
+    on_a_ticket_that_requires_authority,
+    with_invalid_body,
+    with_invalid_limit,
+    with_key_reused_on_another_ticket,
+    with_other_without_a_note,
+    with_own_account,
+    with_placeholder_in_body,
+    with_reused_key,
+    with_taken_login_name,
+    with_unchanged_role,
+    with_unchanged_status,
+    with_unknown_order,
+    with_unknown_order_filter,
+    with_unknown_path_id,
+    with_unknown_status,
+    with_unknown_target,
+    with_unknown_ticket,
+    with_wrong_current_password,
+    with_wrong_password,
+    without_key,
+    without_origin,
+    without_session,
 )
-
-OTHER_KEY = "00000000-0000-4000-8000-000000000002"
-UNKNOWN_ACCOUNT = "99999999-9999-4999-8999-999999999999"
-UNKNOWN_TICKET = "TCK-999999"
+from tests.contract.calls import ESCALATION, NEW_ACCOUNT, NEW_PASSWORD, REPLY_WITHOUT_A_DRAFT
 
 
 class Condition(StrEnum):
@@ -29,9 +46,7 @@ class Condition(StrEnum):
     HEALTHY = "healthy"
     REQUEST_FAILS = "request-fails"
     NO_DATABASE = "no-database"
-
-
-type ChangeCall = Callable[[Call, World], Call]
+    NO_AI_SERVICE = "no-ai-service"
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,118 +72,6 @@ class Outcome:
         return f"{self.operation_id}-{self.status.value}{self.label}"
 
 
-def without_session(call: Call, _world: World) -> Call:
-    return replace(call, role=None)
-
-
-def without_origin(call: Call, _world: World) -> Call:
-    return replace(call, has_origin=False)
-
-
-def as_admin(call: Call, _world: World) -> Call:
-    return replace(call, role="admin")
-
-
-def as_customer(call: Call, _world: World) -> Call:
-    return replace(call, role="customer")
-
-
-def with_invalid_body(call: Call, _world: World) -> Call:
-    return replace(call, body={"unknown": True})
-
-
-def with_invalid_limit(call: Call, _world: World) -> Call:
-    return replace(call, params={"limit": "0"})
-
-
-def with_wrong_password(call: Call, _world: World) -> Call:
-    return replace(call, body={"login_name": "staff-contract", "password": "wrong-password"})
-
-
-def with_unknown_order(call: Call, _world: World) -> Call:
-    return replace(call, body={"order_id": "ORD-99999", "message": "Hi"})
-
-
-def with_unknown_order_filter(call: Call, _world: World) -> Call:
-    return replace(call, params={"order_id": "ORD-99999"})
-
-
-def with_unknown_path_id(call: Call, _world: World) -> Call:
-    return replace(call, path=call.path.rsplit("/", 1)[0] + "/UNKNOWN-1")
-
-
-def with_unknown_ticket(call: Call, world: World) -> Call:
-    return replace(call, path=call.path.replace(world.ticket_id, UNKNOWN_TICKET))
-
-
-def without_key(call: Call, _world: World) -> Call:
-    return replace(call, key=None)
-
-
-def with_unknown_status(call: Call, _world: World) -> Call:
-    return replace(call, params={"status": "unknown"})
-
-
-def as_staff_on_the_closed_queue(call: Call, _world: World) -> Call:
-    return replace(call, params={"status": "closed"})
-
-
-def with_key_reused_on_another_ticket(call: Call, world: World) -> Call:
-    return replace(call, path=call.path.replace(world.ticket_id, world.other_ticket_id), prior=call)
-
-
-def after_the_reply(call: Call, world: World) -> Call:
-    return replace(call, prior=valid_calls(world)["sendReply"])
-
-
-def on_a_ticket_that_requires_authority(call: Call, world: World) -> Call:
-    return replace(call, path=call.path.replace(world.ticket_id, world.authority_ticket_id))
-
-
-def with_placeholder_in_body(call: Call, _world: World) -> Call:
-    return replace(call, body={**REPLY_WITHOUT_A_DRAFT, "body": "We wrote to [EMAIL_1]."})
-
-
-def with_unknown_target(call: Call, world: World) -> Call:
-    return replace(call, path=call.path.replace(str(world.target_account_id), UNKNOWN_ACCOUNT))
-
-
-def with_unchanged_role(call: Call, _world: World) -> Call:
-    return replace(call, body={"role": "staff"})
-
-
-def with_unchanged_status(call: Call, _world: World) -> Call:
-    return replace(call, body={"is_active": True})
-
-
-def with_wrong_current_password(call: Call, _world: World) -> Call:
-    return replace(
-        call,
-        body={
-            "current_password": "wrong-password",
-            "new_password": NEW_PASSWORD,
-            "is_signed_out_elsewhere": True,
-        },
-    )
-
-
-def with_own_account(call: Call, world: World) -> Call:
-    return replace(
-        call, path=call.path.replace(str(world.target_account_id), str(world.admin_account_id))
-    )
-
-
-def with_taken_login_name(call: Call, _world: World) -> Call:
-    return replace(call, key=OTHER_KEY, prior=call)
-
-
-def with_reused_key(new_body: object) -> ChangeCall:
-    def change(call: Call, _world: World) -> Call:
-        return replace(call, body=new_body, prior=call)
-
-    return change
-
-
 SHOP_OPERATIONS = (
     "listShopProducts",
     "getShopProduct",
@@ -183,10 +86,14 @@ CONSOLE_OPERATIONS = (
     "getConsoleTicket",
     "recordTicketView",
     "createSuggestion",
+    "createReplyProposal",
     "sendReply",
+    "createEscalation",
+    "getConsoleKbDocumentVersion",
 )
 ADMIN_OPERATIONS = (
     "listAdminAccounts",
+    "getAdminVersions",
     "createAdminAccount",
     "changeAccountRole",
     "changeAccountStatus",
@@ -217,8 +124,12 @@ OK_STATUSES = {
     "getConsoleTicket": HTTPStatus.OK,
     "recordTicketView": HTTPStatus.NO_CONTENT,
     "createSuggestion": HTTPStatus.ACCEPTED,
+    "createReplyProposal": HTTPStatus.CREATED,
     "sendReply": HTTPStatus.CREATED,
+    "createEscalation": HTTPStatus.CREATED,
+    "getConsoleKbDocumentVersion": HTTPStatus.OK,
     "listAdminAccounts": HTTPStatus.OK,
+    "getAdminVersions": HTTPStatus.OK,
     "createAdminAccount": HTTPStatus.CREATED,
     "changeAccountRole": HTTPStatus.CREATED,
     "changeAccountStatus": HTTPStatus.CREATED,
@@ -263,7 +174,9 @@ OUTCOMES: tuple[Outcome, ...] = (
             "createShopTicket",
             "recordTicketView",
             "createSuggestion",
+            "createReplyProposal",
             "sendReply",
+            "createEscalation",
             "createAdminAccount",
             "changeAccountRole",
             "changeAccountStatus",
@@ -272,11 +185,23 @@ OUTCOMES: tuple[Outcome, ...] = (
     ),
     *(
         Outcome(operation, HTTPStatus.NOT_FOUND, change=with_unknown_path_id)
-        for operation in ("getShopProduct", "getShopOrder", "getShopTicket", "getConsoleTicket")
+        for operation in (
+            "getShopProduct",
+            "getShopOrder",
+            "getShopTicket",
+            "getConsoleTicket",
+            "getConsoleKbDocumentVersion",
+        )
     ),
     *(
         Outcome(operation, HTTPStatus.NOT_FOUND, change=with_unknown_ticket)
-        for operation in ("recordTicketView", "createSuggestion", "sendReply")
+        for operation in (
+            "recordTicketView",
+            "createSuggestion",
+            "createReplyProposal",
+            "sendReply",
+            "createEscalation",
+        )
     ),
     Outcome("listShopTickets", HTTPStatus.NOT_FOUND, change=with_unknown_order_filter),
     Outcome("createShopTicket", HTTPStatus.NOT_FOUND, change=with_unknown_order),
@@ -291,10 +216,22 @@ OUTCOMES: tuple[Outcome, ...] = (
     Outcome("recordTicketView", HTTPStatus.CONFLICT, change=with_key_reused_on_another_ticket),
     Outcome("createSuggestion", HTTPStatus.CONFLICT, change=after_the_reply),
     Outcome(
+        "createReplyProposal",
+        HTTPStatus.CONFLICT,
+        change=with_reused_key({**REPLY_WITHOUT_A_DRAFT, "body": "Another proposal"}),
+    ),
+    Outcome("createReplyProposal", HTTPStatus.CONFLICT, change=after_the_reply, label="-state"),
+    Outcome(
         "sendReply",
         HTTPStatus.CONFLICT,
         change=with_reused_key({**REPLY_WITHOUT_A_DRAFT, "body": "Another reply"}),
     ),
+    Outcome(
+        "createEscalation",
+        HTTPStatus.CONFLICT,
+        change=with_reused_key({**ESCALATION, "staff_reason_codes": ["kb_gap"]}),
+    ),
+    Outcome("createEscalation", HTTPStatus.CONFLICT, change=after_the_reply, label="-state"),
     Outcome("changeAccountRole", HTTPStatus.CONFLICT, change=with_reused_key({"role": "staff"})),
     Outcome(
         "changeAccountStatus", HTTPStatus.CONFLICT, change=with_reused_key({"is_active": True})
@@ -344,7 +281,9 @@ OUTCOMES: tuple[Outcome, ...] = (
             "changeOwnPassword",
             "createShopTicket",
             "createSuggestion",
+            "createReplyProposal",
             "sendReply",
+            "createEscalation",
             "createAdminAccount",
             "changeAccountRole",
             "changeAccountStatus",
@@ -357,7 +296,17 @@ OUTCOMES: tuple[Outcome, ...] = (
         "changeOwnPassword", UNPROCESSABLE, change=with_wrong_current_password, label="-refused"
     ),
     Outcome("resetAccountPassword", UNPROCESSABLE, change=with_own_account, label="-refused"),
-    Outcome("sendReply", UNPROCESSABLE, change=with_placeholder_in_body, label="-placeholder"),
+    *(
+        Outcome(operation, UNPROCESSABLE, change=with_placeholder_in_body, label="-placeholder")
+        for operation in ("createReplyProposal", "sendReply")
+    ),
+    Outcome("createEscalation", UNPROCESSABLE, change=with_other_without_a_note, label="-note"),
+    Outcome(
+        "getConsoleKbDocumentVersion",
+        HTTPStatus.SERVICE_UNAVAILABLE,
+        Condition.NO_AI_SERVICE,
+        label="-ai-service",
+    ),
     *(
         Outcome(operation, HTTPStatus.INTERNAL_SERVER_ERROR, Condition.REQUEST_FAILS)
         for operation in ALL_OPERATIONS

@@ -18,6 +18,9 @@ PRODUCTS = "/v1/shop/products"
 ORDERS = "/v1/shop/orders"
 TICKETS = "/v1/shop/tickets"
 CONSOLE_TICKETS = "/v1/console/tickets"
+# The KB document version of the `getKbDocumentVersion` example of `ai-service` contract 1.0.0.
+KB_DOCUMENT_VERSION = "/v1/console/kb-documents/SAMPLE-REFUND-001/versions/1.0"
+ADMIN_VERSIONS = "/v1/admin/versions"
 ACCOUNTS = "/v1/admin/accounts"
 KEY = "00000000-0000-4000-8000-000000000001"
 LOGIN_NAME = "staff-contract"
@@ -30,6 +33,7 @@ NEW_ACCOUNT = {
     "password": NEW_PASSWORD,
 }
 REPLY_WITHOUT_A_DRAFT = {"basis": "no_ai_draft", "body": "Your parcel left our warehouse today."}
+ESCALATION = {"staff_reason_codes": ["case_exception"]}
 
 
 @dataclass(frozen=True, slots=True)
@@ -210,9 +214,20 @@ def _console_calls(world: World) -> Mapping[str, Call]:
         "createSuggestion": Call(
             "POST", f"{console_ticket}/suggestions", role="staff", key=KEY, body={}
         ),
+        "createReplyProposal": Call(
+            "POST",
+            f"{console_ticket}/reply-proposals",
+            role="staff",
+            key=KEY,
+            body=REPLY_WITHOUT_A_DRAFT,
+        ),
         "sendReply": Call(
             "POST", f"{console_ticket}/replies", role="staff", key=KEY, body=REPLY_WITHOUT_A_DRAFT
         ),
+        "createEscalation": Call(
+            "POST", f"{console_ticket}/escalations", role="staff", key=KEY, body=ESCALATION
+        ),
+        "getConsoleKbDocumentVersion": Call("GET", KB_DOCUMENT_VERSION, role="staff"),
     }
 
 
@@ -220,6 +235,7 @@ def _admin_calls(world: World) -> Mapping[str, Call]:
     target = f"{ACCOUNTS}/{world.target_account_id}"
     return {
         "listAdminAccounts": Call("GET", ACCOUNTS, role="admin"),
+        "getAdminVersions": Call("GET", ADMIN_VERSIONS, role="admin"),
         "createAdminAccount": Call("POST", ACCOUNTS, role="admin", key=KEY, body=NEW_ACCOUNT),
         "changeAccountRole": Call(
             "POST", f"{target}/role-changes", role="admin", key=KEY, body={"role": "manager"}

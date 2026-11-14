@@ -1,6 +1,7 @@
 """Builders of AI results and suggestions with sensible defaults (TEST-05)."""
 
 from dataclasses import replace
+from datetime import UTC, datetime
 
 from supportiq_backend.accounts import AccountId
 from supportiq_backend.platform import TraceId
@@ -17,6 +18,9 @@ from supportiq_backend.suggestions import (
     DraftSegment,
     DraftState,
     IntentLabel,
+    KbDocumentId,
+    KbDocumentVersion,
+    KbDocumentVersionTag,
     MaskCounts,
     ModelIntent,
     NoDraft,
@@ -44,6 +48,8 @@ OTHER_KB_VERSION = "kb-sample-2"
 PREDICTED_INTENT = IntentLabel.REFUND_STATUS
 ANALYSIS_BODY = '{"analysis": "as received"}'
 DRAFT_BODY = '{"draft": "as received"}'
+DOCUMENT_ID = KbDocumentId("SAMPLE-REFUND-001")
+DOCUMENT_VERSION = KbDocumentVersionTag("1.0")
 
 
 def build_versions(kb_version: str = KB_VERSION) -> AssetVersions:
@@ -56,6 +62,22 @@ def build_versions(kb_version: str = KB_VERSION) -> AssetVersions:
         prompt_version="prompts-sample-1",
         routing_version="routing-sample-1",
         index_version="index-sample-1",
+    )
+
+
+def build_kb_document_version() -> KbDocumentVersion:
+    """Build an open-ended sample document version; it is not KB content (TEST-18)."""
+    return KbDocumentVersion(
+        document_id=DOCUMENT_ID,
+        version=DOCUMENT_VERSION,
+        title="Sample refund document",
+        body="This is sample text. It is not KB content and not a policy.",
+        policy_key="sample_refund_review",
+        effective_start_at=datetime(2026, 1, 1, tzinfo=UTC),
+        effective_end_at=None,
+        owner="Policy owner",
+        source="Sample source document",
+        last_reviewed_at=None,
     )
 
 

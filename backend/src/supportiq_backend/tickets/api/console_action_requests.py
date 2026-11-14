@@ -1,6 +1,7 @@
-"""Read the body of `sendReply` into the domain request, once, at the boundary (CODE-32).
+"""Read the bodies of the console's actions into domain requests, once, at the boundary.
 
-The basis of the body chooses the variant. A repeated item of an array that the contract
+`sendReply` and `createReplyProposal` take a body whose basis chooses the variant, and
+`createEscalation` takes its reasons (CODE-32). A repeated item of an array that the contract
 marks `uniqueItems: true` is refused, so a repeated warning ID never stands in for another.
 """
 
@@ -11,6 +12,7 @@ from pydantic import MISSING
 
 from supportiq_backend.generated import (
     AiDraftReplyRequest,
+    CreateEscalationRequest,
     NoAiDraftReplyRequest,
     RejectedAiDraftReplyRequest,
     ReplyProposalReplyRequest,
@@ -25,9 +27,11 @@ from supportiq_backend.tickets.api.console_request_fields import (
 )
 from supportiq_backend.tickets.domain import (
     AiDraftReply,
+    EscalationRequest,
     NoAiDraftReply,
     ProposalId,
     ProposalReply,
+    ProposalRequest,
     RejectedAiDraftReply,
     ReplyRequest,
     StaffReasonCode,
@@ -39,13 +43,10 @@ _REASON_CODES_LOCATION = "body.staff_reason_codes"
 _NOTE_LOCATION = "body.note"
 _PROPOSAL_LOCATION = "body.proposal_id"
 
+# The variants of `CreateReplyProposalRequest`, discriminated by `basis`.
+type ProposalRequestBody = AiDraftReplyRequest | RejectedAiDraftReplyRequest | NoAiDraftReplyRequest
 # The variants of `SendReplyRequest`, discriminated by `basis`.
-type ReplyRequestBody = (
-    AiDraftReplyRequest
-    | RejectedAiDraftReplyRequest
-    | NoAiDraftReplyRequest
-    | ReplyProposalReplyRequest
-)
+type ReplyRequestBody = ProposalRequestBody | ReplyProposalReplyRequest
 
 
 def parse_reply_request(body: ReplyRequestBody) -> ReplyRequest:
@@ -61,6 +62,32 @@ def parse_reply_request(body: ReplyRequestBody) -> ReplyRequest:
         RequestContractError: A text cannot be stored, an array repeats an item, or the
             proposal ID is not a UUID.
     """
+    match body:
+        case ReplyProposalReplyRequest():
+            return ProposalReply(
+                parse_storable_text(body.body.root.root, _BODY_LOCATION),
+                _parse_proposal_id(body.proposal_id),
+            )
+        case AiDraftReplyRequest() | RejectedAiDraftReplyRequest() | NoAiDraftReplyRequest():
+            return parse_proposal_request(body)
+        case _:
+            assert_never(body)
+
+
+def parse_proposal_request(body: ProposalRequestBody) -> ProposalRequest:
+    """Turn a body on a draft, or without one, into the domain request.
+
+    It is the body of `createReplyProposal`, and every body of `sendReply` but a proposal's.
+
+    Args:
+        body: The parsed body, discriminated by `basis`.
+
+    Returns:
+        The domain request.
+
+    Raises:
+        RequestContractError: A text cannot be stored, or an array repeats an item.
+    """
     text = parse_storable_text(body.body.root.root, _BODY_LOCATION)
     match body:
         case AiDraftReplyRequest():
@@ -73,13 +100,28 @@ def parse_reply_request(body: ReplyRequestBody) -> ReplyRequest:
                 note=_parse_note(body.note),
             )
         case NoAiDraftReplyRequest():
-            return NoAiDraftReply(
-                text, None if body.suggestion_id is MISSING else SuggestionId(body.suggestion_id)
-            )
-        case ReplyProposalReplyRequest():
-            return ProposalReply(text, _parse_proposal_id(body.proposal_id))
+            return NoAiDraftReply(text, _parse_suggestion_id(body.suggestion_id))
         case _:
             assert_never(body)
+
+
+def parse_escalation_request(body: CreateEscalationRequest) -> EscalationRequest:
+    """Turn the body of `createEscalation` into the domain request.
+
+    Args:
+        body: The parsed body.
+
+    Returns:
+        The domain request.
+
+    Raises:
+        RequestContractError: The note cannot be stored, or a reason code repeats.
+    """
+    return EscalationRequest(
+        staff_reason_codes=_parse_reason_codes(body.staff_reason_codes),
+        note=_parse_note(body.note),
+        suggestion_id=_parse_suggestion_id(body.suggestion_id),
+    )
 
 
 def _parse_ai_draft_reply(body: AiDraftReplyRequest, text: str) -> AiDraftReply:
@@ -106,6 +148,10 @@ def _parse_reason_codes(codes: list[ContractStaffReasonCode]) -> tuple[StaffReas
 
 def _parse_note(note: StaffNoteText | MISSING) -> str | None:
     return None if note is MISSING else parse_storable_text(note.root, _NOTE_LOCATION)
+
+
+def _parse_suggestion_id(raw: str | MISSING) -> SuggestionId | None:
+    return None if raw is MISSING else SuggestionId(raw)
 
 
 def _parse_proposal_id(raw: str) -> ProposalId:

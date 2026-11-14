@@ -22,10 +22,14 @@ class OperationId(StrEnum):
     GET_CONSOLE_TICKET = "getConsoleTicket"
     RECORD_TICKET_VIEW = "recordTicketView"
     CREATE_SUGGESTION = "createSuggestion"
+    CREATE_REPLY_PROPOSAL = "createReplyProposal"
     SEND_REPLY = "sendReply"
+    CREATE_ESCALATION = "createEscalation"
+    GET_CONSOLE_KB_DOCUMENT_VERSION = "getConsoleKbDocumentVersion"
     LIST_ADMIN_ACCOUNTS = "listAdminAccounts"
     CHANGE_ACCOUNT_ROLE = "changeAccountRole"
     CHANGE_ACCOUNT_STATUS = "changeAccountStatus"
     CHANGE_OWN_PASSWORD = "changeOwnPassword"  # noqa: S105  # an operation ID
     CREATE_ADMIN_ACCOUNT = "createAdminAccount"
     RESET_ACCOUNT_PASSWORD = "resetAccountPassword"  # noqa: S105  # an operation ID
+    GET_ADMIN_VERSIONS = "getAdminVersions"

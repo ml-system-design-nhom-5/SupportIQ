@@ -1,6 +1,6 @@
 # backend
 
-`backend` is the SupportIQ component that owns sign-in, the read-only shop, the ticket workflow behind `/console`, internal accounts, the simulated commerce data, the pseudonym maps, and the audit log ([ADR-0001](../docs/decisions/0001-system-architecture.md)). It implements the [backend foundation design](../docs/design/backend-foundation.md), the [account management design](../docs/design/account-management.md), and the [backend ticket workflow design](../docs/design/backend-ticket-workflow.md) against [`contracts/backend.openapi.yaml`](../contracts/backend.openapi.yaml) 1.2.0, and it calls `ai-service` through [`contracts/ai-service.openapi.yaml`](../contracts/ai-service.openapi.yaml) 1.0.0. The ticket workflow lands in steps on the branch `build/ticket-workflow` ([design, Rollout](../docs/design/backend-ticket-workflow.md#rollout)): `listConsoleTickets`, `getConsoleTicket`, `recordTicketView`, `createSuggestion`, and `sendReply` are served; `createReplyProposal`, `createEscalation`, `getConsoleKbDocumentVersion`, `getConsoleReport`, `getAdminVersions`, the two one-off commands, and the named-entity detector of [ADR-0017](../docs/decisions/0017-named-entity-model-from-its-release-url.md) are not yet. Until they are, the provider contract tests fail on those operations.
+`backend` is the SupportIQ component that owns sign-in, the read-only shop, the ticket workflow behind `/console`, internal accounts, the simulated commerce data, the pseudonym maps, and the audit log ([ADR-0001](../docs/decisions/0001-system-architecture.md)). It implements the [backend foundation design](../docs/design/backend-foundation.md), the [account management design](../docs/design/account-management.md), and the [backend ticket workflow design](../docs/design/backend-ticket-workflow.md) against [`contracts/backend.openapi.yaml`](../contracts/backend.openapi.yaml) 1.2.0, and it calls `ai-service` through [`contracts/ai-service.openapi.yaml`](../contracts/ai-service.openapi.yaml) 1.0.0. The ticket workflow lands in steps on the branch `build/ticket-workflow` ([design, Rollout](../docs/design/backend-ticket-workflow.md#rollout)): `listConsoleTickets`, `getConsoleTicket`, `recordTicketView`, `createSuggestion`, `createReplyProposal`, `sendReply`, `createEscalation`, `getConsoleKbDocumentVersion`, and `getAdminVersions` are served; `getConsoleReport`, the two one-off commands, and the named-entity detector of [ADR-0017](../docs/decisions/0017-named-entity-model-from-its-release-url.md) are not yet. Until they are, the provider contract tests fail on those operations.
 
 ## Run and test
 
@@ -49,7 +49,7 @@ These steps work from a fresh clone.
    uv sync --locked
    ```
 
-5. Create your settings. `.env` is ignored by git, and its values never leave your machine. Replace every placeholder, and use the same owner password as in step 3. A `.env` made before the ticket workflow needs the two new required settings `AI_SERVICE_BASE_URL` and `AI_SERVICE_TOKEN` of `.env.example`; without them `backend` does not start.
+5. Create your settings. `.env` is ignored by git, and its values never leave your machine. Replace every placeholder, and use the same owner password as in step 3. A `.env` made before the ticket workflow needs the three new required settings `AI_SERVICE_BASE_URL`, `AI_SERVICE_TOKEN`, and `BACKEND_BUILD_VERSION` of `.env.example`; without them `backend` does not start.
 
    ```bash
    cp .env.example .env
@@ -119,7 +119,7 @@ backend/
 │   ├── accounts/           # Sign-in, sessions, roles, internal accounts, and passwords
 │   ├── commerce/           # The read-only catalog, orders, shipments, and refunds
 │   ├── tickets/            # Tickets, messages, the console workflow, replies, and decisions
-│   ├── suggestions/        # Suggestions, the job queue and its claim loop, the ai-service client
+│   ├── suggestions/        # Suggestions, the job queue, the ai-service client, and its two reads
 │   ├── pseudonymization/   # The detectors and the pseudonym map; only it reads the map (SEC-37)
 │   ├── composition_root/   # The only place that wires everything: the command and the app
 │   ├── migrations/         # Alembic migrations and the SQL script of supportiq_app
@@ -187,8 +187,8 @@ Every log line is one JSON object on standard output, with the attributes of an 
 | `suggestion_job.claimed`, `suggestion_job.lease_expired`, `suggestion_job.failed` | The claim loop claims a job, ends a job without attempts left, or logs a failure once and goes on |
 | `pseudonymization.failed` | Pseudonymization fails closed: at `error` for a defect, at `warning` for a text over 4 000 characters, which is handled input (ADR-0010, Failure handling) |
 | `pseudonym.restore_failed` | A pseudonym of stored AI text is missing from the map |
-| `ai_service.called`, `ai_service.call_failed`, `ai_service.contract_violated` | A call to `ai-service` answers, times out or fails, or is refused with `4xx` or answered outside the contract |
-| `intent.overridden`, `reply.sent`, `decision.recorded` | Staff choose an intent, send a reply, or record a decision about a draft |
+| `ai_service.called`, `ai_service.call_failed`, `ai_service.contract_violated` | A call to `ai-service` answers, times out or fails, or is refused with `4xx` or answered outside the contract. A KB document read that `ai-service` cannot answer gets `503 not-ready` and is logged only as `ai_service.call_failed`, never as `database.call_failed` |
+| `intent.overridden`, `reply_proposal.submitted`, `reply.sent`, `ticket.escalated`, `decision.recorded` | Staff choose an intent, submit a reply for a manager to send, send a reply, or escalate a ticket, and a decision about a draft is recorded |
 | `command.failed` | A one-off command fails, with the error type |
 | `database.migrated`, `database_role.applied` | A one-off database command succeeds |
 | `seed.loaded`, `seed.reset`, `seed.reset_cancelled` | The seed and reset commands |
