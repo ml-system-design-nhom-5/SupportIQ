@@ -15,6 +15,7 @@ STAFF_REASONS = {"wrong_intent", "wrong_source", "unsupported_claim", "kb_gap", 
 INTENTS = {"add_product", "availability", "availability_in_store", "availability_online", "cancel_order", "change_account", "change_order", "close_account", "customer_service", "damaged_delivery", "delivery_issue", "delivery_time", "exchange_product", "exchange_product_in_store", "human_agent", "missing_item", "open_account", "order_history", "pay", "payment_issue", "payment_methods", "product_information", "product_issue", "recover_password", "refund_policy", "refund_status", "remove_product", "request_invoice", "request_refund", "request_right_to_rectification", "return_policy", "return_product", "return_product_in_store", "return_product_online", "sales_period", "shipping_costs", "store_location", "store_opening_hours", "submit_feedback", "submit_product_feedback", "submit_product_idea", "technical_issue", "track_delivery", "track_order", "use_app", "wrong_item"}
 SENSITIVE_KEYWORDS = re.compile(r"\b(fraud|lawsuit|legal action|chargeback|unauthorized transaction|policy exception)\b", re.I)
 SENSITIVE_ACTION_INTENTS = {"cancel_order", "request_refund", "return_product", "payment_issue"}
+AUTHORITY_ROLES = ("admin", "manager")
 
 
 def require_ticket(session, ticket_id, customer_id=None, lock=False):
@@ -71,8 +72,10 @@ def allowed_actions(ticket, actor, suggestion):
         if suggestion and suggestion.payload.get("draft_status") in ("unavailable", "llm_unavailable") and "pseudonymization_failed" not in suggestion.payload.get("reason_codes", []):
             actions.append("retry_suggestion")
         if actor.role == "staff":
-            actions.extend(["submit_reply_proposal", "escalate"])
-    if not pending(suggestion) and (actor.role == "manager" or not ticket.is_authority_required):
+            actions.append("submit_reply_proposal")
+        if actor.role in ("staff", "admin"):
+            actions.append("escalate")
+    if not pending(suggestion) and (actor.role in AUTHORITY_ROLES or not ticket.is_authority_required):
         actions.append("send_reply")
     return actions
 
@@ -209,7 +212,7 @@ def act(session, actor, ticket_id, action, body, settings, trace_id):
     if ticket.status == "closed":
         raise Problem(409, "invalid-ticket-state", "A colleague already sent the reply.")
     if actor.role == "staff" and ticket.status != "open":
-        raise Problem(403, "forbidden", "This ticket is waiting for a manager.")
+        raise Problem(403, "forbidden", "This ticket requires administrator authority.")
     if action == "suggestions":
         override = body.get("intent_override")
         if ticket.status != "open":
@@ -226,8 +229,10 @@ def act(session, actor, ticket_id, action, body, settings, trace_id):
             audit(session, "intent.overridden", actor.account_id, trace_id, ticket.ticket_id, chosen_intent=override)
         return result
     if action == "escalations":
-        if actor.role != "staff":
-            raise Problem(403, "forbidden", "Only staff escalate tickets to managers.")
+        if actor.role not in ("staff", "admin"):
+            raise Problem(403, "forbidden", "Only staff or administrators can escalate open tickets.")
+        if ticket.status != "open":
+            raise Problem(409, "invalid-ticket-state", "Only open tickets can be escalated.")
         if body.get("suggestion_id") and body["suggestion_id"] != ticket.current_suggestion_id:
             raise Problem(409, "suggestion-superseded", "Reload the current suggestion before escalating.")
         reason_check(body["staff_reason_codes"], body.get("note"), required=True)
@@ -238,10 +243,12 @@ def act(session, actor, ticket_id, action, body, settings, trace_id):
         audit(session, "ticket.escalated", actor.account_id, trace_id, ticket.ticket_id, staff_reason_codes=body["staff_reason_codes"])
         return result
     if action == "replies" and actor.role == "staff" and ticket.is_authority_required:
-        raise Problem(403, "authority-required", "A manager must send the reply. Submit it for approval.")
+        raise Problem(403, "authority-required", "An administrator must send the reply. Submit it for approval.")
     if action == "reply-proposals" and actor.role != "staff":
-        raise Problem(403, "forbidden", "Only staff submit proposals to managers.")
+        raise Problem(403, "forbidden", "Only staff submit proposals for approval.")
     validate_reply(ticket, suggestion, body)
+    if action == "replies" and body["basis"] == "reply_proposal" and (ticket.proposal or {}).get("actor_account_id") == actor.account_id:
+        raise Problem(403, "self-approval-forbidden", "You cannot approve your own reply proposal.")
     if action == "reply-proposals":
         if body["basis"] == "reply_proposal":
             raise Problem(422, "invalid-request", "A proposal cannot be based on another proposal.")

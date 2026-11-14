@@ -222,20 +222,23 @@ def create_app(settings=None, database=None, start_worker=True):
     def shop_get_ticket(request: Request, ticket_id: str):
         return execute(request, ["customer"], lambda session, actor: shop_ticket(session, require_ticket(session, ticket_id, actor.customer_id)))
 
+    console_roles = ["staff", "admin", "manager"]
+    authority_roles = ["admin", "manager"]
+
     @app.get("/v1/console/tickets", operation_id="listConsoleTickets")
     def console_tickets(request: Request, status: str = "open", limit: int = 20, cursor: str | None = None):
         def load(session, actor):
             if actor.role == "staff" and status != "open":
-                raise Problem(403, "forbidden", "Only managers can list handled tickets.")
+                raise Problem(403, "forbidden", "Only administrators can list handled tickets.")
             if status not in ("open", "awaiting_approval", "escalated", "closed"):
                 raise Problem(422, "invalid-request", "Choose a valid ticket status.")
             query = select(Ticket).where(Ticket.status == status).order_by(Ticket.created_at, Ticket.ticket_id)
             return page_query(session, query, lambda ticket: summary(session, ticket), limit, cursor)
-        return execute(request, ["staff", "manager"], load)
+        return execute(request, console_roles, load)
 
     @app.get("/v1/console/tickets/{ticket_id}", operation_id="getConsoleTicket")
     def console_ticket(request: Request, ticket_id: str):
-        return execute(request, ["staff", "manager"], lambda session, actor: workspace(session, require_ticket(session, ticket_id), actor))
+        return execute(request, console_roles, lambda session, actor: workspace(session, require_ticket(session, ticket_id), actor))
 
     @app.post("/v1/console/tickets/{ticket_id}/views", status_code=204, operation_id="recordTicketView")
     def view(request: Request, ticket_id: str):
@@ -244,16 +247,16 @@ def create_app(settings=None, database=None, start_worker=True):
             if ticket.handling_started_at is None:
                 ticket.handling_started_at = utcnow()
             return {}
-        mutate(request, ["staff", "manager"], "view:" + ticket_id, {}, record)
+        mutate(request, console_roles, "view:" + ticket_id, {}, record)
         return Response(status_code=204)
 
     @app.post("/v1/console/tickets/{ticket_id}/suggestions", status_code=202, operation_id="createSuggestion")
     def suggestion(request: Request, ticket_id: str, body: SuggestionInput):
-        return mutate(request, ["staff", "manager"], "suggestion:" + ticket_id, body.model_dump(), lambda session, actor: act(session, actor, ticket_id, "suggestions", body.model_dump(), settings, request.state.trace_id))
+        return mutate(request, console_roles, "suggestion:" + ticket_id, body.model_dump(), lambda session, actor: act(session, actor, ticket_id, "suggestions", body.model_dump(), settings, request.state.trace_id))
 
     @app.post("/v1/console/tickets/{ticket_id}/replies", status_code=201, operation_id="sendReply")
     def send_reply(request: Request, ticket_id: str, body: ReplyInput):
-        return mutate(request, ["staff", "manager"], "reply:" + ticket_id, body.model_dump(), lambda session, actor: act(session, actor, ticket_id, "replies", body.model_dump(), settings, request.state.trace_id))
+        return mutate(request, console_roles, "reply:" + ticket_id, body.model_dump(), lambda session, actor: act(session, actor, ticket_id, "replies", body.model_dump(), settings, request.state.trace_id))
 
     @app.post("/v1/console/tickets/{ticket_id}/reply-proposals", status_code=201, operation_id="createReplyProposal")
     def proposal(request: Request, ticket_id: str, body: ReplyInput):
@@ -261,7 +264,7 @@ def create_app(settings=None, database=None, start_worker=True):
 
     @app.post("/v1/console/tickets/{ticket_id}/escalations", status_code=201, operation_id="createEscalation")
     def escalation(request: Request, ticket_id: str, body: EscalationInput):
-        return mutate(request, ["staff"], "escalation:" + ticket_id, body.model_dump(), lambda session, actor: act(session, actor, ticket_id, "escalations", body.model_dump(), settings, request.state.trace_id))
+        return mutate(request, ["staff", "admin"], "escalation:" + ticket_id, body.model_dump(), lambda session, actor: act(session, actor, ticket_id, "escalations", body.model_dump(), settings, request.state.trace_id))
 
     def ai_get(path):
         if not settings.ai_service_base_url:
@@ -277,7 +280,7 @@ def create_app(settings=None, database=None, start_worker=True):
     @app.get("/v1/console/kb-documents/{document_id}/versions/{version}", operation_id="getKbDocumentVersion")
     def document(request: Request, document_id: str, version: str):
         from urllib.parse import quote
-        return execute(request, ["staff", "manager"], lambda session, actor: ai_get(f"/v1/kb-documents/{quote(document_id, safe='')}/versions/{quote(version, safe='')}"))
+        return execute(request, console_roles, lambda session, actor: ai_get(f"/v1/kb-documents/{quote(document_id, safe='')}/versions/{quote(version, safe='')}"))
 
     @app.get("/v1/console/reports", operation_id="getConsoleReport")
     def reports(request: Request, start_at: datetime, end_at: datetime):
@@ -285,7 +288,7 @@ def create_app(settings=None, database=None, start_worker=True):
             if not start_at.tzinfo or not end_at.tzinfo or start_at >= end_at:
                 raise Problem(422, "invalid-request", "Choose a start date before the end date, with a time zone.")
             return report(session, start_at, end_at)
-        return execute(request, ["manager"], load)
+        return execute(request, authority_roles, load)
 
     @app.get("/v1/admin/accounts", operation_id="listAdminAccounts")
     def accounts(request: Request, limit: int = 20, cursor: str | None = None):

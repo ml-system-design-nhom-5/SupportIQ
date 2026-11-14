@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from './api'
 import type { Role, Session } from './types'
 
-export const roleHome: Record<Role, string> = { customer: '/shop', staff: '/console', manager: '/console', admin: '/admin/accounts' }
+export const roleHome: Record<Role, string> = { customer: '/shop', staff: '/console', manager: '/console', admin: '/console' }
 interface SessionContextValue { session: Session | null | undefined; loading: boolean; error: unknown; signIn: (login: string, password: string) => Promise<Session>; signOut: () => Promise<void> }
 const SessionContext = createContext<SessionContextValue | null>(null)
 

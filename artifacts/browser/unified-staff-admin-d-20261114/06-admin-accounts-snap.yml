@@ -1,0 +1,68 @@
+- generic [ref=f1e3]:
+  - link "Skip to content" [ref=f1e4] [cursor=pointer]:
+    - /url: "#main-content"
+  - banner [ref=f1e5]:
+    - link "SupportIQ Console" [ref=f1e6] [cursor=pointer]:
+      - /url: /console
+      - generic [ref=f1e7]:
+        - strong [ref=f1e11]: SupportIQ
+        - generic [ref=f1e12]: Console
+    - navigation "Console navigation" [ref=f1e13]:
+      - link "Tickets" [ref=f1e14] [cursor=pointer]:
+        - /url: /console
+      - link "Reports" [ref=f1e18] [cursor=pointer]:
+        - /url: /console/reports
+      - link "Accounts" [ref=f1e21] [cursor=pointer]:
+        - /url: /console/accounts
+      - link "Versions" [ref=f1e27] [cursor=pointer]:
+        - /url: /console/versions
+    - generic [ref=f1e32]:
+      - link "Open user profile" [ref=f1e33] [cursor=pointer]:
+        - /url: /profile
+        - text: Minh Le
+        - generic [ref=f1e37]: Admin
+      - button "Sign out" [ref=f1e38] [cursor=pointer]
+  - main [ref=f1e43]:
+    - generic [ref=f1e933]:
+      - generic [ref=f1e934]:
+        - generic [ref=f1e935]:
+          - heading "Internal accounts" [level=1] [ref=f1e936]
+          - paragraph [ref=f1e937]: Manage access for staff and administrators.
+        - generic [ref=f1e938]: Role-based access
+      - generic [ref=f1e942]: Account changes sign the person out of every session. Your own account cannot be changed.
+      - table "Internal accounts" [ref=f1e948]:
+        - row [ref=f1e949]:
+          - columnheader "Account" [ref=f1e950]
+          - columnheader "Role" [ref=f1e951]
+          - columnheader "Status" [ref=f1e952]
+          - columnheader "Actions" [ref=f1e953]
+        - row [ref=f1e954]:
+          - cell "Minh Le · You You cannot change your own account" [ref=f1e955]:
+            - generic [aria-hidden] [ref=f1e956]: ML
+            - generic [ref=f1e957]:
+              - strong [ref=f1e958]: Minh Le · You
+              - generic [ref=f1e959]: You cannot change your own account
+          - cell "Admin" [ref=f1e960]
+          - cell "Active" [ref=f1e965]
+          - cell
+        - row [ref=f1e969]:
+          - cell "Hoa Pham Legacy role · migrate to staff if unused" [ref=f1e970]:
+            - generic [aria-hidden] [ref=f1e971]: HP
+            - generic [ref=f1e972]:
+              - strong [ref=f1e973]: Hoa Pham
+              - generic [ref=f1e974]: Legacy role · migrate to staff if unused
+          - cell "Manager (legacy)" [ref=f1e975]
+          - cell "Active" [ref=f1e980]
+          - cell [ref=f1e984]:
+            - button "Make staff" [ref=f1e985] [cursor=pointer]
+            - button "Deactivate" [ref=f1e986] [cursor=pointer]
+        - row [ref=f1e987]:
+          - cell "Mai Nguyen Internal account" [ref=f1e988]:
+            - generic [aria-hidden] [ref=f1e989]: MN
+            - generic [ref=f1e990]:
+              - strong [ref=f1e991]: Mai Nguyen
+              - generic [ref=f1e992]: Internal account
+          - cell "Staff" [ref=f1e993]
+          - cell "Active" [ref=f1e997]
+          - cell [ref=f1e1001]:
+            - button "Deactivate" [ref=f1e1002] [cursor=pointer]

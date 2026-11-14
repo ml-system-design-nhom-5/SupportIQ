@@ -24,7 +24,7 @@ const statuses: Record<string, [string, string, typeof Circle]> = {
   not_shipped: ['Not shipped','neutral',Box], in_transit: ['In transit','info',Box], delayed: ['Delayed','warning',Clock3], lost: ['Lost','danger',AlertCircle],
   requested: ['Refund requested','info',Clock3], under_review: ['Refund under review','info',Clock3], approved: ['Refund approved','success',Check], rejected: ['Refund rejected','danger',X], paid: ['Refund paid','success',Check],
   active: ['Active','success',Check], deactivated: ['Deactivated','neutral',Circle], available: ['Available','success',Check],
-  staff: ['Staff','neutral',Circle], manager: ['Manager','info',ShieldCheck], admin: ['Admin','neutral',ShieldCheck],
+  staff: ['Staff','neutral',Circle], manager: ['Manager (legacy)','info',ShieldCheck], admin: ['Admin','neutral',ShieldCheck],
 }
 export function Status({value}: {value: string}) {
   const [label, tone, Icon] = statuses[value] || [humanize(value), 'neutral', Circle]

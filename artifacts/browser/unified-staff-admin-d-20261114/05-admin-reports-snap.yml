@@ -1,0 +1,120 @@
+- generic [ref=f1e3]:
+  - link "Skip to content" [ref=f1e4] [cursor=pointer]:
+    - /url: "#main-content"
+  - banner [ref=f1e5]:
+    - link "SupportIQ Console" [ref=f1e6] [cursor=pointer]:
+      - /url: /console
+      - generic [ref=f1e7]:
+        - strong [ref=f1e11]: SupportIQ
+        - generic [ref=f1e12]: Console
+    - navigation "Console navigation" [ref=f1e13]:
+      - link "Tickets" [ref=f1e14] [cursor=pointer]:
+        - /url: /console
+      - link "Reports" [ref=f1e18] [cursor=pointer]:
+        - /url: /console/reports
+      - link "Accounts" [ref=f1e21] [cursor=pointer]:
+        - /url: /console/accounts
+      - link "Versions" [ref=f1e27] [cursor=pointer]:
+        - /url: /console/versions
+    - generic [ref=f1e32]:
+      - link "Open user profile" [ref=f1e33] [cursor=pointer]:
+        - /url: /profile
+        - text: Minh Le
+        - generic [ref=f1e37]: Admin
+      - button "Sign out" [ref=f1e38] [cursor=pointer]
+  - main [ref=f1e43]:
+    - generic [ref=f1e830]:
+      - generic [ref=f1e832]:
+        - heading "Support reports" [level=1] [ref=f1e833]
+        - paragraph [ref=f1e834]: Human decisions and AI outcomes, measured from recorded activity.
+      - generic [ref=f1e837]:
+        - generic [ref=f1e838]:
+          - generic [ref=f1e839]: From
+          - textbox "From" [ref=f1e840]: 2026-10-15
+        - generic [ref=f1e841]:
+          - generic [ref=f1e842]: Through
+          - textbox "Through" [ref=f1e843]: 2026-11-14
+        - button "Apply period" [ref=f1e844] [cursor=pointer]
+      - generic [ref=f1e845]:
+        - generic [ref=f1e846]:
+          - generic [ref=f1e847]: Tickets created
+          - strong [ref=f1e848]: "68"
+        - generic [ref=f1e849]:
+          - generic [ref=f1e850]: Replies sent
+          - strong [ref=f1e851]: "28"
+        - generic [ref=f1e852]:
+          - generic [ref=f1e853]: AI error rate
+          - strong [ref=f1e854]: 5.1%
+        - generic [ref=f1e855]:
+          - generic [ref=f1e856]: Total LLM cost
+          - strong [ref=f1e857]: Unknown
+      - generic [ref=f1e858]:
+        - generic [ref=f1e859]:
+          - heading "Draft decisions" [level=2] [ref=f1e860]
+          - paragraph [ref=f1e861]: Share of sent replies based on a ready AI draft.
+          - generic [ref=f1e862]:
+            - generic [ref=f1e863]: Approve
+            - strong [ref=f1e865]: "0"
+            - generic [ref=f1e866]: 0.0%
+          - generic [ref=f1e867]:
+            - generic [ref=f1e868]: Edit
+            - strong [ref=f1e871]: "1"
+            - generic [ref=f1e872]: 100.0%
+          - generic [ref=f1e873]:
+            - generic [ref=f1e874]: Reject
+            - strong [ref=f1e876]: "0"
+            - generic [ref=f1e877]: 0.0%
+        - generic [ref=f1e878]:
+          - heading "Latency" [level=2] [ref=f1e879]
+          - paragraph [ref=f1e880]: Measured durations. A dash means no recorded measurement.
+          - generic [ref=f1e881]:
+            - generic [ref=f1e882]:
+              - term [ref=f1e883]: End to end · p50 / p95
+              - definition [ref=f1e884]: 1.86 s / 7.95 s
+            - generic [ref=f1e885]:
+              - term [ref=f1e886]: Analysis · p50 / p95
+              - definition [ref=f1e887]: 41 ms / 258 ms
+            - generic [ref=f1e888]:
+              - term [ref=f1e889]: Draft · p50 / p95
+              - definition [ref=f1e890]: 1.10 s / 7.38 s
+          - paragraph [ref=f1e891]: "End-to-end p95 target: 12 seconds."
+        - generic [ref=f1e892]:
+          - heading "Escalation reasons" [level=2] [ref=f1e893]
+          - generic [ref=f1e895]:
+            - term [ref=f1e896]: Wrong intent
+            - definition [ref=f1e897]: "4"
+        - generic [ref=f1e898]:
+          - heading "AI outcomes" [level=2] [ref=f1e899]
+          - generic [ref=f1e900]:
+            - generic [ref=f1e901]:
+              - term [ref=f1e902]: Abstained
+              - definition [ref=f1e903]: "38"
+            - generic [ref=f1e904]:
+              - term [ref=f1e905]: Draft ready
+              - definition [ref=f1e906]: "35"
+            - generic [ref=f1e907]:
+              - term [ref=f1e908]: Llm unavailable
+              - definition [ref=f1e909]: "4"
+            - generic [ref=f1e910]:
+              - term [ref=f1e911]: Escalation recommended
+              - definition [ref=f1e912]: "1"
+        - generic [ref=f1e913]:
+          - heading "Handling time" [level=2] [ref=f1e914]
+          - paragraph [ref=f1e915]: From the first staff view to the sent reply, p50.
+          - generic [ref=f1e916]:
+            - generic [ref=f1e917]:
+              - term [ref=f1e918]: Assisted
+              - definition [ref=f1e919]: 1.10 s
+            - generic [ref=f1e920]:
+              - term [ref=f1e921]: Manual
+              - definition [ref=f1e922]: —
+        - generic [ref=f1e923]:
+          - heading "LLM usage" [level=2] [ref=f1e924]
+          - generic [ref=f1e925]:
+            - generic [ref=f1e926]:
+              - term [ref=f1e927]: Average per suggestion with an LLM call
+              - definition [ref=f1e928]: —
+            - generic [ref=f1e929]:
+              - term [ref=f1e930]: Unmeasured LLM suggestions
+              - definition [ref=f1e931]: "39"
+          - paragraph [ref=f1e932]: Cost metadata is missing or incomplete for some LLM calls. Infrastructure costs are excluded.

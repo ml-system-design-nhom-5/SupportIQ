@@ -9,7 +9,7 @@ import { Brand, Button, ErrorNotice, Loading, humanize } from './components/ui'
 import { roleHome, useSession } from './session'
 import { Shop } from './features/shop'
 import { Console } from './features/console'
-import { Admin } from './features/admin'
+import { Accounts, AssetVersions } from './features/admin'
 import { Reports } from './features/reports'
 import type { Role } from './types'
 
@@ -27,15 +27,22 @@ function SignIn() {
       navigate(previous?.startsWith(`/${prefix}`) ? previous : roleHome[current.role], {replace: true})
     } catch (error) {setError(error)} finally {setBusy(false)}
   }
-  return <div className="signin-page"><header><Brand/></header><main className="signin-main"><div className="signin-grid"><div className="signin-intro"><h1>Sign in to SupportIQ</h1><p>Good support starts with a person.</p><ul className="signin-assurances"><li><Shield size={16}/><span>Every customer reply is reviewed and sent by a person.</span></li><li><Shield size={16}/><span>AI assists with intent classification and grounded citations.</span></li><li><Shield size={16}/><span>Order records remain strictly distinguished from AI text.</span></li></ul></div><div className="signin-card"><form onSubmit={submit} className="signin-form"><ErrorNotice error={error}/><div className="field"><label htmlFor="login-name">Login name</label><input id="login-name" autoComplete="username" autoFocus value={login} onChange={event => setLogin(event.target.value)} placeholder="e.g. staff-1" required maxLength={80}/></div><div className="field"><label htmlFor="password">Password</label><input id="password" type="password" autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} required maxLength={200}/></div><Button type="submit" variant="primary" busy={busy} disabled={!login.trim() || !password}>Sign in<ArrowRight size={16}/></Button></form><p className="signin-note"><Shield size={15}/>Demo accounts: staff-1, manager-1, admin-1, customer-1</p></div></div></main><footer>Synthetic data · SupportIQ demo</footer></div>
+  return <div className="signin-page"><header><Brand/></header><main className="signin-main"><div className="signin-grid"><div className="signin-intro"><h1>Sign in to SupportIQ</h1><p>Good support starts with a person.</p><ul className="signin-assurances"><li><Shield size={16}/><span>Every customer reply is reviewed and sent by a person.</span></li><li><Shield size={16}/><span>AI assists with intent classification and grounded citations.</span></li><li><Shield size={16}/><span>Order records remain strictly distinguished from AI text.</span></li></ul></div><div className="signin-card"><form onSubmit={submit} className="signin-form"><ErrorNotice error={error}/><div className="field"><label htmlFor="login-name">Login name</label><input id="login-name" autoComplete="username" autoFocus value={login} onChange={event => setLogin(event.target.value)} placeholder="e.g. staff-1" required maxLength={80}/></div><div className="field"><label htmlFor="password">Password</label><input id="password" type="password" autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} required maxLength={200}/></div><Button type="submit" variant="primary" busy={busy} disabled={!login.trim() || !password}>Sign in<ArrowRight size={16}/></Button></form><p className="signin-note"><Shield size={15}/>Demo accounts: staff-1, admin-1, customer-1</p></div></div></main><footer>Synthetic data · SupportIQ demo</footer></div>
 }
 
-export function Shell({area, children}: {area: 'shop' | 'console' | 'admin'; children: ReactNode}) {
+export function Shell({area, children}: {area: 'shop' | 'console'; children: ReactNode}) {
   const {session, signOut} = useSession()
   const [error, setError] = useState<unknown>(), [busy, setBusy] = useState(false)
-  const links = area === 'shop' ? [{to: '/shop', label: 'Products', Icon: ShoppingBag, end: true}, {to: '/shop/orders', label: 'My orders', Icon: Inbox}, {to: '/shop/support', label: 'Support', Icon: UserRound}] : area === 'admin' ? [{to: '/admin/accounts', label: 'Accounts', Icon: Users}, {to: '/admin/versions', label: 'Versions', Icon: Layers}] : [{to: '/console', label: 'Tickets', Icon: Inbox, end: false}, ...(session?.role === 'manager' ? [{to: '/console/reports', label: 'Reports', Icon: BarChart3}] : [])]
+  const hasAuthority = session?.role === 'admin' || session?.role === 'manager'
+  const links = area === 'shop'
+    ? [{to: '/shop', label: 'Products', Icon: ShoppingBag, end: true}, {to: '/shop/orders', label: 'My orders', Icon: Inbox}, {to: '/shop/support', label: 'Support', Icon: UserRound}]
+    : [
+        {to: '/console', label: 'Tickets', Icon: Inbox, end: false},
+        ...(hasAuthority ? [{to: '/console/reports', label: 'Reports', Icon: BarChart3}] : []),
+        ...(session?.role === 'admin' ? [{to: '/console/accounts', label: 'Accounts', Icon: Users}, {to: '/console/versions', label: 'Versions', Icon: Layers}] : []),
+      ]
   const location = useLocation()
-  return <div className={`app ${area}-app`}><a className="skip-link" href="#main-content">Skip to content</a><header className="app-header"><Link to={area === 'shop' ? '/shop' : area === 'admin' ? '/admin/accounts' : '/console'} className="brand-link">{area === 'shop' ? <span className="brand"><ShoppingBag size={23} strokeWidth={1.5}/><strong>Demo Shop</strong><span className="brand-area shop-byline">by SupportIQ</span></span> : <Brand area={area === 'admin' ? 'Admin' : 'Console'}/>}</Link><nav aria-label={`${humanize(area)} navigation`}>{links.map(({to,label,Icon,end}) => <NavLink key={to} to={to} end={end} className={({isActive}) => (to === '/console' ? !location.pathname.includes('/reports') : isActive) ? 'nav-link active' : 'nav-link'}><Icon size={16}/>{label}</NavLink>)}</nav><div className="account-menu"><Link to="/profile" className="account-name profile-link" aria-label="Open user profile"><UserRound size={16}/>{session?.display_name}<span className="muted account-role">{area === 'shop' ? '' : humanize(session?.role || '')}</span></Link><Button variant="ghost" busy={busy} onClick={async () => {setBusy(true); try {await signOut()} catch(error) {setError(error)} finally {setBusy(false)}}}><LogOut size={15}/><span>Sign out</span></Button></div></header>{Boolean(error) && <ErrorNotice error={error}/>}<main id="main-content" className={area === 'console' ? 'console-main' : 'content-main'}>{children}</main>{area === 'shop' && <footer className="shop-footer"><span>Demo Shop</span><span>Synthetic data · Read-only catalog</span></footer>}</div>
+  return <div className={`app ${area}-app`}><a className="skip-link" href="#main-content">Skip to content</a><header className="app-header"><Link to={area === 'shop' ? '/shop' : '/console'} className="brand-link">{area === 'shop' ? <span className="brand"><ShoppingBag size={23} strokeWidth={1.5}/><strong>Demo Shop</strong><span className="brand-area shop-byline">by SupportIQ</span></span> : <Brand area="Console"/>}</Link><nav aria-label={`${humanize(area)} navigation`}>{links.map(({to,label,Icon,end}) => <NavLink key={to} to={to} end={end} className={({isActive}) => (to === '/console' ? (location.pathname === '/console' || location.pathname.startsWith('/console/tickets')) : isActive) ? 'nav-link active' : 'nav-link'}><Icon size={16}/>{label}</NavLink>)}</nav><div className="account-menu"><Link to="/profile" className="account-name profile-link" aria-label="Open user profile"><UserRound size={16}/>{session?.display_name}<span className="muted account-role">{area === 'shop' ? '' : humanize(session?.role || '')}</span></Link><Button variant="ghost" busy={busy} onClick={async () => {setBusy(true); try {await signOut()} catch(error) {setError(error)} finally {setBusy(false)}}}><LogOut size={15}/><span>Sign out</span></Button></div></header>{Boolean(error) && <ErrorNotice error={error}/>}<main id="main-content" className={area === 'console' ? 'console-main' : 'content-main'}>{children}</main>{area === 'shop' && <footer className="shop-footer"><span>Demo Shop</span><span>Synthetic data · Read-only catalog</span></footer>}</div>
 }
 
 function Protected({roles, children}: {roles: Role[]; children: ReactNode}) {
@@ -43,7 +50,8 @@ function Protected({roles, children}: {roles: Role[]; children: ReactNode}) {
   if (loading) return <Loading label="Checking your session"/>
   if (error) return <ErrorNotice error={error} retry={() => window.location.reload()}/>
   if (!session) return <Navigate to="/sign-in" state={{from: location.pathname + location.search + location.hash}} replace/>
-  if (!roles.includes(session.role)) return <div className="permission-page"><Brand/><ErrorNotice error={new ApiError(403, `This area is for ${roles.join(' and ')} accounts.`)}/><Link className="button primary" to={roleHome[session.role]}>Go to your workspace</Link></div>
+  const roleLabel = roles.filter(r => r !== 'manager').map(r => r === 'admin' ? 'administrator' : r).join(' and ') || 'authorized'
+  if (!roles.includes(session.role)) return <div className="permission-page"><Brand/><ErrorNotice error={new ApiError(403, `This area is for ${roleLabel} accounts.`)}/><Link className="button primary" to={roleHome[session.role]}>Go to your workspace</Link></div>
   return children
 }
 
@@ -54,7 +62,7 @@ function Profile() {
  const [form,setForm]=useState<ProfileData|null>(null),[busy,setBusy]=useState(false),[saved,setSaved]=useState(false),[error,setError]=useState<unknown>()
  useEffect(()=>{let active=true;api<ProfileData>('/v1/profile').then(value=>{if(active)setForm(value)}).catch(error=>{if(active)setError(error)});return()=>{active=false}},[])
  if(!session)return null
- const area=session.role==='customer'?'shop':session.role==='admin'?'admin':'console'
+ const area=session.role==='customer'?'shop':'console'
  const change=(key:string,value:string|null)=>{setForm(previous=>previous?{...previous,[key]:value}:previous);setSaved(false)}
  async function avatar(file?:File){
   if(!file)return
@@ -70,5 +78,5 @@ function Profile() {
 
 export default function App() {
   const {session} = useSession()
-  return <Routes><Route path="/profile" element={<Protected roles={['customer','staff','manager','admin']}><Profile/></Protected>}/><Route path="/sign-in" element={<SignIn/>}/><Route path="/shop/*" element={<Protected roles={['customer']}><Shell area="shop"><Shop/></Shell></Protected>}/><Route path="/console/reports" element={<Protected roles={['manager']}><Shell area="console"><Reports/></Shell></Protected>}/><Route path="/console/*" element={<Protected roles={['staff','manager']}><Shell area="console"><Console/></Shell></Protected>}/><Route path="/admin/*" element={<Protected roles={['admin']}><Shell area="admin"><Admin/></Shell></Protected>}/><Route path="/" element={<Navigate to={session ? roleHome[session.role] : '/sign-in'} replace/>}/><Route path="*" element={<div className="permission-page"><Brand/><h1>Page not found</h1><Link to="/">Go to SupportIQ</Link></div>}/></Routes>
+  return <Routes><Route path="/profile" element={<Protected roles={['customer','staff','manager','admin']}><Profile/></Protected>}/><Route path="/sign-in" element={<SignIn/>}/><Route path="/shop/*" element={<Protected roles={['customer']}><Shell area="shop"><Shop/></Shell></Protected>}/><Route path="/console/reports" element={<Protected roles={['admin','manager']}><Shell area="console"><Reports/></Shell></Protected>}/><Route path="/console/accounts" element={<Protected roles={['admin']}><Shell area="console"><Accounts/></Shell></Protected>}/><Route path="/console/versions" element={<Protected roles={['admin']}><Shell area="console"><AssetVersions/></Shell></Protected>}/><Route path="/console/*" element={<Protected roles={['staff','admin','manager']}><Shell area="console"><Console/></Shell></Protected>}/><Route path="/admin/versions" element={<Navigate to="/console/versions" replace/>}/><Route path="/admin/*" element={<Navigate to="/console/accounts" replace/>}/><Route path="/" element={<Navigate to={session ? roleHome[session.role] : '/sign-in'} replace/>}/><Route path="*" element={<div className="permission-page"><Brand/><h1>Page not found</h1><Link to="/">Go to SupportIQ</Link></div>}/></Routes>
 }

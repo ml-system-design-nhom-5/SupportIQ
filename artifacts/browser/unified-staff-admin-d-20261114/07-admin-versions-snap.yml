@@ -1,0 +1,57 @@
+- generic [ref=f1e3]:
+  - link "Skip to content" [ref=f1e4] [cursor=pointer]:
+    - /url: "#main-content"
+  - banner [ref=f1e5]:
+    - link "SupportIQ Console" [ref=f1e6] [cursor=pointer]:
+      - /url: /console
+      - generic [ref=f1e7]:
+        - strong [ref=f1e11]: SupportIQ
+        - generic [ref=f1e12]: Console
+    - navigation "Console navigation" [ref=f1e13]:
+      - link "Tickets" [ref=f1e14] [cursor=pointer]:
+        - /url: /console
+      - link "Reports" [ref=f1e18] [cursor=pointer]:
+        - /url: /console/reports
+      - link "Accounts" [ref=f1e21] [cursor=pointer]:
+        - /url: /console/accounts
+      - link "Versions" [ref=f1e27] [cursor=pointer]:
+        - /url: /console/versions
+    - generic [ref=f1e32]:
+      - link "Open user profile" [ref=f1e33] [cursor=pointer]:
+        - /url: /profile
+        - text: Minh Le
+        - generic [ref=f1e37]: Admin
+      - button "Sign out" [ref=f1e38] [cursor=pointer]
+  - main [ref=f1e43]:
+    - generic [ref=f1e1003]:
+      - generic [ref=f1e1005]:
+        - heading "Versions in use" [level=1] [ref=f1e1006]
+        - paragraph [ref=f1e1007]: Read-only release information. Versions change through the release process.
+      - generic [ref=f1e1012]:
+        - generic [ref=f1e1013]: AI service
+        - generic [ref=f1e1014]: Available
+      - generic [ref=f1e1017]:
+        - generic [ref=f1e1018]:
+          - term [ref=f1e1019]: Backend build
+          - definition [ref=f1e1020]: application-v1
+        - generic [ref=f1e1021]:
+          - term [ref=f1e1022]: Release ID
+          - definition [ref=f1e1023]: local-b1c61e8977e69230
+        - generic [ref=f1e1024]:
+          - term [ref=f1e1025]: Model artifact
+          - definition [ref=f1e1026]: fit2-supcon-energy-boundary-v1
+        - generic [ref=f1e1027]:
+          - term [ref=f1e1028]: Knowledge base
+          - definition [ref=f1e1029]: sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c
+        - generic [ref=f1e1030]:
+          - term [ref=f1e1031]: Document-to-intent mapping
+          - definition [ref=f1e1032]: embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c
+        - generic [ref=f1e1033]:
+          - term [ref=f1e1034]: Prompts
+          - definition [ref=f1e1035]: grounded-v3
+        - generic [ref=f1e1036]:
+          - term [ref=f1e1037]: Routing configuration
+          - definition [ref=f1e1038]: sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7
+        - generic [ref=f1e1039]:
+          - term [ref=f1e1040]: Retrieval index
+          - definition [ref=f1e1041]: bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c

@@ -73,7 +73,7 @@ def test_authentication_origin_and_roles(application):
         ("customer", "/v1/shop/orders", "/v1/console/tickets"),
         ("staff", "/v1/console/tickets", "/v1/admin/accounts"),
         ("manager", "/v1/console/tickets", "/v1/shop/orders"),
-        ("admin", "/v1/admin/accounts", "/v1/console/tickets"),
+        ("admin", "/v1/console/tickets", "/v1/shop/orders"),
     ]:
         client = login(application, role)
         assert client.get(own).status_code == 200
