@@ -16,12 +16,7 @@ const LAST_7_DAYS_COUNT = 7;
 const LAST_30_DAYS_COUNT = 30;
 
 /** The periods, in the order of the menu. */
-export const reportPeriodPresets = [
-  "last_7_days",
-  "last_30_days",
-  "this_month",
-  "last_month",
-] as const;
+const reportPeriodPresets = ["last_7_days", "last_30_days", "this_month", "last_month"] as const;
 
 /** The period that the page shows first. */
 export const DEFAULT_REPORT_PERIOD_PRESET = "last_7_days" satisfies ReportPeriodPreset;

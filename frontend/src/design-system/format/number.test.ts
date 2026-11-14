@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { formatCount, formatPercent, formatShareOneDecimal } from "@/design-system/format/number";
+import {
+  formatCount,
+  formatOneDecimal,
+  formatPercent,
+  formatShareOneDecimal,
+} from "@/design-system/format/number";
 
 describe("formatCount", () => {
   it.each([
@@ -34,5 +39,16 @@ describe("formatShareOneDecimal", () => {
     [1, "100%"],
   ])("formats the share %d with at most one decimal as %s", (share, text) => {
     expect(formatShareOneDecimal(share)).toBe(text);
+  });
+});
+
+describe("formatOneDecimal", () => {
+  it.each([
+    [0, "0"],
+    [3.6, "3.6"],
+    [4, "4"],
+    [1234.5, "1,234.5"],
+  ])("formats %s as %s", (value, text) => {
+    expect(formatOneDecimal(value)).toBe(text);
   });
 });

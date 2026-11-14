@@ -6,7 +6,7 @@
  */
 import { CenteredContent } from "@/design-system";
 import { describeFailure, FailureState, type RequestFailure } from "@/features/backend-requests";
-import { ConsolePermissionDenied } from "@/features/console-tickets/components/console-permission-denied";
+import { ConsolePermissionDenied } from "@/features/session";
 
 /** Props of {@link WorkspaceLoadFailure}. */
 type WorkspaceLoadFailureProps = {

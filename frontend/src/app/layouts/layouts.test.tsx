@@ -1,7 +1,12 @@
 import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { getCurrentSessionRoute, listConsoleTicketsRoute } from "@/test/backend-routes";
+import {
+  getConsoleReportRoute,
+  getCurrentSessionRoute,
+  listConsoleTicketsRoute,
+} from "@/test/backend-routes";
+import { openConsole, TICKET_PATH } from "@/test/console-screen";
 import { createFakeBackend, exampleAnswer } from "@/test/fake-backend";
 import { renderApp } from "@/test/render-app";
 
@@ -64,6 +69,32 @@ describe("ConsoleLayout", () => {
     expect(bar).toHaveTextContent("SupportIQConsole");
     expect(within(bar).queryByRole("navigation")).not.toBeInTheDocument();
     expect(within(bar).queryByRole("button")).not.toBeInTheDocument();
+  });
+});
+
+describe("ConsoleLayout, the current page of the navigation", () => {
+  it("marks Reports as current on the Reports page, and Tickets as not current", async () => {
+    const backend = createFakeBackend();
+    backend.answer(getCurrentSessionRoute, exampleAnswer(200, "getCurrentSession", "manager"));
+    backend.answer(
+      getConsoleReportRoute,
+      exampleAnswer(200, "getConsoleReport", "period-with-activity"),
+    );
+    renderApp({ path: "/console/reports", backend });
+
+    const bar = await screen.findByRole("banner");
+    const reports = await within(bar).findByRole("link", { name: "Reports" });
+    expect(reports).toHaveAttribute("aria-current", "page");
+    expect(within(bar).getByRole("link", { name: "Tickets" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("marks Tickets as current on a ticket, and Reports as not current", async () => {
+    openConsole(TICKET_PATH, { session: "manager" });
+
+    const bar = await screen.findByRole("banner");
+    const tickets = await within(bar).findByRole("link", { name: "Tickets" });
+    expect(tickets).toHaveAttribute("aria-current", "page");
+    expect(within(bar).getByRole("link", { name: "Reports" })).not.toHaveAttribute("aria-current");
   });
 });
 

@@ -45,6 +45,15 @@ export const Closed: Story = {
   },
 };
 export const Open: Story = { args: { isDefaultOpen: true } };
+/** Below panels whose headings are level 3, so its heading is level 3 too (UI-30). */
+export const HeadingLevel3: Story = {
+  args: { level: 3 },
+  play: async ({ canvas }) => {
+    await expect(
+      canvas.getByRole("heading", { level: 3, name: "Developer details" }),
+    ).toContainElement(canvas.getByRole("button", { name: "Developer details" }));
+  },
+};
 /** A person opens the closed panel. */
 export const OpenedByClick: Story = {
   play: async ({ canvas, userEvent }) => {

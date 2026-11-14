@@ -25,6 +25,8 @@ export type {
 } from "@/features/session/components/area-permission-denied";
 export { AreaPermissionDenied } from "@/features/session/components/area-permission-denied";
 export { ChangePasswordPage } from "@/features/session/components/change-password-page";
+export type { ConsolePermissionDeniedProps } from "@/features/session/components/console-permission-denied";
+export { ConsolePermissionDenied } from "@/features/session/components/console-permission-denied";
 export type { RequireSessionProps } from "@/features/session/components/require-session";
 export { RequireSession } from "@/features/session/components/require-session";
 export type { SessionAccountMenuProps } from "@/features/session/components/session-account-menu";

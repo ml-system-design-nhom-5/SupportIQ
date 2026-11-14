@@ -6,7 +6,8 @@ import type {
   ReportSection,
   ReportSectionId,
 } from "@/features/console-reports/model/report-section";
-import { readOperationExample } from "@/test/contract-examples";
+import { readOperationExample, withoutMembers } from "@/test/contract-examples";
+import { readBackendSchema, readEnumValues } from "@/test/contract-schemas";
 
 /** The report of a week with activity: the example `period-with-activity`. */
 const weekWithActivity = toConsoleReport(
@@ -15,6 +16,30 @@ const weekWithActivity = toConsoleReport(
 
 /** The report of a period without any record: the example `empty-period`. */
 const emptyPeriod = toConsoleReport(readOperationExample("getConsoleReport", 200, "empty-period"));
+
+/** The body of the week with activity, for the cases that change one member of it. */
+const weekBody = readOperationExample("getConsoleReport", 200, "period-with-activity");
+
+/** Bodies of the week that each lack one required member: of the report, a part, or a count. */
+const bodiesWithoutAMember: readonly (readonly [string, object])[] = [
+  ["handling_time", withoutMembers(weekBody, ["handling_time"])],
+  [
+    "reject_count",
+    { ...weekBody, draft_decisions: withoutMembers(weekBody.draft_decisions, ["reject_count"]) },
+  ],
+  [
+    "draft_status",
+    {
+      ...weekBody,
+      ai_outcomes: {
+        ...weekBody.ai_outcomes,
+        by_draft_status: weekBody.ai_outcomes.by_draft_status.map((statusCount) =>
+          withoutMembers(statusCount, ["draft_status"]),
+        ),
+      },
+    },
+  ],
+];
 
 /** The figures of each section of the week with activity: label, value, and target. */
 const weekFigureCases: readonly (readonly [ReportSectionId, readonly (readonly string[])[]])[] = [
@@ -52,7 +77,7 @@ const weekFigureCases: readonly (readonly [ReportSectionId, readonly (readonly s
     [
       ["AI error rate", "25% · 1 of 4 suggestions", "No target"],
       ["LLM cost, total", "$0.00042", "No target"],
-      ["LLM cost per suggestion", "$0.00021", "No target"],
+      ["LLM cost per suggestion that called the LLM", "$0.00021", "No target"],
       ["Suggestions that called the LLM", "2 suggestions", "No target"],
     ],
   ],
@@ -84,15 +109,15 @@ const weekFigureCases: readonly (readonly [ReportSectionId, readonly (readonly s
 
 /** The figures of the empty period that backend leaves out: section, label, and value. */
 const missingFigureCases: readonly (readonly [ReportSectionId, string, string])[] = [
-  ["draft_decisions", "Approved", "0 replies"],
-  ["draft_decisions", "Edited", "0 replies"],
-  ["draft_decisions", "Rejected", "0 replies"],
+  ["draft_decisions", "Approved", "0 replies · No data"],
+  ["draft_decisions", "Edited", "0 replies · No data"],
+  ["draft_decisions", "Rejected", "0 replies · No data"],
   ["speed", "End-to-end latency p50", "No data"],
   ["speed", "End-to-end latency p95", "No data"],
   ["speed", "Handling time p50, assisted", "No data"],
   ["speed", "Handling time p50, manual", "No data"],
-  ["ai_health_and_cost", "AI error rate", "No data"],
-  ["ai_health_and_cost", "LLM cost per suggestion", "No data"],
+  ["ai_health_and_cost", "AI error rate", "No data · 0 of 0 suggestions"],
+  ["ai_health_and_cost", "LLM cost per suggestion that called the LLM", "No data"],
 ];
 
 /**
@@ -160,11 +185,10 @@ describe("toConsoleReport with a week with activity", () => {
 describe("toConsoleReport with rejections", () => {
   it("lists the rejections by staff reason after the edits, one figure per code", () => {
     // No example has a rejection with a reason yet, so this one is added to the week's example.
-    const week = readOperationExample("getConsoleReport", 200, "period-with-activity");
     const report = toConsoleReport({
-      ...week,
+      ...weekBody,
       draft_decisions: {
-        ...week.draft_decisions,
+        ...weekBody.draft_decisions,
         reject_by_reason: [
           { staff_reason_code: "kb_gap", reply_count: 2 },
           { staff_reason_code: "case_exception", reply_count: 1 },
@@ -176,6 +200,36 @@ describe("toConsoleReport with rejections", () => {
       ["Edited: Tone or clarity", "1 reply", "No target"],
       ["Rejected: KB gap", "2 replies", "No target"],
       ["Rejected: Case exception", "1 reply", "No target"],
+    ]);
+  });
+});
+
+describe("toConsoleReport next to a target of at most some time (NFR-08)", () => {
+  it("rounds each latency up, so a latency above its target never shows as the target", () => {
+    const report = toConsoleReport({
+      ...weekBody,
+      end_to_end_latency: { ...weekBody.end_to_end_latency, p50_ms: 4010, p95_ms: 12_040 },
+    });
+
+    expect(readFigures(report, "speed").slice(0, 2)).toEqual([
+      ["End-to-end latency p50", "4.1 s", "At most 4 s"],
+      ["End-to-end latency p95", "12.1 s", "At most 12 s"],
+    ]);
+  });
+
+  it("rounds the handling time to the nearest, because its target is relative (NFR-11)", () => {
+    const report = toConsoleReport({
+      ...weekBody,
+      handling_time: {
+        ...weekBody.handling_time,
+        assisted: { ...weekBody.handling_time.assisted, p50_ms: 1_050_400 },
+      },
+    });
+
+    expect(readFigures(report, "speed")[3]).toEqual([
+      "Handling time p50, assisted",
+      "17 min 30 s",
+      "At least 20% shorter than manual",
     ]);
   });
 });
@@ -227,9 +281,20 @@ describe("toConsoleReport with empty breakdowns", () => {
   });
 });
 
+describe("toConsoleReport with a body of the wrong shape", () => {
+  it.each(bodiesWithoutAMember)(
+    "stops at a report without the required member %s (CODE-32)",
+    (member, body) => {
+      expect(() => {
+        Reflect.apply(toConsoleReport, undefined, [body]);
+      }).toThrow(`The response has no ${member}.`);
+    },
+  );
+});
+
 describe("toCompletedDraftStatus", () => {
-  it.each(["draft_ready", "abstained", "escalation_recommended", "llm_unavailable", "unavailable"])(
-    "keeps the known status %s",
+  it.each(readEnumValues(readBackendSchema("CompletedDraftStatus")))(
+    "keeps the status %s of the contract",
     (status) => {
       expect(toCompletedDraftStatus(status)).toBe(status);
     },

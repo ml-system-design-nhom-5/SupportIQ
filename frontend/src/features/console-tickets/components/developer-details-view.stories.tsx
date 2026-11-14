@@ -4,7 +4,7 @@ import { expect, userEvent, within } from "storybook/test";
 import { Stack } from "@/design-system";
 import { DeveloperDetailsView } from "@/features/console-tickets/components/developer-details-view";
 import { toDeveloperDetails } from "@/features/console-tickets/model/developer-details";
-import { readOperationExample } from "@/test/contract-examples";
+import { readExampleSuggestion } from "@/test/console-screen";
 
 /** A Grafana trace link, as a developer sets one up (UI-35). */
 const TRACE_HREF = "https://grafana.example/t/4bf92f3577b34da6a3ce929d0e0e4736";
@@ -16,11 +16,7 @@ const TRACE_HREF = "https://grafana.example/t/4bf92f3577b34da6a3ce929d0e0e4736";
  * @returns The details of its suggestion.
  */
 function readDetails(name: string) {
-  const { suggestion } = readOperationExample("getConsoleTicket", 200, name);
-  if (suggestion === undefined) {
-    throw new Error(`The example ${name} has no suggestion.`);
-  }
-  return toDeveloperDetails(suggestion);
+  return toDeveloperDetails(readExampleSuggestion(name));
 }
 
 const meta = {
@@ -86,13 +82,16 @@ export const WithoutGrafanaLink: Story = {
     await expect(canvas.queryByRole("link")).toBeNull();
   },
 };
-/** Both parts pending: only their raw status, no empty versions or latencies. */
+/** Both parts pending: only their raw status, with no reason codes, versions, or latencies. */
 export const PartsPending: Story = {
   args: { details: readDetails("suggestion-pending") },
   play: async (context) => {
     const canvas = await openPanel(context);
 
-    await expect(canvas.getByRole("region", { name: "Draft" })).not.toHaveTextContent("Release");
+    const draft = canvas.getByRole("region", { name: "Draft" });
+    await expect(draft).toHaveTextContent("pending");
+    await expect(draft).not.toHaveTextContent("Reason codes");
+    await expect(draft).not.toHaveTextContent("Release");
   },
 };
 /** Both parts unavailable: the raw status and the reason code of each. */

@@ -1,6 +1,7 @@
 /**
  * The shared number formatters (UI-29): counts with a thousands separator, as in "2,000", whole
- * percentages of probabilities, and the shares of a report with one decimal.
+ * percentages of probabilities, the shares of a report with one decimal, and numbers with one
+ * decimal.
  */
 
 /** The locale of numbers in the mockups: "0 / 2,000 characters". */
@@ -49,4 +50,16 @@ const shareOneDecimalFormatter = new Intl.NumberFormat(NUMBER_LOCALE, {
  */
 export function formatShareOneDecimal(share: number): string {
   return shareOneDecimalFormatter.format(share);
+}
+
+const oneDecimalFormatter = new Intl.NumberFormat(NUMBER_LOCALE, { maximumFractionDigits: 1 });
+
+/**
+ * Format a number with at most one decimal, such as the seconds of a duration.
+ *
+ * @param value - A number that is already rounded to one decimal or less.
+ * @returns For example `3.6` or `4`.
+ */
+export function formatOneDecimal(value: number): string {
+  return oneDecimalFormatter.format(value);
 }

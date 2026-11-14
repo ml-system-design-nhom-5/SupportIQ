@@ -63,6 +63,16 @@ export type ShownStaffReasonCode = StaffReasonCode | "unknown";
 export type StaffNoteProblem = "missing" | "too_long";
 
 /**
+ * Map one staff reason code of `backend`, such as the code of one count of a report.
+ *
+ * @param value - A `StaffReasonCode`.
+ * @returns The code, or `unknown` for a code that this version does not know (CON-22).
+ */
+export function toStaffReasonCode(value: string): ShownStaffReasonCode {
+  return isStaffReasonCode(value) ? value : "unknown";
+}
+
+/**
  * Map staff reason codes of `backend`, in the order of the contract.
  *
  * @param values - The `staff_reason_codes` of an escalation.
@@ -122,4 +132,14 @@ export function describeStaffNoteProblem(problem: StaffNoteProblem, goal?: strin
       ? "Write a note for the reason Other"
       : `Shorten the note to ${formatCount(STAFF_NOTE_MAX_LENGTH)} characters`;
   return goal === undefined ? `${need}.` : `${need} ${goal}.`;
+}
+
+/**
+ * Tell whether a value is a staff reason code that this version knows.
+ *
+ * @param value - A `StaffReasonCode` from `backend`.
+ * @returns True for a code of the contract.
+ */
+function isStaffReasonCode(value: string): value is StaffReasonCode {
+  return knownStaffReasonCodes.has(value);
 }

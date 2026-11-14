@@ -1,7 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { Users } from "lucide-react";
 import { expect, within } from "storybook/test";
 
 import { DataTable } from "@/design-system/primitives/data-table";
+import { Panel } from "@/design-system/primitives/panel";
+import { PanelHeader } from "@/design-system/primitives/panel-header";
 
 const meta = {
   title: "Design system/Primitives/DataTable",
@@ -55,5 +58,31 @@ export const WithRowHeader: Story = {
       { key: "role", label: "Role" },
       { key: "actions", label: "Actions", align: "end" },
     ],
+  },
+};
+
+/** Inside a console panel, below its header: no panel of its own and compact rows. */
+export const Compact: Story = {
+  args: {
+    density: "compact",
+    columns: [
+      { key: "account", label: "Account", isRowHeader: true },
+      { key: "role", label: "Role" },
+      { key: "actions", label: "Actions", align: "end" },
+    ],
+  },
+  decorators: [
+    (Story) => (
+      <Panel density="compact">
+        <PanelHeader icon={Users} level={2} title="Internal accounts" />
+        <Story />
+      </Panel>
+    ),
+  ],
+  play: async ({ canvas }) => {
+    // A compact row header is not a focus target, so tables on one page can share row IDs.
+    await expect(canvas.getByRole("rowheader", { name: "Hoa Pham" })).not.toHaveAttribute(
+      "tabindex",
+    );
   },
 };

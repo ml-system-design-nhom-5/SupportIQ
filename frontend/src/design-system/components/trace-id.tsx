@@ -1,19 +1,19 @@
 /**
  * The copyable trace ID under "Details" of an error (UI-25, LOG-04), and in the developer details
  * of dev mode, where it can also link to the trace in Grafana (UI-35, ADR-0007). The feature
- * builds the link from the settings; this component only renders it. The link opens a new tab, so
- * the console stays where it was, and its name says so.
+ * builds the link from the settings; this component only renders it as an {@link ExternalLink},
+ * which opens a new tab, so the console stays where it was, and says so in its name.
  */
-import { Copy, ExternalLink } from "lucide-react";
+import { Copy } from "lucide-react";
 
 import { cn } from "@/design-system/primitives/class-names";
+import { ExternalLink } from "@/design-system/primitives/external-link";
 import { FOCUS_RING_CLASSES } from "@/design-system/primitives/focus-ring";
 import { Icon } from "@/design-system/primitives/icon";
 import {
   type CopyOutcome,
   useCopyToClipboard,
 } from "@/design-system/primitives/use-copy-to-clipboard";
-import { VisuallyHidden } from "@/design-system/primitives/visually-hidden";
 
 const textByCopyOutcome: Readonly<Record<CopyOutcome, string>> = {
   idle: "",
@@ -53,18 +53,9 @@ export function TraceId({ traceId, traceHref }: TraceIdProps) {
         <Icon icon={Copy} />
       </button>
       {traceHref === undefined ? null : (
-        <a
-          href={traceHref}
-          target="_blank"
-          rel="noreferrer"
-          className={cn(
-            "inline-flex items-center gap-1 rounded-sm font-medium text-primary hover:underline",
-            FOCUS_RING_CLASSES,
-          )}
-        >
-          Open in Grafana <VisuallyHidden>(opens in a new tab)</VisuallyHidden>
-          <Icon icon={ExternalLink} size="xs" />
-        </a>
+        <ExternalLink href={traceHref} emphasis="strong">
+          Open in Grafana
+        </ExternalLink>
       )}
       <span role="status">{textByCopyOutcome[copyOutcome]}</span>
     </span>

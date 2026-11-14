@@ -2,7 +2,8 @@
  * The report of a period as the Reports page shows it (console UI design, Reports; FR-10,
  * UI-44): the contract's `ConsoleReport` mapped once (TS-09) into sections of figures, each a
  * label in business language, a value with its unit, and its target. The mapping only formats
- * what `backend` sent: it never adds up, merges, or compares a figure (UI-14).
+ * what `backend` sent: it never adds up, merges, or compares a figure (UI-14). A body without a
+ * member that the contract requires stops the mapping, so it never shows as figures (CODE-32).
  */
 import {
   formatCount,
@@ -10,6 +11,7 @@ import {
   formatMicroUsd,
   formatShareOneDecimal,
 } from "@/design-system";
+import { requireMembers } from "@/features/backend-requests";
 import type {
   ConsoleReportContract,
   ModeHandlingTimeContract,
@@ -49,6 +51,19 @@ export type ConsoleReport = {
  * @returns The period and the sections of figures.
  */
 export function toConsoleReport(report: ConsoleReportContract): ConsoleReport {
+  requireMembers(report, [
+    "period",
+    "ticket_counts",
+    "draft_decisions",
+    "escalations",
+    "ai_outcomes",
+    "end_to_end_latency",
+    "ai_error_rate",
+    "llm_cost_micro_usd",
+    "handling_time",
+  ]);
+  requireMembers(report.period, ["start_at", "end_at"]);
+  requireMembers(report.ai_outcomes, ["by_draft_status", "by_reason_code"]);
   return {
     periodText: formatReportPeriod({
       startAt: report.period.start_at,
@@ -74,7 +89,11 @@ export function toConsoleReport(report: ConsoleReportContract): ConsoleReport {
  * @returns The section.
  */
 function buildTicketsSection(ticketCounts: ConsoleReportContract["ticket_counts"]): ReportSection {
+  requireMembers(ticketCounts, ["created", "closed"]);
   const { created, closed } = ticketCounts;
+  for (const modeCounts of [created, closed]) {
+    requireMembers(modeCounts, ["assisted_count", "manual_count"]);
+  }
   return {
     id: "tickets",
     title: "Tickets",
@@ -113,6 +132,7 @@ function buildTicketsSection(ticketCounts: ConsoleReportContract["ticket_counts"
 function buildDraftDecisionsSection(
   decisions: ConsoleReportContract["draft_decisions"],
 ): ReportSection {
+  requireMembers(decisions, ["approve_count", "edit_count", "reject_count"]);
   return {
     id: "draft_decisions",
     title: "Draft decisions",
@@ -165,17 +185,18 @@ function buildSpeedSection(report: ConsoleReportContract): ReportSection {
 function buildLatencyFigures(
   latency: ConsoleReportContract["end_to_end_latency"],
 ): readonly ReportFigure[] {
+  requireMembers(latency, ["ticket_count"]);
   return [
     {
       id: "latency-p50",
       label: "End-to-end latency p50",
-      value: formatOptional(latency.p50_ms, formatDuration),
+      value: formatOptional(latency.p50_ms, formatLatency),
       target: LATENCY_P50_TARGET_TEXT,
     },
     {
       id: "latency-p95",
       label: "End-to-end latency p95",
-      value: formatOptional(latency.p95_ms, formatDuration),
+      value: formatOptional(latency.p95_ms, formatLatency),
       target: LATENCY_P95_TARGET_TEXT,
     },
     buildFigure({
@@ -195,7 +216,11 @@ function buildLatencyFigures(
 function buildHandlingTimeFigures(
   handlingTime: ConsoleReportContract["handling_time"],
 ): readonly ReportFigure[] {
+  requireMembers(handlingTime, ["assisted", "manual"]);
   const { assisted, manual } = handlingTime;
+  for (const modeHandlingTime of [assisted, manual]) {
+    requireMembers(modeHandlingTime, ["ticket_count"]);
+  }
   return [
     {
       id: "handling-assisted",
@@ -228,7 +253,9 @@ function buildHandlingTimeFigures(
  * @returns The section.
  */
 function buildAiHealthAndCostSection(report: ConsoleReportContract): ReportSection {
-  const cost = report.llm_cost_micro_usd;
+  const { ai_error_rate: errorRate, llm_cost_micro_usd: cost } = report;
+  requireMembers(errorRate, ["suggestion_count", "failed_count"]);
+  requireMembers(cost, ["total", "llm_call_count"]);
   return {
     id: "ai_health_and_cost",
     title: "AI health and cost",
@@ -236,7 +263,7 @@ function buildAiHealthAndCostSection(report: ConsoleReportContract): ReportSecti
       buildFigure({
         id: "ai-error-rate",
         label: "AI error rate",
-        value: formatErrorRate(report.ai_error_rate),
+        value: formatErrorRate(errorRate),
       }),
       buildFigure({
         id: "llm-cost-total",
@@ -245,7 +272,7 @@ function buildAiHealthAndCostSection(report: ConsoleReportContract): ReportSecti
       }),
       buildFigure({
         id: "llm-cost-average",
-        label: "LLM cost per suggestion",
+        label: "LLM cost per suggestion that called the LLM",
         value: formatOptional(cost.average, formatMicroUsd),
       }),
       buildFigure({
@@ -263,26 +290,40 @@ function buildAiHealthAndCostSection(report: ConsoleReportContract): ReportSecti
  *
  * @param replyCount - The replies of the decision.
  * @param share - Their share of the three decisions, absent when there was no decision.
- * @returns For example `52 replies · 46.2%`, or only the count without a share.
+ * @returns For example `52 replies · 46.2%`, or `0 replies · No data` without a share.
  */
 function formatDecision(replyCount: number, share: number | undefined): string {
-  const replies = formatCountOf(replyCount, "reply");
-  return share === undefined ? replies : `${replies} · ${formatShareOneDecimal(share)}`;
+  return `${formatCountOf(replyCount, "reply")} · ${formatOptional(share, formatShareOneDecimal)}`;
 }
 
 /**
  * Format the AI error rate with the counts that `backend` computed it from.
  *
  * @param errorRate - The `ai_error_rate` of the report.
- * @returns For example `25% · 1 of 4 suggestions`, or "No data" without a share.
+ * @returns For example `25% · 1 of 4 suggestions`, or `No data · 0 of 0 suggestions` without a
+ *   share.
  */
 function formatErrorRate(errorRate: ConsoleReportContract["ai_error_rate"]): string {
-  const counts = `${formatCount(errorRate.failed_count)} of ${formatCountOf(errorRate.suggestion_count, "suggestion")}`;
-  return formatOptional(errorRate.share, (share) => `${formatShareOneDecimal(share)} · ${counts}`);
+  const share = formatOptional(errorRate.share, formatShareOneDecimal);
+  const suggestions = formatCountOf(errorRate.suggestion_count, "suggestion");
+  return `${share} · ${formatCount(errorRate.failed_count)} of ${suggestions}`;
 }
 
 /**
- * Format the median handling time of one mode.
+ * Format a latency next to its target of at most some time (NFR-08). It is rounded up, so a
+ * latency above the target never shows as the target itself: 12 040 ms shows as "12.1 s" next to
+ * "At most 12 s".
+ *
+ * @param durationMs - The percentile from `backend`, in milliseconds.
+ * @returns For example `3.6 s` or `12.1 s`.
+ */
+function formatLatency(durationMs: number): string {
+  return formatDuration(durationMs, "up");
+}
+
+/**
+ * Format the median handling time of one mode, rounded to the nearest: its target is relative to
+ * the manual process (NFR-11), so there is no time to round against.
  *
  * @param handlingTime - The handling time of the mode.
  * @returns The duration, or "No data" when no closed ticket of the mode was measured.

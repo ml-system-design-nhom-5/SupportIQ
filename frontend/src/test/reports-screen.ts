@@ -1,9 +1,11 @@
 /**
  * The Reports page in tests: a fake backend that answers the session and the report with the
- * example files of the contract (TEST-11), and the steps that several tests share.
+ * example files of the contract (TEST-11), and the steps that several tests share. Figures are
+ * read by role and accessible name only (UI-37).
  */
 import { screen, within } from "@testing-library/react";
 
+import { REPORTS_PATH } from "@/features/console-reports";
 import { getConsoleReportRoute, getCurrentSessionRoute } from "@/test/backend-routes";
 import {
   createFakeBackend,
@@ -13,15 +15,19 @@ import {
 } from "@/test/fake-backend";
 import { renderApp, testSettings } from "@/test/render-app";
 
-/** The path of the Reports page. */
-export const REPORTS_PATH = "/console/reports";
-
 /** What the Reports page of a test receives. Each list is used in order, and its last answer repeats. */
 export type ReportAnswers = {
   /** The example of `getCurrentSession`; `manager` by default. */
   readonly session?: string;
   /** The answers of `getConsoleReport`; the `period-with-activity` example by default. */
   readonly report?: readonly FakeAnswer[];
+};
+
+/** One figure of a section as the page shows it. */
+export type ShownFigure = {
+  readonly label: string;
+  readonly value: string;
+  readonly target: string;
 };
 
 /**
@@ -65,6 +71,28 @@ export function openReports(answers: ReportAnswers = {}) {
 }
 
 /**
+ * Read every figure of a section, in order.
+ *
+ * @param section - The title of the section, such as "Speed".
+ * @returns The label, the value, and the target of each figure.
+ */
+export async function readFigures(section: string): Promise<readonly ShownFigure[]> {
+  const table = await screen.findByRole("table", { name: section });
+  return within(table)
+    .getAllByRole("row")
+    .flatMap((row) => {
+      const header = within(row).queryByRole("rowheader");
+      if (header === null) {
+        return [];
+      }
+      const [value = "", target = ""] = within(row)
+        .getAllByRole("cell")
+        .map((cell) => cell.textContent);
+      return [{ label: header.textContent, value, target }];
+    });
+}
+
+/**
  * Find a figure of the report and read its cells.
  *
  * @param section - The title of the section, such as "Speed".
@@ -75,13 +103,9 @@ export async function readFigure(
   section: string,
   label: string,
 ): Promise<{ readonly value: string; readonly target: string }> {
-  const table = await screen.findByRole("table", { name: section });
-  const row = within(table).getByRole("rowheader", { name: label }).closest("tr");
-  if (row === null) {
-    throw new Error(`The figure ${label} has no table row.`);
+  const figure = (await readFigures(section)).find((candidate) => candidate.label === label);
+  if (figure === undefined) {
+    throw new Error(`The section ${section} has no figure ${label}.`);
   }
-  const [value = "", target = ""] = within(row)
-    .getAllByRole("cell")
-    .map((cell) => cell.textContent);
-  return { value, target };
+  return { value: figure.value, target: figure.target };
 }

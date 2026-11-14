@@ -149,7 +149,8 @@ function parseTraceUrlSetting(environment: FrontendEnvironment, name: string): s
   }
   if (typeof raw !== "string" || raw.split(TRACE_ID_SLOT).length !== 2 || !isAllowedTraceUrl(raw)) {
     throw new InvalidSettingError(
-      `${name} must be an https URL, or http on localhost, with one ${TRACE_ID_SLOT}, ` +
+      `${name} must be an https URL, or http on localhost, 127.0.0.1, or [::1], ` +
+        `with one ${TRACE_ID_SLOT}, ` +
         `got "${String(raw)}".`,
     );
   }

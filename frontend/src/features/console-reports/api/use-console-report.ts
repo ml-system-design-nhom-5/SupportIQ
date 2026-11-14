@@ -1,6 +1,9 @@
 /**
- * Read the report of a period (`getConsoleReport`, FR-10). The read changes nothing, and it never
- * loads again by itself: a manager chooses a period, and each period is read once.
+ * Read the report of a period (`getConsoleReport`, FR-10). The read changes nothing. A report is
+ * stale as soon as it arrives, so it is read again each time its period is shown: when the page
+ * opens, when a manager chooses the period, and when the connection comes back. A period chosen
+ * again shows the report already read, while it is still cached, until the new one arrives. It is
+ * never read again on window focus or at an interval.
  */
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 

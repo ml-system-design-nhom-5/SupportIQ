@@ -1,8 +1,8 @@
 /**
- * The permission-denied state of a console screen (console UI design, States,
- * state-permission-denied.png; UI-40): `backend` refused the screen, and the console only says so,
- * with the copyable trace ID (UI-25). The ticket workspace and the Reports page show the same
- * state.
+ * The permission-denied state of one console screen (console UI design, States,
+ * state-permission-denied.png; UI-40), next to `AreaPermissionDenied`, which refuses a whole
+ * area: the screen is not for the role, and the console only says so, with the copyable trace ID
+ * when `backend` sent one (UI-25). The ticket workspace and the Reports page show the same state.
  */
 import { Lock } from "lucide-react";
 

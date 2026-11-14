@@ -66,9 +66,16 @@ export const Error: Story = {
 };
 export const InvalidPeriod: Story = {
   decorators: withReport(exampleAnswer(422, "problems", "invalid-period")),
+  play: async ({ canvasElement }) => {
+    await expect(
+      await within(canvasElement).findByText(
+        "This period could not be reported. Choose another period.",
+      ),
+    ).toBeVisible();
+  },
 };
 export const PermissionDenied: Story = {
-  decorators: withReport(exampleAnswer(403, "problems", "forbidden-role"), "staff"),
+  decorators: withReport(reportExample("period-with-activity"), "staff"),
   play: async ({ canvasElement }) => {
     await expect(
       await within(canvasElement).findByRole("heading", { name: "You cannot open this page" }),
@@ -76,5 +83,13 @@ export const PermissionDenied: Story = {
   },
 };
 export const PermissionDeniedWithoutTheConsole: Story = {
-  decorators: withReport(exampleAnswer(403, "problems", "forbidden-role"), "customer"),
+  decorators: withReport(reportExample("period-with-activity"), "customer"),
+};
+export const RefusedByBackend: Story = {
+  decorators: withReport(exampleAnswer(403, "problems", "forbidden-role")),
+  play: async ({ canvasElement }) => {
+    await expect(
+      await within(canvasElement).findByRole("heading", { name: "You cannot open this page" }),
+    ).toBeVisible();
+  },
 };

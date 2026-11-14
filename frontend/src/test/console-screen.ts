@@ -7,6 +7,7 @@
 import { screen, within } from "@testing-library/react";
 import type { UserEvent } from "@testing-library/user-event";
 
+import type { SuggestionContract } from "@/features/console-tickets/api/contract-types";
 import {
   type ComposerContext,
   type ComposerTicket,
@@ -298,3 +299,18 @@ export function readComposerTicket(
 
 /** The proposal of the awaiting-approval example. */
 export const AWAITING_APPROVAL_PROPOSAL_ID = "3e5a7c9b-1d2f-4a6c-8e0b-5d7f9a1c3e52";
+
+/**
+ * Read the suggestion of a workspace example, typed as the contract defines it.
+ *
+ * @param name - The example of `getConsoleTicket`, such as `draft-ready`.
+ * @returns Its suggestion.
+ * @throws Error when the example has no suggestion.
+ */
+export function readExampleSuggestion(name: string): SuggestionContract {
+  const { suggestion } = readOperationExample("getConsoleTicket", 200, name);
+  if (suggestion === undefined) {
+    throw new Error(`contracts/examples/getConsoleTicket/${name}.json has no suggestion.`);
+  }
+  return suggestion;
+}

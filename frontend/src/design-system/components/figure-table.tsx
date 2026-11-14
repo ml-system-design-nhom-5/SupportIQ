@@ -1,15 +1,30 @@
 /**
  * A panel of figures with their units and targets (console UI design, Reports; UI-44): a header
- * with the title, then a table with the columns Figure, Value, and Target. Each figure names its
- * row, so a screen reader announces it with its value and its target. A panel without figures
- * says so instead of showing an empty table.
+ * with the title, then a compact {@link DataTable} with the columns Figure, Value, and Target.
+ * Each figure names its row, so a screen reader announces it with its value and its target. The
+ * value keeps its unit on one line, and the target is muted, as in reports.png. A panel without
+ * figures says so instead of showing an empty table.
  */
 import type { LucideIcon } from "lucide-react";
 
+import {
+  DataTable,
+  type DataTableColumn,
+  type DataTableRow,
+} from "@/design-system/primitives/data-table";
 import { Panel } from "@/design-system/primitives/panel";
 import { PanelHeader } from "@/design-system/primitives/panel-header";
 import { PanelSection } from "@/design-system/primitives/panel-section";
 import { Text } from "@/design-system/primitives/text";
+
+const figureColumns: readonly DataTableColumn<FigureColumn>[] = [
+  { key: "figure", label: "Figure", isRowHeader: true },
+  { key: "value", label: "Value", align: "end" },
+  { key: "target", label: "Target" },
+];
+
+/** The columns of the table. */
+type FigureColumn = "figure" | "value" | "target";
 
 /** One figure of a {@link FigureTable}, already formatted for display. */
 export type FigureTableRow = {
@@ -48,34 +63,30 @@ export function FigureTable({ icon, title, rows, emptyText }: FigureTableProps) 
           <Text tone="muted">{emptyText}</Text>
         </PanelSection>
       ) : (
-        <table className="w-full border-collapse text-sm text-text">
-          <caption className="sr-only">{title}</caption>
-          <thead className="bg-background text-xs text-text-muted">
-            <tr>
-              <th scope="col" className="px-4 py-2 text-left font-semibold">
-                Figure
-              </th>
-              <th scope="col" className="px-4 py-2 text-right font-semibold">
-                Value
-              </th>
-              <th scope="col" className="px-4 py-2 text-left font-semibold">
-                Target
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id} className="border-t border-border">
-                <th scope="row" className="px-4 py-2 text-left font-normal">
-                  {row.label}
-                </th>
-                <td className="px-4 py-2 text-right font-medium whitespace-nowrap">{row.value}</td>
-                <td className="px-4 py-2 text-text-muted">{row.target}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <DataTable
+          density="compact"
+          caption={title}
+          columns={figureColumns}
+          rows={rows.map((row) => buildFigureRow(row))}
+        />
       )}
     </Panel>
   );
+}
+
+/**
+ * Build the table row of a figure.
+ *
+ * @param row - The figure.
+ * @returns The row: the label, the value on one line, and the muted target.
+ */
+function buildFigureRow(row: FigureTableRow): DataTableRow<FigureColumn> {
+  return {
+    id: row.id,
+    cells: {
+      figure: row.label,
+      value: <span className="font-medium whitespace-nowrap">{row.value}</span>,
+      target: <Text tone="muted">{row.target}</Text>,
+    },
+  };
 }

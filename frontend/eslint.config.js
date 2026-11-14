@@ -188,4 +188,14 @@ export default defineConfig(
       "no-restricted-syntax": ["error", ...languageRestrictions, ...classComponentRestrictions],
     },
   },
+  {
+    // RULE-05: the barrel of the design system is its only public API (CODE-20, UI-01). It holds
+    // re-exports and nothing else, one `export type` and one `export` per module as every index.ts
+    // does, so it grows with each component and has no logic to split. Only this one file may
+    // pass the 300-line limit of TS-04; every other file, in the design system too, keeps it.
+    files: ["src/design-system/index.ts"],
+    rules: {
+      "max-lines": "off",
+    },
+  },
 );

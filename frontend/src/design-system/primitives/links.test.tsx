@@ -36,10 +36,22 @@ describe("NavItem", () => {
     expect(screen.getByRole("link", { name: "My orders" })).toHaveAttribute("aria-current", "page");
   });
 
-  it("marks an exact-match entry only on its own path", () => {
+  it("marks an exact-path entry on its own path", () => {
+    render(
+      <MemoryRouter initialEntries={["/shop"]}>
+        <NavItem to="/shop" icon={LayoutGrid} current={{ by: "exact-path" }}>
+          Products
+        </NavItem>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("link", { name: "Products" })).toHaveAttribute("aria-current", "page");
+  });
+
+  it("does not mark an exact-path entry on a path below it", () => {
     render(
       <MemoryRouter initialEntries={["/shop/orders"]}>
-        <NavItem to="/shop" icon={LayoutGrid} isExactMatch>
+        <NavItem to="/shop" icon={LayoutGrid} current={{ by: "exact-path" }}>
           Products
         </NavItem>
       </MemoryRouter>,
@@ -51,7 +63,7 @@ describe("NavItem", () => {
   it("is not current on a path below it when the area says so", () => {
     render(
       <MemoryRouter initialEntries={["/console/reports"]}>
-        <NavItem to="/console" icon={LayoutGrid} isCurrent={false}>
+        <NavItem to="/console" icon={LayoutGrid} current={{ by: "area", isCurrent: false }}>
           Tickets
         </NavItem>
       </MemoryRouter>,
@@ -65,7 +77,7 @@ describe("NavItem", () => {
   it("is current on another path when the area says so", () => {
     render(
       <MemoryRouter initialEntries={["/console/tickets/TCK-1045"]}>
-        <NavItem to="/console" icon={LayoutGrid} isExactMatch isCurrent>
+        <NavItem to="/console" icon={LayoutGrid} current={{ by: "area", isCurrent: true }}>
           Tickets
         </NavItem>
       </MemoryRouter>,

@@ -1,7 +1,9 @@
 /**
  * The Reports page against the Prism mock (console UI design, Reports; UI-44): a manager opens it
- * from the navigation and reads the figures of the example with their targets, and staff have no
- * link to it. The mock is stateless, so each flow chooses its examples with the `Prefer` header.
+ * from the navigation and reads the figures of the example with their targets. Staff have no link
+ * to it, and at its address they see the permission-denied state without a report request. A
+ * manager whom `backend` refuses with `403` sees the same state (UI-40). The mock is stateless, so
+ * each flow chooses its examples with the `Prefer` header.
  */
 import { expect, type Page, test } from "@playwright/test";
 
@@ -17,16 +19,38 @@ const getReportRequest = { method: "GET", path: "/v1/console/reports" } as const
 test.use({ timezoneId: "UTC" });
 
 /**
- * Sign in with the session of an example, with the open queue and the report of a week.
+ * Sign in with the session of an example, with the open queue and the given report.
  *
  * @param page - The page.
  * @param session - The `Prefer` value of the session.
+ * @param report - The `Prefer` value of the report; the report of a week by default.
  */
-async function prepareConsole(page: Page, session: string): Promise<void> {
+async function prepareConsole(
+  page: Page,
+  session: string,
+  report = "example=period-with-activity",
+): Promise<void> {
   await preferOutcome(page, getSessionRequest, session);
   await preferOutcome(page, listTicketsRequest, "example=open-queue");
-  await preferOutcome(page, getReportRequest, "example=period-with-activity");
+  await preferOutcome(page, getReportRequest, report);
   await createSessionCookie(page);
+}
+
+/**
+ * Record the path of every report request that the page sends.
+ *
+ * @param page - The page.
+ * @returns The paths, in the order in which the requests go out.
+ */
+function recordReportRequests(page: Page): readonly string[] {
+  const paths: string[] = [];
+  page.on("request", (request) => {
+    const { pathname } = new URL(request.url());
+    if (pathname === getReportRequest.path) {
+      paths.push(pathname);
+    }
+  });
+  return paths;
 }
 
 test("a manager opens Reports from the navigation and reads the figures of the week", async ({
@@ -61,4 +85,36 @@ test("staff have no link to Reports", async ({ page }) => {
   const bar = page.getByRole("banner");
   await expect(bar.getByRole("link", { name: "Tickets" })).toBeVisible();
   await expect(bar.getByRole("link", { name: "Reports" })).toHaveCount(0);
+});
+
+test("staff who open the address of Reports see the permission-denied state without a request", async ({
+  page,
+}) => {
+  await prepareConsole(page, "example=staff");
+  const reportRequests = recordReportRequests(page);
+
+  await page.goto("/console/reports");
+
+  const main = page.getByRole("main");
+  await expect(
+    main.getByRole("heading", { level: 1, name: "You cannot open this page" }),
+  ).toBeVisible();
+  await expect(main.getByRole("heading", { name: "Reports" })).toHaveCount(0);
+  expect(reportRequests).toEqual([]);
+  await expectNoAccessibilityViolations(page);
+});
+
+test("a manager whom backend refuses with 403 sees the permission-denied state", async ({
+  page,
+}) => {
+  await prepareConsole(page, "example=manager", "code=403, example=forbidden-role");
+
+  await page.goto("/console/reports");
+
+  const main = page.getByRole("main");
+  await expect(
+    main.getByRole("heading", { level: 1, name: "You cannot open this page" }),
+  ).toBeVisible();
+  await expect(main.getByText(/Details: trace/)).toBeVisible();
+  await expectNoAccessibilityViolations(page);
 });

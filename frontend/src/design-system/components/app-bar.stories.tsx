@@ -64,7 +64,7 @@ export const Shop: Story = {
     brandIcon: ShoppingBag,
     navigation: (
       <>
-        <NavItem to="/" icon={LayoutGrid} isExactMatch>
+        <NavItem to="/" icon={LayoutGrid} current={{ by: "exact-path" }}>
           Products
         </NavItem>
         <NavItem to="/shop/orders" icon={Package}>

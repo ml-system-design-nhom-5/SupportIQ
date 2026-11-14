@@ -7,6 +7,7 @@ import {
   staffReasonCodes,
   staffReasonOptions,
   toggleStaffReasonCode,
+  toStaffReasonCode,
   toStaffReasonCodes,
 } from "@/features/console-tickets/model/staff-reason-codes";
 import { readBackendSchema, readEnumValues } from "@/test/contract-schemas";
@@ -42,6 +43,16 @@ describe("staffReasonOptions", () => {
   it("gives each code its label, in the order of the contract", () => {
     expect(staffReasonOptions.map((option) => option.value)).toEqual(staffReasonCodes);
     expect(staffReasonOptions[0]).toEqual({ value: "wrong_intent", label: "Wrong intent" });
+  });
+});
+
+describe("toStaffReasonCode", () => {
+  it.each([
+    ["kb_gap", "kb_gap"],
+    ["other", "other"],
+    ["new_code", "unknown"],
+  ])("maps %s to %s (CON-22)", (value, code) => {
+    expect(toStaffReasonCode(value)).toBe(code);
   });
 });
 

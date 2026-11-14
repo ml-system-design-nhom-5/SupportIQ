@@ -69,7 +69,7 @@ describe("Panel", () => {
 });
 
 describe("PageColumn", () => {
-  it.each(["shop", "admin"] as const)("is the main landmark of the %s area", (area) => {
+  it.each(["shop", "admin", "console"] as const)("is the main landmark of the %s area", (area) => {
     renderUi(
       <PageColumn area={area}>
         <Text>Content</Text>

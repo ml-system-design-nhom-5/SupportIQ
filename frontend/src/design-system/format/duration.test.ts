@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatDuration } from "@/design-system/format/duration";
+import { formatDuration, formatMilliseconds } from "@/design-system/format/duration";
 
 describe("formatDuration", () => {
   it.each([
@@ -9,6 +9,7 @@ describe("formatDuration", () => {
     [4000, "4 s"],
     [9800, "9.8 s"],
     [10_800, "10.8 s"],
+    [12_040, "12 s"],
     [59_949, "59.9 s"],
     // 59.95 s rounds to a whole minute, so it is written in minutes.
     [59_950, "1 min 00 s"],
@@ -20,5 +21,28 @@ describe("formatDuration", () => {
     [60_000_000, "1,000 min 00 s"],
   ])("formats %i ms as %s", (durationMs, text) => {
     expect(formatDuration(durationMs)).toBe(text);
+  });
+});
+
+describe("formatDuration, rounded up next to a target", () => {
+  it.each([
+    [12_000, "12 s"],
+    [12_001, "12.1 s"],
+    [12_040, "12.1 s"],
+    [4001, "4.1 s"],
+    [59_901, "1 min 00 s"],
+    [60_001, "1 min 01 s"],
+  ])("formats %i ms as %s, so a figure above the target never shows as it", (durationMs, text) => {
+    expect(formatDuration(durationMs, "up")).toBe(text);
+  });
+});
+
+describe("formatMilliseconds", () => {
+  it.each([
+    [0, "0 ms"],
+    [181, "181 ms"],
+    [3205, "3,205 ms"],
+  ])("formats %i as %s", (durationMs, text) => {
+    expect(formatMilliseconds(durationMs)).toBe(text);
   });
 });
