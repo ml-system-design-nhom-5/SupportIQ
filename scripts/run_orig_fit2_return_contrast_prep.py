@@ -11,18 +11,25 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import math
 import platform
 import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, List, Sequence, Tuple
 
+import numpy as np
 import torch
 import transformers
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-from pipeline.evaluation.classifier_acceptance_gate import STANDARD_INTENTS_46
+from pipeline.evaluation.classifier_acceptance_gate import (
+    ESCALATED_34_INTENTS,
+    STANDARD_INTENTS_46,
+    SUPPORTED_12_INTENTS,
+)
 from pipeline.training.orig_fit2_return_contrast_data import (
     _read_jsonl,
     prepare_and_lock_orig_fit2_return_contrast_splits,
@@ -41,12 +48,75 @@ from scripts.run_boundary_contrast_fit import (
     verify_fit2_starting_checkpoint,
 )
 
-DEFAULT_PREP_RUN_ID = "fit2-orig-ret-channel-v3"
-DEFAULT_PLANNED_FIT_RUN_ID = "fit2-orig-ret-channel-fit-v1"
+DEFAULT_PREP_PROFILE = "lr5e6"
+DEFAULT_PREP_RUN_ID = "fit2-orig-ret-channel-v4"
+DEFAULT_PLANNED_FIT_RUN_ID = "fit2-orig-ret-channel-lr5e6-v1"
 LOCAL_ORIG_CONTRAST_ROOT = Path(__file__).resolve().parents[1] / "artifacts/evaluation/fit2_orig_ret_channel_20261114"
 FIT1_CHECKPOINT_REL = "artifacts/models/candidates/reconstructed-closure-fit1-20261113"
 EXPECTED_FIT1_SHA256 = "95a940b630f44bf8d11882a26062c857839baa2d80d188f5451d52cecc2158a6"
 ORIG_FAITHFUL_RECORDS_REL = "artifacts/models/candidates/run-records-faithful-fit2-20261113"
+
+AUTHORIZED_FIT_PROFILES: Dict[str, Dict[str, Any]] = {
+    "option_a": {
+        "profile": "option_a",
+        "selected_recipe": "option_a_original_fit2_hyperparams",
+        "lr": 2e-5,
+        "epochs": 3,
+        "batch_size": 32,
+        "seed": 42,
+        "fit_mode": "fit2_supcon_energy",
+        "min_temperature": 1.0,
+        "enable_selective_rejector": False,
+        "init_weights_sha256": EXPECTED_FIT2_SHA256,
+    },
+    "lr5e6": {
+        "profile": "lr5e6",
+        "selected_recipe": "lr5e6_low_lr_original_fit2_hyperparams",
+        "lr": 5e-6,
+        "epochs": 3,
+        "batch_size": 32,
+        "seed": 42,
+        "fit_mode": "fit2_supcon_energy",
+        "min_temperature": 1.0,
+        "enable_selective_rejector": False,
+        "init_weights_sha256": EXPECTED_FIT2_SHA256,
+    },
+}
+
+CAL_GUARD_FLOAT_TOLERANCE = 3e-6
+CAL_GUARD_DENOMINATORS: Dict[str, int] = {
+    "boundary_pos_cal": 86,
+    "boundary_pos_cal_sup12": 48,
+    "boundary_pos_cal_esc34": 38,
+    "bitext_cal": 690,
+    "boundary_neg_cal": 48,
+    "pos_train_added_18": 18,
+}
+CAL_GUARD_DEFINITION: Dict[str, Any] = {
+    "schema_version": "orig_fit2_cal_guard_def.v1",
+    "surface": "unpseudonymized raw text post-T softmax probabilities",
+    "denominators": dict(CAL_GUARD_DENOMINATORS),
+    "float_tolerance": CAL_GUARD_FLOAT_TOLERANCE,
+    "float_tolerance_justification": "CPU-vs-CUDA float rounding bound (<= 3e-6) verified in Worker B parity audit; zero tolerance on integer count gates.",
+    "integer_count_gates": {
+        "boundary_pos_cal_correct_min": 68,
+        "boundary_pos_cal_sup12_correct_min": 38,
+        "bitext_cal_correct_min": 687,
+        "pos_train_added_18_correct_min": 15,
+        "boundary_pos_cal_sup12_conf_ge_070_min": 26,
+        "boundary_pos_cal_sup12_conf_ge_080_min": 24,
+        "boundary_neg_cal_pred_sup12_max": 9,
+    },
+    "float_drift_and_ceiling_gates": {
+        "boundary_pos_cal_delta_mean_max_prob_formula": (
+            "<= (0.015 if correct <= 68 else min(0.025, 0.015 + 0.5 * (acc_cand - 68/86))) + tol"
+        ),
+        "boundary_pos_cal_esc34_delta_mean_max_prob_max": 0.015,
+        "boundary_pos_cal_esc34_max_sup12_mass_max": 0.55,
+        "boundary_neg_cal_max_sup12_mass_rule": "<= baseline_neg_cal_max_sup12_mass + tol",
+        "boundary_neg_cal_max_single_sup12_prob_rule": "<= baseline_neg_cal_max_single_sup12_prob + tol",
+    },
+}
 
 RELEVANT_SOURCE_PATHS: Tuple[str, ...] = (
     "scripts/run_orig_fit2_return_contrast_prep.py",
@@ -211,13 +281,384 @@ def run_orig_fit2_preflight(repo_root: Path, dryrun_root: Path) -> Dict[str, Any
     }
 
 
-def _build_planned_option_a_plan(
+def _softmax_float64(logits: np.ndarray, temperature: float) -> np.ndarray:
+    """Compute numerically stable float64 post-T softmax probabilities."""
+    if not math.isfinite(temperature) or temperature <= 0.0:
+        raise ValueError(f"Invalid calibration temperature: {temperature}")
+    scaled = np.asarray(logits, dtype=np.float64) / float(temperature)
+    if scaled.ndim != 2 or scaled.shape[1] != len(STANDARD_INTENTS_46):
+        raise ValueError(f"Expected (N, {len(STANDARD_INTENTS_46)}) logits, got {scaled.shape}")
+    shifted = scaled - np.max(scaled, axis=1, keepdims=True)
+    exp_vals = np.exp(shifted)
+    return exp_vals / np.sum(exp_vals, axis=1, keepdims=True)
+
+
+def _load_cal_guard_surfaces(datasets_dir: Path) -> Dict[str, List[Dict[str, Any]]]:
+    """Load the exact unpseudonymized CAL/added-train surfaces and verify fixed denominators."""
+    pos_cal = _read_jsonl(datasets_dir / "boundary_pos_calibration.jsonl")
+    neg_cal = _read_jsonl(datasets_dir / "boundary_neg_calibration.jsonl")
+    bitext_cal = _read_jsonl(datasets_dir / "bitext_cal.jsonl")
+    pos_train = _read_jsonl(datasets_dir / "boundary_pos_train.jsonl")
+    added_18 = [r for r in pos_train if str(r.get("sample_id", "")).startswith("orig_ret_ch_")]
+
+    sup12_set = set(SUPPORTED_12_INTENTS)
+    esc34_set = set(ESCALATED_34_INTENTS)
+    pos_cal_sup12 = [r for r in pos_cal if str(r.get("intent", "")) in sup12_set]
+    pos_cal_esc34 = [r for r in pos_cal if str(r.get("intent", "")) in esc34_set]
+
+    actual_counts = {
+        "boundary_pos_cal": len(pos_cal),
+        "boundary_pos_cal_sup12": len(pos_cal_sup12),
+        "boundary_pos_cal_esc34": len(pos_cal_esc34),
+        "bitext_cal": len(bitext_cal),
+        "boundary_neg_cal": len(neg_cal),
+        "pos_train_added_18": len(added_18),
+    }
+    if actual_counts != CAL_GUARD_DENOMINATORS:
+        raise ValueError(
+            f"CAL guard surface denominators mismatch: {actual_counts} != {CAL_GUARD_DENOMINATORS}"
+        )
+    if len(pos_cal_sup12) + len(pos_cal_esc34) != len(pos_cal):
+        raise ValueError("boundary_pos_calibration contains intents outside SUPPORTED_12 union ESCALATED_34")
+    return {
+        "boundary_pos_cal": pos_cal,
+        "boundary_neg_cal": neg_cal,
+        "bitext_cal": bitext_cal,
+        "pos_train_added_18": added_18,
+    }
+
+
+def _summarize_positive_surface(
+    probs: np.ndarray,
+    rows: Sequence[Dict[str, Any]],
     *,
+    idx_by_label: Dict[str, int],
+    sup12_indices: np.ndarray,
+    include_sup12_conf_counts: bool = False,
+    include_max_sup12_mass: bool = False,
+) -> Dict[str, Any]:
+    """Compute exact integer counts and float64 probability summaries for a positive surface."""
+    true_ids = np.array([idx_by_label[str(r["intent"])] for r in rows], dtype=np.int64)
+    preds = np.argmax(probs, axis=1)
+    max_probs = np.max(probs, axis=1)
+    n = len(rows)
+    correct = int(np.sum(preds == true_ids))
+    summary: Dict[str, Any] = {
+        "count": n,
+        "correct_count": correct,
+        "accuracy": float(correct / n),
+        "mean_max_prob": float(np.mean(max_probs)),
+    }
+    if include_sup12_conf_counts:
+        summary["conf_ge_070_count"] = int(np.sum(max_probs >= 0.70))
+        summary["conf_ge_080_count"] = int(np.sum(max_probs >= 0.80))
+    if include_max_sup12_mass:
+        summary["max_sup12_mass"] = float(np.max(np.sum(probs[:, sup12_indices], axis=1)))
+    return summary
+
+
+def compute_cal_guard_metrics_from_logits(
+    logits_by_surface: Dict[str, Any],
+    surfaces: Dict[str, List[Dict[str, Any]]],
+    *,
+    temperature: float = 1.0,
+    label_order: Sequence[str] = STANDARD_INTENTS_46,
+) -> Dict[str, Any]:
+    """Compute all read-only post-T softmax CAL guard metrics from raw logits."""
+    if list(label_order) != list(STANDARD_INTENTS_46):
+        raise ValueError("CAL guard requires canonical 46-intent label ordering")
+    idx_by_label = {label: i for i, label in enumerate(label_order)}
+    sup12_indices = np.array([idx_by_label[label] for label in SUPPORTED_12_INTENTS], dtype=np.int64)
+    sup12_idx_set = set(sup12_indices.tolist())
+    sup12_label_set = set(SUPPORTED_12_INTENTS)
+
+    pos_rows = surfaces["boundary_pos_cal"]
+    pos_probs = _softmax_float64(np.asarray(logits_by_surface["boundary_pos_cal"]), temperature)
+    if pos_probs.shape[0] != len(pos_rows):
+        raise ValueError(f"boundary_pos_cal logits/rows mismatch: {pos_probs.shape[0]} != {len(pos_rows)}")
+
+    sup12_mask = np.array([str(r["intent"]) in sup12_label_set for r in pos_rows], dtype=bool)
+    esc34_mask = ~sup12_mask
+    sup12_rows = [r for r, flag in zip(pos_rows, sup12_mask) if flag]
+    esc34_rows = [r for r, flag in zip(pos_rows, esc34_mask) if flag]
+
+    bit_rows = surfaces["bitext_cal"]
+    bit_probs = _softmax_float64(np.asarray(logits_by_surface["bitext_cal"]), temperature)
+    if bit_probs.shape[0] != len(bit_rows):
+        raise ValueError(f"bitext_cal logits/rows mismatch: {bit_probs.shape[0]} != {len(bit_rows)}")
+
+    added_rows = surfaces["pos_train_added_18"]
+    added_probs = _softmax_float64(np.asarray(logits_by_surface["pos_train_added_18"]), temperature)
+    if added_probs.shape[0] != len(added_rows):
+        raise ValueError(f"pos_train_added_18 logits/rows mismatch: {added_probs.shape[0]} != {len(added_rows)}")
+
+    neg_rows = surfaces["boundary_neg_cal"]
+    neg_probs = _softmax_float64(np.asarray(logits_by_surface["boundary_neg_cal"]), temperature)
+    if neg_probs.shape[0] != len(neg_rows):
+        raise ValueError(f"boundary_neg_cal logits/rows mismatch: {neg_probs.shape[0]} != {len(neg_rows)}")
+
+    neg_preds = np.argmax(neg_probs, axis=1)
+    neg_sup12_probs = neg_probs[:, sup12_indices]
+    neg_sup12_mass = np.sum(neg_sup12_probs, axis=1)
+
+    return {
+        "temperature": float(temperature),
+        "boundary_pos_cal": _summarize_positive_surface(pos_probs, pos_rows, idx_by_label=idx_by_label, sup12_indices=sup12_indices),
+        "boundary_pos_cal_sup12": _summarize_positive_surface(
+            pos_probs[sup12_mask],
+            sup12_rows,
+            idx_by_label=idx_by_label,
+            sup12_indices=sup12_indices,
+            include_sup12_conf_counts=True,
+        ),
+        "boundary_pos_cal_esc34": _summarize_positive_surface(
+            pos_probs[esc34_mask],
+            esc34_rows,
+            idx_by_label=idx_by_label,
+            sup12_indices=sup12_indices,
+            include_max_sup12_mass=True,
+        ),
+        "bitext_cal": _summarize_positive_surface(bit_probs, bit_rows, idx_by_label=idx_by_label, sup12_indices=sup12_indices),
+        "pos_train_added_18": _summarize_positive_surface(added_probs, added_rows, idx_by_label=idx_by_label, sup12_indices=sup12_indices),
+        "boundary_neg_cal": {
+            "count": len(neg_rows),
+            "pred_sup12_count": int(sum(int(p) in sup12_idx_set for p in neg_preds)),
+            "max_sup12_mass": float(np.max(neg_sup12_mass)),
+            "mean_sup12_mass": float(np.mean(neg_sup12_mass)),
+            "max_single_sup12_prob": float(np.max(neg_sup12_probs)),
+        },
+    }
+
+
+def evaluate_cal_guard_metrics_for_model(
+    model_dir: Path,
+    datasets_dir: Path,
+    *,
+    batch_size: int = 128,
+) -> Dict[str, Any]:
+    """Run strictly read-only forward inference over locked CAL/added-train raw texts."""
+    cal_path = model_dir / "calibration_manifest.json"
+    cal_manifest = json.loads(cal_path.read_text(encoding="utf-8"))
+    cal_block = cal_manifest.get("calibration") or {}
+    temperature = float(cal_block.get("temperature", cal_manifest.get("temperature", float("nan"))))
+    min_temp = float(cal_block.get("min_temperature", 1.0))
+    if not math.isfinite(temperature) or temperature < min_temp or temperature <= 0.0:
+        raise ValueError(f"Invalid calibration temperature {temperature} in {cal_path}")
+
+    tok_cfg = cal_manifest.get("tokenization") or {}
+    max_length = int(tok_cfg.get("max_length", 64))
+    label_space = cal_manifest.get("label_space") or {}
+    id2label = label_space.get("id2label") or {}
+    label_order = [id2label.get(str(i)) for i in range(len(STANDARD_INTENTS_46))]
+    if label_order != list(STANDARD_INTENTS_46):
+        raise ValueError(f"calibration_manifest id2label does not match STANDARD_INTENTS_46 in {cal_path}")
+
+    surfaces = _load_cal_guard_surfaces(datasets_dir)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    tokenizer = AutoTokenizer.from_pretrained(str(model_dir), local_files_only=True)
+    model = AutoModelForSequenceClassification.from_pretrained(str(model_dir), local_files_only=True)
+    model.to(device)
+    model.eval()
+
+    model_id2label = {int(k): v for k, v in (model.config.id2label or {}).items()}
+    if [model_id2label.get(i) for i in range(len(STANDARD_INTENTS_46))] != list(STANDARD_INTENTS_46):
+        raise ValueError(f"Model config id2label does not match STANDARD_INTENTS_46 in {model_dir}")
+
+    logits_by_surface: Dict[str, np.ndarray] = {}
+    with torch.no_grad():
+        for name, rows in surfaces.items():
+            texts = [str(r["text"]) for r in rows]
+            chunks: List[np.ndarray] = []
+            for start in range(0, len(texts), batch_size):
+                enc = tokenizer(
+                    texts[start : start + batch_size],
+                    max_length=max_length,
+                    padding="max_length",
+                    truncation=True,
+                    return_tensors="pt",
+                )
+                enc = {k: v.to(device) for k, v in enc.items()}
+                logits = model(**enc).logits.detach().cpu().numpy().astype(np.float64)
+                chunks.append(logits)
+            logits_by_surface[name] = np.vstack(chunks)
+
+    metrics = compute_cal_guard_metrics_from_logits(
+        logits_by_surface,
+        surfaces,
+        temperature=temperature,
+        label_order=label_order,
+    )
+    metrics["evaluation_metadata"] = {
+        "model_dir": str(model_dir),
+        "weights_sha256": _sha256_lower(model_dir / "model.safetensors"),
+        "calibration_manifest_sha256": _sha256_lower(cal_path),
+        "max_length": max_length,
+        "device": str(device),
+    }
+    return metrics
+
+
+def evaluate_cal_guard_report(
+    candidate_metrics: Dict[str, Any],
+    baseline_metrics: Dict[str, Any],
+    *,
+    float_tolerance: float = CAL_GUARD_FLOAT_TOLERANCE,
+) -> Dict[str, Any]:
+    """Evaluate all exact integer and tolerance-bounded float Worker B CAL guard checks."""
+    c_pos = candidate_metrics["boundary_pos_cal"]
+    c_sup12 = candidate_metrics["boundary_pos_cal_sup12"]
+    c_esc34 = candidate_metrics["boundary_pos_cal_esc34"]
+    c_bit = candidate_metrics["bitext_cal"]
+    c_neg = candidate_metrics["boundary_neg_cal"]
+    c_added = candidate_metrics["pos_train_added_18"]
+
+    b_pos = baseline_metrics["boundary_pos_cal"]
+    b_esc34 = baseline_metrics["boundary_pos_cal_esc34"]
+    b_neg = baseline_metrics["boundary_neg_cal"]
+
+    pos_correct = int(c_pos["correct_count"])
+    pos_acc = pos_correct / float(CAL_GUARD_DENOMINATORS["boundary_pos_cal"])
+    base_pos_acc_floor = 68.0 / float(CAL_GUARD_DENOMINATORS["boundary_pos_cal"])
+    pos_cal_allowed_delta = (
+        0.015 if pos_correct <= 68 else min(0.025, 0.015 + 0.5 * (pos_acc - base_pos_acc_floor))
+    )
+    pos_cal_delta = float(c_pos["mean_max_prob"]) - float(b_pos["mean_max_prob"])
+    esc34_delta = float(c_esc34["mean_max_prob"]) - float(b_esc34["mean_max_prob"])
+
+    checks: List[Dict[str, Any]] = [
+        {
+            "name": "boundary_pos_cal_correct_count",
+            "kind": "integer",
+            "actual": pos_correct,
+            "rule": ">= 68",
+            "passed": pos_correct >= 68,
+        },
+        {
+            "name": "boundary_pos_cal_sup12_correct_count",
+            "kind": "integer",
+            "actual": int(c_sup12["correct_count"]),
+            "rule": ">= 38",
+            "passed": int(c_sup12["correct_count"]) >= 38,
+        },
+        {
+            "name": "bitext_cal_correct_count",
+            "kind": "integer",
+            "actual": int(c_bit["correct_count"]),
+            "rule": ">= 687",
+            "passed": int(c_bit["correct_count"]) >= 687,
+        },
+        {
+            "name": "pos_train_added_18_correct_count",
+            "kind": "integer",
+            "actual": int(c_added["correct_count"]),
+            "rule": ">= 15",
+            "passed": int(c_added["correct_count"]) >= 15,
+        },
+        {
+            "name": "boundary_pos_cal_sup12_conf_ge_070_count",
+            "kind": "integer",
+            "actual": int(c_sup12["conf_ge_070_count"]),
+            "rule": ">= 26",
+            "passed": int(c_sup12["conf_ge_070_count"]) >= 26,
+        },
+        {
+            "name": "boundary_pos_cal_sup12_conf_ge_080_count",
+            "kind": "integer",
+            "actual": int(c_sup12["conf_ge_080_count"]),
+            "rule": ">= 24",
+            "passed": int(c_sup12["conf_ge_080_count"]) >= 24,
+        },
+        {
+            "name": "boundary_neg_cal_pred_sup12_count",
+            "kind": "integer",
+            "actual": int(c_neg["pred_sup12_count"]),
+            "rule": "<= 9",
+            "passed": int(c_neg["pred_sup12_count"]) <= 9,
+        },
+        {
+            "name": "boundary_pos_cal_delta_mean_max_prob",
+            "kind": "float",
+            "actual": pos_cal_delta,
+            "limit": pos_cal_allowed_delta,
+            "tolerance": float_tolerance,
+            "passed": pos_cal_delta <= pos_cal_allowed_delta + float_tolerance,
+        },
+        {
+            "name": "boundary_pos_cal_esc34_delta_mean_max_prob",
+            "kind": "float",
+            "actual": esc34_delta,
+            "limit": 0.015,
+            "tolerance": float_tolerance,
+            "passed": esc34_delta <= 0.015 + float_tolerance,
+        },
+        {
+            "name": "boundary_pos_cal_esc34_max_sup12_mass",
+            "kind": "float",
+            "actual": float(c_esc34["max_sup12_mass"]),
+            "limit": 0.55,
+            "tolerance": float_tolerance,
+            "passed": float(c_esc34["max_sup12_mass"]) <= 0.55 + float_tolerance,
+        },
+        {
+            "name": "boundary_neg_cal_max_sup12_mass",
+            "kind": "float",
+            "actual": float(c_neg["max_sup12_mass"]),
+            "limit": float(b_neg["max_sup12_mass"]),
+            "tolerance": float_tolerance,
+            "passed": float(c_neg["max_sup12_mass"]) <= float(b_neg["max_sup12_mass"]) + float_tolerance,
+        },
+        {
+            "name": "boundary_neg_cal_max_single_sup12_prob",
+            "kind": "float",
+            "actual": float(c_neg["max_single_sup12_prob"]),
+            "limit": float(b_neg["max_single_sup12_prob"]),
+            "tolerance": float_tolerance,
+            "passed": float(c_neg["max_single_sup12_prob"]) <= float(b_neg["max_single_sup12_prob"]) + float_tolerance,
+        },
+    ]
+
+    failed_checks = [c["name"] for c in checks if not c["passed"]]
+    passed = len(failed_checks) == 0
+    return {
+        "schema_version": "orig_fit2_cal_guard_report.v1",
+        "read_only_post_fit_guard": True,
+        "float_tolerance": float_tolerance,
+        "passed": passed,
+        "recommended_status": (
+            "CAL_GUARD_PASS_READY_FOR_C_EVAL" if passed else "CAL_GUARD_REJECT_DO_NOT_PROMOTE"
+        ),
+        "failed_checks": failed_checks,
+        "checks": checks,
+        "deltas": {
+            "boundary_pos_cal_delta_mean_max_prob": pos_cal_delta,
+            "boundary_pos_cal_allowed_delta_mean_max_prob": pos_cal_allowed_delta,
+            "boundary_pos_cal_esc34_delta_mean_max_prob": esc34_delta,
+        },
+        "candidate_metrics": candidate_metrics,
+        "baseline_metrics": baseline_metrics,
+    }
+
+
+def _format_lr_cli(lr: float) -> str:
+    if lr == 5e-6:
+        return "5e-6"
+    if lr == 2e-5:
+        return "2e-5"
+    return str(lr)
+
+
+def _build_planned_execution_plan(
+    *,
+    profile_name: str,
     prep_records_dir: Path,
     planned_fit_run_id: str,
     planned_future_paths: Dict[str, str],
 ) -> Dict[str, Any]:
-    """Document the sole authorized Option A runner CLI, locked hyperparameters, and causal caveat."""
+    """Document the sole authorized runner CLI and locked profile hyperparameters."""
+    if profile_name not in AUTHORIZED_FIT_PROFILES:
+        raise ValueError(f"Unsupported profile {profile_name!r}; expected one of {sorted(AUTHORIZED_FIT_PROFILES)}")
+    cfg = AUTHORIZED_FIT_PROFILES[profile_name]
+    run_flag = "--run-option-a-fit" if profile_name == "option_a" else "--run-authorized-fit"
     planned_cli = [
         ".venv/Scripts/python.exe",
         "-m",
@@ -226,40 +667,58 @@ def _build_planned_option_a_plan(
         str(prep_records_dir),
         "--run-id",
         planned_fit_run_id,
+        "--profile",
+        profile_name,
         "--epochs",
-        "3",
+        str(cfg["epochs"]),
         "--lr",
-        "2e-5",
+        _format_lr_cli(float(cfg["lr"])),
         "--batch-size",
-        "32",
+        str(cfg["batch_size"]),
         "--seed",
-        "42",
+        str(cfg["seed"]),
         "--fit-mode",
-        "fit2_supcon_energy",
-        "--run-option-a-fit",
+        str(cfg["fit_mode"]),
+        run_flag,
     ]
     return {
-        "selected_recipe": "option_a_original_fit2_hyperparams",
-        "epochs": 3,
-        "lr": 2e-5,
-        "batch_size": 32,
-        "seed": 42,
-        "fit_mode": "fit2_supcon_energy",
-        "min_temperature": 1.0,
-        "enable_selective_rejector": False,
-        "init_weights_sha256": EXPECTED_FIT2_SHA256,
+        "profile": profile_name,
+        "selected_recipe": cfg["selected_recipe"],
+        "epochs": cfg["epochs"],
+        "lr": cfg["lr"],
+        "batch_size": cfg["batch_size"],
+        "seed": cfg["seed"],
+        "fit_mode": cfg["fit_mode"],
+        "min_temperature": cfg["min_temperature"],
+        "enable_selective_rejector": cfg["enable_selective_rejector"],
+        "init_weights_sha256": cfg["init_weights_sha256"],
         "planned_cli": planned_cli,
         "planned_future_paths": planned_future_paths,
         "authorized_to_train_now": False,
         "requires_worker_b_re_review_pass_and_coordinator_release": True,
         "causal_control_caveat": (
-            "Original Fit2 (f695b1fe...) was trained from Fit1 (95a940b6...) for epochs=3, lr=2e-5. "
-            "Warm-starting Option A continuation from converged Fit2 applies 3 additional full epochs "
-            "over 13,080 effective rows on top of f695b1fe...; direct comparison against untouched "
-            "Original Fit2 is a comparative candidate evaluation, NOT a matched causal control (no "
-            "matched no-added-data continuation fit is authorized)."
+            f"Original Fit2 (f695b1fe...) was trained from Fit1 (95a940b6...) for epochs=3, lr=2e-5. "
+            f"Warm-starting {profile_name} continuation (lr={_format_lr_cli(float(cfg['lr']))}) from converged "
+            "Fit2 applies 3 additional full epochs over 13,080 effective rows on top of f695b1fe...; direct "
+            "comparison against untouched Original Fit2 is a comparative candidate evaluation, NOT a matched "
+            "causal control (no matched no-added-data continuation fit is authorized)."
         ),
     }
+
+
+def _build_planned_option_a_plan(
+    *,
+    prep_records_dir: Path,
+    planned_fit_run_id: str,
+    planned_future_paths: Dict[str, str],
+) -> Dict[str, Any]:
+    """Backwards-compatible wrapper returning the locked Option A (lr=2e-5) execution plan."""
+    return _build_planned_execution_plan(
+        profile_name="option_a",
+        prep_records_dir=prep_records_dir,
+        planned_fit_run_id=planned_fit_run_id,
+        planned_future_paths=planned_future_paths,
+    )
 
 
 def _archive_orig_fit2_prep_bundle(
@@ -272,8 +731,12 @@ def _archive_orig_fit2_prep_bundle(
     prep_run_id: str,
     planned_fit_run_id: str,
     planned_future_paths: Dict[str, str],
+    profile_name: str = DEFAULT_PREP_PROFILE,
 ) -> None:
-    """Write immutable zero-fit prep bundle with actual input snapshots, sources, env, and SHA inventory."""
+    """Write immutable zero-fit prep bundle with actual input snapshots, baseline CAL reference, and SHA inventory."""
+    if profile_name not in AUTHORIZED_FIT_PROFILES:
+        raise ValueError(f"Unsupported profile {profile_name!r}; expected one of {sorted(AUTHORIZED_FIT_PROFILES)}")
+
     dest_dir.mkdir(parents=True, exist_ok=False)
     (dest_dir / "status.json").write_text(
         json.dumps({"status": "preparing", "fits_executed": 0}, indent=2) + "\n",
@@ -311,35 +774,50 @@ def _archive_orig_fit2_prep_bundle(
 
         orig_prov_path = FIT2_BASELINE_DIR / "candidate_provenance_manifest.json"
         orig_cal_path = FIT2_BASELINE_DIR / "calibration_manifest.json"
-        option_a_plan = _build_planned_option_a_plan(
+        orig_cal_sha = _sha256_lower(orig_cal_path)
+        baseline_cal_metrics = evaluate_cal_guard_metrics_for_model(FIT2_BASELINE_DIR, dest_dir / "datasets")
+
+        execution_plan = _build_planned_execution_plan(
+            profile_name=profile_name,
             prep_records_dir=dest_dir,
             planned_fit_run_id=planned_fit_run_id,
             planned_future_paths=planned_future_paths,
         )
         manifest = {
-            "schema_version": "orig_fit2_return_contrast_prep.v3",
+            "schema_version": "orig_fit2_return_contrast_prep.v4",
             "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
             "git_commit": source_prov["git_commit"],
             "source_hashes": source_prov["source_hashes"],
             "cli_argv": list(sys.argv),
             "planned_prep_run_id": prep_run_id,
             "planned_future_fit_run_id": planned_fit_run_id,
+            "authorized_fit_profile": dict(AUTHORIZED_FIT_PROFILES[profile_name]),
             "baseline_original_fit2": {
                 "checkpoint_dir": str(FIT2_BASELINE_DIR),
                 "model_safetensors_sha256": EXPECTED_FIT2_SHA256,
                 "fit1_initializer_dir": str(repo_root / FIT1_CHECKPOINT_REL),
                 "fit1_model_safetensors_sha256": EXPECTED_FIT1_SHA256,
                 "faithful_stage2_records_dir": str(repo_root / ORIG_FAITHFUL_RECORDS_REL),
-                "calibration_manifest_sha256": _sha256_lower(orig_cal_path),
+                "calibration_manifest_sha256": orig_cal_sha,
                 "provenance_manifest_sha256": _sha256_lower(orig_prov_path),
                 "temperature": 1.0,
                 "min_temperature": 1.0,
                 "selective_rejector_enabled": False,
             },
+            "baseline_cal_reference": {
+                "baseline_model_dir": str(FIT2_BASELINE_DIR),
+                "baseline_weights_sha256": EXPECTED_FIT2_SHA256,
+                "baseline_calibration_manifest_sha256": orig_cal_sha,
+                "dataset_hashes": preflight["dataset_hashes"],
+                "cal_guard_definition": CAL_GUARD_DEFINITION,
+                "metrics": baseline_cal_metrics,
+            },
             "unchanged_original_recipe_parameters": UNCHANGED_ORIGINAL_RECIPE_PARAMETERS,
-            "option_a_execution_plan": option_a_plan,
+            "execution_plan": execution_plan,
             "preflight": preflight,
         }
+        if profile_name == "option_a":
+            manifest["option_a_execution_plan"] = execution_plan
         (dest_dir / "prep_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         (dest_dir / "status.json").write_text(
             json.dumps({"status": "complete", "fits_executed": 0, "prep_archive": True}, indent=2) + "\n",
@@ -360,6 +838,7 @@ def main() -> None:
     ap.add_argument("--archive-prep", action="store_true", help="Archive immutable zero-fit -prep bundle in MAIN")
     ap.add_argument("--run-id", default=DEFAULT_PREP_RUN_ID)
     ap.add_argument("--fit-run-id", default=DEFAULT_PLANNED_FIT_RUN_ID)
+    ap.add_argument("--profile", default=DEFAULT_PREP_PROFILE, choices=tuple(AUTHORIZED_FIT_PROFILES.keys()))
     args = ap.parse_args()
 
     if not args.dry_run and not args.archive_prep:
@@ -390,6 +869,7 @@ def main() -> None:
             source_prov=source_prov,
             prep_run_id=args.run_id,
             planned_fit_run_id=args.fit_run_id,
+            profile_name=args.profile,
             planned_future_paths={
                 "archive_dir": str(prep_ns["fit_archive_dir"]),
                 "records_dir": str(prep_ns["fit_records_dir"]),
@@ -397,7 +877,7 @@ def main() -> None:
             },
         )
         print(f"ARCHIVED_ORIG_FIT2_PREP_BUNDLE: {prep_ns['prep_records_dir']}")
-    print(json.dumps({"fits_executed": 0, "dry_run": True, "counts": preflight["counts"]}, indent=2))
+    print(json.dumps({"fits_executed": 0, "dry_run": True, "profile": args.profile, "counts": preflight["counts"]}, indent=2))
 
 
 if __name__ == "__main__":

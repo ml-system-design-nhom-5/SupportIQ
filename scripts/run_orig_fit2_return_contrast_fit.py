@@ -44,10 +44,15 @@ from scripts.run_boundary_contrast_fit import (
     verify_fit2_starting_checkpoint,
 )
 from scripts.run_orig_fit2_return_contrast_prep import (
+    AUTHORIZED_FIT_PROFILES,
+    CAL_GUARD_DENOMINATORS,
     DEFAULT_PLANNED_FIT_RUN_ID,
     DEFAULT_PREP_RUN_ID,
     LOCAL_ORIG_CONTRAST_ROOT,
     UNCHANGED_ORIGINAL_RECIPE_PARAMETERS,
+    _format_lr_cli,
+    evaluate_cal_guard_metrics_for_model,
+    evaluate_cal_guard_report,
     verify_git_commit_ancestor,
     verify_orig_relevant_source_provenance,
 )
@@ -55,17 +60,39 @@ from scripts.run_orig_fit2_return_contrast_prep import (
 EXPECTED_PREP_SCHEMAS: Tuple[str, ...] = (
     "orig_fit2_return_contrast_prep.v2",
     "orig_fit2_return_contrast_prep.v3",
+    "orig_fit2_return_contrast_prep.v4",
 )
 
-OPTION_A_LOCKED: Dict[str, Any] = {
-    "epochs": 3,
-    "lr": 2e-5,
-    "batch_size": 32,
-    "seed": 42,
-    "fit_mode": "fit2_supcon_energy",
-    "min_temperature": 1.0,
-    "enable_selective_rejector": False,
-}
+OPTION_A_LOCKED: Dict[str, Any] = dict(AUTHORIZED_FIT_PROFILES["option_a"])
+
+
+def validate_profile_settings(
+    *,
+    profile: str,
+    epochs: int,
+    lr: float,
+    batch_size: int,
+    seed: int,
+    fit_mode: str,
+    enable_selective_rejector: bool,
+) -> Dict[str, Any]:
+    """Fail closed on any deviation from the locked parameters for an authorized fit profile."""
+    if profile not in AUTHORIZED_FIT_PROFILES:
+        raise ValueError(f"Unsupported profile {profile!r}; expected one of {sorted(AUTHORIZED_FIT_PROFILES)}")
+    cfg = AUTHORIZED_FIT_PROFILES[profile]
+    if int(epochs) != int(cfg["epochs"]):
+        raise ValueError(f"{profile} enforces epochs={cfg['epochs']}; got {epochs}")
+    if abs(float(lr) - float(cfg["lr"])) > 1e-12:
+        raise ValueError(f"{profile} enforces lr={_format_lr_cli(float(cfg['lr']))}; got {lr}")
+    if int(batch_size) != int(cfg["batch_size"]):
+        raise ValueError(f"{profile} enforces batch_size={cfg['batch_size']}; got {batch_size}")
+    if int(seed) != int(cfg["seed"]):
+        raise ValueError(f"{profile} enforces seed={cfg['seed']}; got {seed}")
+    if str(fit_mode) != str(cfg["fit_mode"]):
+        raise ValueError(f"{profile} enforces fit_mode={cfg['fit_mode']!r}; got {fit_mode!r}")
+    if bool(enable_selective_rejector) != bool(cfg["enable_selective_rejector"]):
+        raise ValueError(f"{profile} enforces selective rejector OFF (enable_selective_rejector=False)")
+    return dict(cfg)
 
 
 def validate_option_a_settings(
@@ -78,18 +105,15 @@ def validate_option_a_settings(
     enable_selective_rejector: bool,
 ) -> None:
     """Fail closed on any deviation from authorized Option A parameters."""
-    if int(epochs) != OPTION_A_LOCKED["epochs"]:
-        raise ValueError(f"Option A enforces epochs=3; got {epochs}")
-    if abs(float(lr) - float(OPTION_A_LOCKED["lr"])) > 1e-12:
-        raise ValueError(f"Option A enforces lr=2e-5; got {lr}")
-    if int(batch_size) != OPTION_A_LOCKED["batch_size"]:
-        raise ValueError(f"Option A enforces batch_size=32; got {batch_size}")
-    if int(seed) != OPTION_A_LOCKED["seed"]:
-        raise ValueError(f"Option A enforces seed=42; got {seed}")
-    if str(fit_mode) != OPTION_A_LOCKED["fit_mode"]:
-        raise ValueError(f"Option A enforces fit_mode='fit2_supcon_energy'; got {fit_mode!r}")
-    if bool(enable_selective_rejector):
-        raise ValueError("Option A enforces selective rejector OFF (enable_selective_rejector=False)")
+    validate_profile_settings(
+        profile="option_a",
+        epochs=epochs,
+        lr=lr,
+        batch_size=batch_size,
+        seed=seed,
+        fit_mode=fit_mode,
+        enable_selective_rejector=enable_selective_rejector,
+    )
 
 
 def verify_locked_prep_bundle(
@@ -97,8 +121,9 @@ def verify_locked_prep_bundle(
     prep_dir: Path,
     repo_root: Path,
     expected_prep_schemas: Tuple[str, ...] = EXPECTED_PREP_SCHEMAS,
+    expected_profile: str | None = None,
 ) -> Dict[str, Any]:
-    """Verify frozen prep bundle integrity, sidecar SHA inventory, datasets, ancestor commit, and source SHAs."""
+    """Verify frozen prep bundle integrity, sidecar SHA inventory, datasets, ancestor commit, profile, and source SHAs."""
     if not prep_dir.is_dir():
         raise FileNotFoundError(f"Missing locked prep bundle directory: {prep_dir}")
 
@@ -130,9 +155,10 @@ def verify_locked_prep_bundle(
 
     manifest_path = prep_dir / "prep_manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if manifest.get("schema_version") not in expected_prep_schemas:
+    schema_version = manifest.get("schema_version")
+    if schema_version not in expected_prep_schemas:
         raise ValueError(
-            f"Unexpected prep_manifest schema_version {manifest.get('schema_version')!r}; expected one of {expected_prep_schemas!r}"
+            f"Unexpected prep_manifest schema_version {schema_version!r}; expected one of {expected_prep_schemas!r}"
         )
 
     preflight = manifest.get("preflight") or {}
@@ -143,9 +169,49 @@ def verify_locked_prep_bundle(
     if (manifest.get("unchanged_original_recipe_parameters") or {}) != UNCHANGED_ORIGINAL_RECIPE_PARAMETERS:
         raise ValueError("prep_manifest unchanged_original_recipe_parameters drifted from expected Fit2 constants")
 
-    plan = manifest.get("option_a_execution_plan") or {}
-    if (plan.get("epochs"), plan.get("lr"), plan.get("enable_selective_rejector")) != (3, 2e-5, False):
-        raise ValueError(f"Invalid option_a_execution_plan in prep_manifest: {plan}")
+    if schema_version == "orig_fit2_return_contrast_prep.v4":
+        auth_profile = manifest.get("authorized_fit_profile") or {}
+        prep_profile = str(auth_profile.get("profile") or "")
+        if prep_profile not in AUTHORIZED_FIT_PROFILES:
+            raise ValueError(f"Invalid authorized_fit_profile in v4 prep_manifest: {auth_profile}")
+        expected_cfg = AUTHORIZED_FIT_PROFILES[prep_profile]
+        plan = manifest.get("execution_plan") or {}
+        for holder_name, holder in (("authorized_fit_profile", auth_profile), ("execution_plan", plan)):
+            if (
+                holder.get("profile") != prep_profile
+                or int(holder.get("epochs", -1)) != int(expected_cfg["epochs"])
+                or abs(float(holder.get("lr", -1.0)) - float(expected_cfg["lr"])) > 1e-12
+                or int(holder.get("batch_size", -1)) != int(expected_cfg["batch_size"])
+                or int(holder.get("seed", -1)) != int(expected_cfg["seed"])
+                or str(holder.get("fit_mode")) != str(expected_cfg["fit_mode"])
+                or bool(holder.get("enable_selective_rejector", True)) is not False
+                or str(holder.get("init_weights_sha256", "")).lower() != EXPECTED_FIT2_SHA256
+            ):
+                raise ValueError(f"Invalid {holder_name} in v4 prep_manifest: {holder}")
+
+        base_cal_ref = manifest.get("baseline_cal_reference") or {}
+        base_metrics = base_cal_ref.get("metrics") or {}
+        missing_surfaces = [k for k in CAL_GUARD_DENOMINATORS if k not in base_metrics]
+        if (
+            str(base_cal_ref.get("baseline_weights_sha256", "")).lower() != EXPECTED_FIT2_SHA256
+            or not base_cal_ref.get("baseline_calibration_manifest_sha256")
+            or (base_cal_ref.get("dataset_hashes") or {}) != (preflight.get("dataset_hashes") or {})
+            or missing_surfaces
+        ):
+            raise ValueError(
+                f"Invalid or incomplete baseline_cal_reference in v4 prep_manifest (missing={missing_surfaces})"
+            )
+    else:
+        prep_profile = "option_a"
+        plan = manifest.get("option_a_execution_plan") or {}
+        if (plan.get("epochs"), plan.get("lr"), plan.get("enable_selective_rejector")) != (3, 2e-5, False):
+            raise ValueError(f"Invalid option_a_execution_plan in prep_manifest: {plan}")
+        base_cal_ref = manifest.get("baseline_cal_reference")
+
+    if expected_profile is not None and prep_profile != expected_profile:
+        raise ValueError(
+            f"Requested profile {expected_profile!r} mismatches locked prep authorized_fit_profile {prep_profile!r}"
+        )
 
     ds_dir = prep_dir / "datasets"
     _verify_dir_matches_lock_hashes(ds_dir, preflight.get("dataset_hashes") or {})
@@ -181,7 +247,9 @@ def verify_locked_prep_bundle(
     return {
         "manifest": manifest,
         "manifest_sha256": _sha256_lower(manifest_path),
-        "prep_schema_version": manifest.get("schema_version"),
+        "prep_schema_version": schema_version,
+        "authorized_fit_profile": prep_profile,
+        "baseline_cal_reference": base_cal_ref,
         "prep_git_commit": prep_commit,
         "head_git_commit": head_commit,
         "new_input_hashes": new_input_hashes,
@@ -205,13 +273,14 @@ def _check_output_paths_unused(
     return {"archive_dir": archive_dir, "records_dir": records_dir, "local_root": local_root}
 
 
-def run_authorized_option_a_fit(
+def run_authorized_fit(
     *,
     repo_root: Path,
     prep_dir: Path,
     run_id: str,
-    epochs: int = 3,
-    lr: float = 2e-5,
+    profile: str,
+    epochs: int,
+    lr: float,
     batch_size: int = 32,
     seed: int = 42,
     fit_mode: str = "fit2_supcon_energy",
@@ -222,8 +291,9 @@ def run_authorized_option_a_fit(
     init_model_dir: Path = FIT2_BASELINE_DIR,
     serving_dir: Path = SERVING_DIR,
 ) -> Dict[str, Any]:
-    """Verify Option A guards and optionally run & archive the single authorized Fit2 continuation."""
-    validate_option_a_settings(
+    """Verify profile + locked prep guards and optionally execute & archive one continuation fit with CAL guard."""
+    profile_cfg = validate_profile_settings(
+        profile=profile,
         epochs=epochs,
         lr=lr,
         batch_size=batch_size,
@@ -236,7 +306,11 @@ def run_authorized_option_a_fit(
         main_candidates_dir=main_candidates_dir,
         local_root_base=local_root_base,
     )
-    prep_verified = verify_locked_prep_bundle(prep_dir=prep_dir, repo_root=repo_root)
+    prep_verified = verify_locked_prep_bundle(
+        prep_dir=prep_dir,
+        repo_root=repo_root,
+        expected_profile=profile,
+    )
 
     serving_weights = serving_dir / "model.safetensors"
     if not serving_weights.is_file():
@@ -256,9 +330,10 @@ def run_authorized_option_a_fit(
             "prep_git_commit": prep_verified["prep_git_commit"],
             "head_git_commit": prep_verified["head_git_commit"],
             "git_commit": prep_verified["head_git_commit"],
+            "authorized_fit_profile": profile,
             "starting_checkpoint": init_info,
             "serving_weights_sha256": serving_sha,
-            "option_a_settings": OPTION_A_LOCKED,
+            "profile_settings": profile_cfg,
             "planned_outputs": {k: str(v) for k, v in out_paths.items()},
         }
 
@@ -320,15 +395,16 @@ def run_authorized_option_a_fit(
                 "cli_argv": list(sys.argv),
                 "prep_dir": str(prep_dir),
                 "prep_manifest_sha256": prep_verified["manifest_sha256"],
+                "authorized_fit_profile": profile,
                 "init_model_dir": str(init_model_dir),
                 "init_weights_sha256": EXPECTED_FIT2_SHA256,
-                "fit_mode": fit_mode,
-                "epochs": epochs,
-                "batch_size": batch_size,
-                "lr": lr,
-                "seed": seed,
-                "min_temperature": 1.0,
-                "enable_selective_rejector": False,
+                "fit_mode": str(profile_cfg["fit_mode"]),
+                "epochs": int(profile_cfg["epochs"]),
+                "batch_size": int(profile_cfg["batch_size"]),
+                "lr": float(profile_cfg["lr"]),
+                "seed": int(profile_cfg["seed"]),
+                "min_temperature": float(profile_cfg["min_temperature"]),
+                "enable_selective_rejector": bool(profile_cfg["enable_selective_rejector"]),
                 "dataset_hashes": prep_verified["dataset_hashes"],
                 "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
             },
@@ -352,30 +428,40 @@ def run_authorized_option_a_fit(
             "head_git_commit": git_sha,
             "prep_git_commit": prep_git_sha,
             "run_id": run_id,
+            "authorized_fit_profile": profile,
+            "lr": float(profile_cfg["lr"]),
             "prep_dir": str(prep_dir),
             "updated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
             **extra,
         }
         (records_dir / "status.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
+    output_subdir = "candidate_model_option_a" if profile == "option_a" else f"candidate_model_{profile}"
     _write_status("training", fits_started=1, fits_completed=0)
-    _log(f"Starting Option A fit run_id={run_id} prep_dir={prep_dir} init={EXPECTED_FIT2_SHA256}")
+    _log(
+        f"Starting authorized fit profile={profile} lr={_format_lr_cli(float(profile_cfg['lr']))} "
+        f"run_id={run_id} prep_dir={prep_dir} init={EXPECTED_FIT2_SHA256}"
+    )
+    cal_guard_report: Dict[str, Any] | None = None
+    cal_guard_passed: bool | None = None
+    cal_guard_status = "NOT_CONFIGURED_IN_LEGACY_PREP"
+    cal_guard_failed_checks: list[str] = []
     try:
         fit_result = run_fit_and_lock_candidate(
             worktree_root=repo_root,
             data_repo_root=repo_root,
             init_model_dir=init_model_dir,
             artifact_root=local_root,
-            fit_mode="fit2_supcon_energy",
-            output_subdir="candidate_model_option_a",
-            epochs=3,
-            batch_size=32,
-            lr=2e-5,
-            seed=42,
-            enable_selective_rejector=False,
+            fit_mode=str(profile_cfg["fit_mode"]),
+            output_subdir=output_subdir,
+            epochs=int(profile_cfg["epochs"]),
+            batch_size=int(profile_cfg["batch_size"]),
+            lr=float(profile_cfg["lr"]),
+            seed=int(profile_cfg["seed"]),
+            enable_selective_rejector=bool(profile_cfg["enable_selective_rejector"]),
             candidate_name=run_id,
         )
-        cand_dir = local_root / "candidate_model_option_a"
+        cand_dir = local_root / output_subdir
         archive_dir.mkdir(parents=True, exist_ok=False)
         for p in sorted(cand_dir.iterdir()):
             if p.is_file():
@@ -398,6 +484,22 @@ def run_authorized_option_a_fit(
         reload_info = verify_reload_from_archive(archive_dir)
         archive_inv = _write_and_verify_sha_inventory(archive_dir, "archive_sha_inventory.json")
         (records_dir / "fit_result.json").write_text(json.dumps(fit_result, indent=2) + "\n", encoding="utf-8")
+
+        base_cal_ref = prep_verified.get("baseline_cal_reference")
+        if base_cal_ref is not None:
+            cand_cal_metrics = evaluate_cal_guard_metrics_for_model(archive_dir, records_dir / "inputs")
+            cal_guard_report = evaluate_cal_guard_report(cand_cal_metrics, base_cal_ref["metrics"])
+            (records_dir / "cal_guard_report.json").write_text(
+                json.dumps(cal_guard_report, indent=2) + "\n", encoding="utf-8"
+            )
+            cal_guard_passed = bool(cal_guard_report["passed"])
+            cal_guard_status = str(cal_guard_report["recommended_status"])
+            cal_guard_failed_checks = list(cal_guard_report["failed_checks"])
+            _log(
+                f"CAL guard completed: passed={cal_guard_passed} status={cal_guard_status} "
+                f"failed={cal_guard_failed_checks}"
+            )
+
         _log(
             f"Archived & verified candidate_dir={archive_dir} T={cal_check.get('temperature')} "
             f"files={len(archive_inv)} reload_labels={reload_info.get('num_labels')}"
@@ -407,24 +509,73 @@ def run_authorized_option_a_fit(
         _write_status("incomplete", fits_started=1, fits_completed=0, error=str(exc))
         raise
 
-    _write_status("complete", fits_started=1, fits_completed=1, archive_dir=str(archive_dir))
+    _write_status(
+        "complete",
+        fits_started=1,
+        fits_completed=1,
+        archive_dir=str(archive_dir),
+        cal_guard_passed=cal_guard_passed,
+        cal_guard_status=cal_guard_status,
+        cal_guard_failed_checks=cal_guard_failed_checks,
+    )
     sidecar_inv = _write_and_verify_sha_inventory(records_dir, "sidecar_sha_inventory.json")
     return {
         "validated_only": False,
         "fits_executed": 1,
+        "authorized_fit_profile": profile,
         "fit_result": fit_result,
         "archive_dir": str(archive_dir),
         "records_dir": str(records_dir),
         "calibration_audit": {"valid": cal_check["valid"], "temperature": cal_check["temperature"]},
         "provenance_audit": {"provenance_passed": prov_check["provenance_passed"], "num_labels": prov_check["num_labels"]},
         "reload": reload_info,
+        "cal_guard_passed": cal_guard_passed,
+        "cal_guard_status": cal_guard_status,
+        "cal_guard_failed_checks": cal_guard_failed_checks,
         "archive_sha_inventory_count": len(archive_inv),
         "sidecar_sha_inventory_count": len(sidecar_inv),
     }
 
 
+def run_authorized_option_a_fit(
+    *,
+    repo_root: Path,
+    prep_dir: Path,
+    run_id: str,
+    epochs: int = 3,
+    lr: float = 2e-5,
+    batch_size: int = 32,
+    seed: int = 42,
+    fit_mode: str = "fit2_supcon_energy",
+    enable_selective_rejector: bool = False,
+    execute_fit: bool = False,
+    main_candidates_dir: Path = MAIN_CANDIDATES_DIR,
+    local_root_base: Path = LOCAL_ORIG_CONTRAST_ROOT,
+    init_model_dir: Path = FIT2_BASELINE_DIR,
+    serving_dir: Path = SERVING_DIR,
+) -> Dict[str, Any]:
+    """Backwards-compatible Option A (profile='option_a', lr=2e-5) entrypoint."""
+    return run_authorized_fit(
+        repo_root=repo_root,
+        prep_dir=prep_dir,
+        run_id=run_id,
+        profile="option_a",
+        epochs=epochs,
+        lr=lr,
+        batch_size=batch_size,
+        seed=seed,
+        fit_mode=fit_mode,
+        enable_selective_rejector=enable_selective_rejector,
+        execute_fit=execute_fit,
+        main_candidates_dir=main_candidates_dir,
+        local_root_base=local_root_base,
+        init_model_dir=init_model_dir,
+        serving_dir=serving_dir,
+    )
+
+
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Fail-closed Option A Fit2 return-channel continuation runner")
+    ap = argparse.ArgumentParser(description="Fail-closed Fit2 return-channel continuation runner (profile-locked)")
     ap.add_argument(
         "--prep-dir",
         type=Path,
@@ -432,31 +583,44 @@ def main() -> None:
         help="Locked prep bundle directory",
     )
     ap.add_argument("--run-id", default=DEFAULT_PLANNED_FIT_RUN_ID)
+    ap.add_argument(
+        "--profile",
+        required=True,
+        choices=tuple(AUTHORIZED_FIT_PROFILES.keys()),
+        help="Authorized hyperparameter profile (must match locked prep authorized_fit_profile)",
+    )
     ap.add_argument("--epochs", type=int, default=3)
-    ap.add_argument("--lr", type=float, default=2e-5)
+    ap.add_argument("--lr", type=float, required=True, help="Explicit learning rate (must match --profile)")
     ap.add_argument("--batch-size", type=int, default=32)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--fit-mode", default="fit2_supcon_energy")
     ap.add_argument("--enable-selective-rejector", action="store_true")
-    ap.add_argument("--validate-only", action="store_true", help="Run fail-closed Option A & locked prep checks without fitting")
-    ap.add_argument("--run-option-a-fit", action="store_true", help="Execute the single authorized Option A continuation fit")
+    ap.add_argument("--validate-only", action="store_true", help="Run fail-closed profile & locked prep checks without fitting")
+    ap.add_argument("--run-authorized-fit", action="store_true", help="Execute the single authorized continuation fit for --profile")
+    ap.add_argument("--run-option-a-fit", action="store_true", help="Legacy Option A execution flag (requires --profile option_a)")
     args = ap.parse_args()
 
-    if args.validate_only == args.run_option_a_fit:
-        raise ValueError("Specify exactly one of --validate-only or --run-option-a-fit")
+    if args.run_authorized_fit and args.run_option_a_fit:
+        raise ValueError("Specify at most one of --run-authorized-fit or --run-option-a-fit")
+    execute_fit = bool(args.run_authorized_fit or args.run_option_a_fit)
+    if args.validate_only == execute_fit:
+        raise ValueError("Specify exactly one of --validate-only or (--run-authorized-fit / --run-option-a-fit)")
+    if args.run_option_a_fit and args.profile != "option_a":
+        raise ValueError("--run-option-a-fit requires --profile option_a; use --run-authorized-fit for lr5e6")
 
     repo_root = Path(__file__).resolve().parents[1]
-    res = run_authorized_option_a_fit(
+    res = run_authorized_fit(
         repo_root=repo_root,
         prep_dir=args.prep_dir.resolve(),
         run_id=args.run_id,
+        profile=args.profile,
         epochs=args.epochs,
         lr=args.lr,
         batch_size=args.batch_size,
         seed=args.seed,
         fit_mode=args.fit_mode,
         enable_selective_rejector=args.enable_selective_rejector,
-        execute_fit=args.run_option_a_fit,
+        execute_fit=execute_fit,
     )
     print(json.dumps(res, indent=2))
 
