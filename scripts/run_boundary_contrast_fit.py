@@ -35,6 +35,7 @@ from pipeline.training.train_boundary_candidate import (
     resolve_neg_repeat,
     run_fit_and_lock_candidate,
     validate_boundary_split_taxonomy,
+    validate_semantic_status,
     verify_reload_from_archive,
 )
 from pipeline.training.train_domain_candidate import verify_original_46_label_lineage
@@ -87,7 +88,10 @@ def _write_and_verify_sha_inventory(root: Path, inv_filename: str, exclude: set[
 
 def _verify_dir_matches_lock_hashes(datasets_dir: Path, expected_hashes: Dict[str, str]) -> None:
     """Ensure every locked dataset artifact in datasets_dir matches dataset_lock_manifest SHA-256s."""
-    special_names = {"boundary_split_manifest": "split_manifest.json"}
+    special_names = {
+        "boundary_split_manifest": "split_manifest.json",
+        "semantic_audit_manifest": "semantic_audit_manifest.json",
+    }
     for key, exp_sha in expected_hashes.items():
         fname = special_names.get(key, f"{key}.jsonl")
         p = datasets_dir / fname
@@ -163,12 +167,31 @@ def run_preflight_validation(repo_root: Path, dryrun_root: Path) -> Dict[str, An
     neg_cal_rows = _read_jsonl(ds_dir / "boundary_neg_calibration.jsonl")
     neg_eval_rows = _read_jsonl(ds_dir / "boundary_neg_evaluation.jsonl")
 
+    bitext_clean_rows = _read_jsonl(ds_dir / "bitext_train_clean.jsonl")
+    bitext_noisy_rows = _read_jsonl(ds_dir / "bitext_train_noisy.jsonl")
+    bitext_cal_rows = _read_jsonl(ds_dir / "bitext_cal.jsonl")
+    quarantine_rows = _read_jsonl(ds_dir / "quarantine_records.jsonl")
+
     validate_boundary_split_taxonomy(pos_train_rows, neg_train_rows, split_name="contrast_train")
     validate_boundary_split_taxonomy(pos_cal_rows, neg_cal_rows, split_name="contrast_calibration")
     validate_boundary_split_taxonomy(pos_eval_rows, neg_eval_rows, split_name="contrast_evaluation")
     validate_contrast_semantic_consistency(pos_train_rows, neg_train_rows, "contrast_train", check_train_balance=True)
     validate_contrast_semantic_consistency(pos_cal_rows, neg_cal_rows, "contrast_calibration")
     validate_contrast_semantic_consistency(pos_eval_rows, neg_eval_rows, "contrast_evaluation")
+    validate_contrast_semantic_consistency(bitext_clean_rows, [], "bitext_train_clean")
+    validate_contrast_semantic_consistency(bitext_noisy_rows, [], "bitext_train_noisy")
+    validate_contrast_semantic_consistency(bitext_cal_rows, [], "bitext_cal")
+
+    for rec in quarantine_rows:
+        validate_semantic_status(str(rec.get("status", "")), context=f"quarantine:{rec.get('sample_id')}")
+        for req_k in ("sample_id", "parent_sample_id", "text_sha256", "intent", "reason", "status"):
+            if not str(rec.get(req_k) or "").strip():
+                raise ValueError(f"Missing quarantine provenance field {req_k!r} on {rec!r}")
+
+    bitext_replay_intents = {str(r["intent"]) for r in (bitext_clean_rows + bitext_noisy_rows)}
+    missing_46 = set(STANDARD_INTENTS_46) - bitext_replay_intents
+    if missing_46:
+        raise RuntimeError(f"Missing labels in Bitext replay after audit: {sorted(missing_46)}")
 
     for r in pos_train_rows + pos_cal_rows + pos_eval_rows:
         if "neg_repeat" in r:
@@ -211,6 +234,7 @@ def run_preflight_validation(repo_root: Path, dryrun_root: Path) -> Dict[str, An
         },
         "counts": lock["counts"],
         "contrast_extension": lock["contrast_extension"],
+        "semantic_audit": lock["semantic_audit"],
         "effective_exposure_counts": lock["effective_exposure_counts"],
         "dataset_hashes": lock["dataset_hashes"],
     }
@@ -256,15 +280,82 @@ def _snapshot_relevant_sources(repo_root: Path, dest_root: Path, expected_hashes
             raise ValueError(f"Archived source snapshot SHA mismatch for {rel}")
 
 
+def _archive_zero_fit_records(
+    *,
+    dest_dir: Path,
+    manifest_filename: str,
+    repo_root: Path,
+    dryrun_root: Path,
+    preflight: Dict[str, Any],
+    source_prov: Dict[str, Any],
+    c_grid: Tuple[float, ...],
+    run_id: str,
+) -> None:
+    """Write immutable zero-fit preparation/dryrun bundle with verified SHA inventory."""
+    dest_dir.mkdir(parents=True, exist_ok=False)
+    shutil.copytree(dryrun_root / "datasets", dest_dir / "datasets")
+    _verify_dir_matches_lock_hashes(dest_dir / "datasets", preflight["dataset_hashes"])
+    for root_copy in ("quarantine_records.jsonl", "semantic_audit_manifest.json", "dataset_lock_manifest.json"):
+        src_p = dest_dir / "datasets" / root_copy
+        if src_p.exists():
+            shutil.copy2(src_p, dest_dir / root_copy)
+    _snapshot_relevant_sources(repo_root, dest_dir, source_prov["source_hashes"])
+    (dest_dir / "environment.json").write_text(
+        json.dumps(
+            {
+                "python": sys.version,
+                "platform": platform.platform(),
+                "torch": torch.__version__,
+                "cuda_available": torch.cuda.is_available(),
+                "cuda_device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
+                "transformers": transformers.__version__,
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (dest_dir / manifest_filename).write_text(
+        json.dumps(
+            {
+                "git_commit": source_prov["git_commit"],
+                "source_hashes": source_prov["source_hashes"],
+                "cli_argv": list(sys.argv),
+                "planned_run_id": run_id,
+                "planned_future_cli": [
+                    "python",
+                    "-m",
+                    "scripts.run_boundary_contrast_fit",
+                    "--run-contrast-fit",
+                    "--run-id",
+                    run_id,
+                    "--enable-selective-rejector",
+                ],
+                "planned_rejector_c_grid": list(c_grid),
+                "preflight": preflight,
+                "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    _write_and_verify_sha_inventory(dest_dir, "sidecar_sha_inventory.json")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Bounded confusable-boundary contrast continuation runner")
     ap.add_argument("--dry-run", action="store_true", help="Run fail-closed preflight without training")
     ap.add_argument("--archive-dryrun", action="store_true", help="Archive immutable dryrun datasets/manifest/env in MAIN")
+    ap.add_argument("--archive-prep", action="store_true", help="Archive immutable zero-fit prep record at run-records-<run-id>")
     ap.add_argument("--run-contrast-fit", action="store_true", help="Run 1 bounded continuation fit (requires budget)")
     ap.add_argument("--run-id", default="fit2-boundary-contrast-v4p1")
     ap.add_argument("--enable-selective-rejector", action="store_true", help="Fit existing 776d CLS+logit rejector on TRAIN/CAL")
     ap.add_argument("--c-grid", default=",".join(str(x) for x in DEFAULT_REJECTOR_C_GRID))
     args = ap.parse_args()
+
+    if args.archive_prep and args.run_contrast_fit:
+        raise ValueError("--archive-prep is strictly zero-fit and cannot be combined with --run-contrast-fit")
 
     c_grid = _parse_c_grid(args.c_grid)
     repo_root = Path(__file__).resolve().parents[1]
@@ -283,58 +374,38 @@ def main() -> None:
             raise FileExistsError(f"Local output dir already exists: {local_root}")
     if args.archive_dryrun and dryrun_records_dir.exists():
         raise FileExistsError(f"MAIN dryrun records already exist: {dryrun_records_dir}")
+    if args.archive_prep and records_dir.exists():
+        raise FileExistsError(f"MAIN prep records already exist: {records_dir}")
 
-    source_prov = verify_relevant_source_provenance(repo_root) if (args.archive_dryrun or args.run_contrast_fit) else None
+    need_prov = args.archive_dryrun or args.archive_prep or args.run_contrast_fit
+    source_prov = verify_relevant_source_provenance(repo_root) if need_prov else None
     preflight = run_preflight_validation(repo_root, dryrun_root)
     if args.archive_dryrun:
         assert source_prov is not None
-        git_sha = source_prov["git_commit"]
-        dryrun_records_dir.mkdir(parents=True, exist_ok=False)
-        shutil.copytree(dryrun_root / "datasets", dryrun_records_dir / "datasets")
-        _verify_dir_matches_lock_hashes(dryrun_records_dir / "datasets", preflight["dataset_hashes"])
-        _snapshot_relevant_sources(repo_root, dryrun_records_dir, source_prov["source_hashes"])
-        (dryrun_records_dir / "environment.json").write_text(
-            json.dumps(
-                {
-                    "python": sys.version,
-                    "platform": platform.platform(),
-                    "torch": torch.__version__,
-                    "cuda_available": torch.cuda.is_available(),
-                    "cuda_device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
-                    "transformers": transformers.__version__,
-                },
-                indent=2,
-            )
-            + "\n",
-            encoding="utf-8",
+        _archive_zero_fit_records(
+            dest_dir=dryrun_records_dir,
+            manifest_filename="dryrun_manifest.json",
+            repo_root=repo_root,
+            dryrun_root=dryrun_root,
+            preflight=preflight,
+            source_prov=source_prov,
+            c_grid=c_grid,
+            run_id=args.run_id,
         )
-        (dryrun_records_dir / "dryrun_manifest.json").write_text(
-            json.dumps(
-                {
-                    "git_commit": git_sha,
-                    "source_hashes": source_prov["source_hashes"],
-                    "cli_argv": list(sys.argv),
-                    "planned_run_id": args.run_id,
-                    "planned_future_cli": [
-                        "python",
-                        "-m",
-                        "scripts.run_boundary_contrast_fit",
-                        "--run-contrast-fit",
-                        "--run-id",
-                        args.run_id,
-                        "--enable-selective-rejector",
-                    ],
-                    "planned_rejector_c_grid": list(c_grid),
-                    "preflight": preflight,
-                    "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
-                },
-                indent=2,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
-        _write_and_verify_sha_inventory(dryrun_records_dir, "sidecar_sha_inventory.json")
         preflight["dryrun_records_dir"] = str(dryrun_records_dir)
+    if args.archive_prep:
+        assert source_prov is not None
+        _archive_zero_fit_records(
+            dest_dir=records_dir,
+            manifest_filename="prep_manifest.json",
+            repo_root=repo_root,
+            dryrun_root=dryrun_root,
+            preflight=preflight,
+            source_prov=source_prov,
+            c_grid=c_grid,
+            run_id=args.run_id,
+        )
+        preflight["prep_records_dir"] = str(records_dir)
 
     if args.dry_run or not args.run_contrast_fit:
         print(json.dumps(preflight, indent=2))

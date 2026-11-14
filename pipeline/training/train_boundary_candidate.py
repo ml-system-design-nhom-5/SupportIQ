@@ -15,10 +15,12 @@ compares serving vs closure c6cae7a vs Fit 1.
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import datetime as dt
 import hashlib
 import json
 import random
+import re
 import subprocess
 import sys
 import time
@@ -123,6 +125,165 @@ def validate_boundary_split_taxonomy(
         raise ValueError(
             f"Single-intent STANDARD_INTENTS_46 or invalid non-OOD row in {split_name} negative split: {bad_neg[:5]}"
         )
+
+
+SEMANTIC_AUDIT_STATUSES = frozenset({"valid", "quarantined_kb_contradiction", "ambiguous_retained"})
+
+# Active-KB semantic boundary guards derived strictly from approved_kb.v2.json:
+# - POL-ORD-001 vs track_delivery (live vehicle/GPS/courier/doorstep telemetry)
+# - POL-RET-001/002/003 vs return_product_in_store (physical store/shop/branch return channel)
+VEHICLE_GPS_TELEMETRY_RE = re.compile(
+    r"\b(truck|delivery van|courier van|gps|driver|rider|stops away|gate photo|doorstep telemetry|"
+    r"live courier route|attempted delivery)\b",
+    re.IGNORECASE,
+)
+_MERCHANT_POLICY_OR_ONLINE_STORE_RE = re.compile(
+    r"\b(online\s+store|web\s+store|e-?store|convenience-?store\s+locker|"
+    r"store\s+(?:return\s+)?policy|standard\s+store\s+rules?|store\s+rules?|"
+    r"store\s+credit|store\s+guidelines?|store\s+terms?)\b",
+    re.IGNORECASE,
+)
+PHYSICAL_INSTORE_RETURN_RE = re.compile(
+    r"\b(?:"
+    r"brick-and-mortar|physical\s+(?:store|shop|branch|location)|"
+    r"retail\s+(?:branch|store|shop|outlet)|storefront|store\s+counter|"
+    r"walk-?in|cashier|in-?store|"
+    r"(?:(?:at|in|to|into|from)\s+(?:(?:a|an|any|the|te|your|one\s+of\s+your)\s+)?|\ba\s+(?:the|te)\s+)(?:store|shop|branch)s?|"
+    r"in\s+person(?:\s+at\s+(?:a|the|your)\s+(?:store|shop|branch))?"
+    r")\b",
+    re.IGNORECASE,
+)
+_TRACK_ORDER_REPLACEMENT_OVERLAP_RE = re.compile(r"\b(replace|replacement|exchange)\b", re.IGNORECASE)
+_RETURN_IN_STORE_INFO_OVERLAP_RE = re.compile(r"\binformation\s+about\b", re.IGNORECASE)
+
+
+def validate_semantic_status(status: str, *, context: str = "semantic_audit") -> str:
+    """Fail closed on any unknown semantic audit status."""
+    if status not in SEMANTIC_AUDIT_STATUSES:
+        raise ValueError(f"Unknown semantic audit status in {context}: {status!r}")
+    return status
+
+
+def classify_row_kb_semantics(
+    row: Dict[str, Any],
+    quarantined_parent_reasons: Optional[Dict[str, str]] = None,
+) -> Dict[str, Any]:
+    """Classify one row against active-KB boundaries without automatic relabeling."""
+    sample_id = str(row.get("sample_id") or "").strip()
+    intent = str(row.get("intent") or row.get("true_intent") or "").strip()
+    txt = str(row.get("text") or row.get("instruction") or "").strip()
+    source = str(row.get("source") or "").strip()
+    parent_id = str(row.get("parent_sample_id") or "").strip()
+    if not sample_id or not intent or not txt:
+        raise ValueError(
+            f"Missing required row provenance (sample_id={sample_id!r}, intent={intent!r}, has_text={bool(txt)})"
+        )
+    if source.startswith("bitext_") and not parent_id:
+        raise ValueError(f"Missing parent_sample_id provenance on Bitext row {sample_id}")
+
+    effective_parent = parent_id or sample_id
+    text_sha256 = hashlib.sha256(txt.encode("utf-8")).hexdigest().lower()
+    status = "valid"
+    reason = "kb_aligned"
+
+    if quarantined_parent_reasons and effective_parent in quarantined_parent_reasons:
+        status = "quarantined_kb_contradiction"
+        reason = f"parent_quarantined:{quarantined_parent_reasons[effective_parent]}"
+    elif intent == "track_order" and VEHICLE_GPS_TELEMETRY_RE.search(txt):
+        status = "quarantined_kb_contradiction"
+        reason = "kb_pol_ord_001_vehicle_gps_telemetry_contradiction"
+    elif intent == "return_policy":
+        sanitized = _MERCHANT_POLICY_OR_ONLINE_STORE_RE.sub(" ", txt)
+        if PHYSICAL_INSTORE_RETURN_RE.search(sanitized):
+            status = "quarantined_kb_contradiction"
+            reason = "kb_pol_ret_001_physical_instore_channel_contradiction"
+    elif intent == "track_delivery" and not VEHICLE_GPS_TELEMETRY_RE.search(txt):
+        # Generic delivery status phrasing overlaps POL-ORD-001; retain in 46-class replay and flag explicitly.
+        status = "ambiguous_retained"
+        reason = "kb_pol_ord_001_generic_delivery_without_telemetry"
+    elif intent == "track_order" and _TRACK_ORDER_REPLACEMENT_OVERLAP_RE.search(txt):
+        status = "ambiguous_retained"
+        reason = "bitext_track_order_replacement_overlap"
+    elif intent == "return_product_in_store" and _RETURN_IN_STORE_INFO_OVERLAP_RE.search(txt):
+        status = "ambiguous_retained"
+        reason = "bitext_return_in_store_item_info_overlap"
+
+    validate_semantic_status(status, context=f"row:{sample_id}")
+    return {
+        "sample_id": sample_id,
+        "parent_sample_id": effective_parent,
+        "text_sha256": text_sha256,
+        "intent": intent,
+        "source": source or "unspecified",
+        "reason": reason,
+        "status": status,
+    }
+
+
+def audit_rows_against_active_kb(
+    rows: Sequence[Dict[str, Any]],
+    split_name: str,
+    quarantined_parent_reasons: Optional[Dict[str, str]] = None,
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, Any]]:
+    """Audit rows with classify_row_kb_semantics, keeping valid/ambiguous rows and separating quarantined ones."""
+    kept: List[Dict[str, Any]] = []
+    quarantined_records: List[Dict[str, Any]] = []
+    status_counts: Counter[str] = Counter()
+    reason_counts: Counter[str] = Counter()
+    ambiguous_by_intent: Counter[str] = Counter()
+    quarantined_by_intent: Counter[str] = Counter()
+    parent_reasons = dict(quarantined_parent_reasons or {})
+
+    for row in rows:
+        rec = classify_row_kb_semantics(row, quarantined_parent_reasons=parent_reasons)
+        rec_out = {**rec, "split": split_name}
+        validate_semantic_status(rec_out["status"], context=f"{split_name}:{rec_out['sample_id']}")
+        status_counts[rec_out["status"]] += 1
+        if rec_out["status"] == "quarantined_kb_contradiction":
+            quarantined_records.append(rec_out)
+            reason_counts[rec_out["reason"]] += 1
+            quarantined_by_intent[rec_out["intent"]] += 1
+            parent_reasons.setdefault(rec_out["parent_sample_id"], rec_out["reason"])
+        else:
+            if rec_out["status"] == "ambiguous_retained":
+                reason_counts[rec_out["reason"]] += 1
+                ambiguous_by_intent[rec_out["intent"]] += 1
+            kept.append(row)
+
+    summary = {
+        "split": split_name,
+        "input_rows": len(rows),
+        "kept_rows": len(kept),
+        "quarantined_rows": len(quarantined_records),
+        "status_counts": {k: int(v) for k, v in sorted(status_counts.items())},
+        "reason_counts": {k: int(v) for k, v in sorted(reason_counts.items())},
+        "quarantined_by_intent": {k: int(v) for k, v in sorted(quarantined_by_intent.items())},
+        "ambiguous_retained_by_intent": {k: int(v) for k, v in sorted(ambiguous_by_intent.items())},
+    }
+    return kept, quarantined_records, summary
+
+
+def build_semantic_audit_manifest(
+    *,
+    split_summaries: Sequence[Dict[str, Any]],
+    quarantine_records: Sequence[Dict[str, Any]],
+    extra_notes: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Assemble and validate the canonical active-KB semantic audit manifest."""
+    for rec in quarantine_records:
+        validate_semantic_status(str(rec.get("status", "")), context=f"quarantine:{rec.get('sample_id')}")
+    return {
+        "schema_version": "active_kb_semantic_audit.v1",
+        "kb_sources": [
+            "data/knowledge/approved_kb.v2.json",
+            "data/knowledge/policies.json",
+            "apps/core_backend/config/policies/intent_policy.v2.json",
+        ],
+        "allowed_statuses": sorted(SEMANTIC_AUDIT_STATUSES),
+        "quarantined_total": len(quarantine_records),
+        "split_summaries": list(split_summaries),
+        **(extra_notes or {}),
+    }
 
 
 SUPPORTED_11_DRAFT_SET = frozenset(SUPPORTED_11_DRAFT_INTENTS)
@@ -581,6 +742,30 @@ def prepare_and_lock_splits(
             )
 
     test_ids = set(lineage.test_df["sample_id"].astype(str).tolist())
+
+    # Apply the same active-KB semantic audit across Bitext clean/noisy/cal AND domain splits.
+    # Noisy children inherit parent quarantine even when typos mask surface phrasing (e.g. "at the stoe").
+    bitext_cal_rows, q_cal, sum_bcal = audit_rows_against_active_kb(bitext_cal_rows, "bitext_cal")
+    bitext_train_clean_rows, q_bclean, sum_bclean = audit_rows_against_active_kb(
+        bitext_train_clean_rows, "bitext_train_clean"
+    )
+    quarantined_bitext_parents = {
+        str(rec["parent_sample_id"]): str(rec["reason"]) for rec in (q_cal + q_bclean)
+    }
+    bitext_train_noisy_rows, q_bnoisy, sum_bnoisy = audit_rows_against_active_kb(
+        bitext_train_noisy_rows,
+        "bitext_train_noisy",
+        quarantined_parent_reasons=quarantined_bitext_parents,
+    )
+    pos_train, q_dtrn, sum_dtrn = audit_rows_against_active_kb(pos_train, "domain_pos_train")
+    pos_cal, q_dcal, sum_dcal = audit_rows_against_active_kb(pos_cal, "domain_pos_calibration")
+    pos_eval, q_devl, sum_devl = audit_rows_against_active_kb(pos_eval, "domain_pos_evaluation")
+
+    train_parent_ids = {str(r["parent_sample_id"]) for r in bitext_train_clean_rows if r.get("parent_sample_id")} | {
+        str(r["parent_sample_id"]) for r in bitext_train_noisy_rows if r.get("parent_sample_id")
+    }
+    cal_parent_ids = {str(r["parent_sample_id"]) for r in bitext_cal_rows if r.get("parent_sample_id")}
+
     assert train_parent_ids.isdisjoint(cal_parent_ids), "Bitext train/cal parent overlap!"
     assert train_parent_ids.isdisjoint(test_ids), "Bitext train/test overlap!"
     assert cal_parent_ids.isdisjoint(test_ids), "Bitext cal/test overlap!"
@@ -596,18 +781,33 @@ def prepare_and_lock_splits(
         }
         for r in lineage.test_df.itertuples(index=False)
     ]
+    # Read-only audit of held-out bitext_test_6690 (test rows remain 100% untouched).
+    _, _, sum_btst_ro = audit_rows_against_active_kb(bitext_test_rows, "bitext_test_6690_readonly")
+
+    quarantine_records = q_dtrn + q_dcal + q_devl + q_bclean + q_bnoisy + q_cal
+    semantic_manifest = build_semantic_audit_manifest(
+        split_summaries=[sum_dtrn, sum_dcal, sum_devl, sum_bclean, sum_bnoisy, sum_bcal, sum_btst_ro],
+        quarantine_records=quarantine_records,
+    )
+    sem_manifest_path = datasets_dir / "semantic_audit_manifest.json"
+    sem_manifest_path.write_text(json.dumps(semantic_manifest, indent=2) + "\n", encoding="utf-8")
 
     full_train_dedup = pos_train + neg_train + bitext_train_clean_rows + bitext_train_noisy_rows
     full_cal_dedup = pos_cal + neg_cal + bitext_cal_rows
 
     hashes = {
         "boundary_split_manifest": _sha256_file(datasets_dir / "split_manifest.json"),
+        "boundary_pos_train": _write_jsonl(datasets_dir / "boundary_pos_train.jsonl", pos_train),
+        "boundary_pos_calibration": _write_jsonl(datasets_dir / "boundary_pos_calibration.jsonl", pos_cal),
+        "boundary_pos_evaluation": _write_jsonl(datasets_dir / "boundary_pos_evaluation.jsonl", pos_eval),
         "full_train_split": _write_jsonl(datasets_dir / "full_train_split.jsonl", full_train_dedup),
         "full_cal_split": _write_jsonl(datasets_dir / "full_cal_split.jsonl", full_cal_dedup),
         "bitext_train_clean": _write_jsonl(datasets_dir / "bitext_train_clean.jsonl", bitext_train_clean_rows),
         "bitext_train_noisy": _write_jsonl(datasets_dir / "bitext_train_noisy.jsonl", bitext_train_noisy_rows),
         "bitext_cal": _write_jsonl(datasets_dir / "bitext_cal.jsonl", bitext_cal_rows),
         "bitext_test_6690": _write_jsonl(datasets_dir / "bitext_test_6690.jsonl", bitext_test_rows),
+        "quarantine_records": _write_jsonl(datasets_dir / "quarantine_records.jsonl", quarantine_records),
+        "semantic_audit_manifest": _sha256_file(sem_manifest_path),
     }
 
     tokenizer = AutoTokenizer.from_pretrained(str(init_model_dir))
@@ -653,6 +853,8 @@ def prepare_and_lock_splits(
         },
         "dataset_hashes": hashes,
         "boundary_audit_summary": boundary_audit["overlap_audit"],
+        "semantic_audit": semantic_manifest,
+        "quarantined_domain_base_ids": [str(r["sample_id"]) for r in (q_dtrn + q_dcal + q_devl)],
         "token_truncation_audit_max_length_64": trunc_stats,
     }
     lock_path = datasets_dir / "dataset_lock_manifest.json"

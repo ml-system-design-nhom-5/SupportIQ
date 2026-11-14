@@ -94,8 +94,19 @@ def test_contrast_splits_group_isolation_semantic_and_balanced_targets(tmp_path:
     bitext_test_rows = tbc._read_jsonl(ds / "bitext_test_6690.jsonl")
     test_norms = {gate_mod.normalize_text(r["text"]) for r in bitext_test_rows}
     noisy_rows = tbc._read_jsonl(ds / "bitext_train_noisy.jsonl")
+    clean_rows = tbc._read_jsonl(ds / "bitext_train_clean.jsonl")
     assert not ({gate_mod.normalize_text(r["text"]) for r in noisy_rows} & test_norms)
     assert not ({gate_mod.normalize_text(r["text"]) for r in trn} & test_norms)
+
+    # All 46 labels preserved in replay while Bitext return_policy physical-store parents + noisy typo children are quarantined
+    assert {r["intent"] for r in (clean_rows + noisy_rows)} == s46
+    assert ext["quarantined_total"] >= 22
+    assert len(ext["quarantined_bitext_ids"]) >= 19
+    assert "bitext_trn_aug_sample_029457_32" in set(ext["quarantined_bitext_ids"])
+    td_audit = exp["track_delivery_exposure"]
+    assert td_audit["total_train_raw"] == 270
+    assert td_audit["total_train_effective"] == 390
+    assert td_audit["ambiguous_retained_train_raw"] > 0
 
 
 def test_contrast_semantic_validator_rejects_contradictions() -> None:
@@ -670,3 +681,124 @@ def test_runner_post_fit_provenance_failure_marks_incomplete(tmp_path: Path) -> 
     st = json.loads((main_cand / "run-records-fit2-bad-prov" / "status.json").read_text(encoding="utf-8"))
     assert st["status"] == "incomplete"
     assert (main_cand / "fit2-bad-prov").exists()
+
+
+def test_active_kb_semantic_classifier_phrasing_and_fail_closed_guards() -> None:
+    """Shared KB classifier catches Bitext store/shop typos, keeps merchant-policy/locker text, and preserves non-GPS track_delivery."""
+    # 1. Bitext store/shop phrasings missed by old narrow regex MUST be quarantined
+    for sid, txt in (
+        ("b1", "can I ask for the exchange of an item in store?"),
+        ("b2", "can I make returns at the shop?"),
+        ("b3", "what is the process to return a product a the store?"),
+        ("b4", "tell me if I can return a product at te store"),
+    ):
+        rec = tbc.classify_row_kb_semantics({"sample_id": sid, "parent_sample_id": sid, "intent": "return_policy", "text": txt, "source": "bitext_train_partition_clean"})
+        assert rec["status"] == "quarantined_kb_contradiction", (sid, rec)
+
+    # 2. Genuine merchant-policy, online store, and locker phrasing MUST remain valid
+    for sid, intent, txt in (
+        ("v1", "return_policy", "Can I review your standard store rules and store return policy?"),
+        ("v2", "refund_policy", "Do you refund as store credit for online purchases?"),
+        ("v3", "return_product", "Drop off your return at any convenience-store locker nearby."),
+        ("v4", "return_policy", "I bought it from your online store and want to return it online."),
+    ):
+        rec = tbc.classify_row_kb_semantics({"sample_id": sid, "parent_sample_id": sid, "intent": intent, "text": txt, "source": "authored"})
+        assert rec["status"] == "valid", (sid, rec)
+
+    # 3. Generic track_delivery lacking GPS keywords MUST be ambiguous_retained (never blanket-dropped); track_order+GPS quarantined
+    td_rec = tbc.classify_row_kb_semantics({"sample_id": "td1", "parent_sample_id": "td1", "intent": "track_delivery", "text": "help me track my shipment please", "source": "bitext_train_partition_clean"})
+    assert td_rec["status"] == "ambiguous_retained"
+    to_rec = tbc.classify_row_kb_semantics({"sample_id": "to1", "parent_sample_id": "to1", "intent": "track_order", "text": "track delivery truck on live gps", "source": "domain"})
+    assert to_rec["status"] == "quarantined_kb_contradiction"
+
+    # 4. Fail-closed provenance & unknown semantic status checks
+    with pytest.raises(ValueError, match="Missing parent_sample_id provenance"):
+        tbc.classify_row_kb_semantics({"sample_id": "b_missing", "intent": "return_policy", "text": "return online", "source": "bitext_train_partition_clean"})
+    with pytest.raises(ValueError, match="Unknown semantic audit status"):
+        tbc.validate_semantic_status("invented_status")
+
+
+def test_prepare_splits_quarantines_parent_and_typo_noisy_child(tmp_path: Path) -> None:
+    """If clean parent return_policy row is quarantined, its typo noisy child ('at the stoe') is also quarantined."""
+    init_dir = tmp_path / "init"
+    init_dir.mkdir()
+    (init_dir / "model.safetensors").write_bytes(b"weights")
+    art = tmp_path / "art"
+
+    train_rows = []
+    for i, lbl in enumerate(STANDARD_INTENTS_46):
+        if lbl == "return_policy":
+            train_rows.append({"sample_id": "rp_cal_0", "instruction": "can i return something bought online", "intent": lbl})
+            train_rows.append({"sample_id": "rp_bad_parent", "instruction": "can i return a product at the store", "intent": lbl})
+            train_rows.append({"sample_id": "rp_good_parent", "instruction": "what is your standard online return policy window", "intent": lbl})
+        else:
+            txt = f"{lbl.replace('_', ' ')} unique base {i}"
+            train_rows.append({"sample_id": f"cal_{i}", "instruction": txt + " cal", "intent": lbl})
+            train_rows.append({"sample_id": f"trn_{i}", "instruction": txt, "intent": lbl})
+    test_df = pd.DataFrame([{"sample_id": "tst_0", "instruction": "unrelated test order item", "intent": "track_order"}])
+    fake_lineage = SimpleNamespace(cleaned_sha256="c" * 64, splits_sha256="d" * 64, train_df=pd.DataFrame(train_rows), test_df=test_df)
+
+    def _fixed_audit(datasets_dir: Path, repo_root: Path):
+        datasets_dir.mkdir(parents=True, exist_ok=True)
+        (datasets_dir / "split_manifest.json").write_text("{}\n", encoding="utf-8")
+        for fn, row in (
+            ("boundary_pos_train.jsonl", {"sample_id": "p1", "instruction": "dom pos trn", "text": "dom pos trn", "intent": "track_order", "group_id": "g_pt"}),
+            ("boundary_neg_train.jsonl", {"sample_id": "n1", "instruction": "dom neg trn", "text": "dom neg trn", "intent": "out_of_scope", "group_id": "g_nt"}),
+            ("boundary_pos_calibration.jsonl", {"sample_id": "p2", "instruction": "dom pos cal", "text": "dom pos cal", "intent": "track_order", "group_id": "g_pc"}),
+            ("boundary_neg_calibration.jsonl", {"sample_id": "n2", "instruction": "dom neg cal", "text": "dom neg cal", "intent": "out_of_scope", "group_id": "g_nc"}),
+            ("boundary_pos_evaluation.jsonl", {"sample_id": "p3", "instruction": "dom pos evl", "text": "dom pos evl", "intent": "track_order", "group_id": "g_pe"}),
+            ("boundary_neg_evaluation.jsonl", {"sample_id": "n3", "instruction": "dom neg evl", "text": "dom neg evl", "intent": "out_of_scope", "group_id": "g_ne"}),
+        ):
+            (datasets_dir / fn).write_text(json.dumps(row) + "\n", encoding="utf-8")
+        return {"token_truncation_audit": {}, "overlap_audit": {}}
+
+    class _StubTok:
+        def encode(self, text, truncation=False, add_special_tokens=True):
+            return [1]
+
+    def _typo_noise(txt: str, _rng) -> str:
+        return "can i return a fucking product at the stoe" if "at the store" in txt else f"noisy {txt}"
+
+    with (
+        patch.object(tbc, "audit_and_export_boundary_datasets", side_effect=_fixed_audit),
+        patch.object(tbc, "verify_original_46_label_lineage", return_value=fake_lineage),
+        patch.object(tbc, "_load_frozen_benchmark_texts", return_value=[]),
+        patch.object(tbc, "apply_realistic_noise", side_effect=_typo_noise),
+        patch.object(tbc.AutoTokenizer, "from_pretrained", return_value=_StubTok()),
+        patch.object(pd.DataFrame, "sample", lambda self, **kw: self),
+    ):
+        tbc.prepare_and_lock_splits(
+            worktree_root=REPO_ROOT,
+            data_repo_root=REPO_ROOT,
+            init_model_dir=init_dir,
+            artifact_root=art,
+            replay_per_class=2,
+            noise_aug_per_class=2,
+            bitext_cal_per_class=1,
+        )
+
+    clean_ids = {r["sample_id"] for r in tbc._read_jsonl(art / "datasets" / "bitext_train_clean.jsonl")}
+    noisy_ids = {r["sample_id"] for r in tbc._read_jsonl(art / "datasets" / "bitext_train_noisy.jsonl")}
+    q_recs = tbc._read_jsonl(art / "datasets" / "quarantine_records.jsonl")
+    assert "bitext_trn_rp_bad_parent" not in clean_ids
+    assert "bitext_trn_rp_good_parent" in clean_ids
+    assert all(not sid.startswith("bitext_trn_aug_rp_bad_parent") for sid in noisy_ids)
+    assert any(r["parent_sample_id"] == "rp_bad_parent" and r["split"] == "bitext_train_clean" for r in q_recs)
+    assert any(r["parent_sample_id"] == "rp_bad_parent" and r["split"] == "bitext_train_noisy" and r["reason"].startswith("parent_quarantined:") for r in q_recs)
+
+
+def test_archive_prep_refuses_overwrite_and_disallows_fit(tmp_path: Path) -> None:
+    """--archive-prep is strictly zero-fit and fails closed when destination run-records dir already exists."""
+    main_cand = tmp_path / "main_cand"
+    existing = main_cand / "run-records-v5-prep-test"
+    existing.mkdir(parents=True)
+    with (
+        patch.object(contrast_mod, "MAIN_CANDIDATES_DIR", main_cand),
+        patch.object(sys, "argv", ["prog", "--archive-prep", "--run-id", "v5-prep-test"]),
+    ):
+        with pytest.raises(FileExistsError, match="MAIN prep records already exist"):
+            contrast_mod.main()
+
+    with patch.object(sys, "argv", ["prog", "--archive-prep", "--run-contrast-fit", "--run-id", "v5-prep-test"]):
+        with pytest.raises(ValueError, match="strictly zero-fit"):
+            contrast_mod.main()

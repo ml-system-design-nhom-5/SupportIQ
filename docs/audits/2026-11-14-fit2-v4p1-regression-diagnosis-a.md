@@ -105,23 +105,25 @@ In `fit_selective_rejector_from_arrays` ([train_boundary_candidate.py](file:///F
 
 ---
 
-## 6. Minimal, Evidence-Backed Next-Iteration Plan (Stop Chasing Boundary Hacks)
+## 6. Revised Remediation Plan (Incorporating Review B & Taxonomy Audit Prep)
 
-Anchor the next clean run strictly to **`reconstructed-fit2-supcon-20261113` (`f695b1fe`)** (NOT `v4p1`), keeping DistilBERT 46-class + CE/SupCon/KL, canonical Bitext (`8BC10CFA` / `1D366E89`), and `selective_calibration.v1` intact:
+**Status separator (strict):** Only the **shared active-KB preparation & quarantine audit** (`fit2-taxonomy-audit-v5-prep`, **0 fits**) has been implemented in code. All training-objective, exposure-weight, `return_product_online`, and rejector changes below remain **unexecuted hypotheses** requiring separate coordinator approval — **no training run, 2-fit budget, or architecture swap is pre-authorized**.
 
-1. **Apply Taxonomy Filters Uniformly Across Bitext + Replay + Contrast (`boundary_contrast_data.py`):**
-   - Run `_INSTORE_CHANNEL_RE` and `_VEHICLE_GPS_TELEMETRY_RE` over `bitext_train_*` and `bitext_cal` too: remove or quarantine the `19` store-return rows mislabeled `return_policy` and stop `5x`-amplifying non-GPS generic `"track my shipment"` `track_delivery` rows (`390` -> `<=260` eff).
-   - Add KB-grounded `return_product_online` vs `return_product` contrast pairs (balanced across train/cal, strict `group_id` isolation).
-2. **Rebalance `SUP11` Exposure, Soften Negative KL/Energy Drag, & Unclamp `T` (`train_boundary_candidate.py`):**
-   - Give all 11 `SUP11` intents balanced domain exposure (`delivery_issue`, `cancel_order`, `refund_status`, `payment_issue`, `shipping_costs` not starved relative to `return_policy`).
-   - Reduce `neg_repeat` (`<= 6` vs `12`) and lower compound `sup12` penalty pressure (`ceil` / weight) so shared retail verbs (`cancel`, `refund`, `tracking`) do not collapse in-scope softmax tails.
-   - Allow `min_temperature=0.75` (matching `train_domain_candidate.py`) instead of forcing `T >= 1.0` when `T=1.0` produces 44% flat tails.
-3. **Disable the `776d` `[CLS]` 11-vs-35 Rejector (`selective_rejector.enabled=false`) — or Replace with 8d Logit/Energy OOD Only:**
-   - Default to `selective_rejector.enabled=false` first (immediately recovers all `8` `ml_noise_420` + `1` `pos175` false vetoes) or, if kept inside `selective_calibration.v1`, fit `logit_geometry_v1` (`8d`: `raw/cal_max_prob`, `margin`, `entropy`, `logit_max`, `logit_logsumexp`) strictly on **all 46 in-distribution intents vs `neg_train`/`neg_cal` OOD**, never `SUP11` vs `ESC34` `[CLS]`.
+1. **Implemented Now — Shared Active-KB Semantic Audit & Quarantine (`0` fits, `train_boundary_candidate.py` / `boundary_contrast_data.py`):**
+   - Replaced the narrow domain-only check with one shared active-KB classifier (`approved_kb.v2.json` `POL-RET-001/002/003`, `POL-ORD-001` + `policies.json`) applied uniformly across `bitext_train_clean`, `bitext_train_noisy` (with parent-ID propagation), `bitext_cal` (independent KB rule, no failure cherry-picking), domain splits, and extra `bitext_train_esc34_pos_*` pools (`bitext_test_6690` & frozen gold/holdout benchmarks untouched).
+   - **Quarantined rows (`quarantined_kb_contradiction`, never auto-relabeled):** Removes the `12` Bitext `return_policy` physical-store rows + `8` noisy augmented children (`20` Bitext rows total, including `"at the stoe"` via parent propagation) alongside domain base contradictions, while retaining legitimate merchant-policy / online-store wording (`"store rules"`, `"store credit"`, `"store policy"`, `"convenience-store locker"`).
+   - **Explicit `ambiguous_retained` accounting (no blanket GPS drop):** Bitext `track_delivery` (`0` GPS/vehicle keywords in `clean/noisy/cal`) is retained for 46-class replay and logged as `ambiguous_retained` with explicit raw/effective counts (`270` raw / `390` eff in `v4p1` TRAIN, including `20` `bitext_train_esc34_pos_train` rows at `5x`), alongside `track_order` replacement overlap and `return_product_in_store` item-info overlap.
 
-**Predeclared Acceptance & Stop Criteria (Max 2 Bounded Iterations; `epochs <= 2`, `lr <= 1.5e-5`):**
-- **Pass criteria vs `orig_fit2`:** `0` unsafe leaks across `pos175`, `mand62`, `ml_oos_80`, `neg51`, and `fresh_holdout_34`; `final24 >= 10/12`; `sa156 sup34 >= 26/30`; `ml_noise_420 macro_f1_12 >= 0.8573` & `bare correct_draft >= 267` (`0` false vetoes on clean `SUP11` drafts).
-- **Stop criterion:** If clean taxonomy filtering + balanced loss without `776d` rejector still leaks `ESC34` or non-retail OOD into `Engine`/`Runner`, stop encoder micro-tuning and enforce explicit KB/retrieval or deterministic routing rules rather than adding higher `neg` repeats.
+2. **Proposed Next-Fit Hypotheses Only (Not Implemented; Anchored to `reconstructed-fit2-supcon-20261113` `f695b1fe`, NOT `v4p1`):**
+   - **Exposure & Objective (`T >= 1.0` contract preserved):** *Withdraw* the prior `min_temperature=0.75` proposal — serving enforces `min_temperature >= 1.0` and `temperature >= min_temperature` (`apps/ml_inference/app.py:305-314`), and `T < 1.0` scales OOD/ESC34 logits equally rather than improving `SUP11` margin separation. Any future `SUP11` confidence recovery must be tested at `T >= 1.0` via balanced `SUP11` contrast exposure (adding `cancel_order`, `delivery_issue`, `refund_status`, `payment_issue`, `shipping_costs`, and `return_product_online` vs `return_product`), dropping duplicated `track_delivery` `bitext_train_esc34_pos_train` (`5x`) amplification, and reducing `neg_repeat` (`<= 6` vs `12`) / compound penalty pressure (`hypothesis`, untested). In this prep commit, weights (`4x`/`5x`/`12x`), loss/KL, `min_temperature=1.0`, and rejector remain unchanged.
+   - **Rejector Ablation & Caveats:** Run the classifier baseline with `selective_rejector.enabled=false` first to isolate classifier behavior from `[CLS]` 11-vs-35 topic bias (the observed `L2(cls_w) = 3.3355` vs `L2(geo_w) = 0.1409` reflection combines `768` vs `8` standardized dims and `92.1%` in-distribution `ESC34+human_agent` `y=0` dominance; exact attribution requires ablation). As Review B notes, an `8d` `logit_geometry_v1` fallback cannot resolve wrong-intent `ESC34 -> SUP11` errors at `0.9780` (`contrast_auth_pos_eval_102`), its `[0.65..0.75]` OOD separation is untested, and `nonretail_ood_eval_019` (`0.7109` / `0.6860`) leaked across every layer — implicating retrieval/domain-scope gating outside classifier tuning.
+
+**Frozen Evaluation Targets for Any Future Approved Candidate (Original Frozen Gates Unchanged):**
+- `final_acceptance_24`: `final >= 10/12`, `system >= 25/34`.
+- `system_acceptance_156` (`sa156`): undo `v4p1` drift back to `>= 26/30` supported drafts.
+- `ml_noise_420`: `macro_f1_12 >= 0.8573` and `bare` / gate correct drafts `>= 267`.
+- Safety: `0` unsafe leaks across known/isolated suites (`pos175`, `mand62`, `ml_oos_80`, `neg51`, `fresh_holdout_34`).
+- Governance: Future fit parameters, iteration budget, and stop/escalation criteria require explicit coordinator authorization prior to execution.
 
 ---
 

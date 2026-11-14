@@ -9,7 +9,6 @@ physical store channel), and balances supported contrast exposures (~8-12 rows/c
 from __future__ import annotations
 
 import json
-import re
 from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List, Sequence, Tuple
@@ -20,25 +19,18 @@ from pipeline.training.boundary_curriculum_data import _load_frozen_benchmark_te
 from pipeline.training.train_boundary_candidate import (
     _has_gold_conflict,
     _read_jsonl,
+    _sha256_file,
     _token_set,
     _write_jsonl,
+    audit_rows_against_active_kb,
+    build_semantic_audit_manifest,
+    classify_row_kb_semantics,
     prepare_and_lock_splits,
     resolve_neg_repeat,
     validate_boundary_split_taxonomy,
+    validate_semantic_status,
 )
 from pipeline.training.train_domain_candidate import verify_original_46_label_lineage
-
-# Semantic boundary guards aligned with active KB (POL-ORD-001 vs track_delivery; POL-RET-001 vs return_product_in_store).
-_VEHICLE_GPS_TELEMETRY_RE = re.compile(
-    r"\b(truck|delivery van|courier van|gps|driver|rider|stops away|gate photo|doorstep telemetry|"
-    r"live courier route|attempted delivery)\b",
-    re.IGNORECASE,
-)
-_INSTORE_CHANNEL_RE = re.compile(
-    r"\b(brick-and-mortar|physical store|physical shop|retail branch|retail store|storefront|"
-    r"store counter|walk-in|cashier|in person at (?:a|your|the) (?:store|shop|branch))\b",
-    re.IGNORECASE,
-)
 
 # Balanced authored contrast families: (split, group_id, intent, text)
 # Train supported contrast classes are balanced to 10 rows each (~8-12 target):
@@ -246,14 +238,8 @@ SUPPORTED_CONTRAST_TRAIN_BOUNDS: Tuple[int, int] = (8, 12)
 
 
 def _is_contradictory_base_row(row: Dict[str, Any]) -> bool:
-    """Detect base domain rows that conflict with active-KB intent boundaries."""
-    intent = str(row.get("intent", ""))
-    txt = str(row.get("text") or row.get("instruction") or "")
-    if intent == "track_order" and _VEHICLE_GPS_TELEMETRY_RE.search(txt):
-        return True
-    if intent == "return_policy" and _INSTORE_CHANNEL_RE.search(txt):
-        return True
-    return False
+    """Detect rows that conflict with active-KB intent boundaries via shared semantic classifier."""
+    return classify_row_kb_semantics(row)["status"] == "quarantined_kb_contradiction"
 
 
 def validate_contrast_semantic_consistency(
@@ -263,16 +249,15 @@ def validate_contrast_semantic_consistency(
     *,
     check_train_balance: bool = False,
 ) -> Dict[str, int]:
-    """Fail closed on KB semantic contradictions or unbalanced supported contrast exposures."""
+    """Fail closed on KB semantic contradictions, unknown audit statuses, or unbalanced supported contrast exposures."""
     esc34 = set(ESCALATED_34_INTENTS)
     sup12 = set(SUPPORTED_12_INTENTS)
     for row in pos_rows:
-        intent = str(row.get("intent", ""))
-        txt = str(row.get("text") or row.get("instruction") or "")
-        if intent == "track_order" and _VEHICLE_GPS_TELEMETRY_RE.search(txt):
-            raise ValueError(f"Semantic contradiction in {split_name} track_order row {row.get('sample_id')}: {txt!r}")
-        if intent == "return_policy" and _INSTORE_CHANNEL_RE.search(txt):
-            raise ValueError(f"Semantic contradiction in {split_name} return_policy row {row.get('sample_id')}: {txt!r}")
+        rec = classify_row_kb_semantics(row)
+        validate_semantic_status(rec["status"], context=f"{split_name}:{rec['sample_id']}")
+        intent = rec["intent"]
+        if rec["status"] == "quarantined_kb_contradiction":
+            raise ValueError(f"Semantic contradiction in {split_name} {intent} row {rec['sample_id']}: {rec['reason']}")
         if intent in ("track_delivery", "return_product_in_store", "order_history") and intent not in esc34:
             raise ValueError(f"Expected ESCALATED_34 intent for {intent}")
 
@@ -333,16 +318,21 @@ def prepare_and_lock_contrast_splits(
     validate_boundary_split_taxonomy(pos_cal_raw, neg_cal, "base_cal")
     validate_boundary_split_taxonomy(pos_eval_raw, neg_eval, "base_eval")
 
-    removed_base_ids: List[str] = []
-    pos_train = [r for r in pos_train_raw if not (_is_contradictory_base_row(r) and (removed_base_ids.append(str(r.get("sample_id"))) or True))]
-    pos_cal = [r for r in pos_cal_raw if not (_is_contradictory_base_row(r) and (removed_base_ids.append(str(r.get("sample_id"))) or True))]
-    pos_eval = [r for r in pos_eval_raw if not (_is_contradictory_base_row(r) and (removed_base_ids.append(str(r.get("sample_id"))) or True))]
+    base_quarantine = _read_jsonl(datasets_dir / "quarantine_records.jsonl")
+    removed_base_ids: List[str] = list(base_lock.get("quarantined_domain_base_ids") or [])
+    for split_list, dest in ((pos_train_raw, "pos_train"), (pos_cal_raw, "pos_cal"), (pos_eval_raw, "pos_eval")):
+        for r in split_list:
+            if _is_contradictory_base_row(r):
+                removed_base_ids.append(str(r.get("sample_id")))
+    pos_train = [r for r in pos_train_raw if not _is_contradictory_base_row(r)]
+    pos_cal = [r for r in pos_cal_raw if not _is_contradictory_base_row(r)]
+    pos_eval = [r for r in pos_eval_raw if not _is_contradictory_base_row(r)]
 
     used_parent_ids = {
         str(r.get("parent_sample_id"))
         for r in (bitext_clean + bitext_noisy + bitext_cal)
         if r.get("parent_sample_id")
-    }
+    } | {str(r.get("parent_sample_id")) for r in base_quarantine if r.get("parent_sample_id")}
     lineage = verify_original_46_label_lineage(repo_root=worktree_root)
     test_ids = set(lineage.test_df["sample_id"].astype(str).tolist())
 
@@ -486,6 +476,28 @@ def prepare_and_lock_contrast_splits(
         else:
             neg_eval.append(row)
 
+    # Apply shared active-KB audit across final positive contrast splits & Bitext replay splits
+    pos_train, q_pos_trn, sum_pos_trn = audit_rows_against_active_kb(pos_train, "contrast_pos_train")
+    pos_cal, q_pos_cal, sum_pos_cal = audit_rows_against_active_kb(pos_cal, "contrast_pos_calibration")
+    pos_eval, q_pos_evl, sum_pos_evl = audit_rows_against_active_kb(pos_eval, "contrast_pos_evaluation")
+    _, q_chk_bclean, sum_bclean = audit_rows_against_active_kb(bitext_clean, "bitext_train_clean")
+    _, q_chk_bnoisy, sum_bnoisy = audit_rows_against_active_kb(bitext_noisy, "bitext_train_noisy")
+    _, q_chk_bcal, sum_bcal = audit_rows_against_active_kb(bitext_cal, "bitext_cal")
+    if q_chk_bclean or q_chk_bnoisy or q_chk_bcal:
+        raise RuntimeError(
+            f"Bitext split contains unexpected unquarantined KB contradictions after base prep: "
+            f"clean={len(q_chk_bclean)}, noisy={len(q_chk_bnoisy)}, cal={len(q_chk_bcal)}"
+        )
+
+    # Deduplicate combined quarantine records (base Bitext/domain + any contrast additions) preserving insertion order
+    seen_q: set[Tuple[str, str]] = set()
+    quarantine_records: List[Dict[str, Any]] = []
+    for rec in base_quarantine + q_pos_trn + q_pos_cal + q_pos_evl:
+        key = (str(rec.get("split")), str(rec.get("sample_id")))
+        if key not in seen_q:
+            seen_q.add(key)
+            quarantine_records.append(rec)
+
     # Strict taxonomy and semantic boundary verification across all splits
     validate_boundary_split_taxonomy(pos_train, neg_train, "train")
     validate_boundary_split_taxonomy(pos_cal, neg_cal, "cal")
@@ -493,6 +505,9 @@ def prepare_and_lock_contrast_splits(
     authored_trn_counts = validate_contrast_semantic_consistency(pos_train, neg_train, "train", check_train_balance=True)
     validate_contrast_semantic_consistency(pos_cal, neg_cal, "cal")
     validate_contrast_semantic_consistency(pos_eval, neg_eval, "eval")
+    validate_contrast_semantic_consistency(bitext_clean, [], "bitext_train_clean")
+    validate_contrast_semantic_consistency(bitext_noisy, [], "bitext_train_noisy")
+    validate_contrast_semantic_consistency(bitext_cal, [], "bitext_cal")
 
     full_train_all = pos_train + neg_train + bitext_clean + bitext_noisy
     full_cal_all = pos_cal + neg_cal + bitext_cal
@@ -570,11 +585,51 @@ def prepare_and_lock_contrast_splits(
     compound_eff_total = base_compound_raw * 12 + compound_new_eff
     total_eff_train = domain_pos_eff + bitext_eff + neg_eff_total
 
+    # Explicit exposure accounting for duplicated/upweighted track_delivery vs KB ambiguity
+    td_clean = [r for r in bitext_clean if r["intent"] == "track_delivery"]
+    td_noisy = [r for r in bitext_noisy if r["intent"] == "track_delivery"]
+    td_cal = [r for r in bitext_cal if r["intent"] == "track_delivery"]
+    td_extra_trn = [r for r in esc34_pos_rows if r["intent"] == "track_delivery" and str(r.get("source", "")).startswith("bitext_train_esc34")]
+    td_auth_trn = [r for r in esc34_pos_rows if r["intent"] == "track_delivery" and str(r.get("source", "")).startswith("authored_contrast")]
+    td_other_pos_trn = [r for r in esc34_pos_rows if r["intent"] == "track_delivery" and r not in td_extra_trn and r not in td_auth_trn]
+    td_train_rows = td_clean + td_noisy + td_extra_trn + td_auth_trn + td_other_pos_trn
+    td_ambig_train = sum(1 for r in td_train_rows if classify_row_kb_semantics(r)["status"] == "ambiguous_retained")
+    track_delivery_exposure_audit = {
+        "bitext_train_clean": {"raw": len(td_clean), "weight": 1, "effective": len(td_clean)},
+        "bitext_train_noisy": {"raw": len(td_noisy), "weight": 1, "effective": len(td_noisy)},
+        "bitext_train_esc34_pos_train": {"raw": len(td_extra_trn), "weight": 5, "effective": len(td_extra_trn) * 5},
+        "authored_contrast_pos_train": {"raw": len(td_auth_trn), "weight": 5, "effective": len(td_auth_trn) * 5},
+        "domain_other_pos_train": {"raw": len(td_other_pos_trn), "weight": 5, "effective": len(td_other_pos_trn) * 5},
+        "bitext_cal_raw": len(td_cal),
+        "total_train_raw": len(td_train_rows),
+        "total_train_effective": len(td_clean) + len(td_noisy) + 5 * (len(td_extra_trn) + len(td_auth_trn) + len(td_other_pos_trn)),
+        "ambiguous_retained_train_raw": td_ambig_train,
+        "note": "Generic track_delivery queries lacking vehicle/GPS keywords are retained for 46-class replay and flagged ambiguous_retained rather than blanket-dropped.",
+    }
+
+    ro_test_summary = [s for s in (base_lock.get("semantic_audit", {}).get("split_summaries") or []) if s.get("split") == "bitext_test_6690_readonly"]
+    semantic_manifest = build_semantic_audit_manifest(
+        split_summaries=[sum_pos_trn, sum_pos_cal, sum_pos_evl, sum_bclean, sum_bnoisy, sum_bcal, *ro_test_summary],
+        quarantine_records=quarantine_records,
+        extra_notes={"track_delivery_exposure_audit": track_delivery_exposure_audit},
+    )
+    sem_manifest_path = datasets_dir / "semantic_audit_manifest.json"
+    sem_manifest_path.write_text(json.dumps(semantic_manifest, indent=2) + "\n", encoding="utf-8")
+    q_sha = _write_jsonl(datasets_dir / "quarantine_records.jsonl", quarantine_records)
+    sem_sha = _sha256_file(sem_manifest_path)
+    lock["dataset_hashes"]["quarantine_records"] = q_sha
+    lock["dataset_hashes"]["semantic_audit_manifest"] = sem_sha
+    lock["files"]["quarantine_records"] = {"path": str(datasets_dir / "quarantine_records.jsonl"), "sha256": q_sha, "rows": len(quarantine_records)}
+    lock["files"]["semantic_audit_manifest"] = {"path": str(sem_manifest_path), "sha256": sem_sha, "rows": 1}
+
+    lock["semantic_audit"] = semantic_manifest
     lock["contrast_extension"] = {
         "bitext_contrast_per_intent": list(bitext_contrast_per_intent),
         "bitext_contrast_intents": ["order_history", "return_product_in_store", "track_delivery"],
         "added_bitext_parent_ids_count": len(added_bitext_parent_ids),
         "removed_contradictory_base_ids": removed_base_ids,
+        "quarantined_total": len(quarantine_records),
+        "quarantined_bitext_ids": [str(r["sample_id"]) for r in quarantine_records if str(r.get("split", "")).startswith("bitext_")],
         "authored_contrast_pos_rows": len(AUTHORED_CONTRAST_FAMILIES),
         "authored_contrast_train_by_intent": authored_trn_counts,
         "authored_compound_neg_rows": len(AUTHORED_COMPOUND_FAMILIES),
@@ -607,6 +662,7 @@ def prepare_and_lock_contrast_splits(
             "total_compound_neg_effective": compound_eff_total,
             "compound_share_of_effective_neg": round(compound_eff_total / neg_eff_total, 4) if neg_eff_total else 0.0,
         },
+        "track_delivery_exposure": track_delivery_exposure_audit,
         "total_effective_train_rows": total_eff_train,
         "batches_per_epoch_bs32": (total_eff_train + 31) // 32,
     }
