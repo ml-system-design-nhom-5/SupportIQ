@@ -1,0 +1,12 @@
+{
+  "schema_version": "worker_c_review_manifest.v1",
+  "task_id": "task_b49f9106865f",
+  "dispatch_id": "ctx_2b47de192bb5",
+  "git_branch": "minh",
+  "git_head": "70cf073447adc14f1b6378d41b7cab6b300d3168",
+  "elapsed_seconds": 19.93,
+  "outputs": {
+    "control_cal_comparison.json": "7244c36c7d46773fc6bf35288a2c89123d8bc72cf6c70fe592b557c5a352beef",
+    "verify_control_cal.py": "7476dc222eda951379b1e2e9f1514cdcb5389bb9e40f7c7d599298fa3651ef82"
+  }
+}
