@@ -203,6 +203,23 @@ def test_normal_return_policy_flow(e2e_env, ai_engine):
 def test_normal_shipping_cost_flow(e2e_env, ai_engine):
     """Normal customer inquiry: shipping costs inquiry routes properly."""
     engine, mock_model, adapter, mock_llm = ai_engine
+    shipping_doc = {
+        "source_type": "policy",
+        "document_id": "b1000000-0000-0000-0000-000000000005",
+        "doc_id": "b1000000-0000-0000-0000-000000000005",
+        "version": "1",
+        "title": "Shipping Fee Policy",
+        "excerpt": "Standard shipping rates and fee schedules.",
+        "score": 0.91,
+    }
+    adapter.retrieve.return_value = {"status": "success", "evidence": [shipping_doc], "has_conflict": False}
+    adapter.eligible_versions = [
+        MagicMock(
+            doc_id="b1000000-0000-0000-0000-000000000005",
+            version="1",
+            metadata=MagicMock(valid_from=None, valid_to=None),
+        )
+    ]
     mock_model.predict.return_value = {
         "intent": "shipping_costs",
         "confidence": 0.94,

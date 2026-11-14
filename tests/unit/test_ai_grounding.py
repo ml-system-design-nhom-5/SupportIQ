@@ -251,29 +251,111 @@ def test_engine_direct_stub_rejects_clarification_with_factual_question_and_sour
 
 def test_engine_direct_stub_accepts_mixed_policy_and_order_facts_with_polite_framing():
     """Engine.draft preserves valid polite framing alongside mixed S1 policy and S2 order_facts."""
-    sources = [
-        {"source_id": "S1", "source_type": "policy", "document_id": "policy-shipping-v1", "version": "1", "excerpt": "Delivery takes 3 to 5 business days."},
-        {"source_id": "S2", "source_type": "order_facts", "document_id": "order-1", "version": "1",
-         "excerpt": "shipment_status: delayed\nshipping_cost: 0 VND\nrefund_amount: 499,000 VND"},
-    ]
+    from apps.core_backend.llm.gemini import build_grounded_sources
+
+    order_ctx = {
+        "order_status": "shipped",
+        "shipment_status": "delayed",
+        "shipping_cost": {"amount_minor": 0, "currency": "VND"},
+        "refund_amount": {"amount_minor": 499000, "currency": "VND"},
+    }
+    retriever = MockRetriever()
+    sources = build_grounded_sources(retriever.evidence, order_ctx)
     body = (
         "Thank you for reaching out about your order.\n\n"
         "Standard delivery takes 3 to 5 business days. [S1]\n\n"
         "Your shipment is delayed with 0 VND shipping and 499,000 VND refund [S2].\n\n"
         "Please let us know if you have questions about this policy."
     )
-    req = make_request(
-        order_context={
-            "order_status": "shipped",
-            "shipment_status": "delayed",
-            "shipping_cost": {"amount_minor": 0, "currency": "VND"},
-            "refund_amount": {"amount_minor": 499000, "currency": "VND"},
-        }
-    )
-    res = make_engine(llm=MockLLM(body=body, sources=sources)).draft(req)
+    req = make_request(order_context=order_ctx)
+    res = make_engine(retriever=retriever, llm=MockLLM(body=body, sources=sources)).draft(req)
     assert res["status"] == "draft_ready"
     assert set(res["draft"]["citations"][1]["fields"]) >= {"shipment_status", "shipping_cost", "refund_amount"}
     assert [seg["citation_ids"] for seg in res["draft"]["segments"]] == [[], ["S1"], ["S2"], []]
+
+
+@pytest.mark.parametrize("body,forged_sources", [
+    (
+        "Shipping is free forever. [S1]",
+        [{"source_id": "S1", "source_type": "policy", "document_id": "POL-FABRICATED", "version": "9.9", "excerpt": "Shipping is free forever."}],
+    ),
+    (
+        "Delivery takes 3 to 5 business days. [S1]",
+        [{"source_id": "S1", "source_type": "policy", "document_id": "policy-shipping-v1", "version": "9.9", "excerpt": "Delivery takes 3 to 5 business days."}],
+    ),
+    (
+        "Shipping is always free for everyone. [S1]",
+        [{"source_id": "S1", "source_type": "policy", "document_id": "policy-shipping-v1", "version": "1", "excerpt": "Shipping is always free for everyone."}],
+    ),
+    (
+        "Delivery takes 3 to 5 business days. [S1]",
+        [{"source_id": "S1", "source_type": "order_facts", "document_id": "policy-shipping-v1", "version": "1", "excerpt": "Delivery takes 3 to 5 business days."}],
+    ),
+])
+def test_engine_draft_rejects_forged_input_snapshot_against_authoritative_sources(body, forged_sources):
+    """Engine.draft must validate against authoritative retrieval/order sources, never LLM-reported snapshots."""
+    class ForgedSnapshotLLM:
+        def generate(self, message, intent, evidence, business_context=None):
+            return {
+                "body": body,
+                "citations": [{"source_id": "S1", "document_id": forged_sources[0]["document_id"], "version": forged_sources[0]["version"]}],
+                "input_snapshot": {"sources": forged_sources},
+                "latency_seconds": 0.05,
+                "usage": {},
+            }
+
+    res = make_engine(llm=ForgedSnapshotLLM()).draft(make_request())
+    assert res["status"] == "llm_unavailable"
+    assert "grounding_failed" in res["reason_codes"]
+
+
+def test_engine_draft_rejects_conflicting_order_facts_snapshot_and_in_place_mutation():
+    """Engine.draft must reject forged S2 order_facts contradicting request.order_context and resist in-place mutation."""
+    order_ctx = {"order_status": "shipped", "refund_status": "pending"}
+    req = make_request(order_context=order_ctx)
+
+    class ConflictingOrderLLM:
+        def generate(self, message, intent, evidence, business_context=None):
+            evidence[0]["excerpt"] = "Shipping is completely free."
+            if isinstance(business_context, dict):
+                business_context["order_status"] = "Cancelled"
+            return {
+                "body": "Your order is cancelled [S2].",
+                "citations": ["S2"],
+                "input_snapshot": {
+                    "sources": [
+                        {"source_id": "S1", "source_type": "policy", "document_id": "policy-shipping-v1", "version": "1", "excerpt": "Delivery takes 3 to 5 business days."},
+                        {"source_id": "S2", "source_type": "order_facts", "document_id": "ORDER-FACTS", "version": "facts", "excerpt": "Verified Order Details:\norder_status: Cancelled\nrefund_status: Refunded"},
+                    ]
+                },
+                "latency_seconds": 0.05,
+                "usage": {},
+            }
+
+    res = make_engine(llm=ConflictingOrderLLM()).draft(req)
+    assert res["status"] == "llm_unavailable"
+    assert "grounding_failed" in res["reason_codes"]
+
+
+@pytest.mark.parametrize("body", [
+    "Your order is cancelled [S1].",
+    "Your refund is approved [S1].",
+    "Your return is approved [S1].",
+    "Your refund is refunded [S1].",
+    "Your return is processed [S1].",
+    "Your order is credited [S1].",
+    "Shipping is free.Delivery takes 3 to 5 business days [S1].",
+    "Delivery takes 3 to 5 business days [S1], shipping is free.",
+    "Shipping is free, delivery takes 3 to 5 business days [S1].",
+    "Delivery takes 3 to 5 business days (shipping is free) [S1].",
+    "Delivery takes 3 to 5 business days - shipping is free [S1].",
+    "Shipping is free: delivery takes 3 to 5 business days [S1].",
+])
+def test_engine_draft_rejects_bare_passive_status_and_splice_bypasses(body):
+    """Engine.draft must reject bare present-tense passive commitments, missing-space periods, and clause splices."""
+    res = make_engine(llm=MockLLM(body=body)).draft(make_request())
+    assert res["status"] == "llm_unavailable"
+    assert "grounding_failed" in res["reason_codes"]
 
 
 def test_short_clarification_without_citation_allowed():

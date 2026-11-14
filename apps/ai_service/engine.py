@@ -1,5 +1,6 @@
 """Translate existing verified assets into the application AI contract without ticket state."""
 
+import copy
 from datetime import datetime
 import math
 import re
@@ -8,6 +9,7 @@ import time
 from apps.core_backend.llm.gemini import (
     ORDER_CONTEXT_ALLOWED_FIELDS,
     ORDER_CONTEXT_ALLOWED_SET,
+    build_grounded_sources,
     extract_order_facts,
 )
 from apps.core_backend.safety import (
@@ -20,6 +22,7 @@ from apps.core_backend.safety import (
     has_uncovered_cross_border_shipping,
     policy_scope_requires_review,
     validate_generated_draft,
+    validate_snapshot_sources,
 )
 
 
@@ -209,9 +212,31 @@ class Engine:
             elif "low_confidence" in codes:
                 result["staff_note"] = "The model score or margin is below the routing threshold. Confirm or correct the intent before drafting."
             return result
+        authoritative_evidence = copy.deepcopy(evidence)
+        raw_order_context = request.get("order_context")
+        supplied_facts = extract_order_facts(
+            raw_order_context,
+            allowed_fields=ORDER_CONTEXT_ALLOWED_SET,
+            include_order_identifiers=False,
+        )
+        supplied_fields = [field for field in ORDER_CONTEXT_ALLOWED_FIELDS if field in supplied_facts]
+        validated_order_input = {
+            key: copy.deepcopy(raw_order_context[key]) if isinstance(raw_order_context[key], dict) else supplied_facts[key]
+            for key in supplied_facts
+        }
+        authoritative_sources = build_grounded_sources(
+            authoritative_evidence,
+            validated_order_input or None,
+            include_order_identifiers=True,
+        )
         try:
-            # The legacy client receives only the same identifier-free allow-listed order fields.
-            generated = self.llm.generate(request["message"], analysis["intent"]["label"], evidence, business_context=request.get("order_context", {}))
+            # The client receives only isolated retrieval evidence and identifier-free allow-listed order fields.
+            generated = self.llm.generate(
+                request["message"],
+                analysis["intent"]["label"],
+                copy.deepcopy(authoritative_evidence),
+                business_context=copy.deepcopy(validated_order_input),
+            )
         except Exception as error:
             code = getattr(error, 'code', 'llm_unavailable')
             failure = 'grounding_failed' if code in ('llm_insufficient_evidence', 'llm_invalid_citations') else 'llm_invalid_output' if code in ('llm_invalid_response',) else 'llm_unavailable'
@@ -256,18 +281,15 @@ class Engine:
         if any(match.group() not in allowed_placeholders for match in PLACEHOLDER.finditer(text)):
             return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"llm_invalid_output"})}
 
-        snapshot = generated.get("input_snapshot")
-        raw_sources = snapshot.get("sources") if isinstance(snapshot, dict) else None
-        if not isinstance(raw_sources, list) or not raw_sources or not all(
-            isinstance(s, dict) and (s.get("source_id") or s.get("id")) for s in raw_sources
-        ):
+        observed_input_snapshot = generated.get("input_snapshot")
+        if not validate_snapshot_sources(observed_input_snapshot, authoritative_sources, require_snapshot=True):
             return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
 
         is_clarification = bool(generated.get("is_clarification", False))
         if find_draft_grounding_violation(
             request["message"],
             text,
-            raw_sources,
+            authoritative_sources,
             allow_clarification_questions=is_clarification,
         ) is not None:
             return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
@@ -276,19 +298,13 @@ class Engine:
             valid_draft, _, _ = validate_generated_draft(
                 request["message"],
                 generated,
-                raw_sources,
+                authoritative_sources,
                 allow_clarification_questions=is_clarification,
             )
             if not valid_draft:
                 return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
 
-        sources = {str(source.get("source_id") or source.get("id")): source for source in raw_sources}
-        supplied_facts = extract_order_facts(
-            request.get("order_context"),
-            allowed_fields=ORDER_CONTEXT_ALLOWED_SET,
-            include_order_identifiers=False,
-        )
-        supplied_fields = [field for field in ORDER_CONTEXT_ALLOWED_FIELDS if field in supplied_facts]
+        sources = {str(source.get("source_id") or source.get("id")): source for source in authoritative_sources}
         citations, segments = {}, []
         for paragraph_index, paragraph in enumerate(re.split(r"\n\s*\n", text.strip())):
             source_ids = re.findall(r"\[(S\d+)\]", paragraph)
@@ -305,7 +321,7 @@ class Engine:
                         return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
                     citations[identifier] = {"citation_id": identifier, "source_type": "kb_document", "document_id": doc_id, "version": doc_ver, "snippet": source.get("excerpt", "")}
                     citation_ids.append(identifier)
-                elif src_type in ("order_facts", "order", "order_context") and supplied_fields:
+                elif src_type == "order_facts" and supplied_fields:
                     cit_entry = {
                         "citation_id": identifier,
                         "source_type": "order_context",

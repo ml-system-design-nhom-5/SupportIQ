@@ -408,3 +408,96 @@ def test_validator_rejects_adversarial_polite_framing_and_multiline_bypasses(ans
         sources,
     )
     assert (ok, codes) == (False, ['grounding_failed'])
+
+
+@pytest.mark.parametrize('answer', [
+    'Your order is cancelled [S1].',
+    'Your refund is approved [S1].',
+    'Your return is approved [S1].',
+    'Your refund is refunded [S1].',
+    'Your return is processed [S1].',
+    'Your order is credited [S1].',
+    'Shipping is free.Products may be returned within 30 days in original packaging [S1].',
+    'Shipping is free.products may be returned within 30 days in original packaging [S1].',
+    'Products may be returned within 30 days in original packaging [S1].Shipping is free.',
+    'Products may be returned within 30 days in original packaging [S1], shipping is free.',
+    'Shipping is free, products may be returned within 30 days in original packaging [S1].',
+    'Shipping is free: products may be returned within 30 days in original packaging [S1].',
+    'Products may be returned within 30 days in original packaging - shipping is free [S1].',
+    'Products may be returned within 30 days in original packaging (shipping is free) [S1].',
+])
+def test_validator_rejects_bare_passive_status_missing_space_periods_and_clause_splices(answer):
+    from apps.core_backend.safety import validate_generated_draft
+
+    sources = [{'source_id': 'S1', 'source_type': 'policy', 'document_id': 'returns', 'version': '1',
+                'excerpt': 'Products may be returned within 30 days in original packaging.'}]
+    with pytest.raises(LLMError) as caught:
+        client_for(lambda r: httpx.Response(200, json=response_payload(answer=answer, citations=['S1']))).generate(
+            'What is your return policy?', 'return_policy', EVIDENCE
+        )
+    assert caught.value.code == 'llm_invalid_citations'
+
+    ok, codes, _ = validate_generated_draft(
+        'What is your return policy?',
+        {'body': answer, 'citations': ['S1'], 'input_snapshot': {'sources': sources}},
+        sources,
+    )
+    assert (ok, codes) == (False, ['grounding_failed'])
+
+
+def test_validator_passive_status_strict_against_order_facts_and_allows_verified_and_plural_policy():
+    from apps.core_backend.safety import validate_generated_draft
+
+    pol_and_mismatched_order = [
+        {'source_id': 'S1', 'source_type': 'policy', 'document_id': 'POL-RET-001', 'version': '1.0',
+         'title': 'Returns Policy', 'excerpt': 'Refunds are approved after inspection and returned within 30 days.'},
+        {'source_id': 'S2', 'source_type': 'order_facts', 'document_id': 'ORDER-FACTS', 'version': 'facts',
+         'excerpt': 'Verified Order Details:\norder_status: delivered\nrefund_status: pending\nreturn_status: requested'},
+    ]
+    for bad in (
+        'Your order is cancelled [S2].',
+        'Your refund is approved [S2].',
+        'Your return is approved [S2].',
+        'Your refund is refunded [S2].',
+        'Your return is processed [S2].',
+        'Your order is credited [S2].',
+    ):
+        ok, codes, _ = validate_generated_draft(
+            'Check my order',
+            {'body': bad, 'citations': ['S2'], 'input_snapshot': {'sources': pol_and_mismatched_order}},
+            pol_and_mismatched_order,
+        )
+        assert (ok, codes) == (False, ['grounding_failed']), bad
+
+    for good_policy in (
+        'Refunds are approved after inspection [S1].',
+        'Returns Policy: Refunds are approved after inspection [S1].',
+        'Thank you for reaching out, refunds are approved after inspection [S1].',
+        'Once an order has been returned, refunds are approved after inspection [S1].',
+    ):
+        ok, codes, _ = validate_generated_draft(
+            'Refund policy?',
+            {'body': good_policy, 'citations': ['S1'], 'input_snapshot': {'sources': pol_and_mismatched_order}},
+            pol_and_mismatched_order,
+        )
+        assert (ok, codes) == (True, []), good_policy
+
+    verified_order = [
+        {'source_id': 'S2', 'source_type': 'order_facts', 'document_id': 'ORDER-FACTS', 'version': 'facts',
+         'excerpt': 'Verified Order Details:\norder_status: Cancelled\nrefund_status: Refunded\nreturn_status: approved'},
+        {'source_id': 'S3', 'source_type': 'order_facts', 'document_id': 'ORDER-FACTS', 'version': 'facts',
+         'excerpt': 'Verified Order Details:\nrefund_status: approved\nreturn_status: processed'},
+    ]
+    for cite, good_order in (
+        ('S2', 'Your order is cancelled [S2].'),
+        ('S2', 'Your refund is refunded [S2].'),
+        ('S2', 'Your return is approved [S2].'),
+        ('S3', 'Your refund is approved [S3].'),
+        ('S3', 'Your return is processed [S3].'),
+    ):
+        ok, codes, _ = validate_generated_draft(
+            'Order status?',
+            {'body': good_order, 'citations': [cite], 'input_snapshot': {'sources': verified_order}},
+            verified_order,
+        )
+        assert (ok, codes) == (True, []), good_order

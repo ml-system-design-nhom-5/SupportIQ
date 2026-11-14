@@ -366,10 +366,14 @@ def has_unauthorized_duplicate_advice(
 _CITATION_TAG = re.compile(r"\[(S\d+)\]")
 _SENTENCE_BOUNDARY = re.compile(
     r"([.!?;])((?:\s*\[S\d+\])*)"
-    r"(?=\s+(?=[A-Za-z0-9\"'(\[])|(?<=\][.!?;])(?=[A-Za-z0-9\"'(\[])|(?<=\])(?=[A-Za-z0-9\"'(\[])|(?<=;)(?=[A-Za-z0-9\"'(\[])|\s*$)"
+    r"(?=\s+(?=[A-Za-z0-9\"'(\[])|(?<=\])(?=[A-Za-z0-9\"'(\[])|(?<=[.!?;])(?=[A-Za-z\"'(\[])|\s*$)"
 )
 _ABBREVIATION_PREFIX = re.compile(
     r"(?:^|[\s(,])(?:e\.g|i\.e|approx|etc|vs|no|mr|mrs|ms|dr|prof|inc|ltd|dept|est|min|max|avg)$",
+    re.I,
+)
+_DOMAIN_OR_EXT_AFTER_DOT = re.compile(
+    r"^(?:com|net|org|edu|gov|vn|io|co|uk|de|fr|jp|html|htm|php|json|pdf|csv|txt|py|js)\b",
     re.I,
 )
 _NUMBER_TOKEN = re.compile(r"\d+(?:[.,]\d+)*")
@@ -478,7 +482,7 @@ _FIRST_PERSON_IMMEDIATE_COMMIT = re.compile(
 )
 _PASSIVE_COMMIT = re.compile(
     rf"\b(?:your|the|this|a|an)\s+(?:full\s+|partial\s+)?{_COMMIT_SUBJECT}\s+"
-    rf"(?:has\s+(?:(?:just|now|already|successfully)\s+)*been|was(?:\s+(?:just|already|successfully))?|is\s+(?:now|already))\s+"
+    rf"(?:has\s+(?:(?:just|now|already|successfully)\s+)*been|was(?:\s+(?:just|already|successfully))?|is(?:\s+(?:now|already))?)\s+"
     rf"(?:(?:[a-z]+\s+and|successfully)\s+)*{_COMMIT_ACTION}\b",
     re.I,
 )
@@ -499,8 +503,23 @@ _LEADING_CONDITIONAL_CLAUSE = re.compile(
 )
 
 
+def _is_token_identifier_dot(line: str, dot_pos: int, match_end: int) -> bool:
+    """Return True when a no-space period is inside an email, URL, or file/domain extension."""
+    if dot_pos + 1 != match_end:
+        return False
+    left = line.rfind(" ", 0, dot_pos)
+    right = line.find(" ", dot_pos)
+    token = line[left + 1 : len(line) if right == -1 else right]
+    if "@" in token or re.match(r"^(?:https?://|www\.)", token, re.I):
+        return True
+    after = line[match_end:]
+    if _DOMAIN_OR_EXT_AFTER_DOT.match(after) and dot_pos > 0 and line[dot_pos - 1].islower():
+        return True
+    return False
+
+
 def split_draft_sentences(text: str) -> list[str]:
-    """Split draft into sentences while preserving abbreviations and trailing [S1] citations."""
+    """Split draft into sentences while preserving abbreviations, domains/decimals, and trailing [S1] citations."""
     sentences: list[str] = []
     for raw_line in re.split(r"\n+", text.strip()):
         line = raw_line.strip()
@@ -509,8 +528,17 @@ def split_draft_sentences(text: str) -> list[str]:
         start = 0
         for m in _SENTENCE_BOUNDARY.finditer(line):
             punct, attached_cites = m.group(1), m.group(2)
-            if punct == "." and not attached_cites.strip() and _ABBREVIATION_PREFIX.search(line[:m.start()]):
-                continue
+            if punct == "." and not attached_cites.strip():
+                is_multi_dot_abbrev = (
+                    re.search(r"(?:^|[\s(,])(?:e|i)$", line[:m.start()], re.I) is not None
+                    and re.match(r"^(?:g|e)\.", line[m.end():], re.I) is not None
+                )
+                if (
+                    is_multi_dot_abbrev
+                    or _ABBREVIATION_PREFIX.search(line[:m.start()])
+                    or _is_token_identifier_dot(line, m.start(), m.end())
+                ):
+                    continue
             part = line[start:m.end()].strip()
             if part:
                 sentences.append(part)
@@ -679,12 +707,148 @@ def _is_verified_recorded_order_status(
     phrase = matched_phrase.lower()
     order_st = fields.get("order_status", "")
     refund_st = fields.get("refund_status", "")
+    return_st = fields.get("return_status", "")
     payment_st = fields.get("payment_status", "")
     combined_refund = f"{refund_st} {payment_st}"
     if re.search(r"\bcancell?ed\b", phrase):
         return bool(re.search(r"\bcancell?ed\b", order_st))
     if re.search(r"\b(?:refunded|credited|reimbursed)\b", phrase):
         return bool(re.search(r"\b(?:refunded|refund\s+succeeded|credited|reimbursed)\b", combined_refund))
+    if re.search(r"\bapproved\b", phrase):
+        if re.search(r"\breturn\b", phrase):
+            return bool(re.search(r"\bapproved\b", return_st))
+        if re.search(r"\b(?:refund|credit|reimbursement)\b", phrase):
+            return bool(re.search(r"\bapproved\b", combined_refund))
+        return bool(re.search(r"\bapproved\b", f"{refund_st} {return_st}"))
+    if re.search(r"\b(?:processed|issued|completed)\b", phrase):
+        if re.search(r"\breturn\b", phrase):
+            return bool(re.search(r"\b(?:processed|completed)\b", return_st))
+        if re.search(r"\b(?:refund|credit|reimbursement|payment|charge|transaction)\b", phrase):
+            return bool(re.search(r"\b(?:processed|issued|completed|refunded|refund\s+succeeded)\b", combined_refund))
+        return bool(re.search(r"\b(?:processed|completed)\b", order_st))
+    return False
+
+
+_CLAUSE_DELIM = re.compile(r"(?:[()]|(?<!\d):(?!\d)|\s+[-\u2013\u2014]+\s+|(?<!\d),(?!\d))")
+_INTRO_NON_CLAIM = re.compile(
+    r"^(?:per|according\s+to|regarding|concerning|under|about)\s+(?:our|the|this|your)\s+[a-z\s]+$",
+    re.I,
+)
+_CLAUSE_PREDICATE_CLAIM = re.compile(
+    r"\b(?:eligible|ineligible|always|never|guarantee[ds]?|free|price|cost|fee|fees|"
+    r"warranty|discount|voucher|instant(?:ly)?|unlimited|automatic(?:ally)?|waived|"
+    r"hotline|arrivals?|arrive[ds]?|credit(?:ed)?|process(?:ed|es|ing)?|"
+    r"approv(?:ed?|als?)|cancell?(?:ed|ation)?|refund(?:s|ed|ing)?|"
+    r"ship(?:s|ped|ping)?|deliver(?:s|ed|y)?|return(?:s|ed|able)?|replace(?:ment)?)\b",
+    re.I,
+)
+_STEM_IRREGULARS = {
+    "cancelled": "cancel",
+    "canceled": "cancel",
+    "cancellation": "cancel",
+    "delivery": "deliver",
+    "delivered": "deliver",
+    "delivers": "deliver",
+    "shipping": "ship",
+    "shipped": "ship",
+    "ships": "ship",
+    "eligibility": "eligib",
+    "eligible": "eligib",
+    "ineligible": "ineligib",
+    "guarantee": "guarant",
+    "guaranteed": "guarant",
+    "guarantees": "guarant",
+    "approval": "approv",
+    "approvals": "approv",
+    "approved": "approv",
+    "approve": "approv",
+    "credited": "credit",
+    "processed": "process",
+    "processing": "process",
+    "processes": "process",
+    "arrivals": "arriv",
+    "arrival": "arriv",
+    "arrived": "arriv",
+    "arrives": "arriv",
+    "arrive": "arriv",
+    "fees": "fee",
+    "costs": "cost",
+    "prices": "price",
+    "refunds": "refund",
+    "refunded": "refund",
+    "refunding": "refund",
+    "returns": "return",
+    "returned": "return",
+    "returnable": "return",
+    "replacement": "replac",
+    "replace": "replac",
+}
+
+
+def _claim_stem(word: str) -> str:
+    low = word.lower()
+    if low in _STEM_IRREGULARS:
+        return _STEM_IRREGULARS[low]
+    for suffix in ("ing", "ed", "es", "s", "ly"):
+        if len(low) > len(suffix) + 3 and low.endswith(suffix):
+            return low[: -len(suffix)]
+    return low
+
+
+def _clause_lacks_source_support(
+    clause: str,
+    source_stems: set[str],
+    *,
+    allow_clarification: bool = False,
+) -> bool:
+    """Return True if a spliced clause asserts claim terms missing from its cited sources."""
+    stripped = re.sub(r"^(?:and|or|but|so|then|however)\b\s*", "", clause.strip(" .!?;:\"'")).strip()
+    if not stripped or not re.search(r"[A-Za-z0-9]", stripped):
+        return False
+    if _is_safe_uncited_sentence(stripped + ".", allow_clarification=allow_clarification):
+        return False
+    if _INTRO_NON_CLAIM.match(stripped):
+        return False
+    for m in _CLAUSE_PREDICATE_CLAIM.finditer(stripped):
+        prefix = _local_clause_prefix(stripped, m.start())
+        if _COMMIT_NEG_PREFIX.search(prefix) and m.group(0).lower() in {"cancelled", "canceled", "refunded", "credited", "approved", "processed"}:
+            continue
+        if _claim_stem(m.group(0)) not in source_stems:
+            return True
+    return False
+
+
+def _has_spliced_uncited_clause(
+    sentence: str,
+    cited_sources: Sequence[Dict[str, Any]],
+    *,
+    allow_clarification: bool = False,
+) -> bool:
+    """Detect uncited trailing clauses after [S#] and inline comma/colon/dash/paren clause splices."""
+    source_text = "\n".join(
+        f"{s.get('title') or ''} {s.get('text') or s.get('excerpt') or ''}" for s in cited_sources
+    )
+    source_stems = {_claim_stem(w) for w in re.findall(r"[A-Za-z0-9]{2,}", source_text)}
+
+    last_cite_end = 0
+    for m in _CITATION_TAG.finditer(sentence):
+        last_cite_end = m.end()
+    trailing = sentence[last_cite_end:].strip(" .!?;:)]}\"'")
+    if trailing and re.search(r"[A-Za-z0-9]", trailing):
+        cleaned_trailing = re.sub(r"\s+", " ", PLACEHOLDER.sub(" ", trailing)).strip()
+        if not _is_safe_uncited_sentence(cleaned_trailing + ".", allow_clarification=allow_clarification):
+            if _clause_lacks_source_support(cleaned_trailing, source_stems, allow_clarification=allow_clarification):
+                return True
+
+    masked = _DOUBLE_QUOTED_SPAN.sub(" ", _strip_citations_and_placeholders(sentence))
+    masked = _SINGLE_QUOTED_SPAN.sub(" ", masked)
+    masked = _CUSTOMER_ATTRIBUTION.sub(" ", masked)
+    _, masked = _extract_dates_and_strip(masked)
+    clauses = [c.strip() for c in _CLAUSE_DELIM.split(masked) if c.strip(" .!?;:\"'")]
+    if len(clauses) >= 2:
+        for clause in clauses:
+            if _clause_lacks_source_support(clause, source_stems, allow_clarification=allow_clarification):
+                return True
     return False
 
 
@@ -739,6 +903,8 @@ def find_draft_grounding_violation(
             return "invalid_citations"
         has_cited_sentence = True
         sent_sources = [sources_by_id[sid] for sid in sent_ids]
+        if _has_spliced_uncited_clause(sentence, sent_sources, allow_clarification=allow_clarification_questions):
+            return "uncited_claim"
         if _sentence_has_unsupported_numbers(sentence, sent_sources):
             return "unsupported_number"
         order_sources = [s for s in sent_sources if s.get("source_type") == "order_facts"]
@@ -752,6 +918,52 @@ def find_draft_grounding_violation(
     ):
         return "grounding_guardrail_failed"
     return None
+
+
+def validate_snapshot_sources(
+    returned_snapshot: Any,
+    authoritative_sources: Sequence[Dict[str, Any]],
+    *,
+    require_snapshot: bool = False,
+) -> bool:
+    """Verify an LLM-returned input_snapshot strictly matches authoritative sources."""
+    if returned_snapshot is None:
+        return not require_snapshot
+    if not isinstance(returned_snapshot, dict) or not isinstance(returned_snapshot.get("sources"), list):
+        return False
+    snap_list = returned_snapshot["sources"]
+    if not snap_list:
+        return False
+    known_by_id: Dict[str, Dict[str, Any]] = {
+        str(s.get("source_id") or s.get("id")): s
+        for s in authoritative_sources
+        if isinstance(s, dict) and (s.get("source_id") or s.get("id"))
+    }
+    for snap_src in snap_list:
+        if not isinstance(snap_src, dict):
+            return False
+        sid = str(snap_src.get("source_id") or snap_src.get("id") or "")
+        expected_src = known_by_id.get(sid)
+        if expected_src is None:
+            return False
+        expected_type = str(expected_src.get("source_type") or "")
+        if expected_type and str(snap_src.get("source_type") or "") != expected_type:
+            return False
+        if str(snap_src.get("document_id") or "") != str(expected_src.get("document_id") or ""):
+            return False
+        if str(snap_src.get("version") or "") != str(expected_src.get("version") or ""):
+            return False
+        expected_text = str(
+            expected_src.get("excerpt") if expected_src.get("excerpt") is not None else (expected_src.get("text") or "")
+        ).strip()
+        if expected_text:
+            snap_text = snap_src.get("excerpt") if snap_src.get("excerpt") is not None else snap_src.get("text")
+            if str(snap_text or "").strip() != expected_text:
+                return False
+        if snap_src.get("sha256") is not None and expected_src.get("sha256"):
+            if str(snap_src.get("sha256") or "") != str(expected_src.get("sha256") or ""):
+                return False
+    return True
 
 
 def validate_generated_draft(
@@ -780,27 +992,13 @@ def validate_generated_draft(
         return (False, ["llm_invalid_output"], {})
 
     known_by_id: Dict[str, Dict[str, Any]] = {
-        str(s["source_id"]): s for s in snapshot_sources if isinstance(s, dict) and s.get("source_id")
+        str(s.get("source_id") or s.get("id")): s
+        for s in snapshot_sources
+        if isinstance(s, dict) and (s.get("source_id") or s.get("id"))
     }
 
-    returned_snapshot = llm_result.get("input_snapshot")
-    if returned_snapshot is not None:
-        if not isinstance(returned_snapshot, dict) or not isinstance(returned_snapshot.get("sources"), list):
-            return (False, ["grounding_failed"], {})
-        snap_list = returned_snapshot["sources"]
-        if not snap_list:
-            return (False, ["grounding_failed"], {})
-        for snap_src in snap_list:
-            if not isinstance(snap_src, dict):
-                return (False, ["grounding_failed"], {})
-            sid = str(snap_src.get("source_id") or "")
-            expected_src = known_by_id.get(sid)
-            if expected_src is None:
-                return (False, ["grounding_failed"], {})
-            if str(snap_src.get("document_id") or "") != str(expected_src.get("document_id") or ""):
-                return (False, ["grounding_failed"], {})
-            if str(snap_src.get("version") or "") != str(expected_src.get("version") or ""):
-                return (False, ["grounding_failed"], {})
+    if not validate_snapshot_sources(llm_result.get("input_snapshot"), snapshot_sources, require_snapshot=False):
+        return (False, ["grounding_failed"], {})
 
     citations_raw = llm_result.get("citations")
     if not isinstance(citations_raw, list) or not citations_raw:
