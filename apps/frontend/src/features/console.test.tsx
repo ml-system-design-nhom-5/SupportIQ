@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { replyBlocker, replyBasis } from '../components/reply-rules'
 import { Status } from '../components/ui'
+import { CitationMarker } from './console'
 
 describe('Console Reply Rules and Blocker Workflow', () => {
   it('blocks empty reply bodies', () => {
@@ -68,6 +69,43 @@ describe('Console Reply Rules and Blocker Workflow', () => {
 
     const { container: c4 } = render(<Status value="escalation_recommended" />)
     expect(c4.textContent).toContain('Escalation recommended')
+  })
+
+  it('formats multi-field money values, skips null, and supports legacy order_context citations', () => {
+    const { container } = render(
+      <>
+        <CitationMarker
+          citation={{
+            citation_id: 'S2',
+            source_type: 'order_context',
+            fields: ['order_status', 'shipping_cost', 'delivered_at'],
+            values: {
+              order_status: 'shipped',
+              shipping_cost: { amount_minor: 0, currency: 'VND' },
+              delivered_at: null,
+            },
+          }}
+          openSource={vi.fn()}
+          openOrder={vi.fn()}
+        />
+        <CitationMarker
+          citation={{
+            citation_id: 'S3',
+            source_type: 'order_context',
+            field: 'refund_amount',
+            value: { amount_minor: 1999, currency: 'USD' },
+          }}
+          openSource={vi.fn()}
+          openOrder={vi.fn()}
+        />
+      </>
+    )
+    const buttons = container.querySelectorAll('button.order-citation')
+    expect(buttons).toHaveLength(2)
+    expect(buttons[0].getAttribute('title')).toContain('Order status: shipped')
+    expect(buttons[0].getAttribute('title')).toContain('Shipping cost: ₫0')
+    expect(buttons[0].getAttribute('title')).not.toContain('null')
+    expect(buttons[1].getAttribute('title')).toContain('Refund amount: $19.99')
   })
 })
 

@@ -63,6 +63,7 @@ from apps.backend.main import create_app
 from apps.backend.platform.config import Settings
 from apps.backend.platform.database import Database
 from apps.backend.platform.models import Suggestion, Ticket
+from apps.core_backend.llm.gemini import ORDER_CONTEXT_ALLOWED_SET
 from apps.backend.seed import seed
 from scripts.native_runtime import configure_runtime_environment
 
@@ -676,13 +677,43 @@ class AcceptanceEvidenceCollector:
         return self._shared_encoder
 
     @staticmethod
+    def _values_strictly_equal(left: Any, right: Any) -> bool:
+        """Compare JSON/order_context values without Python bool/int conflation."""
+        if isinstance(left, bool) != isinstance(right, bool):
+            return False
+        if isinstance(left, dict) and isinstance(right, dict):
+            return left.keys() == right.keys() and all(
+                AcceptanceEvidenceCollector._values_strictly_equal(left[k], right[k]) for k in left
+            )
+        if isinstance(left, list) and isinstance(right, list):
+            return len(left) == len(right) and all(
+                AcceptanceEvidenceCollector._values_strictly_equal(a, b) for a, b in zip(left, right)
+            )
+        return left == right
+
+    @staticmethod
     def _verify_order_context_citation(cit: Dict[str, Any], executed_order_context: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         """Verify order_context citation field(s) and typed value equality against executed order_context."""
-        ctx = executed_order_context or {}
+        if not isinstance(cit, dict):
+            return {
+                "source_type": "order_context",
+                "field": None,
+                "value": None,
+                "field_present_in_executed_context": False,
+                "value_matches_executed_context": False,
+                "is_verified": False,
+                "verification_error": "ORDER_CONTEXT_CITATION_INVALID: expected dict",
+            }
+        ctx = executed_order_context if isinstance(executed_order_context, dict) else {}
         if "fields" in cit:
             fields_list = cit.get("fields")
             vals_map = cit.get("values")
-            if not isinstance(fields_list, list) or not fields_list or not all(isinstance(f, str) for f in fields_list):
+            if (
+                not isinstance(fields_list, list)
+                or not fields_list
+                or not all(isinstance(f, str) and bool(f) for f in fields_list)
+                or len(set(fields_list)) != len(fields_list)
+            ):
                 return {
                     "source_type": "order_context",
                     "fields": fields_list,
@@ -690,15 +721,32 @@ class AcceptanceEvidenceCollector:
                     "field_present_in_executed_context": False,
                     "value_matches_executed_context": False,
                     "is_verified": False,
-                    "verification_error": "ORDER_CONTEXT_FIELD_MISSING: invalid or empty fields list",
+                    "verification_error": "ORDER_CONTEXT_FIELD_MISSING: invalid, empty, or duplicate fields list",
+                }
+            disallowed = [f for f in fields_list if f not in ORDER_CONTEXT_ALLOWED_SET]
+            if disallowed:
+                return {
+                    "source_type": "order_context",
+                    "fields": fields_list,
+                    "values": vals_map,
+                    "field_present_in_executed_context": False,
+                    "value_matches_executed_context": False,
+                    "is_verified": False,
+                    "verification_error": f"ORDER_CONTEXT_FIELD_DISALLOWED: fields {disallowed} not allowed",
                 }
             all_present = all(f in ctx for f in fields_list)
             vals_match = (
                 all_present
                 and isinstance(vals_map, dict)
                 and set(vals_map.keys()) == set(fields_list)
-                and all(ctx[f] == vals_map[f] for f in fields_list)
-                and ("field" not in cit or (cit.get("field") in fields_list and cit.get("value") == ctx.get(cit.get("field"))))
+                and all(AcceptanceEvidenceCollector._values_strictly_equal(ctx[f], vals_map[f]) for f in fields_list)
+                and (
+                    "field" not in cit
+                    or (
+                        cit.get("field") in fields_list
+                        and AcceptanceEvidenceCollector._values_strictly_equal(cit.get("value"), ctx.get(cit.get("field")))
+                    )
+                )
             )
             v_ok = all_present and vals_match
             err = None
@@ -725,8 +773,18 @@ class AcceptanceEvidenceCollector:
 
         f_name = cit.get("field")
         f_val = cit.get("value")
-        field_present = (executed_order_context is not None and f_name in executed_order_context)
-        val_matches = field_present and (executed_order_context[f_name] == f_val)
+        if not isinstance(f_name, str) or not f_name or f_name not in ORDER_CONTEXT_ALLOWED_SET:
+            return {
+                "source_type": "order_context",
+                "field": f_name,
+                "value": f_val,
+                "field_present_in_executed_context": False,
+                "value_matches_executed_context": False,
+                "is_verified": False,
+                "verification_error": f"ORDER_CONTEXT_FIELD_DISALLOWED: field '{f_name}' not allowed",
+            }
+        field_present = f_name in ctx
+        val_matches = field_present and AcceptanceEvidenceCollector._values_strictly_equal(ctx[f_name], f_val)
         v_ok = field_present and val_matches
         return {
             "source_type": "order_context",
@@ -738,7 +796,7 @@ class AcceptanceEvidenceCollector:
             "verification_error": None if v_ok else (
                 f"ORDER_CONTEXT_FIELD_MISSING: field '{f_name}' not in executed context"
                 if not field_present else
-                f"ORDER_CONTEXT_VALUE_MISMATCH: expected '{executed_order_context[f_name]}', got '{f_val}'"
+                f"ORDER_CONTEXT_VALUE_MISMATCH: expected '{ctx[f_name]}', got '{f_val}'"
             ),
         }
 

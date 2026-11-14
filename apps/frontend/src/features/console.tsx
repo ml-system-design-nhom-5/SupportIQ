@@ -36,14 +36,28 @@ function SourceSheet({source, close}: {source: Source | null; close: () => void}
   return <Modal open={!!source} onOpenChange={value => !value && close()} title={source?.title || 'Source document'} description={source ? `${source.document_id} · ${source.version}` : undefined} wide>{query.isPending ? <Loading label="Loading source document"/> : query.isError ? <ErrorNotice error={query.error} retry={() => query.refetch()}/> : <div className="document-body plain-text">{query.data.body}</div>}</Modal>
 }
 
-function CitationMarker({citation, openSource, openOrder}: {citation: Citation; openSource: (id: string, version: string) => void; openOrder: () => void}) {
+function isMoneyValue(value: unknown): value is {amount_minor: number; currency: string} {
+  return (
+    typeof value === 'object'
+    && value !== null
+    && typeof (value as {amount_minor?: unknown}).amount_minor === 'number'
+    && Number.isFinite((value as {amount_minor: number}).amount_minor)
+    && typeof (value as {currency?: unknown}).currency === 'string'
+    && /^[A-Z]{3}$/.test((value as {currency: string}).currency)
+  )
+}
+
+export function CitationMarker({citation, openSource, openOrder}: {citation: Citation; openSource: (id: string, version: string) => void; openOrder: () => void}) {
   const [open, setOpen] = useState(false)
   if (citation.source_type === 'order_context') {
     const entries: [string, unknown][] = citation.fields?.length
       ? citation.fields.map(field => [field, citation.values?.[field] ?? (citation.field === field ? citation.value : undefined)])
       : citation.field ? [[citation.field, citation.value]] : []
     const label = entries.map(([field]) => humanize(field)).join(', ') || 'order records'
-    const summary = entries.filter(([, val]) => val !== undefined).map(([field, val]) => `${humanize(field)}: ${typeof val === 'object' ? JSON.stringify(val) : String(val)}`).join('; ')
+    const summary = entries
+      .filter(([, val]) => val !== undefined && val !== null)
+      .map(([field, val]) => `${humanize(field)}: ${isMoneyValue(val) ? money(val) : typeof val === 'object' ? JSON.stringify(val) : String(val)}`)
+      .join('; ')
     return <button className="citation order-citation" aria-label={`Order source: ${label}`} title={`${summary ? summary + '. ' : ''}From order records, not AI.`} onClick={openOrder}><Box size={12}/></button>
   }
   return <Popover.Root open={open} onOpenChange={setOpen}><Popover.Trigger className="citation" aria-label={`Read source ${citation.document_id}, version ${citation.version}`} onMouseEnter={() => setOpen(true)} onFocus={() => setOpen(true)}>{citation.citation_id.replace(/\D/g,'') || 'Source'}</Popover.Trigger><Popover.Portal><Popover.Content className="citation-popover" sideOffset={6}><strong>{citation.document_id}</strong><p className="small muted">Version {citation.version}</p><p>{citation.snippet}</p><Button onClick={() => {setOpen(false); openSource(citation.document_id!, citation.version!)}}>Read full document<ArrowUpRight size={14}/></Button></Popover.Content></Popover.Portal></Popover.Root>

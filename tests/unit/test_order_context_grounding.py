@@ -447,3 +447,100 @@ def test_jobs_hydrates_multi_field_order_citation_values_and_collector_verifies(
         {"citation_id": "S2", "source_type": "order_context", "fields": ["shipping_cost", "nonexistent_field"]}
     ])
     assert bad_args[3]["status"] == "unavailable"
+
+    # Conflicting 'field' vs 'fields' must fail closed in jobs.py
+    conflict_args, _ = run_with_citations([
+        {
+            "citation_id": "S2",
+            "source_type": "order_context",
+            "fields": ["order_status"],
+            "field": "shipping_cost",
+        }
+    ])
+    assert conflict_args[3]["status"] == "unavailable"
+
+
+def test_flash_lite_inspect_case_citations_multi_field_legacy_and_fail_closed():
+    """flash_lite_acceptance._inspect_case_citations shares verified multi-field/legacy/fail-closed behavior."""
+    from pipeline.evaluation.flash_lite_acceptance import _inspect_case_citations
+
+    class DummyCollector:
+        def _build_source_snapshot(self, **kwargs):
+            raise AssertionError("Document snapshot should not be called in order_context / invalid-source checks")
+
+    executed_ctx = {
+        "order_status": "shipped",
+        "shipping_cost": {"amount_minor": 0, "currency": "VND"},
+        "order_id": "ORD-SECRET-1",
+    }
+    collector = DummyCollector()
+
+    # 1. Valid multi-field citation matches AcceptanceEvidenceCollector
+    multi_cit = {
+        "citation_id": "S2",
+        "source_type": "order_context",
+        "fields": ["order_status", "shipping_cost"],
+        "values": {
+            "order_status": "shipped",
+            "shipping_cost": {"amount_minor": 0, "currency": "VND"},
+        },
+    }
+    parsed, _ = _inspect_case_citations([multi_cit], [], executed_ctx, collector)
+    assert len(parsed) == 1
+    assert parsed[0] == AcceptanceEvidenceCollector._verify_order_context_citation(multi_cit, executed_ctx)
+    assert parsed[0]["is_verified"] is True
+    assert parsed[0]["field_present_in_executed_context"] is True
+    assert parsed[0]["value_matches_executed_context"] is True
+
+    # 2. Valid legacy single-field citation remains compatible
+    legacy_cit = {"citation_id": "S2", "source_type": "order_context", "field": "order_status", "value": "shipped"}
+    parsed_legacy, _ = _inspect_case_citations([legacy_cit], [], executed_ctx, collector)
+    assert parsed_legacy[0]["is_verified"] is True
+
+    # 3. Missing/unknown/disallowed/mismatched/arbitrary IDs/bool-int confusion fail closed
+    invalid_cases = [
+        # Missing field in executed context
+        {"source_type": "order_context", "fields": ["order_status", "refund_status"], "values": {"order_status": "shipped", "refund_status": "paid"}},
+        # Legacy missing field
+        {"source_type": "order_context", "field": "refund_status", "value": "paid"},
+        # Arbitrary disallowed ID even if present in ctx
+        {"source_type": "order_context", "fields": ["order_id"], "values": {"order_id": "ORD-SECRET-1"}},
+        {"source_type": "order_context", "field": "order_id", "value": "ORD-SECRET-1"},
+        {"source_type": "order_context", "field": "tracking_code", "value": "TRK-1"},
+        # Bool/int confusion: False != 0
+        {"source_type": "order_context", "fields": ["shipping_cost"], "values": {"shipping_cost": {"amount_minor": False, "currency": "VND"}}},
+        # Mismatched value & extra/missing values keys
+        {"source_type": "order_context", "fields": ["order_status"], "values": {"order_status": "delivered"}},
+        {"source_type": "order_context", "fields": ["order_status"], "values": {"order_status": "shipped", "extra": 1}},
+        {"source_type": "order_context", "fields": ["order_status"]},
+        # Empty/duplicate fields list or conflicting single field
+        {"source_type": "order_context", "fields": [], "values": {}},
+        {"source_type": "order_context", "fields": ["order_status", "order_status"], "values": {"order_status": "shipped"}},
+        {"source_type": "order_context", "fields": ["order_status"], "values": {"order_status": "shipped"}, "field": "shipping_cost", "value": {"amount_minor": 0, "currency": "VND"}},
+        # Arbitrary source type even with known document_id
+        {"source_type": "arbitrary_source", "document_id": "POL-RET-001", "version": "2.0"},
+    ]
+    for bad_cit in invalid_cases:
+        out, _ = _inspect_case_citations([bad_cit], [], executed_ctx, collector)
+        assert out[0]["is_verified"] is False, f"Expected fail-closed verification for {bad_cit}"
+
+
+def test_engine_draft_direct_call_mixed_s1_s2_legacy_only_fails_closed():
+    """Direct Engine.draft call with legacy-only order_context must fail closed instead of dropping [S2]."""
+    llm = _make_stub_gemini(
+        answer="Orders ship within 1-2 business days and carrier handles tracking [S1][S2].",
+        citations=["S1", "S2"],
+    )
+    try:
+        eng = _make_engine(llm)
+        res = eng.draft(
+            {
+                "message": "My parcel is delayed, how do returns and carrier tracking work?",
+                "as_of": datetime.now(timezone.utc).isoformat(),
+                "order_context": {"carrier": "VNPost"},
+            }
+        )
+    finally:
+        llm.close()
+    assert res["status"] == "llm_unavailable"
+    assert "grounding_failed" in res["reason_codes"]

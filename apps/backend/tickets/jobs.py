@@ -184,7 +184,10 @@ class SuggestionWorker:
                                         raise ValueError("Invalid order_context citation fields")
                                     citation["values"] = {field_name: payload["order_context"][field_name] for field_name in fields}
                                 if "field" in citation:
-                                    citation["value"] = payload["order_context"][citation["field"]]
+                                    field_name = citation["field"]
+                                    if not isinstance(field_name, str) or (fields is not None and field_name not in fields):
+                                        raise ValueError("Invalid order_context citation field")
+                                    citation["value"] = payload["order_context"][field_name]
                                 elif not fields:
                                     raise ValueError("Invalid order_context citation")
                 return part, result, round((time.perf_counter() - started) * 1000), None

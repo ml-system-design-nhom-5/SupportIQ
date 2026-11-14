@@ -615,19 +615,18 @@ def _inspect_case_citations(
     for cit in raw_citations:
         src_type = cit.get("source_type")
         if src_type in ("order_context", "order"):
-            f_name = cit.get("field")
-            f_val = cit.get("value")
-            field_present = executed_order_context is not None and f_name in executed_order_context
-            val_matches = field_present and (executed_order_context[f_name] == f_val)
-            v_ok = bool(field_present and val_matches)
+            parsed_citations.append(
+                AcceptanceEvidenceCollector._verify_order_context_citation(cit, executed_order_context)
+            )
+        elif src_type not in (None, "kb_document", "document"):
             parsed_citations.append(
                 {
-                    "source_type": "order_context",
-                    "field": f_name,
-                    "value": f_val,
-                    "field_present_in_executed_context": field_present,
-                    "value_matches_executed_context": val_matches,
-                    "is_verified": v_ok,
+                    "source_type": src_type,
+                    "document_id": cit.get("doc_id") or cit.get("document_id"),
+                    "version": cit.get("version"),
+                    "content_hash": cit.get("content_hash"),
+                    "is_verified": False,
+                    "verification_error": f"UNSUPPORTED_CITATION_SOURCE_TYPE: {src_type}",
                 }
             )
         else:

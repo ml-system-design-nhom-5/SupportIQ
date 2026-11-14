@@ -297,6 +297,8 @@ class Engine:
                         cit_entry["field"] = supplied_fields[0]
                     citations[identifier] = cit_entry
                     citation_ids.append(identifier)
+                else:
+                    return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
             if source_ids and not citation_ids:
                 return {**result, "status": "llm_unavailable", "reason_codes": list(set(codes) | {"grounding_failed"})}
             segments.append({"segment_id": f"segment-{paragraph_index}", "paragraph_index": paragraph_index,
