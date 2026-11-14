@@ -1,0 +1,466 @@
+{
+  "model_dir": "artifacts/models/trained/distilbert-supportiq-v1.2.0-r3",
+  "backend": "torch",
+  "base_policy": "v2.0.0",
+  "data": "data/intent/manifest.json (dev_cases, oos_dev, multi_dev, escalation_dev, dev_independent); data/benchmarks/ not read",
+  "grid": {
+    "min_clause_confidence": [
+      0.5,
+      0.6,
+      0.7,
+      0.8,
+      0.9
+    ],
+    "min_words": [
+      3
+    ],
+    "tau_shift": [
+      -0.1,
+      -0.05,
+      0.0,
+      0.05,
+      0.1
+    ],
+    "delta": [
+      0.05,
+      0.1,
+      0.15
+    ],
+    "request_clauses_only": [
+      true
+    ],
+    "min_scope_probability": [
+      null,
+      0.5,
+      0.6,
+      0.7,
+      0.8,
+      0.9
+    ]
+  },
+  "constraints": {
+    "multi_flag_rate": [
+      ">=",
+      0.9
+    ],
+    "single_false_flag_rate": [
+      "<=",
+      0.1
+    ],
+    "dev_clarify_rate": [
+      "<=",
+      0.15
+    ],
+    "oos_flag_rate": [
+      ">=",
+      0.9
+    ]
+  },
+  "selected_by_source": {
+    "independent": {
+      "multi_flag_rate": 1.0,
+      "multi_flagged_by_gate_rate": 0.64,
+      "single_false_flag_rate": null,
+      "single_draft_rate": null,
+      "dev_clarify_rate": 0.1667,
+      "dev_correct_draft_rate": 0.7292,
+      "dev_wrong_intent_drafts": 6,
+      "dev_must_escalate_drafted": 1,
+      "oos_flag_rate": 0.9412,
+      "dev_macro_f1": 0.7875,
+      "dev_confident_error_rate": 0.035,
+      "n": {
+        "multi": 25,
+        "single": 0,
+        "dev": 200,
+        "oos": 17,
+        "draftable": 96
+      }
+    },
+    "own": {
+      "multi_flag_rate": 0.85,
+      "multi_flagged_by_gate_rate": 0.525,
+      "single_false_flag_rate": 0.0,
+      "single_draft_rate": 0.725,
+      "dev_clarify_rate": 0.1345,
+      "dev_correct_draft_rate": 0.7815,
+      "dev_wrong_intent_drafts": 4,
+      "dev_must_escalate_drafted": 0,
+      "oos_flag_rate": 1.0,
+      "dev_macro_f1": 0.8904,
+      "dev_confident_error_rate": 0.0172,
+      "n": {
+        "multi": 40,
+        "single": 40,
+        "dev": 233,
+        "oos": 39,
+        "draftable": 119
+      }
+    }
+  },
+  "base_policy_without_gate": {
+    "multi_flag_rate": 0.5077,
+    "multi_flagged_by_gate_rate": 0.0,
+    "single_false_flag_rate": 0.0,
+    "single_draft_rate": 0.725,
+    "dev_clarify_rate": 0.1767,
+    "dev_correct_draft_rate": 0.7535,
+    "dev_wrong_intent_drafts": 8,
+    "dev_must_escalate_drafted": 2,
+    "oos_flag_rate": 0.9821,
+    "dev_macro_f1": 0.8183,
+    "dev_confident_error_rate": 0.0254,
+    "n": {
+      "multi": 65,
+      "single": 40,
+      "dev": 433,
+      "oos": 56,
+      "draftable": 215
+    }
+  },
+  "selected": {
+    "settings": {
+      "min_clause_confidence": 0.8,
+      "min_words": 3,
+      "tau_shift": -0.05,
+      "delta": 0.1,
+      "request_clauses_only": true,
+      "min_scope_probability": 0.7
+    },
+    "metrics": {
+      "multi_flag_rate": 0.9077,
+      "multi_flagged_by_gate_rate": 0.5692,
+      "single_false_flag_rate": 0.0,
+      "single_draft_rate": 0.725,
+      "dev_clarify_rate": 0.1488,
+      "dev_correct_draft_rate": 0.7581,
+      "dev_wrong_intent_drafts": 10,
+      "dev_must_escalate_drafted": 1,
+      "oos_flag_rate": 0.9821,
+      "dev_macro_f1": 0.8183,
+      "dev_confident_error_rate": 0.0254,
+      "n": {
+        "multi": 65,
+        "single": 40,
+        "dev": 433,
+        "oos": 56,
+        "draftable": 215
+      }
+    },
+    "violation": 0.0,
+    "feasible": true,
+    "n_feasible": 114
+  },
+  "top10": [
+    {
+      "settings": {
+        "min_clause_confidence": 0.5,
+        "min_words": 3,
+        "tau_shift": -0.1,
+        "delta": 0.05,
+        "request_clauses_only": true,
+        "min_scope_probability": null
+      },
+      "metrics": {
+        "multi_flag_rate": 0.9538,
+        "multi_flagged_by_gate_rate": 0.6615,
+        "single_false_flag_rate": 0.0,
+        "single_draft_rate": 0.725,
+        "dev_clarify_rate": 0.1395,
+        "dev_correct_draft_rate": 0.7674,
+        "dev_wrong_intent_drafts": 11,
+        "dev_must_escalate_drafted": 2,
+        "oos_flag_rate": 0.9821,
+        "dev_macro_f1": 0.8183,
+        "dev_confident_error_rate": 0.0254,
+        "n": {
+          "multi": 65,
+          "single": 40,
+          "dev": 433,
+          "oos": 56,
+          "draftable": 215
+        }
+      },
+      "violation": 0.0
+    },
+    {
+      "settings": {
+        "min_clause_confidence": 0.5,
+        "min_words": 3,
+        "tau_shift": -0.1,
+        "delta": 0.05,
+        "request_clauses_only": true,
+        "min_scope_probability": 0.5
+      },
+      "metrics": {
+        "multi_flag_rate": 0.9538,
+        "multi_flagged_by_gate_rate": 0.6615,
+        "single_false_flag_rate": 0.0,
+        "single_draft_rate": 0.725,
+        "dev_clarify_rate": 0.1395,
+        "dev_correct_draft_rate": 0.7674,
+        "dev_wrong_intent_drafts": 11,
+        "dev_must_escalate_drafted": 2,
+        "oos_flag_rate": 0.9821,
+        "dev_macro_f1": 0.8183,
+        "dev_confident_error_rate": 0.0254,
+        "n": {
+          "multi": 65,
+          "single": 40,
+          "dev": 433,
+          "oos": 56,
+          "draftable": 215
+        }
+      },
+      "violation": 0.0
+    },
+    {
+      "settings": {
+        "min_clause_confidence": 0.5,
+        "min_words": 3,
+        "tau_shift": -0.1,
+        "delta": 0.05,
+        "request_clauses_only": true,
+        "min_scope_probability": 0.6
+      },
+      "metrics": {
+        "multi_flag_rate": 0.9538,
+        "multi_flagged_by_gate_rate": 0.6615,
+        "single_false_flag_rate": 0.0,
+        "single_draft_rate": 0.725,
+        "dev_clarify_rate": 0.1395,
+        "dev_correct_draft_rate": 0.7674,
+        "dev_wrong_intent_drafts": 11,
+        "dev_must_escalate_drafted": 2,
+        "oos_flag_rate": 0.9821,
+        "dev_macro_f1": 0.8183,
+        "dev_confident_error_rate": 0.0254,
+        "n": {
+          "multi": 65,
+          "single": 40,
+          "dev": 433,
+          "oos": 56,
+          "draftable": 215
+        }
+      },
+      "violation": 0.0
+    },
+    {
+      "settings": {
+        "min_clause_confidence": 0.5,
+        "min_words": 3,
+        "tau_shift": -0.1,
+        "delta": 0.1,
+        "request_clauses_only": true,
+        "min_scope_probability": null
+      },
+      "metrics": {
+        "multi_flag_rate": 0.9538,
+        "multi_flagged_by_gate_rate": 0.6615,
+        "single_false_flag_rate": 0.0,
+        "single_draft_rate": 0.725,
+        "dev_clarify_rate": 0.1395,
+        "dev_correct_draft_rate": 0.7674,
+        "dev_wrong_intent_drafts": 11,
+        "dev_must_escalate_drafted": 2,
+        "oos_flag_rate": 0.9821,
+        "dev_macro_f1": 0.8183,
+        "dev_confident_error_rate": 0.0254,
+        "n": {
+          "multi": 65,
+          "single": 40,
+          "dev": 433,
+          "oos": 56,
+          "draftable": 215
+        }
+      },
+      "violation": 0.0
+    },
+    {
+      "settings": {
+        "min_clause_confidence": 0.5,
+        "min_words": 3,
+        "tau_shift": -0.1,
+        "delta": 0.1,
+        "request_clauses_only": true,
+        "min_scope_probability": 0.5
+      },
+      "metrics": {
+        "multi_flag_rate": 0.9538,
+        "multi_flagged_by_gate_rate": 0.6615,
+        "single_false_flag_rate": 0.0,
+        "single_draft_rate": 0.725,
+        "dev_clarify_rate": 0.1395,
+        "dev_correct_draft_rate": 0.7674,
+        "dev_wrong_intent_drafts": 11,
+        "dev_must_escalate_drafted": 2,
+        "oos_flag_rate": 0.9821,
+        "dev_macro_f1": 0.8183,
+        "dev_confident_error_rate": 0.0254,
+        "n": {
+          "multi": 65,
+          "single": 40,
+          "dev": 433,
+          "oos": 56,
+          "draftable": 215
+        }
+      },
+      "violation": 0.0
+    },
+    {
+      "settings": {
+        "min_clause_confidence": 0.5,
+        "min_words": 3,
+        "tau_shift": -0.1,
+        "delta": 0.1,
+        "request_clauses_only": true,
+        "min_scope_probability": 0.6
+      },
+      "metrics": {
+        "multi_flag_rate": 0.9538,
+        "multi_flagged_by_gate_rate": 0.6615,
+        "single_false_flag_rate": 0.0,
+        "single_draft_rate": 0.725,
+        "dev_clarify_rate": 0.1395,
+        "dev_correct_draft_rate": 0.7674,
+        "dev_wrong_intent_drafts": 11,
+        "dev_must_escalate_drafted": 2,
+        "oos_flag_rate": 0.9821,
+        "dev_macro_f1": 0.8183,
+        "dev_confident_error_rate": 0.0254,
+        "n": {
+          "multi": 65,
+          "single": 40,
+          "dev": 433,
+          "oos": 56,
+          "draftable": 215
+        }
+      },
+      "violation": 0.0
+    },
+    {
+      "settings": {
+        "min_clause_confidence": 0.5,
+        "min_words": 3,
+        "tau_shift": -0.1,
+        "delta": 0.15,
+        "request_clauses_only": true,
+        "min_scope_probability": null
+      },
+      "metrics": {
+        "multi_flag_rate": 0.9538,
+        "multi_flagged_by_gate_rate": 0.6615,
+        "single_false_flag_rate": 0.0,
+        "single_draft_rate": 0.725,
+        "dev_clarify_rate": 0.1395,
+        "dev_correct_draft_rate": 0.7674,
+        "dev_wrong_intent_drafts": 11,
+        "dev_must_escalate_drafted": 2,
+        "oos_flag_rate": 0.9821,
+        "dev_macro_f1": 0.8183,
+        "dev_confident_error_rate": 0.0254,
+        "n": {
+          "multi": 65,
+          "single": 40,
+          "dev": 433,
+          "oos": 56,
+          "draftable": 215
+        }
+      },
+      "violation": 0.0
+    },
+    {
+      "settings": {
+        "min_clause_confidence": 0.5,
+        "min_words": 3,
+        "tau_shift": -0.1,
+        "delta": 0.15,
+        "request_clauses_only": true,
+        "min_scope_probability": 0.5
+      },
+      "metrics": {
+        "multi_flag_rate": 0.9538,
+        "multi_flagged_by_gate_rate": 0.6615,
+        "single_false_flag_rate": 0.0,
+        "single_draft_rate": 0.725,
+        "dev_clarify_rate": 0.1395,
+        "dev_correct_draft_rate": 0.7674,
+        "dev_wrong_intent_drafts": 11,
+        "dev_must_escalate_drafted": 2,
+        "oos_flag_rate": 0.9821,
+        "dev_macro_f1": 0.8183,
+        "dev_confident_error_rate": 0.0254,
+        "n": {
+          "multi": 65,
+          "single": 40,
+          "dev": 433,
+          "oos": 56,
+          "draftable": 215
+        }
+      },
+      "violation": 0.0
+    },
+    {
+      "settings": {
+        "min_clause_confidence": 0.5,
+        "min_words": 3,
+        "tau_shift": -0.1,
+        "delta": 0.15,
+        "request_clauses_only": true,
+        "min_scope_probability": 0.6
+      },
+      "metrics": {
+        "multi_flag_rate": 0.9538,
+        "multi_flagged_by_gate_rate": 0.6615,
+        "single_false_flag_rate": 0.0,
+        "single_draft_rate": 0.725,
+        "dev_clarify_rate": 0.1395,
+        "dev_correct_draft_rate": 0.7674,
+        "dev_wrong_intent_drafts": 11,
+        "dev_must_escalate_drafted": 2,
+        "oos_flag_rate": 0.9821,
+        "dev_macro_f1": 0.8183,
+        "dev_confident_error_rate": 0.0254,
+        "n": {
+          "multi": 65,
+          "single": 40,
+          "dev": 433,
+          "oos": 56,
+          "draftable": 215
+        }
+      },
+      "violation": 0.0
+    },
+    {
+      "settings": {
+        "min_clause_confidence": 0.6,
+        "min_words": 3,
+        "tau_shift": -0.1,
+        "delta": 0.05,
+        "request_clauses_only": true,
+        "min_scope_probability": null
+      },
+      "metrics": {
+        "multi_flag_rate": 0.9385,
+        "multi_flagged_by_gate_rate": 0.6462,
+        "single_false_flag_rate": 0.0,
+        "single_draft_rate": 0.725,
+        "dev_clarify_rate": 0.1395,
+        "dev_correct_draft_rate": 0.7674,
+        "dev_wrong_intent_drafts": 11,
+        "dev_must_escalate_drafted": 2,
+        "oos_flag_rate": 0.9821,
+        "dev_macro_f1": 0.8183,
+        "dev_confident_error_rate": 0.0254,
+        "n": {
+          "multi": 65,
+          "single": 40,
+          "dev": 433,
+          "oos": 56,
+          "draftable": 215
+        }
+      },
+      "violation": 0.0
+    }
+  ]
+}
