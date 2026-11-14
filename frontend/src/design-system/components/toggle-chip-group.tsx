@@ -9,6 +9,7 @@
 import { TriangleAlert } from "lucide-react";
 import { useId } from "react";
 
+import { CHIP_CLASSES } from "@/design-system/components/chip";
 import { InlineMessage } from "@/design-system/components/inline-message";
 import { cn } from "@/design-system/primitives/class-names";
 import { FOCUS_RING_CLASSES } from "@/design-system/primitives/focus-ring";
@@ -70,10 +71,9 @@ export function ToggleChipGroup<Value extends string>({
               type="button"
               aria-pressed={isSelected}
               className={cn(
-                "inline-flex h-6 items-center rounded-sm border px-2 text-sm whitespace-nowrap transition-colors duration-100",
-                isSelected
-                  ? "border-text bg-text text-text-inverse"
-                  : "border-border bg-background text-text hover:border-border-strong",
+                CHIP_CLASSES,
+                "transition-colors duration-100",
+                isSelected ? "border-text bg-text text-text-inverse" : "hover:border-border-strong",
                 FOCUS_RING_CLASSES,
               )}
               onClick={() => {

@@ -21,6 +21,8 @@ export type { CenteredContentProps } from "@/design-system/components/centered-c
 export { CenteredContent } from "@/design-system/components/centered-content";
 export type { CenteredPanelProps } from "@/design-system/components/centered-panel";
 export { CenteredPanel } from "@/design-system/components/centered-panel";
+export type { ChipProps } from "@/design-system/components/chip";
+export { Chip } from "@/design-system/components/chip";
 export type {
   CitationMarkerProps,
   CitationSource,
@@ -127,10 +129,7 @@ export type { ProductDetailsProps } from "@/design-system/components/product-det
 export { ProductDetails } from "@/design-system/components/product-details";
 export type { ProductImageProps, ProductImageSize } from "@/design-system/components/product-image";
 export { ProductImage } from "@/design-system/components/product-image";
-export type {
-  ProposalComparisonProposal,
-  ProposalComparisonProps,
-} from "@/design-system/components/proposal-comparison";
+export type { ProposalComparisonProps } from "@/design-system/components/proposal-comparison";
 export { ProposalComparison } from "@/design-system/components/proposal-comparison";
 export type { RelativeTimeProps } from "@/design-system/components/relative-time";
 export { RelativeTime } from "@/design-system/components/relative-time";

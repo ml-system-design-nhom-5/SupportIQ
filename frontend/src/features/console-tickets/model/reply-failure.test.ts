@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import type { RequestFailure } from "@/features/backend-requests";
-import { describeReplyFailure } from "@/features/console-tickets/model/send-failure";
+import {
+  describeReplyFailure,
+  pickLatestFailure,
+} from "@/features/console-tickets/model/reply-failure";
 
 /** The trace ID of the failures of these tests. */
 const TRACE_ID = "e929d0e0e4736bf92f3577b34da6a3c2";
@@ -120,4 +123,42 @@ describe("describeReplyFailure of Submit for approval and Escalate ticket", () =
       });
     },
   );
+});
+
+describe("describeReplyFailure of a 403 (contract, ForbiddenRoleOrOrigin)", () => {
+  const forbidden: RequestFailure = {
+    kind: "problem",
+    status: 403,
+    problemType: "forbidden",
+    traceId: TRACE_ID,
+  };
+
+  it("says that a colleague handled the ticket after Send reply, and reloads", () => {
+    expect(describeReplyFailure(forbidden, "send_reply")).toMatchObject({
+      message: "A colleague escalated this ticket or submitted it for approval. Your text is kept.",
+      shouldReload: true,
+    });
+  });
+
+  it.each(["submit_reply_proposal", "escalate"] as const)(
+    "gives the shared message after %s, whose 403 only means a refused origin, without a reload",
+    (write) => {
+      expect(describeReplyFailure(forbidden, write)).toMatchObject({
+        message: "Your account is not allowed to do this.",
+        shouldReload: false,
+      });
+    },
+  );
+});
+
+describe("pickLatestFailure", () => {
+  it("shows the failure of the latest request, or none", () => {
+    const view = { lead: "Old.", message: "", shouldReload: false };
+    const latest = { lead: "New.", message: "", shouldReload: false };
+
+    expect(
+      pickLatestFailure([{ view, submittedAt: 1 }, undefined, { view: latest, submittedAt: 2 }]),
+    ).toBe(latest);
+    expect(pickLatestFailure([undefined, undefined])).toBeUndefined();
+  });
 });

@@ -3,33 +3,36 @@
  * Flow, Actions, Action counts, and States): Submit for approval with and without the authority
  * flag and in manual handling, a reply proposal that a manager sends as is or edited (TEST-27), a
  * ticket that staff read while it awaits approval, Escalate ticket with its dialog, and a manager's
- * reply to an escalated ticket. Only the Send reply of the confirmation sends a reply (UI-17,
+ * reply to an escalated ticket. The failures of Submit for approval are in
+ * console-approval-failures.spec.ts. Only the Send reply of the confirmation sends a reply (UI-17,
  * FR-04); Submit for approval and Escalate ticket reach no customer. The mock is stateless, so each
  * flow chooses the next answer of the ticket when its write goes out.
  */
 import { expect, type Locator, type Page, test } from "@playwright/test";
 
 import {
-  changeTicketOnWrite,
   confirmSend,
   countActions,
+  createProposalRequest,
+  DRAFT_READY_PATH,
+  DRAFT_READY_SUGGESTION_ID,
+  DRAFT_TEXT,
+  expectAwaitingApproval,
   expectReplySent,
+  type FlowExamples,
+  type FlowWrite,
+  MANUAL_MODE_PATH,
+  manualProposalFlow,
   openConfirmation,
+  openTicket,
+  READ_ONLY_LINE,
   recordWrites,
   sendAndConfirm,
+  sendReplyRequest,
 } from "./support/console-flows.ts";
-import { type MockedRequest, preferOutcome } from "./support/mock-outcomes.ts";
+import type { MockedRequest } from "./support/mock-outcomes.ts";
 import { expectNoAccessibilityViolations } from "./support/page-checks.ts";
-import { createSessionCookie } from "./support/sign-in.ts";
 
-const getSessionRequest: MockedRequest = { method: "GET", path: "/v1/sessions/current" };
-const listTicketsRequest: MockedRequest = { method: "GET", path: "/v1/console/tickets" };
-const getTicketRequest: MockedRequest = { method: "GET", path: "/v1/console/tickets/*" };
-const createProposalRequest: MockedRequest = {
-  method: "POST",
-  path: "/v1/console/tickets/*/reply-proposals",
-};
-const sendReplyRequest: MockedRequest = { method: "POST", path: "/v1/console/tickets/*/replies" };
 const createEscalationRequest: MockedRequest = {
   method: "POST",
   path: "/v1/console/tickets/*/escalations",
@@ -37,20 +40,16 @@ const createEscalationRequest: MockedRequest = {
 
 /** The paths of the tickets of the examples; the authority-required ticket also awaits approval. */
 const AUTHORITY_REQUIRED_PATH = "/console/tickets/TCK-1046";
-const DRAFT_READY_PATH = "/console/tickets/TCK-1042";
-const MANUAL_MODE_PATH = "/console/tickets/TCK-1050";
 const ESCALATED_PATH = "/console/tickets/TCK-1047";
 /** The URL glob of the loads of the draft-ready ticket. */
 const DRAFT_READY_TICKET_URL = "**/v1/console/tickets/TCK-1042";
 
 /** The current suggestions of the examples. */
 const AUTHORITY_SUGGESTION_ID = "8d3a1e5c-7b9f-4a2d-8e6c-0f2b4d6a8c41";
-const DRAFT_READY_SUGGESTION_ID = "6b1f0c3e-2a4d-4e8f-9b7c-1d3e5f7a9b20";
 const ESCALATED_SUGGESTION_ID = "5a7c9e1b-3d5f-4a7c-9e1b-3d5f7a9c1e64";
 /** The proposal of the awaiting-approval example, and its text: the AI draft unchanged. */
 const PROPOSAL_ID = "3e5a7c9b-1d2f-4a6c-8e0b-5d7f9a1c3e52";
-const PROPOSAL_TEXT =
-  "Hello Lan Tran, thank you for your patience.\n\nYour refund request for order ORD-20931 is under review. This sample sentence stands for a policy statement from the cited document.";
+const PROPOSAL_TEXT = DRAFT_TEXT;
 /** The note of the escalated example. */
 const ESCALATION_NOTE = "The customer asks to talk to a person.";
 /** The text that staff write themselves. */
@@ -58,29 +57,8 @@ const STAFF_TEXT = "Your request is with a manager. We will write to you again o
 /** The text that a manager writes. */
 const MANAGER_TEXT =
   "A manager checked your request. We will write to you again with the decision.";
-/** The line above the buttons when a ticket is read-only for staff. */
-const READ_ONLY_LINE = "This ticket is read-only for you. A manager sends the reply.";
 /** The More item of Submit for approval, named by its two lines. */
 const SUBMIT_MENU_ITEM = "Submit for approval A manager sends the reply";
-
-/** The write of a flow, its example, and the `Prefer` value of the ticket after it. */
-type FlowWrite = {
-  readonly request: MockedRequest;
-  readonly prefer: string;
-  /** Absent when the flow answers the later loads of the ticket itself. */
-  readonly ticketAfter?: string;
-};
-
-/** The examples that a flow starts with, as `Prefer` values. */
-type FlowExamples = {
-  /** The session; `example=staff` by default. */
-  readonly session?: string;
-  /** The queue of the inbox; `example=open-queue` by default. */
-  readonly queue?: string;
-  readonly ticket: string;
-  /** The write of the flow; absent when the flow only reads. */
-  readonly write?: FlowWrite;
-};
 
 /** A proposal on the AI draft; the ticket then awaits approval, read-only for staff. */
 const proposalOnDraft: FlowWrite = {
@@ -93,37 +71,14 @@ const managerOnProposal: FlowExamples = {
   session: "example=manager",
   queue: "example=awaiting-approval",
   ticket: "example=awaiting-approval",
-  write: {
-    request: sendReplyRequest,
-    prefer: "example=from-reply-proposal",
-    ticketAfter: "example=closed",
-  },
+  writes: [
+    {
+      request: sendReplyRequest,
+      prefer: "example=from-reply-proposal",
+      ticketAfter: "example=closed",
+    },
+  ],
 };
-
-/**
- * Sign in, choose the examples of the flow, and open the ticket.
- *
- * @param page - The page.
- * @param ticketPath - The path of the ticket.
- * @param examples - The `Prefer` values of the session, the queue, the ticket, and the write.
- */
-async function openTicket(page: Page, ticketPath: string, examples: FlowExamples): Promise<void> {
-  await preferOutcome(page, getSessionRequest, examples.session ?? "example=staff");
-  await preferOutcome(page, listTicketsRequest, examples.queue ?? "example=open-queue");
-  const chooseTicket = await preferOutcome(page, getTicketRequest, examples.ticket);
-  const { write } = examples;
-  if (write !== undefined) {
-    await preferOutcome(page, write.request, write.prefer);
-  }
-  if (write?.ticketAfter !== undefined) {
-    await changeTicketOnWrite(page, `**${write.request.path}`, {
-      chooseTicket,
-      prefer: write.ticketAfter,
-    });
-  }
-  await createSessionCookie(page);
-  await page.goto(ticketPath);
-}
 
 /**
  * Answer the loads of the draft-ready ticket after its escalation with the `escalated` example as
@@ -168,26 +123,12 @@ async function getTop(element: Locator): Promise<number> {
   return box.y;
 }
 
-/**
- * Check that the ticket, loaded again after Submit for approval, awaits approval and is read-only
- * for staff, with the focus on the heading of the reply area (console UI design, Flow; UI-30).
- *
- * @param page - The page.
- */
-async function expectAwaitingApproval(page: Page): Promise<void> {
-  const main = page.getByRole("main");
-  await expect(main.getByRole("heading", { name: "Reply for approval" })).toBeFocused();
-  const reply = main.getByRole("region", { name: "Reply for approval" });
-  await expect(reply).toContainText(READ_ONLY_LINE);
-  await expect(reply.getByRole("textbox")).toHaveCount(0);
-}
-
 test("UI-41: a draft edited and submitted for approval takes 2 actions when authority is required", async ({
   page,
 }) => {
   await openTicket(page, AUTHORITY_REQUIRED_PATH, {
     ticket: "example=authority-required",
-    write: proposalOnDraft,
+    writes: [proposalOnDraft],
   });
   const main = page.getByRole("main");
   await expect(main.getByRole("button", { name: "Send reply" })).toHaveCount(0);
@@ -218,7 +159,7 @@ test("UI-41: a draft edited and submitted for approval through More takes 3 acti
 }) => {
   await openTicket(page, DRAFT_READY_PATH, {
     ticket: "example=draft-ready",
-    write: proposalOnDraft,
+    writes: [proposalOnDraft],
   });
   const main = page.getByRole("main");
   await expect(main.getByRole("button", { name: "Submit for approval" })).toHaveCount(0);
@@ -249,10 +190,7 @@ test("UI-41: a draft edited and submitted for approval through More takes 3 acti
 test("UI-26: in manual handling, Submit for approval is a button that submits the written reply", async ({
   page,
 }) => {
-  await openTicket(page, MANUAL_MODE_PATH, {
-    ticket: "example=manual-mode",
-    write: { ...proposalOnDraft, prefer: "example=without-ai-draft" },
-  });
+  await openTicket(page, MANUAL_MODE_PATH, manualProposalFlow);
   const manual = page.getByRole("main").getByRole("region", { name: "Manual handling" });
   const submit = manual.getByRole("button", { name: "Submit for approval" });
   await expect(submit).toBeDisabled();
@@ -311,11 +249,15 @@ test("staff read a ticket that awaits approval with every action disabled", asyn
 
   await expect(reply).toContainText(READ_ONLY_LINE);
   await expect(reply).toContainText("Waiting for a manager");
-  await expect(reply.getByRole("button", { name: "Edit proposal" })).toBeDisabled();
+  // Staff never edit a proposal; the disabled button reads as in state-awaiting-approval-staff.png.
+  await expect(reply.getByRole("button", { name: "Edit draft" })).toBeDisabled();
   await expect(reply.getByRole("button", { name: "Reject draft" })).toBeDisabled();
   await expect(reply.getByRole("button", { name: "Escalate ticket" })).toBeDisabled();
-  await expect(reply.getByRole("button", { name: "More actions" })).toBeDisabled();
-  await expect(reply.getByRole("button", { name: "Send reply" })).toBeDisabled();
+  // The ticket requires authority, so Submit for approval holds the place of Send reply and More
+  // has nothing to hold (UI-16; console UI design, Actions).
+  await expect(reply.getByRole("button", { name: "Submit for approval" })).toBeDisabled();
+  await expect(reply.getByRole("button", { name: "More actions" })).toHaveCount(0);
+  await expect(reply.getByRole("button", { name: "Send reply" })).toHaveCount(0);
   await expect(reply.getByRole("textbox")).toHaveCount(0);
   await expectNoAccessibilityViolations(page);
 });
@@ -325,7 +267,7 @@ test("Escalate ticket asks for a reason, then escalates with it and the suggesti
 }) => {
   await openTicket(page, DRAFT_READY_PATH, {
     ticket: "example=draft-ready",
-    write: { request: createEscalationRequest, prefer: "example=escalated" },
+    writes: [{ request: createEscalationRequest, prefer: "example=escalated" }],
   });
   await showEscalatedToStaff(page);
   const escalations = recordWrites(page, "/escalations");
@@ -357,11 +299,13 @@ test("TEST-27: a manager replies to an escalated ticket under its reason and not
     session: "example=manager",
     queue: "example=escalated",
     ticket: "example=escalated",
-    write: {
-      request: sendReplyRequest,
-      prefer: "example=without-ai-draft",
-      ticketAfter: "example=closed",
-    },
+    writes: [
+      {
+        request: sendReplyRequest,
+        prefer: "example=without-ai-draft",
+        ticketAfter: "example=closed",
+      },
+    ],
   });
   const escalation = page
     .getByRole("main")

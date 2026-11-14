@@ -1,8 +1,13 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { createReplyProposalRoute, sendReplyRoute } from "@/test/backend-routes";
 import {
+  createReplyProposalRoute,
+  getConsoleTicketRoute,
+  sendReplyRoute,
+} from "@/test/backend-routes";
+import {
+  AWAITING_APPROVAL_PROPOSAL_ID,
   DRAFT_READY_SUGGESTION_ID,
   openReplyArea,
   readDraftText,
@@ -11,9 +16,6 @@ import {
 } from "@/test/console-screen";
 import { readOperationExample } from "@/test/contract-examples";
 import { exampleAnswer } from "@/test/fake-backend";
-
-/** The proposal of the awaiting-approval example. */
-const PROPOSAL_ID = "3e5a7c9b-1d2f-4a6c-8e0b-5d7f9a1c3e52";
 
 /** The current suggestion of the authority-required example. */
 const AUTHORITY_SUGGESTION_ID = "8d3a1e5c-7b9f-4a2d-8e6c-0f2b4d6a8c41";
@@ -61,7 +63,7 @@ describe("Submit for approval (FR-06, UI-16)", () => {
 
     const panel = await within(main).findByRole("region", { name: "Reply for approval" });
     expect(within(panel).queryByRole("textbox")).not.toBeInTheDocument();
-    expect(within(panel).getByRole("button", { name: "Edit proposal" })).toBeDisabled();
+    expect(within(panel).getByRole("button", { name: "Edit draft" })).toBeDisabled();
     expect(within(panel).queryByRole("button", { name: "Discard edits" })).not.toBeInTheDocument();
   });
 
@@ -102,18 +104,19 @@ describe("Submit for approval (FR-06, UI-16)", () => {
     });
   });
 
-  it("says what happened after a refusal, keeps the text, and reloads the ticket", async () => {
-    const { user, main } = await openReplyArea({
+  it("says what happened after a refused origin, keeps the text, and does not reload", async () => {
+    const { user, main, backend } = await openReplyArea({
       workspace: [workspaceExample("manual-mode")],
-      proposal: [exampleAnswer(403, "problems", "forbidden-role")],
+      proposal: [exampleAnswer(403, "problems", "forbidden-origin")],
     });
     await writeReply(user, main, "Here is the return label.");
 
     await user.click(within(main).getByRole("button", { name: "Submit for approval" }));
 
     expect(await within(main).findByRole("alert")).toHaveTextContent(
-      "The reply was not submitted. A colleague escalated this ticket or submitted it for approval.",
+      "The reply was not submitted. Your account is not allowed to do this.",
     );
+    expect(backend.requestsTo(getConsoleTicketRoute)).toHaveLength(1);
     expect(within(main).getByRole("textbox", { name: "Reply to the customer" })).toHaveValue(
       "Here is the return label.",
     );
@@ -172,7 +175,7 @@ describe("A ticket awaiting approval", () => {
     expect(backend.requestsTo(sendReplyRoute)[0]?.body).toEqual({
       basis: "reply_proposal",
       body: readProposalBody(),
-      proposal_id: PROPOSAL_ID,
+      proposal_id: AWAITING_APPROVAL_PROPOSAL_ID,
     });
   });
 
@@ -198,19 +201,24 @@ describe("A ticket awaiting approval", () => {
     expect(backend.requestsTo(sendReplyRoute)[0]?.body).toEqual({
       basis: "reply_proposal",
       body: "The edited reply.",
-      proposal_id: PROPOSAL_ID,
+      proposal_id: AWAITING_APPROVAL_PROPOSAL_ID,
     });
   });
 
-  it("is read-only for staff, with every action disabled and the reason", async () => {
-    const { main } = await openReplyArea({ workspace: [workspaceExample("read-only-for-staff")] });
+  it.each(["Edit draft", "Reject draft", "Escalate ticket", "Submit for approval"])(
+    "is read-only for staff: %s is disabled, with the reason",
+    async (name) => {
+      const { main } = await openReplyArea({
+        workspace: [workspaceExample("read-only-for-staff")],
+      });
 
-    expect(main).toHaveTextContent("This ticket is read-only for you. A manager sends the reply.");
-    expect(main).toHaveTextContent("Waiting for a manager");
-    for (const name of ["Edit proposal", "Reject draft", "Escalate ticket", "Send reply"]) {
+      expect(main).toHaveTextContent(
+        "This ticket is read-only for you. A manager sends the reply.",
+      );
+      expect(main).toHaveTextContent("Waiting for a manager");
       expect(within(main).getByRole("button", { name })).toBeDisabled();
-    }
-  });
+    },
+  );
 });
 
 /**

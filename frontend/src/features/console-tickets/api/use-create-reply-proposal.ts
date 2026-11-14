@@ -15,20 +15,19 @@ import {
   requestData,
   useWriteAttemptSender,
 } from "@/features/backend-requests";
-import { consoleQueryKeys } from "@/features/console-tickets/api/console-query-keys";
 import type { CreateReplyProposalRequestContract } from "@/features/console-tickets/api/contract-types";
+import {
+  type KeyedWrite,
+  reloadTicketAfterWrite,
+} from "@/features/console-tickets/api/keyed-writes";
 import {
   type ReplyProposal,
   toReplyProposal,
 } from "@/features/console-tickets/model/manager-handoff";
-import { describeReplyFailure } from "@/features/console-tickets/model/send-failure";
+import { describeReplyFailure } from "@/features/console-tickets/model/reply-failure";
 
 /** One Submit for approval: the request body and its key. */
-export type SubmittedProposal = {
-  readonly request: CreateReplyProposalRequestContract;
-  /** Stays while staff submit the same proposal again after a failure. */
-  readonly idempotencyKey: string;
-};
+export type SubmittedProposal = KeyedWrite<CreateReplyProposalRequestContract>;
 
 /**
  * Submit the reply of a ticket for approval.
@@ -43,8 +42,7 @@ export function useCreateReplyProposal(
   const queryClient = useQueryClient();
   const sendAttempt = useWriteAttemptSender();
   const reloadTicket = () => {
-    void queryClient.invalidateQueries({ queryKey: consoleQueryKeys.workspace(ticketId) });
-    void queryClient.invalidateQueries({ queryKey: consoleQueryKeys.queues() });
+    reloadTicketAfterWrite(queryClient, ticketId);
   };
   return useMutation({
     mutationKey: buildIdempotentWriteKey("createReplyProposal"),

@@ -6,8 +6,9 @@
  * Radix DropdownMenu (UI-31): Enter, Space, or the down arrow opens it, the arrow keys move between
  * its items, Escape closes it, and the focus returns to More. Each item can say what it does on a
  * second line, which is then part of its name, so the name holds all of its visible text (WCAG
- * 2.5.3). More is absent without items and disabled when every item is. The bar sticks to the
- * bottom of the scrolling column, so it stays visible while the reply area scrolls (placement
+ * 2.5.3). More is absent without items. Otherwise it is enabled, and a disabled item stays disabled
+ * inside the menu; More is disabled only when the role may use none of its items. The bar sticks to
+ * the bottom of the scrolling column, so it stays visible while the reply area scrolls (placement
  * rule 4).
  */
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
@@ -41,6 +42,13 @@ export type ActionBarProps = {
   readonly actions: ReactNode;
   /** The actions of the More menu; without any, there is no More button. */
   readonly moreItems?: readonly ActionMenuItem[];
+  /**
+   * True when `backend` allows none of the items now, such as Submit for approval for a manager
+   * (workspace-manager.png) or while the AI works (state-partial.png); More then stays in its
+   * place, disabled (UI-15, UI-16). An item that is allowed but not ready, such as Submit for
+   * approval before a warning is acknowledged, leaves More enabled and is disabled in the menu.
+   */
+  readonly isMoreDisabled?: boolean;
   /** The main action of the view, such as Send reply. */
   readonly primaryAction: ReactNode;
 };
@@ -48,10 +56,17 @@ export type ActionBarProps = {
 /**
  * Render the action bar.
  *
- * @param props - The reason line, the secondary actions, the items of More, and the main action.
+ * @param props - The reason line, the secondary actions, the items of More and whether More is
+ *   disabled, and the main action.
  * @returns The bar; the More menu opens in a portal inside it.
  */
-export function ActionBar({ reason, actions, moreItems = [], primaryAction }: ActionBarProps) {
+export function ActionBar({
+  reason,
+  actions,
+  moreItems = [],
+  isMoreDisabled = false,
+  primaryAction,
+}: ActionBarProps) {
   return (
     <div className="sticky bottom-0 mt-auto flex flex-col gap-2 border-t border-border bg-surface px-4 py-3">
       {reason === undefined ? null : (
@@ -61,7 +76,7 @@ export function ActionBar({ reason, actions, moreItems = [], primaryAction }: Ac
       )}
       <div className="flex flex-wrap items-center gap-2">
         {actions}
-        {moreItems.length === 0 ? null : <MoreMenu items={moreItems} />}
+        {moreItems.length === 0 ? null : <MoreMenu items={moreItems} isDisabled={isMoreDisabled} />}
         <div className="ml-auto">{primaryAction}</div>
       </div>
     </div>
@@ -71,25 +86,26 @@ export function ActionBar({ reason, actions, moreItems = [], primaryAction }: Ac
 /** Props of {@link MoreMenu}. */
 type MoreMenuProps = {
   readonly items: readonly ActionMenuItem[];
+  /** True when the role may use none of the items. */
+  readonly isDisabled: boolean;
 };
 
 /**
  * Render More and its menu.
  *
- * @param props - The items, at least one.
+ * @param props - The items, at least one, and whether More is disabled.
  * @returns The icon button. The menu opens in a portal next to it, so it stays inside the landmark
  *   of the reply area (axe region); it is positioned on top of the page, so the panel does not clip
- *   it.
+ *   it. The element that holds the portal generates no box, so it adds no gap to the row.
  */
-function MoreMenu({ items }: MoreMenuProps) {
-  const isEveryItemDisabled = items.every((item) => item.isDisabled === true);
+function MoreMenu({ items, isDisabled }: MoreMenuProps) {
   const [menuContainer, setMenuContainer] = useState<HTMLSpanElement | null>(null);
   return (
     // Not modal, as in the WAI-ARIA menu button pattern (axe aria-hidden-focus, UI-32).
     <DropdownMenuPrimitive.Root modal={false}>
       <DropdownMenuPrimitive.Trigger
         aria-label="More actions"
-        disabled={isEveryItemDisabled}
+        disabled={isDisabled}
         className={cn(
           buttonVariants({ variant: "secondary", size: "md" }),
           "aria-expanded:bg-background",
@@ -98,7 +114,7 @@ function MoreMenu({ items }: MoreMenuProps) {
       >
         <Icon icon={Ellipsis} />
       </DropdownMenuPrimitive.Trigger>
-      <span ref={setMenuContainer} />
+      <span ref={setMenuContainer} className="contents" />
       <DropdownMenuPrimitive.Portal container={menuContainer}>
         <DropdownMenuPrimitive.Content
           side="top"

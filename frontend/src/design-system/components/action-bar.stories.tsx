@@ -49,13 +49,17 @@ export const SendBlockedByWarning: Story = {
 };
 export const MoreMenuOpen: Story = {
   play: async ({ canvasElement }) => {
-    await userEvent.click(within(canvasElement).getByRole("button", { name: "More actions" }));
+    const more = within(canvasElement).getByRole("button", { name: "More actions" });
+    await userEvent.click(more);
 
-    await expect(
-      await screen.findByRole("menuitem", {
-        name: "Submit for approval A manager sends the reply",
-      }),
-    ).toBeVisible();
+    const menuItem = await screen.findByRole("menuitem", {
+      name: "Submit for approval A manager sends the reply",
+    });
+    await expect(menuItem).toBeVisible();
+    // The menu opens in the element after More, which generates no box, so it adds no gap.
+    const menuHolder = more.nextElementSibling;
+    await expect(menuHolder).toContainElement(menuItem);
+    await expect(menuHolder?.getClientRects()).toHaveLength(0);
   },
 };
 export const MoreMenuByKeyboard: Story = {
@@ -106,6 +110,32 @@ export const EveryActionDisabled: Story = {
         Send reply
       </Button>
     ),
+  },
+  play: async ({ canvasElement }) => {
+    const more = within(canvasElement).getByRole("button", { name: "More actions" });
+    await expect(more).toBeEnabled();
+    await userEvent.click(more);
+
+    await expect(
+      await screen.findByRole("menuitem", { name: /^Submit for approval/ }),
+    ).toHaveAttribute("aria-disabled", "true");
+  },
+};
+export const MoreDisabledForManager: Story = {
+  args: {
+    reason: "Reject draft and Escalate ticket are not available while the ticket awaits approval.",
+    actions: (
+      <>
+        <Button leadingIcon={Pencil}>Edit proposal</Button>
+        <Button leadingIcon={X} disabled>
+          Reject draft
+        </Button>
+        <Button leadingIcon={CircleArrowUp} disabled>
+          Escalate ticket
+        </Button>
+      </>
+    ),
+    isMoreDisabled: true,
   },
   play: async ({ canvasElement }) => {
     await expect(

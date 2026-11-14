@@ -192,7 +192,7 @@ describe("getReplyAreaState of a ticket handed to a manager", () => {
   it("shows the escalation of an escalated ticket without a ready draft", () => {
     expect(getReplyAreaState(readWorkspace("escalated"))).toMatchObject({
       kind: "escalated",
-      escalation: { reasonCodes: ["other"], escalatedByName: "Mai Nguyen" },
+      escalation: { reasonCodes: ["other"], escalatedBy: { displayName: "Mai Nguyen" } },
     });
   });
 });

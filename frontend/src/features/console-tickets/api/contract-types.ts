@@ -76,3 +76,9 @@ export type CreateReplyProposalRequestContract = Schemas["CreateReplyProposalReq
 
 /** `CreateEscalationRequest`: the body of `createEscalation`. */
 export type CreateEscalationRequestContract = Schemas["CreateEscalationRequest"];
+
+/** `StaffMemberView`: the staff member of a proposal or an escalation. */
+export type StaffMemberContract = Schemas["StaffMemberView"];
+
+/** `ReplyProposalBasis`: what a proposal is based on. */
+export type ReplyProposalBasisContract = Schemas["ReplyProposalBasis"];

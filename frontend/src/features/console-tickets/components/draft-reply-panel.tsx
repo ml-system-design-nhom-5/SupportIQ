@@ -1,11 +1,11 @@
 /**
  * The reply area with a ready draft (console UI design, Actions, Draft editing and citations, and
  * States): the draft with its citation markers, the editor after Edit draft, or the reason codes,
- * the rejected draft, and an empty editor after Reject draft. When a new draft replaced the one that
- * staff worked on, their text stays in the editor and the new draft shows above it, read-only
+ * the rejected draft, and an empty editor after Reject draft. When a new draft replaced the one
+ * that staff worked on, their text stays in the editor and the new draft shows above it, read-only
  * (Errors and guardrails, "The draft was superseded"). Warnings sit at the top, next to the action
- * they block, and each needs an acknowledgement (UI-18). AI content carries the `ai` marker
- * (UI-13); text in the editor is staff text.
+ * they block, and each needs an acknowledgement while staff may use the draft (UI-18). AI content
+ * carries the `ai` marker (UI-13); text in the editor is staff text.
  */
 import {
   Panel,
@@ -35,13 +35,11 @@ import type { SuggestionWarning } from "@/features/console-tickets/model/reason-
 import {
   acknowledgeWarning,
   discardEdits,
+  EDITED_TEXT_HINT,
   rejectDraft,
   startEditing,
   toggleReasonCode,
 } from "@/features/console-tickets/model/reply-composer";
-
-/** The hint under the editor of a reply that is sent as an edit of the AI draft. */
-const EDITED_TEXT_HINT = "Edited text is not checked against the sources.";
 
 /** What a draft needs: its warnings, its time, and its citations. */
 export type DraftContext = {
@@ -77,19 +75,7 @@ export function DraftReplyPanel({ composer, draft, context }: DraftReplyPanelPro
     >
       <DraftPanelHeader state={state} generatedAt={context.generatedAt} />
       {isRejected || context.warnings.length === 0 ? null : (
-        <PanelSection>
-          <WarningList
-            warnings={context.warnings.map((warning) => ({
-              warningId: warning.warningId,
-              title: presentationByAiReasonCode[warning.reasonCode].label,
-              description: warning.text,
-            }))}
-            acknowledgedIds={state.acknowledgedWarningIds}
-            onAcknowledgedChange={(warningId, isAcknowledged) => {
-              change((current) => acknowledgeWarning(current, { warningId, isAcknowledged }));
-            }}
-          />
-        </PanelSection>
+        <DraftWarnings composer={composer} warnings={context.warnings} />
       )}
       <DraftBody composer={composer} draft={draft} context={context} />
       <ReplyActionBar
@@ -113,6 +99,40 @@ export function DraftReplyPanel({ composer, draft, context }: DraftReplyPanelPro
         }
       />
     </Panel>
+  );
+}
+
+/**
+ * Render the warnings of the draft at the top of the panel. Only a draft that staff may use asks
+ * for acknowledgements (UI-18); on a read-only ticket the warnings show without checkboxes.
+ *
+ * @param props - The composer and the warnings.
+ * @returns The section with the warnings.
+ */
+function DraftWarnings({
+  composer,
+  warnings,
+}: {
+  readonly composer: ReplyComposer;
+  readonly warnings: readonly SuggestionWarning[];
+}) {
+  const acknowledgement = {
+    acknowledgedIds: composer.state.acknowledgedWarningIds,
+    onAcknowledgedChange: (warningId: string, isAcknowledged: boolean) => {
+      composer.change((current) => acknowledgeWarning(current, { warningId, isAcknowledged }));
+    },
+  };
+  return (
+    <PanelSection>
+      <WarningList
+        warnings={warnings.map((warning) => ({
+          warningId: warning.warningId,
+          title: presentationByAiReasonCode[warning.reasonCode].label,
+          description: warning.text,
+        }))}
+        {...(composer.canChangeDraft ? acknowledgement : {})}
+      />
+    </PanelSection>
   );
 }
 

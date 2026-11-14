@@ -2,8 +2,9 @@
  * The reply area of the workspace in its state (console UI design, States and Actions): the panel
  * of the state, which fills the rest of the column, with the editor when staff may write and the
  * action bar at its bottom (UI-15, UI-16, placement rule 2). A closed ticket keeps the bar with
- * every action disabled and the reason. A ticket awaiting approval shows the proposal next to the AI
- * draft, and an escalated ticket shows its escalation above the editor (console UI design, States).
+ * every action disabled and the reason. A ticket awaiting approval shows the proposal next to the
+ * AI draft, and an escalated ticket shows its escalation above the editor (console UI design,
+ * States).
  * Send reply opens the confirmation, which the workspace shows (UI-17).
  */
 import { RotateCcw } from "lucide-react";

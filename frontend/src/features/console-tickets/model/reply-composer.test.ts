@@ -52,19 +52,21 @@ describe("followSuggestion (UI-18, ADR-0006)", () => {
   it("keeps the same state while the suggestion is the same", () => {
     const checked = checkOnFirstSuggestion(opened);
 
-    expect(followSuggestion(checked, "s1")).toBe(checked);
+    expect(followSuggestion(checked, { suggestionId: "s1", proposalId: undefined })).toBe(checked);
   });
 
   it("drops what staff checked on the old suggestion, and reads the new draft without text", () => {
     const rejected = checkOnFirstSuggestion(rejectDraft(opened));
 
-    expect(followSuggestion(rejected, "s2")).toEqual(createComposerState("s2"));
+    expect(followSuggestion(rejected, { suggestionId: "s2", proposalId: undefined })).toEqual(
+      createComposerState("s2"),
+    );
   });
 
   it("keeps an edit of the old draft in the editor, as an edit, under the new draft", () => {
     const edited = checkOnFirstSuggestion(startEditing(opened, "Edited reply."));
 
-    expect(followSuggestion(edited, "s2")).toEqual({
+    expect(followSuggestion(edited, { suggestionId: "s2", proposalId: undefined })).toEqual({
       ...createComposerState("s2"),
       draftMode: "keeping",
       body: "Edited reply.",
@@ -76,7 +78,12 @@ describe("followSuggestion (UI-18, ADR-0006)", () => {
     ["after a rejection", { ...rejectDraft(opened), body: "My own reply." }],
     ["without a draft", { ...opened, body: "My own reply." }],
   ])("keeps a reply that staff wrote %s as their own reply", (_case, state) => {
-    expect(followSuggestion(checkOnFirstSuggestion(state), "s2")).toMatchObject({
+    expect(
+      followSuggestion(checkOnFirstSuggestion(state), {
+        suggestionId: "s2",
+        proposalId: undefined,
+      }),
+    ).toMatchObject({
       draftMode: "keeping",
       body: "My own reply.",
       keptTextOrigin: "own_reply",
@@ -89,22 +96,46 @@ describe("followSuggestion (UI-18, ADR-0006)", () => {
 
 describe("followSuggestion of a kept text", () => {
   it("keeps where the text came from over several new drafts", () => {
-    const kept = followSuggestion(startEditing(opened, "Edited reply."), "s2");
+    const kept = followSuggestion(startEditing(opened, "Edited reply."), {
+      suggestionId: "s2",
+      proposalId: undefined,
+    });
 
-    expect(followSuggestion(kept, "s3")).toMatchObject({
+    expect(followSuggestion(kept, { suggestionId: "s3", proposalId: undefined })).toMatchObject({
       suggestionId: "s3",
       draftMode: "keeping",
       keptTextOrigin: "edited_draft",
     });
   });
 
+  it("starts over when a proposal arrives on the same suggestion (FR-06)", () => {
+    const edited = startEditing(opened, "A manager's own text.");
+
+    expect(followSuggestion(edited, { suggestionId: "s1", proposalId: "p1" })).toEqual(
+      createComposerState("s1", "p1"),
+    );
+  });
+
+  it("starts over when another proposal replaces the one that a manager edits", () => {
+    const editing = startEditing(createComposerState("s1", "p1"), "Edited proposal.");
+
+    expect(followSuggestion(editing, { suggestionId: "s1", proposalId: "p2" })).toEqual(
+      createComposerState("s1", "p2"),
+    );
+  });
+
   it("treats a text of spaces only as no text", () => {
-    expect(followSuggestion({ ...opened, body: "  " }, "s2")).toEqual(createComposerState("s2"));
+    expect(
+      followSuggestion({ ...opened, body: "  " }, { suggestionId: "s2", proposalId: undefined }),
+    ).toEqual(createComposerState("s2"));
   });
 });
 
 describe("the kept text", () => {
-  const kept = followSuggestion({ ...rejectDraft(opened), body: "My own reply." }, "s2");
+  const kept = followSuggestion(
+    { ...rejectDraft(opened), body: "My own reply." },
+    { suggestionId: "s2", proposalId: undefined },
+  );
 
   it("stays in the editor when staff reject the new draft", () => {
     expect(rejectDraft(kept)).toMatchObject({

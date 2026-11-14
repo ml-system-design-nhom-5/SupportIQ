@@ -31,6 +31,26 @@ type Story = StoryObj<typeof meta>;
 export const NoneSelected: Story = {};
 export const OneSelected: Story = { args: { selected: new Set(["unsupported_claim"]) } };
 export const TwoSelected: Story = { args: { selected: new Set(["wrong_source", "kb_gap"]) } };
+export const LabelHidden: Story = {
+  args: { label: "Why do you escalate this ticket?", labelVisibility: "hidden" },
+  play: async ({ canvasElement }) => {
+    await expect(
+      within(canvasElement).getByRole("group", { name: "Why do you escalate this ticket?" }),
+    ).toBeVisible();
+  },
+};
+export const WithError: Story = {
+  args: {
+    label: "Why do you escalate this ticket?",
+    labelVisibility: "hidden",
+    error: "Choose at least one reason.",
+  },
+  play: async ({ canvasElement }) => {
+    await expect(
+      within(canvasElement).getByRole("group", { name: "Why do you escalate this ticket?" }),
+    ).toHaveAccessibleDescription("Choose at least one reason.");
+  },
+};
 export const ToggleOnAndOff: Story = {
   render: (args) => <ControlledGroup {...args} />,
   play: async ({ canvasElement }) => {

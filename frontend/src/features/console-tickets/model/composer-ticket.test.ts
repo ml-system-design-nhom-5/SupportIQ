@@ -1,10 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { canChangeDraft, canEditProposal } from "@/features/console-tickets/model/composer-ticket";
-import { readComposerTicket } from "@/test/console-screen";
-
-/** The proposal of the awaiting-approval example. */
-const PROPOSAL_ID = "3e5a7c9b-1d2f-4a6c-8e0b-5d7f9a1c3e52";
+import { AWAITING_APPROVAL_PROPOSAL_ID, readComposerTicket } from "@/test/console-screen";
 
 describe("toComposerTicket of a ticket that awaits approval (FR-06)", () => {
   it("starts a manager from the proposal, with no warning to acknowledge", () => {
@@ -12,7 +9,7 @@ describe("toComposerTicket of a ticket that awaits approval (FR-06)", () => {
 
     expect(ticket).toMatchObject({
       status: "awaiting_approval",
-      draft: { kind: "reply_proposal", proposalId: PROPOSAL_ID },
+      draft: { kind: "reply_proposal", proposalId: AWAITING_APPROVAL_PROPOSAL_ID },
       warningIds: [],
     });
     expect(ticket.draft?.text).toMatch(/^Hello Lan Tran, thank you for your patience\./);

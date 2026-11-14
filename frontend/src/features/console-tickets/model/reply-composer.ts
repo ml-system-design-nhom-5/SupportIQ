@@ -15,6 +15,9 @@ import {
   toggleStaffReasonCode,
 } from "@/features/console-tickets/model/staff-reason-codes";
 
+/** The hint under the editor of a reply that is sent as an edit of a ready text. */
+export const EDITED_TEXT_HINT = "Edited text is not checked against the sources.";
+
 /**
  * What staff do with a ready draft.
  * `viewing`: they read it, and Send reply sends it as is.
@@ -34,8 +37,10 @@ export type KeptTextOrigin = "edited_draft" | "own_reply";
 
 /** What staff composed so far. */
 export type ComposerState = {
-  /** The suggestion that the acknowledgements and the reasons belong to; absent in `manual` mode. */
+  /** The suggestion that the acknowledgements and reasons belong to; absent in `manual` mode. */
   readonly suggestionId: string | undefined;
+  /** The proposal that a manager edits; absent unless the ticket awaits approval. */
+  readonly proposalId: string | undefined;
   readonly draftMode: DraftMode;
   /** The text of the editor: the edited draft, the reply after a rejection, or a reply without a draft. */
   readonly body: string;
@@ -47,15 +52,23 @@ export type ComposerState = {
   readonly acknowledgedWarningIds: ReadonlySet<string>;
 };
 
+/** The ready text that what staff composed belongs to: the suggestion and the proposal. */
+export type ComposedTextOwner = Pick<ComposerState, "suggestionId" | "proposalId">;
+
 /**
- * Create the state of a ticket that opens: the draft is read as is, and nothing is typed yet.
+ * Create the state of a ticket that opens: the ready text is read as is, and nothing is typed yet.
  *
  * @param suggestionId - The current suggestion of the ticket; undefined in `manual` mode.
+ * @param proposalId - The proposal of a ticket that awaits approval; undefined otherwise.
  * @returns The state.
  */
-export function createComposerState(suggestionId: string | undefined): ComposerState {
+export function createComposerState(
+  suggestionId: string | undefined,
+  proposalId?: string,
+): ComposerState {
   return {
     suggestionId,
+    proposalId,
     draftMode: "viewing",
     body: "",
     keptTextOrigin: undefined,
@@ -66,23 +79,26 @@ export function createComposerState(suggestionId: string | undefined): ComposerS
 }
 
 /**
- * Keep the state with the current suggestion. When a new suggestion replaced the one that staff
- * worked on, after an intent correction, Try AI again, or a reload after `409
+ * Keep the state with the ready text of the ticket. A new proposal, such as one that a colleague
+ * submitted while a manager was writing, starts over, so a manager only ever sends the proposal
+ * that the screen shows, or their edit of it (FR-06). When a new suggestion replaced the one that
+ * staff worked on, after an intent correction, Try AI again, or a reload after `409
  * suggestion-superseded`, its acknowledgements, reason codes, and note are dropped. Text that staff
  * typed stays in the editor, under the new draft; without text, staff read the new draft as is.
  *
  * @param state - The state.
- * @param suggestionId - The current suggestion of the ticket.
- * @returns The same state while the suggestion is the same; the state for the new one otherwise.
+ * @param owner - The current suggestion and proposal of the ticket.
+ * @returns The same state while both are the same; the state for the new ones otherwise.
  */
-export function followSuggestion(
-  state: ComposerState,
-  suggestionId: string | undefined,
-): ComposerState {
+export function followSuggestion(state: ComposerState, owner: ComposedTextOwner): ComposerState {
+  const { suggestionId, proposalId } = owner;
+  if (state.proposalId !== proposalId) {
+    return createComposerState(suggestionId, proposalId);
+  }
   if (state.suggestionId === suggestionId) {
     return state;
   }
-  const replaced = createComposerState(suggestionId);
+  const replaced = createComposerState(suggestionId, proposalId);
   return state.body.trim() === ""
     ? replaced
     : {

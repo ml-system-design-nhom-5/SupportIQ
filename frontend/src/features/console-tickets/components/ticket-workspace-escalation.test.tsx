@@ -64,7 +64,9 @@ describe("Escalate ticket (ADR-0006)", () => {
     await waitFor(() => {
       expect(dialog).not.toBeInTheDocument();
     });
-    const heading = await within(main).findByRole("heading", { name: "Escalated by Mai Nguyen" });
+    const heading = await within(main).findByRole("heading", {
+      name: "Escalated by Mai Nguyen (you)",
+    });
     await waitFor(() => {
       expect(heading).toHaveFocus();
     });
@@ -133,7 +135,9 @@ describe("An escalated ticket", () => {
       session: "manager",
       workspace: [workspaceExample("escalated")],
     });
-    const escalation = within(main).getByRole("region", { name: "Escalated by Mai Nguyen" });
+    const escalation = within(main).getByRole("region", {
+      name: "Escalated by Mai Nguyen (staff)",
+    });
     expect(escalation).toHaveTextContent("Other");
     expect(escalation).toHaveTextContent("The customer asks to talk to a person.");
     expect(main).toHaveTextContent("Write a reply to send it.");
@@ -161,7 +165,9 @@ describe("An escalated ticket", () => {
       ],
     });
 
-    expect(within(main).getByRole("region", { name: "Escalated by Mai Nguyen" })).toBeVisible();
+    expect(
+      within(main).getByRole("region", { name: "Escalated by Mai Nguyen (staff)" }),
+    ).toBeVisible();
     expect(within(main).getByRole("region", { name: "AI draft" })).toBeVisible();
   });
 });

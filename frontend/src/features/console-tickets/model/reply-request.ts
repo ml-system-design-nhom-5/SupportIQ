@@ -21,21 +21,6 @@ import { staffReasonCodes } from "@/features/console-tickets/model/staff-reason-
 type AiDraft = Extract<ComposerDraft, { readonly kind: "ai_draft" }>;
 
 /**
- * Tell whether two requests send the same reply, so the second reuses the `Idempotency-Key` of
- * the first (TS-29). The bodies are built by this module, so equal requests serialize equally.
- *
- * @param first - The earlier request.
- * @param second - The later one.
- * @returns True when the requests are equal.
- */
-export function isSameReply(
-  first: SendReplyRequestContract,
-  second: SendReplyRequestContract,
-): boolean {
-  return JSON.stringify(first) === JSON.stringify(second);
-}
-
-/**
  * Build the body of `sendReply`: the basis `reply_proposal` with the proposal for a manager on a
  * ticket awaiting approval, and the basis of {@link buildReplyProposalRequest} otherwise.
  *

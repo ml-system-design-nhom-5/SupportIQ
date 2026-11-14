@@ -5,27 +5,26 @@
  * as it is, and the button is disabled while the AI runs or a new suggestion starts, so the
  * proposal is always based on the current suggestion.
  */
-import { getRequestFailure, useCreateIdempotencyKey } from "@/features/backend-requests";
+import { useCreateIdempotencyKey } from "@/features/backend-requests";
+import { chooseIdempotencyKey } from "@/features/console-tickets/api/keyed-writes";
 import { useCreateReplyProposal } from "@/features/console-tickets/api/use-create-reply-proposal";
 import type { ComposerTicket } from "@/features/console-tickets/model/composer-ticket";
+import { findReplyBlock } from "@/features/console-tickets/model/reply-block";
 import type { ComposerState } from "@/features/console-tickets/model/reply-composer";
 import {
-  buildReplyProposalRequest,
-  isSameReply,
-} from "@/features/console-tickets/model/reply-request";
-import { findReplyBlock } from "@/features/console-tickets/model/send-block";
-import {
-  describeReplyFailure,
-  type SendFailureView,
-} from "@/features/console-tickets/model/send-failure";
+  type DatedFailure,
+  readDatedFailure,
+} from "@/features/console-tickets/model/reply-failure";
+import { buildReplyProposalRequest } from "@/features/console-tickets/model/reply-request";
 
 /** Submit for approval and its state. */
 export type ProposalSubmission = {
   /** Submits the reply for approval; does nothing while it is disabled or sending. */
   readonly submit: () => void;
+  /** True while the proposal is sending, with its automatic retries. */
   readonly isSubmitting: boolean;
-  /** The last failed submission, in plain language; undefined after a success or before any. */
-  readonly submitFailure: SendFailureView | undefined;
+  /** The last failed submission, with when it was sent; undefined after a success. */
+  readonly submitFailure: DatedFailure | undefined;
 };
 
 /**
@@ -43,7 +42,6 @@ export function useProposalSubmission(
 ): ProposalSubmission {
   const createProposal = useCreateReplyProposal(ticketId);
   const createIdempotencyKey = useCreateIdempotencyKey();
-  const failure = getRequestFailure(createProposal.error);
   return {
     submit: () => {
       const { ticket, state } = composed;
@@ -54,16 +52,10 @@ export function useProposalSubmission(
         return;
       }
       const request = buildReplyProposalRequest(ticket, state);
-      const failed = createProposal.isError ? createProposal.variables : undefined;
-      // The same proposal submitted again after a failure keeps its key (TS-29).
-      const idempotencyKey =
-        failed !== undefined && isSameReply(failed.request, request)
-          ? failed.idempotencyKey
-          : createIdempotencyKey();
+      const idempotencyKey = chooseIdempotencyKey(request, createProposal, createIdempotencyKey);
       createProposal.mutate({ request, idempotencyKey }, { onSuccess: onSubmitted });
     },
     isSubmitting: createProposal.isPending,
-    submitFailure:
-      failure === undefined ? undefined : describeReplyFailure(failure, "submit_reply_proposal"),
+    submitFailure: readDatedFailure(createProposal, "submit_reply_proposal"),
   };
 }

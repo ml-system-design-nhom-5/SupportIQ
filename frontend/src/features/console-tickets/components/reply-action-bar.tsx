@@ -31,7 +31,7 @@ type ReplyActionBarProps = {
  * @returns The failure banner of the last send or submission, when there is one, and the bar.
  */
 export function ReplyActionBar({ composer, actions }: ReplyActionBarProps) {
-  const failure = composer.submitFailure ?? composer.sendFailure;
+  const { failure } = composer;
   const submitPlace = getSubmitPlace(composer);
   return (
     <>
@@ -54,13 +54,16 @@ export function ReplyActionBar({ composer, actions }: ReplyActionBarProps) {
             >
               Escalate ticket
             </Button>
-            {submitPlace === "button" ? <SubmitButton composer={composer} /> : null}
+            {submitPlace === "button" ? (
+              <SubmitButton composer={composer} variant="secondary" />
+            ) : null}
           </>
         }
         moreItems={submitPlace === "menu" ? [toSubmitMenuItem(composer)] : []}
+        isMoreDisabled={!composer.canSubmit}
         primaryAction={
           submitPlace === "primary" ? (
-            <SubmitButton composer={composer} isPrimary />
+            <SubmitButton composer={composer} variant="primary" />
           ) : (
             <Button
               variant="primary"
@@ -82,19 +85,19 @@ export function ReplyActionBar({ composer, actions }: ReplyActionBarProps) {
 /**
  * Render Submit for approval as a button.
  *
- * @param props - The composer, and whether it is the main action.
+ * @param props - The composer, and the variant: `primary` when it is the main action.
  * @returns The button.
  */
 function SubmitButton({
   composer,
-  isPrimary = false,
+  variant,
 }: {
   readonly composer: ReplyComposer;
-  readonly isPrimary?: boolean;
+  readonly variant: "primary" | "secondary";
 }) {
   return (
     <Button
-      variant={isPrimary ? "primary" : "secondary"}
+      variant={variant}
       leadingIcon={Clock}
       disabled={composer.submitBlock !== undefined}
       isPending={composer.isSubmitting}
@@ -123,14 +126,15 @@ function getSubmitPlace(composer: ReplyComposer): SubmitPlace {
  * Describe Submit for approval as an item of More (action-menu.png).
  *
  * @param composer - The composer.
- * @returns The item, disabled while the submission is blocked or sending.
+ * @returns The item, disabled while the submission is blocked. A press while it is sending does
+ *   nothing, because the submission ignores it.
  */
 function toSubmitMenuItem(composer: ReplyComposer): ActionMenuItem {
   return {
     icon: Clock,
     label: "Submit for approval",
     description: "A manager sends the reply",
-    isDisabled: composer.submitBlock !== undefined || composer.isSubmitting,
+    isDisabled: composer.submitBlock !== undefined,
     onSelect: composer.submit,
   };
 }

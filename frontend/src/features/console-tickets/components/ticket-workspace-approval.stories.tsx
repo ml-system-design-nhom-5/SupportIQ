@@ -7,9 +7,12 @@ import {
   type ConsoleAnswers,
   readSuggestionPart,
   workspaceExample,
+  workspaceWith,
   workspaceWithSuggestion,
 } from "@/test/console-screen";
 import { ConsoleStoryFrame } from "@/test/console-story-frame";
+import { readOperationExample } from "@/test/contract-examples";
+import { exampleAnswer } from "@/test/fake-backend";
 import { withFakeBackend } from "@/test/story-backend";
 
 const meta = {
@@ -28,6 +31,12 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
+/** What the play functions of this file read of the story context. */
+type PlayContext = { readonly canvasElement: HTMLElement };
+
+/** The reply that staff write in manual handling. */
+const STAFF_TEXT = "Here is the return label.";
+
 /**
  * Build the decorator of a story whose console answers as given.
  *
@@ -41,6 +50,21 @@ function withAnswers(answers: ConsoleAnswers) {
       answerConsole(backend, answers);
     }),
   ];
+}
+
+/**
+ * Write a reply in manual handling and press Submit for approval, as staff do.
+ *
+ * @param context - The story context.
+ * @param context.canvasElement - The element that holds the story.
+ * @returns The editor, which keeps the text whatever the outcome.
+ */
+async function submitManualReply({ canvasElement }: PlayContext): Promise<HTMLElement> {
+  const canvas = within(canvasElement);
+  const editor = await canvas.findByRole("textbox", { name: "Reply to the customer" });
+  await userEvent.type(editor, STAFF_TEXT);
+  await userEvent.click(canvas.getByRole("button", { name: "Submit for approval" }));
+  return editor;
 }
 
 export const AuthorityRequired: Story = {
@@ -72,6 +96,34 @@ export const SubmitInManualHandling: Story = {
     ).toBeDisabled();
   },
 };
+export const SubmitRefused: Story = {
+  decorators: withAnswers({
+    workspace: [workspaceExample("manual-mode")],
+    proposal: [exampleAnswer(409, "problems", "invalid-ticket-state")],
+  }),
+  play: async (context) => {
+    const editor = await submitManualReply(context);
+
+    await expect(await within(context.canvasElement).findByRole("alert")).toHaveTextContent(
+      "The reply was not submitted. This ticket was already handled. It now shows its current state.",
+    );
+    await expect(editor).toHaveValue(STAFF_TEXT);
+  },
+};
+export const SubmitOutcomeUnknown: Story = {
+  decorators: withAnswers({
+    workspace: [workspaceExample("manual-mode")],
+    proposal: [{ kind: "network_error" }],
+  }),
+  play: async (context) => {
+    const editor = await submitManualReply(context);
+
+    await expect(await within(context.canvasElement).findByRole("alert")).toHaveTextContent(
+      "The reply may have been submitted. We could not confirm it. Submitting the same reply again is safe: a manager gets it once.",
+    );
+    await expect(editor).toHaveValue(STAFF_TEXT);
+  },
+};
 export const AwaitingApprovalManager: Story = {
   decorators: withAnswers({
     session: "manager",
@@ -81,6 +133,26 @@ export const AwaitingApprovalManager: Story = {
     await expect(
       await within(canvasElement).findByRole("region", { name: "Staff proposal" }),
     ).toBeVisible();
+  },
+};
+export const AwaitingApprovalManagerWithReasons: Story = {
+  decorators: withAnswers({
+    session: "manager",
+    workspace: [
+      workspaceWith("awaiting-approval", {
+        proposal: {
+          ...readOperationExample("getConsoleTicket", 200, "awaiting-approval").proposal,
+          basis: "rejected_ai_draft",
+          staff_reason_codes: ["kb_gap", "other"],
+          note: "The customer called us about the label.",
+        },
+      }),
+    ],
+  }),
+  play: async ({ canvasElement }) => {
+    await expect(
+      await within(canvasElement).findByRole("region", { name: "What staff noted" }),
+    ).toHaveTextContent("Written after staff rejected the AI draft.");
   },
 };
 export const EditProposal: Story = {
@@ -109,8 +181,23 @@ export const EscalatedManager: Story = {
   decorators: withAnswers({ session: "manager", workspace: [workspaceExample("escalated")] }),
   play: async ({ canvasElement }) => {
     await expect(
-      await within(canvasElement).findByRole("region", { name: "Escalated by Mai Nguyen" }),
+      await within(canvasElement).findByRole("region", { name: "Escalated by Mai Nguyen (staff)" }),
     ).toHaveTextContent("The customer asks to talk to a person.");
+  },
+};
+export const EscalatedStaff: Story = {
+  // The example is the view of a manager; an escalated ticket is read-only for staff. The staff
+  // session is the account that escalated it.
+  decorators: withAnswers({ workspace: [workspaceWith("escalated", { allowed_actions: [] })] }),
+  play: async ({ canvasElement }) => {
+    const escalation = await within(canvasElement).findByRole("region", {
+      name: "Escalated by Mai Nguyen (you)",
+    });
+
+    await expect(escalation).toHaveTextContent(
+      "This ticket is read-only for you. A manager sends the reply.",
+    );
+    await expect(within(escalation).queryByRole("textbox")).toBeNull();
   },
 };
 export const EscalatedWithReadyDraft: Story = {

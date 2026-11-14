@@ -13,15 +13,15 @@ import { useBackendClient } from "@/api/client";
 import { getRequestFailure, requestData, useWriteAttemptSender } from "@/features/backend-requests";
 import { consoleQueryKeys } from "@/features/console-tickets/api/console-query-keys";
 import type { SendReplyRequestContract } from "@/features/console-tickets/api/contract-types";
-import { describeReplyFailure } from "@/features/console-tickets/model/send-failure";
+import {
+  type KeyedWrite,
+  reloadTicketAfterWrite,
+} from "@/features/console-tickets/api/keyed-writes";
+import { describeReplyFailure } from "@/features/console-tickets/model/reply-failure";
 import { type SentReply, toSentReply } from "@/features/console-tickets/model/workspace";
 
 /** One confirmed Send reply: the request body and its key. */
-export type ConfirmedReply = {
-  readonly request: SendReplyRequestContract;
-  /** Stays while staff confirm the same reply again after a failure. */
-  readonly idempotencyKey: string;
-};
+export type ConfirmedReply = KeyedWrite<SendReplyRequestContract>;
 
 /**
  * Send the reply of a ticket.
@@ -36,8 +36,7 @@ export function useSendReply(
   const queryClient = useQueryClient();
   const sendAttempt = useWriteAttemptSender();
   const reloadTicket = () => {
-    void queryClient.invalidateQueries({ queryKey: consoleQueryKeys.workspace(ticketId) });
-    void queryClient.invalidateQueries({ queryKey: consoleQueryKeys.queues() });
+    reloadTicketAfterWrite(queryClient, ticketId);
   };
   return useMutation({
     mutationKey: consoleQueryKeys.sendReply(ticketId),

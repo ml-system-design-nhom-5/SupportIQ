@@ -16,20 +16,19 @@ import {
   requestData,
   useWriteAttemptSender,
 } from "@/features/backend-requests";
-import { consoleQueryKeys } from "@/features/console-tickets/api/console-query-keys";
 import type { CreateEscalationRequestContract } from "@/features/console-tickets/api/contract-types";
+import {
+  type KeyedWrite,
+  reloadTicketAfterWrite,
+} from "@/features/console-tickets/api/keyed-writes";
 import {
   type TicketEscalation,
   toTicketEscalation,
 } from "@/features/console-tickets/model/manager-handoff";
-import { describeReplyFailure } from "@/features/console-tickets/model/send-failure";
+import { describeReplyFailure } from "@/features/console-tickets/model/reply-failure";
 
 /** One Escalate ticket: the request body and its key. */
-export type RequestedEscalation = {
-  readonly request: CreateEscalationRequestContract;
-  /** Stays while staff escalate with the same reasons again after a failure. */
-  readonly idempotencyKey: string;
-};
+export type RequestedEscalation = KeyedWrite<CreateEscalationRequestContract>;
 
 /**
  * Escalate a ticket.
@@ -44,8 +43,7 @@ export function useCreateEscalation(
   const queryClient = useQueryClient();
   const sendAttempt = useWriteAttemptSender();
   const reloadTicket = () => {
-    void queryClient.invalidateQueries({ queryKey: consoleQueryKeys.workspace(ticketId) });
-    void queryClient.invalidateQueries({ queryKey: consoleQueryKeys.queues() });
+    reloadTicketAfterWrite(queryClient, ticketId);
   };
   return useMutation({
     mutationKey: buildIdempotentWriteKey("createEscalation"),

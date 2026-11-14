@@ -35,8 +35,9 @@ import { toComposerTicket } from "@/features/console-tickets/model/composer-tick
 import { type SourceSelection, toSourceSelection } from "@/features/console-tickets/model/sources";
 import type { TicketWorkspace } from "@/features/console-tickets/model/workspace";
 import { buildWorkspaceRegions } from "@/features/console-tickets/model/workspace-regions";
+import { useSignedInRole } from "@/features/session";
 
-/** The ID of the ticket heading, which takes the focus when the opener of a sheet or popover is gone. */
+/** The ID of the ticket heading, which takes the focus when the opener of a dialog is gone. */
 const WORKSPACE_HEADING_ID = "ticket-workspace-heading";
 
 /** A source open in the side sheet, and the element that opened it. */
@@ -73,12 +74,16 @@ export function TicketWorkspaceView({
   const [openedSource, setOpenedSource] = useState<OpenedSource | undefined>(undefined);
   const regions = buildWorkspaceRegions(workspace);
   const requestFocus = useFocusRequest();
+  const role = useSignedInRole();
   const suggestionRequests = useCreateSuggestion(ticketId, workspace, (request) => {
     requestFocus(request === "retry" ? PENDING_DRAFT_HEADING_ID : OTHER_INTENT_ID);
   });
   const composer = useReplyComposer(
     ticketId,
-    toComposerTicket(workspace, regions, suggestionRequests.isSending),
+    toComposerTicket(workspace, regions, {
+      isSuggestionRequested: suggestionRequests.isSending,
+      isManager: role === "manager",
+    }),
     {
       onSent: () => {
         requestFocus(SENT_REPLY_HEADING_ID);

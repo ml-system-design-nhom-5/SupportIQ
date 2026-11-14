@@ -8,6 +8,7 @@ import { screen, within } from "@testing-library/react";
 import type { UserEvent } from "@testing-library/user-event";
 
 import {
+  type ComposerContext,
   type ComposerTicket,
   toComposerTicket,
 } from "@/features/console-tickets/model/composer-ticket";
@@ -273,10 +274,21 @@ export async function sendAndConfirm(user: UserEvent, main: HTMLElement): Promis
  * Read what the composer reads of a workspace example.
  *
  * @param name - The example of `getConsoleTicket`.
- * @param isSuggestionRequested - True while an intent correction or Try AI again is sending.
+ * @param context - Whether a new suggestion is requested and whether the session is a manager's;
+ *   neither by default.
  * @returns The composer ticket.
  */
-export function readComposerTicket(name: string, isSuggestionRequested = false): ComposerTicket {
+export function readComposerTicket(
+  name: string,
+  context: Partial<ComposerContext> = {},
+): ComposerTicket {
   const workspace = toTicketWorkspace(readOperationExample("getConsoleTicket", 200, name));
-  return toComposerTicket(workspace, buildWorkspaceRegions(workspace), isSuggestionRequested);
+  return toComposerTicket(workspace, buildWorkspaceRegions(workspace), {
+    isSuggestionRequested: false,
+    isManager: false,
+    ...context,
+  });
 }
+
+/** The proposal of the awaiting-approval example. */
+export const AWAITING_APPROVAL_PROPOSAL_ID = "3e5a7c9b-1d2f-4a6c-8e0b-5d7f9a1c3e52";

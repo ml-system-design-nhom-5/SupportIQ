@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  shownStaffReasonCodeLabels,
   STAFF_NOTE_MAX_LENGTH,
   staffReasonCodeLabels,
   staffReasonCodes,
@@ -45,11 +46,13 @@ describe("staffReasonOptions", () => {
 });
 
 describe("toStaffReasonCodes", () => {
-  it("orders the codes as the contract does, and ignores unknown values (CON-22)", () => {
-    expect(toStaffReasonCodes(["kb_gap", "new_code", "wrong_intent"])).toEqual([
+  it("orders the codes as the contract does, and shows unknown values once as unknown (CON-22)", () => {
+    expect(toStaffReasonCodes(["kb_gap", "new_code", "wrong_intent", "other_new"])).toEqual([
       "wrong_intent",
       "kb_gap",
+      "unknown",
     ]);
+    expect(shownStaffReasonCodeLabels.unknown).toBe("Unspecified reason");
   });
 });
 

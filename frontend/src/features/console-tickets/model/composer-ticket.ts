@@ -6,7 +6,11 @@
  */
 import type { ConsoleTicketStatusName } from "@/design-system";
 import type { SuggestionWarning } from "@/features/console-tickets/model/reason-codes";
-import type { ComposerState, DraftMode } from "@/features/console-tickets/model/reply-composer";
+import type {
+  ComposedTextOwner,
+  ComposerState,
+  DraftMode,
+} from "@/features/console-tickets/model/reply-composer";
 import type { TicketAction } from "@/features/console-tickets/model/ticket-actions";
 import type { TicketWorkspace } from "@/features/console-tickets/model/workspace";
 import {
@@ -30,9 +34,16 @@ export type ComposerDraft =
  */
 export type ComposerSituation = "manual_handling" | "escalation_recommended";
 
+/** A write of the reply area that is sending and hands the ticket to a manager. */
+export type HandoverWrite = "submit_reply_proposal" | "escalate";
+
 /** What the composer needs to know of the ticket, derived from the workspace. */
 export type ComposerTicket = {
   readonly status: ConsoleTicketStatusName;
+  /** True for a manager, who sends the reply where staff submit it for approval (FR-06). */
+  readonly isManager: boolean;
+  /** The write that is sending and hands the ticket to a manager; absent while none is. */
+  readonly handover?: HandoverWrite;
   readonly allowedActions: ReadonlySet<TicketAction>;
   readonly isAuthorityRequired: boolean;
   /**
@@ -62,25 +73,36 @@ export type ComposerRegions = {
 /** What staff do: a mode of the ready text, or `writing` a reply when there is none. */
 export type ComposerMode = DraftMode | "writing";
 
+/** What the workspace knows besides the ticket. */
+export type ComposerContext = {
+  /** True while an intent correction or Try AI again is sending. */
+  readonly isSuggestionRequested: boolean;
+  /** True when the session is a manager's. */
+  readonly isManager: boolean;
+};
+
 /**
  * Read what the composer needs of the ticket.
  *
  * @param workspace - The ticket.
  * @param regions - The state of its reply area and the warnings of its analysis.
- * @param isSuggestionRequested - True while an intent correction or Try AI again is sending.
- * @returns The status, the allowed actions, the authority flag, whether the AI is running, the
- *   current suggestion, the ready text, where staff write without one, and the warnings.
+ * @param context - Whether a new suggestion is requested, and whether the session is a manager's.
+ * @returns The status, the role, the allowed actions, the authority flag, whether the AI is
+ *   running, the current suggestion, the ready text, where staff write without one, and the
+ *   warnings.
  */
 export function toComposerTicket(
   workspace: TicketWorkspace,
   regions: ComposerRegions,
-  isSuggestionRequested: boolean,
+  context: ComposerContext,
 ): ComposerTicket {
   const suggestionId = workspace.suggestion?.suggestionId;
   const { reply } = regions;
   const situation = getSituation(reply);
+  const { isSuggestionRequested } = context;
   return {
     status: workspace.status,
+    isManager: context.isManager,
     allowedActions: workspace.allowedActions,
     isAuthorityRequired: workspace.isAuthorityRequired,
     isSuggestionRunning: isSuggestionRequested || hasPendingPart(workspace),
@@ -108,12 +130,29 @@ export function getComposerMode(ticket: ComposerTicket, state: ComposerState): C
  *
  * @param ticket - The ticket.
  * @param state - What staff composed.
- * @returns The ready text while staff read it as is; the editor's text otherwise.
+ * @returns The ready text while staff read it as is; the editor's text otherwise. A proposal is
+ *   sent as is unless the manager edits it, so no other text is ever sent as the proposal.
  */
 export function getReplyBody(ticket: ComposerTicket, state: ComposerState): string {
-  return ticket.draft !== undefined && state.draftMode === "viewing"
-    ? ticket.draft.text
-    : state.body;
+  const { draft } = ticket;
+  if (draft?.kind === "reply_proposal") {
+    return state.draftMode === "editing" ? state.body : draft.text;
+  }
+  return draft !== undefined && state.draftMode === "viewing" ? draft.text : state.body;
+}
+
+/**
+ * Name the ready text that what staff composed belongs to: the current suggestion and, while the
+ * ticket awaits approval, its proposal (FR-06).
+ *
+ * @param ticket - The ticket.
+ * @returns The suggestion and the proposal.
+ */
+export function getComposedTextOwner(ticket: ComposerTicket): ComposedTextOwner {
+  return {
+    suggestionId: ticket.suggestionId,
+    proposalId: ticket.draft?.kind === "reply_proposal" ? ticket.draft.proposalId : undefined,
+  };
 }
 
 /**

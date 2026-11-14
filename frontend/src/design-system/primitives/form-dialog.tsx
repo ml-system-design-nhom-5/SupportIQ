@@ -93,7 +93,7 @@ export function FormDialog({
             {text.title}
           </DialogPrimitive.Title>
           {text.description === undefined ? null : (
-            <DialogPrimitive.Description className="text-sm">
+            <DialogPrimitive.Description>
               <Text tone={text.descriptionTone ?? "default"}>{text.description}</Text>
             </DialogPrimitive.Description>
           )}

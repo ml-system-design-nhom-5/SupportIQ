@@ -1,19 +1,19 @@
 /**
  * Escalate ticket of the reply area (console UI design, Actions and Dialogs; ADR-0006): the button
  * opens a dialog with the staff reason codes and a note, and the dialog's Escalate ticket sends
- * `createEscalation`. The AI only recommends an escalation; only this staff action decides it. The
- * form is checked when staff press Escalate ticket, and then again with every change. The request
- * is built at that press, with the current suggestion, because staff may escalate while a
- * suggestion part is `pending`.
+ * `createEscalation`. The AI only recommends an escalation; only this staff action decides it.
+ * Like the dialogs of the admin area, the form is checked when staff press Escalate ticket, and
+ * its errors stay until the next press. The request is built at that press, with the current
+ * suggestion, because staff may escalate while a suggestion part is `pending`. The dialog closes
+ * without an escalation when the suggestion that staff saw is replaced or `backend` no longer
+ * allows the escalation, so a decision is never recorded for a suggestion staff did not see.
  */
 import { useState } from "react";
 
-import { getRequestFailure, useCreateIdempotencyKey } from "@/features/backend-requests";
+import { useCreateIdempotencyKey } from "@/features/backend-requests";
 import type { CreateEscalationRequestContract } from "@/features/console-tickets/api/contract-types";
-import {
-  type RequestedEscalation,
-  useCreateEscalation,
-} from "@/features/console-tickets/api/use-create-escalation";
+import { chooseIdempotencyKey, type LastWrite } from "@/features/console-tickets/api/keyed-writes";
+import { useCreateEscalation } from "@/features/console-tickets/api/use-create-escalation";
 import type { ComposerTicket } from "@/features/console-tickets/model/composer-ticket";
 import {
   buildEscalationRequest,
@@ -23,17 +23,20 @@ import {
   findEscalationErrors,
 } from "@/features/console-tickets/model/escalation-form";
 import type { FailureView } from "@/features/console-tickets/model/failure-view";
-import { describeReplyFailure } from "@/features/console-tickets/model/send-failure";
+import {
+  type DatedFailure,
+  readDatedFailure,
+} from "@/features/console-tickets/model/reply-failure";
 
 /** The open dialog. */
 export type EscalationDialogState = {
   /** The Escalate ticket button that opened it. */
   readonly opener: HTMLElement;
   readonly form: EscalationForm;
-  /** What the form still needs; empty before the first press of Escalate ticket. */
+  /** What the form needed at the last press of Escalate ticket; empty before it. */
   readonly errors: EscalationErrors;
   readonly isPending: boolean;
-  /** The last failed escalation of this dialog, in plain language. */
+  /** The last failed escalation, in plain language. */
   readonly failure?: FailureView;
 };
 
@@ -41,8 +44,12 @@ export type EscalationDialogState = {
 export type Escalation = {
   /** True when `backend` allows the escalation (`escalate`). */
   readonly canEscalate: boolean;
+  /** True while the escalation is sending, with its automatic retries. */
+  readonly isEscalating: boolean;
   /** The dialog while it is open. */
   readonly dialog: EscalationDialogState | undefined;
+  /** The last failed escalation while the dialog is closed; the reply area shows it then. */
+  readonly closedFailure: DatedFailure | undefined;
   /** Opens the dialog with an empty form (Escalate ticket in the action bar). */
   readonly open: (opener: HTMLElement) => void;
   /** Changes the form. */
@@ -57,9 +64,13 @@ export type Escalation = {
 type OpenedDialog = {
   readonly opener: HTMLElement;
   readonly form: EscalationForm;
-  /** True once staff pressed Escalate ticket in this dialog. */
-  readonly isChecked: boolean;
+  readonly errors: EscalationErrors;
+  /** The suggestion that staff saw when they opened the dialog. */
+  readonly suggestionId: string | undefined;
 };
+
+/** The state of `createEscalation` that the hook reads. */
+type EscalationMutation = ReturnType<typeof useCreateEscalation>;
 
 /**
  * Keep Escalate ticket of a ticket.
@@ -67,24 +78,30 @@ type OpenedDialog = {
  * @param ticketId - The ticket of the address.
  * @param ticket - What the composer reads of the ticket: its allowed actions and suggestion.
  * @param onEscalated - Called once the ticket was escalated.
- * @returns Whether the escalation is allowed, the open dialog, and its handlers.
+ * @returns Whether the escalation is allowed and sending, the open dialog, and its handlers.
  */
 export function useEscalation(
   ticketId: string,
   ticket: ComposerTicket,
   onEscalated: () => void,
 ): Escalation {
-  const [opened, setOpened] = useState<OpenedDialog | undefined>(undefined);
+  const [stored, setOpened] = useState<OpenedDialog | undefined>(undefined);
   const createEscalation = useCreateEscalation(ticketId);
   const createIdempotencyKey = useCreateIdempotencyKey();
   const canEscalate = ticket.allowedActions.has("escalate");
+  const isStale = stored !== undefined && isOutdated(stored, ticket, createEscalation.isPending);
+  if (isStale) {
+    setOpened(undefined);
+  }
+  const opened = isStale ? undefined : stored;
   return {
     canEscalate,
-    dialog: opened === undefined ? undefined : toDialogState(opened, createEscalation),
+    isEscalating: createEscalation.isPending,
+    ...describeDialog(opened, createEscalation),
     open: (opener) => {
-      if (canEscalate) {
-        createEscalation.reset();
-        setOpened({ opener, form: emptyEscalationForm, isChecked: false });
+      if (canEscalate && !createEscalation.isPending) {
+        const { suggestionId } = ticket;
+        setOpened({ opener, form: emptyEscalationForm, errors: {}, suggestionId });
       }
     },
     change: (update) => {
@@ -92,11 +109,8 @@ export function useEscalation(
     },
     submit: () => {
       if (opened !== undefined && !createEscalation.isPending) {
-        sendEscalation(
-          opened,
-          { mutation: createEscalation, createIdempotencyKey, suggestionId: ticket.suggestionId },
-          { setDialog: setOpened, onEscalated },
-        );
+        const sending = { mutation: createEscalation, createIdempotencyKey };
+        sendEscalation(opened, sending, { setDialog: setOpened, onEscalated });
       }
     },
     cancel: () => {
@@ -108,63 +122,36 @@ export function useEscalation(
 }
 
 /**
- * Show the open dialog.
- *
- * @param opened - The dialog as the hook keeps it.
- * @param mutation - The state of `createEscalation`.
- * @param mutation.isPending - True while the escalation is sent.
- * @param mutation.error - The error of the last escalation, or null.
- * @returns The form, its errors once checked, whether it is sent, and the last failure.
- */
-function toDialogState(
-  opened: OpenedDialog,
-  mutation: { readonly isPending: boolean; readonly error: Error | null },
-): EscalationDialogState {
-  const failure = getRequestFailure(mutation.error);
-  return {
-    opener: opened.opener,
-    form: opened.form,
-    errors: opened.isChecked ? findEscalationErrors(opened.form) : {},
-    isPending: mutation.isPending,
-    ...(failure === undefined ? {} : { failure: describeReplyFailure(failure, "escalate") }),
-  };
-}
-
-/** What sending an escalation needs. */
-type EscalationSending = {
-  readonly mutation: ReturnType<typeof useCreateEscalation>;
-  readonly createIdempotencyKey: () => string;
-  /** The current suggestion that staff saw; undefined without one. */
-  readonly suggestionId: string | undefined;
-};
-
-/**
- * Check the form of the dialog and, when it has no error, send the escalation.
+ * Check the form of the dialog and, when it has no error, send the escalation with the
+ * suggestion that staff saw.
  *
  * @param opened - The open dialog.
- * @param sending - The mutation, the key factory, and the current suggestion.
+ * @param sending - The mutation and the factory of new keys.
+ * @param sending.mutation - The mutation of `createEscalation`.
+ * @param sending.createIdempotencyKey - Creates a new key.
  * @param callbacks - What changes the dialog, and what happens once the ticket was escalated.
  * @param callbacks.setDialog - Shows the dialog with its errors, or closes it after the escalation.
  * @param callbacks.onEscalated - Called once the ticket was escalated and the dialog closed.
  */
 function sendEscalation(
   opened: OpenedDialog,
-  sending: EscalationSending,
+  sending: {
+    readonly mutation: EscalationMutation;
+    readonly createIdempotencyKey: () => string;
+  },
   callbacks: {
     readonly setDialog: (dialog: OpenedDialog | undefined) => void;
     readonly onEscalated: () => void;
   },
 ): void {
-  if (Object.keys(findEscalationErrors(opened.form)).length > 0) {
-    callbacks.setDialog({ ...opened, isChecked: true });
+  const errors = findEscalationErrors(opened.form);
+  callbacks.setDialog({ ...opened, errors });
+  if (Object.keys(errors).length > 0) {
     return;
   }
-  const request = buildEscalationRequest(opened.form, sending.suggestionId);
-  const idempotencyKey = chooseEscalationKey(
-    request,
-    sending.mutation,
-    sending.createIdempotencyKey,
-  );
+  const request = buildEscalationRequest(opened.form, opened.suggestionId);
+  const lastWrite: LastWrite<CreateEscalationRequestContract> = sending.mutation;
+  const idempotencyKey = chooseIdempotencyKey(request, lastWrite, sending.createIdempotencyKey);
   sending.mutation.mutate(
     { request, idempotencyKey },
     {
@@ -177,21 +164,42 @@ function sendEscalation(
 }
 
 /**
- * Choose the `Idempotency-Key` of an escalation: the key of the failed one when staff send the
- * same escalation again, so it happens once (TS-29); a new key otherwise.
+ * Tell whether the open dialog no longer matches the ticket: a new suggestion replaced the one
+ * that staff saw, or `backend` no longer allows the escalation. A dialog that is sending stays.
  *
- * @param request - The escalation to send.
- * @param mutation - The state of `createEscalation`, with the last request when it failed.
- * @param createIdempotencyKey - Creates a new key.
- * @returns The key.
+ * @param opened - The open dialog.
+ * @param ticket - The ticket as rendered now.
+ * @param isPending - True while the escalation is sending.
+ * @returns True when the dialog must close without an escalation.
  */
-function chooseEscalationKey(
-  request: CreateEscalationRequestContract,
-  mutation: { readonly isError: boolean; readonly variables: RequestedEscalation | undefined },
-  createIdempotencyKey: () => string,
-): string {
-  const failed = mutation.isError ? mutation.variables : undefined;
-  return failed !== undefined && JSON.stringify(failed.request) === JSON.stringify(request)
-    ? failed.idempotencyKey
-    : createIdempotencyKey();
+function isOutdated(opened: OpenedDialog, ticket: ComposerTicket, isPending: boolean): boolean {
+  return (
+    !isPending &&
+    (opened.suggestionId !== ticket.suggestionId || !ticket.allowedActions.has("escalate"))
+  );
+}
+
+/**
+ * Show the dialog while it is open, or the last failure in the reply area while it is closed.
+ *
+ * @param opened - The open dialog; undefined while it is closed.
+ * @param mutation - The state of `createEscalation`.
+ * @returns The dialog with its form, errors, sending state, and last failure; or the failure.
+ */
+function describeDialog(
+  opened: OpenedDialog | undefined,
+  mutation: EscalationMutation,
+): Pick<Escalation, "dialog" | "closedFailure"> {
+  const failure = readDatedFailure(mutation, "escalate");
+  if (opened === undefined) {
+    return { dialog: undefined, closedFailure: failure };
+  }
+  const dialog: EscalationDialogState = {
+    opener: opened.opener,
+    form: opened.form,
+    errors: opened.errors,
+    isPending: mutation.isPending,
+    ...(failure === undefined ? {} : { failure: failure.view }),
+  };
+  return { dialog, closedFailure: undefined };
 }

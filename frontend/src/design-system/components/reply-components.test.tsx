@@ -2,7 +2,12 @@ import { screen } from "@testing-library/react";
 import { Clock, Send, X } from "lucide-react";
 import { describe, expect, it, vi } from "vitest";
 
-import { ActionBar, type ActionMenuItem } from "@/design-system/components/action-bar";
+import {
+  ActionBar,
+  type ActionBarProps,
+  type ActionMenuItem,
+} from "@/design-system/components/action-bar";
+import { Chip } from "@/design-system/components/chip";
 import { DraftText } from "@/design-system/components/draft-text";
 import { MarkedText } from "@/design-system/components/marked-text";
 import { ReplyEditor, type ReplyEditorProps } from "@/design-system/components/reply-editor";
@@ -34,9 +39,13 @@ function buildSubmitItem(overrides: Partial<ActionMenuItem> = {}): ActionMenuIte
  * Render an action bar with Escalate ticket and Send reply.
  *
  * @param moreItems - The items of the More menu.
+ * @param overrides - The other props that a test changes.
  * @returns The user-event instance.
  */
-function renderActionBar(moreItems: readonly ActionMenuItem[]) {
+function renderActionBar(
+  moreItems: readonly ActionMenuItem[],
+  overrides: Partial<ActionBarProps> = {},
+) {
   return renderUi(
     <ActionBar
       reason="Acknowledge 1 warning to send the reply."
@@ -47,6 +56,7 @@ function renderActionBar(moreItems: readonly ActionMenuItem[]) {
           Send reply
         </Button>
       }
+      {...overrides}
     />,
   );
 }
@@ -120,8 +130,14 @@ describe("ActionBar", () => {
     expect(item.onSelect).not.toHaveBeenCalled();
   });
 
-  it("disables More when every item is disabled", () => {
+  it("keeps More enabled when every item is disabled", () => {
     renderActionBar([buildSubmitItem({ isDisabled: true })]);
+
+    expect(screen.getByRole("button", { name: "More actions" })).toBeEnabled();
+  });
+
+  it("keeps More in its place, disabled, when the role may use none of its items", () => {
+    renderActionBar([buildSubmitItem()], { isMoreDisabled: true });
 
     expect(screen.getByRole("button", { name: "More actions" })).toBeDisabled();
   });
@@ -251,6 +267,15 @@ describe("ToggleChipGroup", () => {
       "Choose at least one reason.",
     );
     expect(screen.getByRole("alert")).toHaveTextContent("Choose at least one reason.");
+  });
+});
+
+describe("Chip", () => {
+  it("shows its text and is not a control", () => {
+    renderUi(<Chip>Missing case info</Chip>);
+
+    expect(screen.getByText("Missing case info")).toBeVisible();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 });
 

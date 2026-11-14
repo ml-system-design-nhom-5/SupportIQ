@@ -11,7 +11,6 @@ import {
 import {
   buildReplyProposalRequest,
   buildSendReplyRequest,
-  isSameReply,
 } from "@/features/console-tickets/model/reply-request";
 import { DRAFT_READY_SUGGESTION_ID, readComposerTicket } from "@/test/console-screen";
 
@@ -51,7 +50,9 @@ describe("toComposerTicket", () => {
   });
 
   it("says that the AI is running while a correction or Try AI again is sending", () => {
-    expect(readComposerTicket("draft-ready", true)).toMatchObject({ isSuggestionRunning: true });
+    expect(readComposerTicket("draft-ready", { isSuggestionRequested: true })).toMatchObject({
+      isSuggestionRunning: true,
+    });
   });
 
   it("says that a ticket is closed", () => {
@@ -88,11 +89,16 @@ describe("buildSendReplyRequest of a ready draft", () => {
       buildSendReplyRequest(draftReady, startEditing(acknowledged, "Edited reply.")),
     ).toMatchObject({ basis: "ai_draft", body: "Edited reply." });
   });
+});
 
+describe("buildSendReplyRequest of a text kept over a new draft", () => {
   it("sends the text kept over a new draft as an edit of the new draft", () => {
     const kept = followSuggestion(
       { ...rejectDraft(createComposerState("s0")), body: "Mine." },
-      DRAFT_READY_SUGGESTION_ID,
+      {
+        suggestionId: DRAFT_READY_SUGGESTION_ID,
+        proposalId: undefined,
+      },
     );
 
     expect(buildSendReplyRequest(draftReady, kept)).toEqual({
@@ -167,44 +173,6 @@ describe("canChangeDraft", () => {
   });
 });
 
-describe("isSameReply", () => {
-  const rejected = { ...rejectDraft(opened), body: "My own reply." };
-
-  it("matches the same reply confirmed again", () => {
-    expect(
-      isSameReply(
-        buildSendReplyRequest(draftReady, acknowledged),
-        buildSendReplyRequest(draftReady, acknowledged),
-      ),
-    ).toBe(true);
-  });
-
-  it.each([
-    ["another text", startEditing(acknowledged, "x")],
-    ["another acknowledgement", opened],
-  ])("does not match a reply with %s", (_case, state) => {
-    expect(
-      isSameReply(
-        buildSendReplyRequest(draftReady, acknowledged),
-        buildSendReplyRequest(draftReady, state),
-      ),
-    ).toBe(false);
-  });
-
-  it("does not match a rejection with other reason codes", () => {
-    const first = buildSendReplyRequest(draftReady, {
-      ...rejected,
-      reasonCodes: new Set(["wrong_intent"]),
-    });
-    const second = buildSendReplyRequest(draftReady, {
-      ...rejected,
-      reasonCodes: new Set(["kb_gap"]),
-    });
-
-    expect(isSameReply(first, second)).toBe(false);
-  });
-});
-
 describe("buildSendReplyRequest of a manager on a proposal (FR-06)", () => {
   const ticket = readComposerTicket("awaiting-approval");
   const proposalOpened = createComposerState(ticket.suggestionId);
@@ -236,10 +204,10 @@ describe("buildReplyProposalRequest", () => {
   });
 
   it("submits the text kept over a new draft as an edit of the new draft", () => {
-    const kept = followSuggestion(
-      startEditing(createComposerState("s0"), "Edited reply."),
-      DRAFT_READY_SUGGESTION_ID,
-    );
+    const kept = followSuggestion(startEditing(createComposerState("s0"), "Edited reply."), {
+      suggestionId: DRAFT_READY_SUGGESTION_ID,
+      proposalId: undefined,
+    });
 
     expect(buildReplyProposalRequest(draftReady, kept)).toEqual({
       basis: "ai_draft",

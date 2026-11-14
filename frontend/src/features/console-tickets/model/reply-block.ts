@@ -1,9 +1,11 @@
 /**
  * The main action of the reply area and why it is disabled (UI-16, UI-18, UI-43; console UI
- * design, Actions and placement rule 2). Send reply is the main action when `backend` allows it;
- * when authority is required, staff get Submit for approval instead. One line above the buttons
- * names the first reason that applies, or a note when the main action is enabled. `backend` checks
- * every rule again (FR-04, FR-06, SEC-38); the console only spares staff a refused request.
+ * design, Actions and placement rule 2). Send reply is the main action; when authority is
+ * required, staff get Submit for approval in its place. The place follows the authority flag and
+ * the role, so it never moves while `allowed_actions` changes (UI-15); whether an action is
+ * enabled follows `allowed_actions` (UI-40). One line above the buttons names the first reason
+ * that applies, or a note while the main action is enabled. `backend` checks every rule again
+ * (FR-04, FR-06, SEC-38); the console only spares staff a refused request.
  */
 import { formatCount } from "@/design-system";
 import { countContractCharacters, MESSAGE_MAX_LENGTH } from "@/features/backend-requests";
@@ -15,10 +17,14 @@ import {
 } from "@/features/console-tickets/model/composer-ticket";
 import { hasPlaceholder } from "@/features/console-tickets/model/placeholders";
 import type { ComposerState } from "@/features/console-tickets/model/reply-composer";
-import { STAFF_NOTE_MAX_LENGTH } from "@/features/console-tickets/model/staff-reason-codes";
+import {
+  describeStaffNoteProblem,
+  findStaffNoteProblem,
+} from "@/features/console-tickets/model/staff-reason-codes";
+import type { TicketAction } from "@/features/console-tickets/model/ticket-actions";
 
 /** An action that sends what staff composed: Send reply, or Submit for approval. */
-export type ReplyAction = "send_reply" | "submit_reply_proposal";
+export type ReplyAction = Extract<TicketAction, "send_reply" | "submit_reply_proposal">;
 
 /** The verb of each action in the reasons, as in "to send the reply". */
 const verbByAction: Readonly<Record<ReplyAction, string>> = {
@@ -26,18 +32,21 @@ const verbByAction: Readonly<Record<ReplyAction, string>> = {
   submit_reply_proposal: "submit",
 };
 
+/** What the line says while a write that hands the ticket to a manager is sending. */
+const handoverReasons: Readonly<Record<NonNullable<ComposerTicket["handover"]>, string>> = {
+  submit_reply_proposal: "The reply is being submitted for approval.",
+  escalate: "The ticket is being escalated.",
+};
+
 /**
  * Choose the main action, on the right of the action bar (UI-16).
  *
  * @param ticket - The ticket.
- * @returns Send reply when `backend` allows it; Submit for approval when only a proposal is
- *   allowed, as when authority is required; Send reply, disabled, otherwise.
+ * @returns Submit for approval for staff on a ticket that requires authority; Send reply
+ *   otherwise, for a manager always.
  */
 export function getPrimaryAction(ticket: ComposerTicket): ReplyAction {
-  return !ticket.allowedActions.has("send_reply") &&
-    ticket.allowedActions.has("submit_reply_proposal")
-    ? "submit_reply_proposal"
-    : "send_reply";
+  return ticket.isAuthorityRequired && !ticket.isManager ? "submit_reply_proposal" : "send_reply";
 }
 
 /**
@@ -89,17 +98,42 @@ function findTicketBlock(ticket: ComposerTicket, action: ReplyAction): string | 
   if (ticket.status === "closed") {
     return "This ticket is closed. A reply was already sent.";
   }
-  const isAllowed = ticket.allowedActions.has(action);
-  if (!isAllowed && (ticket.status === "awaiting_approval" || ticket.status === "escalated")) {
-    return "This ticket is read-only for you. A manager sends the reply.";
+  if (ticket.handover !== undefined) {
+    return handoverReasons[ticket.handover];
   }
+  return findReadOnlyBlock(ticket, action) ?? findSuggestionBlock(ticket, action);
+}
+
+/**
+ * Say that a ticket handed to a manager is read-only for staff.
+ *
+ * @param ticket - The ticket.
+ * @param action - The action.
+ * @returns The reason for staff on a ticket that awaits approval or is escalated; undefined
+ *   otherwise, and always for a manager, who handles those tickets.
+ */
+function findReadOnlyBlock(ticket: ComposerTicket, action: ReplyAction): string | undefined {
+  const isHandedOver = ticket.status === "awaiting_approval" || ticket.status === "escalated";
+  return !ticket.isManager && isHandedOver && !ticket.allowedActions.has(action)
+    ? "This ticket is read-only for you. A manager sends the reply."
+    : undefined;
+}
+
+/**
+ * Say why the current suggestion, or the role, allows no reply or proposal now.
+ *
+ * @param ticket - The ticket.
+ * @param action - The action.
+ * @returns The reason, or undefined when `backend` allows the action.
+ */
+function findSuggestionBlock(ticket: ComposerTicket, action: ReplyAction): string | undefined {
   if (ticket.isSuggestionRunning) {
     return "The AI is still working on this ticket.";
   }
   if (ticket.isIntentChoiceNeeded) {
     return "Choose an intent to get a draft.";
   }
-  return isAllowed ? undefined : describeNotAllowed(ticket, action);
+  return ticket.allowedActions.has(action) ? undefined : describeNotAllowed(ticket, action);
 }
 
 /**
@@ -111,7 +145,9 @@ function findTicketBlock(ticket: ComposerTicket, action: ReplyAction): string | 
  */
 function describeNotAllowed(ticket: ComposerTicket, action: ReplyAction): string {
   if (action === "submit_reply_proposal") {
-    return "You cannot submit a reply for approval on this ticket.";
+    return ticket.isManager
+      ? "Only staff submit a reply for approval."
+      : "You cannot submit a reply for approval on this ticket.";
   }
   return ticket.isAuthorityRequired
     ? "Only a manager can send the reply of this ticket."
@@ -158,15 +194,10 @@ function findRejectionBlock(
   if (state.reasonCodes.size === 0) {
     return `Choose why you rejected the draft to ${verb} the reply.`;
   }
-  if (!state.reasonCodes.has("other")) {
-    return undefined;
-  }
-  if (state.note.trim() === "") {
-    return `Write a note for the reason Other to ${verb} the reply.`;
-  }
-  return countContractCharacters(state.note) > STAFF_NOTE_MAX_LENGTH
-    ? `Shorten the note to ${formatCount(STAFF_NOTE_MAX_LENGTH)} characters to ${verb} the reply.`
-    : undefined;
+  const problem = findStaffNoteProblem(state.note, state.reasonCodes.has("other"));
+  return problem === undefined
+    ? undefined
+    : describeStaffNoteProblem(problem, `to ${verb} the reply`);
 }
 
 /**

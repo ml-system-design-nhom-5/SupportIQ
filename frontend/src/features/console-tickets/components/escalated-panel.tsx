@@ -8,17 +8,21 @@ import { CircleArrowUp } from "lucide-react";
 import type { ReactNode } from "react";
 
 import {
+  Chip,
   Cluster,
   Panel,
   PanelHeader,
   type PanelHeight,
   PanelSection,
   RelativeTime,
-  Tag,
   Text,
 } from "@/design-system";
-import type { TicketEscalation } from "@/features/console-tickets/model/manager-handoff";
-import { staffReasonCodeLabels } from "@/features/console-tickets/model/staff-reason-codes";
+import {
+  describeHandoffAuthor,
+  type TicketEscalation,
+} from "@/features/console-tickets/model/manager-handoff";
+import { shownStaffReasonCodeLabels } from "@/features/console-tickets/model/staff-reason-codes";
+import { useSignedInAccountId } from "@/features/session";
 
 /** The ID of the heading, which takes the focus once staff escalated the ticket (UI-30). */
 export const ESCALATED_HEADING_ID = "escalated-heading";
@@ -39,7 +43,8 @@ type EscalatedPanelProps = {
  * @returns The panel.
  */
 export function EscalatedPanel({ escalation, height, children }: EscalatedPanelProps) {
-  const title = `Escalated by ${escalation.escalatedByName}`;
+  const signedInAccountId = useSignedInAccountId();
+  const title = `Escalated by ${describeHandoffAuthor(escalation.escalatedBy, signedInAccountId)}`;
   return (
     <Panel density="compact" height={height} as="section" label={title}>
       <PanelHeader
@@ -56,9 +61,7 @@ export function EscalatedPanel({ escalation, height, children }: EscalatedPanelP
       <PanelSection>
         <Cluster>
           {escalation.reasonCodes.map((reasonCode) => (
-            <Tag key={reasonCode} tone="neutral">
-              {staffReasonCodeLabels[reasonCode]}
-            </Tag>
+            <Chip key={reasonCode}>{shownStaffReasonCodeLabels[reasonCode]}</Chip>
           ))}
         </Cluster>
         {escalation.note === undefined ? null : <Text overflow="preserve">{escalation.note}</Text>}

@@ -3,10 +3,10 @@
  * code, and a note, required with `other`. The dialog checks it when staff press Escalate ticket;
  * `backend` checks it again and refuses with `422`.
  */
-import { countContractCharacters } from "@/features/backend-requests";
 import type { CreateEscalationRequestContract } from "@/features/console-tickets/api/contract-types";
 import {
-  STAFF_NOTE_MAX_LENGTH,
+  describeStaffNoteProblem,
+  findStaffNoteProblem,
   type StaffReasonCode,
   staffReasonCodes,
 } from "@/features/console-tickets/model/staff-reason-codes";
@@ -62,16 +62,12 @@ export function buildEscalationRequest(
 }
 
 /**
- * Check the note.
+ * Check the note with the rule of every staff note.
  *
  * @param form - What staff chose.
  * @returns The message, or undefined when the note may be sent.
  */
 function findNoteError(form: EscalationForm): string | undefined {
-  if (form.reasonCodes.has("other") && form.note.trim() === "") {
-    return "Write a note for the reason Other.";
-  }
-  return countContractCharacters(form.note) > STAFF_NOTE_MAX_LENGTH
-    ? "Shorten the note to 1,000 characters."
-    : undefined;
+  const problem = findStaffNoteProblem(form.note, form.reasonCodes.has("other"));
+  return problem === undefined ? undefined : describeStaffNoteProblem(problem);
 }

@@ -1,18 +1,14 @@
 /**
  * The reply area of one opened ticket (console UI design, Actions and Dialogs): what staff
- * composed, the main action and why it is disabled, the confirmation step of Send reply (UI-17),
- * the send, and Submit for approval. Only a confirmation sends a
- * reply (FR-04), and it sends exactly the reply that the confirmation shows: the request and its
- * `Idempotency-Key` are fixed when it opens. The confirmation closes without a send when the
- * suggestion changes or Send reply becomes disabled while it is open. The state lives as long as
- * the ticket is open, so a reload of the workspace keeps the text that staff typed; it is never
- * written to browser storage, because it is Confidential.
+ * composed, the main action and why it is disabled, Send reply with its confirmation (UI-17),
+ * Submit for approval, and Escalate ticket. The state lives as long as the ticket is open, so a
+ * reload of the workspace keeps the text that staff typed; it is never written to browser storage,
+ * because it is Confidential. It follows the ready text of the ticket: a new suggestion or a new
+ * proposal resets what belonged to the old one. While Submit for approval or Escalate ticket is
+ * sending, the other actions wait, so two writes never race.
  */
-import { useState } from "react";
+import { type Dispatch, type SetStateAction, useState } from "react";
 
-import { getRequestFailure, useCreateIdempotencyKey } from "@/features/backend-requests";
-import type { SendReplyRequestContract } from "@/features/console-tickets/api/contract-types";
-import { type ConfirmedReply, useSendReply } from "@/features/console-tickets/api/use-send-reply";
 import {
   type Escalation,
   useEscalation,
@@ -22,56 +18,38 @@ import {
   useProposalSubmission,
 } from "@/features/console-tickets/components/use-proposal-submission";
 import {
+  type ReplySending,
+  useReplySending,
+} from "@/features/console-tickets/components/use-reply-sending";
+import {
   canChangeDraft,
   canEditProposal,
   type ComposerMode,
   type ComposerTicket,
+  getComposedTextOwner,
   getComposerMode,
   getReplyBody,
 } from "@/features/console-tickets/model/composer-ticket";
-import {
-  type ComposerState,
-  createComposerState,
-  followSuggestion,
-} from "@/features/console-tickets/model/reply-composer";
-import { buildSendReplyRequest, isSameReply } from "@/features/console-tickets/model/reply-request";
 import {
   findActionNote,
   findReplyBlock,
   getPrimaryAction,
   type ReplyAction,
-} from "@/features/console-tickets/model/send-block";
+} from "@/features/console-tickets/model/reply-block";
 import {
-  describeReplyFailure,
-  type SendFailureView,
-} from "@/features/console-tickets/model/send-failure";
-
-/** The open confirmation: the button that opened it and the text that it sends. */
-export type OpenConfirmation = {
-  readonly opener: HTMLElement;
-  /** The text that the customer receives. */
-  readonly body: string;
-};
-
-/** The confirmation of Send reply and the send. */
-type ReplySending = {
-  /** The confirmation while it is open. */
-  readonly confirmation: OpenConfirmation | undefined;
-  /** Opens the confirmation with the reply as it is now (Send reply). */
-  readonly askToSend: (opener: HTMLElement) => void;
-  /** Closes the confirmation without a send (Keep editing). */
-  readonly cancelSend: () => void;
-  /** Sends the reply that the confirmation shows (the confirmation's Send reply). */
-  readonly confirmSend: () => void;
-  readonly isSending: boolean;
-  /** The last failed send, in plain language; undefined after a success or before any send. */
-  readonly sendFailure: SendFailureView | undefined;
-};
+  type ComposerState,
+  createComposerState,
+  followSuggestion,
+} from "@/features/console-tickets/model/reply-composer";
+import {
+  pickLatestFailure,
+  type ReplyFailureView,
+} from "@/features/console-tickets/model/reply-failure";
 
 /** The reply area of the opened ticket. */
-export type ReplyComposer = ReplySending &
-  ProposalSubmission & {
-    /** What staff composed, for the current suggestion. */
+export type ReplyComposer = Omit<ReplySending, "sendFailure"> &
+  Omit<ProposalSubmission, "submitFailure"> & {
+    /** What staff composed, for the current ready text. */
     readonly state: ComposerState;
     /** What staff do: a mode of the ready text, or `writing` without one. */
     readonly mode: ComposerMode;
@@ -83,6 +61,8 @@ export type ReplyComposer = ReplySending &
     readonly isManualHandling: boolean;
     /** True when `backend` allows a reply or a proposal, so the editor is shown. */
     readonly canWrite: boolean;
+    /** True when `backend` allows Submit for approval, so More is enabled. */
+    readonly canSubmit: boolean;
     /** Changes what staff composed. */
     readonly change: (update: (state: ComposerState) => ComposerState) => void;
     /** The text that the main action sends. */
@@ -93,8 +73,10 @@ export type ReplyComposer = ReplySending &
     readonly primaryBlock: string | undefined;
     /** Why Submit for approval is disabled; undefined when it is enabled. */
     readonly submitBlock: string | undefined;
-    /** The line above the buttons: why the main action is disabled, or a note. */
+    /** The line above the buttons: why an action is disabled, or a note. */
     readonly barLine: string | undefined;
+    /** The latest failed write of the reply area, in plain language. */
+    readonly failure: ReplyFailureView | undefined;
     /** Escalate ticket and its dialog. */
     readonly escalation: Escalation;
   };
@@ -106,21 +88,6 @@ export type ReplyComposerEvents = {
   readonly onEscalated: () => void;
 };
 
-/** What the send reads of the reply area now. */
-type ComposedReply = {
-  readonly ticket: ComposerTicket;
-  readonly state: ComposerState;
-  readonly sendBlock: string | undefined;
-};
-
-/** A confirmation as the composer keeps it. */
-type Confirmation = {
-  readonly opener: HTMLElement;
-  readonly reply: ConfirmedReply;
-  /** The suggestion that the reply was built on. */
-  readonly suggestionId: string | undefined;
-};
-
 /**
  * Keep the reply area of a ticket.
  *
@@ -128,162 +95,115 @@ type Confirmation = {
  * @param ticket - What the composer reads of the ticket.
  * @param events - Called once a reply was sent, a proposal was submitted, or the ticket was
  *   escalated.
- * @returns The state, its change, the main action and its block, and the handlers of the
- *   confirmation, the send, and Submit for approval.
+ * @returns The state, its change, the main action and its block, and the handlers of the writes.
  */
 export function useReplyComposer(
   ticketId: string,
   ticket: ComposerTicket,
   events: ReplyComposerEvents,
 ): ReplyComposer {
-  const [storedState, setState] = useState(() => createComposerState(ticket.suggestionId));
-  // A new suggestion resets what belonged to the old one, during the render that shows it (TS-21).
-  const state = followSuggestion(storedState, ticket.suggestionId);
-  if (state !== storedState) {
+  const [state, setState] = useComposerState(ticket);
+  // Once the ticket went to a manager, what staff composed is done with.
+  const startOver = () => {
+    setState(createComposerState(ticket.suggestionId));
+  };
+  const submission = useProposalSubmission(ticketId, { ticket, state }, () => {
+    startOver();
+    events.onSubmitted();
+  });
+  const escalation = useEscalation(ticketId, ticket, () => {
+    startOver();
+    events.onEscalated();
+  });
+  const busyTicket = withHandover(ticket, submission.isSubmitting, escalation.isEscalating);
+  const sendBlock = findReplyBlock(busyTicket, state, "send_reply");
+  const { sendFailure, ...sending } = useReplySending(
+    ticketId,
+    { ticket, state, sendBlock },
+    events.onSent,
+  );
+  return {
+    ...describeComposition(busyTicket, state, setState),
+    ...sending,
+    submit: submission.submit,
+    isSubmitting: submission.isSubmitting,
+    failure: pickLatestFailure([sendFailure, submission.submitFailure, escalation.closedFailure]),
+    escalation: { ...escalation, canEscalate: escalation.canEscalate && !submission.isSubmitting },
+  };
+}
+
+/**
+ * Keep what staff composed with the ready text of the ticket, during the render that shows a new
+ * suggestion or proposal (TS-21).
+ *
+ * @param ticket - The ticket.
+ * @returns The state for the current ready text, and its setter.
+ */
+function useComposerState(
+  ticket: ComposerTicket,
+): readonly [ComposerState, Dispatch<SetStateAction<ComposerState>>] {
+  const owner = getComposedTextOwner(ticket);
+  const [stored, setState] = useState(() =>
+    createComposerState(owner.suggestionId, owner.proposalId),
+  );
+  const state = followSuggestion(stored, owner);
+  if (state !== stored) {
     setState(state);
   }
+  return [state, setState];
+}
+
+/**
+ * Describe what staff composed and what the actions of the bar may do with it.
+ *
+ * @param ticket - The ticket, with the write that is sending.
+ * @param state - What staff composed.
+ * @param change - Changes what staff composed.
+ * @returns The state, the mode, the main action, the blocks, and the line above the buttons.
+ */
+function describeComposition(
+  ticket: ComposerTicket,
+  state: ComposerState,
+  change: ReplyComposer["change"],
+) {
   const primaryAction = getPrimaryAction(ticket);
   const primaryBlock = findReplyBlock(ticket, state, primaryAction);
-  const sendBlock = findReplyBlock(ticket, state, "send_reply");
+  const submitBlock = findReplyBlock(ticket, state, "submit_reply_proposal");
+  const isManualHandling = ticket.situation === "manual_handling";
+  const { allowedActions } = ticket;
   return {
     state,
     mode: getComposerMode(ticket, state),
     canChangeDraft: canChangeDraft(ticket),
     canEditProposal: canEditProposal(ticket),
-    isManualHandling: ticket.situation === "manual_handling",
-    canWrite:
-      ticket.allowedActions.has("send_reply") || ticket.allowedActions.has("submit_reply_proposal"),
-    change: setState,
+    isManualHandling,
+    canWrite: allowedActions.has("send_reply") || allowedActions.has("submit_reply_proposal"),
+    canSubmit: allowedActions.has("submit_reply_proposal"),
+    change,
     body: getReplyBody(ticket, state),
     primaryAction,
     primaryBlock,
-    submitBlock: findReplyBlock(ticket, state, "submit_reply_proposal"),
-    barLine: primaryBlock ?? findActionNote(ticket),
-    ...useReplySending(ticketId, { ticket, state, sendBlock }, events.onSent),
-    // Once the ticket went to a manager, what staff composed is done with.
-    ...useProposalSubmission(ticketId, { ticket, state }, () => {
-      setState(createComposerState(ticket.suggestionId));
-      events.onSubmitted();
-    }),
-    escalation: useEscalation(ticketId, ticket, () => {
-      setState(createComposerState(ticket.suggestionId));
-      events.onEscalated();
-    }),
+    submitBlock,
+    // A visible Submit for approval says why it is disabled while Send reply is enabled (UI-16).
+    barLine: primaryBlock ?? findActionNote(ticket) ?? (isManualHandling ? submitBlock : undefined),
   };
 }
 
 /**
- * Keep the confirmation of Send reply and send the reply that it shows. Send reply is never retried
- * automatically; confirming the same reply again after a failure reuses its key (TS-29).
+ * Mark the write that is sending and hands the ticket to a manager.
  *
- * @param ticketId - The ticket.
- * @param composed - The ticket, what staff composed, and the send block, as rendered now.
- * @param onSent - Called once a reply was sent.
- * @returns The open confirmation and its handlers, and the state of the send.
+ * @param ticket - The ticket.
+ * @param isSubmitting - True while Submit for approval is sending.
+ * @param isEscalating - True while Escalate ticket is sending.
+ * @returns The ticket with the write, or the same ticket while none is sending.
  */
-function useReplySending(
-  ticketId: string,
-  composed: ComposedReply,
-  onSent: () => void,
-): ReplySending {
-  const [stored, setConfirmation] = useState<Confirmation | undefined>(undefined);
-  const sendReply = useSendReply(ticketId);
-  const createIdempotencyKey = useCreateIdempotencyKey();
-  const isStale = stored !== undefined && !sendReply.isPending && isOutdated(stored, composed);
-  if (isStale) {
-    setConfirmation(undefined);
+function withHandover(
+  ticket: ComposerTicket,
+  isSubmitting: boolean,
+  isEscalating: boolean,
+): ComposerTicket {
+  if (isSubmitting) {
+    return { ...ticket, handover: "submit_reply_proposal" };
   }
-  const confirmation = isStale ? undefined : stored;
-  const failure = getRequestFailure(sendReply.error);
-  const failedReply = sendReply.isError ? sendReply.variables : undefined;
-  const close = () => {
-    setConfirmation(undefined);
-  };
-  return {
-    confirmation: toOpenConfirmation(confirmation),
-    askToSend: (opener) => {
-      if (composed.sendBlock === undefined) {
-        setConfirmation(
-          prepareConfirmation(composed, opener, (request) =>
-            chooseKey(request, failedReply, createIdempotencyKey),
-          ),
-        );
-      }
-    },
-    cancelSend: close,
-    confirmSend: () => {
-      if (confirmation !== undefined && !sendReply.isPending) {
-        sendReply.mutate(confirmation.reply, { onSuccess: onSent, onSettled: close });
-      }
-    },
-    isSending: sendReply.isPending,
-    sendFailure: failure === undefined ? undefined : describeReplyFailure(failure, "send_reply"),
-  };
-}
-
-/**
- * Tell whether an open confirmation no longer shows what Send reply would send: a new suggestion
- * replaced the one that the reply was built on, or Send reply became disabled.
- *
- * @param confirmation - The open confirmation.
- * @param composed - The reply area as rendered now.
- * @returns True when the confirmation must close without a send.
- */
-function isOutdated(confirmation: Confirmation, composed: ComposedReply): boolean {
-  return (
-    confirmation.suggestionId !== composed.ticket.suggestionId || composed.sendBlock !== undefined
-  );
-}
-
-/**
- * Choose the `Idempotency-Key` of a confirmation: the key of the failed send when staff confirm the
- * same reply again, so a reply whose outcome was unknown reaches the customer once; a new key for
- * any other reply.
- *
- * @param request - The reply that the confirmation shows.
- * @param failedReply - The reply of the last send when it failed.
- * @param createIdempotencyKey - Creates a new key.
- * @returns The key.
- */
-function chooseKey(
-  request: SendReplyRequestContract,
-  failedReply: ConfirmedReply | undefined,
-  createIdempotencyKey: () => string,
-): string {
-  return failedReply !== undefined && isSameReply(failedReply.request, request)
-    ? failedReply.idempotencyKey
-    : createIdempotencyKey();
-}
-
-/**
- * Fix the reply of a confirmation as it is now, with its key.
- *
- * @param composed - The reply area as rendered now.
- * @param opener - The Send reply button.
- * @param keyOf - Gives the `Idempotency-Key` of the reply.
- * @returns The confirmation.
- */
-function prepareConfirmation(
-  composed: ComposedReply,
-  opener: HTMLElement,
-  keyOf: (request: SendReplyRequestContract) => string,
-): Confirmation {
-  const request = buildSendReplyRequest(composed.ticket, composed.state);
-  return {
-    opener,
-    reply: { request, idempotencyKey: keyOf(request) },
-    suggestionId: composed.ticket.suggestionId,
-  };
-}
-
-/**
- * Show a confirmation: its opener and the text that it sends.
- *
- * @param confirmation - The open confirmation, or undefined.
- * @returns What the dialog shows, or undefined while it is closed.
- */
-function toOpenConfirmation(confirmation: Confirmation | undefined): OpenConfirmation | undefined {
-  return confirmation === undefined
-    ? undefined
-    : { opener: confirmation.opener, body: confirmation.reply.request.body };
+  return isEscalating ? { ...ticket, handover: "escalate" } : ticket;
 }

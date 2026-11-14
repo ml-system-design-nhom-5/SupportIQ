@@ -1,7 +1,10 @@
 /**
- * The staff reason codes (ADR-0006; console UI design, state-rejected.png): why staff rejected a
- * draft. They are business terms, never ML jargon (UI-28). `other` needs a note.
+ * The staff reason codes (ADR-0006; console UI design, state-rejected.png, dialog-escalate.png):
+ * why staff rejected a draft or escalated a ticket. They are business terms, never ML jargon
+ * (UI-28). `other` needs a note, and every note follows the rule of `StaffNoteText`.
  */
+import { formatCount, type ToggleChipOption } from "@/design-system";
+import { countContractCharacters } from "@/features/backend-requests";
 import type { StaffReasonCodeContract } from "@/features/console-tickets/api/contract-types";
 
 /** The reason codes of the contract, in its order, which is the order of the chips. */
@@ -15,9 +18,6 @@ export const staffReasonCodes = [
   "case_exception",
   "other",
 ] as const satisfies readonly StaffReasonCodeContract[];
-
-/** A staff reason code. */
-export type StaffReasonCode = (typeof staffReasonCodes)[number];
 
 /** The `maxLength` of `StaffNoteText`: a note has from 1 to 1 000 characters. */
 export const STAFF_NOTE_MAX_LENGTH = 1000;
@@ -34,22 +34,45 @@ export const staffReasonCodeLabels: Readonly<Record<StaffReasonCode, string>> = 
   other: "Other",
 };
 
+/** The label of each shown reason code. */
+export const shownStaffReasonCodeLabels: Readonly<Record<ShownStaffReasonCode, string>> = {
+  ...staffReasonCodeLabels,
+  unknown: "Unspecified reason",
+};
+
+/** The chips of the staff reason codes, in the order of the contract. */
+export const staffReasonOptions: readonly ToggleChipOption<StaffReasonCode>[] =
+  staffReasonCodes.map((code) => ({ value: code, label: staffReasonCodeLabels[code] }));
+
+const knownStaffReasonCodes: ReadonlySet<string> = new Set(staffReasonCodes);
+
+/** A staff reason code. */
+export type StaffReasonCode = (typeof staffReasonCodes)[number];
+
+/**
+ * A staff reason code as the console shows it: `unknown` for a code that this version does not
+ * know (CON-22).
+ */
+export type ShownStaffReasonCode = StaffReasonCode | "unknown";
+
+/**
+ * What a staff note still needs (`StaffNoteText`, ADR-0006).
+ * `missing`: the reason code `other` needs a note, and there is none.
+ * `too_long`: the note has more than 1 000 characters.
+ */
+export type StaffNoteProblem = "missing" | "too_long";
+
 /**
  * Map staff reason codes of `backend`, in the order of the contract.
  *
- * @param values - The `staff_reason_codes` of a proposal or an escalation.
- * @returns The codes; a value that this version does not know is ignored (CON-22).
+ * @param values - The `staff_reason_codes` of an escalation.
+ * @returns The codes; codes that this version does not know show once, as `unknown`, at the end.
  */
-export function toStaffReasonCodes(values: readonly string[]): readonly StaffReasonCode[] {
+export function toStaffReasonCodes(values: readonly string[]): readonly ShownStaffReasonCode[] {
   const given: ReadonlySet<string> = new Set(values);
-  return staffReasonCodes.filter((code) => given.has(code));
+  const known = staffReasonCodes.filter((code) => given.has(code));
+  return values.some((value) => !knownStaffReasonCodes.has(value)) ? [...known, "unknown"] : known;
 }
-
-/** The chips of the staff reason codes, in the order of the contract. */
-export const staffReasonOptions: readonly {
-  readonly value: StaffReasonCode;
-  readonly label: string;
-}[] = staffReasonCodes.map((code) => ({ value: code, label: staffReasonCodeLabels[code] }));
 
 /**
  * Choose or unchoose a reason code.
@@ -67,4 +90,36 @@ export function toggleStaffReasonCode(
     toggled.add(reasonCode);
   }
   return toggled;
+}
+
+/**
+ * Check a staff note, the same way for a rejection and for an escalation.
+ *
+ * @param note - The note as typed.
+ * @param isRequired - True when the reason code `other` is chosen.
+ * @returns The problem, or undefined when the note may be sent.
+ */
+export function findStaffNoteProblem(
+  note: string,
+  isRequired: boolean,
+): StaffNoteProblem | undefined {
+  if (isRequired && note.trim() === "") {
+    return "missing";
+  }
+  return countContractCharacters(note) > STAFF_NOTE_MAX_LENGTH ? "too_long" : undefined;
+}
+
+/**
+ * Describe what a staff note still needs.
+ *
+ * @param problem - What the note still needs.
+ * @param goal - What the note allows, such as "to send the reply"; absent next to the field.
+ * @returns The sentence, such as "Write a note for the reason Other to send the reply.".
+ */
+export function describeStaffNoteProblem(problem: StaffNoteProblem, goal?: string): string {
+  const need =
+    problem === "missing"
+      ? "Write a note for the reason Other"
+      : `Shorten the note to ${formatCount(STAFF_NOTE_MAX_LENGTH)} characters`;
+  return goal === undefined ? `${need}.` : `${need} ${goal}.`;
 }
