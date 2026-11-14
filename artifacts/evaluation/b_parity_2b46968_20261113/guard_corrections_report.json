@@ -1,0 +1,1107 @@
+{
+  "generated_at_utc": "2026-11-13T11:40:38.885259Z",
+  "target_worktree": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-public-contact-fix",
+  "loaded_apps_init": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-public-contact-fix\\apps\\__init__.py",
+  "target_git_commit": "2b469689f9f6e0e9eccd03fb29b0780742262e83",
+  "evidence_runner_commit": "018cdcacee27533dae6bf3d6f9e5c988ea1f228d",
+  "surface": "all",
+  "historic_fault_evidence": {
+    "all_matched": true,
+    "files": {
+      "fault_boundary_report.json": {
+        "exists": true,
+        "expected_sha256": "348c4a1861450fcab290e3dd9517b46bac808f0cd9436973c4558f81fb1f48ae",
+        "actual_sha256": "348c4a1861450fcab290e3dd9517b46bac808f0cd9436973c4558f81fb1f48ae",
+        "matched": true
+      },
+      "FAULT_BOUNDARY_REPORT.md": {
+        "exists": true,
+        "expected_sha256": "8cd003fb59b41a32a4c0dc312b1ffbd207b9472200677fb5b7ea7bbff2bd266f",
+        "actual_sha256": "8cd003fb59b41a32a4c0dc312b1ffbd207b9472200677fb5b7ea7bbff2bd266f",
+        "matched": true
+      }
+    }
+  },
+  "fault_suite": {
+    "live_http_requests_attempted": 0,
+    "live_http_budget_max": 0,
+    "pg_cleanup": {
+      "postgres_schema": "fault_chk_29c13e7fef",
+      "postgres_schema_created": true,
+      "postgres_schema_dropped_cleanly": true,
+      "postgres_schema_drop_status": "dropped_cleanly",
+      "postgres_schema_drop_error_category": null,
+      "pg_namespace_verified_absent": true
+    },
+    "summary": {
+      "primary_total_executions": 11,
+      "primary_strict_pass": 2,
+      "primary_safe_fallback_mismatch": 8,
+      "primary_intake_404_mismatch": 1,
+      "primary_no_draft_all_preserved": true,
+      "companion_total_executions": 12,
+      "companion_no_draft_all_preserved": true
+    },
+    "corrected_contract_rows": [
+      {
+        "case_id": "unc-track_order-03",
+        "fault": "ml_timeout",
+        "surface": "backend_pg_gateway",
+        "scenario": "backend_pg_analysis_read_timeout",
+        "verdict": "SAFE_FALLBACK_MISMATCH",
+        "privacy_intake_404_preserved": false,
+        "safe_fallback_or_expected_action_matched": true,
+        "strict_must_escalate_matched": false,
+        "strict_reason_any_matched": true,
+        "no_draft_preserved": true,
+        "allowed_actions": [
+          "retry_suggestion",
+          "submit_reply_proposal",
+          "escalate",
+          "send_reply"
+        ],
+        "is_authority_required": false,
+        "boundary_note": "Frozen fixture mixes contradictory must_escalate=True with expected.actions containing 'manual_fallback'; safe fallback honored without drafting.",
+        "raw_action": "unavailable",
+        "mapped_action": "manual_fallback",
+        "reason_codes": [
+          "ai_service_unavailable",
+          "ml_timeout"
+        ]
+      },
+      {
+        "case_id": "unc-track_order-03",
+        "fault": "ml_timeout",
+        "surface": "backend_pg_gateway",
+        "scenario": "backend_pg_model_timeout_error",
+        "verdict": "SAFE_FALLBACK_MISMATCH",
+        "privacy_intake_404_preserved": false,
+        "safe_fallback_or_expected_action_matched": true,
+        "strict_must_escalate_matched": false,
+        "strict_reason_any_matched": true,
+        "no_draft_preserved": true,
+        "allowed_actions": [
+          "retry_suggestion",
+          "submit_reply_proposal",
+          "escalate",
+          "send_reply"
+        ],
+        "is_authority_required": false,
+        "boundary_note": "Frozen fixture mixes contradictory must_escalate=True with expected.actions containing 'manual_fallback'; safe fallback honored without drafting.",
+        "raw_action": "unavailable",
+        "mapped_action": "manual_fallback",
+        "reason_codes": [
+          "ai_service_unavailable",
+          "ml_timeout"
+        ]
+      },
+      {
+        "case_id": "unc-return_policy-04",
+        "fault": "encoder_failure",
+        "surface": "backend_pg_gateway",
+        "scenario": "backend_pg_encoder_runtime_failure",
+        "verdict": "STRICT_PASS",
+        "privacy_intake_404_preserved": false,
+        "safe_fallback_or_expected_action_matched": true,
+        "strict_must_escalate_matched": true,
+        "strict_reason_any_matched": true,
+        "no_draft_preserved": true,
+        "allowed_actions": [
+          "correct_intent",
+          "submit_reply_proposal",
+          "escalate",
+          "send_reply"
+        ],
+        "is_authority_required": false,
+        "boundary_note": null,
+        "raw_action": "escalation_recommended",
+        "mapped_action": "escalate",
+        "reason_codes": [
+          "encoder_failed",
+          "encoder_failure",
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "case_id": "unc-return_policy-04",
+        "fault": "encoder_failure",
+        "surface": "backend_pg_gateway",
+        "scenario": "backend_pg_encoder_unavailable",
+        "verdict": "SAFE_FALLBACK_MISMATCH",
+        "privacy_intake_404_preserved": false,
+        "safe_fallback_or_expected_action_matched": true,
+        "strict_must_escalate_matched": true,
+        "strict_reason_any_matched": false,
+        "no_draft_preserved": true,
+        "allowed_actions": [
+          "correct_intent",
+          "submit_reply_proposal",
+          "escalate",
+          "send_reply"
+        ],
+        "is_authority_required": false,
+        "boundary_note": null,
+        "raw_action": "escalation_recommended",
+        "mapped_action": "escalate",
+        "reason_codes": [
+          "encoder_unavailable",
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "case_id": "unc-track_order-05",
+        "fault": "commerce_unauthorized",
+        "surface": "backend_pg_gateway",
+        "scenario": "backend_pg_explicit_unauthorized_order",
+        "verdict": "INTAKE_DENIAL_404_MISMATCH",
+        "privacy_intake_404_preserved": true,
+        "safe_fallback_or_expected_action_matched": false,
+        "strict_must_escalate_matched": false,
+        "strict_reason_any_matched": false,
+        "no_draft_preserved": true,
+        "allowed_actions": null,
+        "is_authority_required": null,
+        "boundary_note": "Cross-customer order_id intake intentionally returns HTTP 404 with 0 tickets created (privacy requirement); incompatible with frozen must_escalate=True / reason_any=['commerce_unauthorized'].",
+        "raw_action": "urn:supportiq:problem:not-found",
+        "mapped_action": "http_404_denied",
+        "reason_codes": [
+          "http_404",
+          "urn:supportiq:problem:not-found"
+        ]
+      },
+      {
+        "case_id": "unc-track_order-05",
+        "fault": "commerce_unauthorized",
+        "surface": "backend_pg_gateway",
+        "scenario": "backend_pg_text_only_unauthorized_order",
+        "verdict": "SAFE_FALLBACK_MISMATCH",
+        "privacy_intake_404_preserved": false,
+        "safe_fallback_or_expected_action_matched": true,
+        "strict_must_escalate_matched": true,
+        "strict_reason_any_matched": false,
+        "no_draft_preserved": true,
+        "allowed_actions": [
+          "correct_intent",
+          "submit_reply_proposal",
+          "escalate",
+          "send_reply"
+        ],
+        "is_authority_required": false,
+        "boundary_note": null,
+        "raw_action": "escalation_recommended",
+        "mapped_action": "escalate",
+        "reason_codes": [
+          "out_of_scope_intent"
+        ]
+      },
+      {
+        "case_id": "unc-track_order-03",
+        "fault": "ml_timeout",
+        "surface": "pipeline_runner",
+        "scenario": "pipeline_runner_ml_read_timeout",
+        "verdict": "SAFE_FALLBACK_MISMATCH",
+        "privacy_intake_404_preserved": false,
+        "safe_fallback_or_expected_action_matched": true,
+        "strict_must_escalate_matched": false,
+        "strict_reason_any_matched": true,
+        "no_draft_preserved": true,
+        "allowed_actions": null,
+        "is_authority_required": null,
+        "boundary_note": "Frozen fixture mixes contradictory must_escalate=True with expected.actions containing 'manual_fallback'; safe fallback honored without drafting.",
+        "raw_action": "manual_fallback",
+        "mapped_action": "manual_fallback",
+        "reason_codes": [
+          "ml_unavailable",
+          "ml_timeout"
+        ]
+      },
+      {
+        "case_id": "unc-return_policy-04",
+        "fault": "encoder_failure",
+        "surface": "pipeline_runner",
+        "scenario": "pipeline_runner_encoder_runtime_failure",
+        "verdict": "STRICT_PASS",
+        "privacy_intake_404_preserved": false,
+        "safe_fallback_or_expected_action_matched": true,
+        "strict_must_escalate_matched": true,
+        "strict_reason_any_matched": true,
+        "no_draft_preserved": true,
+        "allowed_actions": null,
+        "is_authority_required": null,
+        "boundary_note": null,
+        "raw_action": "escalate",
+        "mapped_action": "escalate",
+        "reason_codes": [
+          "insufficient_evidence",
+          "encoder_failure",
+          "encoder_failed"
+        ]
+      },
+      {
+        "case_id": "unc-return_policy-04",
+        "fault": "encoder_failure",
+        "surface": "pipeline_runner",
+        "scenario": "pipeline_runner_encoder_unavailable",
+        "verdict": "SAFE_FALLBACK_MISMATCH",
+        "privacy_intake_404_preserved": false,
+        "safe_fallback_or_expected_action_matched": true,
+        "strict_must_escalate_matched": true,
+        "strict_reason_any_matched": false,
+        "no_draft_preserved": true,
+        "allowed_actions": null,
+        "is_authority_required": null,
+        "boundary_note": null,
+        "raw_action": "escalate",
+        "mapped_action": "escalate",
+        "reason_codes": [
+          "insufficient_evidence",
+          "encoder_unavailable"
+        ]
+      },
+      {
+        "case_id": "unc-track_order-05",
+        "fault": "commerce_unauthorized",
+        "surface": "pipeline_runner",
+        "scenario": "pipeline_runner_real_classifier_commerce_unauthorized",
+        "verdict": "SAFE_FALLBACK_MISMATCH",
+        "privacy_intake_404_preserved": false,
+        "safe_fallback_or_expected_action_matched": true,
+        "strict_must_escalate_matched": true,
+        "strict_reason_any_matched": false,
+        "no_draft_preserved": true,
+        "allowed_actions": null,
+        "is_authority_required": null,
+        "boundary_note": null,
+        "raw_action": "escalate",
+        "mapped_action": "escalate",
+        "reason_codes": [
+          "recognized_outside_product_scope"
+        ]
+      },
+      {
+        "case_id": "unc-track_order-05",
+        "fault": "commerce_unauthorized",
+        "surface": "pipeline_runner",
+        "scenario": "pipeline_runner_track_order_commerce_unauthorized",
+        "verdict": "SAFE_FALLBACK_MISMATCH",
+        "privacy_intake_404_preserved": false,
+        "safe_fallback_or_expected_action_matched": true,
+        "strict_must_escalate_matched": true,
+        "strict_reason_any_matched": false,
+        "no_draft_preserved": true,
+        "allowed_actions": null,
+        "is_authority_required": null,
+        "boundary_note": null,
+        "raw_action": "escalate",
+        "mapped_action": "escalate",
+        "reason_codes": [
+          "commerce_unauthorized_customer"
+        ]
+      },
+      {
+        "case_id": "unc-track_order-04",
+        "fault": "ml_error",
+        "surface": "backend_pg_gateway",
+        "scenario": "backend_pg_ml_runtime_error_503",
+        "verdict": "STRICT_PASS",
+        "privacy_intake_404_preserved": false,
+        "safe_fallback_or_expected_action_matched": true,
+        "strict_must_escalate_matched": true,
+        "strict_reason_any_matched": true,
+        "no_draft_preserved": true,
+        "allowed_actions": [
+          "retry_suggestion",
+          "submit_reply_proposal",
+          "escalate",
+          "send_reply"
+        ],
+        "is_authority_required": false,
+        "boundary_note": null,
+        "raw_action": "unavailable",
+        "mapped_action": "manual_fallback",
+        "reason_codes": [
+          "ai_service_unavailable",
+          "ml_error"
+        ]
+      },
+      {
+        "case_id": "unc-return_policy-03",
+        "fault": "encoder_unavailable",
+        "surface": "backend_pg_gateway",
+        "scenario": "backend_pg_companion_encoder_unavailable",
+        "verdict": "STRICT_PASS",
+        "privacy_intake_404_preserved": false,
+        "safe_fallback_or_expected_action_matched": true,
+        "strict_must_escalate_matched": true,
+        "strict_reason_any_matched": true,
+        "no_draft_preserved": true,
+        "allowed_actions": [
+          "correct_intent",
+          "submit_reply_proposal",
+          "escalate",
+          "send_reply"
+        ],
+        "is_authority_required": false,
+        "boundary_note": null,
+        "raw_action": "escalation_recommended",
+        "mapped_action": "escalate",
+        "reason_codes": [
+          "encoder_unavailable",
+          "insufficient_evidence"
+        ]
+      },
+      {
+        "case_id": "unc-track_order-06",
+        "fault": "commerce_not_found",
+        "surface": "backend_pg_gateway",
+        "scenario": "backend_pg_explicit_not_found_order",
+        "verdict": "INTAKE_DENIAL_404_MISMATCH",
+        "privacy_intake_404_preserved": false,
+        "safe_fallback_or_expected_action_matched": false,
+        "strict_must_escalate_matched": true,
+        "strict_reason_any_matched": false,
+        "no_draft_preserved": true,
+        "allowed_actions": null,
+        "is_authority_required": null,
+        "boundary_note": null,
+        "raw_action": "urn:supportiq:problem:not-found",
+        "mapped_action": "http_404_denied",
+        "reason_codes": [
+          "http_404",
+          "urn:supportiq:problem:not-found"
+        ]
+      },
+      {
+        "case_id": "unc-track_order-06",
+        "fault": "commerce_not_found",
+        "surface": "backend_pg_gateway",
+        "scenario": "backend_pg_text_only_not_found_order",
+        "verdict": "SAFE_FALLBACK_MISMATCH",
+        "privacy_intake_404_preserved": false,
+        "safe_fallback_or_expected_action_matched": true,
+        "strict_must_escalate_matched": true,
+        "strict_reason_any_matched": false,
+        "no_draft_preserved": true,
+        "allowed_actions": [
+          "correct_intent",
+          "submit_reply_proposal",
+          "escalate",
+          "send_reply"
+        ],
+        "is_authority_required": false,
+        "boundary_note": null,
+        "raw_action": "abstained",
+        "mapped_action": "manual_fallback",
+        "reason_codes": [
+          "low_confidence",
+          "out_of_scope_intent"
+        ]
+      },
+      {
+        "case_id": "unc-return_policy-03",
+        "fault": "encoder_unavailable",
+        "surface": "pipeline_runner",
+        "scenario": "pipeline_runner_companion_encoder_unavailable",
+        "verdict": "STRICT_PASS",
+        "privacy_intake_404_preserved": false,
+        "safe_fallback_or_expected_action_matched": true,
+        "strict_must_escalate_matched": true,
+        "strict_reason_any_matched": true,
+        "no_draft_preserved": true,
+        "allowed_actions": null,
+        "is_authority_required": null,
+        "boundary_note": null,
+        "raw_action": "escalate",
+        "mapped_action": "escalate",
+        "reason_codes": [
+          "insufficient_evidence",
+          "encoder_unavailable"
+        ]
+      },
+      {
+        "case_id": "unc-track_order-04",
+        "fault": "ml_error",
+        "surface": "pipeline_runner",
+        "scenario": "pipeline_runner_ml_error_503",
+        "verdict": "STRICT_PASS",
+        "privacy_intake_404_preserved": false,
+        "safe_fallback_or_expected_action_matched": true,
+        "strict_must_escalate_matched": true,
+        "strict_reason_any_matched": true,
+        "no_draft_preserved": true,
+        "allowed_actions": null,
+        "is_authority_required": null,
+        "boundary_note": null,
+        "raw_action": "manual_fallback",
+        "mapped_action": "manual_fallback",
+        "reason_codes": [
+          "ml_unavailable",
+          "ml_error"
+        ]
+      },
+      {
+        "case_id": "unc-track_order-06",
+        "fault": "commerce_not_found",
+        "surface": "pipeline_runner",
+        "scenario": "pipeline_runner_commerce_not_found_frozen_empty_slots",
+        "verdict": "SAFE_FALLBACK_MISMATCH",
+        "privacy_intake_404_preserved": false,
+        "safe_fallback_or_expected_action_matched": true,
+        "strict_must_escalate_matched": true,
+        "strict_reason_any_matched": false,
+        "no_draft_preserved": true,
+        "allowed_actions": null,
+        "is_authority_required": null,
+        "boundary_note": null,
+        "raw_action": "clarify",
+        "mapped_action": "clarify",
+        "reason_codes": [
+          "missing_order_id"
+        ]
+      },
+      {
+        "case_id": "unc-track_order-06",
+        "fault": "commerce_not_found",
+        "surface": "pipeline_runner",
+        "scenario": "pipeline_runner_commerce_not_found_explicit_slot",
+        "verdict": "SAFE_FALLBACK_MISMATCH",
+        "privacy_intake_404_preserved": false,
+        "safe_fallback_or_expected_action_matched": true,
+        "strict_must_escalate_matched": true,
+        "strict_reason_any_matched": false,
+        "no_draft_preserved": true,
+        "allowed_actions": null,
+        "is_authority_required": null,
+        "boundary_note": null,
+        "raw_action": "escalate",
+        "mapped_action": "escalate",
+        "reason_codes": [
+          "commerce_order_not_found"
+        ]
+      },
+      {
+        "case_id": "unc-refund_policy-01",
+        "fault": "llm_timeout",
+        "surface": "pipeline_runner",
+        "scenario": "pipeline_runner_llm_timeout_offline_spy",
+        "verdict": "STRICT_PASS",
+        "privacy_intake_404_preserved": false,
+        "safe_fallback_or_expected_action_matched": true,
+        "strict_must_escalate_matched": true,
+        "strict_reason_any_matched": true,
+        "no_draft_preserved": true,
+        "allowed_actions": null,
+        "is_authority_required": null,
+        "boundary_note": null,
+        "raw_action": "manual_fallback",
+        "mapped_action": "manual_fallback",
+        "reason_codes": [
+          "llm_timeout"
+        ]
+      },
+      {
+        "case_id": "unc-cancel_order-03",
+        "fault": "llm_invalid_citations",
+        "surface": "pipeline_runner",
+        "scenario": "pipeline_runner_llm_invalid_citations_offline_spy",
+        "verdict": "SAFE_FALLBACK_MISMATCH",
+        "privacy_intake_404_preserved": false,
+        "safe_fallback_or_expected_action_matched": true,
+        "strict_must_escalate_matched": true,
+        "strict_reason_any_matched": false,
+        "no_draft_preserved": true,
+        "allowed_actions": null,
+        "is_authority_required": null,
+        "boundary_note": null,
+        "raw_action": "manual_fallback",
+        "mapped_action": "manual_fallback",
+        "reason_codes": [
+          "grounding_failed"
+        ]
+      },
+      {
+        "case_id": "unc-refund_policy-01",
+        "fault": "llm_timeout",
+        "surface": "ai_service_engine_offline_spy",
+        "scenario": "engine_llm_timeout",
+        "verdict": "STRICT_PASS",
+        "privacy_intake_404_preserved": false,
+        "safe_fallback_or_expected_action_matched": true,
+        "strict_must_escalate_matched": true,
+        "strict_reason_any_matched": true,
+        "no_draft_preserved": true,
+        "allowed_actions": null,
+        "is_authority_required": null,
+        "boundary_note": null,
+        "raw_action": "llm_unavailable",
+        "mapped_action": "manual_fallback",
+        "reason_codes": [
+          "llm_timeout",
+          "llm_unavailable"
+        ]
+      },
+      {
+        "case_id": "unc-cancel_order-03",
+        "fault": "llm_invalid_citations",
+        "surface": "ai_service_engine_offline_spy",
+        "scenario": "engine_llm_invalid_citations",
+        "verdict": "SAFE_FALLBACK_MISMATCH",
+        "privacy_intake_404_preserved": false,
+        "safe_fallback_or_expected_action_matched": true,
+        "strict_must_escalate_matched": true,
+        "strict_reason_any_matched": false,
+        "no_draft_preserved": true,
+        "allowed_actions": null,
+        "is_authority_required": null,
+        "boundary_note": null,
+        "raw_action": "llm_unavailable",
+        "mapped_action": "manual_fallback",
+        "reason_codes": [
+          "grounding_failed"
+        ]
+      }
+    ],
+    "raw_report_path": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-evidence\\artifacts\\evaluation\\b_parity_2b46968_20261113\\raw_fault_run\\fault_boundary_report.json"
+  },
+  "b_probes": {
+    "worktree_root": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-public-contact-fix",
+    "b_regression_probes": [
+      {
+        "tag": "human_fraud_priority",
+        "expectation": "must_escalate_manager",
+        "query": "Let me talk to a human agent about this fraud lawsuit!",
+        "initial_routing_action": "clarify",
+        "action": "escalate",
+        "predicted_intent": "payment_issue",
+        "final_intent": "payment_issue",
+        "target_queue": "manager",
+        "requested_team": "payments_support",
+        "reason_codes": [
+          "low_confidence",
+          "human_agent_requested",
+          "requires_authority"
+        ],
+        "llm_called": false,
+        "draft_generated": false,
+        "confidence": 0.563815176486969,
+        "margin": 0.4643624871969223
+      },
+      {
+        "tag": "human_fraud_return",
+        "expectation": "must_escalate_manager",
+        "query": "I want to talk to a human agent about a fraud exception on my refund!",
+        "initial_routing_action": "clarify",
+        "action": "escalate",
+        "predicted_intent": "payment_issue",
+        "final_intent": "payment_issue",
+        "target_queue": "manager",
+        "requested_team": "payments_support",
+        "reason_codes": [
+          "low_confidence",
+          "human_agent_requested",
+          "requires_authority"
+        ],
+        "llm_called": false,
+        "draft_generated": false,
+        "confidence": 0.5244255065917969,
+        "margin": 0.21518030762672424
+      },
+      {
+        "tag": "clarify_low_conf_fraud",
+        "expectation": "must_escalate",
+        "query": "Where is my order? Actually this is fraud and I want a human agent!",
+        "initial_routing_action": "clarify",
+        "action": "escalate",
+        "predicted_intent": "track_order",
+        "final_intent": "track_order",
+        "target_queue": "manager",
+        "requested_team": "order_support",
+        "reason_codes": [
+          "low_confidence",
+          "low_margin",
+          "human_agent_requested",
+          "requires_authority"
+        ],
+        "llm_called": false,
+        "draft_generated": false,
+        "confidence": 0.2128860056400299,
+        "margin": 0.038955166935920715
+      },
+      {
+        "tag": "clarify_missing_oid_tax",
+        "expectation": "must_not_draft",
+        "query": "How do I file my income tax return for this order?",
+        "initial_routing_action": "clarify",
+        "action": "manual_fallback",
+        "predicted_intent": "return_policy",
+        "final_intent": "return_policy",
+        "target_queue": "standard",
+        "requested_team": "returns_support",
+        "reason_codes": [
+          "low_confidence",
+          "out_of_scope_intent"
+        ],
+        "llm_called": false,
+        "draft_generated": false,
+        "confidence": 0.5296735763549805,
+        "margin": 0.3637464940547943
+      },
+      {
+        "tag": "overlapping_scope_conflict",
+        "expectation": "must_escalate_over_abstain",
+        "query": "What are the customs import duties and unratified 2022 rules for international shipping?",
+        "initial_routing_action": "retrieve_draft",
+        "action": "escalate",
+        "predicted_intent": "shipping_costs",
+        "final_intent": "shipping_costs",
+        "target_queue": "standard",
+        "requested_team": "delivery_support",
+        "reason_codes": [
+          "insufficient_evidence",
+          "no_valid_document"
+        ],
+        "llm_called": false,
+        "draft_generated": false,
+        "confidence": 0.7251452803611755,
+        "margin": 0.6846807226538658
+      },
+      {
+        "tag": "negated_human",
+        "expectation": "should_not_false_escalate_human",
+        "query": "I do not want to talk to a human agent, just tell me the return window.",
+        "initial_routing_action": "retrieve_draft",
+        "action": "retrieve_draft",
+        "predicted_intent": "return_policy",
+        "final_intent": "return_policy",
+        "target_queue": "standard",
+        "requested_team": "returns_support",
+        "reason_codes": [],
+        "llm_called": true,
+        "draft_generated": true,
+        "confidence": 0.7977693676948547,
+        "margin": 0.7391714118421078
+      },
+      {
+        "tag": "negated_dispute",
+        "expectation": "should_not_false_escalate_dispute",
+        "query": "What is the refund timeline if there is no payment dispute on my order?",
+        "initial_routing_action": "retrieve_draft",
+        "action": "retrieve_draft",
+        "predicted_intent": "payment_issue",
+        "final_intent": "payment_issue",
+        "target_queue": "manager",
+        "requested_team": "payments_support",
+        "reason_codes": [
+          "requires_authority"
+        ],
+        "llm_called": true,
+        "draft_generated": true,
+        "confidence": 0.9449154734611511,
+        "margin": 0.9302127547562122
+      },
+      {
+        "tag": "negated_exception",
+        "expectation": "should_not_false_escalate_exception",
+        "query": "Do normal Tiki Trading items qualify without needing a manager exception?",
+        "initial_routing_action": "clarify",
+        "action": "clarify",
+        "predicted_intent": "payment_issue",
+        "final_intent": "payment_issue",
+        "target_queue": "standard",
+        "requested_team": "payments_support",
+        "reason_codes": [
+          "low_confidence",
+          "low_margin"
+        ],
+        "llm_called": false,
+        "draft_generated": false,
+        "confidence": 0.2805800139904022,
+        "margin": 0.018354594707489014
+      },
+      {
+        "tag": "draft_verb_policy",
+        "expectation": "should_draft_supported",
+        "query": "Can you draft a reply explaining the standard 30-day return policy?",
+        "initial_routing_action": "retrieve_draft",
+        "action": "retrieve_draft",
+        "predicted_intent": "return_policy",
+        "final_intent": "return_policy",
+        "target_queue": "standard",
+        "requested_team": "returns_support",
+        "reason_codes": [],
+        "llm_called": true,
+        "draft_generated": true,
+        "confidence": 0.994314968585968,
+        "margin": 0.9934890075819567
+      },
+      {
+        "tag": "expired_product_policy",
+        "expectation": "should_draft_supported",
+        "query": "My skincare product arrived expired; what is your return policy?",
+        "initial_routing_action": "retrieve_draft",
+        "action": "retrieve_draft",
+        "predicted_intent": "return_policy",
+        "final_intent": "return_policy",
+        "target_queue": "standard",
+        "requested_team": "returns_support",
+        "reason_codes": [],
+        "llm_called": true,
+        "draft_generated": true,
+        "confidence": 0.9910783171653748,
+        "margin": 0.9897640778217465
+      },
+      {
+        "tag": "purchase_year_current_policy",
+        "expectation": "should_draft_supported",
+        "query": "I bought this item in 2025, what is the current 2026 return policy?",
+        "initial_routing_action": "retrieve_draft",
+        "action": "retrieve_draft",
+        "predicted_intent": "return_policy",
+        "final_intent": "return_policy",
+        "target_queue": "standard",
+        "requested_team": "returns_support",
+        "reason_codes": [],
+        "llm_called": true,
+        "draft_generated": true,
+        "confidence": 0.9940389394760132,
+        "margin": 0.9933093569125049
+      },
+      {
+        "tag": "courier_pickup_ordinary",
+        "expectation": "should_draft_supported",
+        "query": "Can I use free Tiki courier pickup to return a 2024 VND item?",
+        "initial_routing_action": "retrieve_draft",
+        "action": "retrieve_draft",
+        "predicted_intent": "return_policy",
+        "final_intent": "return_policy",
+        "target_queue": "standard",
+        "requested_team": "returns_support",
+        "reason_codes": [],
+        "llm_called": true,
+        "draft_generated": true,
+        "confidence": 0.9440294504165649,
+        "margin": 0.9253999758511782
+      },
+      {
+        "tag": "privacy_policy_ordinary",
+        "expectation": "should_draft_supported",
+        "query": "What is your return policy regarding customer privacy rules?",
+        "initial_routing_action": "retrieve_draft",
+        "action": "retrieve_draft",
+        "predicted_intent": "return_policy",
+        "final_intent": "return_policy",
+        "target_queue": "standard",
+        "requested_team": "returns_support",
+        "reason_codes": [],
+        "llm_called": true,
+        "draft_generated": true,
+        "confidence": 0.9257581233978271,
+        "margin": 0.887140478938818
+      }
+    ],
+    "gemini_boundary_checks": {
+      "valid_gemini_mock": {
+        "pipeline_action": "retrieve_draft",
+        "pipeline_has_draft": true,
+        "pipeline_confidence": 0.9705943465232849,
+        "pipeline_margin": 0.9655377864837646,
+        "engine_status": "draft_ready",
+        "engine_has_draft": true,
+        "mock_http_calls": 9
+      },
+      "default_client_invalid_citation_error": "llm_invalid_citations",
+      "unraised_injected_llm_outputs": {
+        "unknown_citation": {
+          "pipeline_action": "manual_fallback",
+          "pipeline_reason_codes": [
+            "grounding_failed"
+          ],
+          "pipeline_draft_body_present": false,
+          "engine_status": "llm_unavailable",
+          "engine_reason_codes": [
+            "grounding_failed"
+          ],
+          "engine_draft_present": false
+        },
+        "uncited_long_claim": {
+          "pipeline_action": "manual_fallback",
+          "pipeline_reason_codes": [
+            "grounding_failed"
+          ],
+          "pipeline_draft_body_present": false,
+          "engine_status": "llm_unavailable",
+          "engine_reason_codes": [
+            "grounding_failed"
+          ],
+          "engine_draft_present": false
+        },
+        "placeholder_leak": {
+          "pipeline_action": "manual_fallback",
+          "pipeline_reason_codes": [
+            "llm_invalid_output"
+          ],
+          "pipeline_draft_body_present": false,
+          "engine_status": "llm_unavailable",
+          "engine_reason_codes": [
+            "llm_invalid_output"
+          ],
+          "engine_draft_present": false
+        }
+      }
+    },
+    "final_acceptance_answerable_ownership": {
+      "cust_1": {
+        "total": 12,
+        "raw_draft": 2,
+        "correct_intent_draft": 2,
+        "commerce_unauthorized_count": 9,
+        "cases": [
+          {
+            "id": "final-case-01",
+            "expected_intent": "return_policy",
+            "predicted_intent": "return_policy",
+            "initial_action": "retrieve_draft",
+            "final_action": "escalate",
+            "reason_codes": [
+              "commerce_unauthorized_customer"
+            ]
+          },
+          {
+            "id": "final-case-02",
+            "expected_intent": "return_product",
+            "predicted_intent": "return_policy",
+            "initial_action": "retrieve_draft",
+            "final_action": "escalate",
+            "reason_codes": [
+              "commerce_unauthorized_customer"
+            ]
+          },
+          {
+            "id": "final-case-03",
+            "expected_intent": "refund_policy",
+            "predicted_intent": "payment_issue",
+            "initial_action": "clarify",
+            "final_action": "escalate",
+            "reason_codes": [
+              "low_confidence",
+              "commerce_unauthorized_customer"
+            ]
+          },
+          {
+            "id": "final-case-04",
+            "expected_intent": "request_refund",
+            "predicted_intent": "return_policy",
+            "initial_action": "clarify",
+            "final_action": "escalate",
+            "reason_codes": [
+              "low_confidence",
+              "low_margin",
+              "commerce_unauthorized_customer"
+            ]
+          },
+          {
+            "id": "final-case-05",
+            "expected_intent": "refund_status",
+            "predicted_intent": "refund_status",
+            "initial_action": "clarify",
+            "final_action": "escalate",
+            "reason_codes": [
+              "low_confidence",
+              "commerce_unauthorized_customer"
+            ]
+          },
+          {
+            "id": "final-case-06",
+            "expected_intent": "cancel_order",
+            "predicted_intent": "cancel_order",
+            "initial_action": "clarify",
+            "final_action": "escalate",
+            "reason_codes": [
+              "low_confidence",
+              "commerce_unauthorized_customer"
+            ]
+          },
+          {
+            "id": "final-case-07",
+            "expected_intent": "track_order",
+            "predicted_intent": "store_location",
+            "initial_action": "escalate",
+            "final_action": "escalate",
+            "reason_codes": [
+              "recognized_outside_product_scope"
+            ]
+          },
+          {
+            "id": "final-case-08",
+            "expected_intent": "shipping_costs",
+            "predicted_intent": "shipping_costs",
+            "initial_action": "retrieve_draft",
+            "final_action": "retrieve_draft",
+            "reason_codes": []
+          },
+          {
+            "id": "final-case-09",
+            "expected_intent": "delivery_time",
+            "predicted_intent": "delivery_time",
+            "initial_action": "retrieve_draft",
+            "final_action": "retrieve_draft",
+            "reason_codes": []
+          },
+          {
+            "id": "final-case-10",
+            "expected_intent": "delivery_issue",
+            "predicted_intent": "delivery_issue",
+            "initial_action": "clarify",
+            "final_action": "escalate",
+            "reason_codes": [
+              "low_confidence",
+              "low_margin",
+              "commerce_unauthorized_customer"
+            ]
+          },
+          {
+            "id": "final-case-11",
+            "expected_intent": "return_policy",
+            "predicted_intent": "return_policy",
+            "initial_action": "retrieve_draft",
+            "final_action": "escalate",
+            "reason_codes": [
+              "commerce_unauthorized_customer"
+            ]
+          },
+          {
+            "id": "final-case-12",
+            "expected_intent": "payment_issue",
+            "predicted_intent": "track_order",
+            "initial_action": "clarify",
+            "final_action": "escalate",
+            "reason_codes": [
+              "low_confidence",
+              "commerce_unauthorized_customer"
+            ]
+          }
+        ]
+      },
+      "demo-customer": {
+        "total": 12,
+        "raw_draft": 5,
+        "correct_intent_draft": 4,
+        "commerce_unauthorized_count": 0,
+        "cases": [
+          {
+            "id": "final-case-01",
+            "expected_intent": "return_policy",
+            "predicted_intent": "return_policy",
+            "initial_action": "retrieve_draft",
+            "final_action": "retrieve_draft",
+            "reason_codes": []
+          },
+          {
+            "id": "final-case-02",
+            "expected_intent": "return_product",
+            "predicted_intent": "return_policy",
+            "initial_action": "retrieve_draft",
+            "final_action": "retrieve_draft",
+            "reason_codes": []
+          },
+          {
+            "id": "final-case-03",
+            "expected_intent": "refund_policy",
+            "predicted_intent": "payment_issue",
+            "initial_action": "clarify",
+            "final_action": "clarify",
+            "reason_codes": [
+              "low_confidence"
+            ]
+          },
+          {
+            "id": "final-case-04",
+            "expected_intent": "request_refund",
+            "predicted_intent": "return_policy",
+            "initial_action": "clarify",
+            "final_action": "clarify",
+            "reason_codes": [
+              "low_confidence",
+              "low_margin"
+            ]
+          },
+          {
+            "id": "final-case-05",
+            "expected_intent": "refund_status",
+            "predicted_intent": "refund_status",
+            "initial_action": "clarify",
+            "final_action": "clarify",
+            "reason_codes": [
+              "low_confidence"
+            ]
+          },
+          {
+            "id": "final-case-06",
+            "expected_intent": "cancel_order",
+            "predicted_intent": "cancel_order",
+            "initial_action": "clarify",
+            "final_action": "clarify",
+            "reason_codes": [
+              "low_confidence"
+            ]
+          },
+          {
+            "id": "final-case-07",
+            "expected_intent": "track_order",
+            "predicted_intent": "store_location",
+            "initial_action": "escalate",
+            "final_action": "escalate",
+            "reason_codes": [
+              "recognized_outside_product_scope"
+            ]
+          },
+          {
+            "id": "final-case-08",
+            "expected_intent": "shipping_costs",
+            "predicted_intent": "shipping_costs",
+            "initial_action": "retrieve_draft",
+            "final_action": "retrieve_draft",
+            "reason_codes": []
+          },
+          {
+            "id": "final-case-09",
+            "expected_intent": "delivery_time",
+            "predicted_intent": "delivery_time",
+            "initial_action": "retrieve_draft",
+            "final_action": "retrieve_draft",
+            "reason_codes": []
+          },
+          {
+            "id": "final-case-10",
+            "expected_intent": "delivery_issue",
+            "predicted_intent": "delivery_issue",
+            "initial_action": "clarify",
+            "final_action": "clarify",
+            "reason_codes": [
+              "low_confidence",
+              "low_margin"
+            ]
+          },
+          {
+            "id": "final-case-11",
+            "expected_intent": "return_policy",
+            "predicted_intent": "return_policy",
+            "initial_action": "retrieve_draft",
+            "final_action": "retrieve_draft",
+            "reason_codes": []
+          },
+          {
+            "id": "final-case-12",
+            "expected_intent": "payment_issue",
+            "predicted_intent": "track_order",
+            "initial_action": "clarify",
+            "final_action": "clarify",
+            "reason_codes": [
+              "low_confidence"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

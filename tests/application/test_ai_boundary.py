@@ -48,6 +48,15 @@ def test_sensitive_override_requires_manager_authority():
     assert "requires_authority" in result["routing"]["reason_codes"]
 
 
+def test_uncovered_policy_escalation_is_accepted_by_application_contract():
+    from apps.backend.tickets.jobs import validate_analysis
+    payload = {**request(), 'message': 'Explain the archived shipping policy.'}
+    result = engine().analyse(payload)
+    assert result['routing']['recommendation'] == 'escalate'
+    assert 'insufficient_evidence' in result['routing']['reason_codes']
+    assert validate_analysis(result) is result
+
+
 def test_unknown_placeholder_blocks_draft():
     class UnsafeLLM(LLM):
         def generate(self, *args, **kwargs):
@@ -118,4 +127,56 @@ def test_high_entropy_triggers_ood_low_confidence():
     analysis = subject.analyse(request())
     assert "low_confidence" in analysis["routing"]["reason_codes"]
     assert "out_of_scope_intent" in analysis["routing"]["reason_codes"]
+
+
+def test_short_unsupported_commitment_blocks_draft_in_boundary():
+    class ShortFactualLLM(LLM):
+        def generate(self, *args, **kwargs):
+            return {
+                "body": "Refund amount is $50.",
+                "input_snapshot": {"sources": [{"source_id": "S1", "source_type": "policy", "document_id": "policy-1", "version": "1", "excerpt": "Shipping evidence"}]}
+            }
+    result = engine(ShortFactualLLM()).draft(request())
+    assert result["status"] == "llm_unavailable"
+    assert "grounding_failed" in result["reason_codes"]
+
+
+def test_polite_greeting_allowed_in_boundary():
+    class GreetingLLM(LLM):
+        def generate(self, *args, **kwargs):
+            return {
+                "body": "Hello [NAME_1],\n\nPlease check the shipping policy. [S1]",
+                "input_snapshot": {"sources": [{"source_id": "S1", "source_type": "policy", "document_id": "policy-1", "version": "1", "excerpt": "Shipping evidence"}]}
+            }
+    result = engine(GreetingLLM()).draft({"message": "Hello [NAME_1], where is [ORDER_ID_1]?", "as_of": datetime.now(timezone.utc).isoformat(), "order_context": {"order_status": "shipped"}})
+    assert result["status"] == "draft_ready"
+    assert len(result["draft"]["segments"]) == 2
+    assert result["draft"]["segments"][0]["citation_ids"] == []
+    assert result["draft"]["segments"][1]["citation_ids"] == ["S1"]
+
+
+def test_staff_override_provenance_in_boundary():
+    result = engine().analyse(request("track_order"))
+    intent = result["intent"]
+    assert intent["source"] == "staff"
+    assert intent["score_kind"] == "staff_choice"
+    assert intent["model_mode"] == "override"
+    assert intent["verified"] is False
+    assert intent["probability"] == 1.0
+
+
+def test_model_provenance_carried_through_analysis():
+    class ProvenanceModel(Model):
+        def predict(self, text):
+            res = super().predict(text)
+            res["model_mode"] = "trained"
+            res["verified"] = True
+            return res
+    eng = engine()
+    eng.model = ProvenanceModel()
+    result = eng.analyse(request())
+    assert result["intent"]["source"] == "model"
+    assert result["intent"]["model_mode"] == "trained"
+    assert result["intent"]["verified"] is True
+
 

@@ -23,7 +23,7 @@ class AiSettings(BaseSettings):
         extra="ignore"
     )
     gemini_api_key: SecretStr = SecretStr("")
-    gemini_model: str = "gemini-3.1-flash-lite"
+    gemini_model: str = "gemini-3.5-flash-lite"
     supportiq_enable_llm: bool = True
 
 
@@ -64,6 +64,55 @@ class AllowListedTransport(httpx.BaseTransport):
         self.transport.close()
 
 
+_BOUNDED_GATEWAY_CODES = frozenset({
+    "ml_timeout",
+    "ml_error",
+    "ml_unavailable",
+    "encoder_unavailable",
+    "encoder_failure",
+    "encoder_failed",
+    "ai_service_unavailable",
+})
+
+
+def _gateway_http_error(
+    status_code: int,
+    error_code: str,
+    message: str,
+    reason_codes: list[str] | None = None,
+) -> HTTPException:
+    codes = reason_codes or (
+        [error_code] if error_code == "ai_service_unavailable" else [error_code, "ai_service_unavailable"]
+    )
+    return HTTPException(
+        status_code=status_code,
+        detail={"error_code": error_code, "reason_codes": codes, "message": message},
+        headers={"X-SupportIQ-Error-Code": error_code},
+    )
+
+
+def _execute_gateway_call(call, *, unavailability_message: str):
+    try:
+        return call()
+    except HTTPException:
+        raise
+    except TimeoutError:
+        raise _gateway_http_error(504, "ml_timeout", "Inference timed out") from None
+    except Exception as exc:
+        explicit_code = getattr(exc, "code", None)
+        if explicit_code == "ml_timeout":
+            raise _gateway_http_error(504, "ml_timeout", "Inference timed out") from None
+        if isinstance(explicit_code, str) and explicit_code in _BOUNDED_GATEWAY_CODES:
+            reason_codes = (
+                ["encoder_failure", "encoder_failed", "ai_service_unavailable"]
+                if explicit_code in ("encoder_failure", "encoder_failed")
+                else [explicit_code, "ai_service_unavailable"]
+            )
+            canonical = "encoder_failure" if explicit_code == "encoder_failed" else explicit_code
+            raise _gateway_http_error(503, canonical, unavailability_message, reason_codes=reason_codes) from None
+        raise _gateway_http_error(503, "ml_error", unavailability_message) from None
+
+
 def create_app():
     settings = AiSettings()
     resources = {}
@@ -73,7 +122,7 @@ def create_app():
         import torch
         from apps.ml_inference.app import ModelContainer
         from apps.core_backend.retrieval.adapter import RetrievalAdapter
-        from apps.core_backend.llm.gemini import GeminiDraftClient
+        from apps.core_backend.llm.gemini import GeminiDraftClient, PROMPT_VERSION
 
         torch.set_num_threads(2)
         model = ModelContainer()
@@ -89,9 +138,14 @@ def create_app():
         policy_path = root / "apps/core_backend/config/policies/intent_policy.v2.json"
         kb_hash = hashlib.sha256(kb.read_bytes() + release_path.read_bytes()).hexdigest()
         policy_hash = hashlib.sha256(policy_path.read_bytes()).hexdigest()
-        versions = {"release_id": "local-" + hashlib.sha256(((model.model_checksum or "unavailable") + kb_hash + policy_hash + "grounded-v2").encode()).hexdigest()[:16],
-                    "model_version": model.verified_model_version or "Unknown", "kb_version": "sha256:" + kb_hash, "mapping_version": "embedded:" + kb_hash,
-                    "prompt_version": "grounded-v2", "routing_version": "sha256:" + policy_hash, "index_version": "bge-small-en-v1.5:" + kb_hash}
+        engine_hash = hashlib.sha256(Path(__file__).with_name('engine.py').read_bytes()).hexdigest()
+        versions = {"release_id": "local-" + hashlib.sha256(((model.model_checksum or "unavailable") + kb_hash + policy_hash + engine_hash + PROMPT_VERSION).encode()).hexdigest()[:16],
+                    "model_version": model.verified_model_version or getattr(model, "model_version", None) or "Unknown",
+                    "model_mode": getattr(model, "model_mode", "unavailable"),
+                    "verified": getattr(model, "verified", False),
+                    "kb_version": "sha256:" + kb_hash, "mapping_version": "embedded:" + kb_hash,
+                    "prompt_version": PROMPT_VERSION, "engine_version": "sha256:" + engine_hash,
+                    "routing_version": "sha256:" + policy_hash, "index_version": "bge-small-en-v1.5:" + kb_hash}
         resources.update(engine=Engine(model,retriever,BudgetedDraftClient(llm),versions,json.loads(policy_path.read_text())), model=model, retriever=retriever, versions=versions)
         yield
         client.close()
@@ -100,7 +154,7 @@ def create_app():
 
     def engine():
         if not resources.get("model") or not resources["model"].is_ready():
-            raise HTTPException(503, "The verified model is not available")
+            raise _gateway_http_error(503, "ml_unavailable", "The verified model is not available")
         return resources["engine"]
 
     @app.get("/health/live")
@@ -110,21 +164,28 @@ def create_app():
     @app.get("/health/ready")
     def ready():
         engine()
-        return {"status": "ready", "llm_enabled": settings.supportiq_enable_llm, "llm_configured": bool(settings.gemini_api_key.get_secret_value()), "retrieval_ready": resources["retriever"].index is not None}
+        return {
+            "status": "ready",
+            "llm_enabled": settings.supportiq_enable_llm,
+            "llm_configured": bool(settings.gemini_api_key.get_secret_value()),
+            "retrieval_ready": resources["retriever"].index is not None,
+            "model_mode": resources["versions"].get("model_mode", "unavailable"),
+            "model_verified": resources["versions"].get("verified", False),
+        }
 
     @app.post("/v1/analyses")
     def analyse(request: SuggestionRequest):
-        try:
-            return engine().analyse(request.model_dump())
-        except (ValueError, RuntimeError, KeyError):
-            raise HTTPException(503, "Analysis is temporarily unavailable") from None
+        return _execute_gateway_call(
+            lambda: engine().analyse(request.model_dump()),
+            unavailability_message="Analysis is temporarily unavailable",
+        )
 
     @app.post("/v1/drafts")
     def draft(request: SuggestionRequest):
-        try:
-            return engine().draft(request.model_dump())
-        except (ValueError, RuntimeError, KeyError):
-            raise HTTPException(503, "Draft generation is temporarily unavailable") from None
+        return _execute_gateway_call(
+            lambda: engine().draft(request.model_dump()),
+            unavailability_message="Draft generation is temporarily unavailable",
+        )
 
     @app.get("/v1/asset-versions")
     def versions():

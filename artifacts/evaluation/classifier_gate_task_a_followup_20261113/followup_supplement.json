@@ -1,0 +1,84 @@
+{
+  "source_commit": "32e9781",
+  "candidate_provenance_sha256_verification": {
+    "weights_sha256_actual": "b9e500b2997d54e62ffed9a805f84996b4633f103c2b9b7504e6fee8880aed4e",
+    "weights_sha256_matches_manifest": true,
+    "tokenizer_sha256_actual": "5f218e0ea9eaa9f154815cc067351fb941bea26da81bfd12af3ded3cc66fa3ff",
+    "tokenizer_sha256_matches_manifest": true,
+    "domain_templates_sha256_actual": "3667c0d704f9ca85b71b45b42c919d412405098b471ca5f9c24449ebe9b049a5",
+    "domain_templates_sha256_matches_manifest": true,
+    "domain_negatives_sha256_actual": "fdaae87da2cdd2d6413365d9cdb798ae1ceb41ac4377dce50f8f424d0555672e",
+    "domain_negatives_sha256_matches_manifest": true,
+    "worker_a_promotion_approved": false,
+    "worker_a_promotion_checks": {
+      "ml_oos_zero_false_drafts": false,
+      "held_out_ood_zero_false_drafts": true,
+      "final_acceptance_zero_unanswerable_draft_leaks": false,
+      "system_acceptance_zero_mandatory_draft_leaks": false,
+      "other_34_holdout_retained_ge_99pct": true
+    }
+  },
+  "domain_negatives_isolation_and_gold_contamination": {
+    "passed": true,
+    "failure_reasons": [],
+    "counts": {
+      "train": 36,
+      "calibration": 27,
+      "eval": 27
+    },
+    "group_counts": {
+      "train": 12,
+      "calibration": 9,
+      "eval": 9
+    },
+    "group_overlaps": {
+      "train_vs_calibration": [],
+      "train_vs_eval": [],
+      "calibration_vs_eval": []
+    },
+    "text_overlaps": {
+      "train_vs_calibration": 0,
+      "train_vs_eval": 0,
+      "calibration_vs_eval": 0
+    },
+    "gold_exact_matches": [],
+    "gold_high_jaccard_matches": []
+  },
+  "independent_held_out_domain_negatives_27_eval": {
+    "serving_distilbert_supportiq": {
+      "n_total": 27,
+      "safe_count": 27,
+      "false_draft_count": 0,
+      "false_drafts": []
+    },
+    "followup_candidate_32e9781": {
+      "n_total": 27,
+      "safe_count": 27,
+      "false_draft_count": 0,
+      "false_drafts": []
+    }
+  },
+  "worker_a_reported_bitext_46_holdout_not_rerun": {
+    "n_total": 6690,
+    "all_46_accuracy": 0.9946,
+    "all_46_macro_f1": 0.9947,
+    "supported_12_n": 1762,
+    "supported_12_accuracy": 0.9921,
+    "other_34_n": 4928,
+    "other_34_accuracy": 0.9955
+  },
+  "worker_a_reported_final_acceptance_24": {
+    "n_total": 24,
+    "answerable_total": 12,
+    "answerable_correct_intent_count": 10,
+    "answerable_correct_intent_rate": 0.8333,
+    "raw_draft_eligible_count": 5,
+    "raw_draft_eligible_rate": 0.4167,
+    "correct_intent_draft_eligible_count": 5,
+    "correct_intent_draft_eligible_rate": 0.4167,
+    "unanswerable_total": 12,
+    "unanswerable_strict_action_match_count": 8,
+    "unanswerable_strict_action_match_rate": 0.6667,
+    "unanswerable_draft_leak_count": 1
+  }
+}

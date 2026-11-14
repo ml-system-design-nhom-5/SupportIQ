@@ -53,8 +53,14 @@ def evidence_from_kb(kb: dict[str, dict], doc_ids: list[str]) -> list[dict]:
     for i in doc_ids:
         d = kb.get(i)
         if d:
-            ev.append({"source_type": "policy", "document_id": d["document_id"], "version": str(d.get("version")),
-                       "title": d.get("title", ""), "excerpt": d.get("sanitized_excerpt") or d.get("content", "")})
+            ev.append({
+                "source_type": "policy",
+                "document_id": d["document_id"],
+                "version": str(d.get("version")),
+                "title": d.get("title", ""),
+                "excerpt": d.get("sanitized_excerpt") or d.get("content", ""),
+                "content_hash": d.get("content_hash"),
+            })
     return ev
 
 
@@ -143,8 +149,11 @@ def redaction_probes() -> dict[str, Any]:
 
 # =========================================================================== offline: validator probes
 class _Resp:
-    def __init__(self, status: int, payload: Any):
+    def __init__(self, status: int, payload: Any, headers=None):
+        import httpx
+
         self.status_code, self._payload = status, payload
+        self.headers = httpx.Headers(headers or {})
 
     def json(self):
         if isinstance(self._payload, Exception):

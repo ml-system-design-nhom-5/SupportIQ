@@ -1,0 +1,184 @@
+{
+  "fixture_release": "injected-robustness-fixtures-v1",
+  "fixture_purpose": "Honest isolated synthetic boundary fixtures for evaluating temporal expiry and contradictory policy detection without polluting active production KB release.",
+  "active_kb_release": "current-policies-v1",
+  "active_kb_polluted": false,
+  "documents": [
+    {
+      "doc_id": "POL-INJ-EXP-01",
+      "document_id": "POL-INJ-EXP-01",
+      "version": "1.0",
+      "title": "Expired Holiday Promotional Return Window Policy (Injected Synthetic Fixture)",
+      "category": "return_refund",
+      "policy_key": "promotional_return_window",
+      "normalized_rule_value": "60_days_holiday",
+      "content": "During the 2025 year-end promotional campaign, products purchased between November 1 and December 31, 2025 are eligible for an extended 60-day return window. This promotion strictly terminated on December 31, 2025 and does not apply to subsequent purchase dates.",
+      "content_hash": "d89971d503a4befd545f0f3619c059060924fdb0c3343b3eceb7640282cf310f",
+      "status": "expired",
+      "approved_by": "lead_compliance_officer",
+      "approved_at": "2025-10-15T00:00:00Z",
+      "valid_from": "2025-11-01T00:00:00Z",
+      "valid_to": "2025-12-31T23:59:59Z",
+      "allowed_roles": [
+        "agent",
+        "staff",
+        "manager",
+        "admin",
+        "customer"
+      ],
+      "supported_intents": [
+        "return_policy"
+      ],
+      "answer_capabilities": [
+        "promotional_return_window"
+      ]
+    },
+    {
+      "doc_id": "POL-INJ-EXP-02",
+      "document_id": "POL-INJ-EXP-02",
+      "version": "1.0",
+      "title": "Expired Legacy 2024 E-Wallet Settlement Timeline (Injected Synthetic Fixture)",
+      "category": "return_refund",
+      "policy_key": "legacy_wallet_timeline",
+      "normalized_rule_value": "same_day_instant",
+      "content": "Under the legacy 2024 payment integration pilot, e-wallet refunds for MoMo and ZaloPay were credited on the same calendar day within 4 hours. This rule was superseded at year-end 2024 by standard reconciliation timelines.",
+      "content_hash": "7b240776060830139523f8d6342b37d9a2a68fb6f2090b773c8ddda0222276ee",
+      "status": "expired",
+      "approved_by": "lead_compliance_officer",
+      "approved_at": "2024-01-01T00:00:00Z",
+      "valid_from": "2024-01-01T00:00:00Z",
+      "valid_to": "2024-12-31T23:59:59Z",
+      "allowed_roles": [
+        "agent",
+        "staff",
+        "manager",
+        "admin",
+        "customer"
+      ],
+      "supported_intents": [
+        "refund_policy"
+      ],
+      "answer_capabilities": [
+        "legacy_wallet_timeline"
+      ]
+    },
+    {
+      "doc_id": "POL-INJ-CONF-01A",
+      "document_id": "POL-INJ-CONF-01A",
+      "version": "1.0",
+      "title": "Partner Marketplace 14-Day Return Rule (Injected Synthetic Conflict A)",
+      "category": "return_refund",
+      "policy_key": "marketplace_return_window",
+      "normalized_rule_value": "14_days",
+      "content": "All partner marketplace merchant products sold through the platform are subject to a mandatory 14-day return window from the date of customer delivery.",
+      "content_hash": "26368777c118448244dfbbc4f80d0f361e86f3d75a766564c759873d7abe3e3f",
+      "status": "approved",
+      "approved_by": "lead_compliance_officer",
+      "approved_at": "2026-01-01T00:00:00Z",
+      "valid_from": "2026-01-01T00:00:00Z",
+      "valid_to": "2026-12-31T23:59:59Z",
+      "allowed_roles": [
+        "agent",
+        "staff",
+        "manager",
+        "admin",
+        "customer"
+      ],
+      "supported_intents": [
+        "return_policy"
+      ],
+      "answer_capabilities": [
+        "return_window"
+      ]
+    },
+    {
+      "doc_id": "POL-INJ-CONF-01B",
+      "document_id": "POL-INJ-CONF-01B",
+      "version": "1.0",
+      "title": "Partner Marketplace 45-Day Extended Return Rule (Injected Synthetic Conflict B)",
+      "category": "return_refund",
+      "policy_key": "marketplace_return_window",
+      "normalized_rule_value": "45_days",
+      "content": "All partner marketplace merchant products sold through the platform are subject to an extended 45-day return window from the date of customer delivery.",
+      "content_hash": "b6092c6794c7e88705bc71bd1d0e21b22fe655037f456b3b82ca1bb0cb3f2f27",
+      "status": "approved",
+      "approved_by": "lead_compliance_officer",
+      "approved_at": "2026-01-01T00:00:00Z",
+      "valid_from": "2026-01-01T00:00:00Z",
+      "valid_to": "2026-12-31T23:59:59Z",
+      "allowed_roles": [
+        "agent",
+        "staff",
+        "manager",
+        "admin",
+        "customer"
+      ],
+      "supported_intents": [
+        "return_policy"
+      ],
+      "answer_capabilities": [
+        "return_window"
+      ]
+    },
+    {
+      "doc_id": "POL-INJ-CONF-02A",
+      "document_id": "POL-INJ-CONF-02A",
+      "version": "1.0",
+      "title": "Standard Zero Fee Cancellation Policy (Injected Synthetic Conflict A)",
+      "category": "orders",
+      "policy_key": "cancellation_fee",
+      "normalized_rule_value": "zero_fee",
+      "content": "Pre-dispatch order cancellations carry zero cancellation fees and all pre-paid funds are refunded in full to the original payment instrument.",
+      "content_hash": "f850c34800e198f1591752bad7052d999741f81f4a10e568589fde7bc85c445f",
+      "status": "approved",
+      "approved_by": "lead_compliance_officer",
+      "approved_at": "2026-01-01T00:00:00Z",
+      "valid_from": "2026-01-01T00:00:00Z",
+      "valid_to": "2026-12-31T23:59:59Z",
+      "allowed_roles": [
+        "agent",
+        "staff",
+        "manager",
+        "admin",
+        "customer"
+      ],
+      "supported_intents": [
+        "refund_policy",
+        "cancel_order"
+      ],
+      "answer_capabilities": [
+        "cancellation_fee"
+      ]
+    },
+    {
+      "doc_id": "POL-INJ-CONF-02B",
+      "document_id": "POL-INJ-CONF-02B",
+      "version": "1.0",
+      "title": "Restocking Cancellation Fee Policy (Injected Synthetic Conflict B)",
+      "category": "orders",
+      "policy_key": "cancellation_fee",
+      "normalized_rule_value": "10_percent_deduction",
+      "content": "Pre-dispatch order cancellations are subject to a mandatory 10% restocking and administrative handling fee deducted prior to issuing the refund.",
+      "content_hash": "7a883c97fdb1d7562f07d9f8c8d202cfab14d25c58c4d3be533a327d812cba49",
+      "status": "approved",
+      "approved_by": "lead_compliance_officer",
+      "approved_at": "2026-01-01T00:00:00Z",
+      "valid_from": "2026-01-01T00:00:00Z",
+      "valid_to": "2026-12-31T23:59:59Z",
+      "allowed_roles": [
+        "agent",
+        "staff",
+        "manager",
+        "admin",
+        "customer"
+      ],
+      "supported_intents": [
+        "refund_policy",
+        "cancel_order"
+      ],
+      "answer_capabilities": [
+        "cancellation_fee"
+      ]
+    }
+  ]
+}

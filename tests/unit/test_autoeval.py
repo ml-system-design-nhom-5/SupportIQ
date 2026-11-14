@@ -94,6 +94,11 @@ def test_draft_analysis_flags_uncited_claims_numbers_and_commitments():
     assert a["commitments"]
 
 
+def test_offline_response_has_case_insensitive_headers():
+    assert L._Resp(503, {}).headers.get("retry-after") is None
+    assert L._Resp(503, {}, headers={"Retry-After": "1"}).headers.get("retry-after") == "1"
+
+
 def test_known_good_validator_behaviour_is_preserved():
     res = L.validator_probes(CONFIG, L.load_kb(CONFIG))
     broken_baseline = [p["id"] for p in res["probes"] if p["ref"] == "baseline" and not p["passed"]]

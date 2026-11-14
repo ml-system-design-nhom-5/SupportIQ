@@ -1,4 +1,7 @@
 """Gate 2f: scope probability (docs/design/intent-model-v1.2.md)."""
+import pytest
+from pydantic import ValidationError
+
 from apps.core_backend.intent.routing import decide_route, load_policy_v2
 from apps.core_backend.intent.schemas import IntentPrediction, RoutingContext
 
@@ -25,7 +28,15 @@ def test_high_scope_or_gate_off_or_missing_scope_drafts():
     assert decide_route(_pred(scope=0.95), ctx, _policy()).action == "retrieve_draft"
     assert decide_route(_pred(), ctx, _policy(None)).action == "retrieve_draft"
     assert decide_route(_pred(scope=None), ctx, _policy()).action == "retrieve_draft"
-    assert decide_route(_pred(scope=float("nan")), ctx, _policy()).action == "retrieve_draft"
+
+
+@pytest.mark.parametrize("scope", [float("nan"), -0.1, 1.5])
+def test_invalid_scope_is_rejected_by_schema_and_fails_closed_in_routing(scope):
+    with pytest.raises(ValidationError):
+        _pred(scope=scope)
+    pred = _pred().model_copy(update={"scope_probability": scope})  # bypasses validation
+    decision = decide_route(pred, RoutingContext(ticket_customer_id="c"), _policy())
+    assert decision.action == "manual_fallback" and decision.reason_codes == ["invalid_model_output"]
 
 
 def test_escalated_intents_and_human_agent_are_unchanged():

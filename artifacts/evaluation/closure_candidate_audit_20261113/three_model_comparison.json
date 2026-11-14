@@ -1,0 +1,924 @@
+{
+  "generated_at_utc": "2026-11-13T12:07:52.280882Z",
+  "apps_loaded_from": "F:\\N\u0103m 3\\SD\\project\\SupportIQ\\apps\\__init__.py",
+  "serving_weights_sha256": "dc7af8cffb19fe7711ed5a5d0137ffff3d7d1a1f43bad5a35edff8c8de4c1302",
+  "old_closure_weights_sha256": "95a940b630f44bf8d11882a26062c857839baa2d80d188f5451d52cecc2158a6",
+  "fit2_weights_sha256": "f695b1fe514aba81aafc968823047d496b03474a0b47199c65eaac6bd93c6dfa",
+  "sealed_holdout_sha256": "c874a2b829fa1dad645ca4d0684a9b9d558895e002564a56edae0865c81ab78d",
+  "sealed_overlap_against_fit2_splits": {
+    "dataset_counts": {
+      "fit2_full_train": 11320,
+      "fit2_full_cal": 824,
+      "fit2_pos_eval": 122,
+      "fit2_neg_train": 99,
+      "fit2_neg_cal": 48,
+      "fit2_neg_eval": 39
+    },
+    "exact_hits": [],
+    "jaccard_ge_0_70_hits": [],
+    "clean": true
+  },
+  "fit2_gate_decision": "REJECT",
+  "fit2_gate_failure_reasons": [
+    "mandatory_escalation_unsafe_draft_leak"
+  ],
+  "fit2_runtime_parity_passed": true,
+  "fit2_split_isolation_passed": true,
+  "suites_comparison": {
+    "serving_dc7af8cf": {
+      "model_name": "distilbert-supportiq",
+      "score_path": {
+        "score_kind": "uncalibrated_softmax",
+        "temperature": 1.0,
+        "calibrated": false,
+        "experimental_rejector_active": false
+      },
+      "independent_holdout": {
+        "suite_role": "independent_group_isolated_holdout",
+        "n_total": 122,
+        "accuracy_46": 0.4180327868852459,
+        "macro_f1_46": 0.19900590552764463,
+        "ece_10bin": 0.2001791295335918,
+        "binary_top_label_brier": 0.24804566533023573,
+        "rejected_by_experimental_adapter_count": 0,
+        "escalated_34": {
+          "n": 38,
+          "accuracy": 0.4473684210526316,
+          "macro_f1": 0.14749515190691664,
+          "unsafe_draft_eligible_count": 1
+        },
+        "supported_12": {
+          "n": 84,
+          "accuracy": 0.40476190476190477,
+          "macro_f1": 0.4027605240763135,
+          "raw_draft_eligible_count": 33,
+          "correct_intent_draft_eligible_count": 21,
+          "selective_metrics": {
+            "denominator": 84,
+            "raw_draft_eligible_count": 33,
+            "raw_draft_eligible_rate": 0.392857,
+            "correct_intent_draft_eligible_count": 21,
+            "correct_intent_draft_eligible_rate": 0.25,
+            "wrong_intent_draft_eligible_count": 12,
+            "precision_numerator_correct_intent_draft_eligible": 21,
+            "precision_denominator_raw_draft_eligible": 33,
+            "precision_among_draft_eligible": 0.636364,
+            "abstain_count": 32,
+            "escalate_count": 19,
+            "abstention_and_escalation_count": 51,
+            "abstention_coverage": 0.607143,
+            "no_invented_accuracy_from_abstentions": true
+          }
+        }
+      },
+      "ml_oos_80": {
+        "n_total": 80,
+        "flagged_safe_count": 80,
+        "false_draft_eligible_count": 0,
+        "false_draft_case_ids": [],
+        "adapter_vetoes_count": 0
+      },
+      "ml_noise_420": {
+        "n_total": 420,
+        "accuracy_12": 0.6547619047619048,
+        "macro_f1_12": 0.681716063566692,
+        "safe_routing_rate": 0.9214285714285714,
+        "ece_10bin": 0.09200162912408515,
+        "binary_top_label_brier": 0.18279472822996587,
+        "adapter_vetoes_count": 0,
+        "selective_metrics": {
+          "denominator": 420,
+          "raw_draft_eligible_count": 210,
+          "raw_draft_eligible_rate": 0.5,
+          "correct_intent_draft_eligible_count": 177,
+          "correct_intent_draft_eligible_rate": 0.421429,
+          "wrong_intent_draft_eligible_count": 33,
+          "precision_numerator_correct_intent_draft_eligible": 177,
+          "precision_denominator_raw_draft_eligible": 210,
+          "precision_among_draft_eligible": 0.842857,
+          "abstain_count": 140,
+          "escalate_count": 70,
+          "abstention_and_escalation_count": 210,
+          "abstention_coverage": 0.5,
+          "no_invented_accuracy_from_abstentions": true
+        }
+      },
+      "known_acceptance_regression_not_unseen_holdout": {
+        "suite_role": "known_acceptance_regression_not_unseen_holdout",
+        "system_acceptance_156": {
+          "labeled_153_accuracy": 0.6666666666666666,
+          "labeled_153_macro_f1_46": 0.6119864194256491,
+          "escalated_34_n": 39,
+          "escalated_34_accuracy": 0.6153846153846154,
+          "escalated_34_macro_f1": 0.6470588235294118,
+          "draft_expected_34_raw_draft": 21,
+          "draft_expected_34_correct_intent_draft": 17,
+          "draft_expected_34_selective_metrics": {
+            "denominator": 34,
+            "raw_draft_eligible_count": 21,
+            "raw_draft_eligible_rate": 0.617647,
+            "correct_intent_draft_eligible_count": 17,
+            "correct_intent_draft_eligible_rate": 0.5,
+            "wrong_intent_draft_eligible_count": 4,
+            "precision_numerator_correct_intent_draft_eligible": 17,
+            "precision_denominator_raw_draft_eligible": 21,
+            "precision_among_draft_eligible": 0.809524,
+            "abstain_count": 12,
+            "escalate_count": 1,
+            "abstention_and_escalation_count": 13,
+            "abstention_coverage": 0.382353,
+            "no_invented_accuracy_from_abstentions": true
+          },
+          "mandatory_63_n": 63,
+          "mandatory_63_strict_match": 55,
+          "mandatory_63_strict_match_rate": 0.873016,
+          "mandatory_63_escalate": 55,
+          "mandatory_63_abstain_manual_fallback": 7,
+          "mandatory_63_real_unsafe_draft_leaks": [],
+          "mandatory_63_uninjected_fault_fixtures": [
+            {
+              "case_id": "unc-return_policy-04",
+              "observed_action_without_fault_injection": "retrieve_draft",
+              "status": "NOT_EXECUTED_FAULT_INJECTION",
+              "does_not_count_as_passing_fault_coverage": true
+            }
+          ]
+        },
+        "final_acceptance_24": {
+          "answerable_12_raw_draft": 5,
+          "answerable_12_correct_intent_draft": 4,
+          "answerable_12_wrong_intent_draft_cases": [
+            "final-case-02"
+          ],
+          "answerable_12_selective_metrics": {
+            "denominator": 12,
+            "raw_draft_eligible_count": 5,
+            "raw_draft_eligible_rate": 0.416667,
+            "correct_intent_draft_eligible_count": 4,
+            "correct_intent_draft_eligible_rate": 0.333333,
+            "wrong_intent_draft_eligible_count": 1,
+            "precision_numerator_correct_intent_draft_eligible": 4,
+            "precision_denominator_raw_draft_eligible": 5,
+            "precision_among_draft_eligible": 0.8,
+            "abstain_count": 6,
+            "escalate_count": 1,
+            "abstention_and_escalation_count": 7,
+            "abstention_coverage": 0.583333,
+            "no_invented_accuracy_from_abstentions": true
+          },
+          "unanswerable_active_kb_n": 8,
+          "unanswerable_active_kb_draft_leaks": [],
+          "unanswerable_injected_synthetic_fault_n": 4,
+          "unanswerable_injected_synthetic_uninjected_drafted_cases": [
+            "final-case-21"
+          ],
+          "injected_fault_note": "fixture_boundary=='injected_synthetic' cases (final-case-21..24) run uninjected here and NEVER count as passing fault coverage."
+        }
+      }
+    },
+    "old_closure_95a940b6": {
+      "model_name": "old-closure-c6cae7a",
+      "score_path": {
+        "score_kind": "calibrated_probability",
+        "temperature": 1.0429,
+        "calibrated": true,
+        "experimental_rejector_active": true
+      },
+      "independent_holdout": null,
+      "ml_oos_80": {
+        "n_total": 80,
+        "flagged_safe_count": 80,
+        "false_draft_eligible_count": 0,
+        "false_draft_case_ids": [],
+        "adapter_vetoes_count": 0
+      },
+      "ml_noise_420": {
+        "n_total": 420,
+        "accuracy_12": 0.8095238095238095,
+        "macro_f1_12": 0.8265034204132452,
+        "safe_routing_rate": 0.9261904761904762,
+        "ece_10bin": 0.06635545593287268,
+        "binary_top_label_brier": 0.12309044826907828,
+        "adapter_vetoes_count": 83,
+        "selective_metrics": {
+          "denominator": 420,
+          "raw_draft_eligible_count": 227,
+          "raw_draft_eligible_rate": 0.540476,
+          "correct_intent_draft_eligible_count": 196,
+          "correct_intent_draft_eligible_rate": 0.466667,
+          "wrong_intent_draft_eligible_count": 31,
+          "precision_numerator_correct_intent_draft_eligible": 196,
+          "precision_denominator_raw_draft_eligible": 227,
+          "precision_among_draft_eligible": 0.863436,
+          "abstain_count": 152,
+          "escalate_count": 41,
+          "abstention_and_escalation_count": 193,
+          "abstention_coverage": 0.459524,
+          "no_invented_accuracy_from_abstentions": true
+        }
+      },
+      "known_acceptance_regression_not_unseen_holdout": {
+        "suite_role": "known_acceptance_regression_not_unseen_holdout",
+        "system_acceptance_156": {
+          "labeled_153_accuracy": 0.7908496732026143,
+          "labeled_153_macro_f1_46": 0.7157175878346421,
+          "escalated_34_n": 39,
+          "escalated_34_accuracy": 0.6666666666666666,
+          "escalated_34_macro_f1": 0.7058823529411765,
+          "draft_expected_34_raw_draft": 26,
+          "draft_expected_34_correct_intent_draft": 20,
+          "draft_expected_34_selective_metrics": {
+            "denominator": 34,
+            "raw_draft_eligible_count": 26,
+            "raw_draft_eligible_rate": 0.764706,
+            "correct_intent_draft_eligible_count": 20,
+            "correct_intent_draft_eligible_rate": 0.588235,
+            "wrong_intent_draft_eligible_count": 6,
+            "precision_numerator_correct_intent_draft_eligible": 20,
+            "precision_denominator_raw_draft_eligible": 26,
+            "precision_among_draft_eligible": 0.769231,
+            "abstain_count": 8,
+            "escalate_count": 0,
+            "abstention_and_escalation_count": 8,
+            "abstention_coverage": 0.235294,
+            "no_invented_accuracy_from_abstentions": true
+          },
+          "mandatory_63_n": 63,
+          "mandatory_63_strict_match": 55,
+          "mandatory_63_strict_match_rate": 0.873016,
+          "mandatory_63_escalate": 55,
+          "mandatory_63_abstain_manual_fallback": 6,
+          "mandatory_63_real_unsafe_draft_leaks": [
+            "una-product_information-01"
+          ],
+          "mandatory_63_uninjected_fault_fixtures": [
+            {
+              "case_id": "unc-return_policy-04",
+              "observed_action_without_fault_injection": "retrieve_draft",
+              "status": "NOT_EXECUTED_FAULT_INJECTION",
+              "does_not_count_as_passing_fault_coverage": true
+            }
+          ]
+        },
+        "final_acceptance_24": {
+          "answerable_12_raw_draft": 8,
+          "answerable_12_correct_intent_draft": 8,
+          "answerable_12_wrong_intent_draft_cases": [],
+          "answerable_12_selective_metrics": {
+            "denominator": 12,
+            "raw_draft_eligible_count": 8,
+            "raw_draft_eligible_rate": 0.666667,
+            "correct_intent_draft_eligible_count": 8,
+            "correct_intent_draft_eligible_rate": 0.666667,
+            "wrong_intent_draft_eligible_count": 0,
+            "precision_numerator_correct_intent_draft_eligible": 8,
+            "precision_denominator_raw_draft_eligible": 8,
+            "precision_among_draft_eligible": 1.0,
+            "abstain_count": 4,
+            "escalate_count": 0,
+            "abstention_and_escalation_count": 4,
+            "abstention_coverage": 0.333333,
+            "no_invented_accuracy_from_abstentions": true
+          },
+          "unanswerable_active_kb_n": 8,
+          "unanswerable_active_kb_draft_leaks": [],
+          "unanswerable_injected_synthetic_fault_n": 4,
+          "unanswerable_injected_synthetic_uninjected_drafted_cases": [
+            "final-case-21"
+          ],
+          "injected_fault_note": "fixture_boundary=='injected_synthetic' cases (final-case-21..24) run uninjected here and NEVER count as passing fault coverage."
+        }
+      }
+    },
+    "fit2_f695b1fe": {
+      "model_name": "fit2-supcon-energy-boundary-v1",
+      "score_path": {
+        "score_kind": "calibrated_probability",
+        "temperature": 1.0,
+        "calibrated": true,
+        "experimental_rejector_active": true
+      },
+      "independent_holdout": {
+        "suite_role": "independent_group_isolated_holdout",
+        "n_total": 122,
+        "accuracy_46": 0.7786885245901639,
+        "macro_f1_46": 0.39105713127452263,
+        "ece_10bin": 0.13509166474286155,
+        "binary_top_label_brier": 0.19625710901325383,
+        "rejected_by_experimental_adapter_count": 0,
+        "escalated_34": {
+          "n": 38,
+          "accuracy": 0.9210526315789473,
+          "macro_f1": 0.27320261437908494,
+          "unsafe_draft_eligible_count": 0
+        },
+        "supported_12": {
+          "n": 84,
+          "accuracy": 0.7142857142857143,
+          "macro_f1": 0.7472846597846599,
+          "raw_draft_eligible_count": 39,
+          "correct_intent_draft_eligible_count": 32,
+          "selective_metrics": {
+            "denominator": 84,
+            "raw_draft_eligible_count": 39,
+            "raw_draft_eligible_rate": 0.464286,
+            "correct_intent_draft_eligible_count": 32,
+            "correct_intent_draft_eligible_rate": 0.380952,
+            "wrong_intent_draft_eligible_count": 7,
+            "precision_numerator_correct_intent_draft_eligible": 32,
+            "precision_denominator_raw_draft_eligible": 39,
+            "precision_among_draft_eligible": 0.820513,
+            "abstain_count": 31,
+            "escalate_count": 14,
+            "abstention_and_escalation_count": 45,
+            "abstention_coverage": 0.535714,
+            "no_invented_accuracy_from_abstentions": true
+          }
+        }
+      },
+      "ml_oos_80": {
+        "n_total": 80,
+        "flagged_safe_count": 80,
+        "false_draft_eligible_count": 0,
+        "false_draft_case_ids": [],
+        "adapter_vetoes_count": 0
+      },
+      "ml_noise_420": {
+        "n_total": 420,
+        "accuracy_12": 0.8571428571428571,
+        "macro_f1_12": 0.8573069021452216,
+        "safe_routing_rate": 0.9380952380952381,
+        "ece_10bin": 0.06305978534122313,
+        "binary_top_label_brier": 0.11355614506861432,
+        "adapter_vetoes_count": 0,
+        "selective_metrics": {
+          "denominator": 420,
+          "raw_draft_eligible_count": 293,
+          "raw_draft_eligible_rate": 0.697619,
+          "correct_intent_draft_eligible_count": 267,
+          "correct_intent_draft_eligible_rate": 0.635714,
+          "wrong_intent_draft_eligible_count": 26,
+          "precision_numerator_correct_intent_draft_eligible": 267,
+          "precision_denominator_raw_draft_eligible": 293,
+          "precision_among_draft_eligible": 0.911263,
+          "abstain_count": 94,
+          "escalate_count": 33,
+          "abstention_and_escalation_count": 127,
+          "abstention_coverage": 0.302381,
+          "no_invented_accuracy_from_abstentions": true
+        }
+      },
+      "known_acceptance_regression_not_unseen_holdout": {
+        "suite_role": "known_acceptance_regression_not_unseen_holdout",
+        "system_acceptance_156": {
+          "labeled_153_accuracy": 0.7973856209150327,
+          "labeled_153_macro_f1_46": 0.7325727693512551,
+          "escalated_34_n": 39,
+          "escalated_34_accuracy": 0.6923076923076923,
+          "escalated_34_macro_f1": 0.7352941176470589,
+          "draft_expected_34_raw_draft": 28,
+          "draft_expected_34_correct_intent_draft": 25,
+          "draft_expected_34_selective_metrics": {
+            "denominator": 34,
+            "raw_draft_eligible_count": 28,
+            "raw_draft_eligible_rate": 0.823529,
+            "correct_intent_draft_eligible_count": 25,
+            "correct_intent_draft_eligible_rate": 0.735294,
+            "wrong_intent_draft_eligible_count": 3,
+            "precision_numerator_correct_intent_draft_eligible": 25,
+            "precision_denominator_raw_draft_eligible": 28,
+            "precision_among_draft_eligible": 0.892857,
+            "abstain_count": 6,
+            "escalate_count": 0,
+            "abstention_and_escalation_count": 6,
+            "abstention_coverage": 0.176471,
+            "no_invented_accuracy_from_abstentions": true
+          },
+          "mandatory_63_n": 63,
+          "mandatory_63_strict_match": 57,
+          "mandatory_63_strict_match_rate": 0.904762,
+          "mandatory_63_escalate": 57,
+          "mandatory_63_abstain_manual_fallback": 3,
+          "mandatory_63_real_unsafe_draft_leaks": [
+            "uns-order_history-01",
+            "uns-return_product_in_store-01"
+          ],
+          "mandatory_63_uninjected_fault_fixtures": [
+            {
+              "case_id": "unc-return_policy-04",
+              "observed_action_without_fault_injection": "retrieve_draft",
+              "status": "NOT_EXECUTED_FAULT_INJECTION",
+              "does_not_count_as_passing_fault_coverage": true
+            }
+          ]
+        },
+        "final_acceptance_24": {
+          "answerable_12_raw_draft": 10,
+          "answerable_12_correct_intent_draft": 10,
+          "answerable_12_wrong_intent_draft_cases": [],
+          "answerable_12_selective_metrics": {
+            "denominator": 12,
+            "raw_draft_eligible_count": 10,
+            "raw_draft_eligible_rate": 0.833333,
+            "correct_intent_draft_eligible_count": 10,
+            "correct_intent_draft_eligible_rate": 0.833333,
+            "wrong_intent_draft_eligible_count": 0,
+            "precision_numerator_correct_intent_draft_eligible": 10,
+            "precision_denominator_raw_draft_eligible": 10,
+            "precision_among_draft_eligible": 1.0,
+            "abstain_count": 2,
+            "escalate_count": 0,
+            "abstention_and_escalation_count": 2,
+            "abstention_coverage": 0.166667,
+            "no_invented_accuracy_from_abstentions": true
+          },
+          "unanswerable_active_kb_n": 8,
+          "unanswerable_active_kb_draft_leaks": [],
+          "unanswerable_injected_synthetic_fault_n": 4,
+          "unanswerable_injected_synthetic_uninjected_drafted_cases": [
+            "final-case-21"
+          ],
+          "injected_fault_note": "fixture_boundary=='injected_synthetic' cases (final-case-21..24) run uninjected here and NEVER count as passing fault coverage."
+        }
+      }
+    }
+  },
+  "sealed_72_holdout_comparison": {
+    "serving-dc7af8cf": {
+      "supported_answerable": {
+        "n": 24,
+        "bare": {
+          "draft": 10,
+          "escalate": 5,
+          "manual_fallback": 9,
+          "expected_match": 12,
+          "intent_match": 9,
+          "correct_intent_draft": 5,
+          "unsafe_draft_leaks": []
+        },
+        "engine": {
+          "draft": 9,
+          "escalate": 6,
+          "abstain": 9,
+          "expected_match": 11,
+          "unsafe_draft_leaks": []
+        },
+        "runner": {
+          "draft": 9,
+          "escalate": 6,
+          "manual_fallback": 0,
+          "clarify": 9,
+          "expected_match": 11,
+          "unsafe_draft_leaks": []
+        }
+      },
+      "novel_ood": {
+        "n": 24,
+        "bare": {
+          "draft": 0,
+          "escalate": 13,
+          "manual_fallback": 11,
+          "expected_match": 13,
+          "intent_match": 0,
+          "correct_intent_draft": 0,
+          "unsafe_draft_leaks": []
+        },
+        "engine": {
+          "draft": 0,
+          "escalate": 13,
+          "abstain": 11,
+          "expected_match": 24,
+          "unsafe_draft_leaks": []
+        },
+        "runner": {
+          "draft": 0,
+          "escalate": 13,
+          "manual_fallback": 0,
+          "clarify": 11,
+          "expected_match": 13,
+          "unsafe_draft_leaks": []
+        }
+      },
+      "mandatory_escalation_compound": {
+        "n": 24,
+        "bare": {
+          "draft": 3,
+          "escalate": 9,
+          "manual_fallback": 12,
+          "expected_match": 9,
+          "intent_match": 7,
+          "correct_intent_draft": 1,
+          "unsafe_draft_leaks": [
+            {
+              "id": "sh-esc-01",
+              "pred_intent": "return_policy",
+              "conf": 0.7327
+            },
+            {
+              "id": "sh-esc-03",
+              "pred_intent": "payment_issue",
+              "conf": 0.9203
+            },
+            {
+              "id": "sh-esc-22",
+              "pred_intent": "payment_issue",
+              "conf": 0.9738
+            }
+          ]
+        },
+        "engine": {
+          "draft": 1,
+          "escalate": 11,
+          "abstain": 12,
+          "expected_match": 11,
+          "unsafe_draft_leaks": [
+            {
+              "id": "sh-esc-01",
+              "pred_intent": "return_policy",
+              "reasons": []
+            }
+          ]
+        },
+        "runner": {
+          "draft": 1,
+          "escalate": 11,
+          "manual_fallback": 0,
+          "clarify": 12,
+          "expected_match": 11,
+          "unsafe_draft_leaks": [
+            {
+              "id": "sh-esc-01",
+              "pred_intent": "return_policy",
+              "reasons": []
+            }
+          ]
+        }
+      }
+    },
+    "old-closure-95a940b6": {
+      "supported_answerable": {
+        "n": 24,
+        "bare": {
+          "draft": 6,
+          "escalate": 3,
+          "manual_fallback": 15,
+          "expected_match": 8,
+          "intent_match": 18,
+          "correct_intent_draft": 4,
+          "unsafe_draft_leaks": []
+        },
+        "engine": {
+          "draft": 7,
+          "escalate": 4,
+          "abstain": 13,
+          "expected_match": 9,
+          "unsafe_draft_leaks": []
+        },
+        "runner": {
+          "draft": 6,
+          "escalate": 4,
+          "manual_fallback": 13,
+          "clarify": 1,
+          "expected_match": 8,
+          "unsafe_draft_leaks": []
+        }
+      },
+      "novel_ood": {
+        "n": 24,
+        "bare": {
+          "draft": 2,
+          "escalate": 11,
+          "manual_fallback": 11,
+          "expected_match": 22,
+          "intent_match": 0,
+          "correct_intent_draft": 0,
+          "unsafe_draft_leaks": [
+            {
+              "id": "sh-ood-19",
+              "pred_intent": "refund_policy",
+              "conf": 0.911
+            },
+            {
+              "id": "sh-ood-23",
+              "pred_intent": "shipping_costs",
+              "conf": 0.6828
+            }
+          ]
+        },
+        "engine": {
+          "draft": 0,
+          "escalate": 11,
+          "abstain": 13,
+          "expected_match": 24,
+          "unsafe_draft_leaks": []
+        },
+        "runner": {
+          "draft": 0,
+          "escalate": 13,
+          "manual_fallback": 11,
+          "clarify": 0,
+          "expected_match": 24,
+          "unsafe_draft_leaks": []
+        }
+      },
+      "mandatory_escalation_compound": {
+        "n": 24,
+        "bare": {
+          "draft": 1,
+          "escalate": 8,
+          "manual_fallback": 15,
+          "expected_match": 8,
+          "intent_match": 12,
+          "correct_intent_draft": 1,
+          "unsafe_draft_leaks": [
+            {
+              "id": "sh-esc-02",
+              "pred_intent": "request_refund",
+              "conf": 0.9941
+            }
+          ]
+        },
+        "engine": {
+          "draft": 1,
+          "escalate": 11,
+          "abstain": 12,
+          "expected_match": 11,
+          "unsafe_draft_leaks": [
+            {
+              "id": "sh-esc-02",
+              "pred_intent": "request_refund",
+              "reasons": [
+                "requires_authority"
+              ]
+            }
+          ]
+        },
+        "runner": {
+          "draft": 1,
+          "escalate": 11,
+          "manual_fallback": 12,
+          "clarify": 0,
+          "expected_match": 11,
+          "unsafe_draft_leaks": [
+            {
+              "id": "sh-esc-02",
+              "pred_intent": "request_refund",
+              "reasons": [
+                "requires_authority"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "fit2-f695b1fe": {
+      "supported_answerable": {
+        "n": 24,
+        "bare": {
+          "draft": 7,
+          "escalate": 6,
+          "manual_fallback": 11,
+          "expected_match": 9,
+          "intent_match": 15,
+          "correct_intent_draft": 6,
+          "unsafe_draft_leaks": []
+        },
+        "engine": {
+          "draft": 7,
+          "escalate": 7,
+          "abstain": 10,
+          "expected_match": 9,
+          "unsafe_draft_leaks": []
+        },
+        "runner": {
+          "draft": 6,
+          "escalate": 8,
+          "manual_fallback": 0,
+          "clarify": 10,
+          "expected_match": 8,
+          "unsafe_draft_leaks": []
+        }
+      },
+      "novel_ood": {
+        "n": 24,
+        "bare": {
+          "draft": 0,
+          "escalate": 20,
+          "manual_fallback": 4,
+          "expected_match": 20,
+          "intent_match": 0,
+          "correct_intent_draft": 0,
+          "unsafe_draft_leaks": []
+        },
+        "engine": {
+          "draft": 0,
+          "escalate": 20,
+          "abstain": 4,
+          "expected_match": 24,
+          "unsafe_draft_leaks": []
+        },
+        "runner": {
+          "draft": 0,
+          "escalate": 20,
+          "manual_fallback": 0,
+          "clarify": 4,
+          "expected_match": 20,
+          "unsafe_draft_leaks": []
+        }
+      },
+      "mandatory_escalation_compound": {
+        "n": 24,
+        "bare": {
+          "draft": 0,
+          "escalate": 19,
+          "manual_fallback": 5,
+          "expected_match": 19,
+          "intent_match": 7,
+          "correct_intent_draft": 0,
+          "unsafe_draft_leaks": []
+        },
+        "engine": {
+          "draft": 0,
+          "escalate": 20,
+          "abstain": 4,
+          "expected_match": 20,
+          "unsafe_draft_leaks": []
+        },
+        "runner": {
+          "draft": 0,
+          "escalate": 20,
+          "manual_fallback": 0,
+          "clarify": 4,
+          "expected_match": 20,
+          "unsafe_draft_leaks": []
+        }
+      }
+    }
+  },
+  "mandatory_leak_product_exposure": {
+    "serving-dc7af8cf": [
+      {
+        "case_id": "uns-order_history-01",
+        "true_intent": "order_history",
+        "pred_intent": "order_history",
+        "conf": 0.72127,
+        "bare_decide_route_action": "escalate",
+        "bare_reasons": [
+          "recognized_outside_product_scope"
+        ],
+        "engine_recommendation": "escalate",
+        "engine_reasons": [
+          "out_of_scope_intent"
+        ],
+        "pipeline_runner_action": "escalate",
+        "pipeline_runner_reasons": [
+          "recognized_outside_product_scope"
+        ]
+      },
+      {
+        "case_id": "uns-return_product_in_store-01",
+        "true_intent": "return_product_in_store",
+        "pred_intent": "return_policy",
+        "conf": 0.50573,
+        "bare_decide_route_action": "clarify",
+        "bare_reasons": [
+          "low_confidence"
+        ],
+        "engine_recommendation": "abstain",
+        "engine_reasons": [
+          "low_confidence"
+        ],
+        "pipeline_runner_action": "clarify",
+        "pipeline_runner_reasons": [
+          "low_confidence"
+        ]
+      },
+      {
+        "case_id": "una-product_information-01",
+        "true_intent": "product_information",
+        "pred_intent": "delivery_time",
+        "conf": 0.18045,
+        "bare_decide_route_action": "clarify",
+        "bare_reasons": [
+          "low_confidence",
+          "low_margin"
+        ],
+        "engine_recommendation": "abstain",
+        "engine_reasons": [
+          "low_confidence",
+          "out_of_scope_intent"
+        ],
+        "pipeline_runner_action": "clarify",
+        "pipeline_runner_reasons": [
+          "low_confidence",
+          "low_margin"
+        ]
+      }
+    ],
+    "old-closure-95a940b6": [
+      {
+        "case_id": "uns-order_history-01",
+        "true_intent": "order_history",
+        "pred_intent": "track_order",
+        "conf": 0.69601,
+        "bare_decide_route_action": "manual_fallback",
+        "bare_reasons": [
+          "selective_rejected"
+        ],
+        "engine_recommendation": "abstain",
+        "engine_reasons": [
+          "low_confidence",
+          "out_of_scope_intent"
+        ],
+        "pipeline_runner_action": "manual_fallback",
+        "pipeline_runner_reasons": [
+          "selective_rejected"
+        ]
+      },
+      {
+        "case_id": "uns-return_product_in_store-01",
+        "true_intent": "return_product_in_store",
+        "pred_intent": "return_policy",
+        "conf": 0.36376,
+        "bare_decide_route_action": "manual_fallback",
+        "bare_reasons": [
+          "selective_rejected",
+          "low_confidence",
+          "low_margin"
+        ],
+        "engine_recommendation": "abstain",
+        "engine_reasons": [
+          "low_confidence",
+          "out_of_scope_intent"
+        ],
+        "pipeline_runner_action": "manual_fallback",
+        "pipeline_runner_reasons": [
+          "selective_rejected",
+          "low_confidence",
+          "low_margin"
+        ]
+      },
+      {
+        "case_id": "una-product_information-01",
+        "true_intent": "product_information",
+        "pred_intent": "delivery_time",
+        "conf": 0.88508,
+        "bare_decide_route_action": "retrieve_draft",
+        "bare_reasons": [],
+        "engine_recommendation": "draft",
+        "engine_reasons": [],
+        "pipeline_runner_action": "retrieve_draft",
+        "pipeline_runner_reasons": []
+      }
+    ],
+    "fit2-f695b1fe": [
+      {
+        "case_id": "uns-order_history-01",
+        "true_intent": "order_history",
+        "pred_intent": "track_order",
+        "conf": 0.66386,
+        "bare_decide_route_action": "clarify",
+        "bare_reasons": [
+          "missing_order_id"
+        ],
+        "engine_recommendation": "draft",
+        "engine_reasons": [],
+        "pipeline_runner_action": "clarify",
+        "pipeline_runner_reasons": [
+          "missing_order_id"
+        ]
+      },
+      {
+        "case_id": "uns-return_product_in_store-01",
+        "true_intent": "return_product_in_store",
+        "pred_intent": "return_policy",
+        "conf": 0.68278,
+        "bare_decide_route_action": "retrieve_draft",
+        "bare_reasons": [],
+        "engine_recommendation": "draft",
+        "engine_reasons": [],
+        "pipeline_runner_action": "retrieve_draft",
+        "pipeline_runner_reasons": []
+      },
+      {
+        "case_id": "una-product_information-01",
+        "true_intent": "product_information",
+        "pred_intent": "delivery_time",
+        "conf": 0.4167,
+        "bare_decide_route_action": "clarify",
+        "bare_reasons": [
+          "low_confidence"
+        ],
+        "engine_recommendation": "abstain",
+        "engine_reasons": [
+          "low_confidence"
+        ],
+        "pipeline_runner_action": "clarify",
+        "pipeline_runner_reasons": [
+          "low_confidence"
+        ]
+      }
+    ]
+  },
+  "live_provider_calls": 0
+}

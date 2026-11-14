@@ -1,0 +1,34 @@
+{
+  "selection_metric": "macro_f1_mean",
+  "tie_break": [
+    "macro_f1_mean_desc",
+    "macro_f1_std_asc",
+    "config_order"
+  ],
+  "cv_target_macro_f1": 0.85,
+  "meets_cv_target": true,
+  "best_per_model": {
+    "logistic_regression": {
+      "candidate_id": "logistic_regression__C=20.0",
+      "model_id": "logistic_regression",
+      "params": {
+        "C": 20.0
+      },
+      "macro_f1_mean": 0.9892201150363482,
+      "macro_f1_std": 0.0014374825743039214,
+      "accuracy_mean": 0.9891059855286839,
+      "weighted_f1_mean": 0.9890981791839195
+    }
+  },
+  "winner": {
+    "candidate_id": "logistic_regression__C=20.0",
+    "model_id": "logistic_regression",
+    "params": {
+      "C": 20.0
+    },
+    "macro_f1_mean": 0.9892201150363482,
+    "macro_f1_std": 0.0014374825743039214,
+    "accuracy_mean": 0.9891059855286839,
+    "weighted_f1_mean": 0.9890981791839195
+  }
+}

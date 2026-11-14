@@ -1,0 +1,754 @@
+{
+  "before_0772d09": {
+    "tag": "BEFORE_0772d09",
+    "acceptance_156_exact": {
+      "engine": 74,
+      "http_decide_route": 116
+    },
+    "draft_expected_34_task_c_subset": {
+      "total": 34,
+      "case_ids": [
+        "sup-return_policy-01",
+        "sup-return_policy-02",
+        "sup-return_policy-03",
+        "sup-return_policy-04",
+        "sup-return_policy-05",
+        "sup-refund_policy-01",
+        "sup-refund_policy-02",
+        "sup-refund_policy-03",
+        "sup-refund_policy-04",
+        "sup-refund_policy-05",
+        "ans-return_policy-01",
+        "ans-return_policy-02",
+        "ans-return_policy-03",
+        "ans-return_policy-04",
+        "ans-return_policy-05",
+        "ans-return_policy-06",
+        "ans-return_policy-07",
+        "ans-return_policy-08",
+        "ans-return_policy-09",
+        "ans-return_policy-10",
+        "ans-refund_policy-01",
+        "ans-refund_policy-02",
+        "ans-refund_policy-03",
+        "ans-refund_policy-04",
+        "ans-refund_policy-05",
+        "ans-refund_policy-06",
+        "ans-refund_policy-07",
+        "ans-refund_policy-08",
+        "ans-cancel_order-01",
+        "ans-cancel_order-02",
+        "ans-cancel_order-03",
+        "ans-cancel_order-04",
+        "ans-cancel_order-05",
+        "ans-cancel_order-06"
+      ],
+      "engine_raw_draft": 21,
+      "engine_correct_intent_draft": 17,
+      "engine_abstain_or_clarify": 13,
+      "engine_escalate": 0,
+      "http_raw_draft": 21,
+      "http_correct_intent_draft": 17,
+      "http_clarify": 12,
+      "http_escalate": 1,
+      "http_manual_fallback": 0
+    },
+    "draft_allowed_88_permissive_subset": {
+      "total": 88,
+      "engine_raw_draft": 51,
+      "engine_correct_intent_draft": 44,
+      "http_raw_draft": 39,
+      "http_correct_intent_draft": 33
+    },
+    "mandatory_accounting": {
+      "total_all": 63,
+      "raw_static_engine_matches_all_63": 21,
+      "raw_static_http_matches_all_63": 39,
+      "unfaulted_total": 60,
+      "engine_unfaulted_matches": 19,
+      "engine_unfaulted_mismatches": 41,
+      "engine_unfaulted_unsafe_drafts": 0,
+      "engine_unfaulted_mismatch_cases": [
+        {
+          "id": "sup-human_agent-02",
+          "engine_action": "manual_fallback",
+          "pred": "customer_service",
+          "conf": 0.9918698072433472
+        },
+        {
+          "id": "uns-add_product-01",
+          "engine_action": "manual_fallback",
+          "pred": "add_product",
+          "conf": 0.9909244179725647
+        },
+        {
+          "id": "uns-availability-01",
+          "engine_action": "manual_fallback",
+          "pred": "availability",
+          "conf": 0.7862941026687622
+        },
+        {
+          "id": "uns-availability_in_store-01",
+          "engine_action": "manual_fallback",
+          "pred": "return_product_in_store",
+          "conf": 0.3030872941017151
+        },
+        {
+          "id": "uns-availability_online-01",
+          "engine_action": "manual_fallback",
+          "pred": "availability_online",
+          "conf": 0.27881860733032227
+        },
+        {
+          "id": "uns-change_account-01",
+          "engine_action": "manual_fallback",
+          "pred": "change_account",
+          "conf": 0.9008955955505371
+        },
+        {
+          "id": "uns-change_order-01",
+          "engine_action": "manual_fallback",
+          "pred": "change_order",
+          "conf": 0.9358504414558411
+        },
+        {
+          "id": "uns-close_account-01",
+          "engine_action": "manual_fallback",
+          "pred": "close_account",
+          "conf": 0.9927041530609131
+        },
+        {
+          "id": "uns-customer_service-01",
+          "engine_action": "manual_fallback",
+          "pred": "store_opening_hours",
+          "conf": 0.8405973315238953
+        },
+        {
+          "id": "uns-damaged_delivery-01",
+          "engine_action": "manual_fallback",
+          "pred": "damaged_delivery",
+          "conf": 0.9851817488670349
+        },
+        {
+          "id": "uns-exchange_product-01",
+          "engine_action": "manual_fallback",
+          "pred": "exchange_product",
+          "conf": 0.8358424305915833
+        },
+        {
+          "id": "uns-exchange_product_in_store-01",
+          "engine_action": "manual_fallback",
+          "pred": "exchange_product_in_store",
+          "conf": 0.978398323059082
+        },
+        {
+          "id": "uns-missing_item-01",
+          "engine_action": "manual_fallback",
+          "pred": "missing_item",
+          "conf": 0.9259015917778015
+        },
+        {
+          "id": "uns-open_account-01",
+          "engine_action": "manual_fallback",
+          "pred": "open_account",
+          "conf": 0.956451952457428
+        },
+        {
+          "id": "uns-order_history-01",
+          "engine_action": "manual_fallback",
+          "pred": "order_history",
+          "conf": 0.7212714552879333
+        },
+        {
+          "id": "uns-pay-01",
+          "engine_action": "manual_fallback",
+          "pred": "payment_methods",
+          "conf": 0.51401686668396
+        },
+        {
+          "id": "uns-payment_methods-01",
+          "engine_action": "manual_fallback",
+          "pred": "payment_methods",
+          "conf": 0.9859532713890076
+        },
+        {
+          "id": "uns-product_information-01",
+          "engine_action": "manual_fallback",
+          "pred": "availability",
+          "conf": 0.677216649055481
+        },
+        {
+          "id": "uns-product_issue-01",
+          "engine_action": "manual_fallback",
+          "pred": "technical_issue",
+          "conf": 0.3634231388568878
+        },
+        {
+          "id": "uns-recover_password-01",
+          "engine_action": "manual_fallback",
+          "pred": "recover_password",
+          "conf": 0.9862712621688843
+        },
+        {
+          "id": "uns-remove_product-01",
+          "engine_action": "manual_fallback",
+          "pred": "remove_product",
+          "conf": 0.9937171936035156
+        },
+        {
+          "id": "uns-request_invoice-01",
+          "engine_action": "manual_fallback",
+          "pred": "request_invoice",
+          "conf": 0.5735429525375366
+        },
+        {
+          "id": "uns-request_right_to_rectification-01",
+          "engine_action": "manual_fallback",
+          "pred": "request_right_to_rectification",
+          "conf": 0.9858559370040894
+        },
+        {
+          "id": "uns-return_product_in_store-01",
+          "engine_action": "manual_fallback",
+          "pred": "return_policy",
+          "conf": 0.5057317614555359
+        },
+        {
+          "id": "uns-return_product_online-01",
+          "engine_action": "manual_fallback",
+          "pred": "return_policy",
+          "conf": 0.8144817352294922
+        },
+        {
+          "id": "uns-sales_period-01",
+          "engine_action": "manual_fallback",
+          "pred": "sales_period",
+          "conf": 0.9156369566917419
+        },
+        {
+          "id": "uns-store_location-01",
+          "engine_action": "manual_fallback",
+          "pred": "store_location",
+          "conf": 0.9577658772468567
+        },
+        {
+          "id": "uns-store_opening_hours-01",
+          "engine_action": "manual_fallback",
+          "pred": "store_opening_hours",
+          "conf": 0.9852358102798462
+        },
+        {
+          "id": "uns-submit_feedback-01",
+          "engine_action": "manual_fallback",
+          "pred": "submit_feedback",
+          "conf": 0.6608608961105347
+        },
+        {
+          "id": "uns-submit_product_feedback-01",
+          "engine_action": "manual_fallback",
+          "pred": "submit_product_feedback",
+          "conf": 0.9880968332290649
+        },
+        {
+          "id": "uns-submit_product_idea-01",
+          "engine_action": "manual_fallback",
+          "pred": "submit_product_idea",
+          "conf": 0.809341549873352
+        },
+        {
+          "id": "uns-technical_issue-01",
+          "engine_action": "manual_fallback",
+          "pred": "payment_issue",
+          "conf": 0.2619073987007141
+        },
+        {
+          "id": "uns-track_delivery-01",
+          "engine_action": "manual_fallback",
+          "pred": "shipping_costs",
+          "conf": 0.3649907410144806
+        },
+        {
+          "id": "uns-use_app-01",
+          "engine_action": "manual_fallback",
+          "pred": "use_app",
+          "conf": 0.9142676591873169
+        },
+        {
+          "id": "uns-wrong_item-01",
+          "engine_action": "manual_fallback",
+          "pred": "return_product",
+          "conf": 0.3403708338737488
+        },
+        {
+          "id": "una-product_information-01",
+          "engine_action": "manual_fallback",
+          "pred": "delivery_time",
+          "conf": 0.18044883012771606
+        },
+        {
+          "id": "una-refund_policy-01",
+          "engine_action": "manual_fallback",
+          "pred": "payment_issue",
+          "conf": 0.6278457641601562
+        },
+        {
+          "id": "una-sales_period-01",
+          "engine_action": "manual_fallback",
+          "pred": "return_policy",
+          "conf": 0.12283753603696823
+        },
+        {
+          "id": "una-delivery_issue-01",
+          "engine_action": "manual_fallback",
+          "pred": "shipping_costs",
+          "conf": 0.2826325297355652
+        },
+        {
+          "id": "una-submit_feedback-01",
+          "engine_action": "manual_fallback",
+          "pred": "payment_issue",
+          "conf": 0.2202923446893692
+        },
+        {
+          "id": "una-cancel_order-03",
+          "engine_action": "manual_fallback",
+          "pred": "payment_issue",
+          "conf": 0.5225236415863037
+        }
+      ],
+      "http_unfaulted_matches": 37,
+      "http_unfaulted_mismatches": 23,
+      "http_unfaulted_unsafe_drafts": 12,
+      "http_unfaulted_unsafe_draft_cases": [
+        {
+          "id": "uns-return_product_online-01",
+          "http_action": "retrieve_draft",
+          "pred": "return_policy",
+          "conf": 0.8144817352294922
+        },
+        {
+          "id": "una-shipping_costs-01",
+          "http_action": "retrieve_draft",
+          "pred": "shipping_costs",
+          "conf": 0.8252955079078674
+        },
+        {
+          "id": "una-return_policy-01",
+          "http_action": "retrieve_draft",
+          "pred": "return_policy",
+          "conf": 0.9919982552528381
+        },
+        {
+          "id": "una-refund_policy-02",
+          "http_action": "retrieve_draft",
+          "pred": "refund_policy",
+          "conf": 0.9492896795272827
+        },
+        {
+          "id": "una-cancel_order-01",
+          "http_action": "retrieve_draft",
+          "pred": "return_policy",
+          "conf": 0.6596380472183228
+        },
+        {
+          "id": "una-shipping_costs-02",
+          "http_action": "retrieve_draft",
+          "pred": "return_policy",
+          "conf": 0.7168494462966919
+        },
+        {
+          "id": "una-request_refund-01",
+          "http_action": "retrieve_draft",
+          "pred": "payment_issue",
+          "conf": 0.7689762115478516
+        },
+        {
+          "id": "una-return_policy-02",
+          "http_action": "retrieve_draft",
+          "pred": "return_policy",
+          "conf": 0.9871404767036438
+        },
+        {
+          "id": "una-cancel_order-02",
+          "http_action": "retrieve_draft",
+          "pred": "cancel_order",
+          "conf": 0.9375391602516174
+        },
+        {
+          "id": "una-payment_issue-01",
+          "http_action": "retrieve_draft",
+          "pred": "payment_issue",
+          "conf": 0.9566829800605774
+        },
+        {
+          "id": "una-return_policy-03",
+          "http_action": "retrieve_draft",
+          "pred": "return_policy",
+          "conf": 0.9886624217033386
+        },
+        {
+          "id": "una-refund_policy-03",
+          "http_action": "retrieve_draft",
+          "pred": "refund_policy",
+          "conf": 0.7364985346794128
+        }
+      ],
+      "uninjected_fault_total": 3,
+      "uninjected_fault_cases": [
+        {
+          "id": "unc-track_order-03",
+          "fault": "ml_timeout",
+          "status": "NOT_EXECUTED",
+          "raw_static_engine_action": "manual_fallback",
+          "raw_static_http_action": "escalate",
+          "raw_static_in_expected_actions": true
+        },
+        {
+          "id": "unc-return_policy-04",
+          "fault": "encoder_failure",
+          "status": "NOT_EXECUTED",
+          "raw_static_engine_action": "retrieve_draft",
+          "raw_static_http_action": "retrieve_draft",
+          "raw_static_in_expected_actions": false
+        },
+        {
+          "id": "unc-track_order-05",
+          "fault": "commerce_unauthorized",
+          "status": "NOT_EXECUTED",
+          "raw_static_engine_action": "manual_fallback",
+          "raw_static_http_action": "escalate",
+          "raw_static_in_expected_actions": true
+        }
+      ]
+    },
+    "ml_oos_80": {
+      "engine": {
+        "manual_fallback": 75,
+        "escalate": 5
+      },
+      "http_decide_route": {
+        "escalate": 64,
+        "clarify": 14,
+        "retrieve_draft": 2
+      },
+      "http_leak_cases": [
+        {
+          "id": "oos-other_domain-11",
+          "pred": "return_policy",
+          "conf": 0.6950039267539978
+        },
+        {
+          "id": "oos-multi_intent-08",
+          "pred": "return_policy",
+          "conf": 0.9604857563972473
+        }
+      ]
+    },
+    "ml_noise_420": {
+      "engine": {
+        "retrieve_draft": 214,
+        "manual_fallback": 189,
+        "escalate": 17
+      },
+      "http_decide_route": {
+        "clarify": 140,
+        "escalate": 70,
+        "retrieve_draft": 210
+      }
+    },
+    "final_acceptance": {
+      "answerable_12": {
+        "total": 12,
+        "engine_raw": 5,
+        "engine_correct": 4,
+        "http_raw": 5,
+        "http_correct": 4
+      },
+      "non_answerable_executed_11": {
+        "total": 11,
+        "engine_unsafe_draft": 0,
+        "http_unsafe_draft": 4,
+        "http_unsafe_cases": [
+          "final-case-13",
+          "final-case-22",
+          "final-case-23",
+          "final-case-24"
+        ]
+      }
+    }
+  },
+  "after_5f3493e": {
+    "tag": "AFTER_5f3493e",
+    "acceptance_156_exact": {
+      "engine": 114,
+      "http_decide_route": 116
+    },
+    "draft_expected_34_task_c_subset": {
+      "total": 34,
+      "case_ids": [
+        "sup-return_policy-01",
+        "sup-return_policy-02",
+        "sup-return_policy-03",
+        "sup-return_policy-04",
+        "sup-return_policy-05",
+        "sup-refund_policy-01",
+        "sup-refund_policy-02",
+        "sup-refund_policy-03",
+        "sup-refund_policy-04",
+        "sup-refund_policy-05",
+        "ans-return_policy-01",
+        "ans-return_policy-02",
+        "ans-return_policy-03",
+        "ans-return_policy-04",
+        "ans-return_policy-05",
+        "ans-return_policy-06",
+        "ans-return_policy-07",
+        "ans-return_policy-08",
+        "ans-return_policy-09",
+        "ans-return_policy-10",
+        "ans-refund_policy-01",
+        "ans-refund_policy-02",
+        "ans-refund_policy-03",
+        "ans-refund_policy-04",
+        "ans-refund_policy-05",
+        "ans-refund_policy-06",
+        "ans-refund_policy-07",
+        "ans-refund_policy-08",
+        "ans-cancel_order-01",
+        "ans-cancel_order-02",
+        "ans-cancel_order-03",
+        "ans-cancel_order-04",
+        "ans-cancel_order-05",
+        "ans-cancel_order-06"
+      ],
+      "engine_raw_draft": 21,
+      "engine_correct_intent_draft": 17,
+      "engine_abstain_or_clarify": 12,
+      "engine_escalate": 1,
+      "http_raw_draft": 21,
+      "http_correct_intent_draft": 17,
+      "http_clarify": 12,
+      "http_escalate": 1,
+      "http_manual_fallback": 0
+    },
+    "draft_allowed_88_permissive_subset": {
+      "total": 88,
+      "engine_raw_draft": 51,
+      "engine_correct_intent_draft": 44,
+      "http_raw_draft": 39,
+      "http_correct_intent_draft": 33
+    },
+    "mandatory_accounting": {
+      "total_all": 63,
+      "raw_static_engine_matches_all_63": 55,
+      "raw_static_http_matches_all_63": 39,
+      "unfaulted_total": 60,
+      "engine_unfaulted_matches": 53,
+      "engine_unfaulted_mismatches": 7,
+      "engine_unfaulted_unsafe_drafts": 0,
+      "engine_unfaulted_mismatch_cases": [
+        {
+          "id": "uns-return_product_in_store-01",
+          "engine_action": "manual_fallback",
+          "pred": "return_policy",
+          "conf": 0.5057317614555359
+        },
+        {
+          "id": "uns-technical_issue-01",
+          "engine_action": "manual_fallback",
+          "pred": "payment_issue",
+          "conf": 0.2619073987007141
+        },
+        {
+          "id": "uns-track_delivery-01",
+          "engine_action": "manual_fallback",
+          "pred": "shipping_costs",
+          "conf": 0.3649907410144806
+        },
+        {
+          "id": "uns-wrong_item-01",
+          "engine_action": "manual_fallback",
+          "pred": "return_product",
+          "conf": 0.3403708338737488
+        },
+        {
+          "id": "una-product_information-01",
+          "engine_action": "manual_fallback",
+          "pred": "delivery_time",
+          "conf": 0.18044883012771606
+        },
+        {
+          "id": "una-refund_policy-01",
+          "engine_action": "manual_fallback",
+          "pred": "payment_issue",
+          "conf": 0.6278457641601562
+        },
+        {
+          "id": "una-sales_period-01",
+          "engine_action": "manual_fallback",
+          "pred": "return_policy",
+          "conf": 0.12283753603696823
+        }
+      ],
+      "http_unfaulted_matches": 37,
+      "http_unfaulted_mismatches": 23,
+      "http_unfaulted_unsafe_drafts": 12,
+      "http_unfaulted_unsafe_draft_cases": [
+        {
+          "id": "uns-return_product_online-01",
+          "http_action": "retrieve_draft",
+          "pred": "return_policy",
+          "conf": 0.8144817352294922
+        },
+        {
+          "id": "una-shipping_costs-01",
+          "http_action": "retrieve_draft",
+          "pred": "shipping_costs",
+          "conf": 0.8252955079078674
+        },
+        {
+          "id": "una-return_policy-01",
+          "http_action": "retrieve_draft",
+          "pred": "return_policy",
+          "conf": 0.9919982552528381
+        },
+        {
+          "id": "una-refund_policy-02",
+          "http_action": "retrieve_draft",
+          "pred": "refund_policy",
+          "conf": 0.9492896795272827
+        },
+        {
+          "id": "una-cancel_order-01",
+          "http_action": "retrieve_draft",
+          "pred": "return_policy",
+          "conf": 0.6596380472183228
+        },
+        {
+          "id": "una-shipping_costs-02",
+          "http_action": "retrieve_draft",
+          "pred": "return_policy",
+          "conf": 0.7168494462966919
+        },
+        {
+          "id": "una-request_refund-01",
+          "http_action": "retrieve_draft",
+          "pred": "payment_issue",
+          "conf": 0.7689762115478516
+        },
+        {
+          "id": "una-return_policy-02",
+          "http_action": "retrieve_draft",
+          "pred": "return_policy",
+          "conf": 0.9871404767036438
+        },
+        {
+          "id": "una-cancel_order-02",
+          "http_action": "retrieve_draft",
+          "pred": "cancel_order",
+          "conf": 0.9375391602516174
+        },
+        {
+          "id": "una-payment_issue-01",
+          "http_action": "retrieve_draft",
+          "pred": "payment_issue",
+          "conf": 0.9566829800605774
+        },
+        {
+          "id": "una-return_policy-03",
+          "http_action": "retrieve_draft",
+          "pred": "return_policy",
+          "conf": 0.9886624217033386
+        },
+        {
+          "id": "una-refund_policy-03",
+          "http_action": "retrieve_draft",
+          "pred": "refund_policy",
+          "conf": 0.7364985346794128
+        }
+      ],
+      "uninjected_fault_total": 3,
+      "uninjected_fault_cases": [
+        {
+          "id": "unc-track_order-03",
+          "fault": "ml_timeout",
+          "status": "NOT_EXECUTED",
+          "raw_static_engine_action": "escalate",
+          "raw_static_http_action": "escalate",
+          "raw_static_in_expected_actions": true
+        },
+        {
+          "id": "unc-return_policy-04",
+          "fault": "encoder_failure",
+          "status": "NOT_EXECUTED",
+          "raw_static_engine_action": "retrieve_draft",
+          "raw_static_http_action": "retrieve_draft",
+          "raw_static_in_expected_actions": false
+        },
+        {
+          "id": "unc-track_order-05",
+          "fault": "commerce_unauthorized",
+          "status": "NOT_EXECUTED",
+          "raw_static_engine_action": "escalate",
+          "raw_static_http_action": "escalate",
+          "raw_static_in_expected_actions": true
+        }
+      ]
+    },
+    "ml_oos_80": {
+      "engine": {
+        "escalate": 65,
+        "manual_fallback": 15
+      },
+      "http_decide_route": {
+        "escalate": 64,
+        "clarify": 14,
+        "retrieve_draft": 2
+      },
+      "http_leak_cases": [
+        {
+          "id": "oos-other_domain-11",
+          "pred": "return_policy",
+          "conf": 0.6950039267539978
+        },
+        {
+          "id": "oos-multi_intent-08",
+          "pred": "return_policy",
+          "conf": 0.9604857563972473
+        }
+      ]
+    },
+    "ml_noise_420": {
+      "engine": {
+        "retrieve_draft": 214,
+        "escalate": 70,
+        "manual_fallback": 136
+      },
+      "http_decide_route": {
+        "clarify": 140,
+        "escalate": 70,
+        "retrieve_draft": 210
+      }
+    },
+    "final_acceptance": {
+      "answerable_12": {
+        "total": 12,
+        "engine_raw": 5,
+        "engine_correct": 4,
+        "http_raw": 5,
+        "http_correct": 4
+      },
+      "non_answerable_executed_11": {
+        "total": 11,
+        "engine_unsafe_draft": 0,
+        "http_unsafe_draft": 4,
+        "http_unsafe_cases": [
+          "final-case-13",
+          "final-case-22",
+          "final-case-23",
+          "final-case-24"
+        ]
+      }
+    }
+  }
+}

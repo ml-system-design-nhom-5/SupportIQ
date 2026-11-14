@@ -1,0 +1,30 @@
+{
+  "artifact_id": "supportiq-app-retrieval-evidence-v2",
+  "created_at": "2026-11-12T10:15:35.066079+00:00",
+  "git_commit": "working-tree-b2",
+  "provenance": {
+    "gold_manifest": "data/benchmarks/app_retrieval_gold_manifest.json",
+    "gold_sha256": "64e88513ff6881f45075ba12b4f8107f6eefe59f217834faffeccdec467c42d8",
+    "kb_source": "data/knowledge/approved_kb.v2.json",
+    "release": "apps/ai_service/kb-release.json",
+    "approval": "Delegated stakeholder review; no cross-group approval claim"
+  },
+  "files": {
+    "predictions": {
+      "path": "raw_retrieval_predictions.jsonl",
+      "sha256": "5e9340f39e276c2a4b8d07d8754e25442b775cfad2de1f2547c76dd246197bd6"
+    },
+    "metrics": {
+      "path": "retrieval_metrics.json",
+      "sha256": "63ac92fba29719755f865fbdd9caeb89f61dc435cac2069ccb9b1fc313e53fe9"
+    }
+  },
+  "key_results": {
+    "total_cases": 46,
+    "answerable_denominator": 33,
+    "recall_at_3": 0.9848,
+    "hit_at_3": 1.0,
+    "unanswerable_cases": 13,
+    "false_answer_rate": 0.3846
+  }
+}

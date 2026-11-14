@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 import logging
+import re
 
 from apps.core_backend.retrieval.importer import (
     PolicyVersion,
@@ -12,6 +13,29 @@ from apps.core_backend.retrieval.encoder import PolicyEncoder, chunk_policy
 from apps.core_backend.retrieval.index import SemanticPolicyIndex, search_policies
 
 logger = logging.getLogger("retrieval_adapter")
+
+BOUNDED_RETRIEVAL_REASON_CODES = frozenset({
+    "encoder_unavailable",
+    "encoder_failure",
+    "encoder_failed",
+    "empty_kb",
+    "empty_index",
+    "no_eligible_chunks",
+    "no_match",
+    "no_evidence",
+    "below_relevance_threshold",
+    "token_budget_exceeded",
+    "no_chunks",
+    "only_expired_documents",
+    "insufficient_evidence",
+})
+
+
+def _filter_bounded_reasons(codes: Optional[List[str]]) -> List[str]:
+    if not codes:
+        return []
+    return list(dict.fromkeys(c for c in codes if isinstance(c, str) and c in BOUNDED_RETRIEVAL_REASON_CODES))
+
 
 class RetrievalAdapter:
     """Production Native Semantic Retrieval adapter using BGE-small-en embeddings,
@@ -33,10 +57,10 @@ class RetrievalAdapter:
             try:
                 self.encoder = PolicyEncoder()
             except Exception as e:
-                # P1 FIX: Capture encoder initialization error gracefully at adapter boundary
-                logger.warning(f"Retrieval encoder could not be initialized: {e}")
+                # Store only exception class name privately; never expose raw exception text or credentials.
+                logger.warning("Retrieval encoder could not be initialized (%s)", type(e).__name__)
                 self.encoder = None
-                self.encoder_error = str(e)
+                self.encoder_error = type(e).__name__
 
         self.relevance_threshold = relevance_threshold
         self.eligible_versions: List[PolicyVersion] = []
@@ -78,10 +102,10 @@ class RetrievalAdapter:
                             supported_intents=d.get("supported_intents", []),
                             answer_capabilities=d.get("answer_capabilities", []),
                         )
-                    except Exception as e:
+                    except Exception:
                         self.quarantined_docs.append({
                             "document_id": d.get("document_id"),
-                            "reason": f"invalid_approval_metadata: {e}"
+                            "reason": "invalid_approval_metadata",
                         })
                         continue
 
@@ -124,10 +148,18 @@ class RetrievalAdapter:
         P1: Pre-filters index chunks by (doc_id, version) before ranking.
         """
         if self.encoder is None:
-            return {"status": "encoder_unavailable", "evidence": [], "error": self.encoder_error}
+            return {
+                "status": "encoder_unavailable",
+                "evidence": [],
+                "reason_codes": ["encoder_unavailable"],
+                "has_conflict": False,
+            }
+
+        if intent == "human_agent":
+            return {"status": "human_agent_escalation", "evidence": [], "reason_codes": [], "has_conflict": False}
 
         if not self.index or self.index.is_empty():
-            return {"status": "empty_kb", "evidence": []}
+            return {"status": "empty_kb", "evidence": [], "reason_codes": ["empty_kb"], "has_conflict": False}
 
         # Temporal and strict role filtering
         now = current_time or datetime.now(timezone.utc)
@@ -137,28 +169,56 @@ class RetrievalAdapter:
         allowed_doc_version_keys = {(pv.doc_id, pv.version) for pv in valid_pv}
 
         if not allowed_doc_version_keys:
-            return {"status": "no_match", "evidence": []}
+            return {"status": "no_match", "evidence": [], "reason_codes": ["no_match"], "has_conflict": False}
 
         # Semantic Search across all temporally valid documents
-        res = search_policies(
-            query=query,
-            index=self.index,
-            encoder=self.encoder,
-            threshold=self.relevance_threshold,
-            top_k_docs=3,
-            allowed_doc_version_keys=allowed_doc_version_keys,
-        )
+        try:
+            res = search_policies(
+                query=query,
+                index=self.index,
+                encoder=self.encoder,
+                threshold=self.relevance_threshold,
+                top_k_docs=3,
+                allowed_doc_version_keys=allowed_doc_version_keys,
+            )
+        except Exception as exc:
+            logger.warning("Retrieval query encoding failed (%s)", type(exc).__name__)
+            return {
+                "status": "encoder_failure",
+                "evidence": [],
+                "reason_codes": ["encoder_failure", "encoder_failed"],
+                "has_conflict": False,
+            }
+
+        raw_codes = list(res.reason_codes or [])
+        if res.status == "error" or "encoder_failed" in raw_codes or "encoder_failure" in raw_codes:
+            logger.warning("Retrieval query encoding failed (bounded_status=%s)", res.status)
+            return {
+                "status": "encoder_failure",
+                "evidence": [],
+                "reason_codes": ["encoder_failure", "encoder_failed"],
+                "has_conflict": False,
+            }
 
         if res.status != "success":
-            return {"status": res.status, "evidence": []}
+            return {
+                "status": res.status,
+                "evidence": [],
+                "reason_codes": _filter_bounded_reasons(raw_codes),
+                "has_conflict": False,
+            }
 
         pv_by_key = {(pv.doc_id, pv.version): pv for pv in valid_pv}
 
         # ADR-0005: Additive intent-aware reranking
         LAMBDA_INTENT = 0.15
         reranked_docs = []
+        is_unauthorized_query = bool(re.search(r"\b(chargeback|unauthorized\s+(?:transaction|payment|charge)|fraud)\b", query, re.I))
         for doc in res.documents:
             pv = pv_by_key.get((doc["doc_id"], doc.get("version")))
+            # When the customer reports unauthorized charge or chargeback, duplicate charge resolution (POL-PAY-004) is inapplicable
+            if is_unauthorized_query and pv and "duplicate_charge_resolution" in pv.metadata.answer_capabilities:
+                continue
             base_score = float(doc.get("score") or 0.0)
             boost = LAMBDA_INTENT if (intent and pv and (not pv.metadata.supported_intents or intent in pv.metadata.supported_intents)) else 0.0
             doc["score"] = round(base_score + boost, 4)

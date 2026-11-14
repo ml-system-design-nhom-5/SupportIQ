@@ -1,0 +1,299 @@
+{
+  "before_commit": "e46e1c9",
+  "before": {
+    "focus_12_mandatory": {
+      "total": 12,
+      "initial_retrieve_draft": 12,
+      "final_action_counts": {
+        "retrieve_draft": 12
+      },
+      "unsafe_terminal_draft_ids": [
+        "uns-return_product_online-01",
+        "una-shipping_costs-01",
+        "una-return_policy-01",
+        "una-refund_policy-02",
+        "una-cancel_order-01",
+        "una-shipping_costs-02",
+        "una-request_refund-01",
+        "una-return_policy-02",
+        "una-cancel_order-02",
+        "una-payment_issue-01",
+        "una-return_policy-03",
+        "una-refund_policy-03"
+      ],
+      "llm_invoked_count": 12
+    },
+    "focus_2_ml_oos": {
+      "total": 2,
+      "initial_retrieve_draft": 2,
+      "final_action_counts": {
+        "retrieve_draft": 2
+      },
+      "unsafe_terminal_draft_ids": [
+        "oos-other_domain-11",
+        "oos-multi_intent-08"
+      ],
+      "llm_invoked_count": 2
+    },
+    "focus_4_fa_non_answerable": {
+      "total": 4,
+      "initial_action_counts": {
+        "retrieve_draft": 4
+      },
+      "final_action_counts": {
+        "escalate": 1,
+        "retrieve_draft": 3
+      },
+      "unsafe_terminal_draft_ids": [
+        "final-case-22",
+        "final-case-23",
+        "final-case-24"
+      ],
+      "llm_invoked_count": 3
+    },
+    "mandatory_unfaulted_60": {
+      "executed_total": 60,
+      "uninjected_faults_not_executed": [
+        {
+          "id": "unc-track_order-03",
+          "fault": "ml_timeout",
+          "status": "NOT_EXECUTED"
+        },
+        {
+          "id": "unc-return_policy-04",
+          "fault": "encoder_failure",
+          "status": "NOT_EXECUTED"
+        },
+        {
+          "id": "unc-track_order-05",
+          "fault": "commerce_unauthorized",
+          "status": "NOT_EXECUTED"
+        }
+      ],
+      "final_action_counts": {
+        "escalate": 37,
+        "clarify": 11,
+        "retrieve_draft": 12
+      },
+      "unsafe_terminal_draft_ids": [
+        "uns-return_product_online-01",
+        "una-shipping_costs-01",
+        "una-return_policy-01",
+        "una-refund_policy-02",
+        "una-cancel_order-01",
+        "una-shipping_costs-02",
+        "una-request_refund-01",
+        "una-return_policy-02",
+        "una-cancel_order-02",
+        "una-payment_issue-01",
+        "una-return_policy-03",
+        "una-refund_policy-03"
+      ],
+      "llm_invoked_count": 12
+    },
+    "draft_expected_34": {
+      "total": 34,
+      "raw_final_retrieve_draft": 21,
+      "correct_intent_final_draft": 17,
+      "llm_invoked_count": 21,
+      "final_action_counts": {
+        "retrieve_draft": 21,
+        "clarify": 12,
+        "escalate": 1
+      }
+    },
+    "ml_oos_80": {
+      "total": 80,
+      "initial_action_counts": {
+        "escalate": 64,
+        "clarify": 14,
+        "retrieve_draft": 2
+      },
+      "final_action_counts": {
+        "escalate": 64,
+        "clarify": 14,
+        "retrieve_draft": 2
+      },
+      "unsafe_terminal_draft_ids": [
+        "oos-other_domain-11",
+        "oos-multi_intent-08"
+      ],
+      "llm_invoked_count": 2
+    },
+    "ml_noise_420": {
+      "total": 420,
+      "initial_action_counts": {
+        "retrieve_draft": 215,
+        "escalate": 70,
+        "clarify": 135
+      },
+      "final_action_counts": {
+        "retrieve_draft": 214,
+        "escalate": 71,
+        "clarify": 135
+      },
+      "llm_invoked_count": 214
+    },
+    "final_acceptance_24": {
+      "answerable_12": {
+        "total": 12,
+        "raw_final_retrieve_draft": 2,
+        "correct_intent_final_draft": 2,
+        "final_action_counts": {
+          "escalate": 10,
+          "retrieve_draft": 2
+        },
+        "llm_invoked_count": 2
+      },
+      "non_answerable_executed_11": {
+        "total": 11,
+        "final_action_counts": {
+          "escalate": 5,
+          "clarify": 3,
+          "retrieve_draft": 3
+        },
+        "unsafe_terminal_draft_ids": [
+          "final-case-22",
+          "final-case-23",
+          "final-case-24"
+        ],
+        "llm_invoked_count": 3
+      },
+      "uninjected_fault_not_executed": [
+        {
+          "id": "final-case-21",
+          "status": "NOT_EXECUTED",
+          "reason": "Requires synthetic KB document conflict injection"
+        }
+      ]
+    }
+  },
+  "after": {
+    "focus_12_mandatory": {
+      "total": 12,
+      "initial_retrieve_draft": 12,
+      "final_action_counts": {
+        "escalate": 11,
+        "manual_fallback": 1
+      },
+      "unsafe_terminal_draft_ids": [],
+      "llm_invoked_count": 0
+    },
+    "focus_2_ml_oos": {
+      "total": 2,
+      "initial_retrieve_draft": 2,
+      "final_action_counts": {
+        "manual_fallback": 1,
+        "escalate": 1
+      },
+      "unsafe_terminal_draft_ids": [],
+      "llm_invoked_count": 0
+    },
+    "focus_4_fa_non_answerable": {
+      "total": 4,
+      "initial_action_counts": {
+        "retrieve_draft": 4
+      },
+      "final_action_counts": {
+        "escalate": 4
+      },
+      "unsafe_terminal_draft_ids": [],
+      "llm_invoked_count": 0
+    },
+    "mandatory_unfaulted_60": {
+      "executed_total": 60,
+      "uninjected_faults_not_executed": [
+        {
+          "id": "unc-track_order-03",
+          "fault": "ml_timeout",
+          "status": "NOT_EXECUTED"
+        },
+        {
+          "id": "unc-return_policy-04",
+          "fault": "encoder_failure",
+          "status": "NOT_EXECUTED"
+        },
+        {
+          "id": "unc-track_order-05",
+          "fault": "commerce_unauthorized",
+          "status": "NOT_EXECUTED"
+        }
+      ],
+      "final_action_counts": {
+        "escalate": 48,
+        "clarify": 11,
+        "manual_fallback": 1
+      },
+      "unsafe_terminal_draft_ids": [],
+      "llm_invoked_count": 0
+    },
+    "draft_expected_34": {
+      "total": 34,
+      "raw_final_retrieve_draft": 21,
+      "correct_intent_final_draft": 17,
+      "llm_invoked_count": 21,
+      "final_action_counts": {
+        "retrieve_draft": 21,
+        "clarify": 12,
+        "escalate": 1
+      }
+    },
+    "ml_oos_80": {
+      "total": 80,
+      "initial_action_counts": {
+        "escalate": 64,
+        "clarify": 14,
+        "retrieve_draft": 2
+      },
+      "final_action_counts": {
+        "escalate": 65,
+        "clarify": 14,
+        "manual_fallback": 1
+      },
+      "unsafe_terminal_draft_ids": [],
+      "llm_invoked_count": 0
+    },
+    "ml_noise_420": {
+      "total": 420,
+      "initial_action_counts": {
+        "retrieve_draft": 215,
+        "escalate": 70,
+        "clarify": 135
+      },
+      "final_action_counts": {
+        "retrieve_draft": 214,
+        "escalate": 71,
+        "clarify": 135
+      },
+      "llm_invoked_count": 214
+    },
+    "final_acceptance_24": {
+      "answerable_12": {
+        "total": 12,
+        "raw_final_retrieve_draft": 2,
+        "correct_intent_final_draft": 2,
+        "final_action_counts": {
+          "escalate": 10,
+          "retrieve_draft": 2
+        },
+        "llm_invoked_count": 2
+      },
+      "non_answerable_executed_11": {
+        "total": 11,
+        "final_action_counts": {
+          "escalate": 8,
+          "clarify": 3
+        },
+        "unsafe_terminal_draft_ids": [],
+        "llm_invoked_count": 0
+      },
+      "uninjected_fault_not_executed": [
+        {
+          "id": "final-case-21",
+          "status": "NOT_EXECUTED",
+          "reason": "Requires synthetic KB document conflict injection"
+        }
+      ]
+    }
+  }
+}

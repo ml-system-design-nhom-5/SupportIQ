@@ -5,6 +5,16 @@ from collections import defaultdict
 
 PLACEHOLDER = re.compile(r"\[(NAME|EMAIL|PHONE|CARD|ADDRESS|ORDER_ID|TRACKING_ID|TRANSACTION_ID|LITERAL)(_[1-9][0-9]{0,2})?\]")
 
+CARD_PATTERN = re.compile(r"\b(?:\d[ -]*?){13,19}\b")
+IDENTIFIER_PATTERNS = [
+    ("EMAIL", re.compile(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}")),
+    ("ORDER_ID", re.compile(r"\bORD-[A-Za-z0-9]+\b")),
+    ("TRACKING_ID", re.compile(r"\b(?:TRK-|GIAO|TIKI|VIET|VNPOST)\w+\b")),
+    ("TRANSACTION_ID", re.compile(r"\b(?:TXN-|TIKI-TXN-)\w+\b")),
+    ("PHONE", re.compile(r"(?<!\w)(?:\+?\d[ .()-]?){9,15}(?!\w)")),
+    ("ADDRESS", re.compile(r"\b\d+\s+[A-Za-z0-9\s,.-]+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|Ward|District|City|Province)\b", re.IGNORECASE)),
+]
+
 _SPACY_NLP = None
 
 
@@ -80,25 +90,16 @@ def pseudonymize(message, known):
             pass
 
     # 3. Credit card detection with Luhn checksum validation (must run before PHONE)
-    card_pattern = re.compile(r"\b(?:\d[ -]*?){13,19}\b")
     def mask_card(match):
         raw = match.group()
         if luhn_checksum_valid(raw):
             return replace("CARD", raw)
         return raw
-    result = card_pattern.sub(mask_card, result)
+    result = CARD_PATTERN.sub(mask_card, result)
 
     # 4. Regex patterns for identifiers and sensitive contact data
-    patterns = {
-        "EMAIL": r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}",
-        "ORDER_ID": r"\bORD-[A-Za-z0-9]+\b",
-        "TRACKING_ID": r"\b(?:TRK-|GIAO|TIKI|VIET|VNPOST)\w+\b",
-        "TRANSACTION_ID": r"\b(?:TXN-|TIKI-TXN-)\w+\b",
-        "PHONE": r"(?<!\w)(?:\+?\d[ .()-]?){9,15}(?!\w)",
-        "ADDRESS": r"\b\d+\s+[A-Za-z0-9\s,.-]+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|Ward|District|City|Province)\b"
-    }
-    for kind, pattern in patterns.items():
-        result = re.sub(pattern, lambda match: replace(kind, match.group()), result, flags=re.IGNORECASE if kind == "ADDRESS" else 0)
+    for kind, pattern in IDENTIFIER_PATTERNS:
+        result = pattern.sub(lambda match, k=kind: replace(k, match.group()), result)
 
     for marker, value in literals.items():
         result = result.replace(marker, value)

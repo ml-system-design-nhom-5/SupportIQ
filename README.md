@@ -1,6 +1,6 @@
 # SupportIQ
 
-SupportIQ is an AI copilot for e-commerce support. Customers use a read-only demo shop; staff review intent, sources and replies; managers handle cases that need authority; administrators manage internal accounts. A person sends every reply. Commerce data comes from `data/knowledge/mock_orders.json`.
+SupportIQ is an AI copilot for e-commerce customer support. Customers submit support requests; staff review predicted intents, sources, and response drafts; managers handle authority-required cases; administrators manage internal accounts. A human agent reviews and sends every reply. Simulated commerce data comes from `data/knowledge/mock_orders.json`.
 
 ## Run on Windows
 
@@ -8,11 +8,13 @@ SupportIQ is an AI copilot for e-commerce support. Customers use a read-only dem
 .\scripts\start-app.ps1
 ```
 
-Open **http://127.0.0.1:8080**. No Docker is required. The first run installs application dependencies, prepares a separate native PostgreSQL cluster, imports synthetic orders, builds React and starts the application. PostgreSQL binaries, Node 22+, pnpm and Python must be installed. The existing model environment is needed for AI; use `-WithoutAI` otherwise.
+Open **http://127.0.0.1:8080**. No Docker is required. The startup script dynamically discovers installed PostgreSQL binaries, verifies the runtime driver via preflight (`scripts/native_runtime.py preflight`), configures `PSYCOPG_IMPL=python` for Windows Application Control environments, prepares a dedicated native PostgreSQL cluster, seeds synthetic orders, builds the React frontend, and starts the application services.
+
+PostgreSQL binaries, Node 22+, pnpm, and Python must be installed. The existing model environment is needed for AI; use `-WithoutAI` otherwise.
 
 Login names: `customer-1`, `staff-1`, `manager-1`, `admin-1`. Generated passwords are in the ignored `.local/application.json`. Customer 1 owns the 15 orders of `demo-customer`. No passwords are committed.
 
-External LLM generation is enabled when a Gemini key is configured; use `-DisableLLM` to disable it. To enable it with your local `GEMINI_API_KEY`, run `./scripts/start-app.ps1 -EnableLLM`. Local model inference and retrieval use the existing verified assets. The model exposes raw softmax scores. Draft routing uses the existing per-intent score and margin thresholds; uncertain requests still require intent confirmation.
+External LLM generation is enabled when a Gemini key is configured; use `-DisableLLM` to disable it. Local model inference and retrieval use the existing verified assets. The model exposes raw softmax scores. Draft routing uses the existing per-intent score and margin thresholds; uncertain requests still require intent confirmation.
 
 Stop with `./scripts/stop-app.ps1`. Add `-StopDatabase` to stop the workspace database while preserving its data. See [Windows setup and source-data mappings](docs/guides/application-windows.md).
 
@@ -33,15 +35,24 @@ The frontend calls only the application backend. The backend enforces all roles 
 ## Documentation
 
 - [Requirements](docs/product/requirements.md), [accepted decisions](docs/decisions/README.md), and [approved screen designs](docs/design/console-ui.md).
+- [Current limitations and operational boundaries](docs/CURRENT_LIMITATIONS.md).
 - [Actual application API](contracts/backend.openapi.json), [design tokens](DESIGN.md), and [verification scope and limits](docs/guides/application-verification.md).
 - [Existing core architecture](docs/ARCHITECTURE.md) and [core backend design](docs/superpowers/specs/2026-10-27-core-backend-design.md).
 
-The source design is the documentation on `chore/fe-be-supportiq-ecom` at `48caf66`. Contracts v1 revision 2 remains in review; this implementation does not change that approval status. Native runtime instructions describe the running application; proposed multi-replica hosting remains separate release work.
+Native runtime instructions describe the running application; proposed multi-replica hosting remains separate release work.
 
 ## Checks
 
+See the [Topic 1 integration report](docs/audits/2026-11-12-topic-1-integration.md) for current verification evidence, AI grading, and acceptance limits. The shared retrieval benchmark targets an older KB; its recall is not certified for the current application release.
+
 ```powershell
-.venv\Scripts\python.exe -X utf8 -m pytest -q
+# Python unit and application tests
+.venv\Scripts\python.exe -X utf8 -m pytest tests/unit tests/application -q
+
+# Standalone preflight diagnostic
+.venv\Scripts\python.exe scripts/native_runtime.py preflight
+
+# Frontend build, unit tests (threads pool), and E2E
 cd apps/frontend
 pnpm build
 pnpm test

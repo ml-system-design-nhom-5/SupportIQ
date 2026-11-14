@@ -1,0 +1,35 @@
+{
+  "benchmark_id": "supportiq-app-retrieval-gold-v2",
+  "version": "2.1.0",
+  "status": "approved",
+  "approval": {
+    "approved": true,
+    "approved_by": "coordinator (delegated stakeholder authority)",
+    "approval_date": "2026-11-12",
+    "approval_scope": "local_application_retrieval_evaluation",
+    "approval_notes": "Approved for local application retrieval evaluation by AI coordinator exercising delegated stakeholder authority; no external instructor or cross-group approval claimed."
+  },
+  "created_at": "2026-11-12T11:40:00Z",
+  "provenance": {
+    "source": "data/knowledge/approved_kb.v2.json via apps/ai_service/kb-release.json",
+    "coverage": "All 14 active POL-* documents with full 12 product intents, human_agent, expired, conflict, and OOD slices",
+    "approval_note": "Delegated stakeholder review approved by coordinator dated 2026-11-12; no external instructor or cross-group approval claimed",
+    "kb_source_sha256": "f8dcfbbdbb9cb2cd7a09d2ec12e0149083fdd4fa04931df6261fc4d1e6425fec",
+    "kb_release_sha256": "cf450a72758e3d68ac7453802b5bc6c042ef2eddb9a6c4fa76483d4009c42804"
+  },
+  "target_release": "current-policies-v1",
+  "file": "data/benchmarks/app_retrieval_gold_v2.json",
+  "sha256": "a33e6394d6d76384ac33771d014816ae7e2d1a3c379b3c1ec3a7f3605940bee7",
+  "total_cases": 46,
+  "slice_counts": {
+    "supported_12_product_answerable": 31,
+    "optional_out_of_product": 2,
+    "human_agent_escalation": 3,
+    "expired_temporal_rejection": 3,
+    "conflicting_policies": 2,
+    "out_of_domain": 5
+  },
+  "core_product_recall_denominator": 31,
+  "total_answerable": 33,
+  "total_unanswerable": 13
+}

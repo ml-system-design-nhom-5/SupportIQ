@@ -1,0 +1,320 @@
+{
+  "suite": "final-acceptance-paired-agent-trials-v1",
+  "total_tasks": 12,
+  "alternating_order_ratio": "6_assisted_first_6_manual_first",
+  "delegation_notice": "Prepared by Worker C for coordinator execution. Coordinator performs AI claim grading and actual manual/assisted agent trials; no manual answers, wall times, ratings, or signoffs have been invented.",
+  "tasks": [
+    {
+      "task_id": "paired-task-01",
+      "case_id": "final-case-01",
+      "intent": "return_policy",
+      "execution_order": "assisted_first",
+      "query": "What is the return window for products directly distributed by Tiki Trading compared to marketplace partner sellers?",
+      "trial_status": "prepared_for_coordinator_execution",
+      "assisted_trial": {
+        "condition": "assisted",
+        "started_at": null,
+        "completed_at": null,
+        "duration_seconds": null,
+        "agent_decision": null,
+        "edited_response_text": null,
+        "decision_reason": null,
+        "draft_helpful_rating": null
+      },
+      "manual_trial": {
+        "condition": "manual",
+        "started_at": null,
+        "completed_at": null,
+        "duration_seconds": null,
+        "manual_response_text": null,
+        "notes": null
+      }
+    },
+    {
+      "task_id": "paired-task-02",
+      "case_id": "final-case-02",
+      "intent": "return_product",
+      "execution_order": "manual_first",
+      "query": "How do I submit a return request on the Tiki app and schedule the free courier pickup?",
+      "trial_status": "prepared_for_coordinator_execution",
+      "assisted_trial": {
+        "condition": "assisted",
+        "started_at": null,
+        "completed_at": null,
+        "duration_seconds": null,
+        "agent_decision": null,
+        "edited_response_text": null,
+        "decision_reason": null,
+        "draft_helpful_rating": null
+      },
+      "manual_trial": {
+        "condition": "manual",
+        "started_at": null,
+        "completed_at": null,
+        "duration_seconds": null,
+        "manual_response_text": null,
+        "notes": null
+      }
+    },
+    {
+      "task_id": "paired-task-03",
+      "case_id": "final-case-03",
+      "intent": "refund_policy",
+      "execution_order": "assisted_first",
+      "query": "What are the requirements for refund approval and are shipping fees refunded if I return due to personal preference?",
+      "trial_status": "prepared_for_coordinator_execution",
+      "assisted_trial": {
+        "condition": "assisted",
+        "started_at": null,
+        "completed_at": null,
+        "duration_seconds": null,
+        "agent_decision": null,
+        "edited_response_text": null,
+        "decision_reason": null,
+        "draft_helpful_rating": null
+      },
+      "manual_trial": {
+        "condition": "manual",
+        "started_at": null,
+        "completed_at": null,
+        "duration_seconds": null,
+        "manual_response_text": null,
+        "notes": null
+      }
+    },
+    {
+      "task_id": "paired-task-04",
+      "case_id": "final-case-04",
+      "intent": "request_refund",
+      "execution_order": "manual_first",
+      "query": "How many business days does it take to receive a refund back to my linked e-wallet or bank card?",
+      "trial_status": "prepared_for_coordinator_execution",
+      "assisted_trial": {
+        "condition": "assisted",
+        "started_at": null,
+        "completed_at": null,
+        "duration_seconds": null,
+        "agent_decision": null,
+        "edited_response_text": null,
+        "decision_reason": null,
+        "draft_helpful_rating": null
+      },
+      "manual_trial": {
+        "condition": "manual",
+        "started_at": null,
+        "completed_at": null,
+        "duration_seconds": null,
+        "manual_response_text": null,
+        "notes": null
+      }
+    },
+    {
+      "task_id": "paired-task-05",
+      "case_id": "final-case-05",
+      "intent": "refund_status",
+      "execution_order": "assisted_first",
+      "query": "Where can I check my refund tracking status and transaction tracing code on Tiki?",
+      "trial_status": "prepared_for_coordinator_execution",
+      "assisted_trial": {
+        "condition": "assisted",
+        "started_at": null,
+        "completed_at": null,
+        "duration_seconds": null,
+        "agent_decision": null,
+        "edited_response_text": null,
+        "decision_reason": null,
+        "draft_helpful_rating": null
+      },
+      "manual_trial": {
+        "condition": "manual",
+        "started_at": null,
+        "completed_at": null,
+        "duration_seconds": null,
+        "manual_response_text": null,
+        "notes": null
+      }
+    },
+    {
+      "task_id": "paired-task-06",
+      "case_id": "final-case-06",
+      "intent": "cancel_order",
+      "execution_order": "manual_first",
+      "query": "Can I cancel my order directly on the app while it is still in Awaiting Packing status?",
+      "trial_status": "prepared_for_coordinator_execution",
+      "assisted_trial": {
+        "condition": "assisted",
+        "started_at": null,
+        "completed_at": null,
+        "duration_seconds": null,
+        "agent_decision": null,
+        "edited_response_text": null,
+        "decision_reason": null,
+        "draft_helpful_rating": null
+      },
+      "manual_trial": {
+        "condition": "manual",
+        "started_at": null,
+        "completed_at": null,
+        "duration_seconds": null,
+        "manual_response_text": null,
+        "notes": null
+      }
+    },
+    {
+      "task_id": "paired-task-07",
+      "case_id": "final-case-07",
+      "intent": "track_order",
+      "execution_order": "assisted_first",
+      "query": "How do I track the transit hubs my parcel has passed through using the tracking code?",
+      "trial_status": "prepared_for_coordinator_execution",
+      "assisted_trial": {
+        "condition": "assisted",
+        "started_at": null,
+        "completed_at": null,
+        "duration_seconds": null,
+        "agent_decision": null,
+        "edited_response_text": null,
+        "decision_reason": null,
+        "draft_helpful_rating": null
+      },
+      "manual_trial": {
+        "condition": "manual",
+        "started_at": null,
+        "completed_at": null,
+        "duration_seconds": null,
+        "manual_response_text": null,
+        "notes": null
+      }
+    },
+    {
+      "task_id": "paired-task-08",
+      "case_id": "final-case-08",
+      "intent": "shipping_costs",
+      "execution_order": "manual_first",
+      "query": "What are the base shipping fees for intra-city versus inter-provincial orders and how does Freeship apply?",
+      "trial_status": "prepared_for_coordinator_execution",
+      "assisted_trial": {
+        "condition": "assisted",
+        "started_at": null,
+        "completed_at": null,
+        "duration_seconds": null,
+        "agent_decision": null,
+        "edited_response_text": null,
+        "decision_reason": null,
+        "draft_helpful_rating": null
+      },
+      "manual_trial": {
+        "condition": "manual",
+        "started_at": null,
+        "completed_at": null,
+        "duration_seconds": null,
+        "manual_response_text": null,
+        "notes": null
+      }
+    },
+    {
+      "task_id": "paired-task-09",
+      "case_id": "final-case-09",
+      "intent": "delivery_time",
+      "execution_order": "assisted_first",
+      "query": "What is the delivery timeline for TikiNOW 2-hour express delivery in inner Ho Chi Minh City?",
+      "trial_status": "prepared_for_coordinator_execution",
+      "assisted_trial": {
+        "condition": "assisted",
+        "started_at": null,
+        "completed_at": null,
+        "duration_seconds": null,
+        "agent_decision": null,
+        "edited_response_text": null,
+        "decision_reason": null,
+        "draft_helpful_rating": null
+      },
+      "manual_trial": {
+        "condition": "manual",
+        "started_at": null,
+        "completed_at": null,
+        "duration_seconds": null,
+        "manual_response_text": null,
+        "notes": null
+      }
+    },
+    {
+      "task_id": "paired-task-10",
+      "case_id": "final-case-10",
+      "intent": "delivery_issue",
+      "execution_order": "manual_first",
+      "query": "The app shows my order was delivered but I never received the package from the courier.",
+      "trial_status": "prepared_for_coordinator_execution",
+      "assisted_trial": {
+        "condition": "assisted",
+        "started_at": null,
+        "completed_at": null,
+        "duration_seconds": null,
+        "agent_decision": null,
+        "edited_response_text": null,
+        "decision_reason": null,
+        "draft_helpful_rating": null
+      },
+      "manual_trial": {
+        "condition": "manual",
+        "started_at": null,
+        "completed_at": null,
+        "duration_seconds": null,
+        "manual_response_text": null,
+        "notes": null
+      }
+    },
+    {
+      "task_id": "paired-task-11",
+      "case_id": "final-case-11",
+      "intent": "change_shipping_address",
+      "execution_order": "assisted_first",
+      "query": "Can I update my delivery address for an order that is currently in Pending Processing?",
+      "trial_status": "prepared_for_coordinator_execution",
+      "assisted_trial": {
+        "condition": "assisted",
+        "started_at": null,
+        "completed_at": null,
+        "duration_seconds": null,
+        "agent_decision": null,
+        "edited_response_text": null,
+        "decision_reason": null,
+        "draft_helpful_rating": null
+      },
+      "manual_trial": {
+        "condition": "manual",
+        "started_at": null,
+        "completed_at": null,
+        "duration_seconds": null,
+        "manual_response_text": null,
+        "notes": null
+      }
+    },
+    {
+      "task_id": "paired-task-12",
+      "case_id": "final-case-12",
+      "intent": "payment_issue",
+      "execution_order": "manual_first",
+      "query": "My bank account was debited but my order status on Tiki still shows Awaiting Payment.",
+      "trial_status": "prepared_for_coordinator_execution",
+      "assisted_trial": {
+        "condition": "assisted",
+        "started_at": null,
+        "completed_at": null,
+        "duration_seconds": null,
+        "agent_decision": null,
+        "edited_response_text": null,
+        "decision_reason": null,
+        "draft_helpful_rating": null
+      },
+      "manual_trial": {
+        "condition": "manual",
+        "started_at": null,
+        "completed_at": null,
+        "duration_seconds": null,
+        "manual_response_text": null,
+        "notes": null
+      }
+    }
+  ]
+}

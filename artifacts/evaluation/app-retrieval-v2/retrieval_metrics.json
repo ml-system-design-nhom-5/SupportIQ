@@ -1,0 +1,156 @@
+{
+  "benchmark_id": "supportiq-app-retrieval-gold-v2",
+  "evaluated_at": "2026-11-12T10:15:35.065499+00:00",
+  "gold_pre_run_sha256": "64e88513ff6881f45075ba12b4f8107f6eefe59f217834faffeccdec467c42d8",
+  "active_release": "current-policies-v1",
+  "retriever_model": "BAAI/bge-small-en-v1.5",
+  "relevance_threshold": 0.55,
+  "overall_summary": {
+    "total_cases": 46,
+    "answerable_count": 33,
+    "unanswerable_count": 13,
+    "recall_at_3": 0.9848,
+    "hit_at_3": 1.0,
+    "false_answer_rate": 0.3846
+  },
+  "slice_metrics": {
+    "conflict": {
+      "total_cases": 2,
+      "answerable_count": 0,
+      "unanswerable_count": 2,
+      "recall_at_3": "N/A",
+      "hit_at_3": "N/A",
+      "false_answer_rate": 1.0
+    },
+    "expired": {
+      "total_cases": 3,
+      "answerable_count": 0,
+      "unanswerable_count": 3,
+      "recall_at_3": "N/A",
+      "hit_at_3": "N/A",
+      "false_answer_rate": 0.0
+    },
+    "human_agent": {
+      "total_cases": 3,
+      "answerable_count": 0,
+      "unanswerable_count": 3,
+      "recall_at_3": "N/A",
+      "hit_at_3": "N/A",
+      "false_answer_rate": 0.0
+    },
+    "ood": {
+      "total_cases": 5,
+      "answerable_count": 0,
+      "unanswerable_count": 5,
+      "recall_at_3": "N/A",
+      "hit_at_3": "N/A",
+      "false_answer_rate": 0.6
+    },
+    "supported": {
+      "total_cases": 33,
+      "answerable_count": 33,
+      "unanswerable_count": 0,
+      "recall_at_3": 0.9848,
+      "hit_at_3": 1.0,
+      "false_answer_rate": "N/A"
+    }
+  },
+  "per_intent_metrics": {
+    "cancel_order": {
+      "total_cases": 2,
+      "answerable_count": 2,
+      "unanswerable_count": 0,
+      "recall_at_3": 1.0,
+      "hit_at_3": 1.0,
+      "false_answer_rate": "N/A"
+    },
+    "delivery_issue": {
+      "total_cases": 2,
+      "answerable_count": 2,
+      "unanswerable_count": 0,
+      "recall_at_3": 1.0,
+      "hit_at_3": 1.0,
+      "false_answer_rate": "N/A"
+    },
+    "delivery_time": {
+      "total_cases": 2,
+      "answerable_count": 2,
+      "unanswerable_count": 0,
+      "recall_at_3": 1.0,
+      "hit_at_3": 1.0,
+      "false_answer_rate": "N/A"
+    },
+    "edit_order": {
+      "total_cases": 2,
+      "answerable_count": 2,
+      "unanswerable_count": 0,
+      "recall_at_3": 1.0,
+      "hit_at_3": 1.0,
+      "false_answer_rate": "N/A"
+    },
+    "payment_issue": {
+      "total_cases": 4,
+      "answerable_count": 4,
+      "unanswerable_count": 0,
+      "recall_at_3": 1.0,
+      "hit_at_3": 1.0,
+      "false_answer_rate": "N/A"
+    },
+    "refund_policy": {
+      "total_cases": 4,
+      "answerable_count": 4,
+      "unanswerable_count": 0,
+      "recall_at_3": 1.0,
+      "hit_at_3": 1.0,
+      "false_answer_rate": "N/A"
+    },
+    "refund_status": {
+      "total_cases": 2,
+      "answerable_count": 2,
+      "unanswerable_count": 0,
+      "recall_at_3": 1.0,
+      "hit_at_3": 1.0,
+      "false_answer_rate": "N/A"
+    },
+    "request_refund": {
+      "total_cases": 2,
+      "answerable_count": 2,
+      "unanswerable_count": 0,
+      "recall_at_3": 0.75,
+      "hit_at_3": 1.0,
+      "false_answer_rate": "N/A"
+    },
+    "return_policy": {
+      "total_cases": 5,
+      "answerable_count": 5,
+      "unanswerable_count": 0,
+      "recall_at_3": 1.0,
+      "hit_at_3": 1.0,
+      "false_answer_rate": "N/A"
+    },
+    "return_product": {
+      "total_cases": 4,
+      "answerable_count": 4,
+      "unanswerable_count": 0,
+      "recall_at_3": 1.0,
+      "hit_at_3": 1.0,
+      "false_answer_rate": "N/A"
+    },
+    "shipping_costs": {
+      "total_cases": 2,
+      "answerable_count": 2,
+      "unanswerable_count": 0,
+      "recall_at_3": 1.0,
+      "hit_at_3": 1.0,
+      "false_answer_rate": "N/A"
+    },
+    "track_order": {
+      "total_cases": 2,
+      "answerable_count": 2,
+      "unanswerable_count": 0,
+      "recall_at_3": 1.0,
+      "hit_at_3": 1.0,
+      "false_answer_rate": "N/A"
+    }
+  }
+}

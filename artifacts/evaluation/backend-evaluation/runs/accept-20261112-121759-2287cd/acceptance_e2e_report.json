@@ -1,0 +1,253 @@
+{
+  "meta": {
+    "run_id": "accept-20261112-121759-2287cd",
+    "timestamp": "2026-11-12T12:17:59.022797+00:00",
+    "git_commit": "78a72dbe163590fddae76b77ef1b87bcf6f0a763",
+    "mode": "mock",
+    "boundary_kind": "in_process_asgi_testclient",
+    "evidence_kind": "mock_runner_simulation",
+    "scope": "end_to_end_application_acceptance",
+    "boundary": "POST /v1/shop/tickets -> PostgreSQL job -> GET /v1/console/tickets/{id} terminal state",
+    "certification_scope": "mock_simulation_only",
+    "certification_disclaimer": "Local runner checks alone cannot certify overall Topic 1 or production deployment; holistic multi-worker acceptance required.",
+    "environment": {
+      "os": "Windows-11-10.0.26300-SP0",
+      "python_version": "3.12.14",
+      "psycopg_impl": "python"
+    },
+    "runner_config": {
+      "num_warm_requests": 4,
+      "poll_timeout_seconds": 25.0,
+      "analysis_timeout_ms": 3000,
+      "draft_timeout_ms": 11000
+    },
+    "raw_records_sha256": "7DDBBBB5E290884B881D505C79C5FD94B378D5D9EC2AAC176A4904BA2315F695",
+    "provenance_hashes": {
+      "kb_policies_sha256": "70664AAD23F799CEB9282E8CCB4E2661F76778125482995A04DC4775DD544A74",
+      "routing_policy_sha256": "8789EE26ACDAC2E105FEA90942A1129553CA98DB4B182FCC4D74880B1F537BE7",
+      "model_manifest_sha256": "C94C3EE75C674710535587E8174EF98C7D6765A6B8D07461E4D656203A18BF34",
+      "runner_config_sha256": "6DD15B083B09279FDBF40A7BB4CB9662954A14EC97E8C84FEA06780A23D92330"
+    }
+  },
+  "acceptance_summary": {
+    "runner_checks_passed": true,
+    "overall_passed": true,
+    "mock_only_evaluation": true,
+    "global_production_accepted": false,
+    "total_cases": 5,
+    "successful_cases": 5,
+    "technical_errors": 0,
+    "timeouts": 0,
+    "failed_jobs": 0,
+    "auto_send_violations": 0,
+    "human_oversight_enforced": true,
+    "latency_coverage_complete": true
+  },
+  "performance": {
+    "p50_seconds": 0.16038,
+    "p95_seconds": 0.17515,
+    "min_seconds": 0.10640000000000001,
+    "max_seconds": 0.17515,
+    "target_p95_met": true,
+    "target_threshold_seconds": 12.0,
+    "conditions": {
+      "cold": {
+        "count": 1,
+        "latency_seconds": 0.16038,
+        "description": "App connection and DB pool cold start only (NOT model or provider cold start)"
+      },
+      "warm": {
+        "count": 4,
+        "p50_seconds": 0.16691,
+        "p95_seconds": 0.17515,
+        "description": "Subsequent tickets executed on warm connection pool and worker"
+      }
+    }
+  },
+  "tokens_and_cost": {
+    "total_prompt_tokens": 640,
+    "total_candidate_tokens": 210,
+    "total_thinking_tokens": 0,
+    "total_completion_tokens": 210,
+    "thinking_tracked": true,
+    "all_requests_tracked_thinking": true,
+    "total_tokens": 850,
+    "cost_status": "mock_simulation_cost_estimate",
+    "cost_usd": 0.000475,
+    "lower_bound_cost_usd": 0.000475,
+    "cost_note": "MOCK TRANSPORT FIXTURE ONLY: Tokens and cost reflect mock simulated responses, NOT live LLM provider usage or real invoiced charges.",
+    "observed_models": []
+  },
+  "cases": [
+    {
+      "case_index": 0,
+      "condition": "cold",
+      "message": "What is your return policy?",
+      "ticket_id": "TCK-1001",
+      "wall_latency_ms": 160.38,
+      "analysis_status": "ready",
+      "draft_status": "draft_ready",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {
+        "analysis": 52,
+        "draft": 9,
+        "analysis_ms": 42,
+        "draft_ms": 180,
+        "llm_ms": 150
+      },
+      "tokens": {
+        "input_tokens": 128,
+        "output_tokens": 42,
+        "thought_tokens": 0,
+        "total_tokens": 170
+      },
+      "llm_metadata": {},
+      "llm_model": null,
+      "versions": {
+        "release_id": "rel-v2",
+        "model_version": "v1.0.0",
+        "kb_version": "v2.0"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": true
+    },
+    {
+      "case_index": 1,
+      "condition": "warm",
+      "message": "Can I return an item I bought last week?",
+      "ticket_id": "TCK-1002",
+      "wall_latency_ms": 158.01,
+      "analysis_status": "ready",
+      "draft_status": "draft_ready",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {
+        "analysis": 19,
+        "draft": 32,
+        "analysis_ms": 42,
+        "draft_ms": 180,
+        "llm_ms": 150
+      },
+      "tokens": {
+        "input_tokens": 128,
+        "output_tokens": 42,
+        "thought_tokens": 0,
+        "total_tokens": 170
+      },
+      "llm_metadata": {},
+      "llm_model": null,
+      "versions": {
+        "release_id": "rel-v2",
+        "model_version": "v1.0.0",
+        "kb_version": "v2.0"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": true
+    },
+    {
+      "case_index": 2,
+      "condition": "warm",
+      "message": "How long do I have to make a return?",
+      "ticket_id": "TCK-1003",
+      "wall_latency_ms": 166.91,
+      "analysis_status": "ready",
+      "draft_status": "draft_ready",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {
+        "analysis": 19,
+        "draft": 9,
+        "analysis_ms": 42,
+        "draft_ms": 180,
+        "llm_ms": 150
+      },
+      "tokens": {
+        "input_tokens": 128,
+        "output_tokens": 42,
+        "thought_tokens": 0,
+        "total_tokens": 170
+      },
+      "llm_metadata": {},
+      "llm_model": null,
+      "versions": {
+        "release_id": "rel-v2",
+        "model_version": "v1.0.0",
+        "kb_version": "v2.0"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": true
+    },
+    {
+      "case_index": 3,
+      "condition": "warm",
+      "message": "Do you offer refunds for returned items?",
+      "ticket_id": "TCK-1004",
+      "wall_latency_ms": 106.4,
+      "analysis_status": "ready",
+      "draft_status": "draft_ready",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {
+        "analysis": 18,
+        "draft": 9,
+        "analysis_ms": 42,
+        "draft_ms": 180,
+        "llm_ms": 150
+      },
+      "tokens": {
+        "input_tokens": 128,
+        "output_tokens": 42,
+        "thought_tokens": 0,
+        "total_tokens": 170
+      },
+      "llm_metadata": {},
+      "llm_model": null,
+      "versions": {
+        "release_id": "rel-v2",
+        "model_version": "v1.0.0",
+        "kb_version": "v2.0"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": true
+    },
+    {
+      "case_index": 4,
+      "condition": "warm",
+      "message": "What are the return shipping costs?",
+      "ticket_id": "TCK-1005",
+      "wall_latency_ms": 175.15,
+      "analysis_status": "ready",
+      "draft_status": "draft_ready",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {
+        "analysis": 17,
+        "draft": 9,
+        "analysis_ms": 42,
+        "draft_ms": 180,
+        "llm_ms": 150
+      },
+      "tokens": {
+        "input_tokens": 128,
+        "output_tokens": 42,
+        "thought_tokens": 0,
+        "total_tokens": 170
+      },
+      "llm_metadata": {},
+      "llm_model": null,
+      "versions": {
+        "release_id": "rel-v2",
+        "model_version": "v1.0.0",
+        "kb_version": "v2.0"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": true
+    }
+  ]
+}

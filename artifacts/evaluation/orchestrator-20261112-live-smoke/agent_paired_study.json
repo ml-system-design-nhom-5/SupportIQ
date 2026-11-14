@@ -1,0 +1,362 @@
+{
+  "study_type": "agent_simulation",
+  "evaluator_type": "ai",
+  "protocol": "Two paired scenarios; order counterbalanced: tracking manual then assisted; returns assisted then manual. Wall clock includes tool orchestration and agent review/composition, no human cognition/typing. Tiny sample, learned sources and order effects; no productivity claim.",
+  "trials": [
+    {
+      "case_id": "C01",
+      "mode": "manual",
+      "started_at": "2026-11-12T07:12:52.305547+00:00",
+      "start_unix": 1794467572.3055475,
+      "sources": [
+        {
+          "document_id": "POL-ORD-001",
+          "version": "1.0",
+          "title": "Instructions for Tracking Order Journey and Status on Tiki",
+          "body": "Customers can check order status by navigating to 'My Orders' on the Tiki app. Order statuses include: 'Pending Confirmation' (seller preparing), 'Pick Up in Progress' (packed, awaiting courier), 'In Transit' (courier delivering, real-time tracking code provided), 'Delivered' (completed), and 'Canceled'. Customers tap the tracking code to view details of each transit hub the parcel has passed through."
+        }
+      ],
+      "finished_at": "2026-11-12T07:13:04.478259+00:00",
+      "wall_seconds": 12.172712326049805,
+      "decision": "manual_reply_prepared",
+      "reply": "Please open My Orders in the Tiki app to view your order status. For an In Transit order, tap its tracking code to see the transit hubs. I do not have your individual order details in this request."
+    },
+    {
+      "case_id": "C01",
+      "mode": "assisted",
+      "started_at": "2026-11-12T07:13:04.478259+00:00",
+      "start_unix": 1794467584.4782598,
+      "result": {
+        "analysis": {
+          "intent": {
+            "label": "track_order",
+            "probability": 0.9886661767959595,
+            "confidence_band": "high",
+            "source": "model",
+            "score_kind": "uncalibrated_softmax",
+            "model_mode": "trained",
+            "verified": true
+          },
+          "alternatives": [
+            {
+              "label": "track_delivery",
+              "probability": 0.001982015324756503,
+              "confidence_band": "low"
+            },
+            {
+              "label": "order_history",
+              "probability": 0.00146307866089046,
+              "confidence_band": "low"
+            }
+          ],
+          "is_in_scope": true,
+          "documents": [
+            {
+              "document_id": "POL-ORD-001",
+              "version": "1.0",
+              "title": "Instructions for Tracking Order Journey and Status on Tiki",
+              "snippet": "Instructions for Tracking Order Journey and Status on Tiki\nCustomers can check order status by navigating to 'My Orders' on the Tiki app. Order statuses include: 'Pending Confirmation' (seller preparing), 'Pick Up in Progress' (packed, awaiting courier), 'In Transit' (courier delivering, real-time tracking code provided), 'Delivered' (completed), and 'Canceled'. Customers tap the tracking code to view details of each transit hub the parcel has passed through.",
+              "score": 0.7847,
+              "rank": 1,
+              "validity": "valid",
+              "effective_from": "2026-01-01T00:00:00Z",
+              "effective_to": "2026-12-31T23:59:59Z"
+            },
+            {
+              "document_id": "POL-SHIP-004",
+              "version": "1.0",
+              "title": "Handling Delayed, Lost, or Discrepant Delivery Statuses",
+              "snippet": "Handling Delayed, Lost, or Discrepant Delivery Statuses\nIn the event a Tiki order exceeds its estimated delivery date without arrival, or if a courier marks an order as 'Successfully Delivered' when the customer has not received the parcel, the customer must contact Tiki Customer Support within 24-48 hours via hotline 1900 6035. Tiki's dispatch team will verify courier GPS logs, coordinate with the delivery hub, and resolve the complaint. If an order is lost, Tiki will dispatch a replacement or issue a 100% refund.",
+              "score": 0.6212,
+              "rank": 2,
+              "validity": "valid",
+              "effective_from": "2026-01-01T00:00:00Z",
+              "effective_to": "2026-12-31T23:59:59Z"
+            },
+            {
+              "document_id": "POL-ORD-002",
+              "version": "1.0",
+              "title": "Order Cancellation Rules and Conditions on Tiki",
+              "snippet": "Order Cancellation Rules and Conditions on Tiki\nCustomers can click 'Cancel Order' directly on the Tiki app if the order is in 'Processing' or 'Awaiting Packing' status and has not yet been handed over to the shipping carrier. Once the order transitions to 'In Transit', the direct cancellation button is disabled; customers should reject the package upon courier contact. For canceled prepaid orders, refunds will be issued automatically according to Tiki refund policies.",
+              "score": 0.6187,
+              "rank": 3,
+              "validity": "valid",
+              "effective_from": "2026-01-01T00:00:00Z",
+              "effective_to": "2026-12-31T23:59:59Z"
+            }
+          ],
+          "routing": {
+            "recommendation": "draft",
+            "reason_codes": []
+          },
+          "warnings": [],
+          "versions": {
+            "release_id": "local-e3d8cc1c94076875",
+            "model_version": "v1.0.0",
+            "model_mode": "trained",
+            "verified": true,
+            "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+            "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+            "prompt_version": "grounded-v2",
+            "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+            "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+          },
+          "step_latency_ms": {
+            "analysis": 31
+          }
+        },
+        "reason_codes": [],
+        "versions": {
+          "release_id": "local-e3d8cc1c94076875",
+          "model_version": "v1.0.0",
+          "model_mode": "trained",
+          "verified": true,
+          "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+          "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+          "prompt_version": "grounded-v2",
+          "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+          "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+        },
+        "step_latency_ms": {
+          "analysis": 31,
+          "llm": 1225
+        },
+        "mask_count_by_type": {},
+        "llm_usage": {
+          "input_tokens": 1308,
+          "output_tokens": 133
+        },
+        "status": "draft_ready",
+        "draft": {
+          "segments": [
+            {
+              "segment_id": "segment-0",
+              "paragraph_index": 0,
+              "text": "You can check the current status of your order by navigating to 'My Orders' on the Tiki app. The app provides status updates such as 'Pending Confirmation', 'Pick Up in Progress', 'In Transit', 'Delivered', or 'Canceled', and you can tap the tracking code to view specific transit details. If your order has exceeded its estimated delivery date, please contact Tiki Customer Support via the provided hotline so our team can verify the delivery status for you.",
+              "citation_ids": [
+                "S1",
+                "S2"
+              ]
+            }
+          ],
+          "citations": [
+            {
+              "citation_id": "S1",
+              "source_type": "kb_document",
+              "document_id": "POL-ORD-001",
+              "version": "1.0",
+              "snippet": "Instructions for Tracking Order Journey and Status on Tiki\nCustomers can check order status by navigating to 'My Orders' on the Tiki app. Order statuses include: 'Pending Confirmation' (seller preparing), 'Pick Up in Progress' (packed, awaiting courier), 'In Transit' (courier delivering, real-time tracking code provided), 'Delivered' (completed), and 'Canceled'. Customers tap the tracking code to view details of each transit hub the parcel has passed through."
+            },
+            {
+              "citation_id": "S2",
+              "source_type": "kb_document",
+              "document_id": "POL-SHIP-004",
+              "version": "1.0",
+              "snippet": "Handling Delayed, Lost, or Discrepant Delivery Statuses\nIn the event a Tiki order exceeds its estimated delivery date without arrival, or if a courier marks an order as 'Successfully Delivered' when the customer has not received the parcel, the customer must contact Tiki Customer Support within 24-48 hours via hotline [PHONE_OR_NUMBER]. Tiki's dispatch team will verify courier GPS logs, coordinate with the delivery hub, and resolve the complaint. If an order is lost, Tiki will dispatch a replacement or issue a 100% refund."
+            }
+          ]
+        },
+        "staff_note": "Review every claim against its cited source. AI output is supporting information; a person decides what to send."
+      },
+      "finished_at": "2026-11-12T07:13:18.876587+00:00",
+      "wall_seconds": 14.398328065872192,
+      "decision": "edit",
+      "review_note": "Clarify tracking code applies to In Transit; replace provided hotline with available support channel. No customer reply sent.",
+      "reply": "Open My Orders in the Tiki app to check status. For an In Transit order, tap its tracking code for transit details. If delivery is overdue, contact Tiki Customer Support through an available support channel for verification."
+    },
+    {
+      "case_id": "C06",
+      "mode": "assisted",
+      "started_at": "2026-11-12T07:13:18.876587+00:00",
+      "start_unix": 1794467598.8765879,
+      "result": {
+        "analysis": {
+          "intent": {
+            "label": "return_policy",
+            "probability": 0.9962878227233887,
+            "confidence_band": "high",
+            "source": "model",
+            "score_kind": "uncalibrated_softmax",
+            "model_mode": "trained",
+            "verified": true
+          },
+          "alternatives": [
+            {
+              "label": "return_product",
+              "probability": 0.0005137037951499224,
+              "confidence_band": "low"
+            },
+            {
+              "label": "return_product_online",
+              "probability": 0.0002712794521357864,
+              "confidence_band": "low"
+            }
+          ],
+          "is_in_scope": true,
+          "documents": [
+            {
+              "document_id": "POL-RET-001",
+              "version": "2.0",
+              "title": "Tiki Standard Product Return and Exchange Policy and Conditions",
+              "snippet": "Tiki Standard Product Return and Exchange Policy and Conditions\nCustomers may request an exchange or return within 30 days (for products directly distributed by Tiki Trading) or within 7 days (for products from marketplace partner sellers on Tiki) from the date of successful delivery. Returned products must have intact security seals, complete original packaging, accessories, invoices, and included promotional gifts, and show no signs of usage or laundering.",
+              "score": 0.8412,
+              "rank": 1,
+              "validity": "valid",
+              "effective_from": "2026-01-01T00:00:00Z",
+              "effective_to": "2026-12-31T23:59:59Z"
+            },
+            {
+              "document_id": "POL-RET-003",
+              "version": "2.0",
+              "title": "Restricted Return Categories and Non-Returnable Change-of-Mind Items on Tiki",
+              "snippet": "Restricted Return Categories and Non-Returnable Change-of-Mind Items on Tiki\nProduct categories that do not support returns due to change of mind or personal preference include: Underwear, swimwear, cosmetics and chemicals with unsealed protective packaging, Tiki Ngon fresh groceries, dietary supplements, mobile top-up scratch cards, electronic service vouchers, and clearance outlet items marked as non-returnable. These items are only eligible for return or exchange if Tiki delivered an incorrect item or if there is a verified manufacturer defect.",
+              "score": 0.8359,
+              "rank": 2,
+              "validity": "valid",
+              "effective_from": "2026-01-01T00:00:00Z",
+              "effective_to": "2026-12-31T23:59:59Z"
+            },
+            {
+              "document_id": "POL-REFUND-001",
+              "version": "1.0",
+              "title": "Safe Refund Reconciliation Rules and Principles on Tiki",
+              "snippet": "Safe Refund Reconciliation Rules and Principles on Tiki\nRefund requests are only processed once an order has been successfully canceled prior to dispatch, or after the Tiki warehouse receives and inspects the returned product to standard. All refund decisions must undergo reconciliation by authorized customer service personnel; AI is prohibited from autonomously approving monetary transactions. Original shipping fees are non-refundable if the return reason is based on personal preference.",
+              "score": 0.6877,
+              "rank": 3,
+              "validity": "valid",
+              "effective_from": "2026-01-01T00:00:00Z",
+              "effective_to": "2026-12-31T23:59:59Z"
+            }
+          ],
+          "routing": {
+            "recommendation": "draft",
+            "reason_codes": []
+          },
+          "warnings": [],
+          "versions": {
+            "release_id": "local-e3d8cc1c94076875",
+            "model_version": "v1.0.0",
+            "model_mode": "trained",
+            "verified": true,
+            "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+            "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+            "prompt_version": "grounded-v2",
+            "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+            "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+          },
+          "step_latency_ms": {
+            "analysis": 32
+          }
+        },
+        "reason_codes": [],
+        "versions": {
+          "release_id": "local-e3d8cc1c94076875",
+          "model_version": "v1.0.0",
+          "model_mode": "trained",
+          "verified": true,
+          "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+          "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+          "prompt_version": "grounded-v2",
+          "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+          "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+        },
+        "step_latency_ms": {
+          "analysis": 32,
+          "llm": 1329
+        },
+        "mask_count_by_type": {},
+        "llm_usage": {
+          "input_tokens": 1251,
+          "output_tokens": 197
+        },
+        "status": "draft_ready",
+        "draft": {
+          "segments": [
+            {
+              "segment_id": "segment-0",
+              "paragraph_index": 0,
+              "text": "You may request an exchange or return within 30 days for products distributed by Tiki Trading, or within 7 days for products from marketplace partner sellers, counting from the delivery date. Returned items must be unused, unlaundered, and include all original packaging, accessories, invoices, promotional gifts, and intact security seals. Please note that certain categories, such as underwear, swimwear, cosmetics with unsealed packaging, and fresh groceries, do not support returns for change of mind unless there is a manufacturer defect or an incorrect item was delivered. Once a return is received and inspected at our warehouse, any applicable refund request will be reconciled by our team.",
+              "citation_ids": [
+                "S1",
+                "S2",
+                "S3"
+              ]
+            }
+          ],
+          "citations": [
+            {
+              "citation_id": "S1",
+              "source_type": "kb_document",
+              "document_id": "POL-RET-001",
+              "version": "2.0",
+              "snippet": "Tiki Standard Product Return and Exchange Policy and Conditions\nCustomers may request an exchange or return within 30 days (for products directly distributed by Tiki Trading) or within 7 days (for products from marketplace partner sellers on Tiki) from the date of successful delivery. Returned products must have intact security seals, complete original packaging, accessories, invoices, and included promotional gifts, and show no signs of usage or laundering."
+            },
+            {
+              "citation_id": "S2",
+              "source_type": "kb_document",
+              "document_id": "POL-RET-003",
+              "version": "2.0",
+              "snippet": "Restricted Return Categories and Non-Returnable Change-of-Mind Items on Tiki\nProduct categories that do not support returns due to change of mind or personal preference include: Underwear, swimwear, cosmetics and chemicals with unsealed protective packaging, Tiki Ngon fresh groceries, dietary supplements, mobile top-up scratch cards, electronic service vouchers, and clearance outlet items marked as non-returnable. These items are only eligible for return or exchange if Tiki delivered an incorrect item or if there is a verified manufacturer defect."
+            },
+            {
+              "citation_id": "S3",
+              "source_type": "kb_document",
+              "document_id": "POL-REFUND-001",
+              "version": "1.0",
+              "snippet": "Safe Refund Reconciliation Rules and Principles on Tiki\nRefund requests are only processed once an order has been successfully canceled prior to dispatch, or after the Tiki warehouse receives and inspects the returned product to standard. All refund decisions must undergo reconciliation by authorized customer service personnel; AI is prohibited from autonomously approving monetary transactions. Original shipping fees are non-refundable if the return reason is based on personal preference."
+            }
+          ]
+        },
+        "staff_note": "Review every claim against its cited source. AI output is supporting information; a person decides what to send."
+      },
+      "finished_at": "2026-11-12T07:13:32.346315+00:00",
+      "wall_seconds": 13.469727993011475,
+      "decision": "approve",
+      "review_note": "Windows, conditions, restricted categories qualifier and warehouse refund reconciliation supported by cited versions. No reply sent.",
+      "reply": "You may request an exchange or return within 30 days for products distributed by Tiki Trading, or within 7 days for products from marketplace partner sellers, counting from the delivery date. Returned items must be unused, unlaundered, and include all original packaging, accessories, invoices, promotional gifts, and intact security seals. Please note that certain categories, such as underwear, swimwear, cosmetics with unsealed packaging, and fresh groceries, do not support returns for change of mind unless there is a manufacturer defect or an incorrect item was delivered. Once a return is received and inspected at our warehouse, any applicable refund request will be reconciled by our team."
+    },
+    {
+      "case_id": "C06",
+      "mode": "manual",
+      "started_at": "2026-11-12T07:13:32.346315+00:00",
+      "start_unix": 1794467612.3463159,
+      "sources": [
+        {
+          "document_id": "POL-RET-001",
+          "version": "2.0",
+          "title": "Tiki Standard Product Return and Exchange Policy and Conditions",
+          "body": "Customers may request an exchange or return within 30 days (for products directly distributed by Tiki Trading) or within 7 days (for products from marketplace partner sellers on Tiki) from the date of successful delivery. Returned products must have intact security seals, complete original packaging, accessories, invoices, and included promotional gifts, and show no signs of usage or laundering."
+        },
+        {
+          "document_id": "POL-RET-003",
+          "version": "2.0",
+          "title": "Restricted Return Categories and Non-Returnable Change-of-Mind Items on Tiki",
+          "body": "Product categories that do not support returns due to change of mind or personal preference include: Underwear, swimwear, cosmetics and chemicals with unsealed protective packaging, Tiki Ngon fresh groceries, dietary supplements, mobile top-up scratch cards, electronic service vouchers, and clearance outlet items marked as non-returnable. These items are only eligible for return or exchange if Tiki delivered an incorrect item or if there is a verified manufacturer defect."
+        },
+        {
+          "document_id": "POL-REFUND-001",
+          "version": "1.0",
+          "title": "Safe Refund Reconciliation Rules and Principles on Tiki",
+          "body": "Refund requests are only processed once an order has been successfully canceled prior to dispatch, or after the Tiki warehouse receives and inspects the returned product to standard. All refund decisions must undergo reconciliation by authorized customer service personnel; AI is prohibited from autonomously approving monetary transactions. Original shipping fees are non-refundable if the return reason is based on personal preference."
+        }
+      ],
+      "finished_at": "2026-11-12T07:13:49.356516+00:00",
+      "wall_seconds": 17.010200262069702,
+      "decision": "manual_reply_prepared",
+      "reply": "You can request a return or exchange within 30 days of delivery for Tiki Trading items, or 7 days for marketplace-seller items. Keep the product unused and unlaundered, with intact seals, original packaging, accessories, invoices and promotional gifts. Some categories, including underwear, swimwear, opened cosmetics and fresh groceries, exclude change-of-mind returns; incorrect items or verified manufacturer defects are exceptions. After an eligible returned item is received and inspected, authorized staff reconcile any refund. Original shipping is not refunded for personal-preference returns."
+    }
+  ],
+  "timing_summary": {
+    "manual": {
+      "trials": 2,
+      "mean_wall_seconds": 14.591456294059753
+    },
+    "assisted": {
+      "trials": 2,
+      "mean_wall_seconds": 13.934028029441833
+    }
+  },
+  "human_productivity_improvement_claim": null,
+  "human_study_status": "not_evaluated",
+  "no_customer_reply_sent": true
+}

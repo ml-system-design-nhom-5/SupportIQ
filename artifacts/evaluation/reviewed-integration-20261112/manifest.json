@@ -1,0 +1,16 @@
+{
+  "created_at": "2026-11-12T16:42:08.607964+00:00",
+  "product_commit": "75da9382987377b549227de92155c192791c011a",
+  "command": ".venv/Scripts/python.exe -m pytest tests/unit/test_accounting_guardrails_b.py tests/application/test_llm_retry.py tests/unit/test_routing_safety_regressions.py tests/application/test_gateway_version_identity.py tests/application/test_final_acceptance_suite.py tests/application/test_final_acceptance_collector.py tests/application/test_intent_correction_diagnostic.py -q -rs",
+  "passed": 137,
+  "duration_seconds": 57.34,
+  "log_sha256": "300938ec4c5616a3972533e69cda5ab2cf75d98da179996335e2f72811a31bfa",
+  "source_sha256": {
+    "apps/ai_service/drafting.py": "51278857d5207299d9116a92efe80c3a396d50e4a452be41c3079bb5745abd9e",
+    "apps/core_backend/llm/gemini.py": "32835be8232dd2bcd29db043ff40f6a2c6c63edc9f075fb238c89aab2ddc792d",
+    "scripts/run_intent_correction_diagnostic.py": "f156aa3d7703d4bc4e727bf7021146380c1c7a8f405b773f43f5374bfcd238a3",
+    "scripts/collect_final_acceptance_evidence.py": "af8cfaea2e5c40e3ae0395aeb4556f367f414cc1039c196a0b580f85f9c56adc",
+    "scripts/run_offline_robustness.py": "c6fc626b473e261916001524ab5973626a49231ff548532a02c59514e3d23c3e"
+  },
+  "boundary": "Focused integrated tests with isolated PostgreSQL and controlled gateways; no new live provider requests or browser execution. Does not establish whole-system acceptance."
+}

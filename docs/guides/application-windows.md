@@ -1,6 +1,6 @@
 # Run the application on Windows
 
-> **Status:** Active · **Owner:** application · **Last reviewed:** 2026-11-05
+> **Status:** Active · **Owner:** application · **Last reviewed:** 2026-11-12
 
 For developers running the rebuilt application directly on Windows. The implementation follows the approved [shop](../design/shop-ui.md), [console](../design/console-ui.md), [admin](../design/admin-ui.md), and [backend foundation](../design/backend-foundation.md) designs, with the native runtime requested by the user.
 
@@ -19,6 +19,26 @@ flowchart LR
     AI -->|explicit EnableLLM only, HTTPS allow-list| Provider[Gemini]
     AI -->|unavailable outcome| Manual[Manual support remains available]
 ```
+
+## Runtime Preflight and Windows Application Control
+
+On Windows machines where Windows Application Control (WDAC, AppLocker, or Software Restriction Policies) blocks binary Python C extensions (such as `psycopg_binary` `.pyd`), the application uses the pure-Python ctypes driver (`PSYCOPG_IMPL=python`) together with the allowed native PostgreSQL client library (`libpq.dll`).
+
+1. **Discovery:**
+   The startup script and `scripts/native_runtime.py` dynamically discover PostgreSQL binaries:
+   - User override via `SUPPORTIQ_PG_BIN` (points to the PostgreSQL `bin/` directory).
+   - System `PATH` for `initdb.exe` or `pg_ctl.exe`.
+   - Windows Registry (`HKLM\SOFTWARE\PostgreSQL\Installations`).
+   - Standard drive installation prefixes (`Program Files/PostgreSQL`, `PostgreSQL`) across available drives.
+2. **Environment Configuration:**
+   - Preflight sets `PSYCOPG_IMPL=python` if not already specified.
+   - Discovered PostgreSQL bin directory is prepended to `PATH` and added to Python's DLL directory list (`os.add_dll_directory`).
+3. **Preflight Diagnostics:**
+   Run preflight standalone without starting services:
+   ```powershell
+   python scripts/native_runtime.py preflight
+   ```
+   If libpq or PostgreSQL is missing, preflight outputs clean diagnostic guidance without printing database credentials or connection strings.
 
 ## Source data
 
@@ -43,6 +63,13 @@ For other statuses, see `apps/backend/seed.py`. Normalized enums support the v1 
 ## Verification and limits
 
 Run Python tests from the repository root and frontend checks from `apps/frontend`, as listed in the component READMEs. End-to-end checks exercise customer-to-staff-to-customer replies at desktop, tablet, 390px and 360px, with axe accessibility checks.
+
+Frontend unit and component tests run via Vitest:
+```powershell
+cd apps/frontend
+pnpm test
+```
+The test configuration in `vite.config.ts` specifies `pool: 'threads'` to prevent Windows child-process fork timeouts while executing tests accurately.
 
 The current application adds the essential interactive screens and guardrails. Storybook coverage, a full telemetry deployment, import-linter enforcement, CI contract-generation pipelines, production TLS and independent security/load evaluations remain release work; this native setup is a local demonstration, not a deployment of the proposed multi-replica topology. The AI service uses the existing retrieval behavior and model artifacts; it does not claim to implement a newly evaluated retrieval algorithm or calibrator. Unknown-name/address PII recall and semantic grounding must be measured separately. No paid external generation was used in verification.
 

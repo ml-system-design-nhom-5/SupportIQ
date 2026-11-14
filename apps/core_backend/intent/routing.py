@@ -1,7 +1,7 @@
 import json
 import math
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 from apps.core_backend.intent.schemas import (
     IntentPrediction,
     RoutingContext,
@@ -104,6 +104,39 @@ def load_policy_v2(path: Optional[str] = None) -> IntentPolicy:
         data = json.load(f)
     return IntentPolicy(**data)
 
+def _is_invalid_finite_range(
+    value: Any,
+    min_value: Optional[float] = None,
+    max_value: Optional[float] = None,
+    *,
+    strictly_positive: bool = False,
+) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return True
+    num = float(value)
+    if not math.isfinite(num):
+        return True
+    if strictly_positive and num <= 0.0:
+        return True
+    if min_value is not None and num < min_value:
+        return True
+    if max_value is not None and num > max_value:
+        return True
+    return False
+
+
+def _is_invalid_optional_bool(value: Any) -> bool:
+    return value is not None and type(value) is not bool
+
+
+def _is_invalid_rejector_decision(value: Any) -> bool:
+    if value is None:
+        return False
+    return not isinstance(value, str) or value.lower() not in {"accept", "reject"}
+
+
 def decide_route(
     prediction: IntentPrediction,
     context: RoutingContext,
@@ -116,6 +149,7 @@ def decide_route(
 
     # Gate 0: Validate override provenance and actor scope
     final_intent = predicted
+    has_valid_override = False
     if context.intent_override:
         can_override = "intent:override" in context.verified_scope
         has_provenance = (
@@ -125,25 +159,25 @@ def decide_route(
         )
         if can_override and has_provenance:
             final_intent = context.intent_override
+            has_valid_override = True
         else:
             # Unauthorized or unprovenanced override is rejected; keep predicted intent
             final_intent = predicted
 
-    # Gate 1: Check ML failure or invalid score / unmapped label / invalid margin
-    is_invalid_confidence = (
-        math.isnan(prediction.confidence)
-        or math.isinf(prediction.confidence)
-        or prediction.confidence < 0.0
-        or prediction.confidence > 1.0
-    )
-    is_invalid_margin = (
-        prediction.margin is not None
-        and (
-            math.isnan(prediction.margin)
-            or math.isinf(prediction.margin)
-            or prediction.margin < -1.0
-            or prediction.margin > 1.0
-        )
+    # Gate 1: Check ML failure or invalid score / unmapped label / invalid margin / malformed control fields
+    is_invalid_confidence = _is_invalid_finite_range(prediction.confidence, 0.0, 1.0)
+    is_invalid_margin = _is_invalid_finite_range(prediction.margin, -1.0, 1.0)
+    is_invalid_controls = (
+        _is_invalid_optional_bool(getattr(prediction, "selective_accepted", None))
+        or _is_invalid_optional_bool(getattr(prediction, "rejected_by_experimental_adapter", None))
+        or _is_invalid_optional_bool(getattr(prediction, "verified", None))
+        or _is_invalid_rejector_decision(getattr(prediction, "rejector_decision", None))
+        or _is_invalid_finite_range(getattr(prediction, "selective_score", None), 0.0, 1.0)
+        or _is_invalid_finite_range(getattr(prediction, "selective_threshold", None), 0.0, 1.0)
+        or _is_invalid_finite_range(getattr(prediction, "raw_confidence", None), 0.0, 1.0)
+        or _is_invalid_finite_range(getattr(prediction, "raw_margin", None), -1.0, 1.0)
+        or _is_invalid_finite_range(getattr(prediction, "calibration_temperature", None), strictly_positive=True)
+        or _is_invalid_finite_range(getattr(prediction, "scope_probability", None), 0.0, 1.0)
     )
 
     # Gate 1: Explicit human request rule (Verified human request overrides ML errors or classification)
@@ -172,6 +206,7 @@ def decide_route(
         prediction.error
         or is_invalid_confidence
         or is_invalid_margin
+        or is_invalid_controls
         or is_invalid_clause
         or final_intent not in STANDARD_INTENTS_46
     ):
@@ -291,14 +326,46 @@ def decide_route(
             policy_version=pol_ver,
         )
 
-    # Gate 3: Confidence and margin check for the 11 supported product intents
     conf_thresh = policy.confidence_thresholds.get(final_intent, policy.default_confidence_threshold)
     margin_thresh = policy.margin_thresholds.get(final_intent, policy.default_margin_threshold)
 
     is_low_conf = prediction.confidence < conf_thresh
     is_low_margin = prediction.margin is not None and prediction.margin < margin_thresh
+    is_sensitive = (
+        final_intent in policy.sensitive_action_intents
+        or predicted in policy.sensitive_action_intents
+    )
 
-    if is_low_conf or is_low_margin:
+    # Gate 2g: Explicit selective rejector veto blocks automatic retrieve_draft
+    selective_accepted = getattr(prediction, "selective_accepted", None)
+    rejected_flag = getattr(prediction, "rejected_by_experimental_adapter", None)
+    rejector_decision = getattr(prediction, "rejector_decision", None)
+    is_selective_rejected = (
+        (selective_accepted is False)
+        or (rejected_flag is True)
+        or (isinstance(rejector_decision, str) and rejector_decision.lower() == "reject")
+    )
+    if not has_valid_override and is_selective_rejected:
+        reasons = ["selective_rejected"]
+        if is_low_conf:
+            reasons.append("low_confidence")
+        if is_low_margin:
+            reasons.append("low_margin")
+        if is_sensitive:
+            reasons.append("requires_authority")
+        return RouteDecision(
+            action="manual_fallback",
+            predicted_intent=predicted,
+            final_intent=final_intent,
+            requested_team=team,
+            target_queue="manager" if is_sensitive else "standard",
+            reason_codes=reasons,
+            model_version=model_ver,
+            policy_version=pol_ver,
+        )
+
+    # Gate 3: Confidence and margin check for the 11 supported product intents
+    if not has_valid_override and (is_low_conf or is_low_margin):
         reasons = []
         if is_low_conf:
             reasons.append("low_confidence")
@@ -375,8 +442,8 @@ def decide_route(
         predicted_intent=predicted,
         final_intent=final_intent,
         requested_team=team,
-        target_queue="manager" if final_intent in policy.sensitive_action_intents else "standard",
-        reason_codes=[],
+        target_queue="manager" if is_sensitive else "standard",
+        reason_codes=["requires_authority"] if is_sensitive else [],
         required_slots=required_slots,
         missing_slots=[],
         must_human_approve=True,

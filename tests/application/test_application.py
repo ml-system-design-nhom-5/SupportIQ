@@ -1,6 +1,7 @@
 """Application guardrails exercised against a real, isolated PostgreSQL database."""
 
 import json
+import os
 import uuid
 from pathlib import Path
 
@@ -17,7 +18,7 @@ def application():
 
     from sqlalchemy import create_engine, text
 
-    secrets_path = Path(".local/application.json")
+    secrets_path = Path(os.environ.get("SUPPORTIQ_APPLICATION_SECRETS", ".local/application.json"))
     if not secrets_path.exists():
         pytest.skip("Run scripts/start-app.ps1 -SetupOnly to prepare native PostgreSQL")
     local = json.loads(secrets_path.read_text())
@@ -26,19 +27,23 @@ def application():
     root = create_engine(owner_url)
     with root.begin() as connection:
         connection.execute(text(f'CREATE SCHEMA "{schema}"'))
-    engine = create_engine(owner_url, connect_args={"options": f"-csearch_path={schema}"})
-    database = Database(engine)
-    database.create_schema()
-    passwords = {role: uuid.uuid4().hex for role in ("customer", "staff", "manager", "admin")}
-    seed(database, passwords)
-    settings = Settings(database_url_app=owner_url, database_url_owner=owner_url,
-                        allowed_origins=["http://testserver"], session_cookie_secure=False)
-    app = create_app(settings=settings, database=database, start_worker=False)
-    yield app, passwords, database
-    engine.dispose()
-    with root.begin() as connection:
-        connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
-    root.dispose()
+    engine = None
+    try:
+        engine = create_engine(owner_url, connect_args={"options": f"-csearch_path={schema}"})
+        database = Database(engine)
+        database.create_schema()
+        passwords = {role: uuid.uuid4().hex for role in ("customer", "staff", "manager", "admin")}
+        seed(database, passwords)
+        settings = Settings(database_url_app=owner_url, database_url_owner=owner_url,
+                            allowed_origins=["http://testserver"], session_cookie_secure=False)
+        app = create_app(settings=settings, database=database, start_worker=False)
+        yield app, passwords, database
+    finally:
+        if engine is not None:
+            engine.dispose()
+        with root.begin() as connection:
+            connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
+        root.dispose()
 
 
 def login(application, role="customer", name=None):

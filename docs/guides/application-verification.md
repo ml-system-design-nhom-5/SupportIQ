@@ -1,6 +1,6 @@
 # Application verification
 
-> **Status:** Active · **Owner:** application · **Last reviewed:** 2026-11-05
+> **Status:** Active · **Owner:** application · **Last reviewed:** 2026-11-12
 
 Evidence and review scope for the native Windows application. Commands are in the component READMEs. The default test suite excludes external LLM calls. The explicit live integration check below uses the configured Gemini LLM.
 
@@ -8,11 +8,31 @@ Evidence and review scope for the native Windows application. Commands are in th
 
 Backend tests exercise authentication, Origin enforcement, role isolation, source-order ownership, idempotency including concurrent requests, concurrent sends, proposal approval, escalations, warning acknowledgement, stale suggestions, sticky authority, immutable audit/messages, session revocation, manager-only reports, pseudonymization, uncalibrated-model abstention and citation/placeholder provenance.
 
+Preflight and driver tests (`tests/unit/test_runtime_preflight.py`) verify that:
+1. PostgreSQL installation directories are discovered portably across environment variables, registry keys, PATH, and disk drives without hardcoded paths.
+2. Windows Application Control policy blocks on binary extensions are mitigated via `PSYCOPG_IMPL=python` and native `libpq.dll`.
+3. Preflight errors report clean diagnostics and never expose database connection strings or passwords.
+
+Workflow and privacy tests (`tests/application/test_workflow_privacy.py`) verify:
+1. Pseudonymization helper masks the tested cards, phones, emails, addresses and known names; this helper test does not capture actual HTTP egress.
+2. Customer-authored placeholders (`[NAME_1]`) are preserved as literal text.
+3. Order context sent to AI is strictly allowlisted, omitting forbidden identifying fields.
+4. Retry actions are strictly limited to transient errors (`unavailable`, `llm_unavailable`); ready drafts do not offer regenerate actions.
+5. Action selection denies staff sending an authority-required ticket and permits managers; persisted sticky-authority coverage belongs to the application integration suite.
+
+Test Fixture Scope Note:
+The integration harness in `tests/application/test_application.py` connects with owner privileges to provision and tear down ephemeral schemas (`test_<uuid>`). This isolates integration state, but does not substitute for dedicated testing of runtime-role (`supportiq_app`) permissions or database-level trigger installation.
+
+Evaluation and Grading Scope:
+Automated AI grading or agent-driven timing simulations are distinct from human evaluations; they do not represent real human graders or live CS staff trials, and no claim of measured human productivity improvement is made.
+
+Frontend checks run via Vitest with `pool: 'threads'` configured in `vite.config.ts`, passing all 11 component and reply-rule unit tests without timing out on Windows child processes.
+
 Playwright drives the production build on Microsoft Edge at 1440, 768, 390 and 360px. The flows cover sign-in, catalog, orders, sending a support request, staff reply confirmation, customer receipt, admin confirmation dialogs, versions and manager reports. Every captured state also runs axe WCAG checks and an overflow assertion. Screenshots are local under `.impeccable/review/`.
 
 The native startup command was exercised with the existing environment and production build: `scripts/start-app.ps1 -SkipInstall -SkipBuild`. PostgreSQL and the actual local AI gateway report ready. A real local inference request predicted `track_order` and retrieved one approved source; external drafting remained disabled.
 
-Final recorded checks: Python `419 passed, 1 skipped, 1 deselected`; frontend `3 passed`; production build and TypeScript passed; Playwright `8 passed` across four viewport projects, including axe assertions.
+Historical recorded checks (from 2026-11-05): Python `419 passed, 1 skipped, 1 deselected`; frontend `3 passed`; production build and TypeScript passed; Playwright `8 passed` across four viewport projects, including axe assertions.
 
 ## Visual critique
 
@@ -27,7 +47,6 @@ The browser inspector recorded zero failures for sign-in, order detail, accounts
 ## Release limits
 
 The source model exposes raw scores. The application applies the existing per-intent score and margin thresholds, retaining explicit low-confidence abstention. Semantic claim entailment, unknown-name/address PII recall, load targets and production security require their separate evaluation. Storybook, CI automation, telemetry deployment and production TLS are not claimed by these checks. See [the Windows guide](application-windows.md#verification-and-limits).
-
 
 ## Live application integration, 2026-11-05
 
