@@ -86,6 +86,8 @@ def _make_sqlite_db_and_tickets(tmp_path: Path, count: int, **setting_overrides)
         "allowed_origins": ["http://testserver"],
         "session_cookie_secure": False,
         "ai_service_base_url": "http://mock-ai-service:8002",
+        # Explicit offline opt-out for concurrency tests running without spaCy en_core_web_sm
+        "require_privacy_ner": False,
         "job_poll_interval_ms": 20,
         "job_lease_ms": 10_000,
     }
@@ -400,6 +402,8 @@ def test_pg_skip_locked_concurrent_workers_no_duplicate_claims_or_suggestions():
             allowed_origins=["http://testserver"],
             session_cookie_secure=False,
             ai_service_base_url="http://mock-ai-service:8002",
+            # Explicit offline opt-out for PG worker concurrency test without spaCy en_core_web_sm
+            require_privacy_ner=False,
             job_concurrency=2,
             job_poll_interval_ms=20,
             job_lease_ms=10_000,

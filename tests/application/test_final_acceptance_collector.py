@@ -38,8 +38,10 @@ def sample_cases():
     return [json.loads(line) for line in lines[:4]]
 
 
-def test_collector_mock_bounded_execution(tmp_path):
+def test_collector_mock_bounded_execution(tmp_path, monkeypatch):
     """Collector executes in isolated disposable schema and captures full evidence."""
+    # Offline mock gateway test explicitly opts out of spaCy NER when en_core_web_sm is absent.
+    monkeypatch.setenv("SUPPORTIQ_REQUIRE_PRIVACY_NER", "false")
     collector = AcceptanceEvidenceCollector(
         mode="mock",
         max_cases=4,

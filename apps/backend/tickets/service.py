@@ -102,7 +102,11 @@ def create_suggestion(session, ticket, settings, trace_id, intent_override=None,
         known.setdefault('PHONE',[]).append(customer_account.phone)
         known.setdefault('ADDRESS',[]).append(customer_account.address)
     try:
-        message, mapping = pseudonymize(session.get(CustomerMessage, ticket.ticket_id).body, known)
+        message, mapping = pseudonymize(
+            session.get(CustomerMessage, ticket.ticket_id).body,
+            known,
+            require_ner=bool(getattr(settings, "require_privacy_ner", True)),
+        )
         privacy_failed = False
     except ValueError:
         message, mapping, privacy_failed = "", {}, True

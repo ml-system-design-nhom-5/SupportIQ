@@ -375,6 +375,8 @@ def test_jobs_hydrates_multi_field_order_citation_values_and_collector_verifies(
     stored = []
     worker = SuggestionWorker(database=SimpleNamespace(), settings=SimpleNamespace(
         ai_service_base_url="http://ai.local",
+        # Explicit offline opt-out for unit grounding test with mocked HTTP client
+        require_privacy_ner=False,
         ai_service_analysis_timeout_ms=3000,
         ai_service_draft_timeout_ms=11000,
     ))

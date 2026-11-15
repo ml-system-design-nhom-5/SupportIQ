@@ -250,7 +250,8 @@ def test_pseudonymization_preserves_literals_and_masks_source_ids():
     from apps.backend.tickets.privacy import pseudonymize, restore
 
     original = "Bui Thi An, ORD-1001, GIAO89254563, x@example.com and [NAME_1]"
-    result, mapping = pseudonymize(original, {"NAME": ["Bui Thi An"], "ORDER_ID": ["ORD-1001"], "TRACKING_ID": ["GIAO89254563"]})
+    # Explicit offline opt-out (require_ner=False) for unit verification without spaCy en_core_web_sm
+    result, mapping = pseudonymize(original, {"NAME": ["Bui Thi An"], "ORDER_ID": ["ORD-1001"], "TRACKING_ID": ["GIAO89254563"]}, require_ner=False)
     assert "ORD-1001" not in result and "Bui Thi An" not in result
     assert "GIAO89254563" not in result and "x@example.com" not in result
     assert restore(result, mapping) == original

@@ -17,7 +17,8 @@ def test_luhn_algorithm_validation():
 def test_credit_card_masking_and_restoration():
     known = {"NAME": ["Jane Doe"]}
     msg = "My name is Jane Doe and I paid with card 4532-0151-1283-0366 for order ORD-9999."
-    pseudonymized, mapping = pseudonymize(msg, known)
+    # Explicit offline opt-out (require_ner=False) for regex/Luhn/known unit tests without spaCy
+    pseudonymized, mapping = pseudonymize(msg, known, require_ner=False)
     
     assert "[CARD_1]" in pseudonymized
     assert "4532-0151-1283-0366" not in pseudonymized
@@ -32,14 +33,14 @@ def test_invalid_card_not_masked_as_card():
     known = {}
     # Random 16-digit number that fails Luhn
     msg = "Tracking reference 1234567890123453 is in transit."
-    pseudonymized, mapping = pseudonymize(msg, known)
+    pseudonymized, mapping = pseudonymize(msg, known, require_ner=False)
     assert "[CARD_1]" not in pseudonymized
 
 
 def test_address_and_contacts_masking():
     known = {}
     msg = "Please ship to 123 Nguyen Hue Boulevard, email test@example.com or call +84901234567."
-    pseudonymized, mapping = pseudonymize(msg, known)
+    pseudonymized, mapping = pseudonymize(msg, known, require_ner=False)
     
     assert "[ADDRESS_1]" in pseudonymized
     assert "[EMAIL_1]" in pseudonymized
@@ -52,7 +53,7 @@ def test_address_and_contacts_masking():
 def test_literal_placeholders_preserved():
     known = {}
     msg = "Customer wrote literal [NAME_1] inside the message."
-    pseudonymized, mapping = pseudonymize(msg, known)
+    pseudonymized, mapping = pseudonymize(msg, known, require_ner=False)
     assert "[LITERAL_1]" in pseudonymized
     
     restored = restore(pseudonymized, mapping)
@@ -95,7 +96,8 @@ def test_unavailable_ner_adapter_preserves_known_and_pattern_pii_masks(monkeypat
 
     known = {"NAME": ["Jane Doe"]}
     msg = "Customer Jane Doe (email jane@example.com, phone +84901234567, order ORD-1234) spoke with agent Bob."
-    pseudonymized, mapping = pseudonymize(msg, known)
+    # Explicit offline opt-out (require_ner=False) verifies known/regex masking when NER is intentionally off
+    pseudonymized, mapping = pseudonymize(msg, known, require_ner=False)
 
     assert "[NAME_1]" in pseudonymized
     assert "Jane Doe" not in pseudonymized

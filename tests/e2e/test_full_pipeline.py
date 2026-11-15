@@ -74,6 +74,8 @@ def e2e_env():
         allowed_origins=["http://testserver", "http://127.0.0.1:18080"],
         session_cookie_secure=False,
         ai_service_base_url="http://ai-service.local",
+        # Explicit offline opt-out for E2E unit suite without spaCy en_core_web_sm
+        require_privacy_ner=False,
     )
 
     app = create_app(settings=settings, database=db, start_worker=False)
@@ -646,7 +648,8 @@ def test_pii_masking_invariants():
     # Real Luhn valid Visa test card
     raw = "My name is John Doe, email john@example.com, phone 0901234567, card 4532015112830366."
     known = {"NAME": ["John Doe"], "EMAIL": ["john@example.com"], "PHONE": ["0901234567"]}
-    masked, mapping = pseudonymize(raw, known)
+    # Explicit offline opt-out (require_ner=False) for regex/Luhn/known unit assertion without spaCy
+    masked, mapping = pseudonymize(raw, known, require_ner=False)
 
     assert "4532015112830366" not in masked
     assert "john@example.com" not in masked

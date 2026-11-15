@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     sign_in_failure_window_ms: int = 900_000
     sign_in_failure_delay_ms: int = 2_000
     ai_service_base_url: str | None = None
+    require_privacy_ner: bool = True
     ai_service_analysis_timeout_ms: int = 3_000
     ai_service_draft_timeout_ms: int = 11_000
     job_lease_ms: int = 20_000

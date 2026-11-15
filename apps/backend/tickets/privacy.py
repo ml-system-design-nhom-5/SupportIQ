@@ -3,7 +3,7 @@
 import re
 from collections import defaultdict
 
-PLACEHOLDER = re.compile(r"\[(NAME|EMAIL|PHONE|CARD|ADDRESS|ORDER_ID|TRACKING_ID|TRANSACTION_ID|LITERAL)(_[1-9][0-9]{0,2})?\]")
+PLACEHOLDER = re.compile(r"\[(NAME|EMAIL|PHONE|CARD|ADDRESS|ORDER_ID|TRACKING_ID|TRANSACTION_ID|LITERAL)(?:_[1-9][0-9]*)?\]")
 
 CARD_PATTERN = re.compile(r"\b(?:\d[ -]*?){13,19}\b")
 IDENTIFIER_PATTERNS = [
@@ -14,6 +14,7 @@ IDENTIFIER_PATTERNS = [
     ("PHONE", re.compile(r"(?<!\w)(?:\+?\d[ .()-]?){9,15}(?!\w)")),
     ("ADDRESS", re.compile(r"\b\d+\s+[A-Za-z0-9\s,.-]+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|Ward|District|City|Province)\b", re.IGNORECASE)),
 ]
+_HIGH_SPECIFICITY_KINDS = {"EMAIL", "ORDER_ID", "TRACKING_ID", "TRANSACTION_ID"}
 
 _SPACY_NLP = None
 
@@ -31,6 +32,14 @@ def _get_spacy_nlp():
     return _SPACY_NLP if _SPACY_NLP is not False else None
 
 
+def is_privacy_ner_available() -> bool:
+    """Return True when the local spaCy NER pipeline loads cleanly."""
+    try:
+        return _get_spacy_nlp() is not None
+    except Exception:
+        return False
+
+
 def luhn_checksum_valid(number: str) -> bool:
     digits = [int(c) for c in number if c.isdigit()]
     if not (13 <= len(digits) <= 19):
@@ -46,8 +55,23 @@ def luhn_checksum_valid(number: str) -> bool:
     return checksum % 10 == 0
 
 
-def pseudonymize(message, known):
+def _collision_free_sentinel(message: str, known: dict) -> str:
+    known_values = [str(v) for vs in (known or {}).values() for v in vs if v]
+    sentinel = "\x00"
+    while sentinel in message or any(sentinel in val for val in known_values):
+        sentinel += "\x00"
+    return sentinel
+
+
+def pseudonymize(message, known, *, require_ner: bool = True):
+    if not isinstance(message, str) or not message:
+        raise ValueError("Pseudonymized message exceeds the supported length")
+
+    known = known or {}
+    sentinel = _collision_free_sentinel(message, known)
     mapping, counters = {}, defaultdict(int)
+    final_tokens = {}
+    token_counter = 0
 
     def replace(kind, value):
         for placeholder, original in mapping.items():
@@ -58,55 +82,105 @@ def pseudonymize(message, known):
         mapping[placeholder] = value
         return placeholder
 
-    # Customer-authored reserved strings are kept distinct from generated placeholders.
-    literals = {}
-    def literal(match):
-        marker = f"\x00{len(literals)}\x00"
-        literals[marker] = replace("LITERAL", match.group())
-        return marker
-    result = PLACEHOLDER.sub(literal, message)
+    def wrap(placeholder):
+        nonlocal token_counter
+        tok = f"{sentinel}P{token_counter}{sentinel}"
+        token_counter += 1
+        final_tokens[tok] = placeholder
+        return tok
 
-    # 1. Replace known customer database fields (names, emails, phones, addresses)
-    for kind, values in known.items():
-        for value in sorted(set(filter(None, values)), key=len, reverse=True):
-            result = re.sub(re.escape(value), lambda match: replace(kind, match.group()), result, flags=re.IGNORECASE)
+    # 0. Protect customer-authored placeholders first using collision-free sentinels.
+    result = PLACEHOLDER.sub(lambda match: wrap(replace("LITERAL", match.group())), message)
 
-    # 2. Free-form NER detection using spaCy if available
-    nlp = _get_spacy_nlp()
-    if nlp is not None:
+    # 1. Credit card detection with Luhn checksum validation (before shorter identifiers / phone)
+    def mask_card(match):
+        raw = match.group()
+        if luhn_checksum_valid(raw):
+            return wrap(replace("CARD", raw))
+        return raw
+
+    result = CARD_PATTERN.sub(mask_card, result)
+
+    # 2. High-specificity structured identifiers (prevents short known DB names fragmenting emails/IDs)
+    for kind, pattern in IDENTIFIER_PATTERNS:
+        if kind in _HIGH_SPECIFICITY_KINDS:
+            result = pattern.sub(lambda match, k=kind: wrap(replace(k, match.group())), result)
+
+    # 3. Known customer database fields sorted globally longest-first across all kinds
+    known_entries = sorted(
+        {(kind, str(val)) for kind, values in known.items() for val in values if val},
+        key=lambda item: (-len(item[1]), item[0], item[1]),
+    )
+    for kind, value in known_entries:
+        result = re.sub(
+            re.escape(value),
+            lambda match, k=kind: wrap(replace(k, match.group())),
+            result,
+            flags=re.IGNORECASE,
+        )
+
+    # 4. Free-form NER detection using spaCy; fail closed when strict NER is required or NER throws
+    try:
+        nlp = _get_spacy_nlp()
+    except Exception as exc:
+        raise ValueError("Privacy NER model load failed") from exc
+    if nlp is None:
+        if require_ner:
+            raise ValueError("Strict privacy NER model is unavailable")
+    else:
         try:
             doc = nlp(result)
             spacy_replacements = []
             for ent in doc.ents:
-                if ent.label_ == "PERSON" and len(ent.text.strip()) > 2 and "\x00" not in ent.text:
-                    if not ent.text.startswith("[") and not ent.text.endswith("]"):
-                        spacy_replacements.append(("NAME", ent.text))
-                elif ent.label_ in ("GPE", "LOC", "FAC") and len(ent.text.strip()) > 2 and "\x00" not in ent.text:
-                    if not ent.text.startswith("[") and not ent.text.endswith("]"):
-                        spacy_replacements.append(("ADDRESS", ent.text))
+                ent_text = ent.text
+                if sentinel in ent_text or "[" in ent_text or "]" in ent_text:
+                    continue
+                if ent.label_ == "PERSON" and len(ent_text.strip()) > 2:
+                    spacy_replacements.append(("NAME", ent_text))
+                elif ent.label_ in ("GPE", "LOC", "FAC") and len(ent_text.strip()) > 2:
+                    spacy_replacements.append(("ADDRESS", ent_text))
             for kind, val in sorted(spacy_replacements, key=lambda x: len(x[1]), reverse=True):
-                result = re.sub(r"\b" + re.escape(val) + r"\b", lambda match: replace(kind, match.group()), result)
-        except Exception:
-            pass
+                result = re.sub(
+                    r"(?<!\w)" + re.escape(val) + r"(?!\w)",
+                    lambda match, k=kind: wrap(replace(k, match.group())),
+                    result,
+                )
+        except Exception as exc:
+            raise ValueError("Privacy NER inference failed") from exc
 
-    # 3. Credit card detection with Luhn checksum validation (must run before PHONE)
-    def mask_card(match):
-        raw = match.group()
-        if luhn_checksum_valid(raw):
-            return replace("CARD", raw)
-        return raw
-    result = CARD_PATTERN.sub(mask_card, result)
-
-    # 4. Regex patterns for identifiers and sensitive contact data
+    # 5. Remaining contact/address regex patterns
     for kind, pattern in IDENTIFIER_PATTERNS:
-        result = pattern.sub(lambda match, k=kind: replace(k, match.group()), result)
+        if kind not in _HIGH_SPECIFICITY_KINDS:
+            result = pattern.sub(lambda match, k=kind: wrap(replace(k, match.group())), result)
 
-    for marker, value in literals.items():
-        result = result.replace(marker, value)
+    # 6. Single-pass materialization from sentinels to final placeholders
+    if final_tokens:
+        sentinel_pattern = re.compile(re.escape(sentinel) + r"P\d+" + re.escape(sentinel))
+        result = sentinel_pattern.sub(lambda match: final_tokens[match.group()], result)
+
     if not 1 <= len(result) <= 4000:
         raise ValueError("Pseudonymized message exceeds the supported length")
     return result, mapping
 
 
+def validate_egress_payload(payload, *, require_ner: bool = True) -> None:
+    """Ensure AI worker egress payload satisfies NER strictness and has no raw structured PII."""
+    if require_ner and not is_privacy_ner_available():
+        raise ValueError("Strict privacy NER model is unavailable")
+    if not isinstance(payload, dict):
+        raise ValueError("Invalid AI egress payload")
+    msg = payload.get("message")
+    if not isinstance(msg, str) or not (1 <= len(msg) <= 4000) or not msg.strip():
+        raise ValueError("Invalid pseudonymized egress message")
+    for match in CARD_PATTERN.finditer(msg):
+        if luhn_checksum_valid(match.group()):
+            raise ValueError("Unmasked payment card detected before egress")
+    for kind, pattern in IDENTIFIER_PATTERNS:
+        if kind in _HIGH_SPECIFICITY_KINDS and pattern.search(msg):
+            raise ValueError("Unmasked identifier detected before egress")
+
+
 def restore(message, mapping):
+    if not message or not mapping:
+        return message
     return PLACEHOLDER.sub(lambda match: mapping.get(match.group(), match.group()), message)

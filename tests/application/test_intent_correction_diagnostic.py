@@ -43,8 +43,10 @@ def mock_gateway():
     gateway.stop()
 
 
-def test_intent_correction_diagnostic_controlled_flow(tmp_path, mock_gateway):
+def test_intent_correction_diagnostic_controlled_flow(tmp_path, mock_gateway, monkeypatch):
     """Proves: initial low-confidence abstention -> real staff override -> terminal draft_ready and persisted audit."""
+    # Offline loopback mock gateway test explicitly opts out of spaCy NER when en_core_web_sm is absent.
+    monkeypatch.setenv("SUPPORTIQ_REQUIRE_PRIVACY_NER", "false")
     # Configure mock gateway to simulate initial abstention for final-case-03
     mock_gateway.set_initial_abstain_cases({"final-case-03"})
 
@@ -296,8 +298,10 @@ def test_intent_correction_diagnostic_teardown_error_recording(monkeypatch, tmp_
                 pass
 
 
-def test_intent_correction_diagnostic_no_correction_when_initial_draft_ready(tmp_path, mock_gateway):
+def test_intent_correction_diagnostic_no_correction_when_initial_draft_ready(tmp_path, mock_gateway, monkeypatch):
     """When initial suggestion is already draft_ready, no staff correction is executed."""
+    # Offline loopback mock gateway test explicitly opts out of spaCy NER when en_core_web_sm is absent.
+    monkeypatch.setenv("SUPPORTIQ_REQUIRE_PRIVACY_NER", "false")
     mock_gateway.set_initial_abstain_cases(set())
 
     out_dir = tmp_path / "diag_ready_run"

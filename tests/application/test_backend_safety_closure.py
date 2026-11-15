@@ -66,6 +66,8 @@ def pg_application():
             allowed_origins=["http://testserver"],
             session_cookie_secure=False,
             ai_service_base_url="http://mock-ai-service:8002",
+            # Explicit offline unit opt-out: mocked AI service runs without installed spaCy model
+            require_privacy_ner=False,
         )
         app = create_app(settings=settings, database=database, start_worker=False)
         yield app, passwords, database, settings, schema, local
@@ -738,6 +740,7 @@ def test_actual_outbound_gateway_transport_synthetic_pii_and_log_capture(pg_appl
 def test_documented_recall_boundary_on_informal_slang():
     """Verify documented recall boundary: informal Vietnamese vernacular without standard keywords is not masked without NER."""
     colloquial_input = "Giao cho tui o sau nha ba bay cho cau sat cu"
-    pseudonymized, mapping = pseudonymize(colloquial_input, {})
+    # Explicit offline opt-out (require_ner=False) verifying regex recall boundary without NER
+    pseudonymized, mapping = pseudonymize(colloquial_input, {}, require_ner=False)
     # Accurately asserts the documented limitation (never claim unverified free-form PII protection)
     assert "[ADDRESS_1]" not in pseudonymized

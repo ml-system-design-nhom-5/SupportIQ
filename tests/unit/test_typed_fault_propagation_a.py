@@ -40,6 +40,8 @@ def _make_isolated_backend_app(tmp_path):
         allowed_origins=["http://testserver"],
         session_cookie_secure=False,
         ai_service_base_url="http://mock-ai-service:8002",
+        # Explicit offline opt-out for unit transport-fault tests without spaCy en_core_web_sm
+        require_privacy_ner=False,
     )
     app = create_app(settings=settings, database=database, start_worker=False)
     return app, passwords, database, settings, engine

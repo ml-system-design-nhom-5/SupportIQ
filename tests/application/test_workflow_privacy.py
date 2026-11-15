@@ -76,7 +76,8 @@ def test_pseudonymization_payload_helper():
         "I also typed literal text [NAME_1] in my message."
     )
 
-    pseudonymized, mapping = pseudonymize(raw_message, known_customer_data)
+    # Explicit offline unit opt-out (no external transport; validates known/regex masking without spaCy)
+    pseudonymized, mapping = pseudonymize(raw_message, known_customer_data, require_ner=False)
 
     # Transport egress payload simulation
     egress_payload = {
@@ -112,7 +113,8 @@ def test_pseudonymization_recall_limitations_on_unstructured_slang():
     """
     known = {}
     colloquial_input = "Giao cho tui o sau nha ba bay cho cau sat cu"
-    pseudonymized, mapping = pseudonymize(colloquial_input, known)
+    # Explicit offline opt-out (require_ner=False) for regex recall-limit check
+    pseudonymized, mapping = pseudonymize(colloquial_input, known, require_ner=False)
     # Because there are no street keywords or standard NER entities, it passes as regular text.
     # We assert this behavior to explicitly record the documented recall boundary.
     assert "[ADDRESS_1]" not in pseudonymized

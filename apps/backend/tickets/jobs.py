@@ -20,6 +20,7 @@ def _positive_int(value, default: int) -> int:
 from apps.backend.platform.database import audit, utcnow, ensure_utc
 from apps.backend.platform.models import Suggestion, SuggestionJob, Ticket
 from apps.backend.platform.observability import metrics
+from .privacy import validate_egress_payload
 
 _BOUNDED_REMOTE_FAULT_CODES = frozenset({
     "ai_service_unavailable",
@@ -258,6 +259,30 @@ class SuggestionWorker:
                 return suggestion.suggestion_id, job.lease_token, suggestion.request_payload
 
     def process(self, identifier, token, payload):
+        strict_ner = bool(getattr(self.settings, "require_privacy_ner", True))
+        try:
+            validate_egress_payload(payload, require_ner=strict_ner)
+        except ValueError:
+            self.store(
+                identifier,
+                token,
+                "analysis",
+                None,
+                0,
+                failure_info={"failure_code": "pseudonymization_failed", "reason_codes": ["pseudonymization_failed"]},
+            )
+            synthesized_draft = {
+                "status": "unavailable",
+                "failure_code": "pseudonymization_failed",
+                "reason_codes": ["pseudonymization_failed"],
+                "staff_note": "Customer data could not be safely pseudonymized for AI processing. Review the ticket and respond manually.",
+                "versions": {},
+                "step_latency_ms": {},
+                "mask_count_by_type": {},
+            }
+            self.store(identifier, token, "draft", synthesized_draft, 0)
+            return
+
         def fetch(part):
             budget = self.settings.ai_service_analysis_timeout_ms if part == "analysis" else self.settings.ai_service_draft_timeout_ms
             started = time.perf_counter()

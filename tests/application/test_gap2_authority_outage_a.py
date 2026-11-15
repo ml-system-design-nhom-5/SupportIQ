@@ -35,7 +35,7 @@ def _pg_secrets() -> dict:
     return json.loads(secrets_path.read_text(encoding="utf-8"))
 
 
-def _make_pg_app(ai_service_base_url: str | None = None):
+def _make_pg_app(ai_service_base_url: str | None = None, require_privacy_ner: bool = True):
     local = _pg_secrets()
     owner_url = local["database_url_owner"]
     schema = "test_gap2_" + uuid.uuid4().hex
@@ -53,6 +53,7 @@ def _make_pg_app(ai_service_base_url: str | None = None):
         allowed_origins=["http://testserver"],
         session_cookie_secure=False,
         ai_service_base_url=ai_service_base_url,
+        require_privacy_ner=require_privacy_ner,
     )
     app = create_app(settings=settings, database=database, start_worker=False)
     return root, schema, engine, database, settings, passwords, app
@@ -73,9 +74,10 @@ def pg_app_ai_down():
 
 @pytest.fixture(scope="module")
 def pg_app_ai_enabled():
-    """Disposable PG app with AI URL configured (worker invoked explicitly with mock HTTP)."""
+    """Disposable PG app with AI URL configured (worker invoked explicitly with mock HTTP; offline NER opt-out)."""
     root, schema, engine, database, settings, passwords, app = _make_pg_app(
-        ai_service_base_url="http://mock-ai-service:8002"
+        ai_service_base_url="http://mock-ai-service:8002",
+        require_privacy_ner=False,
     )
     try:
         yield app, passwords, database, settings
