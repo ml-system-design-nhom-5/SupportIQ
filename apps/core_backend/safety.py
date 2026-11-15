@@ -245,6 +245,7 @@ def _extract_policy_query_years(text: str) -> list[int]:
 _ADJ_TRANSPOSITION_TARGETS = (
     "store",
     "stores",
+    "shops",
     "retail",
     "branch",
     "branches",
@@ -276,15 +277,19 @@ _QUOTE_TRANSLATION = str.maketrans({
     "\u00a0": " ",
 })
 _QUOTE_ATTRIBUTION_PREFIX = re.compile(
-    r"(?:\b(?:said|says|told\s+(?:me|us)|wrote|writes|states?|mentions?|reads?|"
+    r"(?:\b(?:said|says|ask(?:s|ed)?|told\s+(?:me|us)|wrote|writes|states?|mentions?|reads?|"
     r"called|labeled|titled|button|tab|section|page|menu|option|"
     r"instead\s+of|rather\s+than)\s*[:\-]?\s*)$",
     re.I,
 )
 _CHANNEL_RETURN_VERB = re.compile(
-    r"\b(?:return(?:ing|ed)?|exchange|exchanging|drop(?:ping)?(?:\s+\w+){0,2}\s+off|"
-    r"bring(?:ing)?(?:\s+\w+){0,2}\s+(?:back|in)|hand(?:ing)?(?:\s+\w+){0,2}\s+in|"
-    r"send(?:ing)?(?:\s+\w+){0,2}\s+back|ship(?:ping)?(?:\s+\w+){0,2}\s+back|take\s+back)\b",
+    r"\b(?:return(?:ing|ed)?|exchange|exchanging|swap(?:ping)?|"
+    r"drop(?:ping)?(?:\s+\w+){0,4}\s+off|"
+    r"bring(?:ing)?(?:\s+\w+){0,4}\s+(?:back|in)|"
+    r"hand(?:ing)?(?:\s+\w+){0,4}\s+in|"
+    r"send(?:ing)?(?:\s+\w+){0,4}\s+back|"
+    r"ship(?:ping)?(?:\s+\w+){0,4}\s+back|"
+    r"take(?:\s+\w+){0,4}\s+back)\b",
     re.I,
 )
 _STORE_PURCHASE_CONTEXT = re.compile(
@@ -292,7 +297,7 @@ _STORE_PURCHASE_CONTEXT = re.compile(
     re.I,
 )
 _ONLINE_OR_DIGITAL_STORE_MODIFIER = re.compile(
-    r"\b(?:online|web|app|google\s+play|play|apple|digital|official|brand|flagship|seller|merchant|mall)\s+$",
+    r"\b(?:online|web|app|google\s+play|play|apple|digital|virtual|e[-\s]?commerce)\s+$",
     re.I,
 )
 _STORE_NON_CHANNEL_SUFFIX = re.compile(
@@ -307,40 +312,57 @@ _DECLARATIVE_CHANNEL_NEG_PREFIX = re.compile(
 )
 _INSTEAD_OF_PREFIX = re.compile(r"\b(?:instead\s+of|rather\s+than)\b([^.,;?!\n]*)$", re.I)
 _REQUEST_MODAL_VERB = re.compile(r"\b(?:want|need|would|can|could|will|prefer|ask|please)\b", re.I)
+_COURIER_PICKUP_CONTEXT = re.compile(
+    r"\b(?:courier|driver|rider|delivery)\b[^.,;?!\n]{0,45}\b(?:pick(?:ing)?\s+up|pickup|collect(?:ing)?)\b",
+    re.I,
+)
 
+_PHYSICAL_VENUE_NOUN = r"(?:stores?|shops?|storefronts?|shopfronts?|branch(?:es)?|showrooms?|outlets?|kiosks?)"
+_PHYSICAL_VENUE_STRICT_MOD = r"(?:physical|retail|brick[-\s]+and[-\s]+mortar)"
+_PHYSICAL_VENUE_ANY_MOD = (
+    r"(?:physical|retail|local|brick[-\s]+and[-\s]+mortar|walk[-\s]+in|"
+    r"mall(?:\s+pop[-\s]+up)?|pop[-\s]+up|tiki(?:\s+retail)?|brand|flagship)"
+)
 _PHYSICAL_STORE_CHANNEL_PATTERN = re.compile(
     r"\b(?:"
-    r"in[-\s]+stores?"
-    r"|(?:at|to|into)\s+(?:a|any|your|the|one\s+of\s+your|nearest|closest|local)?\s*"
-    r"(?:physical\s+)?(?:retail\s+)?(?:stores?|storefronts?|branch(?:es)?|shopfronts?|showrooms?|outlets?|kiosks?)"
-    r"|(?:retail|physical|brick[-\s]+and[-\s]+mortar)\s+(?:stores?|storefronts?|branch(?:es)?|shopfronts?|showrooms?|locations?|outlets?|counters?)"
-    r"|(?:stores?|storefronts?|branch(?:es)?|shopfronts?|showrooms?|outlets?|kiosks?)\s+(?:counter|drop[-\s]?off|return|exchange)s?"
-    r"|(?:return(?:ing)?|exchange|exchanging|drop(?:ping)?(?:\s+\w+){0,2}\s+off|bring(?:ing)?(?:\s+\w+){0,2}\s+(?:back|in)|hand(?:ing)?(?:\s+\w+){0,2}\s+in)\s+"
-    r"(?:at|to|in|into)\s+(?:a|any|your|the|local|nearest)?\s*(?:stores?|storefronts?|branch(?:es)?|shopfronts?|showrooms?|outlets?|kiosks?)"
+    r"in[-\s]+(?:stores?|shops?)"
+    rf"|(?:at|to|into|walk\s+in(?:to)?|visit(?:ing)?)\s+(?:a|an|any|your|the|one\s+of\s+(?:your|the)|nearest|closest|local)?\s*"
+    rf"(?:{_PHYSICAL_VENUE_ANY_MOD}\s+)*{_PHYSICAL_VENUE_NOUN}(?:\s+(?:branch|counter|location|desk)s?)?"
+    rf"|{_PHYSICAL_VENUE_STRICT_MOD}\s+(?:{_PHYSICAL_VENUE_ANY_MOD}\s+)*(?:{_PHYSICAL_VENUE_NOUN}|locations?|counters?)"
+    rf"|(?:{_PHYSICAL_VENUE_ANY_MOD}\s+)?{_PHYSICAL_VENUE_NOUN}\s+(?:branch|counter|drop[-\s]?off|return|exchange)s?"
+    rf"|(?:(?:a|an|any|your|the|local|nearest)\s+)?(?:{_PHYSICAL_VENUE_ANY_MOD}\s+)*{_PHYSICAL_VENUE_NOUN}(?:\s+counters?)?\s+"
+    rf"(?:accept|take|handle|process)(?:s|ing)?\s+(?:[\w-]+\s+){{0,4}}(?:returns?|exchanges?|drop[-\s]?offs?)"
+    rf"|(?:accept|take|handle|process)(?:s|ing)?\s+(?:[\w-]+\s+){{0,3}}in[-\s]+person\s+(?:[\w-]+\s+){{0,2}}(?:returns?|exchanges?|drop[-\s]?offs?)"
+    rf"|(?:return(?:ing)?|exchange|exchanging|swap(?:ping)?|drop(?:ping)?(?:\s+\w+){{0,4}}\s+off|"
+    rf"bring(?:ing)?(?:\s+\w+){{0,4}}\s+(?:back|in)|take(?:\s+\w+){{0,4}}\s+back|hand(?:ing)?(?:\s+\w+){{0,4}}\s+in)\s+"
+    rf"(?:[\w-]+\s+){{0,3}}(?:(?:at|to|in|into)\s+(?:a|an|any|your|the|one\s+of\s+(?:your|the)|local|nearest|closest)?\s*(?:{_PHYSICAL_VENUE_ANY_MOD}\s+)*{_PHYSICAL_VENUE_NOUN}|in[-\s]+person)"
     r")\b",
     re.I,
 )
 _PREPAID_RETURN_LABEL_PATTERN = re.compile(
     r"\b(?:"
-    r"(?:pre[-\s]?paid|printable|downloadable)\s+(?:return(?:\s+shipping)?|shipping)\s+labels?"
-    r"|(?:return(?:\s+shipping)?|shipping)\s+label\s+(?:portal|download|pdf|link|page|button|option)"
-    r"|(?:print(?:ing)?|download(?:ing)?|generat(?:e|ing)|email(?:ing)?|create|creating|issue|issuing|send(?:ing)?(?:\s+me)?)\s+"
-    r"(?:a|an|my|the|your|our)?\s*(?:(?:own|pre[-\s]?paid|free)\s+)*(?:return(?:\s+shipping)?|shipping)\s+labels?"
-    r"|return(?:\s+shipping)?\s+labels?"
+    r"(?:pre[-\s]?paid|printable|downloadable|self[-\s]?print(?:ed)?)\s+(?:[\w-]+\s+){0,2}(?:return(?:\s+shipping)?|shipping)\s+labels?"
+    r"|(?:return(?:\s+shipping)?|shipping)\s+label\s+(?:portals?|downloads?|pdfs?|links?|pages?|buttons?|tools?|generators?)"
+    r"|(?:print(?:ing)?|download(?:ing)?|generat(?:e|ing)|reprint(?:ing)?)\s+"
+    r"(?:[\w-]+\s+){0,3}(?:(?:return(?:\s+shipping)?|shipping)\s+labels?)"
+    r"|(?:email|send)\s+(?:me\s+)?(?:a|the)?\s*(?:pre[-\s]?paid|printable|downloadable|self[-\s]?print(?:ed)?)\s+(?:[\w-]+\s+){0,2}(?:return(?:\s+shipping)?|shipping)\s+labels?"
     r")\b",
     re.I,
 )
 _FULL_ORDER_HISTORY_PATTERN = re.compile(
     r"\b(?:"
-    r"(?:full|entire|complete|whole|all(?:\s+of\s+(?:my|the))?|past|previous|historical|account|lifetime)\s+"
-    r"(?:(?:account|personal|customer)\s+)?(?:order|purchase)s?\s+(?:history|logs?|lists?|records?|summary)"
-    r"|(?:order|purchase)\s+history"
-    r"|(?:list|log|history|records?|summary)\s+of\s+(?:all(?:\s+of)?\s+)?(?:my\s+)?(?:past\s+|previous\s+)?(?:orders?|purchases?)"
-    r"|(?:list|show|view|see|get|export|download|pull(?:\s+up)?|send(?:\s+me)?|retrieve|access)\s+"
-    r"(?:all\s+(?:of\s+)?my\s+(?:past\s+|previous\s+)?(?:orders?|purchases?)"
-    r"|my\s+(?:full|entire|complete|whole|past|previous)\s+(?:orders?|purchases?)"
-    r"|every\s+(?:order|purchase)\s+(?:i(?:'ve|\s+have)?\s+(?:ever\s+)?(?:placed|made)))"
-    r"|(?:see|view|check|export|download)\s+every\s+order\s+(?:i(?:'ve|\s+have)?\s+(?:ever\s+)?(?:placed|made)|in\s+my\s+account)"
+    r"(?:full|entire|complete|whole|lifetime|total|account)\s+"
+    r"(?:(?:account|personal|customer|online)\s+)?(?:orders?|purchases?)\s+(?:history|logs?|lists?|records?|summary)"
+    r"|(?:list|log|history|records?|summary)\s+of\s+(?:all(?:\s+of)?\s+)?(?:(?:my|the)\s+)?(?:past\s+|previous\s+|historical\s+|older\s+)?(?:orders?|purchases?)"
+    r"|(?:show(?:ing)?|list(?:ing)?|view(?:ing)?|see(?:ing)?|get(?:ting)?|export(?:ing)?|download(?:ing)?|pull(?:ing)?(?:\s+up)?|send(?:ing)?(?:\s+me)?|retriev(?:e|ing)|access(?:ing)?|display(?:ing)?)\s+"
+    r"(?:[\w-]+\s+){0,2}(?:"
+    r"(?:all(?:\s+of)?(?:\s+my)?|every)\s+(?:(?:past|previous|historical|older|prior)\s+)*(?:orders|purchases|past\s+purchase|historical\s+order|previous\s+purchase)"
+    r"|(?:my|the)\s+(?:full|entire|complete|whole)\s+(?:[\w-]+\s+){0,1}(?:orders?|purchases?)(?:\s+(?:history|logs?|lists?|records?|summary))?"
+    r"|(?:my|the)\s+(?:past|previous|historical)\s+(?:(?:orders|purchases)|(?:order|purchase)s?\s+(?:history|logs?|lists?|records?|summary))"
+    r"|(?:(?:my|the)\s+)?(?:order|purchase)\s+history(?!\s+(?:for|of)\s+(?:order\s+)?(?:#?\d+|ORD-\w+|this\s+order))"
+    r")"
+    r"|(?:all(?:\s+of)?(?:\s+my)?|every)\s+(?:(?:past|previous|historical|older|prior)\s+)+(?:orders|purchases)(?:\s+i(?:'ve|\s+have)?\s+(?:ever\s+)?(?:placed|made))?"
+    r"|every\s+(?:past\s+|previous\s+|historical\s+)?(?:order|purchase)(?:\s+i(?:'ve|\s+have)?\s+(?:ever\s+)?(?:placed|made)|(?:\s+in|\s+under)\s+(?:my|the)\s+(?:account|login))"
     r")\b",
     re.I,
 )
@@ -399,11 +421,17 @@ def _is_negated_channel_alternative(text: str, start: int) -> bool:
     return False
 
 
-def _is_non_return_store_context(text: str, start: int, end: int) -> bool:
-    """Return True for purchase-in-store facts, digital/online stores, or store-credit mentions."""
+def _is_non_return_store_context(text: str, start: int, end: int, matched_text: str = "") -> bool:
+    """Return True for purchase-in-store facts, digital/online stores, courier in-person pickup, or store-credit mentions."""
     if _STORE_NON_CHANNEL_SUFFIX.match(text[end : end + 24]):
         return True
     prefix = _local_clause_prefix(text, start)
+    if re.search(r"\bin[-\s]+person\b", matched_text, re.I) and _COURIER_PICKUP_CONTEXT.search(prefix + text[start:end]):
+        return True
+    if _CHANNEL_RETURN_VERB.search(matched_text) or re.search(
+        r"\b(?:accept|take|handle|process)(?:s|ing)?\b", matched_text, re.I
+    ):
+        return False
     if _ONLINE_OR_DIGITAL_STORE_MODIFIER.search(prefix) and not _CHANNEL_RETURN_VERB.search(prefix):
         return True
     purchase_matches = list(_STORE_PURCHASE_CONTEXT.finditer(prefix))
@@ -453,7 +481,7 @@ def _trusted_docs_cover_capability(trusted_docs: Sequence[Any], capability: str)
     }
     text_evidence_patterns = {
         "physical_store_return": re.compile(
-            r"\b(?:return|drop\s+off|exchange)\b[^.\n]{0,40}\b(?:in[-\s]+store|retail\s+store|physical\s+store|storefront|branch)\b",
+            r"\b(?:return|drop\s+off|exchange)\b[^.\n]{0,40}\b(?:in[-\s]+(?:stores?|shops?)|retail\s+(?:stores?|shops?)|physical\s+(?:stores?|shops?)|storefronts?|shopfronts?|branch(?:es)?)\b",
             re.I,
         ),
         "prepaid_return_label": re.compile(
@@ -489,7 +517,7 @@ def _has_uncovered_channel_or_capability(
     for m in _PHYSICAL_STORE_CHANNEL_PATTERN.finditer(normalized):
         if _is_negated_channel_alternative(normalized, m.start()):
             continue
-        if _is_non_return_store_context(normalized, m.start(), m.end()):
+        if _is_non_return_store_context(normalized, m.start(), m.end(), m.group(0)):
             continue
         requested.append("physical_store_return")
         break

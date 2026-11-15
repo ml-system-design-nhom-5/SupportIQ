@@ -641,3 +641,108 @@ def test_gap1b_non_transposition_typo_residual_documented_behavior():
     retriever = StaticScopeRetriever({"return_product": ["POL-RET-002"]})
     ev = retriever.retrieve("return", "return_product")["evidence"]
     assert policy_scope_requires_review("Can I return this in storr?", ev, retriever.eligible_versions) is False
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "Can I drop off my online return at a local physical shop branch?",
+        "Does your physical shop counter accept returns from web orders?",
+        "Do your local storefronts accept in-person product returns?",
+        "Can I bring my online order back to one of your shops?",
+        "Do mall storefronts accept returns?",
+        "Are retail shops open for walk-in exchanges?",
+        "Can I return this at a Tiki shop?",
+        "Could a brick-and-mortar Tiki shop take this return in person?",
+        "I bought this shirt in store and want to take it back in store.",
+    ],
+)
+def test_gap1b_review_blockers_physical_shop_and_take_back_escalate(tmp_path: Path, query: str):
+    _assert_both_escalate(tmp_path, query, "return_product", ["POL-RET-002", "POL-RET-001"])
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "Show all historical orders I have ever placed with my login.",
+        "Can I track ORD-1001 and also see every historical order from my account?",
+        "Export every past purchase under my login.",
+    ],
+)
+def test_gap1b_review_blockers_historical_orders_escalate(tmp_path: Path, query: str):
+    ctx = RoutingContext(
+        ticket_customer_id="demo-customer",
+        verified_scope="ticket:read order:read",
+        is_personal_lookup=True,
+        extracted_slots={"order_id": "ORD-1001"},
+    )
+    _assert_both_escalate(tmp_path, query, "track_order", ["POL-ORD-001"], ctx=ctx)
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "Where can I print my own return label at home?",
+        "Where is the portal to download a printable shipping label?",
+    ],
+)
+def test_gap1b_review_blockers_self_print_label_escalates(tmp_path: Path, query: str):
+    _assert_both_escalate(tmp_path, query, "return_product", ["POL-RET-002"])
+
+
+@pytest.mark.parametrize(
+    "text,intent,doc_ids,ctx",
+    [
+        (
+            "Please send me a return shipping label for my item.",
+            "return_product",
+            ["POL-RET-002"],
+            None,
+        ),
+        (
+            "Does the courier bring a return label when picking up my return?",
+            "return_product",
+            ["POL-RET-002"],
+            None,
+        ),
+        (
+            "I checked my order history for ORD-1001 and it shows In Transit — when does ORD-1001 arrive?",
+            "track_order",
+            ["POL-ORD-001"],
+            RoutingContext(
+                ticket_customer_id="demo-customer",
+                verified_scope="ticket:read order:read",
+                is_personal_lookup=True,
+                extracted_slots={"order_id": "ORD-1001"},
+            ),
+        ),
+        (
+            "I bought this shirt in store and want to take it back via courier pickup.",
+            "return_product",
+            ["POL-RET-002"],
+            None,
+        ),
+        (
+            "The local shop sent me a defective kettle — how do I initiate a courier return?",
+            "return_product",
+            ["POL-RET-002"],
+            None,
+        ),
+        (
+            "Will the driver pick up my return in person from my address?",
+            "return_product",
+            ["POL-RET-002"],
+            None,
+        ),
+        (
+            "My friend asked 'do your shops take returns', instead I just want a courier pickup at my home.",
+            "return_product",
+            ["POL-RET-002"],
+            None,
+        ),
+    ],
+)
+def test_gap1b_review_counterexamples_and_ordinary_labels_remain_allowed(
+    tmp_path: Path, text: str, intent: str, doc_ids: list[str], ctx: RoutingContext | None, fake_llm
+):
+    _assert_both_allow(tmp_path, text, intent, doc_ids, ctx, fake_llm=fake_llm)
