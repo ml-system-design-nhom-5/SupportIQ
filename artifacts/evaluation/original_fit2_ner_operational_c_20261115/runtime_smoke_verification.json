@@ -1,0 +1,107 @@
+{
+  "backend_ready": {
+    "status": "ready",
+    "backend_build": "application-v1",
+    "privacy_ner_available": true
+  },
+  "ai_ready_before": {
+    "status": "ready",
+    "llm_enabled": false,
+    "llm_configured": true,
+    "retrieval_ready": true,
+    "model_version": "fit2-supcon-energy-boundary-v1",
+    "model_checksum": "f695b1fe514aba81aafc968823047d496b03474a0b47199c65eaac6bd93c6dfa",
+    "calibration_checksum": "782c88db3fcd80615c3dceabbdb96ea2be7aa769119201f94229535becc7ae39",
+    "model_mode": "trained",
+    "model_verified": true,
+    "live_llm_requests_made": 0,
+    "max_live_llm_requests": 2
+  },
+  "ai_asset_versions": {
+    "release_id": "local-b1c61e8977e69230",
+    "versions": {
+      "release_id": "local-b1c61e8977e69230",
+      "model_version": "fit2-supcon-energy-boundary-v1",
+      "model_checksum": "f695b1fe514aba81aafc968823047d496b03474a0b47199c65eaac6bd93c6dfa",
+      "calibration_checksum": "782c88db3fcd80615c3dceabbdb96ea2be7aa769119201f94229535becc7ae39",
+      "model_mode": "trained",
+      "verified": true,
+      "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+      "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+      "prompt_version": "grounded-v3",
+      "engine_version": "sha256:481bc7ab7fa2a7ad42ca00add79925339b138116aa2b57e233300ba3f7bc88ff",
+      "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+      "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+    }
+  },
+  "backend_admin_versions": {
+    "backend_build": "application-v1",
+    "ai_service_status": "available",
+    "release_id": "local-b1c61e8977e69230",
+    "versions": {
+      "release_id": "local-b1c61e8977e69230",
+      "model_version": "fit2-supcon-energy-boundary-v1",
+      "model_checksum": "f695b1fe514aba81aafc968823047d496b03474a0b47199c65eaac6bd93c6dfa",
+      "calibration_checksum": "782c88db3fcd80615c3dceabbdb96ea2be7aa769119201f94229535becc7ae39",
+      "model_mode": "trained",
+      "verified": true,
+      "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+      "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+      "prompt_version": "grounded-v3",
+      "engine_version": "sha256:481bc7ab7fa2a7ad42ca00add79925339b138116aa2b57e233300ba3f7bc88ff",
+      "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+      "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+    }
+  },
+  "ui_root_status": 200,
+  "ai_analyse_local": {
+    "label": "return_policy",
+    "probability": 0.9657712578773499,
+    "confidence_band": "high",
+    "source": "model",
+    "score_kind": "calibrated_probability",
+    "model_mode": "trained",
+    "verified": true
+  },
+  "ai_draft_disabled": {
+    "status": "llm_unavailable",
+    "failure_code": "llm_not_configured",
+    "reason_codes": [
+      "llm_unavailable"
+    ]
+  },
+  "ai_ready_after": {
+    "status": "ready",
+    "llm_enabled": false,
+    "llm_configured": true,
+    "retrieval_ready": true,
+    "model_version": "fit2-supcon-energy-boundary-v1",
+    "model_checksum": "f695b1fe514aba81aafc968823047d496b03474a0b47199c65eaac6bd93c6dfa",
+    "calibration_checksum": "782c88db3fcd80615c3dceabbdb96ea2be7aa769119201f94229535becc7ae39",
+    "model_mode": "trained",
+    "model_verified": true,
+    "live_llm_requests_made": 0,
+    "max_live_llm_requests": 2
+  },
+  "processes_json": [
+    {
+      "StartedAt": "2026-11-15T08:01:33.7456332Z",
+      "Id": 29708,
+      "Kind": "ai-service"
+    },
+    {
+      "StartedAt": "2026-11-15T08:01:33.7827520Z",
+      "Id": 32820,
+      "Kind": "backend"
+    }
+  ],
+  "ai_env_sha256": "26d083c75acd962010f2fbd0185af3e72e315d2bafc8d753046e51df6e8fce87",
+  "training_cap_sha256": "bc0445e07cca46e7285539a921691050378cdf9ceb3fdfe2cfe911b90bfde922",
+  "pg_counts": {
+    "accounts": 89,
+    "orders": 3,
+    "tickets": 68,
+    "suggestions": 78,
+    "audit_log_entries": 342
+  }
+}

@@ -1,0 +1,107 @@
+{
+  "verdict": "PASS",
+  "duration_seconds": 15.78,
+  "wheel_provenance": {
+    "spacy_version": "3.8.18",
+    "en_core_web_sm_version": "3.8.0",
+    "direct_url": "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
+    "direct_url_sha256": "1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85",
+    "matches_official_expectation": true
+  },
+  "fresh_process_real_ner": {
+    "samples": {
+      "en_free_form": {
+        "input": "Hi, I am Michael Johnson living in Seattle asking about order ORD-1001.",
+        "masked": "Hi, I am [NAME_1] living in [ADDRESS_1] asking about order [ORDER_ID_1].",
+        "pmap": {
+          "[NAME_1]": "Michael Johnson",
+          "[ADDRESS_1]": "Seattle",
+          "[ORDER_ID_1]": "ORD-1001"
+        },
+        "roundtrip_ok": true
+      },
+      "en_multi": {
+        "input": "Please tell Robert Chen at Central Park in New York that bob@example.com called.",
+        "masked": "Please tell [NAME_1] at [ADDRESS_1] in [ADDRESS_2] that [EMAIL_1] called.",
+        "pmap": {
+          "[NAME_1]": "Robert Chen",
+          "[ADDRESS_1]": "Central Park",
+          "[ADDRESS_2]": "New York",
+          "[EMAIL_1]": "bob@example.com"
+        },
+        "roundtrip_ok": true
+      },
+      "neg_order_facts": {
+        "input": "Order placed on 2026-11-10 for 1402000 VND with 30000 VND shipping is in transit.",
+        "masked": "Order placed on 2026-11-10 for 1402000 VND with 30000 VND shipping is in transit.",
+        "pmap": {},
+        "roundtrip_ok": true
+      },
+      "limit_len2_state": {
+        "input": "Ship my package to WA today please.",
+        "masked": "Ship my package to WA today please.",
+        "pmap": {},
+        "roundtrip_ok": true
+      },
+      "limit_street_nosuffix": {
+        "input": "Deliver to 742 Evergreen Terrace quickly.",
+        "masked": "Deliver to 742 Evergreen Terrace quickly.",
+        "pmap": {},
+        "roundtrip_ok": true
+      },
+      "limit_vi_unaccented": {
+        "input": "Xin chao toi la anh nam o quan 1",
+        "masked": "[NAME_1] [ADDRESS_1] 1",
+        "pmap": {
+          "[NAME_1]": "Xin chao",
+          "[ADDRESS_1]": "toi la anh nam o quan"
+        },
+        "roundtrip_ok": true
+      },
+      "limit_vi_accented": {
+        "input": "T\u00f4i l\u00e0 Nguy\u1ec5n V\u0103n Minh \u1edf 123 \u0110\u01b0\u1eddng L\u00ea L\u1ee3i Qu\u1eadn 1",
+        "masked": "T\u00f4i l\u00e0 Nguy\u1ec5n V\u0103n Minh \u1edf 123 [NAME_1] L\u1ee3i Qu\u1eadn 1",
+        "pmap": {
+          "[NAME_1]": "\u0110\u01b0\u1eddng L\u00ea"
+        },
+        "roundtrip_ok": true
+      }
+    },
+    "fail_modes": {
+      "missing_none": {
+        "pseudonymize_blocked": true,
+        "egress_blocked": true
+      },
+      "load_runtime_error": {
+        "pseudonymize_blocked": true,
+        "egress_blocked": true
+      }
+    }
+  },
+  "real_ner_intake_worker_mock_http_e2e": {
+    "health_ready": {
+      "status": "ready",
+      "backend_build": "application-v1",
+      "privacy_ner_available": true
+    },
+    "wire_request_count": 2,
+    "wire_paths": [
+      "/v1/analyses",
+      "/v1/drafts"
+    ],
+    "wire_message": "Hi, I am [NAME_1] living in [ADDRESS_1] checking order [ORDER_ID_1].",
+    "db_pseudonym_map_keys": [
+      "[ADDRESS_1]",
+      "[NAME_1]",
+      "[ORDER_ID_1]"
+    ],
+    "no_raw_pii_on_wire": true,
+    "restored_draft": "Hello Michael Johnson in Seattle, thank you for reaching out.",
+    "fault_injection_reason_codes": [
+      "pseudonymization_failed"
+    ],
+    "fault_injection_draft_status": "unavailable",
+    "fault_injection_extra_http_calls": 0,
+    "retry_disabled_on_fault": true
+  }
+}
