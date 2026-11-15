@@ -1,0 +1,179 @@
+{
+  "processes_json": [
+    {
+      "StartedAt": "2026-11-15T09:49:35.4577960Z",
+      "Id": 12648,
+      "Kind": "ai-service"
+    },
+    {
+      "StartedAt": "2026-11-15T09:49:35.4686669Z",
+      "Id": 40568,
+      "Kind": "backend"
+    }
+  ],
+  "ai_ready": {
+    "status": "ready",
+    "llm_enabled": false,
+    "llm_configured": true,
+    "retrieval_ready": true,
+    "model_version": "fit2-supcon-energy-boundary-v1",
+    "model_checksum": "f695b1fe514aba81aafc968823047d496b03474a0b47199c65eaac6bd93c6dfa",
+    "calibration_checksum": "782c88db3fcd80615c3dceabbdb96ea2be7aa769119201f94229535becc7ae39",
+    "model_mode": "trained",
+    "model_verified": true,
+    "live_llm_requests_made": 0,
+    "max_live_llm_requests": 2
+  },
+  "ai_assets_release": "local-b1c61e8977e69230",
+  "be_ready": {
+    "status": "ready",
+    "backend_build": "application-v1",
+    "privacy_ner_available": true
+  },
+  "bundle_assets": {
+    "js": "index-C3zu942g.js",
+    "css": "index-DoT7plPC.css",
+    "html_sha256_match": true,
+    "js_sha256": "ef77343dc11d9b8d1c883ff8b2af6d90fd6c61e192e07e69bb9d782d26277cbd"
+  },
+  "order_context_keys": [
+    "order_status",
+    "placed_at",
+    "order_total",
+    "shipping_cost",
+    "shipment_status",
+    "estimated_delivery_at",
+    "delivered_at",
+    "refund_status",
+    "refund_amount",
+    "refund_requested_at"
+  ],
+  "analysis_response_summary": {
+    "intent": {
+      "label": "refund_status",
+      "probability": 0.9811400175094604,
+      "confidence_band": "high",
+      "source": "model",
+      "score_kind": "calibrated_probability",
+      "model_mode": "trained",
+      "verified": true
+    },
+    "authority": null,
+    "evidence_count": 0
+  },
+  "draft_with_llm_disabled": {
+    "http_status": 200,
+    "body": {
+      "analysis": {
+        "intent": {
+          "label": "refund_status",
+          "probability": 0.9811400175094604,
+          "confidence_band": "high",
+          "source": "model",
+          "score_kind": "calibrated_probability",
+          "model_mode": "trained",
+          "verified": true
+        },
+        "alternatives": [
+          {
+            "label": "request_refund",
+            "probability": 0.002233648905530572,
+            "confidence_band": "low"
+          },
+          {
+            "label": "refund_policy",
+            "probability": 0.0010392386466264725,
+            "confidence_band": "low"
+          }
+        ],
+        "is_in_scope": true,
+        "documents": [
+          {
+            "document_id": "POL-REFUND-007",
+            "version": "1.0",
+            "title": "Checking Refund History and Order Status on Tiki",
+            "snippet": "Checking Refund History and Order Status on Tiki\nCustomers can monitor refund progress by accessing 'Account Details' > 'Return & Refund Management'. Refund statuses include: 'Reconciliation Processing' (under customer support review), 'Transferred to Bank' (funds dispatched from Tiki, awaiting bank credit), and 'Refund Succeeded' along with the bank's transaction tracing reference code.",
+            "score": 0.8273,
+            "rank": 1,
+            "validity": "valid",
+            "effective_from": "2026-01-01T00:00:00Z",
+            "effective_to": "2026-12-31T23:59:59Z"
+          },
+          {
+            "document_id": "POL-REFUND-002",
+            "version": "2.0",
+            "title": "Refund Receipt Timeline by Payment Method on Tiki",
+            "snippet": "Refund Receipt Timeline by Payment Method on Tiki\nThe timeline for receiving a refund on Tiki depends on the original payment method: For Tiki Coins Wallet, refunds are credited within 24 hours. For linked e-wallets (MoMo, ZaloPay, VNPay, Viettel Money), funds are returned to the wallet within 1-2 business days. For domestic Napas ATM cards, the timeline is 3-5 business days. For international credit/debit cards (Visa, Mastercard, JCB), issuing banks process within 7-15 business days (excluding Saturdays, Sundays, and public holidays).",
+            "score": 0.7873,
+            "rank": 2,
+            "validity": "valid",
+            "effective_from": "2026-01-01T00:00:00Z",
+            "effective_to": "2026-12-31T23:59:59Z"
+          }
+        ],
+        "routing": {
+          "recommendation": "draft",
+          "reason_codes": []
+        },
+        "warnings": [],
+        "versions": {
+          "release_id": "local-b1c61e8977e69230",
+          "model_version": "fit2-supcon-energy-boundary-v1",
+          "model_checksum": "f695b1fe514aba81aafc968823047d496b03474a0b47199c65eaac6bd93c6dfa",
+          "calibration_checksum": "782c88db3fcd80615c3dceabbdb96ea2be7aa769119201f94229535becc7ae39",
+          "model_mode": "trained",
+          "verified": true,
+          "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+          "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+          "prompt_version": "grounded-v3",
+          "engine_version": "sha256:481bc7ab7fa2a7ad42ca00add79925339b138116aa2b57e233300ba3f7bc88ff",
+          "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+          "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+        },
+        "step_latency_ms": {
+          "analysis": 51
+        }
+      },
+      "reason_codes": [
+        "llm_unavailable"
+      ],
+      "versions": {
+        "release_id": "local-b1c61e8977e69230",
+        "model_version": "fit2-supcon-energy-boundary-v1",
+        "model_checksum": "f695b1fe514aba81aafc968823047d496b03474a0b47199c65eaac6bd93c6dfa",
+        "calibration_checksum": "782c88db3fcd80615c3dceabbdb96ea2be7aa769119201f94229535becc7ae39",
+        "model_mode": "trained",
+        "verified": true,
+        "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "prompt_version": "grounded-v3",
+        "engine_version": "sha256:481bc7ab7fa2a7ad42ca00add79925339b138116aa2b57e233300ba3f7bc88ff",
+        "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+        "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+      },
+      "step_latency_ms": {
+        "analysis": 51,
+        "llm": 0
+      },
+      "mask_count_by_type": {},
+      "status": "llm_unavailable",
+      "failure_code": "llm_not_configured",
+      "staff_note": "Draft generation is unavailable. Review the retrieved sources and write a reply manually.",
+      "llm_metadata": {
+        "attempts": [
+          {
+            "attempt_index": 0,
+            "status": "llm_not_configured",
+            "latency_seconds": 0.0,
+            "stage": null,
+            "http_status": null,
+            "exception_category": null,
+            "usage": {},
+            "metadata": {}
+          }
+        ]
+      }
+    }
+  },
+  "ai_live_llm_requests_after": 0
+}

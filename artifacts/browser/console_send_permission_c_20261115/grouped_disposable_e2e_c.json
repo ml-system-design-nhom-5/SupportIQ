@@ -1,0 +1,44 @@
+{
+  "verdict": "PASS",
+  "schema": "c_grouped_verify_51c42093af",
+  "ticket_id_10f": "TCK-1001",
+  "ticket_id_auth": "TCK-1002",
+  "wire_order_context_keys": [
+    "order_status",
+    "placed_at",
+    "order_total",
+    "shipping_cost",
+    "shipment_status",
+    "estimated_delivery_at",
+    "delivered_at",
+    "refund_status",
+    "refund_amount",
+    "refund_requested_at"
+  ],
+  "hydrated_citation_fields": [
+    "order_status",
+    "placed_at",
+    "order_total",
+    "shipping_cost",
+    "shipment_status",
+    "estimated_delivery_at",
+    "delivered_at",
+    "refund_status",
+    "refund_amount",
+    "refund_requested_at"
+  ],
+  "staff_allowed_before_proposal": [
+    "correct_intent",
+    "submit_reply_proposal",
+    "escalate"
+  ],
+  "staff_direct_send_status": 403,
+  "staff_allowed_own_proposal": [],
+  "admin_allowed_before_approval": [
+    "send_reply"
+  ],
+  "final_status_and_allowed": {
+    "status": "closed",
+    "allowed_actions": []
+  }
+}

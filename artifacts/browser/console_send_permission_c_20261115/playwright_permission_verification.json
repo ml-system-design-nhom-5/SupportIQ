@@ -1,0 +1,180 @@
+{
+  "verdict": "PASS",
+  "total_cases": 12,
+  "passed": 12,
+  "failed": 0,
+  "results": [
+    {
+      "id": "real-runtime-readonly-staff-admin",
+      "status": "PASS",
+      "details": {
+        "staffHealth": {
+          "layout": {
+            "scrollWidth": 1440,
+            "innerWidth": 1440,
+            "overflowX": false,
+            "bodyBg": "rgb(248, 250, 252)"
+          },
+          "axeViolations": []
+        },
+        "adminHealth": {
+          "layout": {
+            "scrollWidth": 1440,
+            "innerWidth": 1440,
+            "overflowX": false,
+            "bodyBg": "rgb(248, 250, 252)"
+          },
+          "axeViolations": []
+        },
+        "unexpectedConsoleErrors": 0,
+        "observedExpectedConsoleMessages": 4,
+        "pageErrors": 0,
+        "server5xx": 0
+      }
+    },
+    {
+      "id": "P1-contradictory-admin-escalate-only",
+      "status": "PASS",
+      "details": {
+        "postPaths": [
+          "/v1/console/tickets/TCK-SYNTH-100/views",
+          "/v1/console/tickets/TCK-SYNTH-100/escalations"
+        ],
+        "visual": {
+          "layout": {
+            "scrollWidth": 1440,
+            "innerWidth": 1440,
+            "overflowX": false,
+            "bodyBg": "rgb(248, 250, 252)"
+          },
+          "axeViolations": []
+        }
+      }
+    },
+    {
+      "id": "P2-fail-closed-absent",
+      "status": "PASS",
+      "details": {
+        "label": "absent",
+        "waitText": true,
+        "zeroPosts": true
+      }
+    },
+    {
+      "id": "P2-fail-closed-null",
+      "status": "PASS",
+      "details": {
+        "label": "null",
+        "waitText": true,
+        "zeroPosts": true
+      }
+    },
+    {
+      "id": "P2-fail-closed-non-array-string",
+      "status": "PASS",
+      "details": {
+        "label": "non-array-string",
+        "waitText": true,
+        "zeroPosts": true
+      }
+    },
+    {
+      "id": "P2-fail-closed-empty",
+      "status": "PASS",
+      "details": {
+        "label": "empty",
+        "waitText": true,
+        "zeroPosts": true
+      }
+    },
+    {
+      "id": "P3-ai-pending-safety",
+      "status": "PASS",
+      "details": {
+        "pendingVisible": true,
+        "sendDisabled": true,
+        "zeroPosts": true
+      }
+    },
+    {
+      "id": "P4-closed-and-own-proposal-fail-closed",
+      "status": "PASS",
+      "details": {
+        "closedSafe": true,
+        "ownProposalSafe": true
+      }
+    },
+    {
+      "id": "P5-dynamic-revocation-between-modal-open-and-confirm",
+      "status": "PASS",
+      "details": {
+        "modalAutoClosed": true,
+        "sendCountAfter": 0,
+        "replyPosts": 0,
+        "visual": {
+          "layout": {
+            "scrollWidth": 1440,
+            "innerWidth": 1440,
+            "overflowX": false,
+            "bodyBg": "rgb(248, 250, 252)"
+          },
+          "axeViolations": []
+        }
+      }
+    },
+    {
+      "id": "P6-legitimate-manual-no-ai-draft",
+      "status": "PASS",
+      "details": {
+        "postBody": {
+          "basis": "no_ai_draft",
+          "body": "Thank you. We checked your order and the refund is processing.",
+          "suggestion_id": "SUG-1"
+        }
+      }
+    },
+    {
+      "id": "P7-legitimate-staff-submit-proposal",
+      "status": "PASS",
+      "details": {
+        "postBody": {
+          "basis": "ai_draft",
+          "body": "Your refund request is under review.",
+          "suggestion_id": "SUG-1",
+          "acknowledged_warning_ids": [],
+          "staff_reason_codes": [],
+          "note": null
+        },
+        "visual": {
+          "layout": {
+            "scrollWidth": 1440,
+            "innerWidth": 1440,
+            "overflowX": false,
+            "bodyBg": "rgb(248, 250, 252)"
+          },
+          "axeViolations": []
+        }
+      }
+    },
+    {
+      "id": "P8-legitimate-cross-person-admin-approval",
+      "status": "PASS",
+      "details": {
+        "postBody": {
+          "basis": "reply_proposal",
+          "body": "Staff proposed refund confirmation.",
+          "proposal_id": "PROP-1"
+        },
+        "visual": {
+          "layout": {
+            "scrollWidth": 1440,
+            "innerWidth": 1440,
+            "overflowX": false,
+            "bodyBg": "rgb(248, 250, 252)"
+          },
+          "axeViolations": []
+        }
+      }
+    }
+  ]
+}
