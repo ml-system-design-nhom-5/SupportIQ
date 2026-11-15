@@ -72,12 +72,22 @@ def pg_app_ai_down():
         root.dispose()
 
 
+@pytest.fixture(autouse=True)
+def _mock_offline_spacy_ner(monkeypatch):
+    """Provide deterministic in-process mock spaCy NER when en_core_web_sm is absent."""
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        "apps.backend.tickets.privacy._get_spacy_nlp",
+        lambda: (lambda _text: SimpleNamespace(ents=[])),
+    )
+
+
 @pytest.fixture(scope="module")
 def pg_app_ai_enabled():
-    """Disposable PG app with AI URL configured (worker invoked explicitly with mock HTTP; offline NER opt-out)."""
+    """Disposable PG app with AI URL configured (worker invoked explicitly with mock HTTP)."""
     root, schema, engine, database, settings, passwords, app = _make_pg_app(
         ai_service_base_url="http://mock-ai-service:8002",
-        require_privacy_ner=False,
     )
     try:
         yield app, passwords, database, settings

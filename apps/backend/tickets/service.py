@@ -105,7 +105,7 @@ def create_suggestion(session, ticket, settings, trace_id, intent_override=None,
         message, mapping = pseudonymize(
             session.get(CustomerMessage, ticket.ticket_id).body,
             known,
-            require_ner=bool(getattr(settings, "require_privacy_ner", True)),
+            require_ner=bool(settings.ai_service_base_url) or bool(getattr(settings, "require_privacy_ner", True)),
         )
         privacy_failed = False
     except ValueError:

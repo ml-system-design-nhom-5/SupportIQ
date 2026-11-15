@@ -198,7 +198,10 @@ def test_gap3_ner_exceptions_fail_closed_and_retain_sticky_authority(monkeypatch
 def test_gap3_worker_pre_dispatch_gate_blocks_unmasked_or_missing_ner_zero_egress(monkeypatch):
     """SuggestionWorker.process blocks before any _post_ai call if strict NER unavailable or payload unmasked."""
     monkeypatch.setattr("apps.backend.tickets.privacy._get_spacy_nlp", lambda: None)
-    root, schema, engine, database, settings_offline, passwords, app_off = _make_pg_app(require_privacy_ner=False)
+    root, schema, engine, database, settings_offline, passwords, app_off = _make_pg_app(
+        ai_service_base_url=None,
+        require_privacy_ner=False,
+    )
     try:
         customer = _login(app_off, passwords, "customer")
         tid = _post(customer, "/v1/shop/tickets", {
@@ -210,9 +213,12 @@ def test_gap3_worker_pre_dispatch_gate_blocks_unmasked_or_missing_ner_zero_egres
             t = session.get(Ticket, tid)
             t.is_authority_required = True
             sug = session.get(Suggestion, t.current_suggestion_id)
-            job = session.get(SuggestionJob, sug.suggestion_id)
-            job.lease_token = "tok-worker-1"
             sid = sug.suggestion_id
+            session.add(SuggestionJob(
+                suggestion_id=sid,
+                lease_token="tok-worker-1",
+                attempts=1,
+            ))
 
         calls: list[tuple[str, dict]] = []
         strict_settings = Settings(
@@ -235,14 +241,15 @@ def test_gap3_worker_pre_dispatch_gate_blocks_unmasked_or_missing_ner_zero_egres
             assert session.get(Ticket, tid).is_authority_required is True
 
         # Also validate raw unmasked PII payload rejected even when require_ner=False
+        base = {"order_context": {}, "as_of": "2026-11-15T00:00:00Z"}
         with pytest.raises(ValueError):
-            validate_egress_payload({"message": "Contact leak@example.com directly"}, require_ner=False)
+            validate_egress_payload({**base, "message": "Contact leak@example.com directly"}, require_ner=False)
         with pytest.raises(ValueError):
-            validate_egress_payload({"message": ""}, require_ner=False)
+            validate_egress_payload({**base, "message": ""}, require_ner=False)
         with pytest.raises(ValueError):
-            validate_egress_payload({"message": "Card 4532-0151-1283-0366 unmasked"}, require_ner=False)
+            validate_egress_payload({**base, "message": "Card 4532-0151-1283-0366 unmasked"}, require_ner=False)
         with pytest.raises(ValueError):
-            validate_egress_payload({"message": "Order ORD-1001 unmasked"}, require_ner=False)
+            validate_egress_payload({**base, "message": "Order ORD-1001 unmasked"}, require_ner=False)
     finally:
         _cleanup_pg(root, schema, engine)
 
@@ -405,3 +412,201 @@ def test_gap3_reason_codes_bounded_29_and_no_pii_in_logs(caplog, monkeypatch):
 
     assert "Johnathan Smith" not in caplog.text
     assert "4532015112830366" not in caplog.text
+
+
+def test_gap3_blocker1_rejects_env_and_remote_ner_disable_and_enforces_worker_http_ner(monkeypatch):
+    """Blocker 1: Env vars and remote/real HTTP egress cannot disable strict privacy NER."""
+    monkeypatch.setattr("apps.backend.tickets.privacy._get_spacy_nlp", lambda: None)
+
+    # 1. Environment variable cannot disable NER when ai_service_base_url is set
+    monkeypatch.setenv("SUPPORTIQ_REQUIRE_PRIVACY_NER", "false")
+    with pytest.raises(ValueError):
+        Settings(
+            _env_file=None,
+            database_url_app="sqlite:///:memory:",
+            ai_service_base_url="https://ai.remote.example.com",
+        )
+    monkeypatch.delenv("SUPPORTIQ_REQUIRE_PRIVACY_NER", raising=False)
+
+    # 2. Explicit require_privacy_ner=False with configured AI URL is rejected by Settings
+    for url in ("https://ai.remote.example.com", "http://127.0.0.1:8002"):
+        with pytest.raises(ValueError):
+            Settings(
+                _env_file=None,
+                database_url_app="sqlite:///:memory:",
+                ai_service_base_url=url,
+                require_privacy_ner=False,
+            )
+
+    # 3. Even with a bypassed SimpleNamespace settings object, SuggestionWorker enforces strict NER
+    # on any real httpx.Client HTTP transport with 0 network calls.
+    root, schema, engine, database, settings, passwords, app = _make_pg_app(ai_service_base_url=None)
+    try:
+        customer = _login(app, passwords, "customer")
+        created = _post(customer, "/v1/shop/tickets", {
+            "order_id": "ORD-1001",
+            "message": "Johnathan Smith lives in Ho Chi Minh City.",
+        })
+        assert created.status_code == 201
+        tid = created.json()["ticket_id"]
+
+        with database.transaction() as session:
+            sug = session.get(Suggestion, session.get(Ticket, tid).current_suggestion_id)
+            sid = sug.suggestion_id
+            session.add(SuggestionJob(
+                suggestion_id=sid,
+                lease_token="tok-b1",
+                attempts=1,
+            ))
+
+        called: list[str] = []
+
+        class SpyRealTransport(httpx.HTTPTransport):
+            def handle_request(self, request):  # pragma: no cover - must never execute
+                called.append(str(request.url))
+                raise AssertionError(f"Unmasked HTTP egress attempted to {request.url}")
+
+        bypassed = SimpleNamespace(
+            ai_service_base_url="https://ai.remote.example.com",
+            require_privacy_ner=False,
+            ai_service_analysis_timeout_ms=1000,
+            ai_service_draft_timeout_ms=1000,
+        )
+        with httpx.Client(transport=SpyRealTransport()) as real_client:
+            worker = SuggestionWorker(database, bypassed, http_client=real_client)
+            worker.process(sid, "tok-b1", {
+                "message": "Johnathan Smith lives in Ho Chi Minh City.",
+                "order_context": {},
+                "as_of": "2026-11-15T00:00:00Z",
+            })
+
+        assert called == []
+        with database.transaction() as session:
+            sug = session.get(Suggestion, sid)
+            assert sug.payload["analysis_status"] == "unavailable"
+            assert "pseudonymization_failed" in sug.payload["reason_codes"]
+    finally:
+        _cleanup_pg(root, schema, engine)
+
+
+def test_gap3_blocker2_validate_egress_envelope_pii_and_worker_legacy_job_rejection(monkeypatch):
+    """Blocker 2: validate_egress_payload validates full SuggestionRequest, PHONE/ADDRESS/order_context/DB PII."""
+    # Valid canonical payload + legitimate numeric money & ISO timestamps must pass
+    valid = {
+        "message": "Where is [ORDER_ID_1]? Ordered at 2026-11-15 12:00:00 for 1402000 VND.",
+        "order_context": {
+            "order_status": "shipped",
+            "placed_at": "2026-11-15T12:00:00+07:00",
+            "order_total": {"amount_minor": 1402000, "currency": "VND"},
+            "shipping_cost": {"amount_minor": 30000, "currency": "VND"},
+            "shipment_status": "in_transit",
+        },
+        "as_of": "2026-11-15T12:05:00Z",
+        "intent_override": None,
+    }
+    validate_egress_payload(valid, require_ner=False)
+
+    # All tampered/unmasked envelope shapes must raise ValueError
+    tampered_payloads = [
+        # Raw phone in message
+        {**valid, "message": "Call +84901234567 about [ORDER_ID_1]."},
+        # Raw address in message
+        {**valid, "message": "Ship to 123 Nguyen Hue Street immediately."},
+        # Forbidden top-level extra key / pseudonym_map leak
+        {**valid, "pseudonym_map": {"[NAME_1]": "Nguyen Van A"}},
+        {**valid, "raw_body": "secret"},
+        # Disallowed key inside order_context
+        {**valid, "order_context": {**valid["order_context"], "shipping_address": "123 Le Loi Street"}},
+        {**valid, "order_context": {**valid["order_context"], "customer_name": "Nguyen Van A"}},
+        # Raw PII smuggled in order_context allowed string field
+        {**valid, "order_context": {"order_status": "email leak@example.com"}},
+        # Raw PII smuggled in intent_override
+        {**valid, "intent_override": "call +84901234567"},
+        # Unexpected nested list inside order_context
+        {**valid, "order_context": {"order_status": ["shipped"]}},
+        # Missing required fields
+        {"message": "Hello [NAME_1]"},
+        # Invalid as_of
+        {**valid, "as_of": "not-a-timestamp"},
+    ]
+    for bad in tampered_payloads:
+        with pytest.raises(ValueError):
+            validate_egress_payload(bad, require_ner=False)
+
+    # Legacy queued job with phone/address/unknown order_context key fails closed in SuggestionWorker
+    class _Doc:
+        ents = []
+
+    monkeypatch.setattr("apps.backend.tickets.privacy._get_spacy_nlp", lambda: (lambda _t: _Doc()))
+    root, schema, engine, database, settings, passwords, app = _make_pg_app()
+    try:
+        customer = _login(app, passwords, "customer")
+        staff = _login(app, passwords, "staff")
+        created = _post(customer, "/v1/shop/tickets", {
+            "order_id": "ORD-1001",
+            "message": "Where is my order ORD-1001?",
+        })
+        tid = created.json()["ticket_id"]
+        with database.transaction() as session:
+            sug = session.get(Suggestion, session.get(Ticket, tid).current_suggestion_id)
+            sid = sug.suggestion_id
+            job = session.get(SuggestionJob, sid)
+            job.lease_token = "tok-b2"
+
+        http_calls: list[dict] = []
+        with httpx.Client(transport=httpx.MockTransport(lambda req: http_calls.append({"url": str(req.url)}) or httpx.Response(200, json={}))) as fake_http:
+            worker = SuggestionWorker(database, settings, http_client=fake_http)
+            worker.process(sid, "tok-b2", {
+                "message": "Call +84901234567 at 123 Nguyen Hue Street",
+                "order_context": {"shipping_address": "123 Le Loi Street", "order_status": "shipped"},
+                "as_of": "2026-11-15T12:00:00Z",
+            })
+
+        assert http_calls == []
+        ws = staff.get(f"/v1/console/tickets/{tid}").json()
+        assert ws["suggestion"]["analysis_status"] == "unavailable"
+        assert ws["suggestion"]["draft_status"] == "unavailable"
+        assert ws["suggestion"]["reason_codes"] == ["pseudonymization_failed"]
+        assert "retry_suggestion" not in ws["allowed_actions"]
+
+        # DB pseudonym_map cross-check also blocks raw free-form DB PII appearing in payload
+        with database.transaction() as session:
+            sug = session.get(Suggestion, sid)
+            sug.pseudonym_map = {"[NAME_1]": "Johnathan Smith"}
+            sug.payload = {**sug.payload, "analysis_status": "pending", "draft_status": "pending", "reason_codes": []}
+            job = session.get(SuggestionJob, sid)
+            job.finished = False
+            job.lease_token = "tok-b2-db"
+
+        with httpx.Client(transport=httpx.MockTransport(lambda req: http_calls.append({"url": str(req.url)}) or httpx.Response(200, json={}))) as fake_http:
+            worker = SuggestionWorker(database, settings, http_client=fake_http)
+            worker.process(sid, "tok-b2-db", {
+                "message": "Johnathan Smith wants a status update.",
+                "order_context": {},
+                "as_of": "2026-11-15T12:00:00Z",
+            })
+
+        assert http_calls == []
+        with database.transaction() as session:
+            assert "pseudonymization_failed" in session.get(Suggestion, sid).payload["reason_codes"]
+    finally:
+        _cleanup_pg(root, schema, engine)
+
+
+def test_gap3_blocker3_no_sentinel_corruption_or_known_address_fragmentation():
+    """Blocker 3: known 'P0'/'P1'/NUL values never corrupt sentinels, and short known substrings never fragment addresses."""
+    # [PROBE C1] Metamorphic P0/P1 sentinel collision
+    raw_c1 = "Customer P0 and P1 reported ORD-1001"
+    masked_c1, map_c1 = pseudonymize(raw_c1, {"NAME": ["P0", "P1"]}, require_ner=False)
+    assert "\x00" not in masked_c1
+    assert "P0" not in masked_c1
+    assert "P1" not in masked_c1
+    assert "ORD-1001" not in masked_c1
+    assert masked_c1 == "Customer [NAME_1] and [NAME_2] reported [ORDER_ID_1]"
+    assert restore(masked_c1, map_c1) == raw_c1
+
+    # [PROBE C2] Known short substring 'Hue' inside '123 Nguyen Hue Street' must NOT fragment the address
+    raw_c2 = "Ship to 123 Nguyen Hue Street for Hue"
+    masked_c2, map_c2 = pseudonymize(raw_c2, {"NAME": ["Hue"]}, require_ner=False)
+    assert masked_c2 == "Ship to [ADDRESS_1] for [NAME_1]"
+    assert restore(masked_c2, map_c2) == raw_c2

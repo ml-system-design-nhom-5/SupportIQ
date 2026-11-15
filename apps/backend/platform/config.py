@@ -1,5 +1,6 @@
+import os
 from pathlib import Path
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _ROOT = Path(__file__).resolve().parents[3]
@@ -28,3 +29,12 @@ class Settings(BaseSettings):
     job_poll_interval_ms: int = 500
     job_concurrency: int = Field(default=4, ge=1, le=16)
     backend_build: str = "application-v1"
+
+    @model_validator(mode="after")
+    def _enforce_strict_privacy_ner(self) -> "Settings":
+        env_val = os.environ.get("SUPPORTIQ_REQUIRE_PRIVACY_NER")
+        if env_val is not None and env_val.strip().lower() in {"0", "false", "no", "off"}:
+            raise ValueError("SUPPORTIQ_REQUIRE_PRIVACY_NER cannot disable strict privacy NER")
+        if self.ai_service_base_url is not None and not self.require_privacy_ner:
+            raise ValueError("require_privacy_ner cannot be False when ai_service_base_url is configured")
+        return self

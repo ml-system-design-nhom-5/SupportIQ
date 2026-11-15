@@ -44,6 +44,17 @@ def get_secrets():
     return json.loads(secrets_path.read_text())
 
 
+@pytest.fixture(autouse=True)
+def _mock_offline_spacy_ner(monkeypatch):
+    """Provide deterministic in-process mock spaCy NER when en_core_web_sm is absent."""
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        "apps.backend.tickets.privacy._get_spacy_nlp",
+        lambda: (lambda _text: SimpleNamespace(ents=[])),
+    )
+
+
 @pytest.fixture(scope="module")
 def pg_application():
     """Disposable PostgreSQL schema for safety closure tests."""
@@ -66,8 +77,6 @@ def pg_application():
             allowed_origins=["http://testserver"],
             session_cookie_secure=False,
             ai_service_base_url="http://mock-ai-service:8002",
-            # Explicit offline unit opt-out: mocked AI service runs without installed spaCy model
-            require_privacy_ner=False,
         )
         app = create_app(settings=settings, database=database, start_worker=False)
         yield app, passwords, database, settings, schema, local

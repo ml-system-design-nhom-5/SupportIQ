@@ -59,6 +59,17 @@ from apps.ai_service.engine import Engine
 # Fixtures
 # -----------------------------------------------------------------------------
 
+@pytest.fixture(autouse=True)
+def _mock_offline_spacy_ner(monkeypatch):
+    """Provide deterministic in-process mock spaCy NER when en_core_web_sm is absent."""
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        "apps.backend.tickets.privacy._get_spacy_nlp",
+        lambda: (lambda _text: SimpleNamespace(ents=[])),
+    )
+
+
 @pytest.fixture
 def e2e_env():
     """Build an isolated in-memory SupportIQ system environment."""
@@ -74,8 +85,6 @@ def e2e_env():
         allowed_origins=["http://testserver", "http://127.0.0.1:18080"],
         session_cookie_secure=False,
         ai_service_base_url="http://ai-service.local",
-        # Explicit offline opt-out for E2E unit suite without spaCy en_core_web_sm
-        require_privacy_ner=False,
     )
 
     app = create_app(settings=settings, database=db, start_worker=False)

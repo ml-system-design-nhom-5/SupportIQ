@@ -258,10 +258,35 @@ class SuggestionWorker:
                 job.lease_until = utcnow() + timedelta(milliseconds=self._lease_ms)
                 return suggestion.suggestion_id, job.lease_token, suggestion.request_payload
 
+    def _uses_real_http_transport(self) -> bool:
+        """Return True unless HTTP calls route strictly through an in-process mock transport or stub."""
+        if self._injected_http_client is not None:
+            if isinstance(self._injected_http_client, _REAL_HTTPX_CLIENT):
+                return not isinstance(getattr(self._injected_http_client, "_transport", None), httpx.MockTransport)
+            return False
+        return httpx.Client is _REAL_HTTPX_CLIENT
+
     def process(self, identifier, token, payload):
-        strict_ner = bool(getattr(self.settings, "require_privacy_ner", True))
+        strict_ner = (
+            self._uses_real_http_transport()
+            or bool(getattr(self.settings, "ai_service_base_url", None))
+            or bool(getattr(self.settings, "require_privacy_ner", True))
+        )
+        forbidden_values: tuple[str, ...] = ()
+        if hasattr(self.database, "transaction"):
+            try:
+                with self.database.transaction() as session:
+                    sug = session.get(Suggestion, identifier)
+                    if sug and isinstance(sug.pseudonym_map, dict):
+                        forbidden_values = tuple(
+                            str(v)
+                            for k, v in sug.pseudonym_map.items()
+                            if isinstance(v, str) and v.strip() and not str(k).startswith("[LITERAL_")
+                        )
+            except Exception:
+                forbidden_values = ()
         try:
-            validate_egress_payload(payload, require_ner=strict_ner)
+            validate_egress_payload(payload, require_ner=strict_ner, forbidden_values=forbidden_values)
         except ValueError:
             self.store(
                 identifier,

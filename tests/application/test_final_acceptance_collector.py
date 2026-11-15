@@ -40,8 +40,13 @@ def sample_cases():
 
 def test_collector_mock_bounded_execution(tmp_path, monkeypatch):
     """Collector executes in isolated disposable schema and captures full evidence."""
-    # Offline mock gateway test explicitly opts out of spaCy NER when en_core_web_sm is absent.
-    monkeypatch.setenv("SUPPORTIQ_REQUIRE_PRIVACY_NER", "false")
+    from types import SimpleNamespace
+
+    # Provide deterministic in-process NER stub for offline mock-gateway test under strict NER.
+    monkeypatch.setattr(
+        "apps.backend.tickets.privacy._get_spacy_nlp",
+        lambda: (lambda _text: SimpleNamespace(ents=[])),
+    )
     collector = AcceptanceEvidenceCollector(
         mode="mock",
         max_cases=4,

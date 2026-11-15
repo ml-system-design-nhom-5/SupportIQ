@@ -27,6 +27,17 @@ from apps.core_backend.retrieval.adapter import RetrievalAdapter
 from pipeline.evaluation.mock_dependencies import MockPolicyEncoder
 
 
+@pytest.fixture(autouse=True)
+def _mock_offline_spacy_ner(monkeypatch):
+    """Provide deterministic in-process mock spaCy NER when en_core_web_sm is absent."""
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        "apps.backend.tickets.privacy._get_spacy_nlp",
+        lambda: (lambda _text: SimpleNamespace(ents=[])),
+    )
+
+
 def _make_isolated_backend_app(tmp_path):
     db_path = tmp_path / "synthetic_supportiq.db"
     engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
@@ -40,8 +51,6 @@ def _make_isolated_backend_app(tmp_path):
         allowed_origins=["http://testserver"],
         session_cookie_secure=False,
         ai_service_base_url="http://mock-ai-service:8002",
-        # Explicit offline opt-out for unit transport-fault tests without spaCy en_core_web_sm
-        require_privacy_ner=False,
     )
     app = create_app(settings=settings, database=database, start_worker=False)
     return app, passwords, database, settings, engine
