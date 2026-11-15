@@ -1,0 +1,15 @@
+{
+  "branch": "minh",
+  "git_head": "5188d5ba23994771212d8ca6aa736eb5671d941d",
+  "command": ".venv/Scripts/python.exe -B artifacts/evaluation/original_fit2_gap2_authority_c_20261115/evaluate_gap2_authority_c.py",
+  "verdict": "PASS",
+  "executed_cases": 19,
+  "passed_cases": 19,
+  "failed_cases": [],
+  "duration_seconds": 47.63,
+  "sha256": {
+    "frozen_gap2_case_matrix.json": "a0a7602d8af284b4e1945054d686f34ad0ba76ea268703ca4b872fa9786190f3",
+    "evaluate_gap2_authority_c.py": "f5f2a719a5c035782b50df1a2fc281718d08867232bc6627dfc0b4b19ea6d00b",
+    "gap2_security_verification.json": "9b89d16717c61fdb4902c9ad9385f00f727868e7bb7e9a12a071a1ec73f5d068"
+  }
+}

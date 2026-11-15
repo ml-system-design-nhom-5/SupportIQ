@@ -1,0 +1,160 @@
+{
+  "schema_version": "frozen_gap2_case_matrix_c.v1",
+  "frozen_before_execution": true,
+  "target_branch": "minh",
+  "target_reviewed_head": "5188d5ba23994771212d8ca6aa736eb5671d941d",
+  "worker_a_commit": "f93b7882960ebd351eadff72543f5cf78aafd211",
+  "cases": [
+    {
+      "id": "g2-auth-off-01",
+      "group": "authority_outage",
+      "mode": "ai_off",
+      "message": "Please file a bank dispute for unauthorized charge on my order.",
+      "expected_authority": true,
+      "expected_staff_reply_status": 403,
+      "expected_error_code": "authority-required"
+    },
+    {
+      "id": "g2-auth-off-02",
+      "group": "authority_outage",
+      "mode": "ai_off",
+      "message": "Could you grant an exception on my expired return window?",
+      "expected_authority": true,
+      "expected_staff_reply_status": 403,
+      "expected_error_code": "authority-required"
+    },
+    {
+      "id": "g2-auth-off-03",
+      "group": "authority_outage",
+      "mode": "ai_off",
+      "message": "My attorney is preparing legal paperwork over this bill.",
+      "expected_authority": true,
+      "expected_staff_reply_status": 403,
+      "expected_error_code": "authority-required"
+    },
+    {
+      "id": "g2-auth-pend-01",
+      "group": "authority_outage",
+      "mode": "ai_pending",
+      "message": "There are unauthorized charges and I demand a human manager.",
+      "expected_authority": true,
+      "expected_staff_reply_status": 403,
+      "expected_error_code": "authority-required"
+    },
+    {
+      "id": "g2-auth-timeout-01",
+      "group": "authority_outage",
+      "mode": "ml_timeout",
+      "message": "Make an exception for my damaged package right now.",
+      "expected_authority": true,
+      "expected_staff_reply_status": 403,
+      "expected_error_code": "authority-required"
+    },
+    {
+      "id": "g2-auth-privfail-01",
+      "group": "authority_outage",
+      "mode": "pseudonymization_failed",
+      "message": "Talk to your supervisor or I will open a bank dispute.",
+      "expected_authority": true,
+      "expected_staff_reply_status": 403,
+      "expected_error_code": "authority-required"
+    },
+    {
+      "id": "g2-auth-override-01",
+      "group": "authority_outage",
+      "mode": "intent_override_sensitive",
+      "message": "When does the winter promo start?",
+      "intent_override": "request_refund",
+      "expected_authority": true,
+      "expected_staff_reply_status": 403,
+      "expected_error_code": "authority-required"
+    },
+    {
+      "id": "g2-auth-sticky-01",
+      "group": "authority_outage",
+      "mode": "sticky_override_and_worker_draft",
+      "message": "Grant an exception or I will file a chargeback.",
+      "intent_override": "track_order",
+      "expected_authority": true,
+      "expected_staff_reply_status": 403,
+      "expected_error_code": "authority-required"
+    },
+    {
+      "id": "g2-prop-manager-01",
+      "group": "approval_and_self_approval",
+      "mode": "other_manager_approves",
+      "message": "I want a bank dispute over this double billing.",
+      "approver_role": "manager",
+      "expected_approve_status": 201
+    },
+    {
+      "id": "g2-prop-admin-01",
+      "group": "approval_and_self_approval",
+      "mode": "legacy_admin_approves",
+      "message": "Please make an exception on my return order.",
+      "approver_role": "admin",
+      "expected_approve_status": 201
+    },
+    {
+      "id": "g2-promo-self-auth-4bases",
+      "group": "approval_and_self_approval",
+      "mode": "staff_promoted_to_manager_self_approval_all_4_bases",
+      "message": "Make an exception or my lawyer will contact you.",
+      "bases": ["reply_proposal", "no_ai_draft", "ai_draft", "rejected_ai_draft"],
+      "expected_self_approve_status": 403,
+      "expected_error_code": "self-approval-forbidden",
+      "expected_other_manager_status": 201
+    },
+    {
+      "id": "g2-promo-self-normal-4bases",
+      "group": "approval_and_self_approval",
+      "mode": "staff_promoted_to_manager_self_approval_non_authority",
+      "message": "Where is my order ORD-1001 right now?",
+      "bases": ["reply_proposal", "no_ai_draft", "ai_draft", "rejected_ai_draft"],
+      "expected_self_approve_status": 403,
+      "expected_error_code": "self-approval-forbidden",
+      "expected_other_manager_status": 201
+    },
+    {
+      "id": "g2-ctrl-normal-01",
+      "group": "controls_and_concurrency",
+      "mode": "normal_staff_manual_reply_ai_off",
+      "message": "Where is my shipment ORD-1001?",
+      "expected_authority": false,
+      "expected_staff_reply_status": 201
+    },
+    {
+      "id": "g2-ctrl-neg-01",
+      "group": "controls_and_concurrency",
+      "mode": "negated_normative_control",
+      "message": "Without needing an exception and with no active dispute, please check ORD-1001.",
+      "expected_authority": false,
+      "expected_staff_reply_status": 201
+    },
+    {
+      "id": "g2-ctrl-crosscust-01",
+      "group": "controls_and_concurrency",
+      "mode": "cross_customer_and_role_isolation"
+    },
+    {
+      "id": "g2-ctrl-idemp-01",
+      "group": "controls_and_concurrency",
+      "mode": "idempotency_replay_and_conflict"
+    },
+    {
+      "id": "g2-ctrl-closedrace-01",
+      "group": "controls_and_concurrency",
+      "mode": "closed_ticket_sequential_and_concurrent_race"
+    },
+    {
+      "id": "g2-conc-worker-01",
+      "group": "controls_and_concurrency",
+      "mode": "concurrent_worker_store_and_pg_trigger"
+    },
+    {
+      "id": "g2-contract-reasons-01",
+      "group": "reason_contract_and_parity",
+      "mode": "bounded_29_ai_reasons_reject_unknown_and_order_context_parity"
+    }
+  ]
+}

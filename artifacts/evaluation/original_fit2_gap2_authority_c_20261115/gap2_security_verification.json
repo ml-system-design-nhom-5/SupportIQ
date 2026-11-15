@@ -1,0 +1,514 @@
+{
+  "schema_version": "original_fit2_gap2_authority_c.v1",
+  "frozen_matrix_path": "artifacts/evaluation/original_fit2_gap2_authority_c_20261115/frozen_gap2_case_matrix.json",
+  "frozen_matrix_sha256": "a0a7602d8af284b4e1945054d686f34ad0ba76ea268703ca4b872fa9786190f3",
+  "verdict": "PASS",
+  "total_matrix_cases": 19,
+  "executed_cases": 19,
+  "passed_cases": 19,
+  "failed_cases": [],
+  "invariants": {
+    "git_head": "5188d5ba23994771212d8ca6aa736eb5671d941d",
+    "git_branch": "minh",
+    "diff_since_slice1_40c73438_apps_data": [
+      "apps/backend/tickets/service.py"
+    ],
+    "pinned_sha256": {
+      "apps/core_backend/safety.py": "45d11761d95e00323e410f43b4bf4c6ff499c120c0cc5d89bcc3f30856c5e000",
+      "apps/core_backend/retrieval/adapter.py": "3bd797dab79da0b89e5cdeb25a668ba704e31120523cb09824bb4b64264b5f8f",
+      "artifacts/models/candidates/reconstructed-fit2-supcon-20261113/model.safetensors": "f695b1fe514aba81aafc968823047d496b03474a0b47199c65eaac6bd93c6dfa",
+      "artifacts/models/candidates/reconstructed-fit2-supcon-20261113/calibration_manifest.json": "782c88db3fcd80615c3dceabbdb96ea2be7aa769119201f94229535becc7ae39",
+      "artifacts/models/trained/distilbert-supportiq/model.safetensors": "dc7af8cffb19fe7711ed5a5d0137ffff3d7d1a1f43bad5a35edff8c8de4c1302",
+      "data/knowledge/approved_kb.v2.json": "f8dcfbbdbb9cb2cd7a09d2ec12e0149083fdd4fa04931df6261fc4d1e6425fec",
+      "apps/ai_service/kb-release.json": "cf450a72758e3d68ac7453802b5bc6c042ef2eddb9a6c4fa76483d4009c42804",
+      "apps/core_backend/config/policies/intent_policy.v2.json": "8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+      ".local/training-cap-20261114.json": "bc0445e07cca46e7285539a921691050378cdf9ceb3fdfe2cfe911b90bfde922",
+      ".local/ai.env": "26d083c75acd962010f2fbd0185af3e72e315d2bafc8d753046e51df6e8fce87"
+    },
+    "mismatches": [],
+    "sensitive_keywords_refs_in_apps": [],
+    "training_cap_2_of_2_stopped": true,
+    "passed": true
+  },
+  "group_a_authority_outage": [
+    {
+      "id": "g2-auth-off-01",
+      "mode": "ai_off",
+      "passed": true,
+      "reply_status": 403,
+      "error_code": "authority-required",
+      "allowed_actions": [
+        "retry_suggestion",
+        "submit_reply_proposal",
+        "escalate"
+      ],
+      "db_state": {
+        "status": "open",
+        "is_authority_required": true,
+        "has_reply": false,
+        "current_suggestion_id": "3288748c-3f16-4c03-83a5-b2bb5b17f049",
+        "draft_status": "unavailable",
+        "reason_codes": [
+          "ai_service_unavailable"
+        ],
+        "audit_events": [
+          "message.pseudonymized",
+          "ticket.created"
+        ],
+        "reply_sent_audit_count": 0
+      }
+    },
+    {
+      "id": "g2-auth-off-02",
+      "mode": "ai_off",
+      "passed": true,
+      "reply_status": 403,
+      "error_code": "authority-required",
+      "allowed_actions": [
+        "retry_suggestion",
+        "submit_reply_proposal",
+        "escalate"
+      ],
+      "db_state": {
+        "status": "open",
+        "is_authority_required": true,
+        "has_reply": false,
+        "current_suggestion_id": "2037b01a-fd53-4ade-bdc1-3e7afcdd7ecf",
+        "draft_status": "unavailable",
+        "reason_codes": [
+          "ai_service_unavailable"
+        ],
+        "audit_events": [
+          "message.pseudonymized",
+          "ticket.created"
+        ],
+        "reply_sent_audit_count": 0
+      }
+    },
+    {
+      "id": "g2-auth-off-03",
+      "mode": "ai_off",
+      "passed": true,
+      "reply_status": 403,
+      "error_code": "authority-required",
+      "allowed_actions": [
+        "retry_suggestion",
+        "submit_reply_proposal",
+        "escalate"
+      ],
+      "db_state": {
+        "status": "open",
+        "is_authority_required": true,
+        "has_reply": false,
+        "current_suggestion_id": "5b839953-38f3-484f-ae8d-8572ac1b5e7e",
+        "draft_status": "unavailable",
+        "reason_codes": [
+          "ai_service_unavailable"
+        ],
+        "audit_events": [
+          "message.pseudonymized",
+          "ticket.created"
+        ],
+        "reply_sent_audit_count": 0
+      }
+    },
+    {
+      "id": "g2-auth-pend-01",
+      "mode": "ai_pending",
+      "passed": true,
+      "reply_status": 403,
+      "error_code": "authority-required",
+      "db_state": {
+        "status": "open",
+        "is_authority_required": true,
+        "has_reply": false,
+        "current_suggestion_id": "f253e13f-41a6-449f-8e3d-5b6995aa1bea",
+        "draft_status": "pending",
+        "reason_codes": [],
+        "audit_events": [
+          "message.pseudonymized",
+          "ticket.created"
+        ],
+        "reply_sent_audit_count": 0
+      }
+    },
+    {
+      "id": "g2-auth-timeout-01",
+      "mode": "ml_timeout",
+      "passed": true,
+      "reply_status": 403,
+      "error_code": "authority-required",
+      "db_state": {
+        "status": "open",
+        "is_authority_required": true,
+        "has_reply": false,
+        "current_suggestion_id": "bd9fd768-4943-42f7-8afb-36fb41e0da11",
+        "draft_status": "unavailable",
+        "reason_codes": [
+          "ml_timeout",
+          "ai_service_unavailable"
+        ],
+        "audit_events": [
+          "message.pseudonymized",
+          "ticket.created",
+          "suggestion.part_completed",
+          "suggestion.part_completed"
+        ],
+        "reply_sent_audit_count": 0
+      }
+    },
+    {
+      "id": "g2-auth-privfail-01",
+      "mode": "pseudonymization_failed",
+      "passed": true,
+      "reply_status": 403,
+      "error_code": "authority-required",
+      "db_state": {
+        "status": "open",
+        "is_authority_required": true,
+        "has_reply": false,
+        "current_suggestion_id": "455a04ba-95a4-4217-af5f-f31db423034a",
+        "draft_status": "unavailable",
+        "reason_codes": [
+          "pseudonymization_failed"
+        ],
+        "audit_events": [
+          "message.pseudonymized",
+          "ticket.created"
+        ],
+        "reply_sent_audit_count": 0
+      }
+    },
+    {
+      "id": "g2-auth-override-01",
+      "mode": "intent_override_sensitive",
+      "passed": true,
+      "override_status": 202,
+      "reply_status": 403,
+      "error_code": "authority-required",
+      "db_state": {
+        "status": "open",
+        "is_authority_required": true,
+        "has_reply": false,
+        "current_suggestion_id": "51a1582f-bc3e-429f-bda8-27f44688ee09",
+        "draft_status": "unavailable",
+        "reason_codes": [
+          "ai_service_unavailable"
+        ],
+        "audit_events": [
+          "message.pseudonymized",
+          "ticket.created",
+          "message.pseudonymized",
+          "intent.overridden"
+        ],
+        "reply_sent_audit_count": 0
+      }
+    },
+    {
+      "id": "g2-auth-sticky-01",
+      "mode": "sticky_override_and_worker_draft",
+      "passed": true,
+      "reply_status": 403,
+      "error_code": "authority-required",
+      "db_state": {
+        "status": "open",
+        "is_authority_required": true,
+        "has_reply": false,
+        "current_suggestion_id": "1bbf4c7d-1a91-4e27-ad3c-260488c25f9e",
+        "draft_status": "draft_ready",
+        "reason_codes": [],
+        "audit_events": [
+          "message.pseudonymized",
+          "ticket.created",
+          "suggestion.part_completed",
+          "suggestion.part_completed",
+          "message.pseudonymized",
+          "intent.overridden",
+          "suggestion.part_completed",
+          "suggestion.part_completed"
+        ],
+        "reply_sent_audit_count": 0
+      }
+    }
+  ],
+  "group_b_approval_and_self_approval": [
+    {
+      "id": "g2-prop-manager-01",
+      "mode": "other_manager_approves",
+      "passed": true,
+      "proposal_status": 201,
+      "approve_status": 201,
+      "db_state": {
+        "status": "closed",
+        "is_authority_required": true,
+        "has_reply": true,
+        "current_suggestion_id": "10216042-8987-479b-8c9a-001e8a0f2b4b",
+        "draft_status": "unavailable",
+        "reason_codes": [
+          "ai_service_unavailable"
+        ],
+        "audit_events": [
+          "message.pseudonymized",
+          "ticket.created",
+          "reply_proposal.submitted",
+          "reply.sent"
+        ],
+        "reply_sent_audit_count": 1
+      }
+    },
+    {
+      "id": "g2-prop-admin-01",
+      "mode": "legacy_admin_approves",
+      "passed": true,
+      "proposal_status": 201,
+      "approve_status": 201,
+      "db_state": {
+        "status": "closed",
+        "is_authority_required": true,
+        "has_reply": true,
+        "current_suggestion_id": "9637f9d6-e773-4983-b2a6-39589f1537ce",
+        "draft_status": "unavailable",
+        "reason_codes": [
+          "ai_service_unavailable"
+        ],
+        "audit_events": [
+          "message.pseudonymized",
+          "ticket.created",
+          "reply_proposal.submitted",
+          "reply.sent"
+        ],
+        "reply_sent_audit_count": 1
+      }
+    },
+    {
+      "id": "g2-promo-self-auth-4bases",
+      "mode": "staff_promoted_to_manager_self_approval_all_4_bases",
+      "passed": true,
+      "old_session_status": 401,
+      "promoted_allowed_actions": [],
+      "basis_attempts": {
+        "reply_proposal": {
+          "status": 403,
+          "error_code": "self-approval-forbidden"
+        },
+        "no_ai_draft": {
+          "status": 403,
+          "error_code": "self-approval-forbidden"
+        },
+        "ai_draft": {
+          "status": 403,
+          "error_code": "self-approval-forbidden"
+        },
+        "rejected_ai_draft": {
+          "status": 403,
+          "error_code": "self-approval-forbidden"
+        }
+      },
+      "other_manager_status": 201,
+      "db_state_end": {
+        "status": "closed",
+        "is_authority_required": true,
+        "has_reply": true,
+        "current_suggestion_id": "d8a949eb-aa00-43a0-a8aa-572726592c5d",
+        "draft_status": "draft_ready",
+        "reason_codes": [],
+        "audit_events": [
+          "message.pseudonymized",
+          "ticket.created",
+          "suggestion.part_completed",
+          "suggestion.part_completed",
+          "reply_proposal.submitted",
+          "reply.sent",
+          "decision.recorded"
+        ],
+        "reply_sent_audit_count": 1
+      }
+    },
+    {
+      "id": "g2-promo-self-normal-4bases",
+      "mode": "staff_promoted_to_manager_self_approval_non_authority",
+      "passed": true,
+      "old_session_status": 401,
+      "promoted_allowed_actions": [],
+      "basis_attempts": {
+        "reply_proposal": {
+          "status": 403,
+          "error_code": "self-approval-forbidden"
+        },
+        "no_ai_draft": {
+          "status": 403,
+          "error_code": "self-approval-forbidden"
+        },
+        "ai_draft": {
+          "status": 403,
+          "error_code": "self-approval-forbidden"
+        },
+        "rejected_ai_draft": {
+          "status": 403,
+          "error_code": "self-approval-forbidden"
+        }
+      },
+      "other_manager_status": 201,
+      "db_state_end": {
+        "status": "closed",
+        "is_authority_required": false,
+        "has_reply": true,
+        "current_suggestion_id": "5443d406-09fa-40ea-9119-8c2c9ae3ba92",
+        "draft_status": "draft_ready",
+        "reason_codes": [],
+        "audit_events": [
+          "message.pseudonymized",
+          "ticket.created",
+          "suggestion.part_completed",
+          "suggestion.part_completed",
+          "reply_proposal.submitted",
+          "reply.sent",
+          "decision.recorded"
+        ],
+        "reply_sent_audit_count": 1
+      }
+    }
+  ],
+  "group_c_controls_concurrency_contracts": [
+    {
+      "id": "g2-ctrl-normal-01",
+      "mode": "normal_staff_manual_reply_ai_off",
+      "passed": true,
+      "reply_status": 201,
+      "db_state": {
+        "status": "closed",
+        "is_authority_required": false,
+        "has_reply": true,
+        "current_suggestion_id": "294d8646-7bbd-4a91-8bf2-e9ed211da14d",
+        "draft_status": "unavailable",
+        "reason_codes": [
+          "ai_service_unavailable"
+        ],
+        "audit_events": [
+          "message.pseudonymized",
+          "ticket.created",
+          "reply.sent"
+        ],
+        "reply_sent_audit_count": 1
+      }
+    },
+    {
+      "id": "g2-ctrl-neg-01",
+      "mode": "negated_normative_control",
+      "passed": true,
+      "reply_status": 201,
+      "db_state": {
+        "status": "closed",
+        "is_authority_required": false,
+        "has_reply": true,
+        "current_suggestion_id": "6099df3a-bbf2-474a-8f8e-f3302bcc6dab",
+        "draft_status": "unavailable",
+        "reason_codes": [
+          "ai_service_unavailable"
+        ],
+        "audit_events": [
+          "message.pseudonymized",
+          "ticket.created",
+          "reply.sent"
+        ],
+        "reply_sent_audit_count": 1
+      }
+    },
+    {
+      "id": "g2-ctrl-crosscust-01",
+      "mode": "cross_customer_and_role_isolation",
+      "passed": true,
+      "c2_get_ticket": 404,
+      "c2_c1_order": 404,
+      "cust_console": 403
+    },
+    {
+      "id": "g2-ctrl-idemp-01",
+      "mode": "idempotency_replay_and_conflict",
+      "passed": true,
+      "r1": 201,
+      "r2": 201,
+      "r3": 409,
+      "reply_sent_audits": 1
+    },
+    {
+      "id": "g2-ctrl-closedrace-01",
+      "mode": "closed_ticket_sequential_and_concurrent_race",
+      "passed": true,
+      "concurrent_statuses": [
+        201,
+        409
+      ],
+      "late_proposal_status": 409,
+      "late_proposal_error": "invalid-ticket-state",
+      "reply_sent_audits": 1
+    },
+    {
+      "id": "g2-conc-worker-01",
+      "mode": "concurrent_worker_store_and_pg_trigger",
+      "passed": true,
+      "db_state": {
+        "status": "open",
+        "is_authority_required": true,
+        "has_reply": false,
+        "current_suggestion_id": "31e236a8-fcf3-4931-903f-0a3bd07f334e",
+        "draft_status": "draft_ready",
+        "reason_codes": [],
+        "audit_events": [
+          "message.pseudonymized",
+          "ticket.created",
+          "suggestion.part_completed",
+          "suggestion.part_completed",
+          "suggestion.part_completed"
+        ],
+        "reply_sent_audit_count": 0
+      },
+      "pg_trigger_blocked": true,
+      "pg_trigger_error_present": true
+    },
+    {
+      "id": "g2-contract-reasons-01",
+      "mode": "bounded_29_ai_reasons_reject_unknown_and_order_context_parity",
+      "passed": true,
+      "ai_reasons_count": 29,
+      "ai_reasons_exact_29": true,
+      "unknown_reason_rejected_by_validate_analysis": true,
+      "worker_fail_closed_on_unknown_reason": true,
+      "order_context_nonrefund_fields": [
+        "order_status",
+        "order_total",
+        "shipment_status",
+        "shipping_cost"
+      ],
+      "order_context_refund_fields": [
+        "order_status",
+        "order_total",
+        "refund_amount",
+        "refund_status",
+        "shipment_status",
+        "shipping_cost"
+      ],
+      "order_context_refund_count": 6,
+      "order_context_allowed_fields": [
+        "order_status",
+        "placed_at",
+        "order_total",
+        "shipping_cost",
+        "shipment_status",
+        "estimated_delivery_at",
+        "delivered_at",
+        "refund_status",
+        "refund_amount",
+        "refund_requested_at"
+      ],
+      "order_context_allowed_count": 10,
+      "order_context_parity_missing_fields": [
+        "placed_at",
+        "estimated_delivery_at",
+        "delivered_at",
+        "refund_requested_at"
+      ]
+    }
+  ],
+  "duration_seconds": 47.63
+}
