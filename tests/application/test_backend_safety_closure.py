@@ -731,9 +731,11 @@ def test_actual_outbound_gateway_transport_synthetic_pii_and_log_capture(pg_appl
     assert "[ADDRESS_1]" in transport_message
     assert "[LITERAL_1]" in transport_message
 
-    # Order context across transport must contain ONLY allowlisted fields
-    allowed_order_fields = {"order_status", "order_total", "shipping_cost", "shipment_status", "refund_status", "refund_amount"}
-    assert set(transport_order_context.keys()) <= allowed_order_fields
+    # Order context across transport must contain ONLY canonical allowlisted fields
+    from apps.core_backend.llm.gemini import ORDER_CONTEXT_ALLOWED_SET
+
+    assert set(transport_order_context.keys()) <= ORDER_CONTEXT_ALLOWED_SET
+    assert "placed_at" in transport_order_context
     for forbidden in ("customer_name", "phone", "shipping_address", "credit_card", "transaction_id", "tracking_code"):
         assert forbidden not in transport_order_context
 

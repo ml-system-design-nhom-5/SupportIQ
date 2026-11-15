@@ -548,3 +548,149 @@ def test_engine_draft_direct_call_mixed_s1_s2_legacy_only_fails_closed():
         llm.close()
     assert res["status"] == "llm_unavailable"
     assert "grounding_failed" in res["reason_codes"]
+
+
+def test_backend_order_context_to_engine_all_ten_canonical_fields_and_exclusion(monkeypatch):
+    """All 10 canonical order_context fields survive backend -> privacy -> SuggestionRequest -> Engine -> worker, while legacy/PII/malformed stay excluded/rejected."""
+    from apps.backend.tickets import jobs as jobs_mod
+    from apps.backend.tickets.privacy import validate_egress_payload
+    from apps.core_backend.llm.gemini import ORDER_CONTEXT_ALLOWED_FIELDS
+
+    full_order = SimpleNamespace(
+        payload={
+            "order_id": "ORD-1010",
+            "customer_id": "cust-secret-10",
+            "customer_name": "Le Thi Secret",
+            "phone": "+84901234567",
+            "shipping_address": "123 Le Loi Street, District 1, HCMC",
+            "transaction_id": "TXN-1010",
+            "payment_status": "Captured",
+            "can_cancel": False,
+            "order_status": "delivered",
+            "placed_at": "2026-10-01T07:00:00Z",
+            "order_total": {"amount_minor": 1402000, "currency": "vnd"},
+            "shipping_cost": {"amount_minor": 0, "currency": "VND"},
+            "shipment": {
+                "shipment_status": "delivered",
+                "tracking_code": "GIAO1010",
+                "carrier": "GHN Express",
+                "estimated_delivery_text": "Today before 18:00",
+                "estimated_delivery_at": "2026-10-03T18:00:00Z",
+                "delivered_at": "2026-10-03",
+            },
+            "refund": {
+                "refund_status": "requested",
+                "refund_amount": {"amount_minor": 500000, "currency": "VND"},
+                "refund_requested_at": "2026-10-05T09:15:00Z",
+                "expected_refund_time": "3-5 business days",
+            },
+        }
+    )
+
+    ctx = build_backend_order_context(full_order)
+    assert list(ctx.keys()) == list(ORDER_CONTEXT_ALLOWED_FIELDS)
+    assert ctx["order_total"] == {"amount_minor": 1402000, "currency": "VND"}
+    assert ctx["shipping_cost"] == {"amount_minor": 0, "currency": "VND"}
+    for excluded in (
+        "order_id", "customer_id", "customer_name", "phone", "shipping_address",
+        "transaction_id", "tracking_code", "carrier", "payment_status",
+        "estimated_delivery_text", "expected_refund_time", "can_cancel",
+    ):
+        assert excluded not in ctx
+
+    monkeypatch.setattr(
+        "apps.backend.tickets.privacy._get_spacy_nlp",
+        lambda: (lambda _text: SimpleNamespace(ents=[])),
+    )
+    envelope = {
+        "message": "When was my order placed and delivered, and when was my refund requested?",
+        "order_context": ctx,
+        "as_of": "2026-10-06T00:00:00Z",
+    }
+    validate_egress_payload(envelope, require_ner=True)
+    req_model = SuggestionRequest(**envelope)
+
+    captured: list[str] = []
+    llm = _make_stub_gemini(
+        answer=(
+            "Your order placed on 2026-10-01 was delivered on 2026-10-03, "
+            "and your 500,000 VND refund was requested on 2026-10-05 [S2]."
+        ),
+        citations=["S2"],
+        captured_bodies=captured,
+    )
+    try:
+        eng = _make_engine(llm)
+        eng_res = eng.draft(req_model.model_dump())
+    finally:
+        llm.close()
+
+    assert eng_res["status"] == "draft_ready"
+    assert eng_res["draft"]["citations"] == [
+        {
+            "citation_id": "S2",
+            "source_type": "order_context",
+            "fields": list(ORDER_CONTEXT_ALLOWED_FIELDS),
+        }
+    ]
+    wire = json.loads(json.loads(captured[0])["contents"][0]["parts"][0]["text"])
+    assert set(wire["order_facts"].keys()) == set(ORDER_CONTEXT_ALLOWED_FIELDS)
+    for expected in (
+        "placed_at: 2026-10-01T07:00:00Z",
+        "estimated_delivery_at: 2026-10-03T18:00:00Z",
+        "delivered_at: 2026-10-03",
+        "refund_requested_at: 2026-10-05T09:15:00Z",
+    ):
+        assert expected in wire["sources"][1]["excerpt"]
+    for secret in ("ORD-1010", "cust-secret-10", "Le Thi Secret", "GIAO1010", "GHN Express"):
+        assert secret not in captured[0]
+
+    stored = []
+    worker = SuggestionWorker(
+        database=SimpleNamespace(),
+        settings=SimpleNamespace(ai_service_base_url="http://ai.local", ai_service_analysis_timeout_ms=3000, ai_service_draft_timeout_ms=11000),
+    )
+    monkeypatch.setattr(worker, "store", lambda *args, **kwargs: stored.append((args, kwargs)))
+
+    class FakeClient:
+        def __init__(self, *a, **kw):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def post(self, url, json=None):
+            body = eng_res["analysis"] if url.endswith("/v1/analyses") else eng_res
+            return SimpleNamespace(raise_for_status=lambda: None, json=lambda: body)
+
+    monkeypatch.setattr(jobs_mod.httpx, "Client", FakeClient)
+    worker.process("sugg-10", "tok-10", req_model.model_dump())
+    hydrated = stored[-1][0][3]["draft"]["citations"][0]
+    assert hydrated["values"] == ctx
+
+    # None optional fields and malformed/PII payloads inside order.payload stay excluded safely
+    poisoned_order = SimpleNamespace(
+        payload={
+            "order_id": "ORD-1011",
+            "order_status": "shipped email leak@example.com",
+            "placed_at": "not-an-iso-date",
+            "order_total": {"amount_minor": 100000, "currency": "VND", "extra": "leak"},
+            "shipping_cost": {"amount_minor": 0, "currency": "VND"},
+            "shipment": {"shipment_status": "in_transit", "delivered_at": None},
+            "refund": None,
+        }
+    )
+    safe_ctx = build_backend_order_context(poisoned_order)
+    assert safe_ctx == {
+        "order_status": "shipped email [EMAIL]",
+        "shipping_cost": {"amount_minor": 0, "currency": "VND"},
+        "shipment_status": "in_transit",
+    }
+    validate_egress_payload({**envelope, "order_context": safe_ctx}, require_ner=True)
+    with pytest.raises(ValueError):
+        validate_egress_payload({**envelope, "order_context": {**safe_ctx, "carrier": "GHN"}}, require_ner=True)
+    with pytest.raises(ValidationError):
+        SuggestionRequest(**{**envelope, "order_context": {**safe_ctx, "delivered_at": "Call 0912345678"}})

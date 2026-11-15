@@ -9,6 +9,7 @@ from apps.backend.commerce import order_view, require_order
 from apps.backend.platform.database import Problem, audit, utcnow, ensure_utc
 from apps.backend.platform.models import Account, CustomerMessage, Order, Suggestion, SuggestionJob, Ticket
 from apps.backend.platform.observability import metrics
+from apps.core_backend.llm.gemini import ORDER_CONTEXT_ALLOWED_FIELDS, ORDER_CONTEXT_ALLOWED_SET, extract_order_facts
 from apps.core_backend.safety import has_authority_request
 from .privacy import PLACEHOLDER, pseudonymize, restore
 
@@ -36,12 +37,35 @@ def shop_ticket(session, ticket):
 
 
 def order_context(order):
-    data = order.payload
-    context = {key: data[key] for key in ("order_status", "order_total", "shipping_cost")}
-    context["shipment_status"] = data["shipment"]["shipment_status"]
-    if data.get("refund"):
-        context.update({key: data["refund"][key] for key in ("refund_status", "refund_amount")})
-    return context
+    """Extract canonical allowlisted non-PII order facts across order, shipment, and refund payloads."""
+    data = order.payload if isinstance(order.payload, dict) else {}
+    shipment = data.get("shipment") if isinstance(data.get("shipment"), dict) else {}
+    refund = data.get("refund") if isinstance(data.get("refund"), dict) else {}
+    raw = {}
+    for key in ORDER_CONTEXT_ALLOWED_FIELDS:
+        for source in (data, shipment, refund):
+            if source.get(key) is not None:
+                raw[key] = source[key]
+                break
+    lookup = {
+        **raw,
+        **{k: data[k] for k in ("order_id", "customer_id", "customer_name", "transaction_id") if k in data},
+    }
+    if shipment.get("tracking_code") is not None:
+        lookup.setdefault("tracking_code", shipment["tracking_code"])
+    facts = extract_order_facts(
+        lookup,
+        allowed_fields=ORDER_CONTEXT_ALLOWED_SET,
+        include_order_identifiers=False,
+        strict=False,
+    )
+    return {
+        key: {"amount_minor": raw[key]["amount_minor"], "currency": raw[key]["currency"].strip().upper()}
+        if isinstance(raw[key], dict)
+        else facts[key]
+        for key in ORDER_CONTEXT_ALLOWED_FIELDS
+        if key in facts
+    }
 
 
 def suggestion_view(suggestion):
