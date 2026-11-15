@@ -278,8 +278,9 @@ _QUOTE_TRANSLATION = str.maketrans({
 })
 _QUOTE_ATTRIBUTION_PREFIX = re.compile(
     r"(?:\b(?:said|says|ask(?:s|ed)?|told\s+(?:me|us)|wrote|writes|states?|mentions?|reads?|"
+    r"jok(?:e[ds]?|ing)|claim(?:s|ed)?|suggest(?:s|ed)?|repl(?:y|ies|ied)|advis(?:e[ds]?|ing)|"
     r"called|labeled|titled|button|tab|section|page|menu|option|"
-    r"instead\s+of|rather\s+than)\s*[:\-]?\s*)$",
+    r"instead\s+of|rather\s+than)\s*[:,\-]?\s*)$",
     re.I,
 )
 _CHANNEL_RETURN_VERB = re.compile(
@@ -310,15 +311,39 @@ _NEG_CHANNEL_MOTION_OR_ACTION = (
     r"return(?:ing)?|drop(?:ping)?\s+off|bring(?:ing)?|tak(?:e|ing)|"
     r"print(?:ing)?|download(?:ing)?|generat(?:e|ing)|us(?:e|ing))"
 )
+_NEG_CHANNEL_TRANSITIVE_ACTION = (
+    r"(?:return(?:ing)?|bring(?:ing)?(?:\s+(?:back|in))?|tak(?:e|ing)(?:\s+back)?|"
+    r"drop(?:ping)?(?:\s+off)?|hand(?:ing)?(?:\s+in)?|send(?:ing)?(?:\s+back)?|"
+    r"ship(?:ping)?(?:\s+back)?|carry(?:ing)?|deliver(?:ing)?|exchang(?:e|ing)|swap(?:ping)?)"
+)
+_NEG_OBJECT_NP_WORD = (
+    r"(?!(?:and|or|but|so|yet|though|however|actually|if|when|while|where|because|since|"
+    r"unless|until|then|before|after|whether|than|to|"
+    r"am|is|are|was|were|be|been|being|do|does|did|have|has|had|"
+    r"can|could|will|would|shall|should|may|might|must|"
+    r"i|we|you|he|she|they|i'm|i'll|i'd|we're|we'll|we'd|you're|you'll|let|let's|"
+    r"someone|anyone|everyone|please|"
+    r"want|need|plan|prefer|like|wish|try|trying|go|going|walk|walking|travel|traveling|travelling|"
+    r"drive|driving|come|coming|visit|visiting|return|returning|bring|bringing|take|taking|"
+    r"drop|dropping|hand|handing|send|sending|ship|shipping|carry|carrying|exchange|exchanging|swap|swapping)\b)"
+    r"[A-Za-z0-9'](?:[A-Za-z0-9'-]{0,28}[A-Za-z0-9'])?"
+)
+_NEG_CHANNEL_ACTION_CLAUSE = (
+    rf"(?:"
+    rf"{_NEG_CHANNEL_TRANSITIVE_ACTION}(?:\s+{_NEG_OBJECT_NP_WORD}){{1,5}}(?:\s+(?:back|off|in))?"
+    rf"|{_NEG_CHANNEL_MOTION_OR_ACTION}"
+    rf")"
+)
 _DECLARATIVE_CHANNEL_NEG_PREFIX = re.compile(
     r"\b(?:"
     r"no\s+need\s+(?:for|to)"
     r"|(?:i|we)(?:'d|\s+would)?\s+(?:prefer\s+not\s+to|rather\s+not)"
     r"|(?:i|we)\s+(?:do\s+not|don't|did\s+not|didn't|cannot|can\s+not|can't|could\s+not|couldn't|will\s+not|won't|would\s+not|wouldn't)"
-    r"|(?:i'm|we're|(?:i|we)\s+(?:am|are))\s+(?:not(?:\s+(?:going|planning|willing|trying|looking|asking))?|unable)"
+    r"|(?:(?:i'm|we're|(?:i|we)\s+(?:am|are))\s+not|we\s+aren't)(?:\s+(?:going|planning|willing|trying|looking|asking))?"
+    r"|(?:i'm|we're|(?:i|we)\s+(?:am|are))\s+unable"
     r"|without(?:\s+(?:going|traveling|walking|heading|driving|visiting|needing|having|using|printing|downloading))?"
     r")(?:\s+(?:want|need|wish|plan|expect|intend|prefer|like|have|be\s+able|able))?"
-    rf"(?:\s+(?:to|for))?(?:\s+{_NEG_CHANNEL_MOTION_OR_ACTION})?"
+    rf"(?:\s+(?:to|for))?(?:\s+{_NEG_CHANNEL_ACTION_CLAUSE})?"
     r"(?:\s+(?:to|into|at|for|with|any|a|an|the|my|your))*\s*$",
     re.I,
 )

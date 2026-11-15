@@ -815,3 +815,111 @@ def test_gap1b_negated_modal_and_motion_declining_physical_channel_remains_allow
 )
 def test_gap1b_compound_contradictions_and_negated_wrong_object_still_escalate(tmp_path: Path, query: str):
     _assert_both_escalate(tmp_path, query, "return_product", ["POL-RET-002", "POL-RET-001"])
+
+
+@pytest.mark.parametrize(
+    "text,intent,doc_ids",
+    [
+        (
+            "We will not bring the faulty headset into a local store; instead, please explain the 1-2 business day courier pickup process.",
+            "return_product",
+            ["POL-RET-002", "POL-RET-001"],
+        ),
+        (
+            "I won't take my damaged laptop into a physical store; please schedule courier pickup.",
+            "return_product",
+            ["POL-RET-002"],
+        ),
+        (
+            "We are not returning the big broken OLED monitor to a retail branch — how does courier pickup work?",
+            "return_product",
+            ["POL-RET-002"],
+        ),
+        (
+            "We do not plan to drop off the heavy microwave at a local storefront; please share post office steps.",
+            "return_product",
+            ["POL-RET-002"],
+        ),
+        (
+            "I'm not going to carry this bulky wireless printer into a retail outlet — can a courier pick it up?",
+            "return_product",
+            ["POL-RET-002"],
+        ),
+        (
+            "We won't hand the defective keyboard in at a physical shop; let's use partner post office drop-off.",
+            "return_product",
+            ["POL-RET-002"],
+        ),
+        (
+            "Without bringing the faulty headset into a local store, how do I book courier pickup?",
+            "return_product",
+            ["POL-RET-002"],
+        ),
+        (
+            "A friend joked 'just walk into a retail store', though I actually plan to drop the box at a designated partner post office.",
+            "return_product",
+            ["POL-RET-002", "POL-RET-001"],
+        ),
+        (
+            'My coworker joked: "drop it off at a physical branch" — instead, how do I schedule courier pickup?',
+            "return_product",
+            ["POL-RET-002"],
+        ),
+        (
+            "A friend joked, 'go into a local shop', rather than doing that I want courier pickup from my condo.",
+            "return_product",
+            ["POL-RET-002"],
+        ),
+        (
+            "Support suggested 'return at a local store' by mistake, please help me arrange courier pickup.",
+            "return_product",
+            ["POL-RET-002"],
+        ),
+        (
+            "An old forum post claimed 'walk into any retail outlet', instead how do I return online?",
+            "return_product",
+            ["POL-RET-002"],
+        ),
+    ],
+)
+def test_gap1c_transitive_negated_action_and_quoted_speech_remain_allowed(
+    tmp_path: Path, text: str, intent: str, doc_ids: list[str], fake_llm
+):
+    _assert_both_allow(tmp_path, text, intent, doc_ids, fake_llm=fake_llm)
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "I joked before, but now I want to go to a physical store.",
+        "I joked 'never going to a store' before, but now I want to go to a physical store.",
+        "A friend joked 'just walk into a retail store', though can I still drop my shoes off at a local store?",
+        "The FAQ claims 'online pickup is standard', yet can I personally walk into a brick-and-mortar store to return shoes?",
+        "Can I 'just walk into a retail store'?",
+        "We will not bring the faulty headset today — can I drop it off into a local store tomorrow?",
+        "We won't bring a receipt -- can we bring the faulty headset into a local store?",
+        "I cannot print a return label to bring this headset into a local store.",
+        "Without a home printer may I bring the microwave directly to a local storefront?",
+        "Without bringing a receipt I will go into a local store.",
+        "We will not wait for pickup and will take the headset into a local store instead.",
+        "We will not bring a box so I want to bring the faulty headset into a local store.",
+    ],
+)
+def test_gap1c_quote_positive_controls_and_unrelated_negation_still_escalate(tmp_path: Path, query: str):
+    _assert_both_escalate(tmp_path, query, "return_product", ["POL-RET-002", "POL-RET-001"])
+
+
+def test_gap1c_multichannel_negated_single_order_plus_full_history_escalates(tmp_path: Path):
+    ctx = RoutingContext(
+        ticket_customer_id="demo-customer",
+        verified_scope="ticket:read order:read",
+        is_personal_lookup=True,
+        extracted_slots={"order_id": "ORD-1001"},
+    )
+    _assert_both_escalate(
+        tmp_path,
+        "I do not only want order ORD-1001; please send a full spreadsheet of all historical orders from my account.",
+        "track_order",
+        ["POL-ORD-001"],
+        ctx=ctx,
+    )
