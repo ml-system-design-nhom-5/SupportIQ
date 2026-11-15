@@ -1,0 +1,14 @@
+{
+  "branch": "minh",
+  "git_head": "e8856394043c93bdd64e79155396c6f282962000",
+  "command": ".venv/Scripts/python.exe -B artifacts/evaluation/original_fit2_safety_slice1_closure_c_20261115/evaluate_safety_slice1_closure_c.py",
+  "verdict": "PASS",
+  "failed_criteria": [],
+  "eval_seconds": 111.59,
+  "total_duration_seconds": 132.67,
+  "sha256": {
+    "artifacts/evaluation/original_fit2_safety_slice1_closure_c_20261115/evaluate_safety_slice1_closure_c.py": "5808f5846452c2475535a1d19ee46edc5a9c895d691b8929adcf6516d8850509",
+    "artifacts/evaluation/original_fit2_safety_slice1_closure_c_20261115/predictions_post_slice1_closure_orig_fit2.jsonl": "82f0397ea8df17478119dc9d8184dc53b06e03f2a7275a1564740d1b334988d5",
+    "artifacts/evaluation/original_fit2_safety_slice1_closure_c_20261115/slice1_closure_paired_evaluation.json": "b4423df478bfd53a5749360112d3bf583a7c3f2fe2d6dab3352ba386a4230308"
+  }
+}
