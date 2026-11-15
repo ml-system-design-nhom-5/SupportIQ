@@ -90,7 +90,17 @@ class RetrievalAdapter:
                         })
                         continue
 
+                    raw_intents = d.get("supported_intents", [])
+                    raw_caps = d.get("answer_capabilities", [])
                     try:
+                        if raw_intents is None or not isinstance(raw_intents, (list, tuple)) or any(
+                            not isinstance(item, str) or not item.strip() for item in raw_intents
+                        ):
+                            raise ValueError("invalid supported_intents")
+                        if raw_caps is None or not isinstance(raw_caps, (list, tuple)) or any(
+                            not isinstance(item, str) or not item.strip() for item in raw_caps
+                        ):
+                            raise ValueError("invalid answer_capabilities")
                         meta = PolicyMetadata(
                             status="approved",
                             approved_by=approved_by,
@@ -99,8 +109,8 @@ class RetrievalAdapter:
                             valid_to=d.get("valid_to"),
                             allowed_roles=allowed_roles,
                             policy_key=d.get("policy_key"),
-                            supported_intents=d.get("supported_intents", []),
-                            answer_capabilities=d.get("answer_capabilities", []),
+                            supported_intents=[item.strip() for item in raw_intents],
+                            answer_capabilities=[item.strip() for item in raw_caps],
                         )
                     except Exception:
                         self.quarantined_docs.append({
@@ -155,11 +165,15 @@ class RetrievalAdapter:
                 "has_conflict": False,
             }
 
-        if intent == "human_agent":
+        clean_intent = intent.strip() if isinstance(intent, str) else ""
+        if clean_intent == "human_agent":
             return {"status": "human_agent_escalation", "evidence": [], "reason_codes": [], "has_conflict": False}
 
         if not self.index or self.index.is_empty():
             return {"status": "empty_kb", "evidence": [], "reason_codes": ["empty_kb"], "has_conflict": False}
+
+        if not clean_intent:
+            return {"status": "no_match", "evidence": [], "reason_codes": ["no_match"], "has_conflict": False}
 
         # Temporal and strict role filtering
         now = current_time or datetime.now(timezone.utc)
@@ -171,14 +185,15 @@ class RetrievalAdapter:
         if not allowed_doc_version_keys:
             return {"status": "no_match", "evidence": [], "reason_codes": ["no_match"], "has_conflict": False}
 
-        # Semantic Search across all temporally valid documents
+        # Search full approved release pool before intent filtering to prevent top-k / token-budget crowdout.
         try:
             res = search_policies(
                 query=query,
                 index=self.index,
                 encoder=self.encoder,
                 threshold=self.relevance_threshold,
-                top_k_docs=3,
+                top_k_docs=len(allowed_doc_version_keys),
+                token_budget=max(1500, 1500 * len(allowed_doc_version_keys)),
                 allowed_doc_version_keys=allowed_doc_version_keys,
             )
         except Exception as exc:
@@ -210,19 +225,34 @@ class RetrievalAdapter:
 
         pv_by_key = {(pv.doc_id, pv.version): pv for pv in valid_pv}
 
-        # ADR-0005: Additive intent-aware reranking
+        # ADR-0005: Strict intent & unboosted-threshold gating before additive reranking
         LAMBDA_INTENT = 0.15
         reranked_docs = []
         is_unauthorized_query = bool(re.search(r"\b(chargeback|unauthorized\s+(?:transaction|payment|charge)|fraud)\b", query, re.I))
         for doc in res.documents:
             pv = pv_by_key.get((doc["doc_id"], doc.get("version")))
-            # When the customer reports unauthorized charge or chargeback, duplicate charge resolution (POL-PAY-004) is inapplicable
-            if is_unauthorized_query and pv and "duplicate_charge_resolution" in pv.metadata.answer_capabilities:
+            if not pv:
                 continue
-            base_score = float(doc.get("score") or 0.0)
-            boost = LAMBDA_INTENT if (intent and pv and (not pv.metadata.supported_intents or intent in pv.metadata.supported_intents)) else 0.0
-            doc["score"] = round(base_score + boost, 4)
-            reranked_docs.append(doc)
+            supported = getattr(pv.metadata, "supported_intents", None)
+            if not isinstance(supported, (list, tuple)) or not supported or clean_intent not in supported:
+                continue
+            # When the customer reports unauthorized charge or chargeback, duplicate charge resolution (POL-PAY-004) is inapplicable
+            if is_unauthorized_query and "duplicate_charge_resolution" in (pv.metadata.answer_capabilities or ()):
+                continue
+            raw_score = float(doc.get("score") or 0.0)
+            if raw_score < self.relevance_threshold:
+                continue
+            reranked_doc = dict(doc)
+            reranked_doc["score"] = round(raw_score + LAMBDA_INTENT, 4)
+            reranked_docs.append(reranked_doc)
+
+        if not reranked_docs:
+            return {
+                "status": "no_match",
+                "evidence": [],
+                "reason_codes": ["no_match", "below_relevance_threshold"],
+                "has_conflict": False,
+            }
 
         reranked_docs.sort(key=lambda d: d.get("score") or 0.0, reverse=True)
 

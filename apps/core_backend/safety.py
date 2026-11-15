@@ -6,6 +6,7 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 import re
 from typing import Any, Dict, Optional, Sequence
+import unicodedata
 
 PLACEHOLDER = re.compile(
     r"\[(NAME|EMAIL|PHONE|CARD|ADDRESS|ORDER_ID|TRACKING_ID|TRANSACTION_ID|LITERAL)(_[1-9][0-9]{0,2})?\]"
@@ -241,12 +242,281 @@ def _extract_policy_query_years(text: str) -> list[int]:
     return years
 
 
+_ADJ_TRANSPOSITION_TARGETS = (
+    "store",
+    "stores",
+    "retail",
+    "branch",
+    "branches",
+    "storefront",
+    "shopfront",
+    "showroom",
+    "counter",
+    "outlet",
+    "kiosk",
+    "label",
+    "labels",
+    "prepaid",
+    "printable",
+    "downloadable",
+    "history",
+    "purchase",
+    "purchases",
+    "orders",
+    "account",
+)
+_QUOTE_TRANSLATION = str.maketrans({
+    "\u2018": "'",
+    "\u2019": "'",
+    "\u201c": '"',
+    "\u201d": '"',
+    "\u2013": "-",
+    "\u2014": "-",
+    "\u2212": "-",
+    "\u00a0": " ",
+})
+_QUOTE_ATTRIBUTION_PREFIX = re.compile(
+    r"(?:\b(?:said|says|told\s+(?:me|us)|wrote|writes|states?|mentions?|reads?|"
+    r"called|labeled|titled|button|tab|section|page|menu|option|"
+    r"instead\s+of|rather\s+than)\s*[:\-]?\s*)$",
+    re.I,
+)
+_CHANNEL_RETURN_VERB = re.compile(
+    r"\b(?:return(?:ing|ed)?|exchange|exchanging|drop(?:ping)?(?:\s+\w+){0,2}\s+off|"
+    r"bring(?:ing)?(?:\s+\w+){0,2}\s+(?:back|in)|hand(?:ing)?(?:\s+\w+){0,2}\s+in|"
+    r"send(?:ing)?(?:\s+\w+){0,2}\s+back|ship(?:ping)?(?:\s+\w+){0,2}\s+back|take\s+back)\b",
+    re.I,
+)
+_STORE_PURCHASE_CONTEXT = re.compile(
+    r"\b(?:bought|purchased|ordered|received|delivered|picked\s+up|collected|obtained|got|sold\s+by)\b",
+    re.I,
+)
+_ONLINE_OR_DIGITAL_STORE_MODIFIER = re.compile(
+    r"\b(?:online|web|app|google\s+play|play|apple|digital|official|brand|flagship|seller|merchant|mall)\s+$",
+    re.I,
+)
+_STORE_NON_CHANNEL_SUFFIX = re.compile(
+    r"^\s*(?:credits?|wallets?|vouchers?|cards?|balances?|polic(?:y|ies))\b",
+    re.I,
+)
+_DECLARATIVE_CHANNEL_NEG_PREFIX = re.compile(
+    r"\b(?:no\s+need\s+(?:for|to)|(?:i|we)\s+(?:do\s+not|don't)\s+(?:need|want)(?:\s+to)?|"
+    r"without(?:\s+(?:going\s+to|visiting|using|needing(?:\s+to)?|printing|downloading))?)"
+    r"\s+(?:(?:a|an|the|any|my|your)\s+)?$",
+    re.I,
+)
+_INSTEAD_OF_PREFIX = re.compile(r"\b(?:instead\s+of|rather\s+than)\b([^.,;?!\n]*)$", re.I)
+_REQUEST_MODAL_VERB = re.compile(r"\b(?:want|need|would|can|could|will|prefer|ask|please)\b", re.I)
+
+_PHYSICAL_STORE_CHANNEL_PATTERN = re.compile(
+    r"\b(?:"
+    r"in[-\s]+stores?"
+    r"|(?:at|to|into)\s+(?:a|any|your|the|one\s+of\s+your|nearest|closest|local)?\s*"
+    r"(?:physical\s+)?(?:retail\s+)?(?:stores?|storefronts?|branch(?:es)?|shopfronts?|showrooms?|outlets?|kiosks?)"
+    r"|(?:retail|physical|brick[-\s]+and[-\s]+mortar)\s+(?:stores?|storefronts?|branch(?:es)?|shopfronts?|showrooms?|locations?|outlets?|counters?)"
+    r"|(?:stores?|storefronts?|branch(?:es)?|shopfronts?|showrooms?|outlets?|kiosks?)\s+(?:counter|drop[-\s]?off|return|exchange)s?"
+    r"|(?:return(?:ing)?|exchange|exchanging|drop(?:ping)?(?:\s+\w+){0,2}\s+off|bring(?:ing)?(?:\s+\w+){0,2}\s+(?:back|in)|hand(?:ing)?(?:\s+\w+){0,2}\s+in)\s+"
+    r"(?:at|to|in|into)\s+(?:a|any|your|the|local|nearest)?\s*(?:stores?|storefronts?|branch(?:es)?|shopfronts?|showrooms?|outlets?|kiosks?)"
+    r")\b",
+    re.I,
+)
+_PREPAID_RETURN_LABEL_PATTERN = re.compile(
+    r"\b(?:"
+    r"(?:pre[-\s]?paid|printable|downloadable)\s+(?:return(?:\s+shipping)?|shipping)\s+labels?"
+    r"|(?:return(?:\s+shipping)?|shipping)\s+label\s+(?:portal|download|pdf|link|page|button|option)"
+    r"|(?:print(?:ing)?|download(?:ing)?|generat(?:e|ing)|email(?:ing)?|create|creating|issue|issuing|send(?:ing)?(?:\s+me)?)\s+"
+    r"(?:a|an|my|the|your|our)?\s*(?:(?:own|pre[-\s]?paid|free)\s+)*(?:return(?:\s+shipping)?|shipping)\s+labels?"
+    r"|return(?:\s+shipping)?\s+labels?"
+    r")\b",
+    re.I,
+)
+_FULL_ORDER_HISTORY_PATTERN = re.compile(
+    r"\b(?:"
+    r"(?:full|entire|complete|whole|all(?:\s+of\s+(?:my|the))?|past|previous|historical|account|lifetime)\s+"
+    r"(?:(?:account|personal|customer)\s+)?(?:order|purchase)s?\s+(?:history|logs?|lists?|records?|summary)"
+    r"|(?:order|purchase)\s+history"
+    r"|(?:list|log|history|records?|summary)\s+of\s+(?:all(?:\s+of)?\s+)?(?:my\s+)?(?:past\s+|previous\s+)?(?:orders?|purchases?)"
+    r"|(?:list|show|view|see|get|export|download|pull(?:\s+up)?|send(?:\s+me)?|retrieve|access)\s+"
+    r"(?:all\s+(?:of\s+)?my\s+(?:past\s+|previous\s+)?(?:orders?|purchases?)"
+    r"|my\s+(?:full|entire|complete|whole|past|previous)\s+(?:orders?|purchases?)"
+    r"|every\s+(?:order|purchase)\s+(?:i(?:'ve|\s+have)?\s+(?:ever\s+)?(?:placed|made)))"
+    r"|(?:see|view|check|export|download)\s+every\s+order\s+(?:i(?:'ve|\s+have)?\s+(?:ever\s+)?(?:placed|made)|in\s+my\s+account)"
+    r")\b",
+    re.I,
+)
+
+
+def _is_adjacent_transposition(token: str, target: str) -> bool:
+    """Return True if lowercase token is a single adjacent-letter transposition of a >=5-char target."""
+    if len(target) < 5 or len(token) != len(target) or token == target:
+        return False
+    diffs = [i for i, (a, b) in enumerate(zip(token, target)) if a != b]
+    return (
+        len(diffs) == 2
+        and diffs[1] == diffs[0] + 1
+        and token[diffs[0]] == target[diffs[1]]
+        and token[diffs[1]] == target[diffs[0]]
+    )
+
+
+def _normalize_scope_text(text: str) -> str:
+    """Normalize Unicode compatibility forms, quotes/dashes, spacing, and >=5-char channel transpositions."""
+    norm = unicodedata.normalize("NFKC", text).translate(_QUOTE_TRANSLATION)
+    norm = re.sub(r"[\u200b-\u200d\ufeff]", "", norm)
+    norm = re.sub(r"[ \t\r\f\v]+", " ", norm)
+
+    def _fix_transposition(m: re.Match[str]) -> str:
+        word = m.group(0)
+        low = word.lower()
+        for target in _ADJ_TRANSPOSITION_TARGETS:
+            if _is_adjacent_transposition(low, target):
+                return target
+        return word
+
+    return re.sub(r"\b[A-Za-z]{5,14}\b", _fix_transposition, norm)
+
+
+def _mask_attributed_quotes(text: str) -> str:
+    """Blank out quoted spans preceded by speech/UI/counterfactual attribution (not direct quoted questions)."""
+    chars = list(text)
+    for pattern in (_DOUBLE_QUOTED_SPAN, _SINGLE_QUOTED_SPAN):
+        for m in pattern.finditer(text):
+            ctx_prefix = text[max(0, m.start() - 40) : m.start()]
+            if _QUOTE_ATTRIBUTION_PREFIX.search(ctx_prefix):
+                for idx in range(m.start(), m.end()):
+                    chars[idx] = " "
+    return "".join(chars)
+
+
+def _is_negated_channel_alternative(text: str, start: int) -> bool:
+    """Return True when a channel match is rejected as an alternative rather than requested."""
+    prefix = _local_clause_prefix(text, start)
+    if _DECLARATIVE_CHANNEL_NEG_PREFIX.search(prefix):
+        return True
+    instead_match = _INSTEAD_OF_PREFIX.search(prefix)
+    if instead_match and not _REQUEST_MODAL_VERB.search(instead_match.group(1)):
+        return True
+    return False
+
+
+def _is_non_return_store_context(text: str, start: int, end: int) -> bool:
+    """Return True for purchase-in-store facts, digital/online stores, or store-credit mentions."""
+    if _STORE_NON_CHANNEL_SUFFIX.match(text[end : end + 24]):
+        return True
+    prefix = _local_clause_prefix(text, start)
+    if _ONLINE_OR_DIGITAL_STORE_MODIFIER.search(prefix) and not _CHANNEL_RETURN_VERB.search(prefix):
+        return True
+    purchase_matches = list(_STORE_PURCHASE_CONTEXT.finditer(prefix))
+    if not purchase_matches:
+        return False
+    last_purchase_end = purchase_matches[-1].end()
+    return_matches = list(_CHANNEL_RETURN_VERB.finditer(prefix))
+    last_return_end = return_matches[-1].end() if return_matches else -1
+    if last_purchase_end > last_return_end and not re.search(r"\bonline\b", prefix[last_purchase_end:], re.I):
+        return True
+    return False
+
+
+def _trusted_policy_docs(evidence: Sequence[Dict[str, Any]], eligible_versions: Sequence[Any]) -> list[Any]:
+    """Return approved active PolicyVersion docs strictly matching retrieved source_type='policy' items."""
+    trusted: list[Any] = []
+    seen_keys: set[tuple[str, str]] = set()
+    for item in evidence:
+        if not isinstance(item, dict) or item.get("source_type") != "policy":
+            continue
+        item_id = item.get("document_id") or item.get("doc_id")
+        item_ver = item.get("version")
+        if not isinstance(item_id, str) or item_ver is None:
+            continue
+        key = (item_id, str(item_ver))
+        if key in seen_keys:
+            continue
+        for doc in eligible_versions:
+            if getattr(doc, "doc_id", None) != item_id or str(getattr(doc, "version", None)) != str(item_ver):
+                continue
+            meta = getattr(doc, "metadata", None)
+            status = getattr(meta, "status", None)
+            if isinstance(status, str) and status != "approved":
+                continue
+            trusted.append(doc)
+            seen_keys.add(key)
+            break
+    return trusted
+
+
+def _trusted_docs_cover_capability(trusted_docs: Sequence[Any], capability: str) -> bool:
+    """Verify whether trusted approved policy docs explicitly grant the requested channel/capability."""
+    cap_aliases = {
+        "physical_store_return": {"in_store_return", "retail_store_return", "store_drop_off"},
+        "prepaid_return_label": {"prepaid_return_label", "return_label_portal", "printable_return_label"},
+        "full_order_history": {"order_history", "purchase_history", "full_order_history"},
+    }
+    text_evidence_patterns = {
+        "physical_store_return": re.compile(
+            r"\b(?:return|drop\s+off|exchange)\b[^.\n]{0,40}\b(?:in[-\s]+store|retail\s+store|physical\s+store|storefront|branch)\b",
+            re.I,
+        ),
+        "prepaid_return_label": re.compile(
+            r"\b(?:pre[-\s]?paid|printable|downloadable)?\s*(?:return|shipping)\s+label\b",
+            re.I,
+        ),
+        "full_order_history": re.compile(r"\b(?:order|purchase)\s+history\b", re.I),
+    }
+    allowed_caps = cap_aliases[capability]
+    text_pat = text_evidence_patterns[capability]
+    for doc in trusted_docs:
+        meta = getattr(doc, "metadata", None)
+        raw_caps = getattr(meta, "answer_capabilities", None)
+        if isinstance(raw_caps, (list, tuple)) and any(isinstance(c, str) and c in allowed_caps for c in raw_caps):
+            return True
+        raw_content = getattr(doc, "content", None)
+        if isinstance(raw_content, str) and text_pat.search(raw_content):
+            return True
+    return False
+
+
+def _has_uncovered_channel_or_capability(
+    text: str,
+    evidence: Sequence[Dict[str, Any]],
+    eligible_versions: Sequence[Any],
+) -> bool:
+    """Return True if non-empty evidence would otherwise be served for an uncovered channel/capability."""
+    if not evidence:
+        return False
+    normalized = _mask_attributed_quotes(_normalize_scope_text(text))
+    requested: list[str] = []
+
+    for m in _PHYSICAL_STORE_CHANNEL_PATTERN.finditer(normalized):
+        if _is_negated_channel_alternative(normalized, m.start()):
+            continue
+        if _is_non_return_store_context(normalized, m.start(), m.end()):
+            continue
+        requested.append("physical_store_return")
+        break
+
+    for m in _PREPAID_RETURN_LABEL_PATTERN.finditer(normalized):
+        if not _is_negated_channel_alternative(normalized, m.start()):
+            requested.append("prepaid_return_label")
+            break
+
+    for m in _FULL_ORDER_HISTORY_PATTERN.finditer(normalized):
+        if not _is_negated_channel_alternative(normalized, m.start()):
+            requested.append("full_order_history")
+            break
+
+    if not requested:
+        return False
+
+    trusted_docs = _trusted_policy_docs(evidence, eligible_versions)
+    return any(not _trusted_docs_cover_capability(trusted_docs, cap) for cap in requested)
+
+
 def policy_scope_requires_review(
     text: str,
     evidence: Sequence[Dict[str, Any]],
     eligible_versions: Sequence[Any],
 ) -> bool:
-    """Return True when query requests internal, non-active, conflicting, uncovered customs, or out-of-window policy."""
+    """Return True when query requests internal, non-active, conflicting, uncovered customs/capability, or out-of-window policy."""
     if _INTERNAL_POLICY_PATTERN.search(text):
         return True
     if _NON_ACTIVE_POLICY_PATTERN.search(text):
@@ -262,6 +532,9 @@ def policy_scope_requires_review(
             continue
         if not any(_CUSTOMS_PATTERN.search(str(item.get("excerpt", "") or "")) for item in evidence):
             return True
+
+    if _has_uncovered_channel_or_capability(text, evidence, eligible_versions):
+        return True
 
     years = _extract_policy_query_years(text)
     if (has_topic or _NON_ACTIVE_POLICY_PATTERN.search(text)) and years:
