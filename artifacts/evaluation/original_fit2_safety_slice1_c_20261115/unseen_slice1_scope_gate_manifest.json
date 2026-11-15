@@ -1,0 +1,31 @@
+{
+  "schema_version": "unseen_slice1_scope_gate.v1",
+  "created_at": "2026-11-15T09:50:00+07:00",
+  "owner": "worker_c",
+  "frozen_after_implementation_commit": "12d358d3b301680a5d1ab910d684a1102bcd509c",
+  "reviewed_b_commit": "faac0e72027627b7864a1f7d707ee79af1f8c442",
+  "adapter_commit": "03eb1231a9552fb22cf755a448d4fe6bd1225363",
+  "frozen_before_execution": true,
+  "cases_file": "artifacts/evaluation/original_fit2_safety_slice1_c_20261115/unseen_slice1_scope_gate_cases.jsonl",
+  "cases_sha256": "20bb9315c8d4be4670fd2e8157053eea29ee43eec6a7510029ccbb49a66b84d8",
+  "normative_basis": [
+    "data/knowledge/approved_kb.v2.json (POL-RET-001 v2.0, POL-RET-002 v2.0, POL-RET-003 v2.0, POL-ORD-001 v1.0, POL-REFUND-007 v1.0)",
+    "apps/ai_service/kb-release.json (14 released documents)",
+    "apps/core_backend/config/policies/intent_policy.v2.json"
+  ],
+  "total_cases": 27,
+  "must_not_draft_cases": 11,
+  "supported_counterexample_cases": 16,
+  "slices": {
+    "physical_store_unsupported": 2,
+    "mixed_digital_physical": 3,
+    "quoted_context": 3,
+    "allowed_courier_post_office": 4,
+    "prepaid_label_portal_unsupported": 2,
+    "generic_label_supported": 2,
+    "full_account_history_unsupported": 3,
+    "single_order_history_supported": 3,
+    "negated_store_false_positive_probe": 5
+  },
+  "disjoint_verification": "Zero text/norm-text overlap with tests/unit/test_safety_slice1_gap1_a.py, unseen_domain_gate_cases.jsonl, or any of the 12 frozen evaluation suites."
+}
