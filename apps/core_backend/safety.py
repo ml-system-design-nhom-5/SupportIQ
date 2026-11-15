@@ -123,7 +123,7 @@ _EXCEPTION_NEG_PREFIX = re.compile(
     re.I,
 )
 _ALTERNATIVE_NEG_PREFIX = re.compile(
-    r"\b(?:instead\s+of|rather\s+than|not|no|without(?:\s+any)?|free\s+of|excluding)\s+(?:a\s+)?$",
+    r"\b(?:instead\s+of|rather\s+than|not|no|without(?:\s+any)?|free\s+of|excluding|besides|save|barring)\s+(?:a\s+)?$",
     re.I,
 )
 
@@ -276,12 +276,10 @@ _QUOTE_TRANSLATION = str.maketrans({
     "\u2212": "-",
     "\u00a0": " ",
 })
-_UI_OR_CONTRAST_QUOTE_PREFIX = re.compile(
-    r"(?:\b(?:called|labeled|titled|button|tab|section|page|menu|option|instead\s+of|rather\s+than)\s*[:,\-]?\s*)$",
-    re.I,
-)
-_REPORTED_SPEECH_QUOTE_PREFIX = re.compile(
-    r"\b(?:said|says|asked|asks|told\s+(?:me|us)|wrote|writes|stated|states|mentioned|mentions|reads?|"
+_CONTRASTIVE_QUOTE_PREFIX = re.compile(r"\b(?:instead\s+of|rather\s+than)\s*[:,\-]?\s*$", re.I)
+_UI_OR_SPEECH_QUOTE_PREFIX = re.compile(
+    r"\b(?:called|labeled|titled|button|tab|section|page|menu|option|"
+    r"said|says|asked|asks|told\s+(?:me|us)|wrote|writes|stated|states|mentioned|mentions|reads?|"
     r"joked|jokes|claimed|claims|suggested|suggests|replied|replies|advised|advises)\s*[:,\-]?\s*$",
     re.I,
 )
@@ -290,10 +288,9 @@ _QUOTE_FIRST_PERSON_OR_MODAL = re.compile(
     r"can|could|would|will|should|shall|may|might|do|does|did|please)\b",
     re.I,
 )
-_QUOTE_ENDORSEMENT_FOLLOWUP = re.compile(
-    r"\b(?:(?:can|could|may|should|would|will|do|did|is|are)\s+(?:i|we|someone|customers?|that|it)\s+"
-    r"(?:still\s+|actually\s+|really\s+)?(?:do\s+(?:that|it|so)|follow\s+that|try\s+that|allowed|possible|okay|ok)"
-    r"|(?:i|we)\s+(?:want|need|plan|prefer|agree)\s+to\s+(?:do|follow|try)\s+(?:that|it))\b",
+_QUOTE_REJECTION_SIGNAL = re.compile(
+    r"\b(?:instead|rather\s+than|wrongly|erroneous(?:ly)?|mistaken(?:ly)?|by\s+mistake|false(?:ly)?|"
+    r"incorrect(?:ly)?|jok(?:e[ds]?|ing))\b",
     re.I,
 )
 _CHANNEL_RETURN_VERB = re.compile(
@@ -330,7 +327,7 @@ _NEG_CHANNEL_TRANSITIVE_VERBS = (
 )
 _NEG_CLAUSE_BOUNDARY_WORDS = (
     r"and|or|but|so|yet|though|although|however|actually|whereas|while|"
-    r"except|without|unless|instead|rather|only|just|not|never|neither|nor|still|also|"
+    r"except|without|unless|excluding|besides|save|barring|instead|rather|only|just|not|never|neither|nor|still|also|"
     r"if|when|where|because|since|until|then|before|after|whether|than|"
     r"to|for|from|by|at|in|into|onto|on|via|with|"
     r"am|is|are|was|were|be|been|being|do|does|did|have|has|had|"
@@ -375,20 +372,18 @@ _COVERED_RETURN_ALTERNATIVE_PATTERN = re.compile(
     r")\b",
     re.I,
 )
-_ALT_CLAUSE_REJECTION = re.compile(
-    r"\b(?:won't|will\s+not|cannot|can't|can\s+not|do\s+not|don't|prefer\s+not\s+to|rather\s+not|"
-    r"no\s+need\s+(?:for|to))\b[^.,;?!\n]*$",
-    re.I,
-)
-_DECLARATIVE_CHANNEL_NEG_PREFIX = re.compile(
-    r"\b(?:"
+_DECLARATIVE_NEGATION_STEM = (
     r"no\s+need\s+(?:for|to)"
     r"|(?:i|we)(?:'d|\s+would)?\s+(?:prefer\s+not\s+to|rather\s+not)"
     r"|(?:i|we)\s+(?:do\s+not|don't|did\s+not|didn't|cannot|can\s+not|can't|could\s+not|couldn't|will\s+not|won't|would\s+not|wouldn't)"
     r"|(?:(?:i'm|we're|(?:i|we)\s+(?:am|are))\s+not|we\s+aren't)(?:\s+(?:going|planning|willing|trying|looking|asking))?"
     r"|(?:i'm|we're|(?:i|we)\s+(?:am|are))\s+unable"
     r"|without(?:\s+(?:going|traveling|walking|heading|driving|visiting|needing|having|using|printing|downloading))?"
-    r")(?:\s+(?:want|need|wish|plan|expect|intend|prefer|like|have|be\s+able|able))?"
+)
+_ALT_CLAUSE_REJECTION = re.compile(rf"\b(?:{_DECLARATIVE_NEGATION_STEM})\b[^.,;?!\n]*$", re.I)
+_DECLARATIVE_CHANNEL_NEG_PREFIX = re.compile(
+    rf"\b(?:{_DECLARATIVE_NEGATION_STEM})"
+    r"(?:\s+(?:want|need|wish|plan|expect|intend|prefer|like|have|be\s+able|able))?"
     rf"(?:\s+(?:to|for))?(?:\s+{_NEG_CHANNEL_ACTION_CLAUSE})?"
     r"(?:\s+(?:to|into|at|for|with|any|a|an|the|my|your))*\s*$",
     re.I,
@@ -501,31 +496,49 @@ def _has_covered_return_alternative_request(text: str) -> bool:
     return False
 
 
+def _is_ambiguous_or_endorsed_post_quote(post_quote: str) -> bool:
+    """Return True if post-quote text asks an open choice (or <alt>) or anaphoric question on the quoted store action."""
+    cleaned = re.sub(
+        r"\b(?:instead\s+of|rather\s+than)\s+(?:doing\s+)?(?:that|it|so)\b",
+        " ",
+        post_quote,
+        flags=re.I,
+    )
+    first_alt = _COVERED_RETURN_ALTERNATIVE_PATTERN.search(cleaned)
+    if first_alt and re.search(
+        r"\bor\b\s*(?:should\s+i|can\s+i|could\s+i|use|book|go|just|drop|do|with|a|the)?\s*$",
+        cleaned[: first_alt.start()],
+        re.I,
+    ):
+        return True
+    for clause in re.split(r"[.,;!\n]+|\s+-\s+|--", cleaned):
+        if "?" in clause and re.search(r"\b(?:that|this|it|doing\s+so)\b", clause, re.I):
+            return True
+    return False
+
+
 def _mask_attributed_quotes(text: str) -> str:
-    """Blank out UI/counterfactual quotes and credible third-party reported speech quotes."""
+    """Blank out contrastive/third-party reported or UI quotes when non-first-person, disavowed, and paired with an approved alternative."""
     chars = list(text)
     for pattern in (_DOUBLE_QUOTED_SPAN, _SINGLE_QUOTED_SPAN):
         for m in pattern.finditer(text):
             punct_m = re.search(r"[:,\-]\s*$", text[: m.start()])
             attr_pos = punct_m.start() if punct_m else m.start()
             local_prefix = _clause_before(text, attr_pos) + text[attr_pos : m.start()]
-            if _UI_OR_CONTRAST_QUOTE_PREFIX.search(local_prefix):
-                for idx in range(m.start(), m.end()):
-                    chars[idx] = " "
+            is_contrastive = bool(_CONTRASTIVE_QUOTE_PREFIX.search(local_prefix))
+            quote_m = None if is_contrastive else _UI_OR_SPEECH_QUOTE_PREFIX.search(local_prefix)
+            if not is_contrastive and not quote_m:
                 continue
-            speech_m = _REPORTED_SPEECH_QUOTE_PREFIX.search(local_prefix)
-            if not speech_m:
-                continue
-            before_verb = local_prefix[: speech_m.start()]
-            if _QUOTE_FIRST_PERSON_OR_MODAL.search(before_verb):
-                continue
-            if _QUOTE_ENDORSEMENT_FOLLOWUP.search(text[m.end() :]):
+            if quote_m and _QUOTE_FIRST_PERSON_OR_MODAL.search(local_prefix[: quote_m.start()]):
                 continue
             outside_quote = f"{text[:m.start()]} {text[m.end():]}"
-            if _PHYSICAL_STORE_CHANNEL_PATTERN.search(m.group(0)) and not _has_covered_return_alternative_request(
-                outside_quote
-            ):
-                continue
+            if _PHYSICAL_STORE_CHANNEL_PATTERN.search(m.group(0)):
+                if not _has_covered_return_alternative_request(outside_quote):
+                    continue
+                if not is_contrastive and not _QUOTE_REJECTION_SIGNAL.search(outside_quote):
+                    continue
+                if _is_ambiguous_or_endorsed_post_quote(text[m.end() :]):
+                    continue
             for idx in range(m.start(), m.end()):
                 chars[idx] = " "
     return "".join(chars)

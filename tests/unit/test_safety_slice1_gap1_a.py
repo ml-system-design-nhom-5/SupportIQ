@@ -936,34 +936,8 @@ class _PreLLMSpy(StubLLM):
         return super().generate(*args, **kwargs)
 
 
-@pytest.mark.parametrize(
-    "query",
-    [
-        # Worker B 6 end-to-end FAIL-OPEN repros (+ deliver leak)
-        "I can't return this item except at a physical store",
-        "I cannot return the opened TV without stopping by a physical store",
-        "I won't return my item instead head to a retail shop",
-        "I cannot ship my parcel home deliver it at a physical shop",
-        "Without bringing the box to a physical store, can I still return my headphones?",
-        "I asked, 'can I walk into a physical shop to return this?'",
-        "Could support advise, 'bring it to a physical shop', and can I do that now?",
-        # Structural & clause paraphrases for exception, contrast, unqualified without/negation, and quote traps
-        "I can't return it except at a retail shop.",
-        "Instead of courier, I can't return this item except at a physical store.",
-        "We won't drop our parcel off only return at a physical shop.",
-        "I will not return my item unless at a physical store.",
-        "Without visiting a physical store, can I still return my headphones?",
-        "We will not go to a physical store; can I still return this defective item?",
-        "We asked, 'can we walk into a physical shop to return this?'",
-        "Can someone advise, 'bring it to a physical shop', and can I do that now?",
-        "My friend joked 'just walk into a retail store', and can I do that now?",
-        "My friend joked 'just walk into a retail store' — can I do that or schedule courier pickup?",
-        "A friend joked 'use courier or walk into a retail store'?",
-    ],
-)
-def test_gap1d_fail_open_exception_unqualified_and_quote_traps_block_pre_llm(tmp_path: Path, query: str):
+def _assert_pre_llm_escalate(tmp_path: Path, query: str, retriever) -> None:
     _, _, policy = _load_real_kb_and_release()
-    retriever = StaticScopeRetriever({"return_product": ["POL-RET-002", "POL-RET-001"]})
     manifest = {"release_id": "slice1-test-release"}
 
     eng_spy = _PreLLMSpy()
@@ -1002,3 +976,106 @@ def test_gap1d_fail_open_exception_unqualified_and_quote_traps_block_pre_llm(tmp
     assert run_res["action"] == "escalate", f"PipelineRunner leaked: {query} -> {run_res}"
     assert "insufficient_evidence" in run_res["reason_codes"]
     assert run_spy.calls == [], f"PipelineRunner invoked provider LLM before scope escalation: {query}"
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        # Worker B 6 end-to-end FAIL-OPEN repros (+ deliver leak)
+        "I can't return this item except at a physical store",
+        "I cannot return the opened TV without stopping by a physical store",
+        "I won't return my item instead head to a retail shop",
+        "I cannot ship my parcel home deliver it at a physical shop",
+        "Without bringing the box to a physical store, can I still return my headphones?",
+        "I asked, 'can I walk into a physical shop to return this?'",
+        "Could support advise, 'bring it to a physical shop', and can I do that now?",
+        # Structural & clause paraphrases for exception, contrast, unqualified without/negation, and quote traps
+        "I can't return it except at a retail shop.",
+        "Instead of courier, I can't return this item except at a physical store.",
+        "We won't drop our parcel off only return at a physical shop.",
+        "I will not return my item unless at a physical store.",
+        "Without visiting a physical store, can I still return my headphones?",
+        "We will not go to a physical store; can I still return this defective item?",
+        "We asked, 'can we walk into a physical shop to return this?'",
+        "Can someone advise, 'bring it to a physical shop', and can I do that now?",
+        "My friend joked 'just walk into a retail store', and can I do that now?",
+        "My friend joked 'just walk into a retail store' — can I do that or schedule courier pickup?",
+        "A friend joked 'use courier or walk into a retail store'?",
+    ],
+)
+def test_gap1d_fail_open_exception_unqualified_and_quote_traps_block_pre_llm(tmp_path: Path, query: str):
+    retriever = StaticScopeRetriever({"return_product": ["POL-RET-002", "POL-RET-001"]})
+    _assert_pre_llm_escalate(tmp_path, query, retriever)
+
+
+@pytest.fixture(scope="module")
+def real_scope_retriever() -> RetrievalAdapter:
+    _, allowed, _ = _load_real_kb_and_release()
+    return RetrievalAdapter(kb_path=str(APPROVED_KB_V2), allowed_document_versions=allowed)
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        # Worker B 9 end-to-end FAIL-OPEN leaks (Engine='draft', Runner calls==1 on c466ffaa)
+        "I won't return this excluding at a physical store, can I use a courier?",
+        "I can't return it besides at a physical store, or can I use a courier?",
+        "I won't return my item save at a physical store, or can I book a courier?",
+        "My friend said 'walk into a physical store to return it' — is that an option, or courier pickup?",
+        "Someone told me 'return it in-store' — does that work, or should I use the app?",
+        "A friend said 'bring it to a physical store', should I go ahead with that or use courier?",
+        "Can I use the option 'return at a physical store' to send back my order?",
+        "Where do I click the button 'drop off at a physical store' so I can return this?",
+        "I am not using the app, and without visiting a physical store, can I still return this?",
+        # Metamorphic structural traps (unknown endorsement, bare contrast, UI modal, rejected courier, barring)
+        "I won't return my item barring at a physical store, or can I book a courier?",
+        "Support told me 'visit a physical branch' — is doing so fine if I prefer courier pickup?",
+        "My friend said 'walk into a physical store', but can I do that?",
+        "My friend said 'walk into a physical store', but can I do that or use courier pickup?",
+        "A friend said 'drop off at a retail store', however does that work with the app?",
+        "Should the user tap the tab 'return at a retail outlet' to get a refund?",
+        "We are unable to use courier pickup, so without visiting a physical store, can I return this?",
+        "Instead of 'return in store', can I still get a refund without visiting a physical shop?",
+    ],
+)
+def test_gap1e_b_nine_leaks_and_structural_traps_block_pre_llm_with_real_retrieval(
+    tmp_path: Path, real_scope_retriever: RetrievalAdapter, query: str
+):
+    real_ret = real_scope_retriever.retrieve(query, intent="return_product", current_time=AS_OF_2026)
+    if real_ret["status"] == "success":
+        _assert_pre_llm_escalate(tmp_path, query, real_scope_retriever)
+    else:
+        _assert_pre_llm_escalate(
+            tmp_path, query, StaticScopeRetriever({"return_product": ["POL-RET-002", "POL-RET-001"]})
+        )
+
+
+@pytest.mark.parametrize(
+    "text,intent,doc_ids",
+    [
+        (
+            "The marketplace seller wrongly told me 'go to a physical store', but I want Tiki courier pickup through the app instead.",
+            "return_product",
+            ["POL-RET-002", "POL-RET-001"],
+        ),
+        (
+            "Instead of 'return in store', how do I book a courier pickup?",
+            "return_product",
+            ["POL-RET-002"],
+        ),
+        (
+            "Support wrote 'bring it to a physical branch' by mistake, instead please explain partner post office drop-off.",
+            "return_product",
+            ["POL-RET-002"],
+        ),
+        (
+            "An old page shows the option 'return at a physical store', instead how do I return through the Tiki app?",
+            "return_product",
+            ["POL-RET-002"],
+        ),
+    ],
+)
+def test_gap1e_valid_third_party_quote_rejections_and_contrastive_ui_remain_allowed(
+    tmp_path: Path, text: str, intent: str, doc_ids: list[str], fake_llm
+):
+    _assert_both_allow(tmp_path, text, intent, doc_ids, fake_llm=fake_llm)
