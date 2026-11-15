@@ -100,3 +100,24 @@ Chưa hoàn thành toàn bộ kế hoạch gốc. Lượt sửa review giữ c�
 - Final local verification: **1,067 passed, 2 skipped, 3 deselected in 265.48 seconds**; frontend **18 tests passed**, production build passed; actual offline autoeval exit **0**, **4 blocking gates passed**, **0 blocking failures**, **2 warnings**, **20 not run**. No new provider, real-model or GPU evaluation calls were made.
 - Remaining advisory failures: comma-grouped/lowercase citations, provider blocked-response classification, and uncontexted identifier/name redaction probes. No thresholds were relaxed to suppress them. Real-model ML, paid semantic review and browser execution are not newly verified by this batch.
 - Hosted GitHub Actions is unverified: `gh` is unavailable on PATH and unauthenticated Actions API inspection returned HTTP 404. Local workflow YAML/trigger/permission validation passed; branch-protection settings were not changed. These results do not claim overall Topic 1 acceptance.
+
+## 8. Bounded Cache & Dead UI Pruning Execution (2026-11-15)
+
+- **Authority & Scope:** Executed under coordinator directive (`msg_a44fa38b85a9`) following user scope change and Worker D plan (`docs/audits/2026-11-14-code-cleanup-preparation-d.md`). Confined strictly to inactive test caches, confirmed dead frontend routing wrapper, and unreferenced CSS/types.
+- **Cache Reclamation:**
+  - Executed allowlisted cleaner `powershell -ExecutionPolicy Bypass -File scripts/clean_test_cache.ps1 -Apply`.
+  - Reclaimed **173 cache directories**, **34,441 files**, and **~1.603 GB** of inactive disk space across `.pytest_cache/`, `tmp/pytest/*`, and source `__pycache__/` trees.
+  - Verified `tests/integration/test_cache_cleanup.py`: **6 passed in 7.60s**.
+- **Frontend Pruning:**
+  - Removed dead `export function Admin()` router and unused imports (`Navigate, Route, Routes`, `Empty`) from `apps/frontend/src/features/admin.tsx`.
+  - Removed dead selectors `.support-form` and `.recommendation-panel` from `apps/frontend/src/styles.css`.
+  - Dropped internal-only `export` from `Shell` in `apps/frontend/src/App.tsx` and `Suggestion` / `Proposal` in `apps/frontend/src/types.ts`.
+  - Verified frontend suite (`vitest run`): **6 test files, 30 passed in 7.15s**.
+  - Verified production build (`pnpm --dir apps/frontend build`): clean build in 566ms.
+- **Evaluation Gate Fail-Closed Correction:**
+  - Removed error-swallowing fallback from `artifacts/evaluation/fit2_independent_gate_20261113/gate.py` and `tests/unit/test_sealed_holdout_20261113.py` ensuring `HistoricalCorpusIntegrityError` propagates on corrupted or missing inventory.
+  - Added public entry negative test `test_gate_historical_corpus_propagates_integrity_violation` to `tests/unit/test_historical_corpus_reproducibility.py`.
+  - Verified targeted evaluation gate tests: **9 passed in 10.51s**.
+- **Protected File Invariants Verified Preserved:**
+  - All datasets (`data/`), model checkpoints/weights/configs/calibration/run-records (`artifacts/models/`), historical evaluation manifests/audits (`artifacts/evaluation/`, `artifacts/audit/`), presentation assets (`docs/report.template.pptx`, `tmp/report-work/`), `.codegraph/`, `.local/`, and unstaged `artifacts/models/.gitkeep` remain 100% untouched.
+  - Zero edits to core `safety.py` and zero hash helper refactors (preserved per coordinator constraint).

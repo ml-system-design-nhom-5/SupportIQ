@@ -57,11 +57,8 @@ def historical_corpus(roots: list[Path] | None = None) -> tuple[list[str], int]:
     to prevent downstream evaluation prediction exports from invalidating novelty.
     """
     if roots is None:
-        try:
-            from pipeline.evaluation.historical_inventory import collect_historical_corpus_prompts
-            return collect_historical_corpus_prompts(exclude_dirs=[HERE])
-        except Exception:
-            pass
+        from pipeline.evaluation.historical_inventory import collect_historical_corpus_prompts
+        return collect_historical_corpus_prompts(exclude_dirs=[HERE])
 
     roots = roots or [REPO / "data", REPO / "artifacts/evaluation", ROOT_ARTIFACTS / "preparation", ROOT_ARTIFACTS / "audit"]
     out: list[str] = []

@@ -15,14 +15,14 @@ export interface Intent { label: string; probability: number; confidence_band: s
 export interface Source { document_id: string; version: string; title: string; snippet: string; effective_from?: string; effective_to?: string; validity: string; rank: number }
 export interface Citation { citation_id: string; source_type: 'kb_document' | 'order_context'; document_id?: string; version?: string; snippet?: string; field?: string; value?: unknown; fields?: string[]; values?: Record<string, unknown> }
 export interface Draft { text: string; segments: {segment_id: string; paragraph_index: number; text: string; citation_ids: string[]}[]; citations: Citation[] }
-export interface Suggestion {
+interface Suggestion {
   suggestion_id: string; created_at: string; trigger: string; analysis_status: string; draft_status: string; intent_override?: string;
   analysis?: {intent: Intent; alternatives: Intent[]; documents: Source[]; routing: {recommendation: string; reason_codes: string[]}};
   draft?: Draft; warnings: {warning_id: string; reason_code?: string; code?: string}[]; reason_codes: string[]; staff_note?: string;
   versions?: Record<string, string | boolean>; step_latency_ms: Record<string, number>; trace_id: string;
 }
 export interface TicketSummary {ticket_id: string; created_at: string; status: string; handling_mode: string; is_authority_required: boolean; handling_started_at?: string; customer: {display_name: string}; excerpt: string; draft_status?: string; intent?: Intent}
-export interface Proposal {proposal_id: string; basis: string; body: string; by: string; created_at: string}
+interface Proposal {proposal_id: string; basis: string; body: string; by: string; created_at: string}
 export interface Workspace extends TicketSummary {message: {body: string; created_at: string}; order: Order | null; other_orders: Order[]; suggestion: Suggestion | null; proposal: Proposal | null; escalation: {staff_reason_codes: string[]; note?: string; by: string} | null; reply: {body: string; by: string; sent_at: string} | null; allowed_actions: string[]}
 export interface Account extends Session {is_active: boolean}
 export interface Versions {backend_build: string; ai_service_status: string; release_id: string | null; versions: Record<string, string | boolean> | null}

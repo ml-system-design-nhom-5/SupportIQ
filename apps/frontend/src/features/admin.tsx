@@ -1,10 +1,9 @@
 import { useState } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertCircle, Layers, LockKeyhole, ShieldCheck } from 'lucide-react'
 import { api, post } from '../api'
 import { useSession } from '../session'
-import { Button, Empty, ErrorNotice, Loading, Modal, Status, humanize } from '../components/ui'
+import { Button, ErrorNotice, Loading, Modal, Status, humanize } from '../components/ui'
 import type { Account, Page, Versions } from '../types'
 
 export function Accounts() {
@@ -29,4 +28,3 @@ export function AssetVersions() {
   const labels: Record<string,string> = {model_version:'Model artifact',kb_version:'Knowledge base',mapping_version:'Document-to-intent mapping',prompt_version:'Prompts',routing_version:'Routing configuration',index_version:'Retrieval index'}
   return <div className="admin-content versions-content"><div className="page-heading"><div><h1>Versions in use</h1><p>Read-only release information. Versions change through the release process.</p></div><Layers size={22} className="muted"/></div>{query.isPending ? <Loading label="Loading asset versions"/> : query.isError ? <ErrorNotice error={query.error} retry={() => query.refetch()}/> : <>{query.data.ai_service_status === 'unavailable' && <div className="notice danger"><AlertCircle size={18}/><div><strong>AI service unavailable</strong><p>Versions could not be retrieved. Reload the page later.</p><Button onClick={() => query.refetch()} busy={query.isFetching}>Reload versions</Button></div></div>}<div className="version-summary"><span>AI service</span><Status value={query.data.ai_service_status}/></div><dl className="version-list"><div><dt>Backend build</dt><dd className="identifier">{query.data.backend_build}</dd></div><div><dt>Release ID</dt><dd className="identifier">{query.data.release_id || 'Unknown'}</dd></div>{Object.entries(labels).map(([key,label]) => <div key={key}><dt>{label}</dt><dd className="identifier">{query.data.versions?.[key] || 'Unknown'}</dd></div>)}</dl></>}</div>
 }
-export function Admin() { return <Routes><Route index element={<Navigate to="accounts" replace/>}/><Route path="accounts" element={<Accounts/>}/><Route path="versions" element={<AssetVersions/>}/><Route path="*" element={<Empty title="Page not found"/>}/></Routes> }

@@ -151,3 +151,28 @@ def test_utf8_bom_and_normal_utf8_semantic_equivalence(tmp_path: Path):
     # Disk bytes must remain unaltered
     assert jsonl_bom.read_bytes().startswith(b"\xef\xbb\xbf")
     assert not jsonl_plain.read_bytes().startswith(b"\xef\xbb\xbf")
+
+
+def test_gate_historical_corpus_propagates_integrity_violation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """The public gate.historical_corpus() entry point must propagate HistoricalCorpusIntegrityError fail-closed."""
+    import pipeline.evaluation.historical_inventory as inv_mod
+
+    # Case 1: Missing inventory file must raise HistoricalCorpusIntegrityError without falling back
+    monkeypatch.setattr(inv_mod, "DEFAULT_INVENTORY_PATH", tmp_path / "missing_inventory.json")
+    with pytest.raises(HistoricalCorpusIntegrityError, match="not found"):
+        historical_corpus()
+
+    # Case 2: Tampered hash in inventory must raise HistoricalCorpusIntegrityError without falling back
+    tampered_inv = tmp_path / "tampered_hash_inventory.json"
+    tampered_inv.write_text(
+        json.dumps({
+            "corpus_files": [
+                {"path": "data/knowledge/approved_kb.v2.json", "sha256": "0" * 64}
+            ]
+        }),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(inv_mod, "DEFAULT_INVENTORY_PATH", tampered_inv)
+    with pytest.raises(HistoricalCorpusIntegrityError, match="integrity violation"):
+        historical_corpus()
+

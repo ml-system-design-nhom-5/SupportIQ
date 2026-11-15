@@ -28,11 +28,8 @@ def _jaccard(a: set[str], b: set[str]) -> float:
 
 def collect_historical_prompts(repo_root: Path = REPO_ROOT) -> list[tuple[str, str]]:
     """Collect seen benchmark and prior evaluation prompts across the workspace."""
-    try:
-        from pipeline.evaluation.historical_inventory import collect_historical_prompt_tuples
-        return collect_historical_prompt_tuples(repo_root=repo_root, exclude_dirs=[HOLDOUT_DIR])
-    except Exception:
-        pass
+    from pipeline.evaluation.historical_inventory import collect_historical_prompt_tuples
+    return collect_historical_prompt_tuples(repo_root=repo_root, exclude_dirs=[HOLDOUT_DIR])
 
     seen: list[tuple[str, str]] = []
 
