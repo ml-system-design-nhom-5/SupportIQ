@@ -28,6 +28,12 @@ def _jaccard(a: set[str], b: set[str]) -> float:
 
 def collect_historical_prompts(repo_root: Path = REPO_ROOT) -> list[tuple[str, str]]:
     """Collect seen benchmark and prior evaluation prompts across the workspace."""
+    try:
+        from pipeline.evaluation.historical_inventory import collect_historical_prompt_tuples
+        return collect_historical_prompt_tuples(repo_root=repo_root, exclude_dirs=[HOLDOUT_DIR])
+    except Exception:
+        pass
+
     seen: list[tuple[str, str]] = []
 
     def _walk(obj: Any, source: str) -> None:
@@ -51,17 +57,17 @@ def collect_historical_prompts(repo_root: Path = REPO_ROOT) -> list[tuple[str, s
             if not path.is_file() or any("sealed_holdout" in part for part in path.parts):
                 continue
             if path.suffix == ".jsonl":
-                for line in path.read_text(encoding="utf-8").splitlines():
+                for line in path.read_text(encoding="utf-8-sig").splitlines():
                     if line.strip():
                         _walk(json.loads(line), str(path.relative_to(repo_root)))
             elif path.suffix == ".json" and path.stat().st_size < 2_000_000:
-                _walk(json.loads(path.read_text(encoding="utf-8")), str(path.relative_to(repo_root)))
+                _walk(json.loads(path.read_text(encoding="utf-8-sig")), str(path.relative_to(repo_root)))
     return seen
 
 
 def active_kb_doc_keys(repo_root: Path = REPO_ROOT) -> set[str]:
-    release = json.loads((repo_root / "apps/ai_service/kb-release.json").read_text(encoding="utf-8"))
-    kb = json.loads((repo_root / "data/knowledge/approved_kb.v2.json").read_text(encoding="utf-8"))
+    release = json.loads((repo_root / "apps/ai_service/kb-release.json").read_text(encoding="utf-8-sig"))
+    kb = json.loads((repo_root / "data/knowledge/approved_kb.v2.json").read_text(encoding="utf-8-sig"))
     kb_keys = {f"{d['document_id']}:{d['version']}" for d in kb if d.get("status") == "approved"}
     rel_keys = {f"{d['document_id']}:{d['version']}" for d in release["documents"]}
     return kb_keys & rel_keys

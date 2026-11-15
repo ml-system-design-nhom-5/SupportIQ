@@ -16,8 +16,8 @@ _spec.loader.exec_module(g)
 
 
 def _active_docs() -> set[str]:
-    rel = json.loads((g.REPO / "apps/ai_service/kb-release.json").read_text(encoding="utf-8"))
-    kb = json.loads((g.REPO / "data/knowledge/approved_kb.v2.json").read_text(encoding="utf-8"))
+    rel = json.loads((g.REPO / "apps/ai_service/kb-release.json").read_text(encoding="utf-8-sig"))
+    kb = json.loads((g.REPO / "data/knowledge/approved_kb.v2.json").read_text(encoding="utf-8-sig"))
     ok = {f"{d['document_id']}:{d['version']}" for d in kb if d["status"] == "approved"}
     return ok & {f"{d['document_id']}:{d['version']}" for d in rel["documents"]}
 
@@ -52,7 +52,7 @@ def test_novel_vs_all_prior_and_internal() -> None:
 
 
 def test_manifest_hash_lock() -> None:
-    m = json.loads(g.MANIFEST.read_text(encoding="utf-8"))
+    m = json.loads(g.MANIFEST.read_text(encoding="utf-8-sig"))
     assert m["cases_sha256"] == g.sha256(g.CASES) and m["total_cases"] == 36
     kb_path = g.REPO / "data/knowledge/approved_kb.v2.json"
     kb_lf_sha = hashlib.sha256(kb_path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()

@@ -51,7 +51,18 @@ def _walk(o, out):
 
 
 def historical_corpus(roots: list[Path] | None = None) -> tuple[list[str], int]:
-    """All prompts from prior datasets/benchmarks (old sealed72 included, own dir excluded)."""
+    """All prompts from prior datasets/benchmarks (old sealed72 included, own dir excluded).
+
+    When roots is None, uses the immutable historical as-of inventory (commit 16b01eb)
+    to prevent downstream evaluation prediction exports from invalidating novelty.
+    """
+    if roots is None:
+        try:
+            from pipeline.evaluation.historical_inventory import collect_historical_corpus_prompts
+            return collect_historical_corpus_prompts(exclude_dirs=[HERE])
+        except Exception:
+            pass
+
     roots = roots or [REPO / "data", REPO / "artifacts/evaluation", ROOT_ARTIFACTS / "preparation", ROOT_ARTIFACTS / "audit"]
     out: list[str] = []
     files = 0
@@ -63,13 +74,13 @@ def historical_corpus(roots: list[Path] | None = None) -> tuple[list[str], int]:
                 continue
             try:
                 if p.suffix == ".jsonl":
-                    for ln in p.read_text(encoding="utf-8").splitlines():
+                    for ln in p.read_text(encoding="utf-8-sig").splitlines():
                         if ln.strip():
                             _walk(json.loads(ln), out)
                 elif p.suffix == ".json":
-                    _walk(json.loads(p.read_text(encoding="utf-8")), out)
+                    _walk(json.loads(p.read_text(encoding="utf-8-sig")), out)
                 elif p.suffix == ".csv":
-                    with p.open(encoding="utf-8", newline="") as f:
+                    with p.open(encoding="utf-8-sig", newline="") as f:
                         for row in csv.DictReader(f):
                             _walk(row, out)
                 else:
