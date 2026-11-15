@@ -106,11 +106,12 @@ def test_pseudonymization_payload_helper():
     assert restored == raw_message
 
 
-def test_pseudonymization_recall_limitations_on_unstructured_slang():
+def test_pseudonymization_recall_limitations_on_unstructured_slang(monkeypatch):
     """Document recall limitation: highly informal non-standard vernacular addresses without street markers.
     
     Standard regex/NER may miss obscure colloquial Vietnamese directions lacking standard administrative keywords.
     """
+    monkeypatch.setattr("apps.backend.tickets.privacy._get_spacy_nlp", lambda: None)
     known = {}
     colloquial_input = "Giao cho tui o sau nha ba bay cho cau sat cu"
     # Explicit offline opt-out (require_ner=False) for regex recall-limit check

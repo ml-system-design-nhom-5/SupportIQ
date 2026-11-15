@@ -168,6 +168,22 @@ def run(command):
     subprocess.run([str(part) for part in command], check=True, cwd=ROOT)
 
 
+def check_privacy_ner():
+    """Check spaCy and en_core_web_sm readiness without weakening strict privacy defaults."""
+    try:
+        import spacy
+
+        nlp = spacy.load("en_core_web_sm")
+        version = getattr(nlp, "meta", {}).get("version", "unknown")
+        return True, f"Privacy NER (spaCy en_core_web_sm {version}): ready."
+    except Exception as exc:
+        return (
+            False,
+            f"WARNING: Privacy NER (spaCy en_core_web_sm) unavailable ({type(exc).__name__}). "
+            "Strict AI egress will fail closed until provisioned via: pip install -r apps/backend/requirements.txt",
+        )
+
+
 def preflight():
     """Run standalone preflight diagnostics."""
     bin_path = discover_pg_bin()
@@ -176,6 +192,8 @@ def preflight():
     impl = getattr(pq, "__impl__", "unknown")
     ver = getattr(pq, "version", lambda: "unknown")()
     print(f"Psycopg {psycopg.__version__} initialized successfully (impl: {impl}, libpq version: {ver}).")
+    _, ner_message = check_privacy_ner()
+    print(ner_message)
     return 0
 
 

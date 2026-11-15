@@ -25,6 +25,7 @@ from .platform.database import Database, Problem, idempotent, utcnow
 from .platform.models import Account, Order, Product, SessionRecord, Ticket
 from .platform.observability import metrics, logger, error_tracker
 from .tickets.jobs import SuggestionWorker
+from .tickets.privacy import is_privacy_ner_available
 from .tickets.reports import report
 from .tickets.service import act, create_ticket, require_ticket, shop_ticket, summary, workspace
 import time
@@ -115,7 +116,11 @@ def create_app(settings=None, database=None, start_worker=True):
     def ready():
         with database.transaction() as session:
             session.execute(text("SELECT 1"))
-        return {"status": "ready", "backend_build": settings.backend_build}
+        return {
+            "status": "ready",
+            "backend_build": settings.backend_build,
+            "privacy_ner_available": is_privacy_ner_available(),
+        }
 
     @app.post("/v1/sessions", status_code=201, response_model=SessionView, operation_id="createSession")
     def sign_in(body: SessionInput, response: Response):

@@ -1,6 +1,7 @@
 import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
 import pytest
 
@@ -10,9 +11,11 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.native_runtime import (
+    check_privacy_ner,
     discover_pg_bin,
     configure_runtime_environment,
     ensure_psycopg_runtime,
+    preflight,
 )
 
 
@@ -107,3 +110,22 @@ def test_configure_runtime_environment_sets_impl(tmp_path, monkeypatch):
     configure_runtime_environment(fake_bin)
     assert os.environ.get("PSYCOPG_IMPL") == "python"
     assert str(fake_bin) in os.environ.get("PATH", "")
+
+
+def test_preflight_reports_missing_privacy_ner_without_failing_manual_mode(monkeypatch, capsys):
+    """Preflight logs a clean NER diagnostic when en_core_web_sm is unavailable without leaking secrets."""
+    monkeypatch.setattr("scripts.native_runtime.discover_pg_bin", lambda: Path("C:/pg/bin"))
+    monkeypatch.setattr(
+        "scripts.native_runtime.ensure_psycopg_runtime",
+        lambda: (SimpleNamespace(__version__="3.3.8"), SimpleNamespace(__impl__="python", version=lambda: 180006)),
+    )
+    monkeypatch.setattr("spacy.load", lambda _name: (_ for _ in ()).throw(OSError("missing en_core_web_sm")))
+
+    ok, msg = check_privacy_ner()
+    assert ok is False
+    assert "en_core_web_sm" in msg
+    assert "fail closed" in msg.lower()
+
+    assert preflight() == 0
+    captured = capsys.readouterr().out
+    assert "WARNING: Privacy NER" in captured

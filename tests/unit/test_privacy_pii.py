@@ -1,6 +1,12 @@
 from types import SimpleNamespace
 import pytest
-from apps.backend.tickets.privacy import pseudonymize, restore, luhn_checksum_valid
+from apps.backend.tickets.privacy import (
+    is_privacy_ner_available,
+    luhn_checksum_valid,
+    pseudonymize,
+    restore,
+    validate_egress_payload,
+)
 
 
 def test_luhn_algorithm_validation():
@@ -134,3 +140,63 @@ def test_live_spacy_free_form_ner_masking_integration():
     assert "Johnathan Smith" not in pseudonymized
     restored = restore(pseudonymized, mapping)
     assert restored == msg
+
+
+@pytest.mark.skipif(
+    not _spacy_model_installed(),
+    reason="Optional spaCy library and 'en_core_web_sm' model are not installed in the environment",
+)
+def test_live_spacy_real_ner_names_locations_identifiers_roundtrip_and_limits():
+    """Verify real en_core_web_sm masking across NL names/locations/identifiers, negative order facts, and recall limits."""
+    assert is_privacy_ner_available() is True
+
+    # 1. Mixed free-form English names, location, street address, known identifiers, and literal placeholder
+    msg = (
+        "Hi, I am Michael Johnson living in Seattle. Please ship ORD-2045 to "
+        "123 Nguyen Hue Street for Sarah Connor, email sarah@example.com, "
+        "phone +84901234567, literal [NAME_1]."
+    )
+    pseudonymized, mapping = pseudonymize(msg, {})
+    for secret in (
+        "Michael Johnson",
+        "Sarah Connor",
+        "Seattle",
+        "123 Nguyen Hue Street",
+        "ORD-2045",
+        "sarah@example.com",
+        "+84901234567",
+    ):
+        assert secret not in pseudonymized
+    assert "[LITERAL_1]" in pseudonymized
+    assert restore(pseudonymized, mapping) == msg
+    validate_egress_payload(
+        {"message": pseudonymized, "order_context": {"order_status": "shipped"}, "as_of": "2026-11-15T00:00:00Z"},
+        require_ner=True,
+        forbidden_values=("Michael Johnson", "Sarah Connor", "Seattle"),
+    )
+
+    # 2. Negative check: ordinary order facts (dates & VND amounts) must pass cleanly without false-positive masking
+    facts = "Order placed on 2026-11-10 for 1402000 VND with 30000 VND shipping is in transit."
+    facts_masked, facts_map = pseudonymize(facts, {})
+    assert facts_masked == facts
+    assert facts_map == {}
+    validate_egress_payload(
+        {
+            "message": facts_masked,
+            "order_context": {
+                "order_status": "shipped",
+                "placed_at": "2026-11-10T00:00:00Z",
+                "order_total": {"amount_minor": 1402000, "currency": "VND"},
+                "shipping_cost": {"amount_minor": 30000, "currency": "VND"},
+                "shipment_status": "in_transit",
+            },
+            "as_of": "2026-11-15T00:00:00Z",
+        },
+        require_ner=True,
+    )
+
+    # 3. Documented empirical NER limit: informal lowercase Vietnamese without DB known entries is not guaranteed
+    slang = "anh nam o quan 1 hoi don hang"
+    slang_masked, slang_map = pseudonymize(slang, {})
+    assert "anh nam" in slang_masked
+    assert restore(slang_masked, slang_map) == slang

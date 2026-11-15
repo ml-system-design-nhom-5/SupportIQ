@@ -89,6 +89,8 @@ $processRecords = @()
 if (-not $WithoutAI) {
     & $pythonPath -X utf8 -c "import torch, transformers, numpy"
     if ($LASTEXITCODE -ne 0) { throw 'AI dependencies are missing. Install pipeline/requirements-transformers.txt, or start with -WithoutAI.' }
+    & $pythonPath -X utf8 -c "import spacy; spacy.load('en_core_web_sm')"
+    if ($LASTEXITCODE -ne 0) { throw 'Privacy NER model en_core_web_sm is missing. Install apps/backend/requirements.txt (run without -SkipInstall), or start with -WithoutAI.' }
     if (Test-ApplicationPort 8002) { throw 'Port 8002 is in use. Start with -WithoutAI or stop the existing service.' }
     $env:HF_HUB_OFFLINE = '1'
     $env:TRANSFORMERS_OFFLINE = '1'

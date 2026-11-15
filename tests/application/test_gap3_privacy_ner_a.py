@@ -77,7 +77,7 @@ def _post(client: TestClient, path: str, body: dict):
     return client.post(path, json=body, headers={"Idempotency-Key": str(uuid.uuid4())})
 
 
-def test_gap3_settings_and_pseudonymize_default_strict():
+def test_gap3_settings_and_pseudonymize_default_strict(monkeypatch):
     """Settings and pseudonymize() must default strict (no implicit opt-out when spaCy is absent)."""
     s = Settings(
         _env_file=None,
@@ -85,6 +85,8 @@ def test_gap3_settings_and_pseudonymize_default_strict():
         ai_service_base_url="http://external-ai:8002",
     )
     assert s.require_privacy_ner is True
+    # Simulate missing/unavailable spaCy NER even when en_core_web_sm is installed
+    monkeypatch.setattr("apps.backend.tickets.privacy._get_spacy_nlp", lambda: None)
     assert is_privacy_ner_available() is False
     with pytest.raises(ValueError):
         pseudonymize("Yesterday Johnathan Smith asked about order ORD-1001.", {})
@@ -610,3 +612,101 @@ def test_gap3_blocker3_no_sentinel_corruption_or_known_address_fragmentation():
     masked_c2, map_c2 = pseudonymize(raw_c2, {"NAME": ["Hue"]}, require_ner=False)
     assert masked_c2 == "Ship to [ADDRESS_1] for [NAME_1]"
     assert restore(masked_c2, map_c2) == raw_c2
+
+
+def _live_spacy_model_installed() -> bool:
+    try:
+        import spacy
+
+        spacy.load("en_core_web_sm")
+        return True
+    except Exception:
+        return False
+
+
+@pytest.mark.skipif(
+    not _live_spacy_model_installed(),
+    reason="Optional spaCy library and 'en_core_web_sm' model are not installed in the environment",
+)
+def test_gap3_real_spacy_ner_positive_intake_to_worker_mock_http_e2e():
+    """Positive real-NER intake -> worker AI request E2E on disposable PG + MockTransport (zero paid calls)."""
+    captured_egress: list[dict] = []
+
+    def handler(request: httpx.Request):
+        import json as _json
+
+        payload = _json.loads(request.content.decode("utf-8"))
+        captured_egress.append(payload)
+        analysis = {
+            "intent": {"label": "track_order", "probability": 0.94, "confidence_band": "high"},
+            "alternatives": [],
+            "documents": [],
+            "warnings": [],
+            "routing": {"recommendation": "draft", "reason_codes": []},
+            "versions": {"release_id": "rel-gap3-live-ner"},
+        }
+        if request.url.path == "/v1/analyses":
+            return httpx.Response(200, json=analysis)
+        return httpx.Response(200, json={
+            "status": "draft_ready",
+            "reason_codes": [],
+            "analysis": analysis,
+            "draft": {
+                "segments": [{
+                    "segment_id": "s-1",
+                    "paragraph_index": 0,
+                    "text": "Hello [NAME_1], forwarding [ORDER_ID_1] update from [ADDRESS_1] to [EMAIL_1].",
+                    "citation_ids": [],
+                }],
+                "citations": [],
+            },
+        })
+
+    root, schema, engine, database, settings, passwords, app = _make_pg_app()
+    try:
+        assert settings.require_privacy_ner is True
+        customer = _login(app, passwords, "customer")
+        staff = _login(app, passwords, "staff")
+
+        ready = staff.get("/health/ready")
+        assert ready.status_code == 200
+        assert ready.json()["privacy_ner_available"] is True
+
+        created = _post(customer, "/v1/shop/tickets", {
+            "order_id": "ORD-1001",
+            "message": "Yesterday Michael Johnson in Seattle emailed michael@example.com about ORD-1001.",
+        })
+        assert created.status_code == 201
+        tid = created.json()["ticket_id"]
+
+        with database.transaction() as session:
+            sid = session.get(Ticket, tid).current_suggestion_id
+
+        with httpx.Client(transport=httpx.MockTransport(handler)) as fake_http:
+            worker = SuggestionWorker(database, settings, http_client=fake_http)
+            claimed = worker.claim(sid)
+            assert claimed is not None
+            worker.process(*claimed)
+
+        assert len(captured_egress) == 2
+        for req_body in captured_egress:
+            assert "pseudonym_map" not in req_body
+            assert "Michael Johnson" not in req_body["message"]
+            assert "Seattle" not in req_body["message"]
+            assert "michael@example.com" not in req_body["message"]
+            assert "ORD-1001" not in req_body["message"]
+            assert "[NAME_1]" in req_body["message"]
+            assert "[ADDRESS_1]" in req_body["message"]
+            assert "[EMAIL_1]" in req_body["message"]
+            assert "[ORDER_ID_1]" in req_body["message"]
+
+        shop_res = customer.get(f"/v1/shop/tickets/{tid}").json()
+        assert "suggestion" not in shop_res
+        ws = staff.get(f"/v1/console/tickets/{tid}").json()
+        draft_text = ws["suggestion"]["draft"]["text"]
+        assert "Michael Johnson" in draft_text
+        assert "Seattle" in draft_text
+        assert "michael@example.com" in draft_text
+        assert "ORD-1001" in draft_text
+    finally:
+        _cleanup_pg(root, schema, engine)
