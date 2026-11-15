@@ -1,0 +1,99 @@
+{
+  "verdict": "PASS",
+  "scope": "ORDER_CONTEXT_CONTRACT_PARITY_ONLY",
+  "commit": "b94df2744d4e9d57bbbc5b4ae3b29a466d886027",
+  "duration_seconds": 16.18,
+  "invariants": {
+    "hashes": {
+      "apps/core_backend/safety.py": "45d11761d95e00323e410f43b4bf4c6ff499c120c0cc5d89bcc3f30856c5e000",
+      "apps/core_backend/retrieval/adapter.py": "3bd797dab79da0b89e5cdeb25a668ba704e31120523cb09824bb4b64264b5f8f",
+      "apps/core_backend/llm/gemini.py": "c6dd495724472d160f967869ee7553aea2e74a3828bfded8bf45fb39146d865b",
+      "apps/core_backend/orchestration/pipeline_runner.py": "c981baf833a4071220b62b14043985c684dfbc307af79bc4426f18ea615765a6",
+      "apps/ai_service/engine.py": "481bc7ab7fa2a7ad42ca00add79925339b138116aa2b57e233300ba3f7bc88ff",
+      "apps/ai_service/main.py": "933851213299db2f051de10d6d701a94faad36c58e94623fb0ab05d8e55309cc",
+      "apps/ai_service/kb-release.json": "cf450a72758e3d68ac7453802b5bc6c042ef2eddb9a6c4fa76483d4009c42804",
+      "data/knowledge/approved_kb.v2.json": "f8dcfbbdbb9cb2cd7a09d2ec12e0149083fdd4fa04931df6261fc4d1e6425fec",
+      "apps/core_backend/config/policies/intent_policy.v2.json": "8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+      ".local/training-cap-20261114.json": "bc0445e07cca46e7285539a921691050378cdf9ceb3fdfe2cfe911b90bfde922",
+      ".local/ai.env": "26d083c75acd962010f2fbd0185af3e72e315d2bafc8d753046e51df6e8fce87"
+    },
+    "mismatches": [],
+    "training_stopped_2_of_2": true,
+    "passed": true
+  },
+  "cases": [
+    {
+      "id": "oc-10fields-usd-e2e",
+      "passed": true,
+      "eng_status": "draft_ready",
+      "wire_order_fact_keys": [
+        "delivered_at",
+        "estimated_delivery_at",
+        "order_status",
+        "order_total",
+        "placed_at",
+        "refund_amount",
+        "refund_requested_at",
+        "refund_status",
+        "shipment_status",
+        "shipping_cost"
+      ]
+    },
+    {
+      "id": "oc-missing-non-dict-precedence",
+      "passed": true,
+      "precedence_observed": {
+        "order_status": "placed",
+        "shipment_status": "shipped_root",
+        "delivered_at": "2026-10-04",
+        "refund_status": "ship_refund",
+        "refund_requested_at": "2026-10-05"
+      }
+    },
+    {
+      "id": "oc-malformed-invalid-pii-probe",
+      "passed": true,
+      "poison_extracted": {
+        "order_status": "paid for [IDENTIFIER] by [IDENTIFIER] email [EMAIL] phone [PHONE_OR_NUMBER]",
+        "shipment_status": "tracking [IDENTIFIER]",
+        "refund_status": "requested"
+      },
+      "egress_rejections": "19/19"
+    },
+    {
+      "id": "oc-no-date-invention-grounding-strict",
+      "passed": true,
+      "prose_only_keys": [
+        "order_status",
+        "placed_at",
+        "order_total",
+        "shipping_cost",
+        "shipment_status",
+        "refund_status",
+        "refund_amount"
+      ],
+      "fab_statuses": [
+        "llm_unavailable",
+        "llm_unavailable",
+        "llm_unavailable",
+        "llm_unavailable",
+        "draft_ready"
+      ]
+    },
+    {
+      "id": "oc-single-field-hydration",
+      "passed": true
+    },
+    {
+      "id": "oc-pg-e2e-10fields-roundtrip",
+      "passed": true,
+      "seeded_1001_keys": [
+        "order_status",
+        "placed_at",
+        "order_total",
+        "shipping_cost",
+        "shipment_status"
+      ]
+    }
+  ]
+}
