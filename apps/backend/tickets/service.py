@@ -9,11 +9,11 @@ from apps.backend.commerce import order_view, require_order
 from apps.backend.platform.database import Problem, audit, utcnow, ensure_utc
 from apps.backend.platform.models import Account, CustomerMessage, Order, Suggestion, SuggestionJob, Ticket
 from apps.backend.platform.observability import metrics
+from apps.core_backend.safety import has_authority_request
 from .privacy import PLACEHOLDER, pseudonymize, restore
 
 STAFF_REASONS = {"wrong_intent", "wrong_source", "unsupported_claim", "kb_gap", "missing_case_info", "tone_or_clarity", "case_exception", "other"}
 INTENTS = {"add_product", "availability", "availability_in_store", "availability_online", "cancel_order", "change_account", "change_order", "close_account", "customer_service", "damaged_delivery", "delivery_issue", "delivery_time", "exchange_product", "exchange_product_in_store", "human_agent", "missing_item", "open_account", "order_history", "pay", "payment_issue", "payment_methods", "product_information", "product_issue", "recover_password", "refund_policy", "refund_status", "remove_product", "request_invoice", "request_refund", "request_right_to_rectification", "return_policy", "return_product", "return_product_in_store", "return_product_online", "sales_period", "shipping_costs", "store_location", "store_opening_hours", "submit_feedback", "submit_product_feedback", "submit_product_idea", "technical_issue", "track_delivery", "track_order", "use_app", "wrong_item"}
-SENSITIVE_KEYWORDS = re.compile(r"\b(fraud|lawsuit|legal action|chargeback|unauthorized transaction|policy exception)\b", re.I)
 SENSITIVE_ACTION_INTENTS = {"cancel_order", "request_refund", "return_product", "payment_issue"}
 AUTHORITY_ROLES = ("admin", "manager")
 
@@ -75,7 +75,8 @@ def allowed_actions(ticket, actor, suggestion):
             actions.append("submit_reply_proposal")
         if actor.role in ("staff", "admin"):
             actions.append("escalate")
-    if not pending(suggestion) and (actor.role in AUTHORITY_ROLES or not ticket.is_authority_required):
+    own_pending_proposal = ticket.status == "awaiting_approval" and (ticket.proposal or {}).get("actor_account_id") == actor.account_id
+    if not pending(suggestion) and not own_pending_proposal and (actor.role in AUTHORITY_ROLES or not ticket.is_authority_required):
         actions.append("send_reply")
     return actions
 
@@ -123,7 +124,7 @@ def create_suggestion(session, ticket, settings, trace_id, intent_override=None,
         session.add(SuggestionJob(suggestion_id=identifier))
     ticket.current_suggestion_id = identifier
     body_text = (session.get(CustomerMessage, ticket.ticket_id).body if session.get(CustomerMessage, ticket.ticket_id) else "")
-    if intent_override in SENSITIVE_ACTION_INTENTS or SENSITIVE_KEYWORDS.search(body_text):
+    if intent_override in SENSITIVE_ACTION_INTENTS or has_authority_request(body_text):
         ticket.is_authority_required = True
     metrics.record_pii({"entities": len(mapping)}, blocked=privacy_failed)
     audit(session, "message.pseudonymized", None, trace_id, ticket.ticket_id, outcome="failed" if privacy_failed else "ready", pseudonym_count=len(mapping))
@@ -144,7 +145,7 @@ def create_ticket(session, actor, order_id, message, settings, trace_id):
     else:
         max_id = session.scalar(text("SELECT MAX(CAST(SUBSTR(ticket_id, 5) AS INTEGER)) FROM tickets"))
         number = (max_id or 1000) + 1
-    message_requires_authority = bool(SENSITIVE_KEYWORDS.search(message))
+    message_requires_authority = has_authority_request(message)
     ticket = Ticket(ticket_id=f"TCK-{number}", customer_id=actor.customer_id, order_id=order_id, created_at=utcnow(), status="open", handling_mode="assisted", is_authority_required=message_requires_authority)
     session.add(ticket)
     session.flush()
@@ -246,9 +247,9 @@ def act(session, actor, ticket_id, action, body, settings, trace_id):
         raise Problem(403, "authority-required", "An administrator must send the reply. Submit it for approval.")
     if action == "reply-proposals" and actor.role != "staff":
         raise Problem(403, "forbidden", "Only staff submit proposals for approval.")
-    validate_reply(ticket, suggestion, body)
-    if action == "replies" and body["basis"] == "reply_proposal" and (ticket.proposal or {}).get("actor_account_id") == actor.account_id:
+    if action == "replies" and (ticket.status == "awaiting_approval" or body.get("basis") == "reply_proposal") and (ticket.proposal or {}).get("actor_account_id") == actor.account_id:
         raise Problem(403, "self-approval-forbidden", "You cannot approve your own reply proposal.")
+    validate_reply(ticket, suggestion, body)
     if action == "reply-proposals":
         if body["basis"] == "reply_proposal":
             raise Problem(422, "invalid-request", "A proposal cannot be based on another proposal.")
