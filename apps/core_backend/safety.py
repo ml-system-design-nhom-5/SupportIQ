@@ -288,9 +288,37 @@ _QUOTE_FIRST_PERSON_OR_MODAL = re.compile(
     r"can|could|would|will|should|shall|may|might|do|does|did|please)\b",
     re.I,
 )
-_QUOTE_REJECTION_SIGNAL = re.compile(
-    r"\b(?:instead|rather\s+than|wrongly|erroneous(?:ly)?|mistaken(?:ly)?|by\s+mistake|false(?:ly)?|"
-    r"incorrect(?:ly)?|jok(?:e[ds]?|ing))\b",
+_LOCAL_QUOTE_FALSITY = re.compile(
+    r"\b(?:wrongly|erroneous(?:ly)?|mistaken(?:ly)?|by\s+mistake|false(?:ly)?|incorrect(?:ly)?)\b",
+    re.I,
+)
+_POST_QUOTE_DISAVOWAL_PREFIX = re.compile(
+    r"^\s*(?:[,;:\-]+)?\s*(?:"
+    r"(?:by\s+mistake|wrongly|erroneous(?:ly)?|mistaken(?:ly)?|false(?:ly)?|incorrect(?:ly)?)"
+    r"(?:\s*[,;:\-]?\s*(?:instead|rather|but))?\b"
+    r"|instead(?:\s+of\s+(?:doing\s+)?(?:that|this|it|so))?\b"
+    r"|rather(?:\s+than\s+(?:doing\s+)?(?:that|this|it|so))?\b"
+    r"|though\s+(?:i|we)\s+actually\b"
+    r")",
+    re.I,
+)
+_COVERED_ALT_RETURN_ACTION = re.compile(
+    r"\b(?:return(?:ing)?|exchange|exchanging|refund|pickup|pick\s+up|drop[-\s]?off|"
+    r"drop\b[^.,;?!\n]{0,20}\boff|collect|upload|courier|post\s+office|steps?|process|"
+    r"how\s+do\s+i\s+(?:use|start|initiate))\b",
+    re.I,
+)
+_UNRESOLVED_QUOTE_REFERENCE = re.compile(
+    r"\b(?:"
+    r"that|there|doing\s+so|such|same|also|too|as\s+well|alongside|along\s+with|either|"
+    r"visit(?:ing)?|going|walk(?:ing)?|go\s+(?:there|in|to)|"
+    r"this(?!\s+(?:item|order|product|parcel|package|box|shirt|kettle|headset|laptop|"
+    r"microwave|printer|keyboard|monitor|lamp|earbuds?)\b)"
+    r")\b",
+    re.I,
+)
+_POST_QUOTE_CLAUSE_SPLIT = re.compile(
+    r"[.;!\n?]+|\s+-\s+|--|\b(?:and|or|but|while|whereas|before|after|alongside|plus)\b",
     re.I,
 )
 _CHANNEL_RETURN_VERB = re.compile(
@@ -380,7 +408,23 @@ _DECLARATIVE_NEGATION_STEM = (
     r"|(?:i'm|we're|(?:i|we)\s+(?:am|are))\s+unable"
     r"|without(?:\s+(?:going|traveling|walking|heading|driving|visiting|needing|having|using|printing|downloading))?"
 )
-_ALT_CLAUSE_REJECTION = re.compile(rf"\b(?:{_DECLARATIVE_NEGATION_STEM})\b[^.,;?!\n]*$", re.I)
+_ALT_CLAUSE_REJECTION = re.compile(
+    rf"(?:\b(?:{_DECLARATIVE_NEGATION_STEM})\b[^.,;?!\n]*$"
+    r"|\b(?:instead\s+of|rather\s+than)\b(?:\s+(?:waiting\s+for|using|booking|getting|trying|relying\s+on))?\s*(?:a\s+|an\s+|the\s+)?$"
+    r"|\b(?:not|never|without|neither|nor)\s+(?:waiting\s+for|using|booking|getting|having|needing)\s*(?:a\s+|an\s+|the\s+)?$"
+    r"|\bno\s+(?:available\s+|free\s+)?$)",
+    re.I,
+)
+_ALT_CLAUSE_POST_NEG = re.compile(
+    r"^(?:\s+(?!for\b|at\b|on\b|in\b|to\b|with\b|via\b|from\b|how\b|when\b|where\b|can\b|could\b|will\b|would\b|should\b)[A-Za-z'-]+){0,2}\s+"
+    r"(?:"
+    r"(?:is|are|was|were|does|do|did|will|would|can|could)\s+not\b"
+    r"|(?:isn't|aren't|doesn't|don't|didn't|won't|wouldn't|can't|cannot|couldn't)\b"
+    r"|(?:(?:is|are|was|were|seems?|appears?|looks?)\s+)?(?:(?:currently|temporarily|completely|totally|still)\s+)?"
+    r"(?:unavailable|unusable|offline|down|broken|disabled|closed)\b"
+    r")",
+    re.I,
+)
 _DECLARATIVE_CHANNEL_NEG_PREFIX = re.compile(
     rf"\b(?:{_DECLARATIVE_NEGATION_STEM})"
     r"(?:\s+(?:want|need|wish|plan|expect|intend|prefer|like|have|be\s+able|able))?"
@@ -486,61 +530,124 @@ def _clause_before(text: str, pos: int) -> str:
     return prefix
 
 
-def _has_covered_return_alternative_request(text: str) -> bool:
-    """Return True when context affirmatively names an approved return alternative (courier/post office/app)."""
+def _clause_after(text: str, pos: int) -> str:
+    """Return text within the current clause immediately following a regex match."""
+    tail = text[pos:]
+    end = len(tail)
+    for m in _HISTORICAL_CLAUSE_BREAK.finditer(tail):
+        end = min(end, m.start())
+        break
+    for sep in (" - ", "--"):
+        idx = tail.find(sep)
+        if idx != -1:
+            end = min(end, idx)
+    return tail[:end]
+
+
+def _is_covered_alt_clause_negated(prefix: str, suffix: str) -> bool:
+    """Return True when a covered-alternative mention is negated in its local clause."""
+    return bool(
+        _ALTERNATIVE_NEG_PREFIX.search(prefix)
+        or _ALT_CLAUSE_REJECTION.search(prefix)
+        or _ALT_CLAUSE_POST_NEG.search(suffix)
+    )
+
+
+def _has_covered_return_alternative_request(text: str, *, require_return_action: bool = False) -> bool:
+    """Return True when context affirmatively names an unnegated approved return alternative."""
     for m in _COVERED_RETURN_ALTERNATIVE_PATTERN.finditer(text):
         prefix = _clause_before(text, m.start())
-        if _ALTERNATIVE_NEG_PREFIX.search(prefix) or _ALT_CLAUSE_REJECTION.search(prefix):
+        suffix = _clause_after(text, m.end())
+        if _is_covered_alt_clause_negated(prefix, suffix):
+            continue
+        if require_return_action and not _COVERED_ALT_RETURN_ACTION.search(f"{prefix}{m.group(0)}{suffix}"):
             continue
         return True
     return False
 
 
-def _is_ambiguous_or_endorsed_post_quote(post_quote: str) -> bool:
-    """Return True if post-quote text asks an open choice (or <alt>) or anaphoric question on the quoted store action."""
-    cleaned = re.sub(
-        r"\b(?:instead\s+of|rather\s+than)\s+(?:doing\s+)?(?:that|it|so)\b",
-        " ",
-        post_quote,
-        flags=re.I,
+def _post_quote_is_exclusively_covered(local_post: str, *, has_prefix_disavowal: bool) -> bool:
+    """Require local explicit disavowal and verify every subsequent clause exclusively asks for an approved return alternative."""
+    post_m = _POST_QUOTE_DISAVOWAL_PREFIX.match(local_post)
+    if post_m:
+        rem = local_post[post_m.end() :]
+    elif has_prefix_disavowal:
+        rem = re.sub(r"^\s*(?:[,;:\-]+)?\s*(?:(?:and|but)\s+)?", "", local_post, flags=re.I)
+    else:
+        return False
+
+    rem = re.sub(r"^\s*[,;:\-\s]+", "", rem).strip()
+    if not rem or _UNRESOLVED_QUOTE_REFERENCE.search(rem):
+        return False
+
+    clauses = [c.strip(" ,;:\t-") for c in _POST_QUOTE_CLAUSE_SPLIT.split(rem)]
+    non_empty = [c for c in clauses if c]
+    if not non_empty:
+        return False
+    return all(_has_covered_return_alternative_request(c, require_return_action=True) for c in non_empty)
+
+
+def _collect_non_overlapping_quotes(text: str) -> list[re.Match[str]]:
+    """Collect non-overlapping quoted spans sorted left-to-right."""
+    candidates = sorted(
+        [m for pat in (_DOUBLE_QUOTED_SPAN, _SINGLE_QUOTED_SPAN) for m in pat.finditer(text)],
+        key=lambda m: (m.start(), -m.end()),
     )
-    first_alt = _COVERED_RETURN_ALTERNATIVE_PATTERN.search(cleaned)
-    if first_alt and re.search(
-        r"\bor\b\s*(?:should\s+i|can\s+i|could\s+i|use|book|go|just|drop|do|with|a|the)?\s*$",
-        cleaned[: first_alt.start()],
-        re.I,
-    ):
-        return True
-    for clause in re.split(r"[.,;!\n]+|\s+-\s+|--", cleaned):
-        if "?" in clause and re.search(r"\b(?:that|this|it|doing\s+so)\b", clause, re.I):
-            return True
-    return False
+    ordered: list[re.Match[str]] = []
+    last_end = -1
+    for m in candidates:
+        if m.start() >= last_end:
+            ordered.append(m)
+            last_end = m.end()
+    return ordered
+
+
+def _quote_bounds_and_prefix(text: str, matches: list[re.Match[str]], idx: int) -> tuple[str, str]:
+    """Return strictly bounded (local_prefix, local_post) isolated from other quotes."""
+    m = matches[idx]
+    prev_end = matches[idx - 1].end() if idx > 0 else 0
+    next_start = matches[idx + 1].start() if idx + 1 < len(matches) else len(text)
+
+    punct_m = re.search(r"[:,\-]\s*$", text[prev_end : m.start()])
+    attr_pos = prev_end + punct_m.start() if punct_m else m.start()
+    pre_slice = text[prev_end:attr_pos]
+    local_prefix = _clause_before(pre_slice, len(pre_slice)) + text[attr_pos : m.start()]
+
+    post_end = next_start
+    if idx + 1 < len(matches):
+        rel = text[m.end() : next_start]
+        next_punct = re.search(r"[:,\-]\s*$", rel)
+        next_attr_rel = next_punct.start() if next_punct else len(rel)
+        next_intro = _clause_before(rel, next_attr_rel)
+        cut_rel = next_attr_rel - len(next_intro)
+        if cut_rel > 0:
+            post_end = m.end() + cut_rel
+
+    return local_prefix, text[m.end() : post_end]
 
 
 def _mask_attributed_quotes(text: str) -> str:
-    """Blank out contrastive/third-party reported or UI quotes when non-first-person, disavowed, and paired with an approved alternative."""
+    """Retain unsupported capability quotes by default; blank ONLY with positive local disavowal and exclusive covered alternative."""
+    matches = _collect_non_overlapping_quotes(text)
+    if not matches:
+        return text
     chars = list(text)
-    for pattern in (_DOUBLE_QUOTED_SPAN, _SINGLE_QUOTED_SPAN):
-        for m in pattern.finditer(text):
-            punct_m = re.search(r"[:,\-]\s*$", text[: m.start()])
-            attr_pos = punct_m.start() if punct_m else m.start()
-            local_prefix = _clause_before(text, attr_pos) + text[attr_pos : m.start()]
-            is_contrastive = bool(_CONTRASTIVE_QUOTE_PREFIX.search(local_prefix))
-            quote_m = None if is_contrastive else _UI_OR_SPEECH_QUOTE_PREFIX.search(local_prefix)
-            if not is_contrastive and not quote_m:
-                continue
-            if quote_m and _QUOTE_FIRST_PERSON_OR_MODAL.search(local_prefix[: quote_m.start()]):
-                continue
-            outside_quote = f"{text[:m.start()]} {text[m.end():]}"
-            if _PHYSICAL_STORE_CHANNEL_PATTERN.search(m.group(0)):
-                if not _has_covered_return_alternative_request(outside_quote):
-                    continue
-                if not is_contrastive and not _QUOTE_REJECTION_SIGNAL.search(outside_quote):
-                    continue
-                if _is_ambiguous_or_endorsed_post_quote(text[m.end() :]):
-                    continue
-            for idx in range(m.start(), m.end()):
-                chars[idx] = " "
+    for idx, m in enumerate(matches):
+        if not _PHYSICAL_STORE_CHANNEL_PATTERN.search(m.group(0)):
+            continue
+        local_prefix, local_post = _quote_bounds_and_prefix(text, matches, idx)
+        contrast_m = _CONTRASTIVE_QUOTE_PREFIX.search(local_prefix)
+        quote_m = None if contrast_m else _UI_OR_SPEECH_QUOTE_PREFIX.search(local_prefix)
+        if not contrast_m and not quote_m:
+            continue
+        pre_attr = local_prefix[: (contrast_m or quote_m).start()]
+        if _QUOTE_FIRST_PERSON_OR_MODAL.search(pre_attr):
+            continue
+        has_prefix_disavowal = bool(contrast_m or _LOCAL_QUOTE_FALSITY.search(local_prefix))
+        if not _post_quote_is_exclusively_covered(local_post, has_prefix_disavowal=has_prefix_disavowal):
+            continue
+        for pos in range(m.start(), m.end()):
+            chars[pos] = " "
     return "".join(chars)
 
 

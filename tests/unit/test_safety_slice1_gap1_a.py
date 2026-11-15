@@ -1079,3 +1079,143 @@ def test_gap1e_valid_third_party_quote_rejections_and_contrastive_ui_remain_allo
     tmp_path: Path, text: str, intent: str, doc_ids: list[str], fake_llm
 ):
     _assert_both_allow(tmp_path, text, intent, doc_ids, fake_llm=fake_llm)
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        # Worker B's 8 exact end-to-end FAIL-OPEN leaks against 717ac038
+        "My friend joked 'walk into a physical store to return it', and I want to do that along with the app.",
+        "My friend joked 'walk into a physical store to return it' — please tell me I can do that before booking a courier.",
+        "My friend joked 'walk into a physical store to return it' and I plan to go there instead of waiting for a courier.",
+        "My friend joked 'walk into a physical store to return it' — is going there fine too, alongside booking a courier?",
+        "My friend joked 'just walk into a retail store' — is visiting allowed before booking courier?",
+        "Instead of buying online, a friend told me 'return at a physical store' — please confirm if visiting is okay when I use the app.",
+        "My friend joked yesterday, anyway support told me 'bring it to a physical store', let's check via the app.",
+        "Because courier isn't available, without visiting a physical store, can I still return this?",
+        # Additional declarative/unreported/ambiguous/3rd-person negative alternative traps
+        "My friend joked 'walk into a physical store', I'd like to do that.",
+        "The FAQ says 'return at a physical store' — can you check courier pickup or how do I visit?",
+        "Courier doesn't work in my area; without visiting a physical store, can I still return this?",
+        "My friend joked 'walk into a physical store', how does courier pickup work?",
+    ],
+)
+def test_gap1f_worker_b_eight_leaks_and_structural_traps_block_pre_llm(
+    tmp_path: Path, real_scope_retriever: RetrievalAdapter, query: str
+):
+    real_ret = real_scope_retriever.retrieve(query, intent="return_product", current_time=AS_OF_2026)
+    retriever = (
+        real_scope_retriever
+        if real_ret["status"] == "success"
+        else StaticScopeRetriever({"return_product": ["POL-RET-002", "POL-RET-001"]})
+    )
+    _assert_pre_llm_escalate(tmp_path, query, retriever)
+
+
+@pytest.mark.parametrize(
+    "base_query",
+    [
+        "My friend joked 'walk into a physical store to return it' — I'd like to do that before booking a courier.",
+        "Support told me 'visit a physical branch' — I want to go there after trying the app.",
+        "A coworker said 'drop off at a physical store' — I plan to try that and use courier.",
+        "An old page shows 'return at a physical store' — tell me that works instead of waiting for a courier.",
+    ],
+)
+def test_gap1f_property_declarative_without_question_mark_never_unlocks(
+    tmp_path: Path, real_scope_retriever: RetrievalAdapter, base_query: str
+):
+    # Invariant: stripping '?' or phrasing as a declarative statement must never bypass scope escalation.
+    for idx, variant in enumerate((base_query, base_query.rstrip(".") + "?")):
+        _assert_pre_llm_escalate(
+            tmp_path / f"v{idx}",
+            variant,
+            StaticScopeRetriever({"return_product": ["POL-RET-002", "POL-RET-001"]}),
+        )
+
+
+@pytest.mark.parametrize(
+    "unrelated_rejection,unsupported_quote",
+    [
+        ("Instead of buying online,", "a friend told me 'return at a physical store' via the app."),
+        ("My friend joked yesterday;", "support told me 'bring it to a physical store' for courier pickup."),
+        ("I didn't generate a label by mistake.", "Support wrote 'drop it at a physical shop' when booking courier."),
+        ("No need for wrapping paper;", "my coworker said 'visit a physical store' after booking courier."),
+    ],
+)
+def test_gap1f_property_unrelated_rejection_elsewhere_never_authorizes_quote(
+    tmp_path: Path, unrelated_rejection: str, unsupported_quote: str
+):
+    # Invariant: inserting a rejection/contrast/joked token in an earlier clause must not grant a waiver to another quote.
+    retriever = StaticScopeRetriever({"return_product": ["POL-RET-002", "POL-RET-001"]})
+    _assert_pre_llm_escalate(tmp_path / "bare", unsupported_quote, retriever)
+    _assert_pre_llm_escalate(tmp_path / "with_prefix", f"{unrelated_rejection} {unsupported_quote}", retriever)
+
+
+@pytest.mark.parametrize(
+    "negated_alt_query",
+    [
+        "Because courier isn't available, without visiting a physical store, can I return this?",
+        "Since courier pickup is unavailable, without visiting a physical store, what should I do?",
+        "Courier doesn't work here; no need to visit a physical store?",
+        "I am going there instead of waiting for a courier, without visiting a physical store.",
+        "Instead of waiting for a courier, my friend joked 'walk into a physical store', so can I return it?",
+    ],
+)
+def test_gap1f_property_negating_covered_alternative_never_unlocks(tmp_path: Path, negated_alt_query: str):
+    retriever = StaticScopeRetriever({"return_product": ["POL-RET-002", "POL-RET-001"]})
+    _assert_pre_llm_escalate(tmp_path, negated_alt_query, retriever)
+
+
+@pytest.mark.parametrize(
+    "multi_quote_query",
+    [
+        "Support wrongly said 'go to a physical store', instead courier pickup; also a friend told me 'visit a retail store' when returning.",
+        "My coworker wrote 'bring it to a physical shop' by mistake, instead how do I book courier pickup? My sibling also asked 'drop off at a physical branch' for my item?",
+        "Instead of 'return in store', how do I schedule courier pickup, and why did a banner say 'walk into a physical store' too?",
+        "Support suggested 'go to a physical store' by mistake; meanwhile another page says 'return at a local storefront' via the app.",
+    ],
+)
+def test_gap1f_property_multiple_quotes_evaluated_independently(tmp_path: Path, multi_quote_query: str):
+    # Invariant: one validly disavowed quote must not leak a waiver to a second un-disavowed quote in the same prompt.
+    retriever = StaticScopeRetriever({"return_product": ["POL-RET-002", "POL-RET-001"]})
+    _assert_pre_llm_escalate(tmp_path, multi_quote_query, retriever)
+
+
+@pytest.mark.parametrize(
+    "text,intent,doc_ids,ctx",
+    [
+        (
+            "The marketplace seller wrongly told me 'go to a physical store', but I want Tiki courier pickup through the app instead.",
+            "return_product",
+            ["POL-RET-002", "POL-RET-001"],
+            None,
+        ),
+        (
+            "A friend joked 'just walk into a retail store', though I actually plan to drop the box at a designated partner post office.",
+            "return_product",
+            ["POL-RET-002", "POL-RET-001"],
+            None,
+        ),
+        (
+            "Instead of 'return in store', how do I book a courier pickup?",
+            "return_product",
+            ["POL-RET-002"],
+            None,
+        ),
+        (
+            "Where can I click 'My Orders' to track order ORD-1001?",
+            "track_order",
+            ["POL-ORD-001"],
+            RoutingContext(
+                ticket_customer_id="demo-customer",
+                verified_scope="ticket:read order:read",
+                is_personal_lookup=True,
+                extracted_slots={"order_id": "ORD-1001"},
+            ),
+        ),
+    ],
+)
+def test_gap1f_positive_local_rejection_with_exclusive_courier_and_safe_ui_allowed(
+    tmp_path: Path, text: str, intent: str, doc_ids: list[str], ctx: RoutingContext | None, fake_llm
+):
+    _assert_both_allow(tmp_path, text, intent, doc_ids, ctx, fake_llm=fake_llm)
