@@ -121,3 +121,27 @@ Chưa hoàn thành toàn bộ kế hoạch gốc. Lượt sửa review giữ c�
 - **Protected File Invariants Verified Preserved:**
   - All datasets (`data/`), model checkpoints/weights/configs/calibration/run-records (`artifacts/models/`), historical evaluation manifests/audits (`artifacts/evaluation/`, `artifacts/audit/`), presentation assets (`docs/report.template.pptx`, `tmp/report-work/`), `.codegraph/`, `.local/`, and unstaged `artifacts/models/.gitkeep` remain 100% untouched.
   - Zero edits to core `safety.py` and zero hash helper refactors (preserved per coordinator constraint).
+
+## 9. Worker C Independent Verification of Codebase Cleanup & Gate Fail-Closed Correction (2026-11-15)
+
+- **Scope & Commit Verified:** `24fb8806a26f43903d4f8f72c50d44dcb59c537d` on `minh`.
+- **Verdict:** **PASS** (scoped verification for critical cleanup and fail-closed gate fixes; no claims that all academic criteria are met).
+- **Targeted Test Results:**
+  - `tests/unit/test_fit2_independent_gate.py` (3 passed), `tests/unit/test_sealed_holdout_20261113.py` (1 passed), `tests/unit/test_historical_corpus_reproducibility.py` (5 passed), and `tests/integration/test_cache_cleanup.py` (6 passed) all passed: **15 passed in 15.43s** (0 failed, 0 skipped).
+  - Confirmed fail-closed public entry point `historical_corpus()` raises `HistoricalCorpusIntegrityError` without fallback upon missing or tampered inventory (`test_gate_historical_corpus_propagates_integrity_violation`).
+  - Confirmed sealed holdout leakage negative control fails closed (`test_prefreeze_overlap_fails_closed`).
+- **Frontend Verification:**
+  - TypeScript typecheck (`pnpm --dir apps/frontend run typecheck`): passed.
+  - Vitest suite (`pnpm --dir apps/frontend test`): **6 test files, 30 passed in 4.96s**.
+  - Production build (`pnpm --dir apps/frontend run build`): clean build in 514ms.
+- **Protected File & Invariant Checks:**
+  - All 11 pinned core SHA-256 digests matched (`safety.py`, `adapter.py`, `gemini.py`, `pipeline_runner.py`, `engine.py`, `main.py`, `kb-release.json`, `approved_kb.v2.json`, `intent_policy.v2.json`, `.local/training-cap-20261114.json`, `.local/ai.env`).
+  - Pinned serving model weights (`artifacts/models/trained/distilbert-supportiq/model.safetensors`): `dc7af8cffb19fe7711ed5a5d0137ffff3d7d1a1f43bad5a35edff8c8de4c1302`.
+  - Pinned Original Fit2 candidate weights (`artifacts/models/candidates/reconstructed-fit2-supcon-20261113/model.safetensors`): `f695b1fe514aba81aafc968823047d496b03474a0b47199c65eaac6bd93c6dfa`.
+  - Pinned Original Fit2 calibration (`artifacts/models/candidates/reconstructed-fit2-supcon-20261113/calibration_manifest.json`): `782c88db3fcd80615c3dceabbdb96ea2be7aa769119201f94229535becc7ae39`.
+  - Protected assets (`docs/report.template.pptx`, `data/`, `pipeline/evaluation/historical_as_of_inventory.json`, unstaged deletion of `artifacts/models/.gitkeep`) and `2/2` STOP training cap preserved.
+- **Shared Runtime Verification & Smoke:**
+  - Shared services verified on `http://127.0.0.1:8080/health/ready` (`privacy_ner_available: true`) and `http://127.0.0.1:8002/health/ready` (`llm_enabled: false`, `live_llm_requests_made: 0`, `model_version: "fit2-supcon-energy-boundary-v1"`, matching model and calibration checksums).
+  - Playwright read-only main login smoke passed on `127.0.0.1:8080` (0 errors, 0 overflow).
+  - PostgreSQL live row counts verified unchanged (`accounts=89, audit_log_entries=342, customer_messages=68, idempotency_records=26, orders=3, products=100, sessions=1, sign_in_failures=0, suggestion_jobs=78, suggestions=78, tickets=68`).
+
