@@ -923,3 +923,82 @@ def test_gap1c_multichannel_negated_single_order_plus_full_history_escalates(tmp
         ["POL-ORD-001"],
         ctx=ctx,
     )
+
+
+class _PreLLMSpy(StubLLM):
+    configured = True
+
+    def __init__(self):
+        self.calls: list[tuple] = []
+
+    def generate(self, *args, **kwargs):
+        self.calls.append((args, kwargs))
+        return super().generate(*args, **kwargs)
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        # Worker B 6 end-to-end FAIL-OPEN repros (+ deliver leak)
+        "I can't return this item except at a physical store",
+        "I cannot return the opened TV without stopping by a physical store",
+        "I won't return my item instead head to a retail shop",
+        "I cannot ship my parcel home deliver it at a physical shop",
+        "Without bringing the box to a physical store, can I still return my headphones?",
+        "I asked, 'can I walk into a physical shop to return this?'",
+        "Could support advise, 'bring it to a physical shop', and can I do that now?",
+        # Structural & clause paraphrases for exception, contrast, unqualified without/negation, and quote traps
+        "I can't return it except at a retail shop.",
+        "Instead of courier, I can't return this item except at a physical store.",
+        "We won't drop our parcel off only return at a physical shop.",
+        "I will not return my item unless at a physical store.",
+        "Without visiting a physical store, can I still return my headphones?",
+        "We will not go to a physical store; can I still return this defective item?",
+        "We asked, 'can we walk into a physical shop to return this?'",
+        "Can someone advise, 'bring it to a physical shop', and can I do that now?",
+        "My friend joked 'just walk into a retail store', and can I do that now?",
+        "My friend joked 'just walk into a retail store' — can I do that or schedule courier pickup?",
+        "A friend joked 'use courier or walk into a retail store'?",
+    ],
+)
+def test_gap1d_fail_open_exception_unqualified_and_quote_traps_block_pre_llm(tmp_path: Path, query: str):
+    _, _, policy = _load_real_kb_and_release()
+    retriever = StaticScopeRetriever({"return_product": ["POL-RET-002", "POL-RET-001"]})
+    manifest = {"release_id": "slice1-test-release"}
+
+    eng_spy = _PreLLMSpy()
+    engine = Engine(StaticIntentModel("return_product"), retriever, eng_spy, manifest, policy=policy)
+    eng_res = engine.analyse({"message": query, "as_of": AS_OF_2026.isoformat()})
+    assert eng_res["routing"]["recommendation"] == "escalate", f"Engine leaked pre-LLM draft: {query} -> {eng_res}"
+    assert "insufficient_evidence" in eng_res["routing"]["reason_codes"]
+    assert eng_spy.calls == [], f"Engine invoked provider LLM before scope escalation: {query}"
+    assert validate_analysis(eng_res) is eng_res
+
+    def ok_handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "intent": "return_product",
+                "confidence": 0.96,
+                "margin": 0.85,
+                "top_k": [{"intent": "return_product", "probability": 0.96}],
+                "model_version": "v1.0.0",
+                "verified": True,
+            },
+        )
+
+    intent_client = IntentClient(
+        base_url="http://ml.local",
+        http_client=httpx.Client(transport=httpx.MockTransport(ok_handler), trust_env=False),
+    )
+    run_spy = _PreLLMSpy()
+    runner = PipelineRunner(
+        intent_client=intent_client,
+        store=PersistentStore(db_path=str(tmp_path / "store_spy.sqlite3")),
+        llm_client=run_spy,
+        retrieval_adapter=retriever,
+    )
+    run_res = runner.run(query, RoutingContext(ticket_customer_id="demo-customer", is_personal_lookup=False))
+    assert run_res["action"] == "escalate", f"PipelineRunner leaked: {query} -> {run_res}"
+    assert "insufficient_evidence" in run_res["reason_codes"]
+    assert run_spy.calls == [], f"PipelineRunner invoked provider LLM before scope escalation: {query}"

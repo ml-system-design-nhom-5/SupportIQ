@@ -276,11 +276,24 @@ _QUOTE_TRANSLATION = str.maketrans({
     "\u2212": "-",
     "\u00a0": " ",
 })
-_QUOTE_ATTRIBUTION_PREFIX = re.compile(
-    r"(?:\b(?:said|says|ask(?:s|ed)?|told\s+(?:me|us)|wrote|writes|states?|mentions?|reads?|"
-    r"jok(?:e[ds]?|ing)|claim(?:s|ed)?|suggest(?:s|ed)?|repl(?:y|ies|ied)|advis(?:e[ds]?|ing)|"
-    r"called|labeled|titled|button|tab|section|page|menu|option|"
-    r"instead\s+of|rather\s+than)\s*[:,\-]?\s*)$",
+_UI_OR_CONTRAST_QUOTE_PREFIX = re.compile(
+    r"(?:\b(?:called|labeled|titled|button|tab|section|page|menu|option|instead\s+of|rather\s+than)\s*[:,\-]?\s*)$",
+    re.I,
+)
+_REPORTED_SPEECH_QUOTE_PREFIX = re.compile(
+    r"\b(?:said|says|asked|asks|told\s+(?:me|us)|wrote|writes|stated|states|mentioned|mentions|reads?|"
+    r"joked|jokes|claimed|claims|suggested|suggests|replied|replies|advised|advises)\s*[:,\-]?\s*$",
+    re.I,
+)
+_QUOTE_FIRST_PERSON_OR_MODAL = re.compile(
+    r"\b(?:i|we|i'm|we're|i've|we've|i'd|we'd|let\s+me|let\s+us|"
+    r"can|could|would|will|should|shall|may|might|do|does|did|please)\b",
+    re.I,
+)
+_QUOTE_ENDORSEMENT_FOLLOWUP = re.compile(
+    r"\b(?:(?:can|could|may|should|would|will|do|did|is|are)\s+(?:i|we|someone|customers?|that|it)\s+"
+    r"(?:still\s+|actually\s+|really\s+)?(?:do\s+(?:that|it|so)|follow\s+that|try\s+that|allowed|possible|okay|ok)"
+    r"|(?:i|we)\s+(?:want|need|plan|prefer|agree)\s+to\s+(?:do|follow|try)\s+(?:that|it))\b",
     re.I,
 )
 _CHANNEL_RETURN_VERB = re.compile(
@@ -305,34 +318,67 @@ _STORE_NON_CHANNEL_SUFFIX = re.compile(
     r"^\s*(?:credits?|wallets?|vouchers?|cards?|balances?|polic(?:y|ies))\b",
     re.I,
 )
-_NEG_CHANNEL_MOTION_OR_ACTION = (
-    r"(?:go(?:ing)?|travel(?:ing|ling)?|walk(?:ing)?|head(?:ing)?|driv(?:e|ing)|"
-    r"commut(?:e|ing)|com(?:e|ing)|visit(?:ing)?|stop(?:ping)?\s+by|drop(?:ping)?\s+in|"
-    r"return(?:ing)?|drop(?:ping)?\s+off|bring(?:ing)?|tak(?:e|ing)|"
-    r"print(?:ing)?|download(?:ing)?|generat(?:e|ing)|us(?:e|ing))"
+_NEG_CHANNEL_INTRANSITIVE_VERBS = (
+    r"go(?:ing)?|travel(?:ing|ling)?|walk(?:ing)?|head(?:ing)?|driv(?:e|ing)|"
+    r"commut(?:e|ing)|com(?:e|ing)|visit(?:ing)?|stop(?:ping)?(?:\s+by)?|"
+    r"drop(?:ping)?\s+in|wait(?:ing)?|stay(?:ing)?|leav(?:e|ing)|keep(?:ing)?|"
+    r"ask(?:ing)?|mail(?:ing)?|print(?:ing)?|download(?:ing)?|generat(?:e|ing)|us(?:e|ing)"
+)
+_NEG_CHANNEL_TRANSITIVE_VERBS = (
+    r"return(?:ing)?|bring(?:ing)?|tak(?:e|ing)|drop(?:ping)?|hand(?:ing)?|"
+    r"send(?:ing)?|ship(?:ping)?|carry(?:ing)?|deliver(?:ing)?|exchang(?:e|ing)|swap(?:ping)?"
+)
+_NEG_CLAUSE_BOUNDARY_WORDS = (
+    r"and|or|but|so|yet|though|although|however|actually|whereas|while|"
+    r"except|without|unless|instead|rather|only|just|not|never|neither|nor|still|also|"
+    r"if|when|where|because|since|until|then|before|after|whether|than|"
+    r"to|for|from|by|at|in|into|onto|on|via|with|"
+    r"am|is|are|was|were|be|been|being|do|does|did|have|has|had|"
+    r"can|could|will|would|shall|should|may|might|must|"
+    r"i|we|you|he|she|they|i'm|i'll|i'd|we're|we'll|we'd|you're|you'll|let|let's|"
+    r"someone|anyone|everyone|please|"
+    r"want|need|plan|prefer|like|wish|try|trying|allow|accept|process|handle"
 )
 _NEG_CHANNEL_TRANSITIVE_ACTION = (
     r"(?:return(?:ing)?|bring(?:ing)?(?:\s+(?:back|in))?|tak(?:e|ing)(?:\s+back)?|"
     r"drop(?:ping)?(?:\s+off)?|hand(?:ing)?(?:\s+in)?|send(?:ing)?(?:\s+back)?|"
     r"ship(?:ping)?(?:\s+back)?|carry(?:ing)?|deliver(?:ing)?|exchang(?:e|ing)|swap(?:ping)?)"
 )
+_NEG_NON_OBJECT_TOKEN = re.compile(
+    rf"\b(?:{_NEG_CLAUSE_BOUNDARY_WORDS}|{_NEG_CHANNEL_INTRANSITIVE_VERBS}|{_NEG_CHANNEL_TRANSITIVE_VERBS})\b",
+    re.I,
+)
 _NEG_OBJECT_NP_WORD = (
-    r"(?!(?:and|or|but|so|yet|though|however|actually|if|when|while|where|because|since|"
-    r"unless|until|then|before|after|whether|than|to|"
-    r"am|is|are|was|were|be|been|being|do|does|did|have|has|had|"
-    r"can|could|will|would|shall|should|may|might|must|"
-    r"i|we|you|he|she|they|i'm|i'll|i'd|we're|we'll|we'd|you're|you'll|let|let's|"
-    r"someone|anyone|everyone|please|"
-    r"want|need|plan|prefer|like|wish|try|trying|go|going|walk|walking|travel|traveling|travelling|"
-    r"drive|driving|come|coming|visit|visiting|return|returning|bring|bringing|take|taking|"
-    r"drop|dropping|hand|handing|send|sending|ship|shipping|carry|carrying|exchange|exchanging|swap|swapping)\b)"
+    rf"(?!(?:{_NEG_CLAUSE_BOUNDARY_WORDS}|{_NEG_CHANNEL_INTRANSITIVE_VERBS}|{_NEG_CHANNEL_TRANSITIVE_VERBS})\b)"
     r"[A-Za-z0-9'](?:[A-Za-z0-9'-]{0,28}[A-Za-z0-9'])?"
 )
 _NEG_CHANNEL_ACTION_CLAUSE = (
     rf"(?:"
     rf"{_NEG_CHANNEL_TRANSITIVE_ACTION}(?:\s+{_NEG_OBJECT_NP_WORD}){{1,5}}(?:\s+(?:back|off|in))?"
-    rf"|{_NEG_CHANNEL_MOTION_OR_ACTION}"
+    rf"|{_NEG_CHANNEL_TRANSITIVE_VERBS}|{_NEG_CHANNEL_INTRANSITIVE_VERBS}"
     rf")"
+)
+_STORE_CHANNEL_VERB_PREFIX_SPLIT = re.compile(
+    rf"^({_NEG_CHANNEL_TRANSITIVE_ACTION})\s+(.+?)\s+(?=(?:at|to|in|into)\b|in[-\s]+person\b)",
+    re.I,
+)
+_COVERED_RETURN_ALTERNATIVE_PATTERN = re.compile(
+    r"\b(?:"
+    r"(?:shipping\s+)?couriers?"
+    r"|(?:designated\s+)?(?:partner\s+)?post\s+office\s+(?:drop[-\s]?off|steps?|returns?)"
+    r"|(?:designated\s+|partner\s+)post\s+offices?"
+    r"|order\s+management"
+    r"|(?:tiki\s+)?app\b"
+    r"|(?:in|on|via|through)\s+(?:the\s+)?app\b"
+    r"|(?:return|exchange)(?:ing)?\s+online"
+    r"|online\s+(?:return|exchange|courier|pickup)"
+    r")\b",
+    re.I,
+)
+_ALT_CLAUSE_REJECTION = re.compile(
+    r"\b(?:won't|will\s+not|cannot|can't|can\s+not|do\s+not|don't|prefer\s+not\s+to|rather\s+not|"
+    r"no\s+need\s+(?:for|to))\b[^.,;?!\n]*$",
+    re.I,
 )
 _DECLARATIVE_CHANNEL_NEG_PREFIX = re.compile(
     r"\b(?:"
@@ -435,20 +481,64 @@ def _normalize_scope_text(text: str) -> str:
     return re.sub(r"\b[A-Za-z]{5,14}\b", _fix_transposition, norm)
 
 
+def _clause_before(text: str, pos: int) -> str:
+    """Return text within the current clause before pos, splitting on punctuation/contrast and spaced dashes."""
+    prefix = _local_clause_prefix(text, pos)
+    last_dash = max(prefix.rfind(" - "), prefix.rfind("--"))
+    if last_dash != -1:
+        dash_len = 3 if prefix[last_dash : last_dash + 3] == " - " else 2
+        prefix = prefix[last_dash + dash_len :]
+    return prefix
+
+
+def _has_covered_return_alternative_request(text: str) -> bool:
+    """Return True when context affirmatively names an approved return alternative (courier/post office/app)."""
+    for m in _COVERED_RETURN_ALTERNATIVE_PATTERN.finditer(text):
+        prefix = _clause_before(text, m.start())
+        if _ALTERNATIVE_NEG_PREFIX.search(prefix) or _ALT_CLAUSE_REJECTION.search(prefix):
+            continue
+        return True
+    return False
+
+
 def _mask_attributed_quotes(text: str) -> str:
-    """Blank out quoted spans preceded by speech/UI/counterfactual attribution (not direct quoted questions)."""
+    """Blank out UI/counterfactual quotes and credible third-party reported speech quotes."""
     chars = list(text)
     for pattern in (_DOUBLE_QUOTED_SPAN, _SINGLE_QUOTED_SPAN):
         for m in pattern.finditer(text):
-            ctx_prefix = text[max(0, m.start() - 40) : m.start()]
-            if _QUOTE_ATTRIBUTION_PREFIX.search(ctx_prefix):
+            punct_m = re.search(r"[:,\-]\s*$", text[: m.start()])
+            attr_pos = punct_m.start() if punct_m else m.start()
+            local_prefix = _clause_before(text, attr_pos) + text[attr_pos : m.start()]
+            if _UI_OR_CONTRAST_QUOTE_PREFIX.search(local_prefix):
                 for idx in range(m.start(), m.end()):
                     chars[idx] = " "
+                continue
+            speech_m = _REPORTED_SPEECH_QUOTE_PREFIX.search(local_prefix)
+            if not speech_m:
+                continue
+            before_verb = local_prefix[: speech_m.start()]
+            if _QUOTE_FIRST_PERSON_OR_MODAL.search(before_verb):
+                continue
+            if _QUOTE_ENDORSEMENT_FOLLOWUP.search(text[m.end() :]):
+                continue
+            outside_quote = f"{text[:m.start()]} {text[m.end():]}"
+            if _PHYSICAL_STORE_CHANNEL_PATTERN.search(m.group(0)) and not _has_covered_return_alternative_request(
+                outside_quote
+            ):
+                continue
+            for idx in range(m.start(), m.end()):
+                chars[idx] = " "
     return "".join(chars)
 
 
-def _is_negated_channel_alternative(text: str, start: int) -> bool:
-    """Return True when a channel match is rejected as an alternative rather than requested."""
+def _is_negated_channel_alternative(text: str, start: int, matched_text: str = "") -> bool:
+    """Return True when a channel match is cleanly declined with pure NP syntax rather than exception/contrast."""
+    if matched_text:
+        split_m = _STORE_CHANNEL_VERB_PREFIX_SPLIT.match(matched_text)
+        if split_m:
+            interior = re.sub(r"\s+(?:back|off|in)$", "", split_m.group(2), flags=re.I)
+            if _NEG_NON_OBJECT_TOKEN.search(interior):
+                return False
     prefix = _local_clause_prefix(text, start)
     if _DECLARATIVE_CHANNEL_NEG_PREFIX.search(prefix):
         return True
@@ -552,9 +642,10 @@ def _has_uncovered_channel_or_capability(
         return False
     normalized = _mask_attributed_quotes(_normalize_scope_text(text))
     requested: list[str] = []
+    has_covered_return_alt = _has_covered_return_alternative_request(normalized)
 
     for m in _PHYSICAL_STORE_CHANNEL_PATTERN.finditer(normalized):
-        if _is_negated_channel_alternative(normalized, m.start()):
+        if has_covered_return_alt and _is_negated_channel_alternative(normalized, m.start(), m.group(0)):
             continue
         if _is_non_return_store_context(normalized, m.start(), m.end(), m.group(0)):
             continue
