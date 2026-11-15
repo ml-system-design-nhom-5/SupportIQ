@@ -206,7 +206,7 @@ def verify_original_46_label_lineage(
 ) -> VerifiedOriginalLineage:
     """Verify original 46-label cleaned dataset + split assignments against preparation manifest."""
     prep_dir = repo_root / "artifacts/preparation/03-11-2026-02"
-    restored_prep = Path(r"F:\Năm 3\SD\project\SupportIQ\data\datasets\restored\bitext-12dd624\prep\artifacts\preparation\13-11-2026-00")
+    restored_prep = repo_root / "data/datasets/restored/bitext-12dd624/prep/artifacts/preparation/13-11-2026-00"
     if not (repo_root / "data/datasets/processed/03-11-2026-02/cleaned.csv").is_file() and restored_prep.exists():
         prep_dir = restored_prep
     manifest_p = preparation_manifest_path or (prep_dir / "manifest.json")

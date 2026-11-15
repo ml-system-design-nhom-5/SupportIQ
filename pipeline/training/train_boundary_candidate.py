@@ -1858,7 +1858,7 @@ def run_fit_and_lock_candidate(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Fit 1 / Fit 2 boundary-hardened continuation trainer")
     parser.add_argument("--worktree-root", type=Path, default=Path(__file__).resolve().parents[2])
-    parser.add_argument("--data-repo-root", type=Path, default=Path(r"F:\Năm 3\SD\project\SupportIQ"))
+    parser.add_argument("--data-repo-root", type=Path, default=Path(__file__).resolve().parents[2])
     parser.add_argument(
         "--init-model-dir",
         type=Path,

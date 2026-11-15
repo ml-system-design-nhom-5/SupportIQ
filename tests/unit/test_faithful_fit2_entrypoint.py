@@ -1,21 +1,98 @@
 """Focused unit tests for fail-closed preflight, Stage 1 data assembly, rejector archival, and Stage 2 handoff."""
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from pathlib import Path
 from unittest.mock import patch
 
+import pandas as pd
 import pytest
 
 import scripts.run_faithful_fit2_restore as restore_mod
+from apps.core_backend.intent.routing import STANDARD_INTENTS_46
+from pipeline.training.train_domain_candidate import (
+    MissingLineageBlockerError,
+    verify_original_46_label_lineage,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
+def _has_local_bitext_46_data() -> bool:
+    return (
+        (
+            (REPO_ROOT / "data/datasets/processed/03-11-2026-02/cleaned.csv").is_file()
+            and (REPO_ROOT / "data/datasets/splits/03-11-2026-02/split_assignments.csv").is_file()
+        )
+        or (
+            (REPO_ROOT / "data/datasets/restored/bitext-12dd624/prep/data/datasets/processed/13-11-2026-00/cleaned.csv").is_file()
+            and (REPO_ROOT / "data/datasets/restored/bitext-12dd624/prep/data/datasets/splits/13-11-2026-00/split_assignments.csv").is_file()
+        )
+    )
+
+
+def _build_synthetic_46_label_lineage(fixture_root: Path):
+    """Build deterministic 46-label CSVs + SHA-locked prep manifests in tmp_path and verify via real parser."""
+    fixture_root.mkdir(parents=True, exist_ok=True)
+    cleaned_rows = []
+    split_rows = []
+    idx = 0
+    for intent in STANDARD_INTENTS_46:
+        for i in range(86):
+            idx += 1
+            sid = f"syn_sample_{idx:05d}"
+            cleaned_rows.append(
+                {
+                    "sample_id": sid,
+                    "instruction": f"Synthetic customer inquiry {idx} regarding {intent.replace('_', ' ')}",
+                    "intent": intent,
+                }
+            )
+            split_rows.append({"sample_id": sid, "partition": "train" if i < 85 else "test"})
+
+    cleaned_path = fixture_root / "cleaned.csv"
+    splits_path = fixture_root / "split_assignments.csv"
+    pd.DataFrame(cleaned_rows).to_csv(cleaned_path, index=False)
+    pd.DataFrame(split_rows).to_csv(splits_path, index=False)
+
+    cleaned_sha = hashlib.sha256(cleaned_path.read_bytes()).hexdigest().upper()
+    splits_sha = hashlib.sha256(splits_path.read_bytes()).hexdigest().upper()
+
+    manifest_path = fixture_root / "manifest.json"
+    split_report_path = fixture_root / "split_report.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "run_id": "synthetic-46",
+                "input_files": {"raw_sha256": ""},
+                "output_artifacts": {
+                    "cleaned_csv": str(cleaned_path),
+                    "split_assignments": str(splits_path),
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    split_report_path.write_text(
+        json.dumps({"cleaned_sha256": cleaned_sha, "splits_sha256": splits_sha}),
+        encoding="utf-8",
+    )
+    return verify_original_46_label_lineage(
+        preparation_manifest_path=manifest_path,
+        split_report_path=split_report_path,
+        cleaned_csv_override=cleaned_path,
+        splits_csv_override=splits_path,
+        repo_root=REPO_ROOT,
+    )
+
+
 def test_stage1_real_data_assembly_and_rejector_invocation(tmp_path: Path) -> None:
-    """Real assemble_stage1_closure_data produces all 46 Bitext replay labels, 0 OOD in CE, disjoint cal, and invokes rejector."""
-    s1_data = restore_mod.assemble_stage1_closure_data(REPO_ROOT, tmp_path / "ds", seed=42)
+    """Deterministic assemble_stage1_closure_data produces all 46 replay labels, 0 OOD in CE, disjoint cal, and invokes rejector."""
+    syn_lineage = _build_synthetic_46_label_lineage(tmp_path / "syn_46")
+    with patch.object(restore_mod, "verify_original_46_label_lineage", return_value=syn_lineage):
+        s1_data = restore_mod.assemble_stage1_closure_data(REPO_ROOT, tmp_path / "ds", seed=42)
     assert len(set(s1_data["pos_train_labels"])) == 46
     assert all(f == 0 for f in s1_data["pos_train_flags"])
     assert len(s1_data["pos_train_texts"]) > 3000
@@ -61,7 +138,9 @@ def test_stage1_real_data_assembly_and_rejector_invocation(tmp_path: Path) -> No
 
 def test_combined_stage1_and_stage2_passes_new_stage1_archive(tmp_path: Path) -> None:
     """Combined flags make Stage 2 consume the newly archived Stage 1 MAIN dir, not unset args."""
-    s1_data = restore_mod.assemble_stage1_closure_data(REPO_ROOT, tmp_path / "ds", seed=42)
+    syn_lineage = _build_synthetic_46_label_lineage(tmp_path / "syn_46")
+    with patch.object(restore_mod, "verify_original_46_label_lineage", return_value=syn_lineage):
+        s1_data = restore_mod.assemble_stage1_closure_data(REPO_ROOT, tmp_path / "ds", seed=42)
     main_cand = tmp_path / "main_cand"
     stage2_calls = []
 
@@ -141,3 +220,24 @@ def test_wrong_stage1_archive_fails_before_stage2_training(tmp_path: Path) -> No
     )
     with pytest.raises(RuntimeError, match="Unexpected Stage 1 selected_fit"):
         restore_mod.verify_stage1_archive_before_stage2(bad_s1)
+
+
+def test_missing_original_46_label_lineage_fails_closed(tmp_path: Path) -> None:
+    """Absent 46-label preparation manifest/data raises MissingLineageBlockerError fail-closed."""
+    with pytest.raises(MissingLineageBlockerError):
+        verify_original_46_label_lineage(repo_root=tmp_path)
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    not _has_local_bitext_46_data(),
+    reason="Requires gitignored local 46-label Bitext cleaned.csv and split_assignments.csv.",
+)
+def test_stage1_real_bitext_assembly_preflight(tmp_path: Path) -> None:
+    """Integration preflight: real local Bitext dataset produces 46 labels and disjoint calibration split."""
+    s1_data = restore_mod.assemble_stage1_closure_data(REPO_ROOT, tmp_path / "ds_real", seed=42)
+    assert len(set(s1_data["pos_train_labels"])) == 46
+    assert all(f == 0 for f in s1_data["pos_train_flags"])
+    assert len(s1_data["pos_train_texts"]) > 3000
+    assert not (set(s1_data["replay_domain_train_df"]["sample_id"]) & set(s1_data["bitext_cal_df"]["sample_id"]))
+

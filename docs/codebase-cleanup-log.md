@@ -145,3 +145,23 @@ Chưa hoàn thành toàn bộ kế hoạch gốc. Lượt sửa review giữ c�
   - Playwright read-only main login smoke passed on `127.0.0.1:8080` (0 errors, 0 overflow).
   - PostgreSQL live row counts verified unchanged (`accounts=89, audit_log_entries=342, customer_messages=68, idempotency_records=26, orders=3, products=100, sessions=1, sign_in_failures=0, suggestion_jobs=78, suggestions=78, tickets=68`).
 
+## 10. Hosted CI Portability Fixes — CRLF/LF Inventory Hashing & Real-Asset Integration Boundaries (2026-11-15)
+
+- **Root Cause Fixed (CI Run `43712320339`, 9 failed):**
+  - 4 historical corpus tests failed on Linux (`ubuntu-latest` LF checkout) due to `539` text files checked out as LF against Windows CRLF byte digests in `pipeline/evaluation/historical_as_of_inventory.json`.
+  - 5 training/preflight tests failed on CI due to absent gitignored local weights/Bitext CSVs (`data/datasets/**`, `artifacts/models/**`) and hardcoded `F:\Năm 3\SD\project\SupportIQ` paths in runner/training scripts.
+- **Historical Inventory Canonical Newline Hashing:**
+  - Added `"hash_semantics": "canonical_lf_v1"` and per-entry `"canonical_lf_sha256"` (computed from `git cat-file blob <git_blob>` with `\r\n` -> `\n`) across all `786` entries in `pipeline/evaluation/historical_as_of_inventory.json`, strictly preserving original `"sha256"` and `"git_blob"` provenance without modifying dataset bytes on disk.
+  - Added streaming boundary-safe `_compute_canonical_lf_sha256()` in `pipeline/evaluation/historical_inventory.py`; `load_historical_corpus_inventory()` verifies canonical-LF digest when `"canonical_lf_sha256"` is present (falling back strictly to raw `"sha256"` for legacy manifests) and fails closed on any content tamper or missing file.
+  - Added `test_canonical_lf_portability_and_content_tamper_fails_closed` in `tests/unit/test_historical_corpus_reproducibility.py` covering CRLF/LF parity across 64 KiB read chunks and single-byte tamper rejection.
+- **Portable Repo-Relative Paths & Unit vs Integration Boundary:**
+  - Removed hardcoded `F:\Năm 3\SD\project\SupportIQ` defaults in `scripts/run_boundary_contrast_fit.py`, `scripts/run_faithful_fit2_restore.py`, `pipeline/training/train_domain_candidate.py`, and `pipeline/training/train_boundary_candidate.py`.
+  - Fixed `test_preflight_fails_closed_on_wrong_checkpoint_or_tampered_sha` in `tests/unit/test_boundary_contrast_fit.py` using a `tmp_path` stub serving checkpoint; classified real-weight/real-Bitext preflight tests as `@pytest.mark.integration` with explicit `skipif` prerequisites so they run locally and skip cleanly when gitignored assets are absent.
+  - Replaced local Bitext dependency in `tests/unit/test_faithful_fit2_entrypoint.py` unit tests with a deterministic 46-label `tmp_path` fixture validated via real `verify_original_46_label_lineage`, added `test_missing_original_46_label_lineage_fails_closed`, and retained `test_stage1_real_bitext_assembly_preflight` (`@pytest.mark.integration`).
+- **Verification Results:**
+  - Local full targeted suite (including real-asset integration checks): **40 passed in 210.52s** (`0 failed, 0 skipped`).
+  - Local non-integration subset (`-m "not integration"`): **37 passed, 3 deselected in 76.67s**.
+  - Cross-platform LF check over all `786` historical inventory files + tamper test: **786/786 PASSED**.
+  - Simulated LF CI checkout without gitignored weights/datasets: **37 passed, 3 skipped in 61.66s** (`0 failed`).
+
+

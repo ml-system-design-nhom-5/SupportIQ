@@ -28,6 +28,38 @@ from pipeline.training.boundary_contrast_data import (
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
+def _has_local_bitext_46_data() -> bool:
+    return (
+        (
+            (REPO_ROOT / "data/datasets/processed/03-11-2026-02/cleaned.csv").is_file()
+            and (REPO_ROOT / "data/datasets/splits/03-11-2026-02/split_assignments.csv").is_file()
+        )
+        or (
+            (REPO_ROOT / "data/datasets/restored/bitext-12dd624/prep/data/datasets/processed/13-11-2026-00/cleaned.csv").is_file()
+            and (REPO_ROOT / "data/datasets/restored/bitext-12dd624/prep/data/datasets/splits/13-11-2026-00/split_assignments.csv").is_file()
+        )
+    )
+
+
+def _has_fit2_contrast_prereqs() -> bool:
+    return (contrast_mod.FIT2_BASELINE_DIR / "model.safetensors").is_file() and _has_local_bitext_46_data()
+
+
+def _has_faithful_restore_prereqs() -> bool:
+    import scripts.run_faithful_fit2_restore as restore_mod
+
+    return (
+        (contrast_mod.SERVING_DIR / "model.safetensors").is_file()
+        and restore_mod.ORIG_SIDECAR_DIR.is_dir()
+        and _has_local_bitext_46_data()
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    not _has_fit2_contrast_prereqs(),
+    reason="Requires gitignored local Fit2 model weights and original 46-label Bitext CSVs.",
+)
 def test_contrast_splits_group_isolation_semantic_and_balanced_targets(tmp_path: Path) -> None:
     """Real prepare_and_lock_contrast_splits enforces isolation, semantic consistency, and 8-12 contrast balance."""
     class _StubTok:
@@ -259,7 +291,12 @@ def test_preflight_fails_closed_on_wrong_checkpoint_or_tampered_sha(tmp_path: Pa
     with pytest.raises(ValueError, match="Starting Fit2 weights SHA mismatch"):
         contrast_mod.verify_fit2_starting_checkpoint(fake_init)
 
+    fake_serving = tmp_path / "serving"
+    fake_serving.mkdir()
+    (fake_serving / "model.safetensors").write_bytes(b"serving")
+
     with (
+        patch.object(contrast_mod, "SERVING_DIR", fake_serving),
         patch.object(contrast_mod, "EXPECTED_SERVING_SHA256", "0" * 64),
         patch.object(contrast_mod, "run_fit_and_lock_candidate") as mock_fit,
         patch.object(sys, "argv", ["prog", "--dry-run"]),
@@ -922,6 +959,11 @@ def test_semantic_audit_manifest_fails_closed_on_mismatched_split_sums() -> None
         tbc.build_semantic_audit_manifest(split_summaries=[lossy_summary], quarantine_records=[q_rec])
 
 
+@pytest.mark.integration
+@pytest.mark.skipif(
+    not _has_faithful_restore_prereqs(),
+    reason="Requires gitignored local Serving/sidecar model weights and original 46-label Bitext CSVs.",
+)
 def test_faithful_fit2_restore_real_preflight_hashes_unaffected(tmp_path: Path) -> None:
     """Real zero-fit check: scripts/run_faithful_fit2_restore.py matches exact 8/8 Closure + 7/7 Boundary hashes."""
     import scripts.run_faithful_fit2_restore as restore_mod

@@ -40,12 +40,13 @@ from pipeline.training.train_boundary_candidate import (
 )
 from pipeline.training.train_domain_candidate import verify_original_46_label_lineage
 
-SERVING_DIR = Path(r"F:\Năm 3\SD\project\SupportIQ\artifacts\models\trained\distilbert-supportiq")
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+SERVING_DIR = _REPO_ROOT / "artifacts/models/trained/distilbert-supportiq"
 EXPECTED_SERVING_SHA256 = "dc7af8cffb19fe7711ed5a5d0137ffff3d7d1a1f43bad5a35edff8c8de4c1302"
-MAIN_CANDIDATES_DIR = Path(r"F:\Năm 3\SD\project\SupportIQ\artifacts\models\candidates")
+MAIN_CANDIDATES_DIR = _REPO_ROOT / "artifacts/models/candidates"
 FIT2_BASELINE_DIR = MAIN_CANDIDATES_DIR / "reconstructed-fit2-supcon-20261113"
 EXPECTED_FIT2_SHA256 = "f695b1fe514aba81aafc968823047d496b03474a0b47199c65eaac6bd93c6dfa"
-LOCAL_CONTRAST_ROOT = Path(__file__).resolve().parents[1] / "artifacts/evaluation/boundary_contrast_20261114"
+LOCAL_CONTRAST_ROOT = _REPO_ROOT / "artifacts/evaluation/boundary_contrast_20261114"
 RELEVANT_SOURCE_PATHS: Tuple[str, ...] = (
     "scripts/run_boundary_contrast_fit.py",
     "pipeline/training/boundary_contrast_data.py",

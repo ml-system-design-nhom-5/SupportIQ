@@ -176,3 +176,62 @@ def test_gate_historical_corpus_propagates_integrity_violation(tmp_path: Path, m
     with pytest.raises(HistoricalCorpusIntegrityError, match="integrity violation"):
         historical_corpus()
 
+
+def test_canonical_lf_portability_and_content_tamper_fails_closed(tmp_path: Path):
+    """Canonical LF hash accepts CRLF and LF line endings identically while failing closed on content tamper."""
+    import hashlib
+
+    sample_json_lf = b'{\n  "id": "portability-1",\n  "text": "Kiem tra don hang"\n}\n'
+    sample_csv_lf = b"id,text\n1,Huy don hang\n2,Hoan tien\n"
+    sample_jsonl_lf = b'{"id": 1, "q": "a"}\n{"id": 2, "q": "b"}\n'
+
+    crlf_root = tmp_path / "crlf_checkout"
+    lf_root = tmp_path / "lf_checkout"
+    (crlf_root / "sub").mkdir(parents=True)
+    (lf_root / "sub").mkdir(parents=True)
+
+    # Write payloads exceeding 64 KiB read chunk size with CRLF vs LF across boundary
+    long_lf = (b"col1,col2\n" + (b"alpha,beta\n" * 7000))
+    long_crlf = long_lf.replace(b"\n", b"\r\n")
+
+    files = {
+        "sub/sample.json": (sample_json_lf.replace(b"\n", b"\r\n"), sample_json_lf),
+        "sub/sample.csv": (sample_csv_lf.replace(b"\n", b"\r\n"), sample_csv_lf),
+        "sub/sample.jsonl": (sample_jsonl_lf.replace(b"\n", b"\r\n"), sample_jsonl_lf),
+        "sub/chunk_boundary.csv": (long_crlf, long_lf),
+    }
+
+    corpus_entries = []
+    for rel, (crlf_bytes, lf_bytes) in files.items():
+        (crlf_root / rel).write_bytes(crlf_bytes)
+        (lf_root / rel).write_bytes(lf_bytes)
+        corpus_entries.append({
+            "path": rel,
+            "sha256": hashlib.sha256(crlf_bytes).hexdigest().lower(),
+            "canonical_lf_sha256": hashlib.sha256(lf_bytes).hexdigest().lower(),
+        })
+
+    inv_path = tmp_path / "portable_inventory.json"
+    inv_path.write_text(json.dumps({"hash_semantics": "canonical_lf_v1", "corpus_files": corpus_entries}), encoding="utf-8")
+
+    loaded_crlf = load_historical_corpus_inventory(inventory_path=inv_path, repo_root=crlf_root, verify_hashes=True)
+    loaded_lf = load_historical_corpus_inventory(inventory_path=inv_path, repo_root=lf_root, verify_hashes=True)
+    assert len(loaded_crlf["corpus_files"]) == len(loaded_lf["corpus_files"]) == 4
+
+    # Disk bytes on both checkouts must remain untouched
+    assert b"\r\n" in (crlf_root / "sub/sample.csv").read_bytes()
+    assert b"\r\n" not in (lf_root / "sub/sample.csv").read_bytes()
+
+    # Mutating a single non-newline byte must fail closed
+    tampered_csv = lf_root / "sub/sample.csv"
+    tampered_csv.write_bytes(sample_csv_lf.replace(b"Hoan tien", b"Hoan tian"))
+    with pytest.raises(HistoricalCorpusIntegrityError, match="Mismatched antecedent file hashes"):
+        load_historical_corpus_inventory(inventory_path=inv_path, repo_root=lf_root, verify_hashes=True)
+
+    # Deleting a line must fail closed
+    tampered_jsonl = crlf_root / "sub/sample.jsonl"
+    tampered_jsonl.write_bytes(b'{"id": 1, "q": "a"}\r\n')
+    with pytest.raises(HistoricalCorpusIntegrityError, match="Mismatched antecedent file hashes"):
+        load_historical_corpus_inventory(inventory_path=inv_path, repo_root=crlf_root, verify_hashes=True)
+
+

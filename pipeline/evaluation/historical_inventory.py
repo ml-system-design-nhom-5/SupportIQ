@@ -46,6 +46,31 @@ def _compute_sha256(path: Path) -> str:
     return hasher.hexdigest().lower()
 
 
+def _compute_canonical_lf_sha256(path: Path) -> str:
+    """Compute SHA-256 over file bytes after normalizing CRLF (\\r\\n) to LF (\\n)."""
+    hasher = hashlib.sha256()
+    carry_cr = False
+    with path.open("rb") as f:
+        while chunk := f.read(65536):
+            if carry_cr:
+                if chunk.startswith(b"\n"):
+                    hasher.update(b"\n")
+                    chunk = chunk[1:]
+                else:
+                    hasher.update(b"\r")
+                carry_cr = False
+            if chunk.endswith(b"\r"):
+                carry_cr = True
+                chunk = chunk[:-1]
+            if b"\r\n" in chunk:
+                chunk = chunk.replace(b"\r\n", b"\n")
+            if chunk:
+                hasher.update(chunk)
+    if carry_cr:
+        hasher.update(b"\r")
+    return hasher.hexdigest().lower()
+
+
 def load_historical_corpus_inventory(
     inventory_path: Path | None = None,
     repo_root: Path | None = None,
@@ -53,6 +78,10 @@ def load_historical_corpus_inventory(
     verify_hashes: bool = True,
 ) -> dict[str, Any]:
     """Load and validate the immutable antecedent historical corpus inventory fail-closed.
+
+    When ``canonical_lf_sha256`` is recorded on an inventory entry, verification computes the
+    portable canonical-LF digest (``\\r\\n`` -> ``\\n``) so Git CRLF/LF checkouts produce the same
+    digest while still failing closed on any content tamper; otherwise raw SHA-256 is verified.
 
     Raises:
         HistoricalCorpusIntegrityError: If any inventory file is missing or its SHA-256
@@ -73,16 +102,26 @@ def load_historical_corpus_inventory(
 
         for entry in corpus_files:
             rel = entry["path"]
-            expected_sha = entry["sha256"]
+            expected_canonical_lf_sha = entry.get("canonical_lf_sha256")
+            expected_sha = entry.get("sha256")
             full_path = root / rel
 
             if not full_path.is_file():
                 missing.append(rel)
                 continue
 
-            actual_sha = _compute_sha256(full_path)
-            if actual_sha != expected_sha:
-                mismatched.append((rel, expected_sha, actual_sha))
+            if expected_canonical_lf_sha:
+                actual_sha = _compute_canonical_lf_sha256(full_path)
+                expected_digest = expected_canonical_lf_sha
+            elif expected_sha:
+                actual_sha = _compute_sha256(full_path)
+                expected_digest = expected_sha
+            else:
+                mismatched.append((rel, "<missing-expected-hash>", _compute_sha256(full_path)))
+                continue
+
+            if actual_sha != expected_digest:
+                mismatched.append((rel, expected_digest, actual_sha))
 
         if missing or mismatched:
             err_parts = []

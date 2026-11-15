@@ -41,11 +41,12 @@ from pipeline.training.train_selective_candidate import (
     write_calibration_manifest,
 )
 
-SERVING_DIR = Path(r"F:\Năm 3\SD\project\SupportIQ\artifacts\models\trained\distilbert-supportiq")
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+SERVING_DIR = _REPO_ROOT / "artifacts/models/trained/distilbert-supportiq"
 EXPECTED_SERVING_SHA256 = "dc7af8cffb19fe7711ed5a5d0137ffff3d7d1a1f43bad5a35edff8c8de4c1302"
-MAIN_CANDIDATES_DIR = Path(r"F:\Năm 3\SD\project\SupportIQ\artifacts\models\candidates")
+MAIN_CANDIDATES_DIR = _REPO_ROOT / "artifacts/models/candidates"
 ORIG_SIDECAR_DIR = MAIN_CANDIDATES_DIR / "run-records-original-fit2-20261113"
-LOCAL_RESTORE_ROOT = Path(__file__).resolve().parents[1] / "artifacts/evaluation/original_fit2_restore"
+LOCAL_RESTORE_ROOT = _REPO_ROOT / "artifacts/evaluation/original_fit2_restore"
 
 
 def _sha256_lower(path: Path) -> str:
@@ -179,7 +180,7 @@ def run_preflight_validation(repo_root: Path, dryrun_root: Path) -> Dict[str, An
     )
     new_lock = prepare_and_lock_splits(
         worktree_root=repo_root,
-        data_repo_root=Path(r"F:\Năm 3\SD\project\SupportIQ"),
+        data_repo_root=repo_root,
         init_model_dir=SERVING_DIR,
         artifact_root=dryrun_root,
         exclude_noisy_test_overlap=False,
@@ -349,14 +350,14 @@ def main() -> None:
             raise FileExistsError(f"Local Stage 2 dir already exists: {art_root}")
         prepare_and_lock_splits(
             worktree_root=repo_root,
-            data_repo_root=Path(r"F:\Năm 3\SD\project\SupportIQ"),
+            data_repo_root=repo_root,
             init_model_dir=resolved_stage1_dir,
             artifact_root=art_root,
             exclude_noisy_test_overlap=False,
         )
         res = run_fit_and_lock_candidate(
             worktree_root=repo_root,
-            data_repo_root=Path(r"F:\Năm 3\SD\project\SupportIQ"),
+            data_repo_root=repo_root,
             init_model_dir=resolved_stage1_dir,
             artifact_root=art_root,
             fit_mode="fit2_supcon_energy",
