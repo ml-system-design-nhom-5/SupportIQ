@@ -746,3 +746,72 @@ def test_gap1b_review_counterexamples_and_ordinary_labels_remain_allowed(
     tmp_path: Path, text: str, intent: str, doc_ids: list[str], ctx: RoutingContext | None, fake_llm
 ):
     _assert_both_allow(tmp_path, text, intent, doc_ids, ctx, fake_llm=fake_llm)
+
+
+@pytest.mark.parametrize(
+    "text,intent,doc_ids",
+    [
+        (
+            "I do not want to go to a physical store; can I schedule courier pickup for my return instead?",
+            "return_product",
+            ["POL-RET-002", "POL-RET-001"],
+        ),
+        (
+            "I cannot travel to a retail store branch — how does Tiki's free courier pickup work for defective items?",
+            "return_product",
+            ["POL-RET-002", "POL-RET-001"],
+        ),
+        (
+            "We're unable to drive to a physical store branch — can a courier pick up the return instead?",
+            "return_product",
+            ["POL-RET-002"],
+        ),
+        (
+            "I can’t walk to a retail store, how do I drop off at a partner post office?",
+            "return_product",
+            ["POL-RET-002"],
+        ),
+        (
+            "We won't head into a local shop; please arrange courier return pickup.",
+            "return_product",
+            ["POL-RET-002"],
+        ),
+        (
+            "I'd rather not travel to a storefront counter, can I use the Tiki app for pickup?",
+            "return_product",
+            ["POL-RET-002"],
+        ),
+        (
+            "Instead of going to a retail store, can I drop the parcel off at a partner post office?",
+            "return_product",
+            ["POL-RET-002"],
+        ),
+        (
+            "I do not need to print a prepaid return label — I just want courier pickup from my address.",
+            "return_product",
+            ["POL-RET-002"],
+        ),
+    ],
+)
+def test_gap1b_negated_modal_and_motion_declining_physical_channel_remains_allowed(
+    tmp_path: Path, text: str, intent: str, doc_ids: list[str], fake_llm
+):
+    _assert_both_allow(tmp_path, text, intent, doc_ids, fake_llm=fake_llm)
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "I cannot visit today but want return in store tomorrow.",
+        "I cannot visit today and want to return in store tomorrow.",
+        "I cannot wait for a courier so I want to return in store.",
+        "Not courier but physical store return please.",
+        "Instead of courier — physical store return please.",
+        "I do not want to go to a physical store today, so can I drop it off at a local shop tomorrow?",
+        "Why can't I travel to a retail store branch to return this?",
+        "Online order — I cannot print a return label at home, can I drop it off at a physical store?",
+        "Can a customer 'go to a physical store' to return an item?",
+    ],
+)
+def test_gap1b_compound_contradictions_and_negated_wrong_object_still_escalate(tmp_path: Path, query: str):
+    _assert_both_escalate(tmp_path, query, "return_product", ["POL-RET-002", "POL-RET-001"])

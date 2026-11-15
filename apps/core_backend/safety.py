@@ -304,10 +304,22 @@ _STORE_NON_CHANNEL_SUFFIX = re.compile(
     r"^\s*(?:credits?|wallets?|vouchers?|cards?|balances?|polic(?:y|ies))\b",
     re.I,
 )
+_NEG_CHANNEL_MOTION_OR_ACTION = (
+    r"(?:go(?:ing)?|travel(?:ing|ling)?|walk(?:ing)?|head(?:ing)?|driv(?:e|ing)|"
+    r"commut(?:e|ing)|com(?:e|ing)|visit(?:ing)?|stop(?:ping)?\s+by|drop(?:ping)?\s+in|"
+    r"return(?:ing)?|drop(?:ping)?\s+off|bring(?:ing)?|tak(?:e|ing)|"
+    r"print(?:ing)?|download(?:ing)?|generat(?:e|ing)|us(?:e|ing))"
+)
 _DECLARATIVE_CHANNEL_NEG_PREFIX = re.compile(
-    r"\b(?:no\s+need\s+(?:for|to)|(?:i|we)\s+(?:do\s+not|don't)\s+(?:need|want)(?:\s+to)?|"
-    r"without(?:\s+(?:going\s+to|visiting|using|needing(?:\s+to)?|printing|downloading))?)"
-    r"\s+(?:(?:a|an|the|any|my|your)\s+)?$",
+    r"\b(?:"
+    r"no\s+need\s+(?:for|to)"
+    r"|(?:i|we)(?:'d|\s+would)?\s+(?:prefer\s+not\s+to|rather\s+not)"
+    r"|(?:i|we)\s+(?:do\s+not|don't|did\s+not|didn't|cannot|can\s+not|can't|could\s+not|couldn't|will\s+not|won't|would\s+not|wouldn't)"
+    r"|(?:i'm|we're|(?:i|we)\s+(?:am|are))\s+(?:not(?:\s+(?:going|planning|willing|trying|looking|asking))?|unable)"
+    r"|without(?:\s+(?:going|traveling|walking|heading|driving|visiting|needing|having|using|printing|downloading))?"
+    r")(?:\s+(?:want|need|wish|plan|expect|intend|prefer|like|have|be\s+able|able))?"
+    rf"(?:\s+(?:to|for))?(?:\s+{_NEG_CHANNEL_MOTION_OR_ACTION})?"
+    r"(?:\s+(?:to|into|at|for|with|any|a|an|the|my|your))*\s*$",
     re.I,
 )
 _INSTEAD_OF_PREFIX = re.compile(r"\b(?:instead\s+of|rather\s+than)\b([^.,;?!\n]*)$", re.I)
@@ -416,8 +428,10 @@ def _is_negated_channel_alternative(text: str, start: int) -> bool:
     if _DECLARATIVE_CHANNEL_NEG_PREFIX.search(prefix):
         return True
     instead_match = _INSTEAD_OF_PREFIX.search(prefix)
-    if instead_match and not _REQUEST_MODAL_VERB.search(instead_match.group(1)):
-        return True
+    if instead_match:
+        tail = instead_match.group(1)
+        if not _REQUEST_MODAL_VERB.search(tail) and not re.search(r"\s-\s|--", tail):
+            return True
     return False
 
 
