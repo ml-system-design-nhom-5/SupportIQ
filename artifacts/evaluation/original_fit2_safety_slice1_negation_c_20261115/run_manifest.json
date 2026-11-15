@@ -1,0 +1,18 @@
+{
+  "branch": "minh",
+  "git_head": "ebf6c72dfb42042eb81ed68ed3cb1f55b76b41a4",
+  "command": ".venv/Scripts/python.exe -B artifacts/evaluation/original_fit2_safety_slice1_negation_c_20261115/evaluate_safety_slice1_negation_c.py",
+  "verdict": "BLOCK",
+  "failed_criteria": [
+    "gate16_zero_leaks_and_zero_false_scope_blocks"
+  ],
+  "eval_seconds": 111.87,
+  "total_duration_seconds": 130.69,
+  "sha256": {
+    "artifacts/evaluation/original_fit2_safety_slice1_negation_c_20261115/unseen_slice1_negation_gate_cases.jsonl": "c232bd6e21db2c497bc566ddc9e668f5efa3ca11e638fa3e6f6ba67fcc825a3a",
+    "artifacts/evaluation/original_fit2_safety_slice1_negation_c_20261115/unseen_slice1_negation_gate_manifest.json": "fbf4ccecffcb95ab50d11751454c877bf4dc044fdca24b2d2ff0bcf5c97ad4e0",
+    "artifacts/evaluation/original_fit2_safety_slice1_negation_c_20261115/evaluate_safety_slice1_negation_c.py": "b2b48991d2495363ba75625943b54c9bd43133f8e1ff3429e88c42e52f91ce84",
+    "artifacts/evaluation/original_fit2_safety_slice1_negation_c_20261115/predictions_post_slice1_negation_orig_fit2.jsonl": "448d9302d8c5fe4e2bdd2da0d76d32431a51d9539bf8dc4ef70a82b2ad4bc174",
+    "artifacts/evaluation/original_fit2_safety_slice1_negation_c_20261115/slice1_negation_paired_evaluation.json": "30047bc10940378e397eb3b00174c5af0b6d74e2dd9561918ef2b651956f9ced"
+  }
+}

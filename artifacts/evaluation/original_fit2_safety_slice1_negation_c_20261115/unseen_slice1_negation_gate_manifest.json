@@ -1,0 +1,20 @@
+{
+  "schema_version": "unseen_slice1_negation_gate.v1",
+  "created_at": "2026-11-15T10:21:46+07:00",
+  "owner": "worker_c",
+  "frozen_after_source_fix_commit": "34733574e738a7dc932efbf0b8870a68ac3dd4c4",
+  "reviewed_b_commit": "ebf6c72dfb42042eb81ed68ed3cb1f55b76b41a4",
+  "adapter_commit": "03eb1231a9552fb22cf755a448d4fe6bd1225363",
+  "frozen_before_execution": true,
+  "cases_file": "artifacts/evaluation/original_fit2_safety_slice1_negation_c_20261115/unseen_slice1_negation_gate_cases.jsonl",
+  "cases_sha256": "c232bd6e21db2c497bc566ddc9e668f5efa3ca11e638fa3e6f6ba67fcc825a3a",
+  "normative_basis": [
+    "data/knowledge/approved_kb.v2.json (POL-RET-001 v2.0, POL-RET-002 v2.0, POL-RET-003 v2.0, POL-ORD-001 v1.0, POL-REFUND-007 v1.0)",
+    "apps/ai_service/kb-release.json (14 released documents)",
+    "apps/core_backend/config/policies/intent_policy.v2.json"
+  ],
+  "total_cases": 16,
+  "must_not_draft_cases": 8,
+  "supported_counterexample_cases": 8,
+  "disjoint_verification": "Zero text/norm-text overlap against 146 literals in tests/unit/test_safety_slice1_gap1_a.py and 7,587 rows across all 12 frozen evaluation suites, unseen_domain_gate_cases.jsonl (36), and unseen_slice1_scope_gate_cases.jsonl (27)."
+}
