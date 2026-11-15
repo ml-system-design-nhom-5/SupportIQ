@@ -1,16 +1,18 @@
 # Design: Account management
 
-- **Status:** Approved
+- **Status:** In review
 - **Owner:** backend engineer
 - **Reviewers:** frontend engineer, contracts gatekeeper, project lead
-- **Last reviewed:** 2026-11-12
-- **Related:** [Requirements](../product/requirements.md) (FR-08), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0008](../decisions/0008-ui-design-system.md), [backend foundation design](backend-foundation.md), [contracts v1 design](contracts-v1.md), [admin UI design](admin-ui.md), [shop UI design](shop-ui.md), [console UI design](console-ui.md), [security rules](../rules/security-and-privacy.md#authentication-and-authorization), [ERR-15](../rules/errors-and-reliability.md#idempotency), [UI-45](../rules/ui.md#admin)
+- **Last reviewed:** 2026-11-15
+- **Related:** [Requirements](../product/requirements.md) (FR-08), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0008](../decisions/0008-ui-design-system.md), [backend foundation design](backend-foundation.md), [contracts v1 design](contracts-v1.md), [admin UI design](admin-ui.md), [shop UI design](shop-ui.md), [console UI design](console-ui.md), [security rules](../rules/security-and-privacy.md#authentication-and-authorization), [ERR-15](../rules/errors-and-reliability.md#idempotency), [UI-35](../rules/ui.md#developer-views), [UI-45](../rules/ui.md#admin)
 
 ## Summary
 
 This design implements [ADR-0015](../decisions/0015-account-creation-and-password-changes.md) in its simplest form, as the project lead decided on 2026-11-11. An admin creates `staff` and `manager` accounts and resets their passwords; `frontend` suggests a generated password that the admin may copy or replace. Every account changes its own password whenever its owner wants. No password rule applies beyond the limits of sign-in, and no password expires.
 
 It fixes the login names, the locks, three operations of `backend` contract 1.1.0, migration `r0002`, the exception to ERR-15, the audit actions, and the screens: the account menu of every role, `/change-password`, the admin dialogs, and the show and hide toggle of every password field. It follows the existing patterns: `changeAccountRole` and `changeAccountStatus` for admin writes, `createSession` for password checks and the throttle, and `features/admin-accounts/` for the admin screens.
+
+**Revision of 2026-11-15, for dev mode ([UI-35](../rules/ui.md#developer-views)):** the [account menu](#account-menu) gains the checkbox item "Dev mode" between Change password and Sign out, for `staff`, `manager`, and `admin`, only where dev mode is available; customers never get it. The item follows the `frontend` code of 2026-11-15, and this revision needs the project lead's approval. The earlier menu is kept under [Alternatives considered](#alternatives-considered).
 
 ## Goals and non-goals
 
@@ -268,10 +270,14 @@ The mockups are review material in [assets/account-management/](assets/account-m
 
 - Every area has it in place of the display name and Sign out of the app bar: `/shop`, `/console`, and `/admin` ([shop UI](shop-ui.md#layout), [console UI](console-ui.md#layout), [admin UI](admin-ui.md#layout)).
 - The trigger is a button with the person icon, the display name, the role label, and a chevron. At phone width in the shop, the text is visually hidden and only the icon shows, so the accessible name stays the same.
-- The menu holds, in this order: the display name and the role label as a non-interactive heading, a separator, "Change password", and "Sign out". The roles are labeled Customer, Staff, Manager, and Admin.
+- The menu holds, in this order: the display name and the role label as a non-interactive heading, a separator, "Change password", the "Dev mode" item where the next point applies, and "Sign out". The roles are labeled Customer, Staff, Manager, and Admin.
+- Where dev mode is available ([UI-35](../rules/ui.md#developer-views)), the menu of a `staff`, `manager`, or `admin` account holds the checkbox item "Dev mode" between Change password and Sign out, in a group of its own between two separators. It has the code icon and a check mark at its end while dev mode is on, and its state is `aria-checked`, so color is not the only signal. Choosing it switches dev mode on or off and closes the menu, as every other item does. Customers never get the item, and where dev mode is not available nobody does; the setting `VITE_DEV_MODE` makes it available ([console UI design](console-ui.md#frontend-settings)).
+- The choice is a display preference of each account, kept in the browser under the account's `account_id`; it holds no Confidential data and starts off. When the browser refuses storage, the switch works until the page loads again. Dev mode never changes permissions ([UI-40](../rules/ui.md#boundaries)).
 - It is the design-system component `AccountMenu`, on Radix DropdownMenu ([UI-31](../rules/ui.md#accessibility)): Enter, Space, or the down arrow opens it, the arrow keys move between items, Escape closes it, and the focus returns to the trigger.
 
 ![Account menu in the console](assets/account-management/account-menu.png)
+
+The mockups show the menu where dev mode is not available, as in the demo deployment.
 
 ![Account menu in the shop at phone width](assets/shop-ui/account-menu-mobile.png)
 
@@ -522,6 +528,7 @@ No change touches replies, drafts, or transactions: staff still approve every re
 - **The advisory lock and the Argon2id hash inside every transaction:** replaced by the [Locks](#locks). The advisory lock is shared by every account change, so hashing under it, or making an own change take it, would make unrelated changes wait.
 - **No confirmation field on `/change-password`:** not chosen by the project lead. A typo would lock the owner out until an admin reset.
 - **Radix AlertDialog for the forms:** not chosen. Its role is for confirmations; forms use Radix Dialog.
+- **An account menu with only Change password and Sign out:** the menu of this design until 2026-11-15. The Dev mode item joins it, because UI-35 lets each `staff`, `manager`, and `admin` user switch dev mode for themselves, and the account menu is the one control that every area shares.
 
 ## Testing and evaluation
 

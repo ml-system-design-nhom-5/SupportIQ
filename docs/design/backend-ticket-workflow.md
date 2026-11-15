@@ -3,14 +3,16 @@
 - **Status:** In review
 - **Owner:** backend engineer
 - **Reviewers:** project lead, frontend engineer, ML engineer
-- **Last reviewed:** 2026-11-13
-- **Related:** [Requirements](../product/requirements.md) (FR-04 to FR-10, NFR-06 to NFR-11, ESC-01 to ESC-05), [ADR-0005](../decisions/0005-intent-independent-retrieval.md), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md), [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0014](../decisions/0014-citations-to-order-context.md), [ADR-0016](../decisions/0016-hosting-on-free-tiers.md), [ADR-0017](../decisions/0017-named-entity-model-from-its-release-url.md), [ADR-0020](../decisions/0020-storage-errors-of-the-pseudonym-map.md), [contracts v1 design](contracts-v1.md), [backend foundation design](backend-foundation.md), [console UI design](console-ui.md), `backend` contract 1.2.0 and `ai-service` contract 1.0.0 ([CHANGELOG](../../contracts/CHANGELOG.md))
+- **Last reviewed:** 2026-11-15
+- **Related:** [Requirements](../product/requirements.md) (FR-04 to FR-10, NFR-06 to NFR-11, ESC-01 to ESC-05), [ADR-0005](../decisions/0005-intent-independent-retrieval.md), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md), [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0014](../decisions/0014-citations-to-order-context.md), [ADR-0016](../decisions/0016-hosting-on-free-tiers.md), [ADR-0017](../decisions/0017-named-entity-model-from-its-release-url.md), [ADR-0020](../decisions/0020-storage-errors-of-the-pseudonym-map.md), [contracts v1 design](contracts-v1.md), [backend foundation design](backend-foundation.md), [console UI design](console-ui.md), `backend` contract 1.2.0 and `ai-service` contract 1.0.0 ([CHANGELOG](../../contracts/CHANGELOG.md)), [ADR-0022](../decisions/0022-server-sent-events-for-suggestion-progress.md)
 
 ## Summary
 
 This design describes how `backend` runs the ticket workflow behind `/console`. It covers suggestions and their job queue, pseudonymization before every call to `ai-service`, the client that calls `ai-service`, replies, reply proposals, escalations, the authority rule, manual handling, staff decisions, the audit log, reports, and two one-off commands: the ticket import and the decision-record export. It is the third follow-up design of [contracts v1, Rollout, step 9](contracts-v1.md#rollout), and it fixes what that design left to `backend`. The internals of `ai-service` (routing, the list of sensitive intents, retrieval limits) wait for the join with the AI and ML code. Three choices were the project lead's: the named-entity library, the split of handling modes for the product-value study, and the initial values of the job queue. On 2026-11-12 the project lead chose the recommended option of each, and [ADR-0017](../decisions/0017-named-entity-model-from-its-release-url.md), accepted the same day, covers the install of the named-entity model.
 
 **Revision of 2026-11-12, for the `ai-service` service token, the log levels, and [ADR-0020](../decisions/0020-storage-errors-of-the-pseudonym-map.md):** the project lead decided these points on 2026-11-12. The new required secret setting `ai_service_token` (environment variable `AI_SERVICE_TOKEN`) holds the service token that `backend` sends as `Authorization: Bearer <token>` to `ai-service` (`ai-service` contract 1.0.0, `securitySchemes.serviceToken`); it is Secret ([SEC-10](../rules/security-and-privacy.md#secrets)), it is never logged, and startup fails when it is missing or empty ([ERR-17](../rules/errors-and-reliability.md#startup-and-health), [Settings](#settings)). The new event `ai_service.contract_violated` is logged at `error` for a `4xx` from `ai-service` or a response outside its contract, while `ai_service.call_failed` stays at `warning` for timeouts, connection errors, and `5xx` ([The `ai-service` client](#the-ai-service-client), [Observability](#observability)). `pseudonymization.failed` is logged at `warning` for a text over 4 000 characters, which is handled input, and at `error` otherwise ([ADR-0010, Failure handling](../decisions/0010-pseudonymization-and-egress-control.md#failure-handling)). `frontend` polls the inbox every 15 s while it is open, and the workspace every 2 s while a suggestion part is `pending` ([console UI design](console-ui.md#summary)). A transient database error while the pseudonym map is stored is not a pseudonymization failure ([ADR-0020](../decisions/0020-storage-errors-of-the-pseudonym-map.md)), as [Pseudonymization](#pseudonymization), item 3, already stated; item 1 now also names a stored map that differs from the computed one among the deterministic failures. On 2026-11-13 the project lead confirmed that such a run ends with `pseudonymization_failed` and is not retried, and that the stored map is never merged with the computed one ([ADR-0020](../decisions/0020-storage-errors-of-the-pseudonym-map.md)).
+
+**Revision of 2026-11-15, for [ADR-0022](../decisions/0022-server-sent-events-for-suggestion-progress.md), `backend` contract 1.2.1, and the decisions of phase 3:** the project lead decided these points from 2026-11-13 to 2026-11-14, and this revision needs the lead's approval. `frontend` polls no view more often than every 30 s; the workspace learns the progress of a suggestion from the stream of [The suggestion progress stream](#the-suggestion-progress-stream) while one of its parts is `pending`, which replaces the 15 s and 2 s intervals of the revision of 2026-11-12. The report's end-to-end latency leaves out a ticket whose first draft part was `cancelled`, and its handling time counts only tickets whose first view came no later than their reply ([Reports](#reports); `backend` contract 1.2.1). `backend import-tickets` is postponed until the shared scenario sets and the protocol of the product-value study exist ([Handling modes for the product-value study](#handling-modes-for-the-product-value-study)). The `AiService` port names its reads `fetch_kb_document_version` and `fetch_asset_versions`, as the code does ([The `ai-service` client](#the-ai-service-client)). The earlier intervals are kept under [Alternatives considered](#alternatives-considered).
 
 ## Goals and non-goals
 
@@ -52,7 +54,7 @@ This design describes how `backend` runs the ticket workflow behind `/console`. 
 | Feature | Owns | Operations and commands |
 |---|---|---|
 | `tickets` | Tickets, customer messages, reply proposals, replies, escalations, staff decisions, the state machine, `allowed_actions`, and the authority flag | `listConsoleTickets`, `getConsoleTicket`, `recordTicketView`, `createReplyProposal`, `sendReply`, `createEscalation`; `backend import-tickets` |
-| `suggestions` | Suggestions, their parts, suggestion jobs, the claim loop, and the `AiService` port with its HTTP adapter | `createSuggestion`, `getConsoleKbDocumentVersion`, `getAdminVersions` |
+| `suggestions` | Suggestions, their parts, suggestion jobs, the claim loop, the suggestion progress stream, and the `AiService` port with its HTTP adapter | `createSuggestion`, `getConsoleKbDocumentVersion`, `getAdminVersions`, and the stream of [ADR-0022](../decisions/0022-server-sent-events-for-suggestion-progress.md) (`backend` contract 1.3.0) |
 | `pseudonymization` | The pseudonym map and the detectors ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#storage-and-lifecycle), item 6) | None. Its public API has exactly two functions: pseudonymize the message of a ticket, and restore the pseudonyms of a ticket in a text |
 | `reports` | The report queries | `getConsoleReport`; `backend export-decisions` |
 | `audit`, `idempotency`, `commerce`, `accounts`, `platform` | As in the [backend foundation design](backend-foundation.md#feature-modules) | Unchanged |
@@ -202,7 +204,7 @@ The detectors, their order, and the overlap rule are those of [ADR-0010](../deci
 
 ### The `ai-service` client
 
-- The `AiService` port of `suggestions` has four methods: `analyze`, `draft`, `get_kb_document_version`, and `get_asset_versions`. Its adapter uses the `httpx` client that `backend` already depends on, created once at startup ([ARCH-24](../rules/architecture.md#composition-root-and-dependency-injection)).
+- The `AiService` port of `suggestions` has four methods: `analyze`, `draft`, `fetch_kb_document_version`, and `fetch_asset_versions`. Its adapter uses the `httpx` client that `backend` already depends on, created once at startup ([ARCH-24](../rules/architecture.md#composition-root-and-dependency-injection)).
 - Timeouts come from the settings below. The adapter sends `traceparent` on every call ([LOG-05](../rules/logging-and-observability.md#correlation)).
 - Every call carries `Authorization: Bearer <token>` with the value of `ai_service_token`, the service token of `ai-service` contract 1.0.0 (`securitySchemes.serviceToken`). The token never appears in a log, a span, or an error message ([SEC-09](../rules/security-and-privacy.md#secrets)).
 - `backend` itself retries `analyze` and `draft` once after a connection error or a `502` or `503` response, never after a timeout ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md#ai-service-replicas), item 2; ERR-12). The two reads are not retried. A timeout, a connection error, or a `5xx` that remains after that retry makes the part `unavailable` with `ai_service_unavailable` and is logged once at `warning` as `ai_service.call_failed`, because the system behaved safely ([LOG-15](../rules/logging-and-observability.md#levels)).
@@ -217,6 +219,17 @@ The detectors, their order, and the overlap rule are those of [ADR-0010](../deci
 1. The first view sets `handling_started_at`, which starts the handling clock, in every state and mode.
 2. On the first view of an `open` ticket in `assisted` mode, when the current suggestion used a KB version other than the one `ai-service` reports in `getAssetVersions`, a `kb_version_changed` suggestion is created. When `ai-service` does not answer within `ai_service_read_timeout_ms`, the view is still recorded and no `kb_version_changed` suggestion is created.
 3. On any view of an `open` ticket in `assisted` mode whose current suggestion has a part `unavailable` with `ai_service_unavailable` or a draft `llm_unavailable`, and no `pending` part, a `retry` suggestion is created. A pending retry blocks another one.
+
+### The suggestion progress stream
+
+[ADR-0022](../decisions/0022-server-sent-events-for-suggestion-progress.md) decides the stream; this section states what `backend` does. `backend` contract 1.3.0 adds the operation after the project lead approves this revision.
+
+1. `GET /v1/console/tickets/{ticket_id}/suggestion-events` answers `text/event-stream` to `staff` and `manager`, after the checks of `getConsoleTicket`: session, role, and ticket. A refusal is `401`, `403`, or `404` with a Problem Details body, sent before the stream starts. It has no `Origin` check, like every read, because a same-origin `EventSource` sends no `Origin` header.
+2. A ticket that is not `open`, a ticket in `manual` mode, and a ticket whose current suggestion has no `pending` part get `204 No Content`, which stops `EventSource`.
+3. Each connection first sends the current state, then an event `suggestion` with `suggestion_id`, `analysis_status`, and `draft_status` whenever the current suggestion or one of its part statuses changes. An event holds Internal values only; the console reloads the workspace with `getConsoleTicket` for any text. The stream sends `retry: 3000`, and a ping comment when nothing was sent for 15 s ([ADR-0022](../decisions/0022-server-sent-events-for-suggestion-progress.md#decision), statement 3).
+4. A stream learns of a change in two ways, as the claim loop does ([Suggestions and the job queue](#suggestions-and-the-job-queue)): an in-process wake-up after a use case of its replica commits a part result, a new suggestion, or a cancelled part, and a re-read of the part statuses every `suggestion_events_poll_ms` for a job that another replica finished. No connection is held between two reads, so the pool of [ADR-0016](../decisions/0016-hosting-on-free-tiers.md#postgresql-on-supabase) does not change.
+5. A stream ends right after the event that shows no `pending` part, when the ticket leaves `open`, after at most `suggestion_events_max_ms`, and at shutdown, before uvicorn's graceful shutdown ends within Render's 30 s.
+6. A way without periodic reads, such as LISTEN/NOTIFY once the Supabase pool leaves room for one held connection per replica, is a follow-up that the project lead asked for after v1 ([ADR-0022](../decisions/0022-server-sent-events-for-suggestion-progress.md), Follow-ups).
 
 ### Replies, reply proposals, and escalations
 
@@ -260,10 +273,10 @@ sequenceDiagram
 | Draft decisions | Count of `staff_decisions` with `decided_at` in the period and `decision_type` `approve`, `edit`, or `reject`: one decision per reply sent from a ready draft, directly or through a proposal. Each share is its count divided by the sum of the three, and absent when the sum is 0. `edit_by_reason` and `reject_by_reason` count the same `edit` and `reject` decisions per staff reason code; a decision with two codes counts once under each |
 | Escalations by reason | Count of `escalations` with `escalated_at` in the period, in total and per staff reason code; an escalation with two codes counts once in the total and once under each code |
 | AI outcomes | Count of draft parts completed in the period by status, without `cancelled`, and by AI reason code |
-| End-to-end latency | p50 and p95 of `completed_at` of the draft part of each ticket's first suggestion, minus the ticket's `created_at`, for drafts completed in the period |
+| End-to-end latency | p50 and p95 of `completed_at` of the draft part of each ticket's first suggestion, minus the ticket's `created_at`, for drafts completed in the period. A ticket whose first draft part was `cancelled` is left out, because staff got no result from it; a first draft that ended `unavailable` or `llm_unavailable` counts |
 | AI error rate | Suggestions completed in the period with a part `unavailable` or a draft `llm_unavailable`, divided by all suggestions completed in the period without a `cancelled` part; absent when there are none |
 | LLM cost | Sum of `llm_cost_micro_usd` of the draft parts completed in the period, and its average per draft part that called the LLM |
-| Handling time | p50 of `closed_at - handling_started_at` by `handling_mode`, for tickets closed in the period that have `handling_started_at` |
+| Handling time | p50 of `closed_at - handling_started_at` by `handling_mode`, for tickets closed in the period whose `handling_started_at` is no later than `closed_at`. The first view starts the clock in every state, so a ticket first viewed after its reply, such as a closed ticket that a manager opens, has no handling time instead of a negative one |
 
 The breakdown of edits and rejections by intent, which [ADR-0006, Validation](../decisions/0006-staff-feedback-and-reason-codes.md#validation) asks for, is not a figure of the report: it comes from `backend export-decisions` ([The decision-record export](#the-decision-record-export)) and the Staff outcomes dashboard of Grafana ([LOG-27](../rules/logging-and-observability.md#dashboards)), as the project lead decided on 2026-11-12.
 
@@ -289,6 +302,8 @@ NFR-11 compares handling time with and without AI "on the same requests by the s
 
 **Recommendation, chosen by the project lead on 2026-11-12:** the paired import. Because tickets are not assigned to staff ([contracts v1, Non-goals](contracts-v1.md#non-goals)), the protocol runs one staff member at a time on a batch, and the import file decides which batch is visible by importing it just before that session. How authority-related requests are treated in both modes stays a question for the study protocol ([contracts v1, Open questions](contracts-v1.md#open-questions)).
 
+On 2026-11-14 the project lead postponed `backend import-tickets` until the shared scenario sets of groups 2 and 5 and the study protocol exist. Its file format depends on both: each import is one batch, imported just before the session of one staff member, so the two rows of a study pair arrive in two imports, and the protocol decides how imports repeat when another staff member handles the same requests. Until then every ticket comes from the shop, with `default_handling_mode`.
+
 ### Settings
 
 New settings of `backend`, validated at startup ([ARCH-34](../rules/architecture.md#configuration)):
@@ -305,6 +320,8 @@ New settings of `backend`, validated at startup ([ARCH-34](../rules/architecture
 | `suggestion_job_lease_ms` | 15 000 (Choice 3); startup fails unless it is longer than `ai_service_draft_timeout_ms` | ADR-0011, item 3 |
 | `suggestion_job_max_attempts` | 3 (Choice 3) | ADR-0011, item 7 |
 | `suggestion_queue_poll_ms` | 500 (Choice 3) | ADR-0011, item 7 |
+| `suggestion_events_poll_ms` | 1 000 | [ADR-0022](../decisions/0022-server-sent-events-for-suggestion-progress.md), statement 4: how often an open stream re-reads the part statuses, in v1 |
+| `suggestion_events_max_ms` | 600 000 | [ADR-0022](../decisions/0022-server-sent-events-for-suggestion-progress.md), statement 5: the longest life of one stream |
 
 #### Choice 3: the initial values of the queue
 
@@ -329,6 +346,7 @@ New settings of `backend`, validated at startup ([ARCH-34](../rules/architecture
   - a reply proposal's basis is `ReplyProposalBasis`, the values of `ReplyBasis` without `reply_proposal`;
   - the report's draft decisions carry `edit_by_reason` and `reject_by_reason`, the edits and rejections by staff reason code ([Reports](#reports));
   - `createEscalation` answers `422` with the example `note-required` when `staff_reason_codes` contains `other` and the note is absent.
+- **`backend` contract 1.2.1** states which tickets the report's end-to-end latency and handling time measure ([Reports](#reports)). **`backend` contract 1.3.0** adds the stream of [The suggestion progress stream](#the-suggestion-progress-stream) after the project lead approves the revision of 2026-11-15.
 - **`ai-service` contract 1.0.0** is written in a separate change. `backend` consumes it through generated models; `backend` contract schemas never expose it directly ([contracts v1, Common elements](contracts-v1.md#common-elements)).
 - **Migration `r0003`** adds the tables above, with a working downgrade (PY-40). `r0001` and `r0002` are not edited.
 
@@ -364,6 +382,7 @@ The guardrails of the requirements hold: no reply without a staff action (FR-04)
 
 ## Alternatives considered
 
+- **Polling the workspace every 2 s while a part is `pending`, and the inbox every 15 s** (the revision of 2026-11-12): replaced on 2026-11-15, after the project lead ruled out polling more often than every 30 s, by the stream of [ADR-0022](../decisions/0022-server-sent-events-for-suggestion-progress.md) for the workspace and a 30 s poll for the inbox.
 - **One worker per job with its own polling query** (ADR-0011 read literally): replaced by one claim loop per replica with free slots, which claims with the same single statement but sends one query per poll instead of one per idle worker.
 - **Pseudonymize at ticket creation:** rejected by [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#storage-and-lifecycle), item 1. Ticket creation never waits for it, and `manual` tickets are never pseudonymized.
 - **Treat a storage error of the map as `pseudonymization_failed`:** rejected. A storage error is not deterministic, and `pseudonymization_failed` blocks every retry. The first row of ADR-0010's Failure handling table said so; [ADR-0020](../decisions/0020-storage-errors-of-the-pseudonym-map.md) corrects it.
@@ -415,10 +434,11 @@ The NFR-08 load test and the pseudonymization trial run before the demo. No mode
 2. Done on 2026-11-12: the project lead accepted [ADR-0017](../decisions/0017-named-entity-model-from-its-release-url.md), the install of the named-entity model from its release URL, together with this design.
 3. The `backend` implementation on the same branch: migration `r0003`, the feature modules, the commands, the provider tests, and the consumer tests against the `ai-service` mock. The provider contract tests of `backend` run over every operation of the contract, so they fail on this branch from the contract change until this step lands; the branch is merged into `chore` only after it (CON-01, step 5).
 4. The `frontend` console screens, against the Prism mock of `backend` contract 1.2.0.
-5. Roll back by reverting the merge commit after downgrading the database to `r0002` with the merged code, as for `r0002` ([account management design, Rollout](account-management.md#rollout)).
+5. The revision of 2026-11-15 waits for the project lead's approval. `backend` contract 1.3.0 and the stream follow it.
+6. Roll back by reverting the merge commit after downgrading the database to `r0002` with the merged code, as for `r0002` ([account management design, Rollout](account-management.md#rollout)).
 
 ## Open questions
 
 - The study protocol decides how authority-related requests are treated in both handling modes ([contracts v1, Open questions](contracts-v1.md#open-questions)).
 - The NFR-08 load test and the trial of Choice 1 may change the initial values of Choice 3 and the draft timeout.
-- The import file format of `backend import-tickets` depends on the shared scenario sets of groups 2 and 5, which have not arrived ([requirements §8](../product/requirements.md#8-open-questions)).
+- The import file format of `backend import-tickets` depends on the shared scenario sets of groups 2 and 5, which have not arrived ([requirements §8](../product/requirements.md#8-open-questions)), and on the study protocol, which decides how imports repeat for each staff member ([Handling modes for the product-value study](#handling-modes-for-the-product-value-study)).
