@@ -1,0 +1,111 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: supportiq_owner
+      POSTGRES_PASSWORD: ${SUPPORTIQ_POSTGRES_OWNER_PASSWORD:?Set SUPPORTIQ_POSTGRES_OWNER_PASSWORD}
+      POSTGRES_DB: ${SUPPORTIQ_POSTGRES_DB:-supportiq}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U supportiq_owner -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SUPPORTIQ_POSTGRES_HOST: postgres
+      SUPPORTIQ_POSTGRES_PORT: "5432"
+      SUPPORTIQ_POSTGRES_DB: ${SUPPORTIQ_POSTGRES_DB:-supportiq}
+      SUPPORTIQ_POSTGRES_OWNER_PASSWORD: ${SUPPORTIQ_POSTGRES_OWNER_PASSWORD:?Set SUPPORTIQ_POSTGRES_OWNER_PASSWORD}
+      SUPPORTIQ_POSTGRES_APP_PASSWORD: ${SUPPORTIQ_POSTGRES_APP_PASSWORD:?Set SUPPORTIQ_POSTGRES_APP_PASSWORD}
+      SUPPORTIQ_DEMO_CUSTOMER_PASSWORD: ${SUPPORTIQ_DEMO_CUSTOMER_PASSWORD:?Set SUPPORTIQ_DEMO_CUSTOMER_PASSWORD}
+      SUPPORTIQ_DEMO_STAFF_PASSWORD: ${SUPPORTIQ_DEMO_STAFF_PASSWORD:?Set SUPPORTIQ_DEMO_STAFF_PASSWORD}
+      SUPPORTIQ_DEMO_MANAGER_PASSWORD: ${SUPPORTIQ_DEMO_MANAGER_PASSWORD:?Set SUPPORTIQ_DEMO_MANAGER_PASSWORD}
+      SUPPORTIQ_DEMO_ADMIN_PASSWORD: ${SUPPORTIQ_DEMO_ADMIN_PASSWORD:?Set SUPPORTIQ_DEMO_ADMIN_PASSWORD}
+      SUPPORTIQ_APPLICATION_SECRETS: /run/supportiq/application.json
+    command: ["python", "-m", "apps.backend.docker_init", "init"]
+
+  ai-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: ai-service
+    restart: unless-stopped
+    environment:
+      HF_HOME: /cache/huggingface
+      HF_HUB_CACHE: /cache/huggingface/hub
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      SUPPORTIQ_MODEL_DIR: /app/artifacts/models/candidates/reconstructed-fit2-supcon-20261113
+      SUPPORTIQ_CALIBRATION_MANIFEST_PATH: /app/artifacts/models/candidates/reconstructed-fit2-supcon-20261113/calibration_manifest.json
+      SUPPORTIQ_ENABLE_LLM: ${SUPPORTIQ_ENABLE_LLM:-true}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash-lite}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      SUPPORTIQ_MAX_LIVE_LLM_REQUESTS: ${SUPPORTIQ_MAX_LIVE_LLM_REQUESTS:-2}
+      SUPPORTIQ_LLM_MAX_ATTEMPTS: ${SUPPORTIQ_LLM_MAX_ATTEMPTS:-1}
+    volumes:
+      - ./artifacts/models/candidates/reconstructed-fit2-supcon-20261113:/app/artifacts/models/candidates/reconstructed-fit2-supcon-20261113:ro
+      - ${SUPPORTIQ_HF_CACHE_DIR:?Set SUPPORTIQ_HF_CACHE_DIR to existing Hugging Face cache}:/cache/huggingface:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import json, sys, urllib.request; d = json.loads(urllib.request.urlopen('http://127.0.0.1:8002/health/ready', timeout=3).read()); sys.exit(0 if d.get('status') == 'ready' and d.get('retrieval_ready') is True and d.get('model_verified') is True and d.get('model_checksum') == 'f695b1fe514aba81aafc968823047d496b03474a0b47199c65eaac6bd93c6dfa' and d.get('calibration_checksum') == '782c88db3fcd80615c3dceabbdb96ea2be7aa769119201f94229535becc7ae39' else 1)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 60s
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
+    restart: unless-stopped
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      ai-service:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${SUPPORTIQ_HOST_PORT:-8081}:8080"
+    environment:
+      SUPPORTIQ_POSTGRES_HOST: postgres
+      SUPPORTIQ_POSTGRES_PORT: "5432"
+      SUPPORTIQ_POSTGRES_DB: ${SUPPORTIQ_POSTGRES_DB:-supportiq}
+      SUPPORTIQ_POSTGRES_APP_PASSWORD: ${SUPPORTIQ_POSTGRES_APP_PASSWORD:?Set SUPPORTIQ_POSTGRES_APP_PASSWORD}
+      SUPPORTIQ_AI_SERVICE_BASE_URL: http://ai-service:8002
+      SUPPORTIQ_REQUIRE_PRIVACY_NER: "true"
+      SUPPORTIQ_SESSION_COOKIE_SECURE: ${SUPPORTIQ_SESSION_COOKIE_SECURE:-false}
+      SUPPORTIQ_ALLOWED_ORIGINS: '${SUPPORTIQ_ALLOWED_ORIGINS:-["http://127.0.0.1:8081","http://localhost:8081"]}'
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import json, sys, urllib.request; d = json.loads(urllib.request.urlopen('http://127.0.0.1:8080/health/ready', timeout=3).read()); sys.exit(0 if d.get('status') == 'ready' and d.get('privacy_ner_available') is True else 1)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+volumes:
+  pgdata:

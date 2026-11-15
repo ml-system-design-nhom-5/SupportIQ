@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 from sqlalchemy import create_engine, text
@@ -15,8 +16,13 @@ def initialize():
     from alembic.config import Config
 
     root = Path(__file__).resolve().parents[2]
-    local = json.loads((root / ".local/application.json").read_text())
-    engine = create_engine(local["database_url_owner"], hide_parameters=True)
+    secrets_override = os.environ.get("SUPPORTIQ_APPLICATION_SECRETS")
+    secrets_path = Path(secrets_override) if secrets_override else (root / ".local/application.json")
+    local = json.loads(secrets_path.read_text(encoding="utf-8"))
+    owner_url = str(local["database_url_owner"])
+    if owner_url.lower().startswith("sqlite"):
+        raise RuntimeError("SQLite is not supported for application database initialization.")
+    engine = create_engine(owner_url, hide_parameters=True)
     config = Config(str(root / "apps/backend/alembic.ini"))
     config.set_main_option("script_location", str(root / "apps/backend/migrations"))
     with engine.begin() as connection:

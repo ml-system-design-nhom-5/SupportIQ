@@ -16,7 +16,7 @@ Login names: `customer-1`, `staff-1`, `manager-1`, `admin-1`. Generated password
 
 External LLM generation is enabled when a Gemini key is configured; use `-DisableLLM` to disable it. Local model inference and retrieval use the existing verified assets. The model exposes raw softmax scores. Draft routing uses the existing per-intent score and margin thresholds; uncertain requests still require intent confirmation.
 
-Stop with `./scripts/stop-app.ps1`. Add `-StopDatabase` to stop the workspace database while preserving its data. See [Windows setup and source-data mappings](docs/guides/application-windows.md).
+Stop with `./scripts/stop-app.ps1`. Add `-StopDatabase` to stop the workspace database while preserving its data. See [Windows setup and source-data mappings](docs/guides/application-windows.md) or [Docker Compose runtime setup](docs/docker.md) (binds `127.0.0.1:8081` alongside native `:8080`).
 
 ## Application components
 

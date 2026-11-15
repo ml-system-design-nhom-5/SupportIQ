@@ -1,0 +1,24 @@
+# Strict allowlist: exclude secrets, local state, datasets, model weights, tests, and docs by default.
+*
+
+!apps/__init__.py
+!apps/ai_service/
+!apps/backend/
+!apps/core_backend/
+!apps/ml_inference/
+!apps/frontend/
+
+apps/frontend/node_modules/
+apps/frontend/dist/
+apps/frontend/test-results/
+apps/frontend/playwright-report/
+apps/frontend/e2e/
+apps/frontend/playwright.config.ts
+
+!pipeline/requirements-transformers.txt
+!data/knowledge/approved_kb.v2.json
+!data/knowledge/mock_orders.json
+
+**/__pycache__/
+**/*.py[cod]
+**/*.log
