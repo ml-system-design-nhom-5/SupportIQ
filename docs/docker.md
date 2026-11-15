@@ -34,3 +34,15 @@ Stop cleanly without removing database state:
 ```bash
 docker compose --env-file .env.docker down
 ```
+
+## Verified on 2026-11-15
+
+- Both image targets built on Docker Desktop's Linux engine; 8 focused packaging tests passed.
+- PostgreSQL, AI and backend became healthy; initialization exited successfully. Backend and AI run as UID 10001, and backend connects as the restricted `supportiq_app` role.
+- Fit2 and calibration matched the pinned digests; retrieval and privacy NER were ready, with Gemini enabled and configured.
+- Playwright verified a customer request for a human agent, staff workspace, administrator reply and customer receipt without JavaScript errors. This verifies the human support flow; live Gemini drafting was not exercised in this check.
+- A complete `down` / `up` preserved database row counts and the full saved ticket content. The native Windows application remained ready on port 8080.
+
+Check startup explicitly with `docker compose --env-file .env.docker up -d --wait --wait-timeout 180` and `docker compose --env-file .env.docker ps -a`. Keep `.env.docker` private; it contains the Docker account passwords and API key. Avoid `down -v` unless intentionally deleting the Docker database.
+
+The 2-request LLM cap is per AI process and resets when that process restarts; it is not a persistent spending limit. Once exhausted, drafting falls back to manual handling. Restarts do not grant additional evaluation spending authorization.
