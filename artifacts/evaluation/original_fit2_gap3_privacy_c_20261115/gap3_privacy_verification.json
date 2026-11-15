@@ -1,0 +1,212 @@
+{
+  "schema_version": "original_fit2_gap3_privacy_c.v1",
+  "frozen_matrix_path": "artifacts/evaluation/original_fit2_gap3_privacy_c_20261115/frozen_gap3_case_matrix.json",
+  "frozen_matrix_sha256": "67362282cf0770a6dd7e9af3ec63797ea6e78288ec63e5e3562e702c4f33a6e1",
+  "verdict": "PASS",
+  "scope": "GAP3_PRIVACY_CODE_ONLY_NOT_OPERATIONAL_NER_ACCURACY_NOT_WHOLE_PROJECT",
+  "total_matrix_cases": 23,
+  "executed_cases": 23,
+  "passed_cases": 23,
+  "failed_cases": [],
+  "invariants": {
+    "git_head": "ce8ff53a5196ea44c513c0dea7c2c8d397830def",
+    "git_branch": "minh",
+    "diff_since_gap2_d3c4c2a0_apps": [
+      "apps/backend/platform/config.py",
+      "apps/backend/tickets/jobs.py",
+      "apps/backend/tickets/privacy.py",
+      "apps/backend/tickets/service.py"
+    ],
+    "pinned_sha256": {
+      "apps/core_backend/safety.py": "45d11761d95e00323e410f43b4bf4c6ff499c120c0cc5d89bcc3f30856c5e000",
+      "apps/core_backend/retrieval/adapter.py": "3bd797dab79da0b89e5cdeb25a668ba704e31120523cb09824bb4b64264b5f8f",
+      "apps/core_backend/llm/gemini.py": "c6dd495724472d160f967869ee7553aea2e74a3828bfded8bf45fb39146d865b",
+      "artifacts/models/candidates/reconstructed-fit2-supcon-20261113/model.safetensors": "f695b1fe514aba81aafc968823047d496b03474a0b47199c65eaac6bd93c6dfa",
+      "artifacts/models/candidates/reconstructed-fit2-supcon-20261113/calibration_manifest.json": "782c88db3fcd80615c3dceabbdb96ea2be7aa769119201f94229535becc7ae39",
+      "artifacts/models/trained/distilbert-supportiq/model.safetensors": "dc7af8cffb19fe7711ed5a5d0137ffff3d7d1a1f43bad5a35edff8c8de4c1302",
+      "data/knowledge/approved_kb.v2.json": "f8dcfbbdbb9cb2cd7a09d2ec12e0149083fdd4fa04931df6261fc4d1e6425fec",
+      "apps/ai_service/kb-release.json": "cf450a72758e3d68ac7453802b5bc6c042ef2eddb9a6c4fa76483d4009c42804",
+      "apps/core_backend/config/policies/intent_policy.v2.json": "8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+      ".local/training-cap-20261114.json": "bc0445e07cca46e7285539a921691050378cdf9ceb3fdfe2cfe911b90bfde922",
+      ".local/ai.env": "26d083c75acd962010f2fbd0185af3e72e315d2bafc8d753046e51df6e8fce87"
+    },
+    "mismatches": [],
+    "training_cap_2_of_2_stopped": true,
+    "spacy_installed": false,
+    "passed": true
+  },
+  "group_a_strict_enforcement": [
+    {
+      "id": "g3-cfg-strict-default",
+      "passed": true,
+      "default_require_privacy_ner": true,
+      "url_rejections": 4,
+      "env_rejections": 5
+    },
+    {
+      "id": "g3-intake-missing-ner",
+      "passed": true,
+      "draft_status": "unavailable",
+      "reason_codes": [
+        "pseudonymization_failed"
+      ],
+      "jobs_queued": 0,
+      "audit_outcome": "failed",
+      "allowed_actions": [
+        "submit_reply_proposal",
+        "escalate",
+        "send_reply"
+      ]
+    },
+    {
+      "id": "g3-intake-load-exc",
+      "passed": true,
+      "reason_codes": [
+        "pseudonymization_failed"
+      ],
+      "jobs_queued": 0,
+      "secret_leaked_in_payload_or_audit": false
+    },
+    {
+      "id": "g3-intake-runtime-exc",
+      "passed": true,
+      "reason_codes": [
+        "pseudonymization_failed"
+      ],
+      "jobs_queued": 0,
+      "secret_leaked": false
+    },
+    {
+      "id": "g3-worker-direct-strict",
+      "passed": true,
+      "http_calls": 0,
+      "modes_ok": {
+        "none_prod": true,
+        "real_httpx_client": true,
+        "mock_transport_with_url": true,
+        "duck_stub_with_url_and_false_flag": true
+      }
+    },
+    {
+      "id": "g3-authority-sticky-manual",
+      "passed": true,
+      "staff_reply_status": 403,
+      "proposal_status": 201,
+      "manager_approve_status": 201
+    }
+  ],
+  "group_b_egress_and_forged_jobs": [
+    {
+      "id": "g3-egress-extra-nested",
+      "passed": true,
+      "http_calls": 0
+    },
+    {
+      "id": "g3-egress-raw-msg-pii",
+      "passed": true,
+      "checked_vectors": 8,
+      "http_calls": 0
+    },
+    {
+      "id": "g3-egress-orderctx-pii",
+      "passed": true,
+      "checked_vectors": 8,
+      "http_calls": 0
+    },
+    {
+      "id": "g3-egress-asof-intent",
+      "passed": true,
+      "checked_vectors": 4,
+      "http_calls": 0
+    },
+    {
+      "id": "g3-egress-known-db-map",
+      "passed": true,
+      "http_calls": 0,
+      "secret_absent_from_payload": true
+    },
+    {
+      "id": "g3-egress-stale-ner-race",
+      "passed": true,
+      "http_calls": 0,
+      "allowed_actions": [
+        "submit_reply_proposal",
+        "escalate",
+        "send_reply"
+      ]
+    },
+    {
+      "id": "g3-error-no-map-exfil",
+      "passed": true,
+      "captured_errors": [
+        "Unmasked EMAIL detected before egress",
+        "Unmasked PHONE detected before egress"
+      ]
+    },
+    {
+      "id": "g3-unknown-placeholder-vs-forged",
+      "passed": true,
+      "masked_unknown": "Ref token [FOOBAR_1] from customer portal",
+      "map_literal_isolated": {
+        "[LITERAL_1]": "[EMAIL_1]",
+        "[EMAIL_1]": "alice@example.com"
+      }
+    }
+  ],
+  "group_c_positive_and_spans": [
+    {
+      "id": "g3-pos-masked-e2e-transport",
+      "passed": true,
+      "http_call_count": 2,
+      "wire_message": "Hi, I am [NAME_1] in [ADDRESS_1] asking about [ORDER_ID_1].",
+      "wire_order_context_keys": [
+        "order_status",
+        "order_total",
+        "shipment_status",
+        "shipping_cost"
+      ],
+      "restored_draft_text": "Hello Tran Minh, order ORD-1001 is shipping."
+    },
+    {
+      "id": "g3-pos-ordinary-dates-money",
+      "passed": true
+    },
+    {
+      "id": "g3-span-literal-forgery",
+      "passed": true,
+      "masked": "Your form showed [LITERAL_1] when I typed [EMAIL_1]"
+    },
+    {
+      "id": "g3-span-nested-nul-unicode",
+      "passed": true
+    },
+    {
+      "id": "g3-span-p0p1-short-known",
+      "passed": true,
+      "masked": "Priority [ORDER_ID_1] ticket for customer [NAME_1] with [EMAIL_1]"
+    },
+    {
+      "id": "g3-span-overlapping-address",
+      "passed": true,
+      "mapping": {
+        "[ADDRESS_1]": "123 Nguyen Hue Street"
+      }
+    },
+    {
+      "id": "g3-span-gt999-index",
+      "passed": true
+    },
+    {
+      "id": "g3-span-no-recursive-restore",
+      "passed": true
+    },
+    {
+      "id": "g3-span-fake-ner-disclaimer",
+      "passed": true,
+      "spacy_installed": false,
+      "runtime_unprovisioned_fails_closed": true,
+      "note": "Fake NER tests verify boundary enforcement only; live spaCy/en_core_web_sm accuracy requires operational provisioning."
+    }
+  ],
+  "duration_seconds": 16.16
+}

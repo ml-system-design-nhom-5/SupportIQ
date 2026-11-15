@@ -1,0 +1,34 @@
+{
+  "schema_version": "frozen_gap3_case_matrix_c.v1",
+  "frozen_before_execution": true,
+  "target_branch": "minh",
+  "target_reviewed_head": "ce8ff53a5196ea44c513c0dea7c2c8d397830def",
+  "worker_a_commit": "59a41fe8ddb1926acbef19fc699dc2f15dc91492",
+  "cases": [
+    {"id": "g3-cfg-strict-default", "group": "strict_enforcement", "description": "Default strict require_privacy_ner=True and rejection of config/env False across any configured AI URL"},
+    {"id": "g3-intake-missing-ner", "group": "strict_enforcement", "description": "Unprovisioned spaCy NER fails closed at intake with pseudonymization_failed and 0 jobs/HTTP"},
+    {"id": "g3-intake-load-exc", "group": "strict_enforcement", "description": "spaCy model load exception fails closed at intake with 0 jobs/HTTP and no secret leaks"},
+    {"id": "g3-intake-runtime-exc", "group": "strict_enforcement", "description": "NER runtime exception fails closed at intake with 0 jobs/HTTP and no secret leaks"},
+    {"id": "g3-worker-direct-strict", "group": "strict_enforcement", "description": "Production real httpx.Client, unmocked Client, MockTransport+URL, and duck-typed stub+URL all enforce strict_ner=True (0 HTTP)"},
+    {"id": "g3-authority-sticky-manual", "group": "strict_enforcement", "description": "Gap 2 sticky authority preserved on pseudonymization_failed, retry_suggestion disabled, manual manager approval works"},
+
+    {"id": "g3-egress-extra-nested", "group": "egress_and_forged_jobs", "description": "Extra or nested unexpected top-level keys blocked with 0 HTTP calls"},
+    {"id": "g3-egress-raw-msg-pii", "group": "egress_and_forged_jobs", "description": "Unmasked EMAIL/PHONE/ADDRESS/CARD/ORDER_ID/TRACKING_ID/TRANSACTION_ID and legacy sentinel blocked with 0 HTTP calls"},
+    {"id": "g3-egress-orderctx-pii", "group": "egress_and_forged_jobs", "description": "Raw PII in order_context, unknown/legacy keys, and wrong types blocked with 0 HTTP calls"},
+    {"id": "g3-egress-asof-intent", "group": "egress_and_forged_jobs", "description": "Invalid/naive as_of or raw PII in intent_override blocked with 0 HTTP calls"},
+    {"id": "g3-egress-known-db-map", "group": "egress_and_forged_jobs", "description": "Tampered queued job leaking non-literal pseudonym_map DB secret blocked pre-HTTP"},
+    {"id": "g3-egress-stale-ner-race", "group": "egress_and_forged_jobs", "description": "NER removed between intake and worker dispatch triggers fail-closed with 0 HTTP and disabled retry"},
+    {"id": "g3-error-no-map-exfil", "group": "egress_and_forged_jobs", "description": "Exception strings, DB payloads, and AuditEntry logs expose zero raw PII or pseudonym_map secrets"},
+    {"id": "g3-unknown-placeholder-vs-forged", "group": "egress_and_forged_jobs", "description": "Unknown literal [FOOBAR_1] allowed safely, customer [EMAIL_1] isolated to [LITERAL_1], forged DB mapping values blocked"},
+
+    {"id": "g3-pos-masked-e2e-transport", "group": "positive_and_spans", "description": "Valid masked intake + fake NER + mock HTTP sends only masked message + canonical identifier-free order_context + restores internally"},
+    {"id": "g3-pos-ordinary-dates-money", "group": "positive_and_spans", "description": "Ordinary ISO dates, VND money, quantities, and valid order_context pass without false-positive PHONE blocks"},
+    {"id": "g3-span-literal-forgery", "group": "positive_and_spans", "description": "Literal [EMAIL_1] alongside real email masks as [LITERAL_1] + [EMAIL_1] and restores accurately"},
+    {"id": "g3-span-nested-nul-unicode", "group": "positive_and_spans", "description": "Nested brackets [[EMAIL_1]], NUL bytes, and Unicode mask & restore in one pass"},
+    {"id": "g3-span-p0p1-short-known", "group": "positive_and_spans", "description": "Short P0/P1 DB tokens mask and restore without sentinel collision"},
+    {"id": "g3-span-overlapping-address", "group": "positive_and_spans", "description": "Short known substring Hue + 123 Nguyen Hue Street resolves longest span [ADDRESS_1]"},
+    {"id": "g3-span-gt999-index", "group": "positive_and_spans", "description": "Placeholder indices >999 restore cleanly"},
+    {"id": "g3-span-no-recursive-restore", "group": "positive_and_spans", "description": "Single-pass restore() never recursively expands [NAME_1]->[EMAIL_1]->raw"},
+    {"id": "g3-span-fake-ner-disclaimer", "group": "positive_and_spans", "description": "Verify spaCy unprovisioned operationally (spacy_spec=False) and runtime fails closed without stub"}
+  ]
+}

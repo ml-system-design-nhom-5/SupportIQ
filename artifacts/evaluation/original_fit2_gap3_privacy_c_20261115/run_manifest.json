@@ -1,0 +1,15 @@
+{
+  "branch": "minh",
+  "git_head": "ce8ff53a5196ea44c513c0dea7c2c8d397830def",
+  "command": ".venv/Scripts/python.exe -B artifacts/evaluation/original_fit2_gap3_privacy_c_20261115/evaluate_gap3_privacy_c.py",
+  "verdict": "PASS",
+  "executed_cases": 23,
+  "passed_cases": 23,
+  "failed_cases": [],
+  "duration_seconds": 16.16,
+  "sha256": {
+    "frozen_gap3_case_matrix.json": "67362282cf0770a6dd7e9af3ec63797ea6e78288ec63e5e3562e702c4f33a6e1",
+    "evaluate_gap3_privacy_c.py": "3f367f84eff9b51e42cc8b70a46660bb3941c1be013909be2342cadb519b2696",
+    "gap3_privacy_verification.json": "6e1997ed88e961356e8420a12fbe4879c3ede428c8e1f312fbfe25bd2c6a56d3"
+  }
+}
