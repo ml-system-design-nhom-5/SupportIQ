@@ -15,6 +15,8 @@ export {
   useWriteAttemptSender,
 } from "@/features/backend-requests/api/idempotent-writes";
 export { requestData, requestNoContent } from "@/features/backend-requests/api/request-backend";
+export type { WakeBackend } from "@/features/backend-requests/api/wake-backend";
+export { createBackendWaker } from "@/features/backend-requests/api/wake-backend";
 export type { FailureBannerProps } from "@/features/backend-requests/components/failure-banner";
 export { FailureBanner } from "@/features/backend-requests/components/failure-banner";
 export type { FailureStateProps } from "@/features/backend-requests/components/failure-state";
@@ -53,5 +55,6 @@ export {
 } from "@/features/backend-requests/model/request-failure";
 export {
   computeRetryDelayMs,
+  isRetryableFailure,
   shouldRetryRequest,
 } from "@/features/backend-requests/model/retry-policy";

@@ -3,7 +3,9 @@
  *
  * The dev server and `vite preview` proxy `/v1` and `/health` to `backend` or to the Prism mock,
  * so the session cookie stays on the page's origin (ADR-0009, `SameSite=Strict`). The proxy
- * target is the setting `SUPPORTIQ_BACKEND_URL` (README.md, Settings).
+ * target is the setting `SUPPORTIQ_BACKEND_URL` (README.md, Settings). The build writes the
+ * Content Security Policy, which names the wake origin when `VITE_BACKEND_WAKE_ORIGIN` is set
+ * (backend wake-up design, rule 10).
  */
 import { storybookTest } from "@storybook/addon-vitest/vitest-plugin";
 import tailwindcss from "@tailwindcss/vite";
@@ -12,27 +14,13 @@ import { playwright } from "@vitest/browser-playwright";
 import { loadEnv, type Plugin, type ProxyOptions } from "vite";
 import { defineConfig, type ViteUserConfig } from "vitest/config";
 
+import { BACKEND_WAKE_ORIGIN_SETTING, parseBackendWakeOrigin } from "./src/app/build-settings.ts";
+import { buildContentSecurityPolicy } from "./src/app/content-security-policy.ts";
+
 /** The Prism mock of contracts/README.md (For consumers, The mock). */
 const DEFAULT_BACKEND_URL = "http://127.0.0.1:4010";
 
-/**
- * The Content Security Policy of the built page (SEC-23): no inline script and no other origin.
- * Inline styles stay allowed, because the Radix primitives set styles on their elements.
- */
-const CONTENT_SECURITY_POLICY = [
-  "default-src 'self'",
-  "script-src 'self'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
-  "font-src 'self'",
-  "connect-src 'self'",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-].join("; ");
-
 const sharedConfig: ViteUserConfig = {
-  plugins: [react(), tailwindcss(), contentSecurityPolicy()],
   // TODO(#5): the build is one chunk above 500 kB, so the first page loads every screen.
   // The Content Security Policy refuses `data:` fonts, so no asset is inlined.
   build: { assetsInlineLimit: 0 },
@@ -42,13 +30,14 @@ const sharedConfig: ViteUserConfig = {
   test: {
     coverage: {
       provider: "v8",
-      include: ["src/**/*.{ts,tsx}"],
+      include: ["src/**/*.{ts,tsx}", "ingress/**/*.ts"],
       exclude: [
         "src/api/generated/**",
         "src/test/**",
         "src/**/*.stories.tsx",
         "src/**/*.test.{ts,tsx}",
         "src/app/main.tsx",
+        "ingress/**/*.test.ts",
       ],
       // TEST-21: 80% branch coverage for the component, 90% for the view-model mappings.
       thresholds: {
@@ -71,6 +60,17 @@ const sharedConfig: ViteUserConfig = {
           // TEST-15: tests run in random order.
           sequence: { shuffle: true },
           env: { TZ: "UTC" },
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "ingress",
+          // The Pages Function runs on the Workers runtime (ADR-0016): the fetch API without a
+          // DOM, as Node has it, so its tests need neither jsdom nor the setup of the app.
+          environment: "node",
+          include: ["ingress/**/*.test.ts"],
+          sequence: { shuffle: true },
         },
       },
       {
@@ -118,6 +118,7 @@ export default defineConfig(({ mode }) => {
   const proxy = readBackendProxy(mode);
   return {
     ...sharedConfig,
+    plugins: [react(), tailwindcss(), contentSecurityPolicy(readBackendWakeOrigin(mode))],
     // Stories and tests read the contract example files as fixtures (TEST-11).
     server: { proxy, fs: { allow: [".", "../contracts/examples"] } },
     preview: { proxy },
@@ -152,20 +153,34 @@ function buildBackendProxy(target: string): Record<string, ProxyOptions> {
  * Add the Content Security Policy to the built page only, because the dev server injects an
  * inline script for React Fast Refresh.
  *
+ * @param wakeOrigin - The Render origin of `backend`, or undefined when no wake request is sent.
  * @returns The Vite plugin.
  */
-function contentSecurityPolicy(): Plugin {
+function contentSecurityPolicy(wakeOrigin: string | undefined): Plugin {
+  const content = buildContentSecurityPolicy(wakeOrigin);
   return {
     name: "supportiq-content-security-policy",
     apply: "build",
     transformIndexHtml: () => [
       {
         tag: "meta",
-        attrs: { "http-equiv": "Content-Security-Policy", content: CONTENT_SECURITY_POLICY },
+        attrs: { "http-equiv": "Content-Security-Policy", content },
         injectTo: "head-prepend",
       },
     ],
   };
+}
+
+/**
+ * Read the wake origin of a Vite mode with the parser that the app uses too (backend wake-up
+ * design, rule 10), so an invalid value stops the build with the setting's name.
+ *
+ * @param mode - The Vite mode.
+ * @returns The Render origin of `backend`, or undefined when the setting is not set.
+ */
+function readBackendWakeOrigin(mode: string): string | undefined {
+  const environment = loadEnv(mode, import.meta.dirname, "VITE_");
+  return parseBackendWakeOrigin(environment[BACKEND_WAKE_ORIGIN_SETTING]);
 }
 
 /**

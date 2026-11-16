@@ -3,10 +3,18 @@
  * startup (ARCH-34). Every setting has a safe default, so a fresh clone runs without a `.env`
  * file. `.env.example` lists each one.
  */
+import {
+  BACKEND_WAKE_ORIGIN_SETTING,
+  InvalidSettingError,
+  parseBackendWakeOrigin,
+} from "@/app/build-settings";
 import { TRACE_ID_SLOT } from "@/features/session";
 
 /** The backend contract, section Timeouts: frontend stops waiting after 10 000 ms. */
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
+
+/** Backend wake-up design: Render's start time of about one minute plus 30 s. */
+const DEFAULT_BACKEND_WAKE_TIMEOUT_MS = 90_000;
 
 /** ERR-13: bounded retries. Two retries keep a read within three timeouts. */
 const DEFAULT_REQUEST_RETRY_MAX_COUNT = 2;
@@ -46,15 +54,14 @@ export type FrontendSettings = {
    * no Grafana is set up: the developer details then show the trace ID without a link.
    */
   readonly grafanaTraceUrl?: string;
+  /** The Render origin of the wake request; absent when no wake request is sent. */
+  readonly backendWakeOrigin?: string;
+  /** How long a wake request may wait (ERR-09). */
+  readonly backendWakeTimeoutMs: number;
 };
 
 /** The variables that Vite exposes to the page. Only `VITE_` variables reach it. */
 export type FrontendEnvironment = Readonly<Record<string, string | boolean | undefined>>;
-
-/** Thrown when a setting has an invalid value, with the setting's name (ARCH-34). */
-export class InvalidSettingError extends Error {
-  override readonly name = "InvalidSettingError";
-}
 
 /**
  * Parse and validate the settings.
@@ -65,6 +72,7 @@ export class InvalidSettingError extends Error {
  */
 export function parseFrontendSettings(environment: FrontendEnvironment): FrontendSettings {
   const grafanaTraceUrl = parseTraceUrlSetting(environment, "VITE_GRAFANA_TRACE_URL");
+  const backendWakeOrigin = parseBackendWakeOrigin(environment[BACKEND_WAKE_ORIGIN_SETTING]);
   return {
     requestTimeoutMs: parseIntegerSetting(environment, "VITE_REQUEST_TIMEOUT_MS", {
       fallback: DEFAULT_REQUEST_TIMEOUT_MS,
@@ -80,6 +88,11 @@ export function parseFrontendSettings(environment: FrontendEnvironment): Fronten
     }),
     isDevModeAvailable: parseDevModeSetting(environment, "VITE_DEV_MODE"),
     ...(grafanaTraceUrl === undefined ? {} : { grafanaTraceUrl }),
+    ...(backendWakeOrigin === undefined ? {} : { backendWakeOrigin }),
+    backendWakeTimeoutMs: parseIntegerSetting(environment, "VITE_BACKEND_WAKE_TIMEOUT_MS", {
+      fallback: DEFAULT_BACKEND_WAKE_TIMEOUT_MS,
+      minimum: 1,
+    }),
   };
 }
 

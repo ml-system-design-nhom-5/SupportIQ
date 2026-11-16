@@ -42,12 +42,16 @@ export const FIXED_SUGGESTED_PASSWORD = "test-test-test";
 /** The origin of the app in tests. */
 export const TEST_BASE_URL = "http://localhost:3000";
 
-/** Settings without automatic retries, so a failure shows at once. Retry tests set their own. */
+/**
+ * Settings without automatic retries, so a failure shows at once, and without a wake origin, so
+ * no wake request is sent. Retry and wake tests set their own.
+ */
 export const testSettings: FrontendSettings = {
   requestTimeoutMs: 10_000,
   requestRetryMaxCount: 0,
   requestRetryBaseDelayMs: 1,
   isDevModeAvailable: false,
+  backendWakeTimeoutMs: 90_000,
 };
 
 /** What a rendering helper returns. */

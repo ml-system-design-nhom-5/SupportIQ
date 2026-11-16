@@ -18,11 +18,14 @@ import { type Clock, ClockContext } from "@/design-system";
 import { type RandomBytes, RandomBytesContext } from "@/features/admin-accounts";
 import {
   computeRetryDelayMs,
+  createBackendWaker,
   getRequestFailure,
   IdempotencyKeyFactoryContext,
   idempotentWriteMutationKey,
+  isRetryableFailure,
   isUnauthenticatedError,
   shouldRetryRequest,
+  type WakeBackend,
 } from "@/features/backend-requests";
 import {
   createDevModePreferences,
@@ -79,13 +82,21 @@ export type AppProvidersProps = {
 export function createAppDependencies(options: AppDependencyOptions): AppDependencies {
   listenToWindowFocus();
   const { isDevModeAvailable, grafanaTraceUrl } = options.settings;
+  const wakeBackend = createBackendWaker({
+    origin: options.settings.backendWakeOrigin,
+    timeoutMs: options.settings.backendWakeTimeoutMs,
+    fetch: options.fetch,
+  });
+  // Backend wake-up design, rule 4: one wake request when the app starts, and one after each
+  // retryable failure of a request (createAppQueryClient).
+  void wakeBackend();
   return {
     backendClient: createBackendClient({
       baseUrl: options.baseUrl,
       requestTimeoutMs: options.settings.requestTimeoutMs,
       fetch: options.fetch,
     }),
-    queryClient: createAppQueryClient(options),
+    queryClient: createAppQueryClient(options, wakeBackend),
     clock: options.clock,
     createIdempotencyKey: options.createIdempotencyKey,
     randomBytes: options.randomBytes,
@@ -123,7 +134,8 @@ export function AppProviders({ dependencies, children }: AppProvidersProps) {
  * Create the query client with the request policy of frontend.
  *
  * A `401` from any request ends the session: the cached data of the account is removed, and the
- * screen opens sign-in with a return path (contracts v1 design, Common elements). Reads retry only
+ * screen opens sign-in with a return path (contracts v1 design, Common elements). A retryable
+ * failure of any request sends a wake request, because `backend` may have stopped. Reads retry only
  * retryable failures (ERR-12). Writes are never retried, except the mutations
  * whose key starts with {@link idempotentWriteMutationKey}, which send an `Idempotency-Key`
  * (TS-29). Data loads again on window focus only where a screen asks for it (shop UI design,
@@ -133,22 +145,30 @@ export function AppProviders({ dependencies, children }: AppProvidersProps) {
  * boundary of the route, so no screen stays in its loading state (TS-26).
  *
  * @param options - The settings and the random source.
+ * @param wakeBackend - Sends a wake request, unless none is set up or one is in flight.
  * @returns The query client.
  */
-function createAppQueryClient(options: Pick<AppDependencyOptions, "settings" | "random">) {
+function createAppQueryClient(
+  options: Pick<AppDependencyOptions, "settings" | "random">,
+  wakeBackend: WakeBackend,
+) {
   const isDefect = (error: unknown) => getRequestFailure(error) === undefined;
   const retry = (failureCount: number, error: unknown) =>
     shouldRetryRequest(failureCount, error, options.settings.requestRetryMaxCount);
   const retryDelay = (attemptIndex: number) =>
     computeRetryDelayMs(attemptIndex, options.settings.requestRetryBaseDelayMs, options.random());
-  const endSessionOnUnauthenticated = (error: unknown) => {
+  const handleFailure = (error: unknown) => {
     if (isUnauthenticatedError(error)) {
       endSession(queryClient, "no_valid_session");
     }
+    const failure = getRequestFailure(error);
+    if (failure !== undefined && isRetryableFailure(failure)) {
+      void wakeBackend();
+    }
   };
   const queryClient: QueryClient = new QueryClient({
-    queryCache: new QueryCache({ onError: endSessionOnUnauthenticated }),
-    mutationCache: new MutationCache({ onError: endSessionOnUnauthenticated }),
+    queryCache: new QueryCache({ onError: handleFailure }),
+    mutationCache: new MutationCache({ onError: handleFailure }),
     defaultOptions: {
       queries: {
         retry,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { InvalidSettingError, parseFrontendSettings } from "@/app/settings";
+import { InvalidSettingError } from "@/app/build-settings";
+import { parseFrontendSettings } from "@/app/settings";
 
 /** A Grafana trace link of the local stack. */
 const TRACE_URL = "http://localhost:3000/explore?trace={trace_id}";
@@ -14,6 +15,7 @@ describe("parseFrontendSettings", () => {
       requestRetryMaxCount: 2,
       requestRetryBaseDelayMs: 500,
       isDevModeAvailable: false,
+      backendWakeTimeoutMs: 90_000,
     });
   });
 
@@ -24,6 +26,8 @@ describe("parseFrontendSettings", () => {
       VITE_REQUEST_RETRY_BASE_DELAY_MS: "100",
       VITE_DEV_MODE: "on",
       VITE_GRAFANA_TRACE_URL: TRACE_URL,
+      VITE_BACKEND_WAKE_ORIGIN: "https://backend.example.com",
+      VITE_BACKEND_WAKE_TIMEOUT_MS: "60000",
     });
 
     expect(settings).toEqual({
@@ -32,18 +36,30 @@ describe("parseFrontendSettings", () => {
       requestRetryBaseDelayMs: 100,
       isDevModeAvailable: true,
       grafanaTraceUrl: TRACE_URL,
+      backendWakeOrigin: "https://backend.example.com",
+      backendWakeTimeoutMs: 60_000,
     });
   });
+});
 
+describe("parseFrontendSettings, empty and invalid values", () => {
   it("treats an empty variable as not set", () => {
     const settings = parseFrontendSettings({
       VITE_REQUEST_TIMEOUT_MS: "",
       VITE_DEV_MODE: "",
       VITE_GRAFANA_TRACE_URL: "",
+      VITE_BACKEND_WAKE_ORIGIN: "",
     });
 
     expect(settings).toMatchObject({ requestTimeoutMs: 10_000, isDevModeAvailable: false });
     expect(settings).not.toHaveProperty("grafanaTraceUrl");
+    expect(settings).not.toHaveProperty("backendWakeOrigin");
+  });
+
+  it("stops at an invalid wake origin, naming the setting (backend wake-up design, rule 10)", () => {
+    expect(() =>
+      parseFrontendSettings({ VITE_BACKEND_WAKE_ORIGIN: "https://backend.example.com/" }),
+    ).toThrow("VITE_BACKEND_WAKE_ORIGIN must be an http or https origin without a path");
   });
 });
 

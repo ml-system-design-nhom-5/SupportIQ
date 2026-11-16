@@ -1,6 +1,6 @@
 # Frontend
 
-This folder holds the SupportIQ web app: sign-in, the own password change at `/change-password`, the demo shop for customers at `/shop`, the Accounts and Versions screens of the admin area at `/admin`, and the ticket inbox and the ticket workspace of the console at `/console`, where staff correct the intent, try the AI again, edit, reject, and send replies, submit replies for approval, and escalate tickets, and where managers send or edit the proposals, handle escalated tickets, and read the reports at `/console/reports`. Where dev mode is available, staff and managers can switch on the developer details of the ticket workspace; admins can switch dev mode on too, but no admin screen has developer details yet. It is a React single-page app that talks to `backend` only through the [backend contract](../contracts/README.md) with a generated client, and it runs against the Prism mock until `backend` is ready. What each screen does is defined in the [shop UI design](../docs/design/shop-ui.md), the [admin UI design](../docs/design/admin-ui.md), the [console UI design](../docs/design/console-ui.md), and the [account management design](../docs/design/account-management.md); the rules are in [typescript.md](../docs/rules/typescript.md) and [ui.md](../docs/rules/ui.md).
+This folder holds the SupportIQ web app: sign-in, the own password change at `/change-password`, the demo shop for customers at `/shop`, the Accounts and Versions screens of the admin area at `/admin`, and the ticket inbox and the ticket workspace of the console at `/console`, where staff correct the intent, try the AI again, edit, reject, and send replies, submit replies for approval, and escalate tickets, and where managers send or edit the proposals, handle escalated tickets, and read the reports at `/console/reports`. Where dev mode is available, staff and managers can switch on the developer details of the ticket workspace; admins can switch dev mode on too, but no admin screen has developer details yet. It is a React single-page app that talks to `backend` only through the [backend contract](../contracts/README.md) with a generated client, and it runs against the Prism mock until `backend` is ready. In the demo deployment, Cloudflare Pages serves the build, and the Pages Function of this folder is the ingress of `/v1` and `/health` ([Deploy on Cloudflare Pages](#deploy-on-cloudflare-pages)). What each screen does is defined in the [shop UI design](../docs/design/shop-ui.md), the [admin UI design](../docs/design/admin-ui.md), the [console UI design](../docs/design/console-ui.md), and the [account management design](../docs/design/account-management.md); the rules are in [typescript.md](../docs/rules/typescript.md) and [ui.md](../docs/rules/ui.md).
 
 ## Set up
 
@@ -48,7 +48,7 @@ pnpm test
 
 | Layer | Runs with | Covers |
 |---|---|---|
-| Unit and component tests | `pnpm run test:unit` | Mappings, formatters, error messages, query keys, every screen state, and the session flows, in shuffled order, against the example files of `contracts/examples/`. Coverage is enforced: at least 80% overall and 90% in `model/`, without generated code |
+| Unit and component tests | `pnpm run test:unit` | Mappings, formatters, error messages, query keys, every screen state, and the session flows, in shuffled order, against the example files of `contracts/examples/`, and the Pages Function in Node with a fake `backend`. Coverage is enforced: at least 80% overall and 90% in `model/`, without generated code |
 | Stories with axe | `pnpm run test:stories` | Every variant and state of the design system and of the feature screens, in Chromium. An axe violation fails the story |
 | UI flow tests against the mock | `pnpm run test:e2e` | The production build against Prism at 1280 px, and the shop flows also at 360 px, with axe on each screen, and where the keyboard focus lands after a button waits for `backend` or a dialog closes. Playwright starts the mock and the preview server itself |
 
@@ -82,8 +82,10 @@ Every setting has a safe default. [`.env.example`](.env.example) lists them.
 | `VITE_REQUEST_RETRY_BASE_DELAY_MS` | `500` | The first retry delay in ms, doubled for each later attempt, with jitter |
 | `VITE_DEV_MODE` | `on` with the dev server, `off` in a production build | Whether dev mode is available: `on` or `off` ([UI-35](../docs/rules/ui.md#developer-views)). Keep it `off` in the demo deployment |
 | `VITE_GRAFANA_TRACE_URL` | Not set | The link to a trace in Grafana, with `{trace_id}` once where the trace ID goes: https, or http on `localhost`, `127.0.0.1`, or `[::1]`. Not set: the developer details show the trace ID without a link |
+| `VITE_BACKEND_WAKE_ORIGIN` | Not set | The Render origin of `backend`, such as `https://<service>.onrender.com`: an http or https origin without a path. The app sends the wake request of the [backend wake-up design](../docs/design/backend-wake-up.md) to it when it starts and after a retryable request failure, and the build adds it to `connect-src` of the Content Security Policy. Not set: no wake request, and `connect-src` stays `'self'` |
+| `VITE_BACKEND_WAKE_TIMEOUT_MS` | `90000` | How long a wake request may wait, in ms: Render's start time of about one minute plus 30 s |
 
-`VITE_` settings are built into the page, so they never hold a secret. An invalid value stops the app at startup with the name of the setting.
+`VITE_` settings are built into the page, so they never hold a secret. An invalid value stops the app at startup with the name of the setting; an invalid `VITE_BACKEND_WAKE_ORIGIN` stops the build too, because both read it with one parser.
 
 ## Layout
 
@@ -99,6 +101,9 @@ Every setting has a safe default. [`.env.example`](.env.example) lists them.
 | `src/test/` | Test helpers: the fake `backend` that answers with example files, and the render helpers |
 | `e2e/` | The UI flow tests and their helpers |
 | `scripts/` | The command that starts the mock with the dev server, and the check of the generated client |
+| `ingress/` | The Pages Function: the ingress of the demo deployment, with its tests. It imports nothing, neither `src/` nor a package |
+| `functions/` | The routes of the Pages Function, `v1/` and `health/`, which re-export the ingress. Pages requires the file name `[[path]].ts` |
+| `public/` | `_routes.json`, which Vite copies to the root of the build |
 
 `.dependency-cruiser.cjs` enforces these boundaries, and `eslint.config.js` rejects any class that does not come from a token.
 
@@ -116,10 +121,35 @@ Every setting has a safe default. [`.env.example`](.env.example) lists them.
 | `/shop/support` | Support | `customer` |
 | `/console` | The inbox and the prompt to select a ticket. `?status=` chooses the queue: managers have Open, Awaiting approval, Escalated, and Closed; staff have Open | `staff`, `manager` |
 | `/console/tickets/{ticket_id}` | The ticket workspace next to the inbox, which keeps `?status=`. Opening it records the view, then loads the ticket | `staff`, `manager` |
+| `/console/reports` | Reports, for one period | `manager` |
 | `/admin` | Opens Accounts | `admin` |
 | `/admin/accounts` | Accounts, with the dialogs Create account and Reset password | `admin` |
+| `/admin/versions` | Versions in use: the build of `backend` and the versions that `ai-service` serves | `admin` |
 
 `backend` decides every permission. The app shows the permission-denied state when `backend` answers `403`.
+
+## Deploy on Cloudflare Pages
+
+[ADR-0016](../docs/decisions/0016-hosting-on-free-tiers.md#frontend-and-the-ingress-on-cloudflare-pages) defines the deployment. The Pages project builds this folder with `pnpm run build` and publishes `dist/`. The Pages Function in `functions/` is the ingress of `/v1/*` and `/health/*`, and its code is in `ingress/`:
+
+- It forwards each request to `backend` with the method, path, query, body, and headers unchanged, and returns the answer of `backend` unchanged, every `Set-Cookie` included, without a CORS header.
+- It never retries. It answers `502` when `backend` cannot be reached, `504` when `backend` sends no response headers within the timeout, and `413` for a body over 64 KiB, before it forwards anything. These answers have an empty body. The timeout bounds only the wait for the headers, so a body that streams after them is never cut.
+- It logs nothing about a request.
+- When the client cancels its request, such as a stream that the browser closes, the Function cancels the request to `backend` too (ADR-0022, statement 8).
+
+`_routes.json` sends exactly `/v1/*` and `/health/*` to the Function, so static files never invoke it. The route folders of `functions/` match the same two patterns, so a build without `_routes.json` routes the same; a unit test checks both.
+
+The settings of the Pages project:
+
+| Setting | Read by | Default | Meaning |
+|---|---|---|---|
+| `SUPPORTIQ_BACKEND_URL` | The Function, at each request | None: the Function stops without it | The origin of `backend`, such as `https://<service>.onrender.com`: an https origin without a path |
+| `SUPPORTIQ_BACKEND_TIMEOUT_MS` | The Function, at each request | `10000` | How long the Function waits for the response headers of `backend`, in ms: the caller's timeout of the backend contract |
+| `VITE_BACKEND_WAKE_ORIGIN` | The build | Not set | The same Render origin, for the wake request ([Settings](#settings)) |
+
+A missing or invalid setting of the Function stops it with the setting's name, and nothing is forwarded. The Pages project fails closed when the daily Functions limit is used up, so a `/v1` request never receives a static file in place of an answer of `backend` (statement 8).
+
+At the first deploy, also check what the unit tests cannot: that `backend` receives the `Host` of its own URL, and that the Function does not buffer a response that streams.
 
 ## Dependencies
 
@@ -194,4 +224,5 @@ The project lead approved OFL-1.1 and MPL-2.0 on 2026-11-07, the two Radix packa
 - A link from Support to a ticket that is not on the first page of its order opens the order page at the top. An order would need more than 20 tickets for this to happen.
 - The console polls without push updates: the inbox every 30 s once its queue loaded, and the workspace every 2 s while a part of the suggestion is `pending` (`src/features/console-tickets/model/polling.ts`). Neither polls again after a first load that failed; Try again loads it. The lead approved polling on 2026-11-12, which answers the polling question of the [console UI design](../docs/design/console-ui.md#open-questions). The lead decided on 2026-11-13: no polling under 30 s; the workspace moves to server-sent events. Until the contract has them, the workspace keeps its 2 s interval while a part of the suggestion is `pending`.
 - The manual-handling panel shows a neutral stand-in line for the manual-process instructions until the team provides the text ([console UI design, Open questions](../docs/design/console-ui.md#open-questions)).
+- The Pages Function enforces the body limit of the ingress but no per-client rate limit yet, an open question of [ADR-0016](../docs/decisions/0016-hosting-on-free-tiers.md#open-questions) (statement 10). Until it is enforced, the sign-in throttle of `backend` limits password guessing per login name.
 - There is no Dockerfile yet ([ARCH-10](../docs/rules/architecture.md#component-boundaries)). The project lead accepted this as debt on 2026-11-07. Since 2026-11-12, Cloudflare Pages builds `frontend` without a container ([ADR-0016](../docs/decisions/0016-hosting-on-free-tiers.md)), so no deployment uses the image. The debt ends when `frontend` gets a Dockerfile or ARCH-10 stops requiring one for a component that its platform builds without a container ([WF-23](../docs/rules/workflow.md#technical-debt)). Tracked in [#4](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/4).

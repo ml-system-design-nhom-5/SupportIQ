@@ -4,6 +4,7 @@
  */
 import type { FakeRoute } from "@/test/fake-backend";
 
+export const checkLivenessRoute: FakeRoute = { method: "GET", path: "/health/live" };
 export const createSessionRoute: FakeRoute = { method: "POST", path: "/v1/sessions" };
 export const getCurrentSessionRoute: FakeRoute = { method: "GET", path: "/v1/sessions/current" };
 export const deleteCurrentSessionRoute: FakeRoute = {

@@ -30,6 +30,7 @@ function createQueryClient() {
       requestRetryMaxCount: RETRY_MAX_COUNT,
       requestRetryBaseDelayMs: RETRY_BASE_DELAY_MS,
       isDevModeAvailable: false,
+      backendWakeTimeoutMs: 90_000,
     },
     baseUrl: TEST_BASE_URL,
     fetch: () => Promise.reject(new Error("not used")),
