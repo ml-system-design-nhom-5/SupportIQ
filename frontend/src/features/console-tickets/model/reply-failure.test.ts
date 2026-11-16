@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import type { RequestFailure } from "@/features/backend-requests";
+import { type RequestFailure, RequestFailureError } from "@/features/backend-requests";
 import {
   describeReplyFailure,
+  isTakenByColleague,
   pickLatestFailure,
 } from "@/features/console-tickets/model/reply-failure";
 
@@ -149,6 +150,21 @@ describe("describeReplyFailure of a 403 (contract, ForbiddenRoleOrOrigin)", () =
       });
     },
   );
+});
+
+describe("isTakenByColleague (console UI design, Flow, step 6)", () => {
+  it.each<[RequestFailure, boolean]>([
+    [{ kind: "problem", status: 403, problemType: "forbidden" }, true],
+    [{ kind: "problem", status: 403, problemType: "authority_required" }, false],
+    [{ kind: "problem", status: 422, problemType: "invalid_request" }, false],
+    [{ kind: "network" }, false],
+  ])("tells whether %j means that a colleague took the ticket", (failure, isTaken) => {
+    expect(isTakenByColleague(new RequestFailureError(failure))).toBe(isTaken);
+  });
+
+  it("is false for an error that is not a request failure", () => {
+    expect(isTakenByColleague(new Error("A defect"))).toBe(false);
+  });
 });
 
 describe("pickLatestFailure", () => {

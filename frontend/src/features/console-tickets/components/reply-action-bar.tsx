@@ -5,14 +5,21 @@
  * which opens the confirmation; nothing is sent without it (UI-17, FR-04). When authority is
  * required, Submit for approval replaces it; otherwise Submit for approval sits in the More menu,
  * and in manual handling it is a visible button. A failed send or submission shows its banner
- * above the bar.
+ * above the bar, and a send that a colleague's action refused shows its text under the banner.
  */
 import { CircleArrowUp, Clock, Send } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { ActionBar, type ActionMenuItem, Button, PanelSection } from "@/design-system";
+import {
+  ActionBar,
+  type ActionMenuItem,
+  Button,
+  CopyableText,
+  PanelSection,
+} from "@/design-system";
 import { FailureViewBanner } from "@/features/console-tickets/components/failure-view-banner";
 import type { ReplyComposer } from "@/features/console-tickets/components/use-reply-composer";
+import type { ReplyFailureView } from "@/features/console-tickets/model/reply-failure";
 
 /** Where Submit for approval sits: the main action, a visible button, or an item of More. */
 type SubmitPlace = "primary" | "button" | "menu";
@@ -31,14 +38,11 @@ type ReplyActionBarProps = {
  * @returns The failure banner of the last send or submission, when there is one, and the bar.
  */
 export function ReplyActionBar({ composer, actions }: ReplyActionBarProps) {
-  const { failure } = composer;
   const submitPlace = getSubmitPlace(composer);
   return (
     <>
-      {failure === undefined ? null : (
-        <PanelSection>
-          <FailureViewBanner failure={failure} />
-        </PanelSection>
+      {composer.failure === undefined ? null : (
+        <FailureSection failure={composer.failure} unsentText={composer.unsentText} />
       )}
       <ActionBar
         {...(composer.barLine === undefined ? {} : { reason: composer.barLine })}
@@ -79,6 +83,30 @@ export function ReplyActionBar({ composer, actions }: ReplyActionBarProps) {
         }
       />
     </>
+  );
+}
+
+/**
+ * Render the failure of the last write, and under it the text of a send that a colleague's action
+ * refused (console UI design, Flow, step 6).
+ *
+ * @param props - The failure, and the unsent text when there is one.
+ * @returns The section.
+ */
+function FailureSection({
+  failure,
+  unsentText,
+}: {
+  readonly failure: ReplyFailureView;
+  readonly unsentText: string | undefined;
+}) {
+  return (
+    <PanelSection>
+      <FailureViewBanner failure={failure} />
+      {unsentText === undefined ? null : (
+        <CopyableText label="Your unsent text">{unsentText}</CopyableText>
+      )}
+    </PanelSection>
   );
 }
 

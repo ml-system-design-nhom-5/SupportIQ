@@ -39,6 +39,8 @@ export type {
 export { ConfidenceMeter } from "@/design-system/components/confidence-meter";
 export type { ConsoleShellProps } from "@/design-system/components/console-shell";
 export { ConsoleShell } from "@/design-system/components/console-shell";
+export type { CopyableTextProps } from "@/design-system/components/copyable-text";
+export { CopyableText } from "@/design-system/components/copyable-text";
 export type {
   CustomerOrderOption,
   CustomerOrdersProps,

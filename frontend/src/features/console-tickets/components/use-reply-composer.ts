@@ -103,7 +103,8 @@ export function useReplyComposer(
   events: ReplyComposerEvents,
 ): ReplyComposer {
   const [state, setState] = useComposerState(ticket);
-  // Once the ticket went to a manager, what staff composed is done with.
+  // Once the ticket went to a manager, by staff or by a colleague, what staff composed is done
+  // with; after a colleague's action, the unsent text stays to copy (console UI design, Flow, 6).
   const startOver = () => {
     setState(createComposerState(ticket.suggestionId));
   };
@@ -120,7 +121,7 @@ export function useReplyComposer(
   const { sendFailure, ...sending } = useReplySending(
     ticketId,
     { ticket, state, sendBlock },
-    events.onSent,
+    { onSent: events.onSent, onTakenByColleague: startOver },
   );
   return {
     ...describeComposition(busyTicket, state, setState),
@@ -184,7 +185,8 @@ function describeComposition(
     primaryAction,
     primaryBlock,
     submitBlock,
-    // A visible Submit for approval says why it is disabled while Send reply is enabled (UI-16).
+    // A visible Submit for approval says why it is disabled while Send reply is enabled (UI-16):
+    // the note of a manager names it, and for staff its own block follows.
     barLine: primaryBlock ?? findActionNote(ticket) ?? (isManualHandling ? submitBlock : undefined),
   };
 }

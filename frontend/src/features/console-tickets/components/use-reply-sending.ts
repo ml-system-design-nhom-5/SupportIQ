@@ -21,6 +21,7 @@ import type {
 } from "@/features/console-tickets/model/reply-composer";
 import {
   type DatedFailure,
+  isTakenByColleague,
   readDatedFailure,
 } from "@/features/console-tickets/model/reply-failure";
 import { buildSendReplyRequest } from "@/features/console-tickets/model/reply-request";
@@ -45,6 +46,18 @@ export type ReplySending = {
   readonly isSending: boolean;
   /** The last failed send, with when it was sent; undefined after a success. */
   readonly sendFailure: DatedFailure | undefined;
+  /**
+   * The text of a send that a colleague's action refused, until staff leave the ticket. It stays
+   * in the memory of the mutation only, never in browser storage (console UI design, Flow, step 6).
+   */
+  readonly unsentText: string | undefined;
+};
+
+/** What the reply area does after a send. */
+export type ReplySendingEvents = {
+  readonly onSent: () => void;
+  /** A colleague escalated the ticket or submitted it meanwhile, so the send was refused. */
+  readonly onTakenByColleague: () => void;
 };
 
 /** What the send reads of the reply area now. */
@@ -68,13 +81,13 @@ type Confirmation = {
  *
  * @param ticketId - The ticket.
  * @param composed - The ticket, what staff composed, and the send block, as rendered now.
- * @param onSent - Called once a reply was sent.
+ * @param events - Called once a reply was sent, and once a colleague's action refused it.
  * @returns The open confirmation and its handlers, and the state of the send.
  */
 export function useReplySending(
   ticketId: string,
   composed: ComposedReply,
-  onSent: () => void,
+  events: ReplySendingEvents,
 ): ReplySending {
   const [stored, setConfirmation] = useState<Confirmation | undefined>(undefined);
   const sendReply = useSendReply(ticketId);
@@ -100,11 +113,31 @@ export function useReplySending(
     cancelSend: close,
     confirmSend: () => {
       if (confirmation !== undefined && !sendReply.isPending) {
-        sendReply.mutate(confirmation.reply, { onSuccess: onSent, onSettled: close });
+        sendReply.mutate(confirmation.reply, toSendCallbacks(events, close));
       }
     },
     isSending: sendReply.isPending,
     sendFailure: readDatedFailure(sendReply, "send_reply"),
+    unsentText: isTakenByColleague(sendReply.error) ? sendReply.variables?.request.body : undefined,
+  };
+}
+
+/**
+ * Choose what happens after one send.
+ *
+ * @param events - The events of the reply area.
+ * @param close - Closes the confirmation.
+ * @returns The callbacks of the mutation.
+ */
+function toSendCallbacks(events: ReplySendingEvents, close: () => void) {
+  return {
+    onSuccess: events.onSent,
+    onError: (error: Error) => {
+      if (isTakenByColleague(error)) {
+        events.onTakenByColleague();
+      }
+    },
+    onSettled: close,
   };
 }
 

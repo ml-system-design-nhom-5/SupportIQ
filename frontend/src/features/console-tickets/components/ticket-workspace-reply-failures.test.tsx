@@ -1,18 +1,43 @@
 import { screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { getConsoleTicketRoute, sendReplyRoute } from "@/test/backend-routes";
 import {
   type ConsoleAnswers,
   openConsole,
+  readSuggestionPart,
   sendAndConfirm,
   workspaceExample,
+  workspaceWith,
 } from "@/test/console-screen";
-import { exampleAnswer } from "@/test/fake-backend";
+import { readOperationExample } from "@/test/contract-examples";
+import { exampleAnswer, type FakeAnswer } from "@/test/fake-backend";
 import { testSettings } from "@/test/render-app";
 
 /** The path of the ticket of the manual-mode example. */
 const MANUAL_TICKET_PATH = "/console/tickets/TCK-1050";
+
+/** The answer of Send reply after a colleague escalated the ticket or submitted it. */
+const forbiddenSend = exampleAnswer(403, "problems", "forbidden-role");
+
+/** The escalated ticket as staff see it: read-only. */
+const escalatedForStaff = workspaceWith("escalated", { allowed_actions: [] });
+
+/** The read-only states that the reload after `forbiddenSend` shows staff. */
+const readOnlyStates: readonly (readonly [string, FakeAnswer])[] = [
+  ["escalated without a ready draft", escalatedForStaff],
+  [
+    "escalated with a ready draft",
+    workspaceWith("escalated", {
+      allowed_actions: [],
+      suggestion: {
+        ...readOperationExample("getConsoleTicket", 200, "escalated").suggestion,
+        draft: readSuggestionPart("draft-ready", "draft"),
+      },
+    }),
+  ],
+  ["awaiting approval", workspaceExample("read-only-for-staff")],
+];
 
 /**
  * Open a ticket in manual mode, write a reply, and send it.
@@ -93,6 +118,68 @@ describe("A refused send (console UI design, Errors and guardrails)", () => {
       "The reply was not sent. The request was not accepted.",
     );
     expect(backend.requestsTo(getConsoleTicketRoute)).toHaveLength(1);
+  });
+});
+
+describe("A send that a colleague's action refused (console UI design, Flow, step 6)", () => {
+  it.each(readOnlyStates)(
+    "shows the unsent text once, read-only, without an editor, once the ticket is %s",
+    async (_state, reloaded) => {
+      const { main } = await sendManualReply({
+        workspace: [workspaceExample("manual-mode"), reloaded],
+        reply: [forbiddenSend],
+      });
+
+      await waitFor(() => {
+        expect(within(main).queryByRole("textbox")).not.toBeInTheDocument();
+      });
+      expect(within(main).getByRole("alert")).toHaveTextContent(
+        "A colleague escalated this ticket or submitted it for approval. Your text is kept.",
+      );
+      const unsent = within(main).getAllByRole("region", { name: "Your unsent text" });
+      expect(unsent).toHaveLength(1);
+      expect(unsent[0]).toHaveTextContent("Here is the return label.");
+    },
+  );
+
+  it("copies the unsent text", async () => {
+    const { user, main } = await sendManualReply({
+      workspace: [workspaceExample("manual-mode"), escalatedForStaff],
+      reply: [forbiddenSend],
+    });
+    const unsent = await within(main).findByRole("region", { name: "Your unsent text" });
+    const writeText = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+
+    await user.click(within(unsent).getByRole("button", { name: "Copy text" }));
+
+    expect(writeText).toHaveBeenCalledWith("Here is the return label.");
+  });
+
+  it("forgets the unsent text once staff open another ticket", async () => {
+    const { main, router, backend } = await sendManualReply({
+      workspace: [workspaceExample("manual-mode"), escalatedForStaff],
+      reply: [forbiddenSend],
+    });
+    await within(main).findByRole("region", { name: "Your unsent text" });
+
+    await router.navigate("/console/tickets/TCK-1042");
+
+    await waitFor(() => {
+      expect(backend.requestsTo(getConsoleTicketRoute)).toHaveLength(3);
+    });
+    expect(await screen.findByRole("region", { name: /^Escalated by / })).toBeVisible();
+    expect(screen.queryByRole("region", { name: "Your unsent text" })).not.toBeInTheDocument();
+  });
+
+  it("is not shown after a refusal that keeps the editor", async () => {
+    const { main } = await sendManualReply({
+      reply: [exampleAnswer(422, "problems", "placeholder-in-body")],
+    });
+
+    await within(main).findByRole("alert");
+    expect(
+      within(main).queryByRole("region", { name: "Your unsent text" }),
+    ).not.toBeInTheDocument();
   });
 });
 

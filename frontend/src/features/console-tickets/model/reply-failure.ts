@@ -136,6 +136,19 @@ export function describeReplyFailure(
 }
 
 /**
+ * Tell whether a send failed because a colleague escalated the ticket or submitted it for approval
+ * meanwhile (`403 forbidden` of `sendReply`). The ticket is then read-only for staff, and the text
+ * that they composed stays to copy (console UI design, Flow, step 6).
+ *
+ * @param error - The error of `sendReply`.
+ * @returns True for that refusal.
+ */
+export function isTakenByColleague(error: unknown): boolean {
+  const failure = getRequestFailure(error);
+  return failure !== undefined && categorizeFailure(failure) === "permission_denied";
+}
+
+/**
  * Read the last failure of a write.
  *
  * @param outcome - The error of the mutation and when its request was sent.
