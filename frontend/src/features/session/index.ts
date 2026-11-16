@@ -2,16 +2,17 @@
  * The public API of the session feature: sign-in, sign-out, the account menu, the own password
  * change, the signed-in account, the end of a session (ADR-0009, ADR-0015), and dev mode (UI-35).
  */
-export type {
-  DevModePreferences,
-  DevModeSetup,
-  PreferenceStorage,
-} from "@/features/session/api/dev-mode-preferences";
+export type { DevModePreferences, DevModeSetup } from "@/features/session/api/dev-mode-preferences";
 export {
   createDevModePreferences,
   DevModeContext,
-  whenStorageAllows,
 } from "@/features/session/api/dev-mode-preferences";
+export type { PreferenceStorage, PreferenceStore } from "@/features/session/api/preference-store";
+export {
+  createPreferenceStore,
+  PreferenceStoreContext,
+  whenStorageAllows,
+} from "@/features/session/api/preference-store";
 export { endSession } from "@/features/session/api/session-cache";
 export { useSignedInAccountId, useSignedInRole } from "@/features/session/api/use-current-session";
 export type { DevMode } from "@/features/session/api/use-dev-mode";

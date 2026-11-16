@@ -8,11 +8,13 @@
  * confirmation, and only its Send reply sends the reply (UI-17, FR-04). After an action that
  * replaces the element with the focus, the focus moves to what replaced it (UI-30).
  */
+import { Info } from "lucide-react";
 import { useState } from "react";
 
-import { WorkspaceLayout } from "@/design-system";
+import { type ColumnRailMark, WorkspaceLayout } from "@/design-system";
 import type { RequestFailure } from "@/features/backend-requests";
 import { useCreateSuggestion } from "@/features/console-tickets/api/use-create-suggestion";
+import { useResizableColumn } from "@/features/console-tickets/api/use-resizable-column";
 import { AiSidebar } from "@/features/console-tickets/components/ai-sidebar";
 import { CustomerMessagePanel } from "@/features/console-tickets/components/customer-message-panel";
 import { DeveloperDetailsPanel } from "@/features/console-tickets/components/developer-details-panel";
@@ -36,10 +38,14 @@ import { toComposerTicket } from "@/features/console-tickets/model/composer-tick
 import { type SourceSelection, toSourceSelection } from "@/features/console-tickets/model/sources";
 import type { TicketWorkspace } from "@/features/console-tickets/model/workspace";
 import { buildWorkspaceRegions } from "@/features/console-tickets/model/workspace-regions";
+import type { SidebarState } from "@/features/console-tickets/model/workspace-state";
 import { useSignedInRole } from "@/features/session";
 
 /** The ID of the ticket heading, which takes the focus when the opener of a dialog is gone. */
 const WORKSPACE_HEADING_ID = "ticket-workspace-heading";
+
+/** The mark on the rail of a collapsed AI sidebar that holds a staff note (UI-11). */
+const staffNoteMark: ColumnRailMark = { label: "Note for staff in AI details", icon: Info };
 
 /** A source open in the side sheet, and the element that opened it. */
 type OpenedSource = {
@@ -76,6 +82,7 @@ export function TicketWorkspaceView({
   const regions = buildWorkspaceRegions(workspace);
   const requestFocus = useFocusRequest();
   const role = useSignedInRole();
+  const sidebarColumn = useResizableColumn("aiDetails");
   const suggestionRequests = useCreateSuggestion(ticketId, workspace, (request) => {
     requestFocus(request === "retry" ? PENDING_DRAFT_HEADING_ID : OTHER_INTENT_ID);
   });
@@ -181,6 +188,8 @@ export function TicketWorkspaceView({
             <DeveloperDetailsPanel suggestion={workspace.suggestion} />
           </>
         }
+        sidebarColumn={sidebarColumn}
+        sidebarMark={markOfSidebar(regions.sidebar)}
       />
       <ReplyDialogs composer={composer} ticket={workspace} fallbackId={WORKSPACE_HEADING_ID} />
       {openedSource === undefined ? null : (
@@ -194,4 +203,15 @@ export function TicketWorkspaceView({
       )}
     </>
   );
+}
+
+/**
+ * Choose the mark on the rail of the AI sidebar while it is collapsed (console UI design, Column
+ * controls).
+ *
+ * @param sidebar - The state of the AI sidebar.
+ * @returns The staff-note mark while the sidebar shows a staff note; undefined otherwise.
+ */
+function markOfSidebar(sidebar: SidebarState): ColumnRailMark | undefined {
+  return sidebar.kind === "analysis" && sidebar.staffNote !== undefined ? staffNoteMark : undefined;
 }

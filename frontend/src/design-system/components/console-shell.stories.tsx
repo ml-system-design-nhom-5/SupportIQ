@@ -16,6 +16,21 @@ import { MenuSelect } from "@/design-system/primitives/menu-select";
 import { Panel } from "@/design-system/primitives/panel";
 import { PanelSection } from "@/design-system/primitives/panel-section";
 import { Skeleton } from "@/design-system/primitives/skeleton";
+import { consoleColumnSizes } from "@/design-system/tokens/column-sizes";
+
+/** The inbox at its default width; the column control stories resize it. */
+const inboxColumn = {
+  width: consoleColumnSizes.inbox.defaultWidth,
+  isCollapsed: false,
+  onChange: fn(),
+};
+
+/** The AI sidebar at its default width. */
+const sidebarColumn = {
+  width: consoleColumnSizes.aiDetails.defaultWidth,
+  isCollapsed: false,
+  onChange: fn(),
+};
 
 const meta = {
   title: "Design system/Components/ConsoleShell",
@@ -36,11 +51,13 @@ const meta = {
               />
             }
             orderLabel="Oldest first"
+            onCollapse={fn()}
           >
             <InboxItemSkeleton />
             <InboxItemSkeleton />
           </InboxPanel>
         }
+        inboxColumn={inboxColumn}
       >
         <CenteredContent>
           <StateMessage
@@ -65,12 +82,13 @@ export const EmptyInbox: Story = {
     children: (
       <InboxLayout
         inbox={
-          <InboxPanel statusSelect={<span>Open</span>} orderLabel="Oldest first">
+          <InboxPanel statusSelect={<span>Open</span>} orderLabel="Oldest first" onCollapse={fn()}>
             <InboxMessage>
               <p className="text-sm text-text-muted">No open tickets</p>
             </InboxMessage>
           </InboxPanel>
         }
+        inboxColumn={inboxColumn}
       >
         <CenteredContent>
           <StateMessage icon={Inbox} headingLevel={1} title="No open tickets" />
@@ -84,10 +102,11 @@ export const WorkspaceLoading: Story = {
     children: (
       <InboxLayout
         inbox={
-          <InboxPanel statusSelect={<span>Open</span>} orderLabel="Oldest first">
+          <InboxPanel statusSelect={<span>Open</span>} orderLabel="Oldest first" onCollapse={fn()}>
             {null}
           </InboxPanel>
         }
+        inboxColumn={inboxColumn}
       >
         <WorkspaceLayout
           header={<TicketHeaderSkeleton />}
@@ -106,6 +125,7 @@ export const WorkspaceLoading: Story = {
               </PanelSection>
             </Panel>
           }
+          sidebarColumn={sidebarColumn}
         />
       </InboxLayout>
     ),

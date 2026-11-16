@@ -81,7 +81,7 @@ test("staff open a ticket from the inbox and check its draft against its sources
 }) => {
   await prepareConsole(page);
   await page.goto("/console");
-  const inbox = page.getByRole("complementary", { name: "Inbox" });
+  const inbox = page.getByRole("navigation", { name: "Inbox" });
   await expect(page.getByRole("heading", { level: 1, name: "Select a ticket" })).toBeVisible();
   await expectNoAccessibilityViolations(page);
 
@@ -204,7 +204,7 @@ test("a manager reads the closed queue, newest first", async ({ page }) => {
   await prepareConsole(page, { session: "example=manager", queue: "example=closed" });
   await page.goto("/console?status=closed");
 
-  const inbox = page.getByRole("complementary", { name: "Inbox" });
+  const inbox = page.getByRole("navigation", { name: "Inbox" });
   await expect(inbox.getByRole("button", { name: "Ticket status: Closed" })).toBeVisible();
   await expect(inbox.getByText("Newest first")).toBeVisible();
   await expect(inbox.getByRole("link", { name: /TCK-1017/ })).toHaveAttribute(
@@ -236,7 +236,7 @@ test("the view is recorded once for each opening of a ticket", async ({ page }) 
     request.url().endsWith("/v1/console/tickets/TCK-1038/views"),
   );
   await page
-    .getByRole("complementary", { name: "Inbox" })
+    .getByRole("navigation", { name: "Inbox" })
     .getByRole("link", { name: /TCK-1038/ })
     .click();
   await secondView;

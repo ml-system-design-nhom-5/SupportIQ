@@ -8,6 +8,7 @@ import type { ReactNode } from "react";
 
 import { InboxLayout, PageColumn } from "@/design-system";
 import { categorizeFailure, describeFailure, getRequestFailure } from "@/features/backend-requests";
+import { useResizableColumn } from "@/features/console-tickets/api/use-resizable-column";
 import { useTicketQueue } from "@/features/console-tickets/api/use-ticket-queue";
 import { TicketInbox } from "@/features/console-tickets/components/ticket-inbox";
 import { useQueueStatus } from "@/features/console-tickets/components/use-queue-status";
@@ -28,6 +29,7 @@ export type ConsoleTicketsAreaProps = {
 export function ConsoleTicketsArea({ children }: ConsoleTicketsAreaProps) {
   const { status, statuses, changeStatus } = useQueueStatus();
   const queueQuery = useTicketQueue(status);
+  const inboxColumn = useResizableColumn("inbox");
   const failure = getRequestFailure(queueQuery.error);
   if (
     queueQuery.data === undefined &&
@@ -49,8 +51,12 @@ export function ConsoleTicketsArea({ children }: ConsoleTicketsAreaProps) {
           statuses={statuses}
           onStatusChange={changeStatus}
           queueQuery={queueQuery}
+          onCollapse={() => {
+            inboxColumn.onChange({ width: inboxColumn.width, isCollapsed: true });
+          }}
         />
       }
+      inboxColumn={inboxColumn}
     >
       {children}
     </InboxLayout>

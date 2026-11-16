@@ -12,7 +12,7 @@ import { exampleAnswer } from "@/test/fake-backend";
  * @returns The inbox landmark.
  */
 function findInbox(): Promise<HTMLElement> {
-  return screen.findByRole("complementary", { name: "Inbox" });
+  return screen.findByRole("navigation", { name: "Inbox" });
 }
 
 describe("The inbox", () => {
@@ -139,7 +139,7 @@ describe("The inbox", () => {
     expect(
       await screen.findByRole("heading", { level: 1, name: "The console is for support accounts" }),
     ).toBeVisible();
-    expect(screen.queryByRole("complementary", { name: "Inbox" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Inbox" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeVisible();
   });
 });

@@ -66,7 +66,7 @@ export const UpdateFailed: Story = {
     ],
   }),
   play: async ({ canvasElement }) => {
-    const inbox = await within(canvasElement).findByRole("complementary", { name: "Inbox" });
+    const inbox = await within(canvasElement).findByRole("navigation", { name: "Inbox" });
     await within(inbox).findByRole("list", { name: "Open tickets" });
     await chooseQueue(inbox, "Open", "Closed");
     await within(inbox).findByRole("list", { name: "Closed tickets" });

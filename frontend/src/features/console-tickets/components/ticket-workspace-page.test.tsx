@@ -184,6 +184,10 @@ describe("Polling the workspace", () => {
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("This ticket could not be updated.");
-    expect(within(screen.getByRole("main")).getByText(/I asked for a refund/)).toBeVisible();
+    expect(
+      within(screen.getByRole("region", { name: "Customer message" })).getByText(
+        /I asked for a refund/,
+      ),
+    ).toBeVisible();
   });
 });

@@ -29,11 +29,14 @@ import {
 } from "@/features/backend-requests";
 import {
   createDevModePreferences,
+  createPreferenceStore,
   DevModeContext,
   type DevModeSetup,
   endSession,
   type FrontendDetails,
   type PreferenceStorage,
+  type PreferenceStore,
+  PreferenceStoreContext,
 } from "@/features/session";
 
 /** Everything the app receives from its composition root. */
@@ -44,6 +47,8 @@ export type AppDependencies = {
   readonly createIdempotencyKey: () => string;
   readonly randomBytes: RandomBytes;
   readonly devMode: DevModeSetup;
+  /** The display preferences of the screens, such as the widths of the console columns. */
+  readonly preferenceStore: PreferenceStore;
 };
 
 /** What the composition root needs from its caller. */
@@ -77,8 +82,8 @@ export type AppProvidersProps = {
  *
  * @param options - The settings, the base URL, the fetch implementation, the sources of
  *   randomness, time, and identifiers, and the preference storage.
- * @returns The client, the query client, the clock, the key factory, the random bytes, and dev
- *   mode.
+ * @returns The client, the query client, the clock, the key factory, the random bytes, dev mode,
+ *   and the preference store.
  */
 export function createAppDependencies(options: AppDependencyOptions): AppDependencies {
   listenToWindowFocus();
@@ -107,6 +112,7 @@ export function createAppDependencies(options: AppDependencyOptions): AppDepende
       preferences: createDevModePreferences(options.preferenceStorage),
       frontendDetails: buildFrontendDetails(options.settings),
     },
+    preferenceStore: createPreferenceStore(options.preferenceStorage),
   };
 }
 
@@ -142,7 +148,11 @@ export function AppProviders({ dependencies, children }: AppProvidersProps) {
         <ClockContext value={dependencies.clock}>
           <IdempotencyKeyFactoryContext value={dependencies.createIdempotencyKey}>
             <RandomBytesContext value={dependencies.randomBytes}>
-              <DevModeContext value={dependencies.devMode}>{children}</DevModeContext>
+              <DevModeContext value={dependencies.devMode}>
+                <PreferenceStoreContext value={dependencies.preferenceStore}>
+                  {children}
+                </PreferenceStoreContext>
+              </DevModeContext>
             </RandomBytesContext>
           </IdempotencyKeyFactoryContext>
         </ClockContext>

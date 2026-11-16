@@ -108,9 +108,10 @@
   --container-shop: 60rem;
   --container-admin: 65rem;
 
-  /* Console widths (console UI design, Layout and mockups): the inbox column of 272 px and the AI
-     sidebar of 340 px at the minimum console width of 1280 px, the KB side sheet, the order
-     popovers, and the citation hint. */
+  /* Console widths (console UI design, Layout and mockups): the default widths of the inbox
+     column, 272 px, and of the AI sidebar, 340 px, for stories of a single component (the
+     resizable columns take theirs from column-sizes.ts, and the ColumnWidths story of
+     tokens.stories.tsx keeps them equal), the KB side sheet, the order popovers, and the citation hint. */
   --container-inbox: 17rem;
   --container-ai-sidebar: 21.25rem;
   --container-sheet: 32.5rem;

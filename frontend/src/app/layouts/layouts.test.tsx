@@ -58,7 +58,7 @@ describe("ConsoleLayout", () => {
     expect(bar).toHaveTextContent("SupportIQConsole");
     expect(within(bar).getByRole("link", { name: "Tickets" })).toHaveAttribute("href", "/console");
     expect(within(bar).getByRole("button", { name: "Hoa Pham · Manager" })).toBeVisible();
-    expect(await screen.findByRole("complementary", { name: "Inbox" })).toBeVisible();
+    expect(await screen.findByRole("navigation", { name: "Inbox" })).toBeVisible();
     expect(screen.getByRole("main")).toBeInTheDocument();
   });
 

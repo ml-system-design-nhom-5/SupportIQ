@@ -94,6 +94,7 @@ const sharedConfig: ViteUserConfig = {
             "lucide-react",
             "openapi-fetch",
             "react-dom/client",
+            "react-resizable-panels",
             "react-router",
             "storybook/test",
             "tailwind-merge",

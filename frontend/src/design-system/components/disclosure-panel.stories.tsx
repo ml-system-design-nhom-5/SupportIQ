@@ -10,7 +10,7 @@ const meta = {
   component: DisclosurePanel,
   decorators: [
     (Story) => (
-      <section aria-label="AI sidebar" className="flex w-ai-sidebar flex-col gap-4">
+      <section aria-label="AI details" className="flex w-ai-sidebar flex-col gap-4">
         <Story />
       </section>
     ),

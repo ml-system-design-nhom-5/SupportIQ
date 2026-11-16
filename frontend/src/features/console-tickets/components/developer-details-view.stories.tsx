@@ -24,7 +24,7 @@ const meta = {
   component: DeveloperDetailsView,
   decorators: [
     (Story) => (
-      <Stack as="section" label="AI sidebar" gap="4">
+      <Stack as="section" label="AI details" gap="4">
         <Story />
       </Stack>
     ),

@@ -225,7 +225,9 @@ describe("Manual handling", () => {
     expect(main).toHaveTextContent("Manual handling");
     expect(main).toHaveTextContent("No order attached");
     expect(within(main).getAllByRole("heading", { name: "Manual handling" })).toHaveLength(2);
-    expect(within(main).queryByText("AI unavailable")).not.toBeInTheDocument();
+    expect(
+      within(getPanel(main, "AI details")).queryByText("AI unavailable"),
+    ).not.toBeInTheDocument();
   });
 });
 

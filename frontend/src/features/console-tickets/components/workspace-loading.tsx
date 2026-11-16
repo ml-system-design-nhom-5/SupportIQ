@@ -11,14 +11,17 @@ import {
   VisuallyHidden,
   WorkspaceLayout,
 } from "@/design-system";
+import { useResizableColumn } from "@/features/console-tickets/api/use-resizable-column";
 import { SidebarLoading } from "@/features/console-tickets/components/sidebar-loading";
 
 /**
  * Render the loading workspace.
  *
- * @returns The workspace of skeletons, announced as loading.
+ * @returns The workspace of skeletons, announced as loading, with the AI sidebar as the account
+ *   keeps it.
  */
 export function WorkspaceLoading() {
+  const sidebarColumn = useResizableColumn("aiDetails");
   return (
     <WorkspaceLayout
       header={<TicketHeaderSkeleton />}
@@ -48,6 +51,7 @@ export function WorkspaceLoading() {
         </>
       }
       sidebar={<SidebarLoading />}
+      sidebarColumn={sidebarColumn}
     />
   );
 }

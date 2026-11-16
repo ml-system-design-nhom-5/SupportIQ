@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  createDevModePreferences,
-  type PreferenceStorage,
-  whenStorageAllows,
-} from "@/features/session/api/dev-mode-preferences";
+import { createDevModePreferences } from "@/features/session/api/dev-mode-preferences";
+import { type PreferenceStorage, whenStorageAllows } from "@/features/session/api/preference-store";
 import { createMemoryStorage } from "@/test/memory-storage";
 
 /** A storage that the browser refuses, as with blocked site data. */

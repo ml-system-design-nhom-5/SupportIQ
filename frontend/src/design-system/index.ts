@@ -32,6 +32,7 @@ export type {
   CitationSource,
 } from "@/design-system/components/citation-marker";
 export { CitationMarker } from "@/design-system/components/citation-marker";
+export type { ColumnRailMark } from "@/design-system/components/column-rail";
 export type {
   ConfidenceBandName,
   ConfidenceMeterProps,
@@ -315,7 +316,9 @@ export type { TextLinkEmphasis, TextLinkProps } from "@/design-system/primitives
 export { TextLink } from "@/design-system/primitives/text-link";
 export type { TooltipProps } from "@/design-system/primitives/tooltip";
 export { Tooltip } from "@/design-system/primitives/tooltip";
+export type { ColumnState, ResizableColumn } from "@/design-system/primitives/use-column-panel";
 export type { ClipboardCopy, CopyOutcome } from "@/design-system/primitives/use-copy-to-clipboard";
 export { useCopyToClipboard } from "@/design-system/primitives/use-copy-to-clipboard";
 export type { VisuallyHiddenProps } from "@/design-system/primitives/visually-hidden";
 export { VisuallyHidden } from "@/design-system/primitives/visually-hidden";
+export { consoleColumnSizes } from "@/design-system/tokens/column-sizes";

@@ -40,17 +40,26 @@ type TicketInboxProps = {
   readonly statuses: readonly QueueStatus[];
   readonly onStatusChange: (status: QueueStatus) => void;
   readonly queueQuery: TicketQueueQuery;
+  readonly onCollapse: () => void;
 };
 
 /**
  * Render the inbox.
  *
- * @param props - The queue status, the queues of the role, the change handler, and the query.
+ * @param props - The queue status, the queues of the role, the change handler, the query, and the
+ *   collapse handler.
  * @returns The inbox panel.
  */
-export function TicketInbox({ status, statuses, onStatusChange, queueQuery }: TicketInboxProps) {
+export function TicketInbox({
+  status,
+  statuses,
+  onStatusChange,
+  queueQuery,
+  onCollapse,
+}: TicketInboxProps) {
   return (
     <InboxPanel
+      onCollapse={onCollapse}
       statusSelect={
         <MenuSelect
           label="Ticket status"

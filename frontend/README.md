@@ -49,7 +49,7 @@ pnpm test
 | Layer | Runs with | Covers |
 |---|---|---|
 | Unit and component tests | `pnpm run test:unit` | Mappings, formatters, error messages, query keys, every screen state, and the session flows, in shuffled order, against the example files of `contracts/examples/`, and the Pages Function in Node with a fake `backend`. Coverage is enforced: at least 80% overall and 90% in `model/`, without generated code |
-| Stories with axe | `pnpm run test:stories` | Every variant and state of the design system and of the feature screens, in Chromium. An axe violation fails the story |
+| Stories with axe | `pnpm run test:stories` | Every variant and state of the design system and of the feature screens, in Chromium, and the widths that the splitters of the console columns give, which jsdom cannot lay out. An axe violation fails the story |
 | UI flow tests against the mock | `pnpm run test:e2e` | The production build against Prism at 1280 px, and the shop flows also at 360 px, with axe on each screen, and where the keyboard focus lands after a button waits for `backend` or a dialog closes. Playwright starts the mock and the preview server itself |
 
 ## Commands
@@ -177,6 +177,7 @@ At the first deploy, also check what the unit tests cannot: that `backend` recei
 | `lucide-react` | 1.67.0 | ISC | The icon set of the designs |
 | `openapi-fetch` | 0.17.0 | MIT | The typed client over the generated types |
 | `react`, `react-dom` | 19.3.1 | MIT | The UI library |
+| `react-resizable-panels` | 4.16.0 | MIT | The splitters of the console columns, with the keyboard and ARIA of the window splitter pattern, sizes in px, and collapsing (console UI design, Column controls). It is the library of the Resizable component of shadcn/ui ([ADR-0008](../docs/decisions/0008-ui-design-system.md)); the project lead approved it on 2026-11-15. It has no dependencies |
 | `react-router` | 8.5.1 | MIT | Routes and error boundaries |
 | `tailwind-merge` | 3.7.0 | MIT | Resolves conflicting classes, as in shadcn/ui |
 
