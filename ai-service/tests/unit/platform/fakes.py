@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
+from types import MappingProxyType
 
 import httpx
 
@@ -12,6 +13,16 @@ from supportiq_ai_service.platform.adapters.egress import EgressAllowList, creat
 
 FAKE_CLOCK_START = datetime(2026, 11, 13, 9, 0, tzinfo=UTC)
 FAKE_TRACE_ID = TraceId("4bf92f3577b34da6a3ce929d0e0e4736")
+# Test values of the settings of the LLM call, by environment variable (TEST-18). The key calls
+# nothing, and the prices are fixtures, never the prices of the provider.
+LLM_ENVIRONMENT: Mapping[str, str] = MappingProxyType(
+    {
+        "GEMINI_API_KEY": "gemini-key-for-tests",
+        "GEMINI_MODEL": "gemini-3.5-flash-lite",
+        "LLM_INPUT_PRICE_MICRO_USD_PER_MILLION_TOKENS": "1000",
+        "LLM_OUTPUT_PRICE_MICRO_USD_PER_MILLION_TOKENS": "2000",
+    }
+)
 
 
 class FakeClock:

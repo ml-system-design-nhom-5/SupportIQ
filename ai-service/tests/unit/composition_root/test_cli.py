@@ -23,7 +23,7 @@ from supportiq_ai_service.release import ReleaseNotLoadedError
 from supportiq_ai_service.retrieval.adapters.no_kb_documents import NoKbDocuments
 from supportiq_ai_service.suggestions import SuggestionInput
 from supportiq_ai_service.suggestions.adapters import UnavailablePipeline
-from tests.unit.platform.fakes import RecordingEgressClientFactory
+from tests.unit.platform.fakes import LLM_ENVIRONMENT, RecordingEgressClientFactory
 from tests.unit.release.fakes import EXAMPLE_RELEASE, EXAMPLE_VERSIONS
 from tests.unit.release.release_folder import ASSET_FILES, write_release
 
@@ -78,8 +78,14 @@ def release_manifest(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def environment(monkeypatch: pytest.MonkeyPatch, release_manifest: Path) -> None:
+    _set_settings(monkeypatch, str(release_manifest))
+
+
+def _set_settings(monkeypatch: pytest.MonkeyPatch, release_manifest_path: str) -> None:
     monkeypatch.setenv("SERVICE_TOKEN", SERVICE_TOKEN)
-    monkeypatch.setenv("RELEASE_MANIFEST_PATH", str(release_manifest))
+    monkeypatch.setenv("RELEASE_MANIFEST_PATH", release_manifest_path)
+    for name, value in LLM_ENVIRONMENT.items():
+        monkeypatch.setenv(name, value)
 
 
 @pytest.fixture
@@ -179,8 +185,7 @@ def broken_release(
     request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch, release_manifest: Path
 ) -> tuple[str, ...]:
     break_release, expected_attributes = RELEASE_BREAKS[request.param]
-    monkeypatch.setenv("SERVICE_TOKEN", SERVICE_TOKEN)
-    monkeypatch.setenv("RELEASE_MANIFEST_PATH", break_release(release_manifest))
+    _set_settings(monkeypatch, break_release(release_manifest))
     return expected_attributes
 
 

@@ -18,11 +18,11 @@ from tests.unit.release.fakes import EXAMPLE_VERSIONS
 from tests.unit.release.release_folder import (
     ASSET_FILES,
     MANIFEST_FILE_NAME,
-    ManifestDocument,
+    JsonDocument,
     write_release,
 )
 
-type ManifestChange = Callable[[ManifestDocument], None]
+type ManifestChange = Callable[[JsonDocument], None]
 
 needs_file_permissions = pytest.mark.skipif(
     not hasattr(os, "geteuid") or os.geteuid() == 0,
@@ -30,7 +30,7 @@ needs_file_permissions = pytest.mark.skipif(
 )
 
 
-def first_file(document: ManifestDocument, asset: str) -> ManifestDocument:
+def first_file(document: JsonDocument, asset: str) -> JsonDocument:
     return document["assets"][asset]["files"][0]
 
 
@@ -85,58 +85,58 @@ def test_a_manifest_that_is_not_a_json_object_in_utf8_is_refused(
 
 
 def _set(key: str, value: object) -> ManifestChange:
-    def change(document: ManifestDocument) -> None:
+    def change(document: JsonDocument) -> None:
         document[key] = value
 
     return change
 
 
 def _delete(key: str) -> ManifestChange:
-    def change(document: ManifestDocument) -> None:
+    def change(document: JsonDocument) -> None:
         del document[key]
 
     return change
 
 
 def _set_asset(asset: str, key: str, value: object) -> ManifestChange:
-    def change(document: ManifestDocument) -> None:
+    def change(document: JsonDocument) -> None:
         document["assets"][asset][key] = value
 
     return change
 
 
 def _set_file(key: str, value: object) -> ManifestChange:
-    def change(document: ManifestDocument) -> None:
+    def change(document: JsonDocument) -> None:
         first_file(document, "model")[key] = value
 
     return change
 
 
 def _delete_asset_key(asset: str, key: str) -> ManifestChange:
-    def change(document: ManifestDocument) -> None:
+    def change(document: JsonDocument) -> None:
         del document["assets"][asset][key]
 
     return change
 
 
 def _delete_asset(asset: str) -> ManifestChange:
-    def change(document: ManifestDocument) -> None:
+    def change(document: JsonDocument) -> None:
         del document["assets"][asset]
 
     return change
 
 
-def _add_an_asset(document: ManifestDocument) -> None:
+def _add_an_asset(document: JsonDocument) -> None:
     extra_file = {"path": "extra.bin", "sha256": "0" * 64, "size_bytes": 0}
     document["assets"]["extra"] = {"version": "1", "files": [extra_file]}
 
 
-def _repeat_a_path(document: ManifestDocument) -> None:
+def _repeat_a_path(document: JsonDocument) -> None:
     document["assets"]["kb"]["files"].append(first_file(document, "model"))
 
 
 def _set_gate_run(key: str, value: object) -> ManifestChange:
-    def change(document: ManifestDocument) -> None:
+    def change(document: JsonDocument) -> None:
         document["gate_run"] = {**document["gate_run"], key: value}
 
     return change
@@ -224,7 +224,7 @@ def test_a_file_that_links_out_of_the_release_folder_is_refused(tmp_path: Path) 
 @pytest.mark.parametrize(
     ("link_path", "target"),
     [
-        ("model/tokenizer_config.json", "../kb/kb.json"),
+        ("model/vocab.txt", "../kb/kb.json"),
         ("index/encoder/2_Normalize", "../../../outside"),
         ("index/encoder/extra", "../../model"),
         ("model/special_tokens_map.json", "missing.json"),
@@ -305,7 +305,7 @@ def test_a_file_that_cannot_be_read_is_refused(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "extra_path", ["model/tokenizer_config.json", "index/encoder/vocab.txt", ".DS_Store"]
+    "extra_path", ["model/special_tokens_map.json", "index/encoder/vocab.txt", ".DS_Store"]
 )
 def test_a_file_that_the_manifest_does_not_name_is_refused(tmp_path: Path, extra_path: str) -> None:
     manifest_path = write_release(tmp_path)

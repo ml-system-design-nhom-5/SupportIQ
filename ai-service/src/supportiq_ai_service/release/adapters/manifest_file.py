@@ -25,16 +25,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Literal, Self
 
-from pydantic import (
-    AfterValidator,
-    BaseModel,
-    ConfigDict,
-    Field,
-    StringConstraints,
-    ValidationError,
-    model_validator,
-)
+from pydantic import Field, StringConstraints, ValidationError, model_validator
 
+from supportiq_ai_service.release.adapters.asset_document import (
+    AssetFile,
+    AssetFiles,
+    AssetName,
+    AssetVersionText,
+    RelativePath,
+    Sha256,
+    StrictDocument,
+)
 from supportiq_ai_service.release.domain import (
     AssetVersions,
     LoadedRelease,
@@ -44,43 +45,14 @@ from supportiq_ai_service.release.domain import (
 
 MANIFEST_FORMAT = "supportiq-release-manifest/interim-1"
 _HASH_NAME = "sha256"
-# The patterns of `release_id` and of `AssetVersion` in the contract, so every value of the
-# manifest can be served as it is (contracts/schemas/AssetVersions.yaml, AssetVersion.yaml).
+# The pattern of `release_id` in the contract, so it can be served as it is
+# (contracts/schemas/AssetVersions.yaml).
 _RELEASE_ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
-_ASSET_VERSION_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._:+-]{0,127}$"
-_SHA256_PATTERN = r"^[0-9a-f]{64}$"
-# A relative POSIX path: segments of letters, digits, `.`, `_`, and `-`, so no absolute path,
-# no backslash, and no empty segment fits. `_has_no_dot_segment` refuses `.` and `..`.
-_RELATIVE_PATH_PATTERN = r"^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$"
-_RELATIVE_PATH_MAX_LENGTH = 255
-_DOT_SEGMENTS = frozenset({".", ".."})
-
-
-def _has_no_dot_segment(path: str) -> str:
-    # Split by hand: `PurePosixPath` drops `.` segments, so it would hide them.
-    if any(segment in _DOT_SEGMENTS for segment in path.split("/")):
-        message = "a path has no `.` or `..` segment"
-        raise ValueError(message)
-    return path
-
 
 ReleaseId = Annotated[str, StringConstraints(pattern=_RELEASE_ID_PATTERN)]
-AssetVersionText = Annotated[str, StringConstraints(pattern=_ASSET_VERSION_PATTERN)]
-Sha256 = Annotated[str, StringConstraints(pattern=_SHA256_PATTERN)]
-RelativePath = Annotated[
-    str,
-    StringConstraints(max_length=_RELATIVE_PATH_MAX_LENGTH, pattern=_RELATIVE_PATH_PATTERN),
-    AfterValidator(_has_no_dot_segment),
-]
 
 
-class _ManifestPart(BaseModel):
-    """A part of the manifest: read strictly, every other field refused."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
-
-class ManifestFile(_ManifestPart):
+class ManifestFile(StrictDocument):
     """One file of an asset.
 
     Attributes:
@@ -94,7 +66,7 @@ class ManifestFile(_ManifestPart):
     size_bytes: Annotated[int, Field(ge=0)]
 
 
-class ManifestAsset(_ManifestPart):
+class ManifestAsset(StrictDocument):
     """One versioned asset and its files (ARCH-38).
 
     Attributes:
@@ -117,7 +89,7 @@ class RoutingAsset(ManifestAsset):
     model_version: AssetVersionText
 
 
-class ManifestAssets(_ManifestPart):
+class ManifestAssets(StrictDocument):
     """The six assets of a release, each one required (DATA-56).
 
     Attributes:
@@ -137,13 +109,13 @@ class ManifestAssets(_ManifestPart):
     routing: RoutingAsset
     index: ManifestAsset
 
-    def named_files(self) -> Iterator[tuple[str, ManifestFile]]:
-        """Yield every file of every asset, with the name of its asset.
+    def named_assets(self) -> tuple[tuple[AssetName, ManifestAsset], ...]:
+        """Return every asset with its name.
 
-        Yields:
-            The name of the asset, as in the manifest, and one of its files.
+        Returns:
+            The name of each asset, as in the manifest, and the asset, in the manifest's order.
         """
-        named_assets: tuple[tuple[str, ManifestAsset], ...] = (
+        return (
             ("model", self.model),
             ("kb", self.kb),
             ("mapping", self.mapping),
@@ -151,12 +123,19 @@ class ManifestAssets(_ManifestPart):
             ("routing", self.routing),
             ("index", self.index),
         )
-        for name, asset in named_assets:
+
+    def named_files(self) -> Iterator[tuple[AssetName, ManifestFile]]:
+        """Yield every file of every asset, with the name of its asset.
+
+        Yields:
+            The name of the asset, as in the manifest, and one of its files.
+        """
+        for name, asset in self.named_assets():
             for manifest_file in asset.files:
                 yield name, manifest_file
 
 
-class GateRun(_ManifestPart):
+class GateRun(StrictDocument):
     """The run of the offline evaluation gate that this manifest passed (DATA-57).
 
     Attributes:
@@ -172,7 +151,7 @@ class GateRun(_ManifestPart):
     record_sha256: Sha256
 
 
-class ReleaseManifest(_ManifestPart):
+class ReleaseManifest(StrictDocument):
     """The interim format of the release manifest (DATA-56).
 
     Attributes:
@@ -223,9 +202,11 @@ class VerifiedReleaseSource:
 
     Attributes:
         manifest: The checked manifest.
+        folder: The release folder, which holds the manifest and every file it names.
     """
 
     manifest: ReleaseManifest
+    folder: Path
 
     def current(self) -> LoadedRelease:
         """Return the checked release.
@@ -234,6 +215,35 @@ class VerifiedReleaseSource:
             The release with the versions of its manifest.
         """
         return LoadedRelease(versions=self.manifest.asset_versions())
+
+    def asset_files(self, asset: AssetName) -> AssetFiles:
+        """Return the checked files of one asset, for the adapter that reads them.
+
+        Args:
+            asset: The asset.
+
+        Returns:
+            Its version and its files, and the paths of the files of every other asset.
+        """
+        named_assets = dict(self.manifest.assets.named_assets())
+        named_files = tuple(self.manifest.assets.named_files())
+        return AssetFiles(
+            asset=asset,
+            version=named_assets[asset].version,
+            folder=self.folder,
+            files=tuple(
+                AssetFile(
+                    asset=asset,
+                    file_path=manifest_file.path,
+                    location=self.folder / manifest_file.path,
+                )
+                for name, manifest_file in named_files
+                if name == asset
+            ),
+            other_file_paths=frozenset(
+                manifest_file.path for name, manifest_file in named_files if name != asset
+            ),
+        )
 
 
 def verify_release(manifest_path: Path) -> VerifiedReleaseSource:
@@ -313,7 +323,7 @@ def _verify_files(manifest: ReleaseManifest, manifest_path: Path) -> VerifiedRel
     )
     for name, manifest_file, path in located:
         _check_content(path, name, manifest_file)
-    return VerifiedReleaseSource(manifest)
+    return VerifiedReleaseSource(manifest, folder)
 
 
 def _locate(folder: Path, manifest_location: Path, asset: str, manifest_file: ManifestFile) -> Path:

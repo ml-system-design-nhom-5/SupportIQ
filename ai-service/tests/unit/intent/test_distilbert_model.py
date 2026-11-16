@@ -1,252 +1,67 @@
-import json
-import tempfile
+"""The DistilBERT model loads only from its checked artifact and scores every intent.
+
+These tests need torch, so they run only where the `torch` dependency group is installed
+(`uv run --locked --group torch pytest -m torch`), and skip elsewhere.
+"""
+
+import dataclasses
+import math
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
-from fastapi.testclient import TestClient
 
-from apps.ml_inference.app import (
-    ModelContainer,
-    EXPECTED_MANIFEST,
-    EXPECTED_46_LABELS,
-    PredictResponse,
-    PredictionItem,
-    app,
-)
+from supportiq_ai_service.intent import INTENT_LABELS
+from supportiq_ai_service.intent.adapters.distilbert_model import load_distilbert_classifier
+from supportiq_ai_service.intent.adapters.model_artifact import ModelArtifact, read_model_artifact
+from supportiq_ai_service.release.manifest import ReleaseInvalidReason
+from tests.unit.release.release_folder import asset_refusal, verified_release
+from tests.unit.tiny_models import folder_files, write_classifier
+
+pytestmark = pytest.mark.torch
+pytest.importorskip("torch", reason="torch is installed only by the torch group, on Linux")
 
 
 @pytest.fixture
-def clean_env(monkeypatch):
-    """Ensure dev fallback is not enabled via environment."""
-    monkeypatch.delenv("SUPPORTIQ_DEV_FALLBACK_MODEL", raising=False)
+def artifact(tmp_path: Path) -> ModelArtifact:
+    model_folder = tmp_path / "built"
+    write_classifier(model_folder, INTENT_LABELS)
+    release = verified_release(tmp_path / "release", {"model": folder_files(model_folder, "model")})
+    return read_model_artifact(release.asset_files("model"))
 
 
-def test_missing_model_directory_fails_closed(clean_env, tmp_path):
-    """If the model directory does not exist, container must fail closed without fallback."""
-    mc = ModelContainer()
-    nonexistent = tmp_path / "nonexistent_model_dir"
+def test_the_model_of_an_artifact_scores_every_intent(artifact: ModelArtifact) -> None:
+    classifier = load_distilbert_classifier(artifact)
 
-    mc.load(nonexistent)
+    distribution = classifier.classify("Where is my order? It is late.")
 
-    assert mc.is_ready() is False
-    assert getattr(mc, "verified", False) is False
-    assert getattr(mc, "model_mode", "unavailable") == "unavailable"
-    assert mc.verified_model_version is None
-    assert mc.model_checksum is None
-    assert mc.tokenizer_checksum is None
-    with pytest.raises(RuntimeError, match="not loaded, verified, or ready"):
-        mc.predict("Where is my order?")
+    assert {entry.label for entry in distribution.probabilities} == set(INTENT_LABELS)
+    assert math.fsum(entry.probability for entry in distribution.probabilities) == pytest.approx(1)
+    assert classifier.classify("Where is my order? It is late.") == distribution
 
 
-@pytest.mark.parametrize("missing_file", ["model.safetensors", "tokenizer.json", "config.json"])
-def test_missing_individual_artifact_fails_closed_by_default(clean_env, missing_file):
-    """If any required file is missing in an existing model directory, fail closed by default."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        dir_path = Path(tmp_dir)
-        # Create all files except missing_file
-        all_files = {
-            "model.safetensors": b"dummy_weights",
-            "tokenizer.json": b"dummy_tokenizer",
-            "config.json": json.dumps({
-                "id2label": {str(i): lbl for i, lbl in enumerate(sorted(EXPECTED_46_LABELS))}
-            }).encode("utf-8"),
-        }
-        for name, content in all_files.items():
-            if name != missing_file:
-                (dir_path / name).write_bytes(content)
+def test_a_model_whose_label_map_differs_from_the_artifact_is_refused(
+    artifact: ModelArtifact,
+) -> None:
+    swapped = (INTENT_LABELS[1], INTENT_LABELS[0], *INTENT_LABELS[2:])
 
-        mc = ModelContainer()
-        mc.load(dir_path)
-
-        assert mc.is_ready() is False
-        assert getattr(mc, "verified", False) is False
-        assert getattr(mc, "model_mode", "unavailable") == "unavailable"
-        assert mc.verified_model_version is None
-        assert mc.model_checksum is None
-        assert mc.tokenizer_checksum is None
-        with pytest.raises(RuntimeError, match="not loaded, verified, or ready"):
-            mc.predict("Where is my order?")
-
-
-def test_artifact_checksum_mismatch_fails_closed(clean_env):
-    """If artifacts exist but checksums do not match pinned release manifest, fail closed."""
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        dir_path = Path(tmp_dir)
-        (dir_path / "model.safetensors").write_bytes(b"tampered_weights")
-        (dir_path / "tokenizer.json").write_bytes(b"tampered_tokenizer")
-        (dir_path / "config.json").write_text(json.dumps({
-            "id2label": {str(i): lbl for i, lbl in enumerate(sorted(EXPECTED_46_LABELS))}
-        }), encoding="utf-8")
-
-        mc = ModelContainer()
-        mc.load(dir_path)
-
-        assert mc.is_ready() is False
-        assert getattr(mc, "verified", False) is False
-        assert getattr(mc, "model_mode", "unavailable") == "unavailable"
-        assert mc.model_checksum is None
-        assert mc.tokenizer_checksum is None
-        assert mc.verified_model_version is None
-        with pytest.raises(RuntimeError, match="not loaded, verified, or ready"):
-            mc.predict("Where is my order?")
-
-
-def test_explicit_demo_fallback_independent_identity_and_no_fabricated_hashes(monkeypatch):
-    """When dev fallback is explicitly enabled, it must have independent identity,
-    no fabricated artifact hashes, cannot be verified, and cannot certify trained readiness."""
-    monkeypatch.setenv("SUPPORTIQ_DEV_FALLBACK_MODEL", "true")
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        dir_path = Path(tmp_dir)
-        mc = ModelContainer()
-        mc.load(dir_path)
-
-        assert mc._is_dev_fallback is True
-        assert getattr(mc, "model_mode", None) == "heuristic_demo"
-        assert getattr(mc, "verified", True) is False
-        # Must NOT masquerade as verified trained release version
-        assert mc.verified_model_version is None
-        assert mc.model_version != EXPECTED_MANIFEST["model_version"]
-        # Must NOT fabricate artifact hashes
-        assert mc.model_checksum is None
-        assert mc.tokenizer_checksum is None
-        # Cannot certify trained readiness
-        assert mc.is_trained_ready() is False
-
-
-def test_explicit_demo_fallback_predict_never_returns_calibrated_probability(monkeypatch):
-    """Fallback predict must never return calibrated_probability or fabricated hashes."""
-    monkeypatch.setenv("SUPPORTIQ_DEV_FALLBACK_MODEL", "true")
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        dir_path = Path(tmp_dir)
-        mc = ModelContainer()
-        mc.load(dir_path)
-
-        res = mc.predict("Where is my order?", calibrated=True)
-        assert res["score_kind"] != "calibrated_probability"
-        assert res["model_checksum"] is None
-        assert res["tokenizer_checksum"] is None
-        assert res["model_mode"] == "heuristic_demo"
-        assert res["verified"] is False
-        assert res["model_version"] != EXPECTED_MANIFEST["model_version"]
-
-
-def test_trained_model_provenance_success():
-    """Mock a verified trained model and check provenance fields."""
-    mc = ModelContainer()
-    mc.model = MagicMock()
-    mc.tokenizer = MagicMock()
-    mc.id2label = {i: label for i, label in enumerate(sorted(EXPECTED_46_LABELS))}
-    mc.verified_model_version = EXPECTED_MANIFEST["model_version"]
-    mc.model_version = EXPECTED_MANIFEST["model_version"]
-    mc.model_checksum = EXPECTED_MANIFEST["weights_sha256"]
-    mc.tokenizer_checksum = EXPECTED_MANIFEST["tokenizer_sha256"]
-    mc.model_mode = "trained"
-    mc.verified = True
-    mc._is_dev_fallback = False
-
-    assert mc.is_ready() is True
-    assert mc.is_trained_ready() is True
-    assert mc.verified is True
-    assert mc.model_mode == "trained"
-
-
-def test_api_ready_and_predict_provenance(monkeypatch):
-    """FastAPI endpoints must expose additive provenance metadata without mutating global container."""
-    isolated = ModelContainer()
-    isolated.model = MagicMock()
-    isolated.tokenizer = MagicMock()
-    isolated.id2label = {i: label for i, label in enumerate(sorted(EXPECTED_46_LABELS))}
-    isolated.verified_model_version = "v1.0.0"
-    isolated.model_version = "v1.0.0"
-    isolated.model_checksum = EXPECTED_MANIFEST["weights_sha256"]
-    isolated.tokenizer_checksum = EXPECTED_MANIFEST["tokenizer_sha256"]
-    isolated.model_mode = "trained"
-    isolated.verified = True
-    isolated._is_dev_fallback = False
-
-    monkeypatch.setattr("apps.ml_inference.app.container", isolated)
-
-    client = TestClient(app)
-    res = client.get("/ready")
-    assert res.status_code == 200
-    data = res.json()
-    assert data["ready"] is True
-    assert data["model_version"] == "v1.0.0"
-    assert data.get("model_mode") == "trained"
-    assert data.get("verified") is True
-    assert data.get("trained_ready") is True
-
-    # Reject mismatched expected_model_version:
-    res = client.post("/predict", json={
-        "text": "Where is my order?",
-        "expected_model_version": "v9.9.9"
-    })
-    assert res.status_code == 400
-
-
-def test_reload_from_demo_fallback_to_failed_load_resets_state(monkeypatch, tmp_path):
-    """A failed reload attempt after a successful demo fallback must completely reset state."""
-    monkeypatch.setenv("SUPPORTIQ_DEV_FALLBACK_MODEL", "true")
-    mc = ModelContainer()
-    mc.load(tmp_path / "any_path")
-    assert mc._is_dev_fallback is True
-    assert mc.model_mode == "heuristic_demo"
-
-    # Now disable fallback and attempt reload of a non-existent directory
-    monkeypatch.delenv("SUPPORTIQ_DEV_FALLBACK_MODEL", raising=False)
-    mc.load(tmp_path / "nonexistent_dir_reload")
-
-    assert mc._is_dev_fallback is False
-    assert mc.model_mode == "unavailable"
-    assert mc.verified is False
-    assert mc.model_version is None
-    assert mc.verified_model_version is None
-    assert mc.is_ready() is False
-    assert mc.model is None
-    assert mc.tokenizer is None
-    assert mc.id2label == {}
-
-
-def test_reload_from_trained_to_malformed_config_resets_state(tmp_path):
-    """Malformed config on reload must reset previously valid trained state."""
-    mc = ModelContainer()
-    mc.model = MagicMock()
-    mc.tokenizer = MagicMock()
-    mc.id2label = {i: label for i, label in enumerate(sorted(EXPECTED_46_LABELS))}
-    mc.verified_model_version = EXPECTED_MANIFEST["model_version"]
-    mc.model_version = EXPECTED_MANIFEST["model_version"]
-    mc.model_checksum = EXPECTED_MANIFEST["weights_sha256"]
-    mc.tokenizer_checksum = EXPECTED_MANIFEST["tokenizer_sha256"]
-    mc.model_mode = "trained"
-    mc.verified = True
-    assert mc.is_ready() is True
-
-    # Prepare directory with valid weights & tokenizer but malformed config
-    (tmp_path / "model.safetensors").write_bytes(b"dummy")
-    (tmp_path / "tokenizer.json").write_bytes(b"dummy")
-    (tmp_path / "config.json").write_text("{invalid json", encoding="utf-8")
-
-    mc.load(tmp_path)
-    assert mc.is_ready() is False
-    assert mc.is_trained_ready() is False
-    assert mc.model_mode == "unavailable"
-    assert mc.verified is False
-    assert mc.model is None
-    assert mc.tokenizer is None
-    assert mc.id2label == {}
-    assert mc.verified_model_version is None
-    assert mc.model_version is None
-
-
-def test_predict_response_does_not_invent_trained_or_verified_defaults():
-    """PredictResponse schema defaults must not assume trained or verified status if omitted."""
-    resp = PredictResponse(
-        intent="track_order",
-        confidence=0.9,
-        margin=0.8,
-        top_k=[PredictionItem(intent="track_order", probability=0.9)],
-        model_version="v1.0.0",
+    error = asset_refusal(
+        lambda: load_distilbert_classifier(dataclasses.replace(artifact, labels=swapped))
     )
-    assert resp.model_mode != "trained"
-    assert resp.verified is False
+
+    assert error.asset == "model"
+
+
+def test_a_folder_that_lacks_a_file_fails_without_a_download(
+    artifact: ModelArtifact, tmp_path: Path
+) -> None:
+    incomplete = tmp_path / "incomplete"
+    incomplete.mkdir()
+    for name in ("config.json", "tokenizer.json", "tokenizer_config.json"):
+        (incomplete / name).write_bytes((artifact.directory / name).read_bytes())
+
+    error = asset_refusal(
+        lambda: load_distilbert_classifier(dataclasses.replace(artifact, directory=incomplete))
+    )
+
+    # The unit tests block every socket, so a download would fail with another error.
+    assert (error.reason, error.asset) == (ReleaseInvalidReason.ASSET_INVALID, "model")

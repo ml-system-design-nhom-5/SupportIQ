@@ -157,6 +157,7 @@ addopts = [
 ]
 markers = [
     "real_model: loads the real model weights of a release; skipped unless selected with -m real_model",
+    "torch: builds and runs tiny models with torch; skipped where the torch group is not installed",
 ]
 xfail_strict = true
 # Zero warnings (PY-03): every warning fails the test run.
@@ -195,7 +196,9 @@ name = "Layers inside each feature: api, then application, then domain (ARCH-11)
 type = "layers"
 containers = [
     "supportiq_ai_service.suggestions",
+    "supportiq_ai_service.intent",
     "supportiq_ai_service.retrieval",
+    "supportiq_ai_service.drafting",
     "supportiq_ai_service.release",
 ]
 layers = ["(api)", "(application)", "domain"]
@@ -229,6 +232,8 @@ type = "forbidden"
 source_modules = [
     "supportiq_ai_service.suggestions.domain",
     "supportiq_ai_service.suggestions.application",
+    "supportiq_ai_service.intent.domain",
+    "supportiq_ai_service.drafting.domain",
     "supportiq_ai_service.retrieval.domain",
     "supportiq_ai_service.retrieval.application",
     "supportiq_ai_service.release.domain",
@@ -250,6 +255,8 @@ allow_indirect_imports = true
 source_modules = [
     "supportiq_ai_service.suggestions.domain",
     "supportiq_ai_service.suggestions.application",
+    "supportiq_ai_service.intent.domain",
+    "supportiq_ai_service.drafting.domain",
     "supportiq_ai_service.retrieval.domain",
     "supportiq_ai_service.retrieval.application",
     "supportiq_ai_service.release.domain",
@@ -260,12 +267,16 @@ source_modules = [
 forbidden_modules = [
     "supportiq_ai_service.suggestions.adapters",
     "supportiq_ai_service.suggestions.api",
+    "supportiq_ai_service.intent.adapters",
     "supportiq_ai_service.retrieval.adapters",
     "supportiq_ai_service.retrieval.api",
+    "supportiq_ai_service.drafting.adapters",
     "supportiq_ai_service.release.adapters",
     "supportiq_ai_service.release.api",
+    "supportiq_ai_service.release.assets",
     "supportiq_ai_service.release.manifest",
     "supportiq_ai_service.platform.adapters",
+    "supportiq_ai_service.platform.egress",
     "supportiq_ai_service.platform.web",
 ]
 
@@ -299,15 +310,22 @@ forbidden_modules = [
     "supportiq_ai_service.retrieval.adapters",
     "supportiq_ai_service.drafting.adapters",
     "supportiq_ai_service.release.adapters",
+    "supportiq_ai_service.release.assets",
     "supportiq_ai_service.release.manifest",
     "supportiq_ai_service.platform.adapters",
+    "supportiq_ai_service.platform.egress",
 ]
 
 [[tool.importlinter.contracts]]
-name = "Features reach other features only through their public API and release.api (ARCH-17)"
+name = "Features reach other features only through their public API, release.api, release.assets, and platform.egress (ARCH-17)"
 type = "forbidden"
 allow_indirect_imports = true
-source_modules = ["supportiq_ai_service.suggestions", "supportiq_ai_service.retrieval"]
+source_modules = [
+    "supportiq_ai_service.suggestions",
+    "supportiq_ai_service.intent",
+    "supportiq_ai_service.retrieval",
+    "supportiq_ai_service.drafting",
+]
 forbidden_modules = [
     "supportiq_ai_service.release.domain",
     "supportiq_ai_service.release.application",

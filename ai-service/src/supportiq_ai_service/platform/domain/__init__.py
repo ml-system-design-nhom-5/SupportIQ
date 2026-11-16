@@ -1,6 +1,10 @@
 """Domain types of platform: ports and errors that every feature shares (ARCH-19)."""
 
-from supportiq_ai_service.platform.domain.clock import MILLISECONDS_PER_SECOND, Clock
+from supportiq_ai_service.platform.domain.clock import (
+    MILLISECONDS_PER_SECOND,
+    TIMESTAMP_PATTERN,
+    Clock,
+)
 from supportiq_ai_service.platform.domain.errors import (
     AiServiceError,
     ErrorCode,
@@ -26,6 +30,7 @@ __all__ = [
     "EVENT_DESCRIPTIONS",
     "MILLISECONDS_PER_SECOND",
     "SERVICE_NAME",
+    "TIMESTAMP_PATTERN",
     "TRACE_ID_FORMAT",
     "AiServiceError",
     "Clock",

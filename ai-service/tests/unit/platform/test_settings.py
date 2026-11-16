@@ -9,7 +9,7 @@ from supportiq_ai_service.composition_root.settings_loading import (
     load_settings,
 )
 from supportiq_ai_service.platform import EventName
-from tests.unit.platform.fakes import RecordingEventRecorder
+from tests.unit.platform.fakes import LLM_ENVIRONMENT, RecordingEventRecorder
 
 SERVICE_TOKEN_VARIABLE = "SERVICE_TOKEN"
 SERVICE_TOKEN = "service-token-for-unit-tests"
@@ -18,8 +18,10 @@ RELEASE_MANIFEST_PATH = "/srv/release/release-manifest.json"
 
 
 @pytest.fixture(autouse=True)
-def release_manifest_path(monkeypatch: pytest.MonkeyPatch) -> None:
+def required_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(RELEASE_MANIFEST_PATH_VARIABLE, RELEASE_MANIFEST_PATH)
+    for name, value in LLM_ENVIRONMENT.items():
+        monkeypatch.setenv(name, value)
 
 
 def test_valid_settings_are_loaded_and_logged(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -72,3 +74,101 @@ def test_the_service_token_never_appears_in_the_repr_of_the_settings(
     settings = load_settings(RecordingEventRecorder())
 
     assert SERVICE_TOKEN not in repr(settings)
+
+
+def test_the_llm_settings_have_the_budget_of_nfr_07_and_the_values_of_main(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(SERVICE_TOKEN_VARIABLE, SERVICE_TOKEN)
+
+    settings = load_settings(RecordingEventRecorder())
+
+    assert settings.gemini_api_key.get_secret_value() == LLM_ENVIRONMENT["GEMINI_API_KEY"]
+    assert LLM_ENVIRONMENT["GEMINI_API_KEY"] not in repr(settings)
+    assert settings.gemini_model == "gemini-3.5-flash-lite"
+    assert (
+        settings.llm_input_price_micro_usd_per_million_tokens,
+        settings.llm_output_price_micro_usd_per_million_tokens,
+    ) == (1000, 2000)
+    assert (
+        settings.llm_budget_ms,
+        settings.llm_attempt_timeout_ms,
+        settings.llm_max_attempts,
+        settings.llm_backoff_base_ms,
+        settings.llm_backoff_max_ms,
+        settings.llm_max_output_tokens,
+        settings.llm_temperature,
+    ) == (10_000, 5_000, 2, 250, 2_000, 1_024, 0.1)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "GEMINI_API_KEY",
+        "GEMINI_MODEL",
+        "LLM_INPUT_PRICE_MICRO_USD_PER_MILLION_TOKENS",
+        "LLM_OUTPUT_PRICE_MICRO_USD_PER_MILLION_TOKENS",
+    ],
+)
+def test_a_missing_llm_setting_without_default_stops_startup(
+    monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    monkeypatch.setenv(SERVICE_TOKEN_VARIABLE, SERVICE_TOKEN)
+    monkeypatch.delenv(name)
+
+    with pytest.raises(SettingsInvalidError) as raised:
+        load_settings(RecordingEventRecorder())
+
+    assert raised.value.setting_names == (name.lower(),)
+
+
+@pytest.mark.parametrize(
+    ("name", "value", "invalid_setting"),
+    [
+        ("GEMINI_API_KEY", "", "gemini_api_key"),
+        ("GEMINI_MODEL", "gpt-4o", "gemini_model"),
+        (
+            "LLM_INPUT_PRICE_MICRO_USD_PER_MILLION_TOKENS",
+            "-1",
+            "llm_input_price_micro_usd_per_million_tokens",
+        ),
+        ("LLM_BUDGET_MS", "10001", "llm_budget_ms"),
+        ("LLM_MAX_ATTEMPTS", "4", "llm_max_attempts"),
+        ("LLM_MAX_ATTEMPTS", "0", "llm_max_attempts"),
+        ("LLM_TEMPERATURE", "2.5", "llm_temperature"),
+        ("LLM_ATTEMPT_TIMEOUT_MS", "10000", "llm_attempt_timeout_ms"),
+        ("LLM_BACKOFF_BASE_MS", "0", "llm_backoff_base_ms"),
+    ],
+)
+def test_an_llm_setting_out_of_its_range_stops_startup(
+    monkeypatch: pytest.MonkeyPatch, name: str, value: str, invalid_setting: str
+) -> None:
+    monkeypatch.setenv(SERVICE_TOKEN_VARIABLE, SERVICE_TOKEN)
+    monkeypatch.setenv("LLM_BUDGET_MS", "8000")
+    monkeypatch.setenv(name, value)
+
+    with pytest.raises(SettingsInvalidError) as raised:
+        load_settings(RecordingEventRecorder())
+
+    assert raised.value.setting_names == (invalid_setting,)
+
+
+def test_an_attempt_as_long_as_the_budget_is_valid(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(SERVICE_TOKEN_VARIABLE, SERVICE_TOKEN)
+    monkeypatch.setenv("LLM_BUDGET_MS", "8000")
+    monkeypatch.setenv("LLM_ATTEMPT_TIMEOUT_MS", "8000")
+
+    settings = load_settings(RecordingEventRecorder())
+
+    assert (settings.llm_budget_ms, settings.llm_attempt_timeout_ms) == (8000, 8000)
+
+
+def test_a_backoff_maximum_below_its_base_stops_startup(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(SERVICE_TOKEN_VARIABLE, SERVICE_TOKEN)
+    monkeypatch.setenv("LLM_BACKOFF_BASE_MS", "500")
+    monkeypatch.setenv("LLM_BACKOFF_MAX_MS", "400")
+
+    with pytest.raises(SettingsInvalidError) as raised:
+        load_settings(RecordingEventRecorder())
+
+    assert raised.value.setting_names == ("llm_backoff_max_ms",)

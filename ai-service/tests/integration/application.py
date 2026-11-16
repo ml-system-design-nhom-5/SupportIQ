@@ -17,7 +17,12 @@ from supportiq_ai_service.platform.settings import Settings
 from supportiq_ai_service.release import ReleaseSource
 from supportiq_ai_service.retrieval import KbDocumentSource
 from supportiq_ai_service.suggestions import SuggestionPipeline
-from tests.unit.platform.fakes import FakeClock, RecordingEventRecorder, RecordingNetwork
+from tests.unit.platform.fakes import (
+    LLM_ENVIRONMENT,
+    FakeClock,
+    RecordingEventRecorder,
+    RecordingNetwork,
+)
 from tests.unit.release.fakes import StaticReleaseSource
 from tests.unit.retrieval.fakes import StaticKbDocuments
 from tests.unit.suggestions.fakes import FakePipeline
@@ -53,7 +58,11 @@ def build_settings(release_manifest_path: Path = UNCHECKED_RELEASE_MANIFEST_PATH
         The validated settings with the test service token.
     """
     return Settings.model_validate(
-        {"service_token": SERVICE_TOKEN, "release_manifest_path": release_manifest_path}
+        {
+            "service_token": SERVICE_TOKEN,
+            "release_manifest_path": release_manifest_path,
+            **{name.lower(): value for name, value in LLM_ENVIRONMENT.items()},
+        }
     )
 
 

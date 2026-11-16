@@ -10,7 +10,6 @@ Schema counts it as an integer, so this counts integers as the contract does and
 value; strict mode alone would refuse it for an integer field.
 """
 
-import re
 from datetime import UTC, datetime
 from typing import cast
 
@@ -18,16 +17,10 @@ from fastapi import Request
 from pydantic import BaseModel, ValidationError
 from pydantic_core import from_json, to_json
 
-from supportiq_ai_service.platform import RequestContractError
+from supportiq_ai_service.platform import TIMESTAMP_PATTERN, RequestContractError
 from supportiq_ai_service.platform.web.exception_handling import locations_of
 
 _BODY_LOCATION = ("body",)
-# The pattern of the contract's `Timestamp`: RFC 3339 in UTC with `Z` and at most microsecond
-# precision (CON-17). The generated models hold timestamps as text, because Pydantic cannot
-# apply a pattern to a datetime, so every timestamp of a request is read here.
-_TIMESTAMP_PATTERN = re.compile(
-    r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?Z$"
-)
 
 
 async def parse_json_body[ModelT: BaseModel](request: Request, model: type[ModelT]) -> ModelT:
@@ -55,7 +48,9 @@ def parse_timestamp(text: str, location: str) -> datetime:
     """Read a contract `Timestamp`: RFC 3339 in UTC with `Z`.
 
     A time without a time zone, or with an offset other than `Z`, is rejected, never completed
-    (contracts v1 design, Work for the join).
+    (contracts v1 design, Work for the join). The generated models hold timestamps as text,
+    because Pydantic cannot apply a pattern to a datetime, so every timestamp of a request is
+    read here.
 
     Args:
         text: The timestamp as the request holds it.
@@ -67,7 +62,7 @@ def parse_timestamp(text: str, location: str) -> datetime:
     Raises:
         RequestContractError: The text is not a contract `Timestamp`.
     """
-    if not _TIMESTAMP_PATTERN.fullmatch(text):
+    if not TIMESTAMP_PATTERN.fullmatch(text):
         raise RequestContractError((location,))
     try:
         moment = datetime.fromisoformat(text)

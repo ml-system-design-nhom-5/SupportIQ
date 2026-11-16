@@ -81,6 +81,7 @@ class ReleaseInvalidReason(StrEnum):
     FILE_UNLISTED = "file_unlisted"
     SIZE_MISMATCH = "size_mismatch"
     CHECKSUM_MISMATCH = "checksum_mismatch"
+    ASSET_INVALID = "asset_invalid"
 
 
 class ReleaseInvalidError(AiServiceError):

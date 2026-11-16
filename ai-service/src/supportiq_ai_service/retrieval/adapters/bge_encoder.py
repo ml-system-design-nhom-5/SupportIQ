@@ -1,163 +1,172 @@
-from typing import List, Dict, Any, Optional
+"""The BGE encoder of `main`, loaded from the index asset of a release.
+
+It embeds with CLS pooling and L2 normalization, as `main` did, and puts the query prefix of the
+index before each query. It loads only from the folder of the encoder in the release, never
+from the network (`local_files_only`, ADR-0018, Egress), and it falls back to nothing: a
+failure stops startup or fails the request.
+
+This module needs torch, which only the `torch` dependency group installs on Linux, so only the
+composition root imports it, and only its own tests, marked `torch`, run it (ADR-0021, Python
+and dependencies, statement 2).
+"""
+
+from collections.abc import Mapping, Sequence
+from pathlib import Path
+from typing import Protocol, cast
+
 import numpy as np
-import torch
-from transformers import AutoTokenizer, AutoModel
+from numpy.typing import NDArray
+from transformers import AutoModel, AutoTokenizer
 
-from apps.core_backend.retrieval.importer import PolicyVersion
+from supportiq_ai_service.release import ReleaseInvalidError, ReleaseInvalidReason
+from supportiq_ai_service.retrieval.adapters.in_memory_index import Vectors, l2_normalized
+from supportiq_ai_service.retrieval.adapters.index_file import IndexConfiguration
+from supportiq_ai_service.retrieval.domain import RetrievalError
 
-BGE_MODEL_NAME = "BAAI/bge-small-en-v1.5"
-QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
+_TENSOR_FORMAT = "pt"
+_OFFSETS_KEY = "offset_mapping"
 
-def count_tokens(text: str, tokenizer: Optional[Any] = None) -> int:
-    """Accurately count tokens using BGE tokenizer or fallback approximation."""
-    if tokenizer:
-        return len(tokenizer.encode(text, add_special_tokens=False))
-    return int(len(text.split()) * 1.3)
 
-def chunk_policy(
-    policy: PolicyVersion,
-    tokenizer: Optional[Any] = None,
-    max_tokens: int = 480,
-    overlap: int = 40
-) -> List[Dict[str, Any]]:
-    """Chunk policy document strictly using BGE tokenizer token IDs so exceptions at the end
-    are NEVER silently truncated.
-    """
-    title = policy.title.strip()
-    content = policy.content.strip()
+class _Tensor(Protocol):
+    def __getitem__(self, index: object) -> "_Tensor": ...
 
-    # Use tokenizer to get exact token IDs if available
-    if tokenizer:
-        title_ids = tokenizer.encode(title, add_special_tokens=False)
-        content_ids = tokenizer.encode(content, add_special_tokens=False)
-        # Budget for content per chunk accounts for title tokens + newline
-        available_content_tokens = max(50, max_tokens - len(title_ids) - 2)
+    def detach(self) -> "_Tensor": ...
 
-        if len(content_ids) <= available_content_tokens:
-            full_text = f"{title}\n{content}"
-            chunk_tokens = len(tokenizer.encode(full_text, add_special_tokens=True))
-            return [{
-                "chunk_id": f"{policy.doc_id}:{policy.version}:c0",
-                "doc_id": policy.doc_id,
-                "version": policy.version,
-                "category": policy.category,
-                "title": policy.title,
-                "text": full_text,
-                "content_hash": policy.content_hash,
-                "ordinal": 0,
-                "token_count": chunk_tokens,
-            }]
+    def cpu(self) -> "_Tensor": ...
 
-        chunks = []
-        step = max(1, available_content_tokens - overlap)
-        ordinal = 0
-        for i in range(0, len(content_ids), step):
-            sub_content_ids = content_ids[i:i + available_content_tokens]
-            sub_content_text = tokenizer.decode(sub_content_ids, skip_special_tokens=True)
-            chunk_text = f"{title}\n{sub_content_text}"
-            chunk_tokens = len(tokenizer.encode(chunk_text, add_special_tokens=True))
-            chunks.append({
-                "chunk_id": f"{policy.doc_id}:{policy.version}:c{ordinal}",
-                "doc_id": policy.doc_id,
-                "version": policy.version,
-                "category": policy.category,
-                "title": policy.title,
-                "text": chunk_text,
-                "content_hash": policy.content_hash,
-                "ordinal": ordinal,
-                "token_count": chunk_tokens,
-            })
-            ordinal += 1
-            if i + available_content_tokens >= len(content_ids):
-                break
-        return chunks
+    def numpy(self) -> NDArray[np.float32]: ...
 
-    # Fallback word-based chunking with safety margin
-    words = content.split()
-    step = max(1, int(max_tokens * 0.7) - overlap)
-    chunks = []
-    ordinal = 0
-    for i in range(0, len(words), step):
-        sub_words = words[i:i + int(max_tokens * 0.7)]
-        chunk_text = f"{title}\n" + " ".join(sub_words)
-        chunks.append({
-            "chunk_id": f"{policy.doc_id}:{policy.version}:c{ordinal}",
-            "doc_id": policy.doc_id,
-            "version": policy.version,
-            "category": policy.category,
-            "title": policy.title,
-            "text": chunk_text,
-            "content_hash": policy.content_hash,
-            "ordinal": ordinal,
-            "token_count": int(len(chunk_text.split()) * 1.3),
-        })
-        ordinal += 1
-        if i + int(max_tokens * 0.7) >= len(words):
-            break
-    return chunks
 
-class PolicyEncoder:
-    """BAAI/bge-small-en-v1.5 Native PyTorch & Transformers encoder.
-    P1 FIX: In production (mock_mode=False), failure to load model or encode raises an exception
-    so system falls back to manual review, NEVER returning silent fake random vectors!
-    """
-    def __init__(self, model_path: Optional[str] = None, mock_mode: bool = False):
-        self.mock_mode = mock_mode
-        self.device = torch.device("cpu")
-        self.tokenizer = None
-        self.model = None
+class _EncoderOutput(Protocol):
+    last_hidden_state: _Tensor
 
-        if mock_mode:
-            return
 
-        m_path = model_path or BGE_MODEL_NAME
-        try:
-            self.tokenizer = AutoTokenizer.from_pretrained(m_path)
-            self.model = AutoModel.from_pretrained(m_path)
-            self.model.eval()
-            self.model.to(self.device)
-        except Exception as exc:
-            # P1 FIX: Raise exception immediately in production mode!
-            raise RuntimeError(f"Failed to load BGE embedding model '{m_path}': {exc}") from exc
+class _Encoder(Protocol):
+    def __call__(self, **inputs: object) -> _EncoderOutput: ...
 
-    def prepare_query(self, query: str) -> str:
-        return f"{QUERY_PREFIX}{query.strip()}"
+    def eval(self) -> object: ...
 
-    def encode_queries(self, queries: List[str]) -> np.ndarray:
-        prepared = [self.prepare_query(q) for q in queries]
-        return self._encode(prepared)
+    def requires_grad_(self, requires_grad: bool) -> object: ...
 
-    def encode_passages(self, passages: List[str]) -> np.ndarray:
-        return self._encode(passages)
 
-    def _encode(self, texts: List[str]) -> np.ndarray:
-        if self.mock_mode:
-            import hashlib
-            arrs = []
-            for t in texts:
-                h = int(hashlib.md5(t.encode("utf-8")).hexdigest(), 16)
-                np.random.seed(h % (2**32))
-                vec = np.random.randn(384).astype(np.float32)
-                vec = vec / (np.linalg.norm(vec) + 1e-12)
-                arrs.append(vec)
-            return np.vstack(arrs)
+class _Tokenizer(Protocol):
+    is_fast: bool
 
-        if self.model is None or self.tokenizer is None:
-            raise RuntimeError("Model or tokenizer is not loaded")
+    def __call__(self, text: str | list[str], **options: object) -> Mapping[str, object]: ...
 
-        inputs = self.tokenizer(
+
+class _Loader(Protocol):
+    def from_pretrained(self, directory: Path, *, local_files_only: bool) -> object: ...
+
+
+class BgeEncoder:
+    """Implement the `TextEncoder` of the index with the BGE encoder of a release."""
+
+    def __init__(
+        self, configuration: IndexConfiguration, tokenizer: _Tokenizer, model: _Encoder
+    ) -> None:
+        """Keep the loaded tokenizer and model of the encoder.
+
+        Args:
+            configuration: The configuration of the index asset.
+            tokenizer: The fast tokenizer of the encoder.
+            model: The encoder, in evaluation mode and without gradients.
+        """
+        self._configuration = configuration
+        self._tokenizer = tokenizer
+        self._model = model
+
+    def token_spans(self, text: str) -> Sequence[tuple[int, int]]:
+        """Return the character span of each token of a text, without special tokens.
+
+        Args:
+            text: The text.
+
+        Returns:
+            The spans, in order.
+        """
+        encoding = self._tokenizer(text, add_special_tokens=False, return_offsets_mapping=True)
+        offsets = cast("Sequence[Sequence[int]]", encoding[_OFFSETS_KEY])
+        return tuple((start, end) for start, end in offsets)
+
+    def encode_passages(self, texts: Sequence[str]) -> Vectors:
+        """Embed passages of the KB, one row for each.
+
+        Args:
+            texts: The passages.
+
+        Returns:
+            Their L2-normalized vectors.
+
+        Raises:
+            RetrievalError: The encoder failed.
+        """
+        return self._encode(list(texts))
+
+    def encode_query(self, text: str) -> Vectors:
+        """Embed one query with the query prefix of the index.
+
+        Args:
+            text: The query.
+
+        Returns:
+            Its L2-normalized vector.
+
+        Raises:
+            RetrievalError: The encoder failed.
+        """
+        return self._encode([f"{self._configuration.query_prefix}{text.strip()}"])[0]
+
+    def _encode(self, texts: list[str]) -> Vectors:
+        inputs = self._tokenizer(
             texts,
-            max_length=512,
+            max_length=self._configuration.encoder_max_length,
             padding=True,
             truncation=True,
-            return_tensors="pt"
+            return_tensors=_TENSOR_FORMAT,
         )
-        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        try:
+            # CLS pooling: the vector of the first token of each text.
+            hidden = self._model(**inputs).last_hidden_state
+            vectors = hidden[:, 0].detach().cpu().numpy()
+        except RuntimeError as error:
+            raise RetrievalError from error
+        return l2_normalized(vectors)
 
-        with torch.inference_mode():
-            outputs = self.model(**inputs)
-            # CLS pooling
-            embeddings = outputs.last_hidden_state[:, 0]
-            # L2 normalize
-            embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1)
-            return embeddings.cpu().numpy().astype(np.float32)
+
+def load_bge_encoder(configuration: IndexConfiguration) -> BgeEncoder:
+    """Load the encoder of an index asset from its folder only.
+
+    Args:
+        configuration: The configuration of the index asset, which `read_index_configuration`
+            checked.
+
+    Returns:
+        The encoder.
+
+    Raises:
+        ReleaseInvalidError: The model library cannot load the encoder, or its tokenizer gives
+            no token spans.
+    """
+    try:
+        tokenizer = cast(
+            "_Tokenizer",
+            cast("_Loader", AutoTokenizer).from_pretrained(
+                configuration.encoder_directory, local_files_only=True
+            ),
+        )
+        model = cast(
+            "_Encoder",
+            cast("_Loader", AutoModel).from_pretrained(
+                configuration.encoder_directory, local_files_only=True
+            ),
+        )
+    except (OSError, ValueError) as error:
+        raise ReleaseInvalidError(ReleaseInvalidReason.ASSET_INVALID, asset="index") from error
+    if not tokenizer.is_fast:
+        # Only a fast tokenizer gives the token spans that keep each snippet a passage.
+        raise ReleaseInvalidError(ReleaseInvalidReason.ASSET_INVALID, asset="index")
+    model.eval()
+    # No parameter needs a gradient, so an embedding builds no graph and keeps no memory.
+    model.requires_grad_(False)
+    return BgeEncoder(configuration, tokenizer, model)

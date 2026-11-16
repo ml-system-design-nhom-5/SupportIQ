@@ -1,4 +1,4 @@
-"""Domain types of suggestions: the request, the analysis, the draft outcome, the port."""
+"""Domain types of suggestions: the request, the results, the port, and the routing values."""
 
 from supportiq_ai_service.suggestions.domain.analysis import (
     Analysis,
@@ -14,6 +14,7 @@ from supportiq_ai_service.suggestions.domain.analysis import (
     StaffIntent,
     StepLatencies,
 )
+from supportiq_ai_service.suggestions.domain.document_intents import DocumentIntents
 from supportiq_ai_service.suggestions.domain.draft import (
     Citation,
     Draft,
@@ -39,12 +40,19 @@ from supportiq_ai_service.suggestions.domain.request import (
     OrderFacts,
     SuggestionInput,
 )
+from supportiq_ai_service.suggestions.domain.routing import (
+    AuthorityCategory,
+    RoutingConfiguration,
+    SensitiveTerm,
+)
 
 __all__ = [
     "Analysis",
     "AnalysisWarning",
+    "AuthorityCategory",
     "Citation",
     "ConfidenceBand",
+    "DocumentIntents",
     "DocumentValidity",
     "Draft",
     "DraftOutcome",
@@ -66,7 +74,9 @@ __all__ = [
     "RankedDocument",
     "ReasonCode",
     "Routing",
+    "RoutingConfiguration",
     "RoutingRecommendation",
+    "SensitiveTerm",
     "StaffIntent",
     "StepLatencies",
     "SuggestionInput",
