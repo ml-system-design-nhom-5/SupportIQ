@@ -29,6 +29,7 @@ const dependencies = createAppDependencies({
   clock: systemClock,
   // Reading `localStorage` itself throws where the browser refuses storage.
   preferenceStorage: whenStorageAllows(() => window.localStorage),
+  openEventSource: (url) => new EventSource(url),
 });
 
 createRoot(rootElement).render(

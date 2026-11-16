@@ -82,3 +82,6 @@ export type StaffMemberContract = Schemas["StaffMemberView"];
 
 /** `ReplyProposalBasis`: what a proposal is based on. */
 export type ReplyProposalBasisContract = Schemas["ReplyProposalBasis"];
+
+/** `SuggestionProgressEvent`: the data of one event of the suggestion progress stream. */
+export type SuggestionProgressEventContract = Schemas["SuggestionProgressEvent"];

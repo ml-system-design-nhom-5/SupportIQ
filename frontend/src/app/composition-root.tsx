@@ -1,7 +1,8 @@
 /**
  * The composition root of frontend (ARCH-21): it creates the `backend` client, the query client,
  * and the clock once, and provides them to the app. `main.tsx` passes the real browser
- * dependencies; tests pass a fake fetch, a fixed clock, and fixed random bytes.
+ * dependencies; tests pass a fake fetch, a fixed clock, fixed random bytes, and fake event
+ * sources.
  */
 import {
   focusManager,
@@ -28,6 +29,11 @@ import {
   type WakeBackend,
 } from "@/features/backend-requests";
 import {
+  EventSourceContext,
+  type OpenEventSource,
+  type SuggestionEventSource,
+} from "@/features/console-tickets";
+import {
   createDevModePreferences,
   createPreferenceStore,
   DevModeContext,
@@ -49,6 +55,8 @@ export type AppDependencies = {
   readonly devMode: DevModeSetup;
   /** The display preferences of the screens, such as the widths of the console columns. */
   readonly preferenceStore: PreferenceStore;
+  /** Opens a stream of `backend`, such as the suggestion progress stream (ADR-0022). */
+  readonly openEventSource: OpenEventSource;
 };
 
 /** What the composition root needs from its caller. */
@@ -69,6 +77,8 @@ export type AppDependencyOptions = {
    * undefined when the browser refuses storage (UI-35).
    */
   readonly preferenceStorage: PreferenceStorage | undefined;
+  /** Opens an `EventSource` at an absolute URL: `new EventSource(url)` in the browser. */
+  readonly openEventSource: (url: string) => SuggestionEventSource;
 };
 
 /** Props of {@link AppProviders}. */
@@ -81,9 +91,9 @@ export type AppProvidersProps = {
  * Create the dependencies of the app.
  *
  * @param options - The settings, the base URL, the fetch implementation, the sources of
- *   randomness, time, and identifiers, and the preference storage.
+ *   randomness, time, and identifiers, the preference storage, and the opener of streams.
  * @returns The client, the query client, the clock, the key factory, the random bytes, dev mode,
- *   and the preference store.
+ *   the preference store, and the opener of streams at paths of `backend`.
  */
 export function createAppDependencies(options: AppDependencyOptions): AppDependencies {
   listenToWindowFocus();
@@ -113,6 +123,7 @@ export function createAppDependencies(options: AppDependencyOptions): AppDepende
       frontendDetails: buildFrontendDetails(options.settings),
     },
     preferenceStore: createPreferenceStore(options.preferenceStorage),
+    openEventSource: (path) => options.openEventSource(new URL(path, options.baseUrl).href),
   };
 }
 
@@ -150,7 +161,9 @@ export function AppProviders({ dependencies, children }: AppProvidersProps) {
             <RandomBytesContext value={dependencies.randomBytes}>
               <DevModeContext value={dependencies.devMode}>
                 <PreferenceStoreContext value={dependencies.preferenceStore}>
-                  {children}
+                  <EventSourceContext value={dependencies.openEventSource}>
+                    {children}
+                  </EventSourceContext>
                 </PreferenceStoreContext>
               </DevModeContext>
             </RandomBytesContext>

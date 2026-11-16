@@ -1,13 +1,13 @@
 /**
- * Read the workspace of a ticket (`getConsoleTicket`). The read changes nothing. It loads again
- * while a part of the suggestion is `pending` (console UI design, Flow).
+ * Read the workspace of a ticket (`getConsoleTicket`). The read changes nothing. While a part of
+ * the suggestion is `pending`, the workspace loads again after each event of the progress stream,
+ * or every 30 s when the stream cannot run (use-suggestion-progress.ts).
  */
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 
 import { useBackendClient } from "@/api/client";
 import { requestData } from "@/features/backend-requests";
 import { consoleQueryKeys } from "@/features/console-tickets/api/console-query-keys";
-import { getWorkspacePollingIntervalMs } from "@/features/console-tickets/model/polling";
 import {
   type TicketWorkspace,
   toTicketWorkspace,
@@ -46,6 +46,5 @@ export function useTicketWorkspace(
         toTicketWorkspace,
       ),
     enabled: request.isViewSettled,
-    refetchInterval: (query) => getWorkspacePollingIntervalMs(query.state.data),
   });
 }

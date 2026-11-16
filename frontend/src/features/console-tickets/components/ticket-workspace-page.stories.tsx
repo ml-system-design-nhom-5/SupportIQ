@@ -11,6 +11,7 @@ import {
 } from "@/test/console-screen";
 import { ConsoleStoryFrame } from "@/test/console-story-frame";
 import { exampleAnswer, type FakeAnswer } from "@/test/fake-backend";
+import { createFakeEventSources } from "@/test/fake-event-source";
 import { withFakeBackend } from "@/test/story-backend";
 
 const meta = {
@@ -110,6 +111,9 @@ export const ViewNotRecorded: Story = {
 export const ViewMayHaveBeenRecorded: Story = {
   decorators: withWorkspace(workspaceExample("draft-ready"), { view: [{ kind: "network_error" }] }),
 };
+/** The streams of {@link UpdateFailed}, which ends the stream of its partial ticket. */
+const updateFailedStreams = createFakeEventSources();
+
 export const UpdateFailed: Story = {
   decorators: [
     withFakeBackend((backend) => {
@@ -119,13 +123,16 @@ export const UpdateFailed: Story = {
           { kind: "network_error" },
         ],
       });
-    }),
+    }, updateFailedStreams),
   ],
   play: async ({ canvasElement }) => {
-    // The partial ticket polls; its next load fails, and the ticket stays on screen.
-    await expect(
-      await within(canvasElement).findByRole("alert", undefined, { timeout: 5_000 }),
-    ).toHaveTextContent("This ticket could not be updated.");
+    // The stream of the partial ticket fails; the load after it fails too, and the ticket stays.
+    await within(canvasElement).findByRole("heading", { level: 1, name: /^Ticket / });
+    updateFailedStreams.opened.at(-1)?.endForGood();
+
+    await expect(await within(canvasElement).findByRole("alert")).toHaveTextContent(
+      "This ticket could not be updated.",
+    );
   },
 };
 export const KbDocumentOpen: Story = {

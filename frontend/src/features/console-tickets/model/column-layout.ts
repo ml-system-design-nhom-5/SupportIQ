@@ -5,6 +5,7 @@
  * not a layout gives the default columns, and a width outside its limits is brought within them.
  */
 import { type ColumnState, consoleColumnSizes } from "@/design-system";
+import { parseJson, readField } from "@/features/console-tickets/model/json-text";
 
 /** The prefix of the key under which the browser keeps the column layout of an account. */
 const PREFERENCE_KEY_PREFIX = "supportiq.console-columns.";
@@ -42,35 +43,6 @@ export function parseColumnLayout(text: string | undefined): ColumnLayout {
     inbox: toColumnState(readField(stored, "inbox"), consoleColumnSizes.inbox),
     aiDetails: toColumnState(readField(stored, "aiDetails"), consoleColumnSizes.aiDetails),
   };
-}
-
-/**
- * Parse text that should be JSON.
- *
- * @param text - The stored text.
- * @returns The value, or undefined when the text is not JSON.
- * @throws Any error other than the SyntaxError of text that is not JSON.
- */
-function parseJson(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch (error) {
-    if (error instanceof SyntaxError) {
-      return undefined;
-    }
-    throw error;
-  }
-}
-
-/**
- * Read a field of a value that should be an object.
- *
- * @param value - The value.
- * @param name - The name of the field.
- * @returns The field, or undefined when the value is not an object or has no such field.
- */
-function readField(value: unknown, name: string): unknown {
-  return typeof value === "object" && value !== null ? Reflect.get(value, name) : undefined;
 }
 
 /**

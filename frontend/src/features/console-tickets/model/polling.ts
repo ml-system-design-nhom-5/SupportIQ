@@ -1,12 +1,9 @@
 /**
- * How often the console asks `backend` again (console UI design, Inbox and Flow). `frontend` polls
- * because v1 has no push updates (contracts v1 design, Non-goals). The lead approved both values
- * on 2026-11-12, which answers the polling question of the console UI design. The lead decided on
- * 2026-11-13: no polling under 30 s; the workspace moves to server-sent events. Until the contract
- * has them, the workspace keeps its interval while a part of the suggestion is `pending`.
+ * How often the console asks `backend` again (console UI design, Inbox and Flow). The lead decided
+ * on 2026-11-13 that the console never polls more often than every 30 s. The inbox polls; the
+ * workspace follows the suggestion progress stream while a part is `pending`, and polls only when
+ * the stream cannot run (ADR-0022, statements 6 and 7).
  */
-import type { TicketWorkspace } from "@/features/console-tickets/model/workspace";
-import { hasPendingPart } from "@/features/console-tickets/model/workspace-state";
 
 /**
  * The inbox reloads its queue this often while it is open, so new tickets and the "Opened" line of
@@ -15,11 +12,19 @@ import { hasPendingPart } from "@/features/console-tickets/model/workspace-state
 export const INBOX_POLLING_INTERVAL_MS = 30_000;
 
 /**
- * The workspace reloads the ticket this often while a part of the suggestion is `pending`, so the
- * analysis and then the draft appear soon after `ai-service` answers. A draft takes up to 10 s of
- * LLM time (NFR-07), and the end-to-end latency target is p50 at most 4 s (NFR-08).
+ * While the progress stream cannot run, the workspace reloads the ticket this often as long as a
+ * part of the suggestion is `pending`, and opens a new stream after a reload that succeeds
+ * (ADR-0022, statement 7).
  */
-export const WORKSPACE_POLLING_INTERVAL_MS = 2_000;
+export const WORKSPACE_FALLBACK_POLLING_INTERVAL_MS = 30_000;
+
+/**
+ * A new progress stream that sends no event within this time has failed, as a stream does that a
+ * proxy buffers or cuts off (ADR-0022, sequence diagram). `backend` sends the current state as
+ * soon as the stream opens (statement 3), and the ingress already bounds the wait for the
+ * response headers at 10 000 ms (ADR-0016, statement 4).
+ */
+export const FIRST_EVENT_TIMEOUT_MS = 10_000;
 
 /**
  * Choose how soon the inbox loads its queue again.
@@ -30,20 +35,4 @@ export const WORKSPACE_POLLING_INTERVAL_MS = 2_000;
  */
 export function getInboxPollingIntervalMs(hasQueue: boolean): number | false {
   return hasQueue ? INBOX_POLLING_INTERVAL_MS : false;
-}
-
-/**
- * Choose how soon the workspace loads the ticket again.
- *
- * @param workspace - The loaded ticket, or undefined before the first load.
- * @returns {@link WORKSPACE_POLLING_INTERVAL_MS} while a part of the suggestion is `pending`;
- *   false otherwise, so the workspace stops polling. A ticket that failed to load is not asked for
- *   again until staff try again.
- */
-export function getWorkspacePollingIntervalMs(
-  workspace: TicketWorkspace | undefined,
-): number | false {
-  return workspace !== undefined && hasPendingPart(workspace)
-    ? WORKSPACE_POLLING_INTERVAL_MS
-    : false;
 }

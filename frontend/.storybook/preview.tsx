@@ -12,6 +12,7 @@ import { MemoryRouter } from "react-router";
 import { configure } from "storybook/test";
 
 import { AppProviders, createAppDependencies } from "@/app/composition-root";
+import { createFakeEventSources } from "@/test/fake-event-source";
 import { fixedRandomBytes } from "@/test/render-app";
 
 /** The time that every story treats as now. */
@@ -48,6 +49,7 @@ const preview: Preview = {
           randomBytes: fixedRandomBytes,
           clock: () => storyNow,
           preferenceStorage: undefined,
+          openEventSource: createFakeEventSources().open,
         })}
       >
         {parameters["hasOwnRouter"] === true ? (

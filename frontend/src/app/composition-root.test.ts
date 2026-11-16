@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAppDependencies } from "@/app/composition-root";
 import { buildIdempotentWriteKey, RequestFailureError } from "@/features/backend-requests";
+import { createFakeEventSources } from "@/test/fake-event-source";
 import { fixedRandomBytes, TEST_BASE_URL, testNow } from "@/test/render-app";
 
 const RETRY_MAX_COUNT = 2;
@@ -40,6 +41,7 @@ function createQueryClient() {
     createIdempotencyKey: () => "00000000-0000-4000-8000-000000000000",
     randomBytes: fixedRandomBytes,
     preferenceStorage: undefined,
+    openEventSource: createFakeEventSources().open,
   }).queryClient;
 }
 

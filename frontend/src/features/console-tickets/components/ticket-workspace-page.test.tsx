@@ -1,14 +1,8 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { WORKSPACE_POLLING_INTERVAL_MS } from "@/features/console-tickets/model/polling";
 import { getConsoleTicketRoute, recordTicketViewRoute } from "@/test/backend-routes";
-import {
-  openConsole,
-  TICKET_PATH,
-  workspaceExample,
-  workspaceWithSuggestion,
-} from "@/test/console-screen";
+import { openConsole, TICKET_PATH, workspaceExample } from "@/test/console-screen";
 import { exampleAnswer, holdAnswer, noContentAnswer } from "@/test/fake-backend";
 import { testSettings } from "@/test/render-app";
 
@@ -148,46 +142,5 @@ describe("A ticket that could not load", () => {
     await waitFor(() => {
       expect(router.state.location.pathname).toBe("/sign-in");
     });
-  });
-});
-
-describe("Polling the workspace", () => {
-  it("loads the ticket again while a part is pending, and stops when the draft is ready", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    const { backend } = openConsole(TICKET_PATH, {
-      workspace: [workspaceExample("suggestion-pending"), workspaceExample("draft-ready")],
-    });
-    expect(await screen.findByRole("region", { name: "AI draft" })).toHaveTextContent(
-      "Generating draft",
-    );
-
-    await vi.advanceTimersByTimeAsync(WORKSPACE_POLLING_INTERVAL_MS);
-
-    await waitFor(() => {
-      expect(screen.getByRole("region", { name: "AI draft" })).toHaveTextContent("Draft ready");
-    });
-    await vi.advanceTimersByTimeAsync(WORKSPACE_POLLING_INTERVAL_MS * 2);
-    expect(backend.requestsTo(getConsoleTicketRoute)).toHaveLength(2);
-  });
-
-  it("keeps the ticket on screen when a reload fails, and says so", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    openConsole(TICKET_PATH, {
-      workspace: [
-        workspaceWithSuggestion("draft-ready", { draft: { draft_status: "pending" } }),
-        { kind: "network_error" },
-      ],
-    });
-    await screen.findByRole("heading", { level: 1, name: "Ticket TCK-1042" });
-
-    await vi.advanceTimersByTimeAsync(WORKSPACE_POLLING_INTERVAL_MS);
-
-    const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("This ticket could not be updated.");
-    expect(
-      within(screen.getByRole("region", { name: "Customer message" })).getByText(
-        /I asked for a refund/,
-      ),
-    ).toBeVisible();
   });
 });

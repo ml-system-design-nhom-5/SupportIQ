@@ -1,11 +1,12 @@
 /**
  * The ticket workspace screen (`/console/tickets/{ticket_id}`, console UI design, Flow). Opening
  * it records the view, which starts the handling clock and can start a retry of a failed
- * suggestion, and then loads the workspace. The workspace polls while a part of the suggestion is
- * `pending`.
+ * suggestion, and then loads the workspace. The workspace follows the progress of the suggestion
+ * while a part of it is `pending` (ADR-0022).
  */
 import { getRequestFailure } from "@/features/backend-requests";
 import { useRecordTicketView } from "@/features/console-tickets/api/use-record-ticket-view";
+import { useSuggestionProgress } from "@/features/console-tickets/api/use-suggestion-progress";
 import { useTicketWorkspace } from "@/features/console-tickets/api/use-ticket-workspace";
 import { TicketWorkspaceView } from "@/features/console-tickets/components/ticket-workspace-view";
 import { WorkspaceLoadFailure } from "@/features/console-tickets/components/workspace-load-failure";
@@ -26,6 +27,7 @@ export type TicketWorkspacePageProps = {
 export function TicketWorkspacePage({ ticketId }: TicketWorkspacePageProps) {
   const view = useRecordTicketView(ticketId);
   const workspaceQuery = useTicketWorkspace({ ticketId, isViewSettled: view.isSettled });
+  useSuggestionProgress(ticketId, workspaceQuery);
   const failure = getRequestFailure(workspaceQuery.error);
   if (workspaceQuery.data !== undefined) {
     return (
