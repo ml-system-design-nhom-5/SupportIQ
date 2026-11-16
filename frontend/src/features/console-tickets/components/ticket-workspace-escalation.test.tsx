@@ -157,6 +157,23 @@ describe("An escalated ticket", () => {
     });
   });
 
+  it("tells a manager why Escalate ticket is disabled once the reply can be sent (UI-16)", async () => {
+    const { user, main } = await openReplyArea({
+      session: "manager",
+      workspace: [workspaceExample("escalated")],
+    });
+    const escalate = within(main).getByRole("button", { name: "Escalate ticket" });
+    expect(escalate).toBeDisabled();
+    expect(main).toHaveTextContent("Write a reply to send it.");
+
+    await writeReply(user, main, "A manager will call you today.");
+
+    expect(main).toHaveTextContent(
+      "Only staff escalate a ticket. Managers handle escalated tickets.",
+    );
+    expect(escalate).toBeDisabled();
+  });
+
   it("shows the escalation above a ready draft, which the reply is based on", async () => {
     const { main } = await openReplyArea({
       session: "manager",

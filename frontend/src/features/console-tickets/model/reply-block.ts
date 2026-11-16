@@ -76,15 +76,35 @@ export function findReplyBlock(
  *
  * @param ticket - The ticket.
  * @returns That a manager sends the reply when staff submit it for approval; why Reject draft and
- *   Escalate ticket are disabled for a manager on a proposal; or undefined.
+ *   Escalate ticket are disabled for a manager on a proposal; why the actions that only staff take
+ *   are disabled for a manager otherwise ({@link findManagerNote}); or undefined.
  */
 export function findActionNote(ticket: ComposerTicket): string | undefined {
   if (getPrimaryAction(ticket) === "submit_reply_proposal") {
     return "A manager sends the reply on this ticket.";
   }
-  return ticket.draft?.kind === "reply_proposal" && ticket.allowedActions.has("send_reply")
-    ? "Reject draft and Escalate ticket are not available while the ticket awaits approval."
-    : undefined;
+  if (ticket.draft?.kind === "reply_proposal" && ticket.allowedActions.has("send_reply")) {
+    return "Reject draft and Escalate ticket are not available while the ticket awaits approval.";
+  }
+  return findManagerNote(ticket);
+}
+
+/**
+ * Say why a manager cannot take the actions that only staff take: Escalate ticket
+ * (`createEscalation`) and, where it is a visible button in manual handling, Submit for approval
+ * (`createReplyProposal`).
+ *
+ * @param ticket - The ticket.
+ * @returns The note for a manager without `escalate`; undefined for staff, who may escalate.
+ */
+function findManagerNote(ticket: ComposerTicket): string | undefined {
+  if (!ticket.isManager || ticket.allowedActions.has("escalate")) {
+    return undefined;
+  }
+  if (ticket.situation === "manual_handling") {
+    return "Only staff escalate a ticket or submit a reply for approval.";
+  }
+  return "Only staff escalate a ticket. Managers handle escalated tickets.";
 }
 
 /**

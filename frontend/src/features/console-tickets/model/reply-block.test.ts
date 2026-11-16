@@ -159,6 +159,42 @@ describe("findReplyBlock of a manager", () => {
   });
 });
 
+describe("findActionNote of Escalate ticket (UI-16)", () => {
+  it("says why a manager cannot escalate once the reply can be sent", () => {
+    const ticket = readComposerTicket("escalated", { isManager: true });
+    const written = { ...createComposerState(ticket.suggestionId), body: "We call you today." };
+
+    expect(findReplyBlock(ticket, written)).toBeUndefined();
+    expect(findActionNote(ticket)).toBe(
+      "Only staff escalate a ticket. Managers handle escalated tickets.",
+    );
+  });
+
+  it("names Submit for approval too for a manager in manual handling, where it is a button", () => {
+    const ticket = {
+      ...readComposerTicket("manual-mode", { isManager: true }),
+      allowedActions: new Set(["send_reply"] as const),
+    };
+    const written = { ...createComposerState(ticket.suggestionId), body: "We call you today." };
+
+    expect(ticket.situation).toBe("manual_handling");
+    expect(findReplyBlock(ticket, written)).toBeUndefined();
+    expect(findActionNote(ticket)).toBe(
+      "Only staff escalate a ticket or submit a reply for approval.",
+    );
+  });
+
+  it("keeps the note of a proposal, which names Escalate ticket too", () => {
+    expect(findActionNote(readComposerTicket("awaiting-approval", { isManager: true }))).toBe(
+      "Reject draft and Escalate ticket are not available while the ticket awaits approval.",
+    );
+  });
+
+  it("notes nothing for staff, who may escalate", () => {
+    expect(findActionNote(draftReady)).toBeUndefined();
+  });
+});
+
 describe("findReplyBlock while a write hands the ticket to a manager", () => {
   it.each([
     ["submit_reply_proposal", "The reply is being submitted for approval."],

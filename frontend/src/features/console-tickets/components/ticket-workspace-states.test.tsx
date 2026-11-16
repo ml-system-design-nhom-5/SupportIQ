@@ -3,11 +3,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   openConsole,
+  openReplyArea,
   readSuggestionPart,
   TICKET_PATH,
   workspaceExample,
   workspaceWith,
   workspaceWithSuggestion,
+  writeReply,
 } from "@/test/console-screen";
 import type { FakeAnswer } from "@/test/fake-backend";
 
@@ -224,6 +226,22 @@ describe("Manual handling", () => {
     expect(main).toHaveTextContent("No order attached");
     expect(within(main).getAllByRole("heading", { name: "Manual handling" })).toHaveLength(2);
     expect(within(main).queryByText("AI unavailable")).not.toBeInTheDocument();
+  });
+});
+
+describe("Manual handling of a manager (UI-16)", () => {
+  it("says why Escalate ticket and Submit for approval are disabled once the reply can be sent", async () => {
+    const { user, main } = await openReplyArea({
+      session: "manager",
+      workspace: [workspaceWith("manual-mode", { allowed_actions: ["send_reply"] })],
+    });
+
+    await writeReply(user, main, "We call you today.");
+
+    expect(main).toHaveTextContent("Only staff escalate a ticket or submit a reply for approval.");
+    expect(within(main).getByRole("button", { name: "Escalate ticket" })).toBeDisabled();
+    expect(within(main).getByRole("button", { name: "Submit for approval" })).toBeDisabled();
+    expect(within(main).getByRole("button", { name: "Send reply" })).toBeEnabled();
   });
 });
 
