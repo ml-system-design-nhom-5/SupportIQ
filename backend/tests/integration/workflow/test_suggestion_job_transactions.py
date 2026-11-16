@@ -64,7 +64,11 @@ from tests.unit.platform.fakes import (
     RecordingStepTracer,
     SequentialIdGenerator,
 )
-from tests.unit.suggestions.fakes import FakeAiService, FakePseudonymizer
+from tests.unit.suggestions.fakes import (
+    FakeAiService,
+    FakePseudonymizer,
+    RecordingProgressNotifier,
+)
 
 pytestmark = pytest.mark.anyio
 
@@ -142,6 +146,7 @@ def build_job_runner(engine: AsyncEngine, ai_service: AiService) -> SuggestionJo
             traces=FixedTraceContext(),
             events=RecordingEventRecorder(),
             steps=RecordingStepTracer(),
+            progress=RecordingProgressNotifier(),
         ),
         QUEUE_SETTINGS,
     )

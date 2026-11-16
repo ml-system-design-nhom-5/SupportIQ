@@ -56,7 +56,7 @@ from tests.unit.platform.fakes import (
     RecordingStepTracer,
     SequentialIdGenerator,
 )
-from tests.unit.suggestions.fakes import RecordingSuggestionQueue
+from tests.unit.suggestions.fakes import RecordingProgressNotifier, RecordingSuggestionQueue
 
 pytestmark = pytest.mark.anyio
 
@@ -245,6 +245,7 @@ async def test_failure_after_the_insert_leaves_no_record_in_postgresql(
                     traces=FixedTraceContext(),
                     events=events,
                     queue=RecordingSuggestionQueue(),
+                    progress=RecordingProgressNotifier(),
                 )
             ),
         ),

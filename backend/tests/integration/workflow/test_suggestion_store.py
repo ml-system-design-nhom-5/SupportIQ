@@ -22,9 +22,11 @@ from supportiq_backend.suggestions import (
     CancelledPart,
     IntentLabel,
     OrderContext,
+    PartStatus,
     PendingPart,
     Suggestion,
     SuggestionId,
+    SuggestionProgress,
     SuggestionRequest,
     SuggestionTicketId,
     SuggestionTrigger,
@@ -184,6 +186,24 @@ async def test_insert_suggestion_leaves_the_results_of_its_pending_parts_absent(
 
 async def test_load_suggestion_of_an_unknown_suggestion_is_none(app_engine: AsyncEngine) -> None:
     assert await load_suggestion(app_engine, UNKNOWN_SUGGESTION_ID) is None
+
+
+async def test_load_progress_reads_the_status_of_each_part(
+    app_engine: AsyncEngine, builder: DatabaseBuilder
+) -> None:
+    suggestion_id = await new_suggestion(app_engine, builder)
+    analysis = build_analysis_completion(received_analysis_example("draft"), NOW)
+    await complete_parts(app_engine, suggestion_id, analysis)
+
+    async with create_session_factory(app_engine)() as session:
+        progress = await PostgresSuggestionStore(session).load_progress(suggestion_id)
+
+    assert progress == SuggestionProgress(suggestion_id, PartStatus.READY, PartStatus.PENDING)
+
+
+async def test_load_progress_of_an_unknown_suggestion_is_none(app_engine: AsyncEngine) -> None:
+    async with create_session_factory(app_engine)() as session:
+        assert await PostgresSuggestionStore(session).load_progress(UNKNOWN_SUGGESTION_ID) is None
 
 
 async def test_load_suggestions_returns_each_known_suggestion_by_its_id(

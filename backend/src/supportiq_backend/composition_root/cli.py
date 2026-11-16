@@ -39,7 +39,12 @@ from supportiq_backend.composition_root.settings_loading import (
     load_settings,
 )
 from supportiq_backend.composition_root.web_application import create_app
-from supportiq_backend.platform import BackendError, EventName, EventRecorder
+from supportiq_backend.platform import (
+    MILLISECONDS_PER_SECOND,
+    BackendError,
+    EventName,
+    EventRecorder,
+)
 from supportiq_backend.platform.adapters.database_roles import AppRoleUrlError
 from supportiq_backend.platform.adapters.system_clock import SystemClock
 from supportiq_backend.platform.adapters.telemetry import (
@@ -133,6 +138,8 @@ def run_command(arguments: CommandArguments, settings: Settings, events: EventRe
                 log_config=None,
                 access_log=False,
                 server_header=False,
+                timeout_graceful_shutdown=settings.graceful_shutdown_timeout_ms
+                // MILLISECONDS_PER_SECOND,
             )
             return EXIT_SUCCESS
         case OneOffArguments():

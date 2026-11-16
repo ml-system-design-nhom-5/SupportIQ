@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SupportIQ backend API
-  version: 1.2.1
+  version: 1.3.0
   description: |
     The contract between `frontend` and `backend` for sign-in, the read-only shop, the review
     console of staff and managers, and the admin area. Version 1.0.1 holds the operations of
@@ -12,7 +12,8 @@ info:
     1.2.0 adds the console operations and `getAdminVersions` of the contracts v1 design, as
     the [backend ticket workflow design](../docs/design/backend-ticket-workflow.md) implements
     them. Version 1.2.1 states which tickets the end-to-end latency and the handling time of
-    the report measure.
+    the report measure. Version 1.3.0 adds `getSuggestionEvents`, the suggestion progress
+    stream of ADR-0022.
 
     ## Responsibility
 
@@ -80,8 +81,9 @@ info:
 
     - **Latency target:** the requirements set none for these operations. NFR-08 covers a
       suggestion, from ticket creation until its draft part leaves `pending` (p95 at most
-      12 s). `createSuggestion` answers before the suggestion runs, and the console polls
-      `getConsoleTicket`.
+      12 s). `createSuggestion` answers before the suggestion runs, and the console follows it
+      with `getSuggestionEvents`, a stream that the bounds below limit only until its response
+      headers (ADR-0022, statement 8).
     - **Caller's timeout:** `frontend` stops waiting for a response after 10 000 ms per
       request, a `frontend` setting. That is the sum of the single bounds of `backend` below: a
       pool wait of 3 000 ms, one statement of 5 000 ms, and the sign-in delay of 2 000 ms. A
@@ -678,8 +680,10 @@ paths:
         customer's other orders, the current suggestion with pseudonyms restored, the proposal,
         the escalation, the reply, and the actions that the caller may take now. Roles: `staff`
         and `manager`, on a ticket in any state; staff get an empty `allowed_actions` on a ticket
-        that is not `open`. This read changes nothing; the console polls it while a suggestion
-        part is `pending`, and calls `recordTicketView` once when a person opens the ticket.
+        that is not `open`. This read changes nothing; while a suggestion part is `pending`,
+        the console reads it again after each event of `getSuggestionEvents`, or every 30 s
+        when the stream cannot run, and calls `recordTicketView` once when a person opens the
+        ticket.
       security:
         - sessionCookie: []
       x-supportiq-roles:
@@ -785,7 +789,8 @@ paths:
       summary: Correct the intent or retry the AI
       description: >-
         Starts a new suggestion for an `open` ticket in `assisted` mode and answers at once with
-        it, `pending`; the console then polls `getConsoleTicket`. Roles: `staff` and `manager`.
+        it, `pending`; the console then follows it with `getSuggestionEvents`. Roles: `staff`
+        and `manager`.
         With `intent_override`, the request confirms or corrects the intent (ESC-01), also while
         a draft is generating, which cancels that draft; it needs a known intent: the analysis
         of the current suggestion is `ready`, or the current suggestion already carries an
@@ -837,6 +842,86 @@ paths:
           $ref: '#/components/responses/SuggestionConflict'
         '422':
           $ref: '#/components/responses/InvalidSuggestionRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/console/tickets/{ticket_id}/suggestion-events:
+    get:
+      operationId: getSuggestionEvents
+      tags:
+        - console
+      summary: Follow the progress of the current suggestion
+      description: >-
+        Streams the progress of the current suggestion of an `open` ticket in `assisted` mode
+        as server-sent events while one of its parts is `pending` (ADR-0022). Roles: `staff`
+        and `manager`. Like every read, it has no `Origin` check, because a same-origin
+        `EventSource` sends no `Origin` header. A ticket that is not `open`, a ticket in
+        `manual` mode, and a ticket whose current suggestion has no `pending` part get `204`,
+        which stops `EventSource`. The stream first sends `retry: 3000` and the current state,
+        then one event whenever the current suggestion or the status of one of its parts
+        changes. Each event is named `suggestion`, and its `data` is a
+        `SuggestionProgressEvent`: the suggestion ID and the two part statuses, all Internal.
+        An event holds no text; after each one, the console reloads the workspace with
+        `getConsoleTicket`. When nothing was sent for 15 s, the stream sends the comment
+        `: ping`. The stream ends right after the event that shows no `pending` part, when the
+        ticket leaves `open`, after at most `suggestion_events_max_ms` (600 000 by default),
+        and when the replica shuts down. `EventSource` then reconnects and gets `204` once no
+        part is `pending`. `Last-Event-ID` is ignored, because each connection starts with the
+        current state. Consumers map an unknown status as `getConsoleTicket` does (CON-22).
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - staff
+        - manager
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/ConsoleTicketId'
+      responses:
+        '200':
+          description: >-
+            The stream of `suggestion` events, until no part is `pending`.
+          content:
+            text/event-stream:
+              schema:
+                description: >-
+                  One event of the stream, as the fields of its lines in the format of
+                  server-sent events of the HTML standard. The `retry: 3000` line before the
+                  first event and the `: ping` comments are no events. An event has no `id`,
+                  because each connection starts with the current state. Data class:
+                  Internal.
+                type: object
+                additionalProperties: false
+                required:
+                  - event
+                  - data
+                properties:
+                  event:
+                    description: >-
+                      The name of the event. Data class: Internal.
+                    type: string
+                    enum:
+                      - suggestion
+                  data:
+                    description: >-
+                      A `SuggestionProgressEvent` as JSON text. Data class: Internal.
+                    type: string
+                    contentMediaType: application/json
+                    contentSchema:
+                      $ref: '#/components/schemas/SuggestionProgressEvent'
+              examples:
+                draft-ready:
+                  $ref: ./examples/getSuggestionEvents/draft-ready.json
+        '204':
+          description: >-
+            Nothing to follow: the ticket is not `open`, is in `manual` mode, or no part of its
+            current suggestion is `pending`.
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRole'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
         '503':
@@ -3158,6 +3243,36 @@ components:
           uniqueItems: true
           items:
             $ref: '#/components/schemas/TicketAction'
+    SuggestionProgressEvent:
+      description: >-
+        The data of one `suggestion` event of `getSuggestionEvents`: the part statuses of the
+        current suggestion of the ticket, never text (ADR-0022, statement 2). Data class:
+        Internal.
+      type: object
+      additionalProperties: false
+      required:
+        - suggestion_id
+        - analysis_status
+        - draft_status
+      properties:
+        suggestion_id:
+          description: >-
+            The identifier of the current suggestion (CON-15). Data class: Internal.
+          type: string
+          minLength: 1
+        analysis_status:
+          description: >-
+            The status of the analysis part, as `analysis_status` of `AnalysisPart`.
+            Consumers map an unknown value to `unavailable` (CON-22). Data class: Internal.
+          type: string
+          enum:
+            - pending
+            - ready
+            - unavailable
+        draft_status:
+          $ref: '#/components/schemas/DraftStatus'
+          description: >-
+            The status of the draft part. Data class: Internal.
     SuggestionView:
       description: >-
         One run of the AI for a ticket, as `backend` recorded it, with the pseudonyms of its AI
@@ -3222,7 +3337,8 @@ components:
           unavailable: '#/components/schemas/UnavailableAnalysisPart'
     PendingAnalysisPart:
       description: >-
-        An analysis that `ai-service` has not returned yet. The console polls the ticket. Data
+        An analysis that `ai-service` has not returned yet. The console follows it with
+        `getSuggestionEvents`. Data
         class: Internal.
       type: object
       required:

@@ -121,7 +121,7 @@ class ClaimLoop:
             while not self._stop.is_set():
                 job = await self._claim() if self._has_free_slot() else None
                 if job is None:
-                    await self._wait_for_work()
+                    await wait_for_wake_up(self._clock, self._settings.poll_ms, self._wake_up)
                     continue
                 self._keep_running(job, group.create_task(self._run_job(job)))
             for running in self._running.values():
@@ -182,14 +182,22 @@ class ClaimLoop:
                 del self._running[job.suggestion_id]
             self._wake_up.set()
 
-    async def _wait_for_work(self) -> None:
-        async with asyncio.TaskGroup() as group:
-            sleep = group.create_task(self._clock.sleep(self._settings.poll_ms))
-            wake_up = group.create_task(self._wake_up.wait())
-            await asyncio.wait((sleep, wake_up), return_when=asyncio.FIRST_COMPLETED)
-            sleep.cancel()
-            wake_up.cancel()
-        self._wake_up.clear()
+
+async def wait_for_wake_up(clock: Clock, duration_ms: int, wake_up: asyncio.Event) -> None:
+    """Sleep for the duration, or less when the event is set, then clear the event.
+
+    Args:
+        clock: The clock that sleeps.
+        duration_ms: The longest wait, in milliseconds.
+        wake_up: The in-process wake-up after a commit.
+    """
+    async with asyncio.TaskGroup() as group:
+        sleep = group.create_task(clock.sleep(duration_ms))
+        woken = group.create_task(wake_up.wait())
+        await asyncio.wait((sleep, woken), return_when=asyncio.FIRST_COMPLETED)
+        sleep.cancel()
+        woken.cancel()
+    wake_up.clear()
 
 
 def _leaf_errors(group: BaseExceptionGroup[Exception]) -> Iterator[Exception]:

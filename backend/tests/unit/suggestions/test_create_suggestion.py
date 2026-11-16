@@ -81,6 +81,15 @@ async def test_a_correction_supersedes_the_current_suggestion_and_audits_the_int
 
 
 @pytest.mark.anyio
+async def test_a_new_suggestion_wakes_the_streams_of_its_ticket_after_the_commit() -> None:
+    harness = build_harness(build_ready_suggestion())
+
+    await harness.create.execute(SUPPORT, TICKET_ID, CHOSEN_INTENT, KEY)
+
+    assert harness.progress.ticket_ids == [TICKET_ID]
+
+
+@pytest.mark.anyio
 async def test_a_correction_while_the_draft_generates_cancels_the_pending_draft() -> None:
     harness = build_harness(build_suggestion(analysis=build_ready_suggestion().analysis))
 

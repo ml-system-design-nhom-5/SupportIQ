@@ -60,6 +60,7 @@ from tests.unit.platform.fakes import (
 from tests.unit.suggestions.fakes import (
     FakeSuggestionStore,
     FakeTicketLinks,
+    RecordingProgressNotifier,
     RecordingSuggestionQueue,
 )
 from tests.unit.tickets.fakes import FIRST_TICKET_ID, FakeTicketStore
@@ -109,6 +110,7 @@ def build_starter(
             traces=FixedTraceContext(),
             events=events,
             queue=queue,
+            progress=RecordingProgressNotifier(),
         )
     )
 

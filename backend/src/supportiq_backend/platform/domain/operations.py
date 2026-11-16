@@ -22,6 +22,7 @@ class OperationId(StrEnum):
     GET_CONSOLE_TICKET = "getConsoleTicket"
     RECORD_TICKET_VIEW = "recordTicketView"
     CREATE_SUGGESTION = "createSuggestion"
+    GET_SUGGESTION_EVENTS = "getSuggestionEvents"
     CREATE_REPLY_PROPOSAL = "createReplyProposal"
     SEND_REPLY = "sendReply"
     CREATE_ESCALATION = "createEscalation"

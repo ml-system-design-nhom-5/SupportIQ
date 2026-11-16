@@ -60,6 +60,7 @@ ROLE_OF_OPERATION = {
     "createReplyProposal": "staff",
     "sendReply": "staff",
     "createEscalation": "staff",
+    "getSuggestionEvents": "staff",
     "getConsoleKbDocumentVersion": "staff",
     "getConsoleReport": "manager",
     "listAdminAccounts": "admin",

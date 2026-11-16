@@ -749,6 +749,12 @@ class ConsoleCustomerView(BaseModel):
 
 class AnalysisStatus(StrEnum):
     pending = "pending"
+    ready = "ready"
+    unavailable = "unavailable"
+
+
+class AnalysisStatus1(StrEnum):
+    pending = "pending"
 
 
 class PendingAnalysisPart(BaseModel):
@@ -758,11 +764,11 @@ class PendingAnalysisPart(BaseModel):
     ]
 
 
-class AnalysisStatus1(StrEnum):
+class AnalysisStatus2(StrEnum):
     ready = "ready"
 
 
-class AnalysisStatus2(StrEnum):
+class AnalysisStatus3(StrEnum):
     unavailable = "unavailable"
 
 
@@ -1550,6 +1556,28 @@ class ConsoleOtherOrderView(BaseModel):
             max_length=100,
             min_length=1,
         ),
+    ]
+
+
+class SuggestionProgressEvent(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    suggestion_id: Annotated[
+        str,
+        Field(
+            description="The identifier of the current suggestion (CON-15). Data class: Internal.",
+            min_length=1,
+        ),
+    ]
+    analysis_status: Annotated[
+        AnalysisStatus,
+        Field(
+            description="The status of the analysis part, as `analysis_status` of `AnalysisPart`. Consumers map an unknown value to `unavailable` (CON-22). Data class: Internal."
+        ),
+    ]
+    draft_status: Annotated[
+        DraftStatus, Field(description="The status of the draft part. Data class: Internal.")
     ]
 
 

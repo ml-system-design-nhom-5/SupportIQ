@@ -88,6 +88,10 @@ class Settings(BaseSettings):
     suggestion_job_lease_ms: PositiveInt = 15_000
     suggestion_job_max_attempts: PositiveInt = 3
     suggestion_queue_poll_ms: PositiveInt = 500
+    suggestion_events_poll_ms: PositiveInt = 1_000
+    suggestion_events_max_ms: PositiveInt = 600_000
+    # uvicorn takes whole seconds; after this wait it cancels every open response (ADR-0023).
+    graceful_shutdown_timeout_ms: Annotated[PositiveInt, Field(multiple_of=1_000)] = 15_000
     trace_exporter: TraceExporter = TraceExporter.NONE
     otlp_traces_endpoint: HttpUrl | None = None
     otlp_export_timeout_ms: PositiveInt = 10_000

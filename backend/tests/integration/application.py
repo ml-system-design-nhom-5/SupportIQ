@@ -61,6 +61,9 @@ def build_settings(worker_database: WorkerDatabase, **overrides: object) -> Sett
         "database_url_app": worker_database.app_url,
         "allowed_origins": (ALLOWED_ORIGIN,),
         "session_cookie_secure": False,
+        # The test client returns only once a stream ends, and the fake clock ends each wait
+        # at once, so a stream of a pending part ends at this limit after one re-read.
+        "suggestion_events_max_ms": 2_000,
     }
     return build_test_settings(**(values | overrides))
 

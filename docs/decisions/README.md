@@ -28,6 +28,8 @@ An architecture decision record (ADR) captures one significant decision: its con
 | [0019](0019-one-label-for-text-in-the-placeholder-syntax.md) | One label for text in the placeholder syntax | Proposed | 2026-11-13 |
 | [0020](0020-storage-errors-of-the-pseudonym-map.md) | Storage errors of the pseudonym map | Proposed | 2026-11-13 |
 | [0022](0022-server-sent-events-for-suggestion-progress.md) | Server-sent events for the suggestion progress of an open ticket | Accepted | 2026-11-13 |
+| [0023](0023-graceful-shutdown-of-suggestion-progress-streams.md) | Graceful shutdown of suggestion progress streams | Accepted | 2026-11-16 |
+| [0024](0024-event-schema-of-the-suggestion-progress-stream.md) | Event schema of the suggestion progress stream | Accepted | 2026-11-16 |
 
 Notes on the index:
 
@@ -38,6 +40,8 @@ Notes on the index:
 - [ADR-0019](0019-one-label-for-text-in-the-placeholder-syntax.md) was proposed on 2026-11-13 by the project lead. Once accepted, it replaces one passage of [ADR-0010](0010-pseudonymization-and-egress-control.md): the separate label of a restored `LITERAL` in Restoring and sending, item 3. The rest of ADR-0010 still holds.
 - [ADR-0020](0020-storage-errors-of-the-pseudonym-map.md) was proposed on 2026-11-13 by the project lead. Once accepted, it replaces two passages of [ADR-0010](0010-pseudonymization-and-egress-control.md): the words "or the map cannot be stored" in the first row of Failure handling, and the words "storage error" in the first branch of the Overview sequence diagram. The rest of ADR-0010 still holds.
 - [ADR-0022](0022-server-sent-events-for-suggestion-progress.md) was accepted on 2026-11-14 by the project lead, who chose its recommended option, and changes statement 4 of [ADR-0016, `frontend` and the ingress](0016-hosting-on-free-tiers.md#frontend-and-the-ingress-on-cloudflare-pages) for one route. The project lead gave the number 0021 to the ADR on the repository layout and the AI and ML migration of the branch `build/join-main`, so this branch does not use it.
+- [ADR-0023](0023-graceful-shutdown-of-suggestion-progress-streams.md) was accepted on 2026-11-16 by the project lead. It replaces one point of [ADR-0022](0022-server-sent-events-for-suggestion-progress.md), statement 5: "At shutdown: the lifespan ends every stream before uvicorn's graceful shutdown". The rest of ADR-0022 still holds.
+- [ADR-0024](0024-event-schema-of-the-suggestion-progress-stream.md) was accepted on 2026-11-16 by the project lead. It replaces the words "with a string schema" of [ADR-0022](0022-server-sent-events-for-suggestion-progress.md), statement 9. The rest of ADR-0022 still holds.
 
 ## Lifecycle
 

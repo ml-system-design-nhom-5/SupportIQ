@@ -28,6 +28,7 @@ from supportiq_backend.suggestions.domain.kb_documents import (
     KbDocumentVersionTag,
 )
 from supportiq_backend.suggestions.domain.labels import IntentLabel
+from supportiq_backend.suggestions.domain.progress import SuggestionProgress
 from supportiq_backend.suggestions.domain.suggestions import (
     Suggestion,
     SuggestionId,
@@ -109,6 +110,17 @@ class SuggestionTickets(Protocol):
         """
         ...
 
+    async def read_ticket(self, ticket_id: SuggestionTicketId) -> TicketForSuggestion | None:
+        """Read a ticket row without a lock, for the re-reads of a stream.
+
+        Args:
+            ticket_id: The ticket, as a request sent it.
+
+        Returns:
+            The ticket, or None when it is unknown.
+        """
+        ...
+
     async def set_current_suggestion(
         self, ticket_id: SuggestionTicketId, suggestion_id: SuggestionId
     ) -> None:
@@ -181,6 +193,20 @@ class SuggestionStore(Protocol):
         Raises:
             UnexpectedFailureError: A stored part breaks an invariant, a stored text is no value
                 of its enum, or a stored result no longer matches the contract: a defect.
+        """
+        ...
+
+    async def load_progress(self, suggestion_id: SuggestionId) -> SuggestionProgress | None:
+        """Load the part statuses of one suggestion, and nothing else.
+
+        Args:
+            suggestion_id: The suggestion.
+
+        Returns:
+            The statuses, or None when the suggestion is unknown.
+
+        Raises:
+            UnexpectedFailureError: A stored text is no value of its enum: a defect.
         """
         ...
 
@@ -380,5 +406,17 @@ class SuggestionQueue(Protocol):
         Args:
             ticket_id: The ticket.
             suggestion_id: Its new current suggestion, committed already.
+        """
+        ...
+
+
+class ProgressNotifier(Protocol):
+    """Wake the streams of a ticket on this replica after a commit (ADR-0022, statement 4)."""
+
+    def notify_progress(self, ticket_id: SuggestionTicketId) -> None:
+        """Wake every stream of the ticket; a lost wake-up only waits for the next re-read.
+
+        Args:
+            ticket_id: The ticket whose suggestion or part statuses changed, committed already.
         """
         ...

@@ -57,6 +57,7 @@ from tests.unit.suggestions.fakes import (
     FakeRestorer,
     FakeSuggestionStore,
     FakeTicketLinks,
+    RecordingProgressNotifier,
     RecordingSuggestionQueue,
 )
 from tests.unit.tickets.fakes import (
@@ -268,6 +269,7 @@ def _build_ports(
                 traces=FixedTraceContext(),
                 events=events,
                 queue=queue,
+                progress=RecordingProgressNotifier(),
             )
         ),
         ai_service=ai_service,

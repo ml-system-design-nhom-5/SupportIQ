@@ -90,6 +90,10 @@ def after_the_reply(call: Call, world: World) -> Call:
     return replace(call, prior=valid_calls(world)["sendReply"])
 
 
+def after_a_retry(call: Call, world: World) -> Call:
+    return replace(call, prior=valid_calls(world)["createSuggestion"])
+
+
 def on_a_ticket_that_requires_authority(call: Call, world: World) -> Call:
     return replace(call, path=call.path.replace(world.ticket_id, world.authority_ticket_id))
 

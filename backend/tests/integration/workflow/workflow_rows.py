@@ -60,7 +60,7 @@ from tests.unit.platform.fakes import (
     RecordingEventRecorder,
     SequentialIdGenerator,
 )
-from tests.unit.suggestions.fakes import RecordingSuggestionQueue
+from tests.unit.suggestions.fakes import RecordingProgressNotifier, RecordingSuggestionQueue
 
 EXAMPLES = Path(__file__).parents[4] / "contracts" / "examples"
 # The initial values of the queue (backend ticket workflow design, Choice 3).
@@ -154,6 +154,7 @@ async def start_suggestion(
             traces=FixedTraceContext(),
             events=RecordingEventRecorder(),
             queue=RecordingSuggestionQueue(),
+            progress=RecordingProgressNotifier(),
         )
     )
     async with create_session_factory(engine)() as session:

@@ -43,6 +43,8 @@ class EventName(StrEnum):
     SUGGESTION_JOB_CLAIMED = "suggestion_job.claimed"
     SUGGESTION_JOB_LEASE_EXPIRED = "suggestion_job.lease_expired"
     SUGGESTION_JOB_FAILED = "suggestion_job.failed"
+    SUGGESTION_STREAM_ENDED = "suggestion_stream.ended"
+    SUGGESTION_STREAM_FAILED = "suggestion_stream.failed"
     PSEUDONYMIZATION_FAILED = "pseudonymization.failed"
     PSEUDONYM_RESTORE_FAILED = "pseudonym.restore_failed"
     AI_SERVICE_CALLED = "ai_service.called"
@@ -155,6 +157,12 @@ EVENT_DESCRIPTIONS: Mapping[EventName, EventDescription] = MappingProxyType(
         ),
         EventName.SUGGESTION_JOB_FAILED: EventDescription(
             EventLevel.ERROR, "Suggestion job failed and waits for its lease to expire"
+        ),
+        EventName.SUGGESTION_STREAM_ENDED: EventDescription(
+            EventLevel.INFO, "Suggestion progress stream ended"
+        ),
+        EventName.SUGGESTION_STREAM_FAILED: EventDescription(
+            EventLevel.WARNING, "Suggestion progress stream ended because a re-read failed"
         ),
         EventName.PSEUDONYMIZATION_FAILED: EventDescription(
             EventLevel.ERROR,

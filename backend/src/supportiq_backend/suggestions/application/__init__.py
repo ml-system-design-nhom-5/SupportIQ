@@ -27,6 +27,12 @@ from supportiq_backend.suggestions.application.start import (
     SuggestionStarter,
     SuggestionStarterPorts,
 )
+from supportiq_backend.suggestions.application.suggestion_progress import (
+    ProgressSignals,
+    ProgressStores,
+    WatchProgressPorts,
+    WatchSuggestionProgress,
+)
 
 __all__ = [
     "AiServiceOperation",
@@ -41,11 +47,15 @@ __all__ = [
     "JobRunner",
     "JobRunnerPorts",
     "JobStores",
+    "ProgressSignals",
+    "ProgressStores",
     "StartedSuggestion",
     "SuggestionJobRunner",
     "SuggestionStart",
     "SuggestionStarter",
     "SuggestionStarterPorts",
     "VersionsInUse",
+    "WatchProgressPorts",
+    "WatchSuggestionProgress",
     "record_ai_service_failure",
 ]

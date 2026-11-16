@@ -49,6 +49,7 @@ from supportiq_backend.suggestions.domain import (
     Suggestion,
     SuggestionId,
     SuggestionPart,
+    SuggestionProgress,
     SuggestionRequest,
     SuggestionTicketId,
     SuggestionTrigger,
@@ -160,6 +161,35 @@ class PostgresSuggestionStore:
         """
         suggestions = await self.load_suggestions(frozenset({suggestion_id}))
         return suggestions.get(suggestion_id)
+
+    async def load_progress(self, suggestion_id: SuggestionId) -> SuggestionProgress | None:
+        """Load the part statuses of one suggestion, and nothing else.
+
+        Args:
+            suggestion_id: The suggestion.
+
+        Returns:
+            The statuses, or None when the suggestion is unknown. Both parts are inserted
+            together and never deleted.
+
+        Raises:
+            UnexpectedFailureError: A stored status is no value of `PartStatus`: a defect.
+        """
+        rows = (
+            await self._session.execute(
+                select(SuggestionPartRow.part, SuggestionPartRow.status).where(
+                    SuggestionPartRow.suggestion_id == UUID(suggestion_id)
+                )
+            )
+        ).all()
+        status_of_part = {row.part: parse_stored_enum(PartStatus, row.status) for row in rows}
+        if not status_of_part:
+            return None
+        return SuggestionProgress(
+            suggestion_id,
+            status_of_part[SuggestionPart.ANALYSIS.value],
+            status_of_part[SuggestionPart.DRAFT.value],
+        )
 
     async def load_suggestions(
         self, suggestion_ids: frozenset[SuggestionId]

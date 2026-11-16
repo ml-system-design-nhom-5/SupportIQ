@@ -221,7 +221,7 @@ export interface paths {
         };
         /**
          * Read the workspace of a ticket
-         * @description Returns the ticket workspace: the ticket, the customer's message, the order and the customer's other orders, the current suggestion with pseudonyms restored, the proposal, the escalation, the reply, and the actions that the caller may take now. Roles: `staff` and `manager`, on a ticket in any state; staff get an empty `allowed_actions` on a ticket that is not `open`. This read changes nothing; the console polls it while a suggestion part is `pending`, and calls `recordTicketView` once when a person opens the ticket.
+         * @description Returns the ticket workspace: the ticket, the customer's message, the order and the customer's other orders, the current suggestion with pseudonyms restored, the proposal, the escalation, the reply, and the actions that the caller may take now. Roles: `staff` and `manager`, on a ticket in any state; staff get an empty `allowed_actions` on a ticket that is not `open`. This read changes nothing; while a suggestion part is `pending`, the console reads it again after each event of `getSuggestionEvents`, or every 30 s when the stream cannot run, and calls `recordTicketView` once when a person opens the ticket.
          */
         get: operations["getConsoleTicket"];
         put?: never;
@@ -263,9 +263,29 @@ export interface paths {
         put?: never;
         /**
          * Correct the intent or retry the AI
-         * @description Starts a new suggestion for an `open` ticket in `assisted` mode and answers at once with it, `pending`; the console then polls `getConsoleTicket`. Roles: `staff` and `manager`. With `intent_override`, the request confirms or corrects the intent (ESC-01), also while a draft is generating, which cancels that draft; it needs a known intent: the analysis of the current suggestion is `ready`, or the current suggestion already carries an override. When no intent is known, it returns `409 suggestion-pending` while a part is `pending`, and `422` otherwise. Without `intent_override`, the request is a retry, valid only when `allowed_actions` contains `retry_suggestion`; otherwise it returns `422`. A retry repeats the input of the failed suggestion, including the intent that staff chose, so a failure after an intent correction keeps that intent. On a ticket that is not `open`, or whose handling mode is `manual`, the request returns `409 invalid-ticket-state`. The new suggestion supersedes the previous one, and the authority flag stays as it is (contracts v1 design, authority rule). A retry with the same `Idempotency-Key` and body returns the original `202` and starts no second suggestion.
+         * @description Starts a new suggestion for an `open` ticket in `assisted` mode and answers at once with it, `pending`; the console then follows it with `getSuggestionEvents`. Roles: `staff` and `manager`. With `intent_override`, the request confirms or corrects the intent (ESC-01), also while a draft is generating, which cancels that draft; it needs a known intent: the analysis of the current suggestion is `ready`, or the current suggestion already carries an override. When no intent is known, it returns `409 suggestion-pending` while a part is `pending`, and `422` otherwise. Without `intent_override`, the request is a retry, valid only when `allowed_actions` contains `retry_suggestion`; otherwise it returns `422`. A retry repeats the input of the failed suggestion, including the intent that staff chose, so a failure after an intent correction keeps that intent. On a ticket that is not `open`, or whose handling mode is `manual`, the request returns `409 invalid-ticket-state`. The new suggestion supersedes the previous one, and the authority flag stays as it is (contracts v1 design, authority rule). A retry with the same `Idempotency-Key` and body returns the original `202` and starts no second suggestion.
          */
         post: operations["createSuggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/console/tickets/{ticket_id}/suggestion-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Follow the progress of the current suggestion
+         * @description Streams the progress of the current suggestion of an `open` ticket in `assisted` mode as server-sent events while one of its parts is `pending` (ADR-0022). Roles: `staff` and `manager`. Like every read, it has no `Origin` check, because a same-origin `EventSource` sends no `Origin` header. A ticket that is not `open`, a ticket in `manual` mode, and a ticket whose current suggestion has no `pending` part get `204`, which stops `EventSource`. The stream first sends `retry: 3000` and the current state, then one event whenever the current suggestion or the status of one of its parts changes. Each event is named `suggestion`, and its `data` is a `SuggestionProgressEvent`: the suggestion ID and the two part statuses, all Internal. An event holds no text; after each one, the console reloads the workspace with `getConsoleTicket`. When nothing was sent for 15 s, the stream sends the comment `: ping`. The stream ends right after the event that shows no `pending` part, when the ticket leaves `open`, after at most `suggestion_events_max_ms` (600 000 by default), and when the replica shuts down. `EventSource` then reconnects and gets `204` once no part is `pending`. `Last-Event-ID` is ignored, because each connection starts with the current state. Consumers map an unknown status as `getConsoleTicket` does (CON-22).
+         */
+        get: operations["getSuggestionEvents"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1073,6 +1093,18 @@ export interface components {
             /** @description The actions that the caller may take now, without repeats. Empty for `staff` on a ticket that is not `open`, and for everyone on a `closed` ticket. Data class: Internal. */
             allowed_actions: components["schemas"]["TicketAction"][];
         };
+        /** @description The data of one `suggestion` event of `getSuggestionEvents`: the part statuses of the current suggestion of the ticket, never text (ADR-0022, statement 2). Data class: Internal. */
+        SuggestionProgressEvent: {
+            /** @description The identifier of the current suggestion (CON-15). Data class: Internal. */
+            suggestion_id: string;
+            /**
+             * @description The status of the analysis part, as `analysis_status` of `AnalysisPart`. Consumers map an unknown value to `unavailable` (CON-22). Data class: Internal.
+             * @enum {string}
+             */
+            analysis_status: "pending" | "ready" | "unavailable";
+            /** @description The status of the draft part. Data class: Internal. */
+            draft_status: components["schemas"]["DraftStatus"];
+        };
         /** @description One run of the AI for a ticket, as `backend` recorded it, with the pseudonyms of its AI text restored to their original values; a mask, or a pseudonym that the map does not hold, stays as written (ADR-0010). Data class: Confidential. */
         SuggestionView: {
             /** @description The identifier of the suggestion (CON-15). Data class: Internal. */
@@ -1092,7 +1124,7 @@ export interface components {
         };
         /** @description The analysis part of a suggestion, discriminated by `analysis_status`. Consumers handle an unknown status as `unavailable`, so the ticket is handled manually (CON-22). Data class: Internal. */
         AnalysisPart: components["schemas"]["PendingAnalysisPart"] | components["schemas"]["ReadyAnalysisPart"] | components["schemas"]["UnavailableAnalysisPart"];
-        /** @description An analysis that `ai-service` has not returned yet. The console polls the ticket. Data class: Internal. */
+        /** @description An analysis that `ai-service` has not returned yet. The console follows it with `getSuggestionEvents`. Data class: Internal. */
         PendingAnalysisPart: {
             /**
              * @description Always `pending` in this variant. Data class: Internal. (enum property replaced by openapi-typescript)
@@ -2323,6 +2355,52 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["SuggestionConflict"];
             422: components["responses"]["InvalidSuggestionRequest"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["NotReady"];
+        };
+    };
+    getSuggestionEvents: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description The W3C Trace Context header (ADR-0004, decision 6; LOG-05). Absent means that `backend` starts a new trace, which is the normal case because `frontend` exports no telemetry in v1 (LOG-04). `backend` also ignores a value that is not a valid `traceparent` and starts a new trace, as the W3C specification requires, so this header never causes `422`. Data class: Internal. */
+                traceparent?: components["parameters"]["Traceparent"];
+            };
+            path: {
+                /** @description The identifier of a ticket, as `listConsoleTickets` returns it (CON-15). Data class: Internal. */
+                ticket_id: components["parameters"]["ConsoleTicketId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The stream of `suggestion` events, until no part is `pending`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": {
+                        /**
+                         * @description The name of the event. Data class: Internal.
+                         * @enum {string}
+                         */
+                        event: "suggestion";
+                        /** @description A `SuggestionProgressEvent` as JSON text. Data class: Internal. */
+                        data: string;
+                    };
+                };
+            };
+            /** @description Nothing to follow: the ticket is not `open`, is in `manual` mode, or no part of its current suggestion is `pending`. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["ForbiddenRole"];
+            404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
             503: components["responses"]["NotReady"];
         };

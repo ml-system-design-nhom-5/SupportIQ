@@ -29,6 +29,7 @@ from tests.unit.platform.fakes import (
 from tests.unit.suggestions.fakes import (
     FakeSuggestionStore,
     FakeTicketLinks,
+    RecordingProgressNotifier,
     RecordingSuggestionQueue,
 )
 
@@ -45,6 +46,7 @@ class CreateSuggestionHarness:
         suggestions: The suggestion store.
         audit: The audit log.
         queue: The notifications of the claim loop.
+        progress: The wake-ups of the streams.
         events: The recorded events.
         transactions: The transaction runner, which counts commits.
     """
@@ -53,6 +55,7 @@ class CreateSuggestionHarness:
     suggestions: FakeSuggestionStore
     audit: FakeAuditLog
     queue: RecordingSuggestionQueue
+    progress: RecordingProgressNotifier
     events: RecordingEventRecorder
     transactions: FakeTransactionRunner[CreateSuggestionStores]
 
@@ -83,6 +86,7 @@ def build_create_suggestion_harness(
     audit = FakeAuditLog()
     events = RecordingEventRecorder()
     queue = RecordingSuggestionQueue()
+    progress = RecordingProgressNotifier()
     clock = FakeClock()
     transactions = FakeTransactionRunner(
         CreateSuggestionStores(
@@ -97,6 +101,7 @@ def build_create_suggestion_harness(
             traces=FixedTraceContext(),
             events=events,
             queue=queue,
+            progress=progress,
         )
     )
     ports = CreateSuggestionPorts(
@@ -109,4 +114,4 @@ def build_create_suggestion_harness(
         events=events,
     )
     create = CreateSuggestion(transactions, ports, render_suggestion_id)
-    return CreateSuggestionHarness(create, store, audit, queue, events, transactions)
+    return CreateSuggestionHarness(create, store, audit, queue, progress, events, transactions)

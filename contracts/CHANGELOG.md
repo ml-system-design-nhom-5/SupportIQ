@@ -4,6 +4,21 @@ All notable changes to the contracts in this folder. The format follows [Keep a 
 
 ## `backend.openapi.yaml`
 
+### [1.3.0] - 2026-11-16
+
+Adds the suggestion progress stream of [ADR-0022](../docs/decisions/0022-server-sent-events-for-suggestion-progress.md), so the console no longer polls the workspace while a suggestion part is `pending`. The change is compatible (CON-19): one new operation. Prism does not mock `text/event-stream`, so `frontend` tests the stream with a fake `EventSource` and the mock exercises the fallback (ADR-0022, statement 9).
+
+#### Added
+
+- `getSuggestionEvents` (`GET /v1/console/tickets/{ticket_id}/suggestion-events`), for `staff` and `manager`: `text/event-stream` with `retry: 3000`, the current state, and one `suggestion` event per change, whose `data` is a `SuggestionProgressEvent`; a `: ping` comment after 15 s without an event; `204` for a ticket that is not `open`, is in `manual` mode, or has no `pending` part.
+- `SuggestionProgressEvent`, with only `suggestion_id`, `analysis_status`, and `draft_status`. The schema of the `200` response describes one event, `event` and `data`, and gives `data` this schema with `contentSchema` ([ADR-0024](../docs/decisions/0024-event-schema-of-the-suggestion-progress-stream.md)), so the contract tests check every event.
+- The example `getSuggestionEvents/draft-ready.json`, one event.
+
+#### Changed
+
+- The descriptions of `getConsoleTicket`, `createSuggestion`, `PendingAnalysisPart`, and the timeouts of `info.description` name the stream instead of the poll.
+- `info.description` names version 1.3.0.
+
 ### [1.2.1] - 2026-11-15
 
 Clarifies two descriptions of the report, as the project lead decided on 2026-11-14 for the report of the [backend ticket workflow design](../docs/design/backend-ticket-workflow.md#reports). The change is compatible (CON-19): no schema, operation, or example changes.

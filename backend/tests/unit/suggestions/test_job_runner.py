@@ -79,6 +79,7 @@ from tests.unit.suggestions.fakes import (
     FakeSuggestionJobStore,
     FakeSuggestionStore,
     FakeTicketLinks,
+    RecordingProgressNotifier,
 )
 
 QUEUE_SETTINGS = QueueSettings(workers_per_replica=5, lease_ms=15_000, max_attempts=3, poll_ms=500)
@@ -113,6 +114,7 @@ class Harness:
     ai_service: FakeAiService
     audit: FakeAuditLog
     events: RecordingEventRecorder
+    progress: RecordingProgressNotifier
 
 
 @dataclass(slots=True)
@@ -152,6 +154,7 @@ def build_harness(
         service.links = links
     audit = FakeAuditLog()
     events = RecordingEventRecorder()
+    progress = RecordingProgressNotifier()
     runner = SuggestionJobRunner(
         FakeTransactionRunner(build_job_stores(data, links, audit)),
         JobRunnerPorts(
@@ -162,10 +165,11 @@ def build_harness(
             traces=FixedTraceContext(),
             events=events,
             steps=RecordingStepTracer(),
+            progress=progress,
         ),
         QUEUE_SETTINGS,
     )
-    return Harness(runner, data, links, service, audit, events)
+    return Harness(runner, data, links, service, audit, events, progress)
 
 
 def seed_running_job(
@@ -286,6 +290,15 @@ async def test_a_job_stores_the_analysis_and_the_draft_and_ends() -> None:
         AuditEventType.SUGGESTION_PART_COMPLETED,
         AuditEventType.SUGGESTION_PART_COMPLETED,
     ]
+
+
+@pytest.mark.anyio
+async def test_each_stored_result_wakes_the_streams_of_its_ticket() -> None:
+    harness = build_harness()
+
+    await harness.runner.run(JOB)
+
+    assert harness.progress.ticket_ids == [TICKET_ID, TICKET_ID]
 
 
 @pytest.mark.anyio

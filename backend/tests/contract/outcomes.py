@@ -10,6 +10,7 @@ from http import HTTPStatus
 
 from tests.contract.call_changes import (
     ChangeCall,
+    after_a_retry,
     after_the_reply,
     as_admin,
     as_customer,
@@ -91,6 +92,7 @@ CONSOLE_OPERATIONS = (
     "createReplyProposal",
     "sendReply",
     "createEscalation",
+    "getSuggestionEvents",
     "getConsoleKbDocumentVersion",
     "getConsoleReport",
 )
@@ -130,6 +132,7 @@ OK_STATUSES = {
     "createReplyProposal": HTTPStatus.CREATED,
     "sendReply": HTTPStatus.CREATED,
     "createEscalation": HTTPStatus.CREATED,
+    "getSuggestionEvents": HTTPStatus.NO_CONTENT,
     "getConsoleKbDocumentVersion": HTTPStatus.OK,
     "getConsoleReport": HTTPStatus.OK,
     "listAdminAccounts": HTTPStatus.OK,
@@ -205,8 +208,11 @@ OUTCOMES: tuple[Outcome, ...] = (
             "createReplyProposal",
             "sendReply",
             "createEscalation",
+            "getSuggestionEvents",
         )
     ),
+    # A retry leaves a pending suggestion, and the stream ends at the time limit of the tests.
+    Outcome("getSuggestionEvents", HTTPStatus.OK, change=after_a_retry, label="-stream"),
     Outcome("listShopTickets", HTTPStatus.NOT_FOUND, change=with_unknown_order_filter),
     Outcome("createShopTicket", HTTPStatus.NOT_FOUND, change=with_unknown_order),
     Outcome("changeAccountRole", HTTPStatus.NOT_FOUND, change=with_unknown_target),

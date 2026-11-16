@@ -37,10 +37,15 @@ from supportiq_backend.suggestions import (
     GetConsoleKbDocumentVersion,
     JobRunnerPorts,
     JobStores,
+    ProgressSignals,
+    ProgressStores,
     QueueSettings,
+    StreamSettings,
     SuggestionJobRunner,
     SuggestionStarter,
     SuggestionStarterPorts,
+    WatchProgressPorts,
+    WatchSuggestionProgress,
 )
 from supportiq_backend.suggestions.adapters.ai_service_client import (
     AiServiceTimeouts,
@@ -56,6 +61,10 @@ from supportiq_backend.suggestions.api.console import (
     ConsoleKbDocumentRoutes,
     build_console_kb_documents_router,
 )
+from supportiq_backend.suggestions.api.suggestion_events import (
+    SuggestionEventsRoutes,
+    build_suggestion_events_router,
+)
 from supportiq_backend.tickets.adapters.console_store import PostgresTicketLinks
 from supportiq_backend.tickets.api.console import render_created_suggestion
 
@@ -70,7 +79,8 @@ class SuggestionsWiring:
         claim_loop: The claim loop of this replica, run by the lifespan.
         starter: Starts suggestions.
         create_suggestion: The use case of `createSuggestion`.
-        routers: The routers of the console's KB document read and of the versions in use.
+        routers: The routers of the console's KB document read, of the suggestion progress
+            stream, and of the versions in use.
     """
 
     ai_client: httpx.AsyncClient
@@ -131,6 +141,20 @@ def build_job_stores(session: AsyncSession) -> JobStores:
         authority=links,
         orders=PostgresCommerceGateway(session),
         audit=PostgresAuditLog(session),
+    )
+
+
+def build_progress_stores(session: AsyncSession) -> ProgressStores:
+    """Build the stores of the read transaction of a stream on one session.
+
+    Args:
+        session: The session of the transaction.
+
+    Returns:
+        The stores.
+    """
+    return ProgressStores(
+        tickets=PostgresTicketLinks(session), suggestions=PostgresSuggestionStore(session)
     )
 
 
@@ -197,7 +221,10 @@ def wire_suggestions(
             read_ms=settings.ai_service_read_timeout_ms,
         ),
     )
-    claim_loop = _build_claim_loop(session_factory, shared, ai_service, to_queue_settings(settings))
+    signals = ProgressSignals()
+    claim_loop = _build_claim_loop(
+        session_factory, shared, ai_service, to_queue_settings(settings), signals
+    )
     starter = SuggestionStarter(
         SuggestionStarterPorts(
             clock=shared.clock,
@@ -205,7 +232,20 @@ def wire_suggestions(
             traces=shared.traces,
             events=shared.events,
             queue=claim_loop,
+            progress=signals,
         )
+    )
+    watch_progress = WatchSuggestionProgress(
+        SqlAlchemyTransactionRunner(session_factory, build_progress_stores),
+        WatchProgressPorts(
+            authorizer=accounts.authorizer,
+            signals=signals,
+            clock=shared.clock,
+            events=shared.events,
+        ),
+        StreamSettings(
+            poll_ms=settings.suggestion_events_poll_ms, max_ms=settings.suggestion_events_max_ms
+        ),
     )
     create_suggestion = _build_create_suggestion(
         session_factory, shared, accounts.authorizer, starter
@@ -216,7 +256,14 @@ def wire_suggestions(
         claim_loop,
         starter,
         create_suggestion,
-        routers=_build_read_routers(settings, shared, accounts, ai_service),
+        routers=(
+            *_build_read_routers(settings, shared, accounts, ai_service),
+            build_suggestion_events_router(
+                SuggestionEventsRoutes(
+                    watch_progress=watch_progress, current_session=accounts.current_session
+                )
+            ),
+        ),
     )
 
 
@@ -225,6 +272,7 @@ def _build_claim_loop(
     shared: SharedPorts,
     ai_service: HttpAiService,
     queue_settings: QueueSettings,
+    signals: ProgressSignals,
 ) -> ClaimLoop:
     runner = SuggestionJobRunner(
         SqlAlchemyTransactionRunner(session_factory, build_job_stores),
@@ -236,6 +284,7 @@ def _build_claim_loop(
             traces=shared.traces,
             events=shared.events,
             steps=shared.steps,
+            progress=signals,
         ),
         queue_settings,
     )

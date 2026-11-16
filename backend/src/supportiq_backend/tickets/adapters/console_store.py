@@ -161,14 +161,32 @@ class PostgresTicketLinks:
         Raises:
             UnexpectedFailureError: A stored text is no value of its enum: a defect.
         """
+        return await self._read_ticket(ticket_id, is_locked=True)
+
+    async def read_ticket(self, ticket_id: SuggestionTicketId) -> TicketForSuggestion | None:
+        """Read a ticket row without a lock, for the re-reads of a stream.
+
+        Args:
+            ticket_id: The ticket, as a request sent it.
+
+        Returns:
+            The ticket, or None when it is unknown.
+
+        Raises:
+            UnexpectedFailureError: A stored text is no value of its enum: a defect.
+        """
+        return await self._read_ticket(ticket_id, is_locked=False)
+
+    async def _read_ticket(
+        self, ticket_id: SuggestionTicketId, *, is_locked: bool
+    ) -> TicketForSuggestion | None:
         if not is_storable_text(ticket_id):
             return None
+        query = select(
+            TicketRow.current_suggestion_id, TicketRow.status, TicketRow.handling_mode
+        ).where(TicketRow.ticket_id == ticket_id)
         row = (
-            await self._session.execute(
-                select(TicketRow.current_suggestion_id, TicketRow.status, TicketRow.handling_mode)
-                .where(TicketRow.ticket_id == ticket_id)
-                .with_for_update()
-            )
+            await self._session.execute(query.with_for_update() if is_locked else query)
         ).one_or_none()
         if row is None:
             return None

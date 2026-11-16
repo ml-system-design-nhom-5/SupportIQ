@@ -230,6 +230,8 @@ def _console_calls(world: World) -> Mapping[str, Call]:
         "createEscalation": Call(
             "POST", f"{console_ticket}/escalations", role="staff", key=KEY, body=ESCALATION
         ),
+        # The current suggestion of `ticket_id` has no pending part, so this call gets `204`.
+        "getSuggestionEvents": Call("GET", f"{console_ticket}/suggestion-events", role="staff"),
         "getConsoleKbDocumentVersion": Call("GET", KB_DOCUMENT_VERSION, role="staff"),
         "getConsoleReport": Call("GET", CONSOLE_REPORTS, role="manager", params=REPORT_PERIOD),
     }

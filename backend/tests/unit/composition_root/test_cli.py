@@ -33,6 +33,7 @@ from tests.unit.platform.settings_builders import build_test_settings
 
 PORT = 8000
 OTLP_ENDPOINT = "http://collector.test:4318/v1/traces"
+GRACEFUL_SHUTDOWN_S = 20
 
 
 def test_serve_takes_the_host_and_the_port() -> None:
@@ -149,6 +150,25 @@ def test_a_one_off_command_exports_no_span_even_when_the_settings_choose_otlp(
 
     # ADR-0010, Egress control, item 3: a one-off command connects only to the database.
     assert exporters == [None]
+
+
+def test_serve_gives_uvicorn_the_graceful_shutdown_of_the_settings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def record_run(_app: object, **options: object) -> None:
+        calls.append(options)
+
+    monkeypatch.setattr("supportiq_backend.composition_root.cli.uvicorn.run", record_run)
+    settings = build_test_settings(graceful_shutdown_timeout_ms=GRACEFUL_SHUTDOWN_S * 1_000)
+
+    status = run_command(
+        ServeArguments(host="127.0.0.1", port=PORT), settings, RecordingEventRecorder()
+    )
+
+    assert status == EXIT_SUCCESS
+    assert calls[0]["timeout_graceful_shutdown"] == GRACEFUL_SHUTDOWN_S
 
 
 def test_serve_without_a_port_stops_with_a_usage_error() -> None:

@@ -77,6 +77,7 @@ from supportiq_backend.suggestions.domain.ports import (
     AiService,
     MessagePseudonymizer,
     NewSuggestion,
+    ProgressNotifier,
     PseudonymRestorer,
     SuggestionJobStore,
     SuggestionQueue,
@@ -85,6 +86,11 @@ from supportiq_backend.suggestions.domain.ports import (
     TicketAuthority,
     TicketForSuggestion,
     TicketMessage,
+)
+from supportiq_backend.suggestions.domain.progress import (
+    StreamEndReason,
+    StreamSettings,
+    SuggestionProgress,
 )
 from supportiq_backend.suggestions.domain.requests import (
     build_order_context,
@@ -157,6 +163,7 @@ __all__ = [
     "PartCompletion",
     "PartStatus",
     "PendingPart",
+    "ProgressNotifier",
     "PseudonymRestorer",
     "QueueSettings",
     "RankedDocument",
@@ -166,11 +173,14 @@ __all__ = [
     "RoutingRecommendation",
     "StaffIntent",
     "StepLatencies",
+    "StreamEndReason",
+    "StreamSettings",
     "Suggestion",
     "SuggestionId",
     "SuggestionJobStore",
     "SuggestionPart",
     "SuggestionPendingError",
+    "SuggestionProgress",
     "SuggestionQueue",
     "SuggestionRequest",
     "SuggestionStore",

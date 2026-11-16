@@ -50,6 +50,7 @@ EVERY_READ_OF_THE_CONTRACT = {
     ("GET", "/v1/shop/tickets/{ticket_id}"),
     ("GET", "/v1/console/tickets"),
     ("GET", "/v1/console/tickets/{ticket_id}"),
+    ("GET", "/v1/console/tickets/{ticket_id}/suggestion-events"),
     ("GET", "/v1/console/kb-documents/{document_id}/versions/{version}"),
     ("GET", "/v1/console/reports"),
     ("GET", "/v1/admin/accounts"),

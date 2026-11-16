@@ -14,6 +14,7 @@ from supportiq_backend.platform import Clock, EventName, EventRecorder, IdGenera
 from supportiq_backend.suggestions.domain import (
     IntentLabel,
     NewSuggestion,
+    ProgressNotifier,
     SuggestionId,
     SuggestionQueue,
     SuggestionStore,
@@ -63,6 +64,7 @@ class SuggestionStarterPorts:
         traces: Tells the trace of the request, which the suggestion keeps (LOG-04).
         events: Where events are recorded.
         queue: The claim loop of this replica.
+        progress: The suggestion progress streams of this replica.
     """
 
     clock: Clock
@@ -70,10 +72,11 @@ class SuggestionStarterPorts:
     traces: TraceContext
     events: EventRecorder
     queue: SuggestionQueue
+    progress: ProgressNotifier
 
 
 class SuggestionStarter:
-    """Insert a suggestion, supersede the previous one, and wake the claim loop after commit."""
+    """Insert a suggestion, supersede the previous one, and announce it after the commit."""
 
     def __init__(self, ports: SuggestionStarterPorts) -> None:
         """Keep the ports.
@@ -112,7 +115,7 @@ class SuggestionStarter:
         return StartedSuggestion(suggestion, superseded_ids)
 
     def announce(self, started: StartedSuggestion) -> None:
-        """Record the events of a committed suggestion and wake the claim loop.
+        """Record the events of a committed suggestion and wake the claim loop and the streams.
 
         Args:
             started: The suggestion, committed already.
@@ -131,3 +134,4 @@ class SuggestionStarter:
             suggestion_trigger=suggestion.trigger.value,
         )
         self._ports.queue.notify_new_suggestion(suggestion.ticket_id, suggestion.suggestion_id)
+        self._ports.progress.notify_progress(suggestion.ticket_id)

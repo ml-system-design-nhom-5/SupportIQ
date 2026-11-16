@@ -31,11 +31,13 @@ from supportiq_backend.suggestions import (
     Suggestion,
     SuggestionId,
     SuggestionPart,
+    SuggestionProgress,
     SuggestionRequest,
     SuggestionTicketId,
     TicketForSuggestion,
     TicketMessage,
     UnavailablePart,
+    get_part_status,
 )
 from tests.unit.suggestions.builders import build_versions
 
@@ -142,6 +144,16 @@ class FakeSuggestionStore:
         self._fail_when_chosen()
         return self.data.suggestions.get(suggestion_id)
 
+    async def load_progress(self, suggestion_id: SuggestionId) -> SuggestionProgress | None:
+        """Load the part statuses of one suggestion."""
+        self._fail_when_chosen()
+        suggestion = self.data.suggestions.get(suggestion_id)
+        if suggestion is None:
+            return None
+        return SuggestionProgress(
+            suggestion_id, get_part_status(suggestion.analysis), get_part_status(suggestion.draft)
+        )
+
     async def load_suggestions(
         self, suggestion_ids: frozenset[SuggestionId]
     ) -> Mapping[SuggestionId, Suggestion]:
@@ -225,6 +237,10 @@ class FakeTicketLinks:
         """Return the ticket."""
         return self.tickets.get(ticket_id)
 
+    async def read_ticket(self, ticket_id: SuggestionTicketId) -> TicketForSuggestion | None:
+        """Return the ticket."""
+        return self.tickets.get(ticket_id)
+
     async def set_current_suggestion(
         self, ticket_id: SuggestionTicketId, suggestion_id: SuggestionId
     ) -> None:
@@ -254,6 +270,17 @@ class RecordingSuggestionQueue:
     ) -> None:
         """Keep the notification."""
         self.notifications.append((ticket_id, suggestion_id))
+
+
+@dataclass(slots=True)
+class RecordingProgressNotifier:
+    """Keep the tickets whose streams were woken."""
+
+    ticket_ids: list[SuggestionTicketId] = field(default_factory=list[SuggestionTicketId])
+
+    def notify_progress(self, ticket_id: SuggestionTicketId) -> None:
+        """Keep the ticket."""
+        self.ticket_ids.append(ticket_id)
 
 
 @dataclass(slots=True)

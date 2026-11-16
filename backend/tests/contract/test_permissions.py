@@ -33,6 +33,7 @@ OPERATIONS_WITH_ROLES = (
     "createReplyProposal",
     "sendReply",
     "createEscalation",
+    "getSuggestionEvents",
     "getConsoleKbDocumentVersion",
     "getConsoleReport",
     "listAdminAccounts",
@@ -58,6 +59,7 @@ SUPPORT_OPERATIONS = (
     "recordTicketView",
     "createSuggestion",
     "sendReply",
+    "getSuggestionEvents",
     "getConsoleKbDocumentVersion",
 )
 

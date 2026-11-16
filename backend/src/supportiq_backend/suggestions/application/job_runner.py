@@ -44,6 +44,7 @@ from supportiq_backend.suggestions.domain import (
     ClaimedJob,
     MessagePseudonymizer,
     PartCompletion,
+    ProgressNotifier,
     QueueSettings,
     ReceivedDraftOutcome,
     Suggestion,
@@ -97,6 +98,7 @@ class JobRunnerPorts:
         traces: Tells the trace of the job.
         events: Where events are recorded.
         steps: Runs the job in its span.
+        progress: The suggestion progress streams of this replica.
     """
 
     pseudonymizer: MessagePseudonymizer
@@ -106,6 +108,7 @@ class JobRunnerPorts:
     traces: TraceContext
     events: EventRecorder
     steps: StepTracer
+    progress: ProgressNotifier
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -307,6 +310,7 @@ class SuggestionJobRunner:
             if not await self._store_parts(transaction.stores, job, completions):
                 return False
             await transaction.commit()
+        self._ports.progress.notify_progress(job.ticket_id)
         return True
 
     async def _store_and_finish(
@@ -320,6 +324,7 @@ class SuggestionJobRunner:
                 return False
             await stores.jobs.finish_job(job.suggestion_id, self._ports.clock.now())
             await transaction.commit()
+        self._ports.progress.notify_progress(job.ticket_id)
         return True
 
     async def _store_parts(

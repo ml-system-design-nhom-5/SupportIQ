@@ -104,6 +104,21 @@ async def test_lock_ticket_of_an_unknown_ticket_is_none(
     assert await lock_ticket(app_engine, ticket_id) is None
 
 
+async def test_read_ticket_reads_a_ticket_that_another_transaction_holds_locked(
+    app_engine: AsyncEngine, builder: DatabaseBuilder
+) -> None:
+    ticket_id = await insert_ticket(builder)
+
+    async with create_session_factory(app_engine)() as holder:
+        await PostgresTicketLinks(holder).lock_ticket(ticket_id)
+        async with create_session_factory(app_engine)() as reader:
+            read = await PostgresTicketLinks(reader).read_ticket(ticket_id)
+
+    assert read == TicketForSuggestion(
+        current_suggestion_id=None, is_open=True, is_assisted=True, status_name="open"
+    )
+
+
 async def test_set_current_suggestion_links_the_suggestion_to_the_ticket(
     app_engine: AsyncEngine, builder: DatabaseBuilder
 ) -> None:
