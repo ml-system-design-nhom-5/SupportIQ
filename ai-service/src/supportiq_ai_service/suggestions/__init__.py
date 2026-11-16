@@ -5,7 +5,13 @@ the port of the pipeline, and the types of its results, until the `ai-service` p
 design splits the pipeline into its features (README.md, Open questions).
 """
 
-from supportiq_ai_service.suggestions.application import CreateAnalysis, CreateDraft
+from supportiq_ai_service.suggestions.application import (
+    CreateAnalysis,
+    CreateDraft,
+    PipelinePorts,
+    PipelineValues,
+    ReleasePipeline,
+)
 from supportiq_ai_service.suggestions.domain import (
     Analysis,
     DraftOutcome,
@@ -19,6 +25,9 @@ __all__ = [
     "CreateAnalysis",
     "CreateDraft",
     "DraftOutcome",
+    "PipelinePorts",
+    "PipelineValues",
+    "ReleasePipeline",
     "SuggestionInput",
     "SuggestionPipeline",
     "UnknownKbVersionError",

@@ -48,6 +48,8 @@ ALLOWED_ATTRIBUTES = frozenset(
         "reason",
         "asset",
         "file_path",
+        "mask_type",
+        "mask_count",
         "logger_name",
     }
 )

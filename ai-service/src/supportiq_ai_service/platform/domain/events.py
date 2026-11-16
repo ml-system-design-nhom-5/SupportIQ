@@ -28,6 +28,7 @@ class EventName(StrEnum):
     REQUEST_FAILED = "request.failed"
     REQUEST_REFUSED = "request.refused"
     SERVICE_TOKEN_REJECTED = "service_token.rejected"  # noqa: S105  # an event name
+    PERSONAL_DATA_MASKED = "personal_data.masked"
     LOG_FORWARDED = "log.forwarded"
 
 
@@ -84,6 +85,10 @@ EVENT_DESCRIPTIONS: Mapping[EventName, EventDescription] = MappingProxyType(
             EventLevel.WARNING, "Request refused because it has no valid service token"
         ),
         EventName.LOG_FORWARDED: EventDescription(EventLevel.INFO, "Library log record"),
+        EventName.PERSONAL_DATA_MASKED: EventDescription(
+            EventLevel.WARNING,
+            "Personal data masked before an LLM call, because pseudonymization missed it",
+        ),
     }
 )
 
