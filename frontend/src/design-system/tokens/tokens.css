@@ -128,6 +128,12 @@
   --height-product-detail: 17.5rem;
 }
 
+/* A part of a panel that draws the line above it (PanelSection): every part after the first,
+   except the one right after a PanelHeader, which draws that line itself. One line separates
+   two parts, as in the mockups (mockup.css: `.panel-head` has the bottom border, and only
+   `.panel-body + .panel-body` has a top border). */
+@custom-variant panel-divider (&:not(:first-child, [data-panel-header] + *));
+
 @layer base {
   html {
     background-color: var(--color-background);

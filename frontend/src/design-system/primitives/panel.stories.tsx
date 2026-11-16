@@ -37,6 +37,17 @@ export const WithHeaderAndSections: Story = {
       </>
     ),
   },
+  play: async ({ canvas }) => {
+    const panel = canvas.getByRole("region", { name: "Support for this order" });
+
+    // One 1 px line under the header and one between the sections, as in the mockups: the
+    // section right after the header draws no line of its own.
+    await expect(measureBorders(panel)).toEqual([
+      { top: 0, bottom: 1 },
+      { top: 0, bottom: 0 },
+      { top: 1, bottom: 0 },
+    ]);
+  },
 };
 
 export const WithTrailingHeaderContent: Story = {
@@ -156,3 +167,20 @@ export const FillsItsColumn: Story = {
     await expect(panel.getBoundingClientRect().bottom).toBeCloseTo(columnContentBottom);
   },
 };
+
+/**
+ * Measure the top and bottom borders of each child of a panel, so a story can check that two
+ * children never draw a line each between them.
+ *
+ * @param panel - The panel element.
+ * @returns The border widths in px, one entry per child, in order.
+ */
+function measureBorders(panel: HTMLElement) {
+  return Array.from(panel.children, (child) => {
+    const style = getComputedStyle(child);
+    return {
+      top: Number.parseFloat(style.borderTopWidth),
+      bottom: Number.parseFloat(style.borderBottomWidth),
+    };
+  });
+}

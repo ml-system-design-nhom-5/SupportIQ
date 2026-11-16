@@ -1,12 +1,14 @@
 /**
- * One padded section of a {@link Panel}. Sections after the first get a divider.
+ * One padded section of a {@link Panel}. Sections after the first get a divider, except a section
+ * right after the `data-panel-header` element of a {@link PanelHeader}: the header draws that line,
+ * so the two never draw a line each (the `panel-divider` variant of the tokens).
  */
 import { cva } from "class-variance-authority";
 import { type ReactNode, use } from "react";
 
 import { PanelDensityContext } from "@/design-system/primitives/panel-density";
 
-const panelSectionVariants = cva("border-border not-first:border-t", {
+const panelSectionVariants = cva("border-border panel-divider:border-t", {
   variants: {
     layout: {
       content: "flex flex-col",

@@ -1,7 +1,8 @@
 /**
  * The header row of a {@link Panel}: an optional icon, a heading, and optional trailing content. A
  * heading with a focus target ID can take the focus from a script and, like the ticket heading,
- * shows no outline then.
+ * shows no outline then. The header draws the line under it, whatever follows; it carries
+ * `data-panel-header` so that a {@link PanelSection} right after it draws no second line.
  */
 import { cva } from "class-variance-authority";
 import type { LucideIcon } from "lucide-react";
@@ -46,7 +47,7 @@ export function PanelHeader({ icon, level, title, trailing, focusTargetId }: Pan
   const Heading = level === 2 ? "h2" : "h3";
   const density = use(PanelDensityContext);
   return (
-    <div className={headerVariants({ density })}>
+    <div data-panel-header className={headerVariants({ density })}>
       {icon === undefined ? null : <Icon icon={icon} />}
       <Heading
         id={focusTargetId}
