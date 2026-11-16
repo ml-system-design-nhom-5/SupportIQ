@@ -1,6 +1,6 @@
 # Design: Admin UI
 
-- **Status:** In review
+- **Status:** Approved
 - **Owner:** frontend engineer
 - **Reviewers:** backend engineer, contracts gatekeeper
 - **Last reviewed:** 2026-11-15
@@ -16,7 +16,7 @@ UI-45 and the [admin operations](contracts-v1.md#admin-operations) fix what each
 
 **Revision of 2026-11-11, for [ADR-0015](../decisions/0015-account-creation-and-password-changes.md):** the accounts screen gains a Login name column, the button Create account, and the row action Reset password. The account menu replaces the display name and Sign out of the app bar. The dialogs, their texts, and their states are defined once, in the [account management design](account-management.md#screens-and-dialogs); this design places them. UI-45 gains the two new actions in the phase that builds them ([account management design](account-management.md#rule-changes)). The earlier non-goal that excluded account creation and password changes is kept under [Alternatives considered](#alternatives-considered).
 
-**Revision of 2026-11-15, for dev mode ([UI-35](../rules/ui.md#developer-views)):** the project lead agreed on the content on 2026-11-14, and this revision needs the lead's approval. In dev mode, the accounts screen and the versions page add developer details, within the data that the contract already returns, and `frontend` gets three new settings: its build version and the links of two Grafana dashboards ([Developer details in the admin area](#developer-details-in-the-admin-area)). `account_id` stays hidden, also in dev mode. In the `frontend` code of 2026-11-15, the account menu of an admin already holds the Dev mode item, but no admin screen shows developer details yet. The project lead decided the open points of the draft on 2026-11-15.
+**Revision of 2026-11-15, for dev mode ([UI-35](../rules/ui.md#developer-views)):** the project lead agreed on the content on 2026-11-14 and approved this revision on 2026-11-15. In dev mode, the accounts screen and the versions page add developer details, within the data that the contract already returns, and `frontend` gets three new settings: its build version and the links of two Grafana dashboards ([Developer details in the admin area](#developer-details-in-the-admin-area)). `account_id` stays hidden, also in dev mode. In the `frontend` code of 2026-11-15, the account menu of an admin already holds the Dev mode item, but no admin screen shows developer details yet. The project lead decided the open points of the draft on 2026-11-15.
 
 ## Goals and non-goals
 
@@ -109,7 +109,7 @@ Where dev mode is available and the admin switched it on in the [account menu](a
 |---|---|
 | Accounts | For each row, the raw values of `role` and `is_active` as `backend` sent them. `account_id` stays hidden, as [Data and contracts](#data-and-contracts) states |
 | Versions in use | The raw value of `ai_service_status`, also a value that this version does not know and shows as Unavailable ([CON-22](../rules/contracts.md#evolution)); the raw value of `backend_version` and of each field of `ai_service_versions`, which the page already shows as `backend` sent them; and one button that copies the whole version block as text for a bug report: `backend_version`, `ai_service_status`, and every field of `ai_service_versions` when `ai-service` is available |
-| Both | The build version of `frontend`; every setting that [frontend/README.md](../../frontend/README.md#settings) lists, with its value; and links to the Grafana dashboards System overview and AI pipeline ([LOG-27](../rules/logging-and-observability.md#dashboards)), each shown only when its setting is set |
+| Both | The build version of `frontend`; every `VITE_` setting that [frontend/README.md](../../frontend/README.md#settings) lists, with its value; and links to the Grafana dashboards System overview and AI pipeline ([LOG-27](../rules/logging-and-observability.md#dashboards)), each shown only when its setting is set |
 
 Three new frontend settings serve these details. Like every `VITE_` setting, they are built into the page, so they never hold a secret, and an invalid value stops `frontend` at startup with the name of the setting ([ARCH-34](../rules/architecture.md#configuration)).
 
@@ -241,7 +241,7 @@ sequenceDiagram
 1. Done on 2026-11-05: the backend and frontend owners approved this design.
 2. Implementation against Prism mocks: the accounts table and dialogs after contract PR 2, then the versions page after the contract change that adds `getAdminVersions`.
 3. Done on 2026-11-11: the project lead approved the revision of 2026-11-11, in place of a PR review. Its screens are built after `backend` contract 1.1.0 ([account management design](account-management.md#rollout)).
-4. After the project lead approves the revision of 2026-11-15, `frontend` builds the developer details of both screens and the three settings, and the setup in `deploy/` sets `VITE_FRONTEND_BUILD_VERSION` on Cloudflare Pages. The versions page of the `frontend` code of 2026-11-15 does not have them yet.
+4. Done on 2026-11-15: the project lead approved the revision of 2026-11-15. `frontend` then builds the developer details of both screens and the three settings, and the setup in `deploy/` sets `VITE_FRONTEND_BUILD_VERSION` on Cloudflare Pages. The versions page of the `frontend` code of 2026-11-15 does not have them yet.
 
 ### Mockup sources
 

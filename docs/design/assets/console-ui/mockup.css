@@ -395,6 +395,7 @@ mark.placeholder { background: var(--color-warning-subtle); color: var(--color-w
 .column-rail-right { border: 1px solid var(--color-border); border-radius: var(--radius-md); }
 .column-head { display: flex; align-items: center; gap: var(--space-8); color: var(--color-text-muted); font-size: var(--text-12); font-weight: var(--weight-semibold); }
 .column-head .btn-icon { margin-left: auto; }
+.rail-mark { display: flex; padding: var(--space-4); border: 1px solid color-mix(in srgb, var(--color-ai) 35%, white); border-radius: 999px; background: var(--color-ai-subtle); color: var(--color-ai); }
 .rail-head .btn-icon { width: 20px; height: 20px; }
 .rail-head .trail { white-space: nowrap; }
 .rail-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-8); }

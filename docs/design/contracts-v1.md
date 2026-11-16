@@ -1,6 +1,6 @@
 # Design: Contracts v1
 
-- **Status:** In review
+- **Status:** Approved
 - **Owner:** contracts gatekeeper
 - **Reviewers:** ML engineer, RAG engineer, backend engineer, frontend engineer
 - **Last reviewed:** 2026-11-15
@@ -33,7 +33,7 @@ The team agreed the product behavior:
 - the update of 2026-11-08, as `backend.openapi.yaml` 1.0.1 states: the problem type `idempotency-key-reused` also covers the same key with different path parameters; the ingress answers `502` or `504` also when a write in flight fails, and a retry with the same key then cannot repeat its effect; a product appears at most once in an order;
 - the update of 2026-11-11, for `backend` contract 1.1.0 ([ADR-0015](../decisions/0015-account-creation-and-password-changes.md)): the own password change, admin account creation and password reset, the problem type `login-name-taken`, and three audit log events. The [account management design](account-management.md) holds their details;
 - the update of 2026-11-12, for `backend` contract 1.2.0: the console's KB document read is named `getConsoleKbDocumentVersion`, the queue order and the message excerpt of `TicketSummary` are fixed, and latencies are integer `_ms` fields inside objects, as CON-18 requires. After the review of the same day, staff get `403 authority-required` before `409 suggestion-pending`, a retry keeps the intent that staff chose, `source_review_overdue` refers to retrieved document versions, `StepLatencies` and `KbDocumentVersion` are shared schemas, and the report breaks down edits and rejections by staff reason code. The [backend ticket workflow design](backend-ticket-workflow.md) holds the details.
-- the update of 2026-11-15, for [ADR-0022](../decisions/0022-server-sent-events-for-suggestion-progress.md) and `backend` contract 1.2.1: the console receives the progress of a suggestion from a server-sent events stream while one of its parts is `pending`, so push updates are no longer a non-goal for that one case, and no other view of `frontend` polls more often than every 30 s. The report's end-to-end latency leaves out a ticket whose first draft part was `cancelled`, and its handling time counts only tickets first viewed no later than their reply, as the project lead decided on 2026-11-14. The update of 2026-11-15 needs the project lead's approval.
+- the update of 2026-11-15, for [ADR-0022](../decisions/0022-server-sent-events-for-suggestion-progress.md) and `backend` contract 1.2.1: the console receives the progress of a suggestion from a server-sent events stream while one of its parts is `pending`, so push updates are no longer a non-goal for that one case, and no other view of `frontend` polls more often than every 30 s. The report's end-to-end latency leaves out a ticket whose first draft part was `cancelled`, and its handling time counts only tickets first viewed no later than their reply, as the project lead decided on 2026-11-14. The project lead approved the update of 2026-11-15 on that day.
 
 Revision 2 needs a new approval.
 
@@ -895,7 +895,7 @@ Every schema property states its data class ([SEC-03](../rules/security-and-priv
    - the evaluation protocol ([DATA-20](../rules/data-and-ml.md#splits-and-evaluation-protocol)).
 10. Done on 2026-11-12: the project lead approved the remaining `frontend` ↔ `backend` part of revision 2, the console operations and `getAdminVersions`, with the decisions of 2026-11-11 on reports and dev mode applied above. The `ai-service` contract followed in step 11. On the same day the project lead decided that the LLM never sets `requires_authority`: only the intent model and the sensitive-term list do, and the LLM only writes the draft ([Authority rule](#authority-rule-fr-06)). The KB data contract stays open until the KB files arrive (step 8).
 11. Done on 2026-11-12: the project lead approved the `ai-service` part of revision 2 with `ai-service` contract 1.0.0, the update of that day for `backend` contract 1.2.0 with its review fixes, and the [backend ticket workflow design](backend-ticket-workflow.md). Revision 2 is approved in full; the KB data contract still waits for the KB files (step 8). The service token, pseudonymization, and the LLM inputs need the two approvals of [SEC-35](../rules/security-and-privacy.md#security-review); the project lead's approval stands for them.
-12. The update of 2026-11-15, for ADR-0022 and `backend` contract 1.2.1, waits for the project lead's approval. `backend` contract 1.3.0 adds the stream of ADR-0022 after that approval.
+12. Done on 2026-11-15: the project lead approved the update of 2026-11-15, for ADR-0022 and `backend` contract 1.2.1. `backend` contract 1.3.0 adds the stream of ADR-0022.
 
 Nothing is deployed yet, so no migration or rollback is needed.
 

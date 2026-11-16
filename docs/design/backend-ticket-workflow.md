@@ -1,6 +1,6 @@
 # Design: Backend ticket workflow
 
-- **Status:** In review
+- **Status:** Approved
 - **Owner:** backend engineer
 - **Reviewers:** project lead, frontend engineer, ML engineer
 - **Last reviewed:** 2026-11-15
@@ -12,7 +12,7 @@ This design describes how `backend` runs the ticket workflow behind `/console`. 
 
 **Revision of 2026-11-12, for the `ai-service` service token, the log levels, and [ADR-0020](../decisions/0020-storage-errors-of-the-pseudonym-map.md):** the project lead decided these points on 2026-11-12. The new required secret setting `ai_service_token` (environment variable `AI_SERVICE_TOKEN`) holds the service token that `backend` sends as `Authorization: Bearer <token>` to `ai-service` (`ai-service` contract 1.0.0, `securitySchemes.serviceToken`); it is Secret ([SEC-10](../rules/security-and-privacy.md#secrets)), it is never logged, and startup fails when it is missing or empty ([ERR-17](../rules/errors-and-reliability.md#startup-and-health), [Settings](#settings)). The new event `ai_service.contract_violated` is logged at `error` for a `4xx` from `ai-service` or a response outside its contract, while `ai_service.call_failed` stays at `warning` for timeouts, connection errors, and `5xx` ([The `ai-service` client](#the-ai-service-client), [Observability](#observability)). `pseudonymization.failed` is logged at `warning` for a text over 4 000 characters, which is handled input, and at `error` otherwise ([ADR-0010, Failure handling](../decisions/0010-pseudonymization-and-egress-control.md#failure-handling)). `frontend` polls the inbox every 15 s while it is open, and the workspace every 2 s while a suggestion part is `pending` ([console UI design](console-ui.md#summary)). A transient database error while the pseudonym map is stored is not a pseudonymization failure ([ADR-0020](../decisions/0020-storage-errors-of-the-pseudonym-map.md)), as [Pseudonymization](#pseudonymization), item 3, already stated; item 1 now also names a stored map that differs from the computed one among the deterministic failures. On 2026-11-13 the project lead confirmed that such a run ends with `pseudonymization_failed` and is not retried, and that the stored map is never merged with the computed one ([ADR-0020](../decisions/0020-storage-errors-of-the-pseudonym-map.md)).
 
-**Revision of 2026-11-15, for [ADR-0022](../decisions/0022-server-sent-events-for-suggestion-progress.md), `backend` contract 1.2.1, and the decisions of phase 3:** the project lead decided these points from 2026-11-13 to 2026-11-14, and this revision needs the lead's approval. `frontend` polls no view more often than every 30 s; the workspace learns the progress of a suggestion from the stream of [The suggestion progress stream](#the-suggestion-progress-stream) while one of its parts is `pending`, which replaces the 15 s and 2 s intervals of the revision of 2026-11-12. The report's end-to-end latency leaves out a ticket whose first draft part was `cancelled`, and its handling time counts only tickets whose first view came no later than their reply ([Reports](#reports); `backend` contract 1.2.1). `backend import-tickets` is postponed until the shared scenario sets and the protocol of the product-value study exist ([Handling modes for the product-value study](#handling-modes-for-the-product-value-study)). The `AiService` port names its reads `fetch_kb_document_version` and `fetch_asset_versions`, as the code does ([The `ai-service` client](#the-ai-service-client)). The earlier intervals are kept under [Alternatives considered](#alternatives-considered).
+**Revision of 2026-11-15, for [ADR-0022](../decisions/0022-server-sent-events-for-suggestion-progress.md), `backend` contract 1.2.1, and the decisions of phase 3:** the project lead decided these points from 2026-11-13 to 2026-11-14 and approved this revision on 2026-11-15. `frontend` polls no view more often than every 30 s; the workspace learns the progress of a suggestion from the stream of [The suggestion progress stream](#the-suggestion-progress-stream) while one of its parts is `pending`, which replaces the 15 s and 2 s intervals of the revision of 2026-11-12. The report's end-to-end latency leaves out a ticket whose first draft part was `cancelled`, and its handling time counts only tickets whose first view came no later than their reply ([Reports](#reports); `backend` contract 1.2.1). `backend import-tickets` is postponed until the shared scenario sets and the protocol of the product-value study exist ([Handling modes for the product-value study](#handling-modes-for-the-product-value-study)). The `AiService` port names its reads `fetch_kb_document_version` and `fetch_asset_versions`, as the code does ([The `ai-service` client](#the-ai-service-client)). The earlier intervals are kept under [Alternatives considered](#alternatives-considered).
 
 ## Goals and non-goals
 
@@ -222,7 +222,7 @@ The detectors, their order, and the overlap rule are those of [ADR-0010](../deci
 
 ### The suggestion progress stream
 
-[ADR-0022](../decisions/0022-server-sent-events-for-suggestion-progress.md) decides the stream; this section states what `backend` does. `backend` contract 1.3.0 adds the operation after the project lead approves this revision.
+[ADR-0022](../decisions/0022-server-sent-events-for-suggestion-progress.md) decides the stream; this section states what `backend` does. `backend` contract 1.3.0 adds the operation.
 
 1. `GET /v1/console/tickets/{ticket_id}/suggestion-events` answers `text/event-stream` to `staff` and `manager`, after the checks of `getConsoleTicket`: session, role, and ticket. A refusal is `401`, `403`, or `404` with a Problem Details body, sent before the stream starts. It has no `Origin` check, like every read, because a same-origin `EventSource` sends no `Origin` header.
 2. A ticket that is not `open`, a ticket in `manual` mode, and a ticket whose current suggestion has no `pending` part get `204 No Content`, which stops `EventSource`.
@@ -346,7 +346,7 @@ New settings of `backend`, validated at startup ([ARCH-34](../rules/architecture
   - a reply proposal's basis is `ReplyProposalBasis`, the values of `ReplyBasis` without `reply_proposal`;
   - the report's draft decisions carry `edit_by_reason` and `reject_by_reason`, the edits and rejections by staff reason code ([Reports](#reports));
   - `createEscalation` answers `422` with the example `note-required` when `staff_reason_codes` contains `other` and the note is absent.
-- **`backend` contract 1.2.1** states which tickets the report's end-to-end latency and handling time measure ([Reports](#reports)). **`backend` contract 1.3.0** adds the stream of [The suggestion progress stream](#the-suggestion-progress-stream) after the project lead approves the revision of 2026-11-15.
+- **`backend` contract 1.2.1** states which tickets the report's end-to-end latency and handling time measure ([Reports](#reports)). **`backend` contract 1.3.0** adds the stream of [The suggestion progress stream](#the-suggestion-progress-stream).
 - **`ai-service` contract 1.0.0** is written in a separate change. `backend` consumes it through generated models; `backend` contract schemas never expose it directly ([contracts v1, Common elements](contracts-v1.md#common-elements)).
 - **Migration `r0003`** adds the tables above, with a working downgrade (PY-40). `r0001` and `r0002` are not edited.
 
@@ -434,7 +434,7 @@ The NFR-08 load test and the pseudonymization trial run before the demo. No mode
 2. Done on 2026-11-12: the project lead accepted [ADR-0017](../decisions/0017-named-entity-model-from-its-release-url.md), the install of the named-entity model from its release URL, together with this design.
 3. The `backend` implementation on the same branch: migration `r0003`, the feature modules, the commands, the provider tests, and the consumer tests against the `ai-service` mock. The provider contract tests of `backend` run over every operation of the contract, so they fail on this branch from the contract change until this step lands; the branch is merged into `chore` only after it (CON-01, step 5).
 4. The `frontend` console screens, against the Prism mock of `backend` contract 1.2.0.
-5. The revision of 2026-11-15 waits for the project lead's approval. `backend` contract 1.3.0 and the stream follow it.
+5. Done on 2026-11-15: the project lead approved the revision of 2026-11-15. `backend` contract 1.3.0 and the stream follow it.
 6. Roll back by reverting the merge commit after downgrading the database to `r0002` with the merged code, as for `r0002` ([account management design, Rollout](account-management.md#rollout)).
 
 ## Open questions

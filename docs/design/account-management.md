@@ -1,6 +1,6 @@
 # Design: Account management
 
-- **Status:** In review
+- **Status:** Approved
 - **Owner:** backend engineer
 - **Reviewers:** frontend engineer, contracts gatekeeper, project lead
 - **Last reviewed:** 2026-11-15
@@ -12,7 +12,7 @@ This design implements [ADR-0015](../decisions/0015-account-creation-and-passwor
 
 It fixes the login names, the locks, three operations of `backend` contract 1.1.0, migration `r0002`, the exception to ERR-15, the audit actions, and the screens: the account menu of every role, `/change-password`, the admin dialogs, and the show and hide toggle of every password field. It follows the existing patterns: `changeAccountRole` and `changeAccountStatus` for admin writes, `createSession` for password checks and the throttle, and `features/admin-accounts/` for the admin screens.
 
-**Revision of 2026-11-15, for dev mode ([UI-35](../rules/ui.md#developer-views)):** the [account menu](#account-menu) gains the checkbox item "Dev mode" between Change password and Sign out, for `staff`, `manager`, and `admin`, only where dev mode is available; customers never get it. The item follows the `frontend` code of 2026-11-15, and this revision needs the project lead's approval. The earlier menu is kept under [Alternatives considered](#alternatives-considered).
+**Revision of 2026-11-15, for dev mode ([UI-35](../rules/ui.md#developer-views)):** the [account menu](#account-menu) gains the checkbox item "Dev mode" between Change password and Sign out, for `staff`, `manager`, and `admin`, only where dev mode is available; customers never get it. The item follows the `frontend` code of 2026-11-15, and the project lead approved this revision on 2026-11-15. The earlier menu is kept under [Alternatives considered](#alternatives-considered).
 
 ## Goals and non-goals
 
@@ -601,7 +601,8 @@ The three phases are built on one branch, `build/account-passwords`, which is me
 1. Phase 1, documents only: this design; the revisions of the admin, shop, and console UI designs with their mockups; the changes to ERR-15, SEC-41, and SEC-42; the glossary; the contracts v1 design; and the edits of ADR-0015.
 2. Phase 2, `backend`: `backend` contract 1.1.0, migration `r0002`, the use cases and tests, the regenerated `backend` models and `frontend` client, and the new TEST-26 bullet with its test ([Rule changes](#rule-changes)). Done on 2026-11-12, in one change with phase 3, so no version of `frontend` meets the new problem type before it handles it.
 3. Phase 3, `frontend`: the design-system components with their stories, the account menu, `/change-password`, the admin dialogs, the password suggestion, the two dependencies, and the changes to UI-38, UI-45, and UI-46 ([Rule changes](#rule-changes)). Done on 2026-11-12.
-4. Rollback after the merge: stop `backend`, downgrade the database to `r0001` with the merged code ([Migration](#migration-r0002)), revert the merge commit, and deploy. The downgrade comes first, because the reverted code no longer contains `r0002`.
+4. Done on 2026-11-15: the project lead approved the revision of 2026-11-15, for dev mode.
+5. Rollback after the merge: stop `backend`, downgrade the database to `r0001` with the merged code ([Migration](#migration-r0002)), revert the merge commit, and deploy. The downgrade comes first, because the reverted code no longer contains `r0002`.
 
 ### Mockup sources
 

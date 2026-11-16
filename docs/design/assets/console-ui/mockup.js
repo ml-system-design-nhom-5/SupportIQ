@@ -661,17 +661,20 @@ function splitter(label, valueNow) {
 }
 
 // A collapsed column keeps a narrow rail with its open button and its icon.
-function collapsedColumn(side, iconName, label) {
+function collapsedColumn(side, iconName, label, mark = "") {
   const openIcon = side === "left" ? "panelLeftOpen" : "panelRightOpen";
   return `<aside class="column-rail column-rail-${side}" aria-label="${label}">
     <button class="btn btn-sm btn-ghost btn-icon" aria-expanded="false" aria-label="Open ${label.toLowerCase()}">${icon(openIcon, "icon-sm")}</button>
-    <span class="muted" aria-hidden="true">${icon(iconName)}</span>
+    ${mark}<span class="muted" aria-hidden="true">${icon(iconName)}</span>
   </aside>`;
 }
 
-function sidebarColumn(sidebar, layout) {
+// The mark of a staff note that the collapsed AI sidebar hides: the icon of "For staff only".
+const HIDDEN_NOTE_MARK = `<span class="rail-mark" role="img" aria-label="Note for staff in AI details" title="Note for staff in AI details">${icon("info", "icon-sm")}</span>`;
+
+function sidebarColumn(sidebar, layout, hasStaffNote) {
   if (!layout) return `<div class="col">${sidebar}</div>`;
-  if (layout.sidebar === "collapsed") return collapsedColumn("right", "sparkles", "AI details");
+  if (layout.sidebar === "collapsed") return collapsedColumn("right", "sparkles", "AI details", hasStaffNote ? HIDDEN_NOTE_MARK : "");
   return `<div class="col"><div class="column-head">${icon("sparkles", "icon-sm")}AI details${collapseButton("panelRightClose", "Collapse AI details")}</div>${sidebar}</div>`;
 }
 
@@ -691,7 +694,7 @@ function workspace(overrides, label, opts = {}) {
     <div class="page">${ticketHeader(s, opts)}${banners(s)}
       <div class="${workspaceClass}">
         <div class="col">${messagePanel(s)}${intentStrip(s)}${replyArea(s, opts)}</div>
-        ${sidebarSplitter}${sidebarColumn(sidebar, layout)}
+        ${sidebarSplitter}${sidebarColumn(sidebar, layout, Boolean(s.staffNote))}
       </div></div></div>${opts.overlay ?? ""}${mockLabel(label)}</div>`;
 }
 
