@@ -35,6 +35,14 @@ EVERY_TABLE = (
     "tickets",
     "customer_messages",
     "audit_log_entries",
+    "suggestions",
+    "suggestion_parts",
+    "suggestion_jobs",
+    "pseudonym_map_entries",
+    "reply_proposals",
+    "replies",
+    "escalations",
+    "staff_decisions",
 )
 WRITES_OF_COMMERCE_DATA = (
     "INSERT INTO customers DEFAULT VALUES",

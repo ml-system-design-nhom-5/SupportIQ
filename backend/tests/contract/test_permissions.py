@@ -26,14 +26,42 @@ OPERATIONS_WITH_ROLES = (
     "listShopTickets",
     "createShopTicket",
     "getShopTicket",
+    "listConsoleTickets",
+    "getConsoleTicket",
+    "recordTicketView",
+    "createSuggestion",
+    "createReplyProposal",
+    "sendReply",
+    "createEscalation",
+    "getSuggestionEvents",
+    "getConsoleKbDocumentVersion",
+    "getConsoleReport",
     "listAdminAccounts",
     "createAdminAccount",
     "changeAccountRole",
     "changeAccountStatus",
     "resetAccountPassword",
+    "getAdminVersions",
 )
 SHOP_OPERATIONS = tuple(name for name in OPERATIONS_WITH_ROLES if "Shop" in name)
-ADMIN_OPERATIONS = tuple(name for name in OPERATIONS_WITH_ROLES if "Account" in name)
+ADMIN_OPERATIONS = (
+    *(name for name in OPERATIONS_WITH_ROLES if "Account" in name),
+    "getAdminVersions",
+)
+# The console operations of staff alone: a manager sends replies instead (FR-06).
+STAFF_OPERATIONS = ("createReplyProposal", "createEscalation")
+# The console operations of managers alone (ADR-0012).
+MANAGER_OPERATIONS = ("getConsoleReport",)
+# The console operations that both support roles call (contracts v1 design, permission table).
+SUPPORT_OPERATIONS = (
+    "listConsoleTickets",
+    "getConsoleTicket",
+    "recordTicketView",
+    "createSuggestion",
+    "sendReply",
+    "getSuggestionEvents",
+    "getConsoleKbDocumentVersion",
+)
 
 
 @pytest.fixture
@@ -82,3 +110,20 @@ def test_only_a_customer_calls_a_shop_operation(contract: BaseSchema, operation_
 @pytest.mark.parametrize("operation_id", ADMIN_OPERATIONS)
 def test_only_an_admin_calls_an_admin_operation(contract: BaseSchema, operation_id: str) -> None:
     assert roles_of(contract, operation_id) == ("admin",)
+
+
+@pytest.mark.parametrize("operation_id", STAFF_OPERATIONS)
+def test_only_staff_call_a_staff_operation(contract: BaseSchema, operation_id: str) -> None:
+    assert roles_of(contract, operation_id) == ("staff",)
+
+
+@pytest.mark.parametrize("operation_id", MANAGER_OPERATIONS)
+def test_only_a_manager_calls_a_manager_operation(contract: BaseSchema, operation_id: str) -> None:
+    assert roles_of(contract, operation_id) == ("manager",)
+
+
+@pytest.mark.parametrize("operation_id", SUPPORT_OPERATIONS)
+def test_only_staff_and_managers_call_a_support_operation(
+    contract: BaseSchema, operation_id: str
+) -> None:
+    assert roles_of(contract, operation_id) == ("staff", "manager")

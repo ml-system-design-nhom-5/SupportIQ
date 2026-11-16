@@ -8,7 +8,7 @@ import httpx
 
 from supportiq_backend.accounts import PasswordHash
 from tests.integration.application import ALLOWED_ORIGIN
-from tests.integration.builders import AccountSpec, DatabaseBuilder
+from tests.integration.builders import FAILED_SUGGESTION, AccountSpec, DatabaseBuilder, TicketSpec
 from tests.unit.accounts.fakes import KNOWN_PASSWORD
 
 SESSIONS = "/v1/sessions"
@@ -17,6 +17,13 @@ OWN_PASSWORD_CHANGES = "/v1/sessions/current/password-changes"
 PRODUCTS = "/v1/shop/products"
 ORDERS = "/v1/shop/orders"
 TICKETS = "/v1/shop/tickets"
+CONSOLE_TICKETS = "/v1/console/tickets"
+# The KB document version of the `getKbDocumentVersion` example of `ai-service` contract 1.0.0.
+KB_DOCUMENT_VERSION = "/v1/console/kb-documents/SAMPLE-REFUND-001/versions/1.0"
+ADMIN_VERSIONS = "/v1/admin/versions"
+CONSOLE_REPORTS = "/v1/console/reports"
+# A period of the report: the start is included and the end excluded (contract `ReportStartAt`).
+REPORT_PERIOD = {"start_at": "2026-11-01T00:00:00Z", "end_at": "2026-12-01T00:00:00Z"}
 ACCOUNTS = "/v1/admin/accounts"
 KEY = "00000000-0000-4000-8000-000000000001"
 LOGIN_NAME = "staff-contract"
@@ -28,6 +35,8 @@ NEW_ACCOUNT = {
     "display_name": "Lan Do",
     "password": NEW_PASSWORD,
 }
+REPLY_WITHOUT_A_DRAFT = {"basis": "no_ai_draft", "body": "Your parcel left our warehouse today."}
+ESCALATION = {"staff_reason_codes": ["case_exception"]}
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,7 +47,10 @@ class World:
         tokens: The raw session identifier of a signed-in account of each role.
         product_id: A product.
         order_id: An order of the signed-in customer.
-        ticket_id: A ticket of the signed-in customer.
+        ticket_id: An `open` ticket of the signed-in customer whose current suggestion ended
+            unavailable, so a retry is valid.
+        other_ticket_id: Another `open` ticket of that customer, without a suggestion.
+        authority_ticket_id: An `open` ticket of that customer that requires authority.
         target_account_id: A `staff` account that an admin can change.
         admin_account_id: The account of the signed-in admin.
     """
@@ -47,6 +59,8 @@ class World:
     product_id: str
     order_id: str
     ticket_id: str
+    other_ticket_id: str
+    authority_ticket_id: str
     target_account_id: UUID
     admin_account_id: UUID
 
@@ -79,7 +93,9 @@ class Call:
 async def build_world(builder: DatabaseBuilder, password_hash: PasswordHash) -> World:
     """Insert what the calls need, with one signed-in account of each role.
 
-    The signed-in `staff` account has `KNOWN_PASSWORD`, so it can change its own password.
+    The signed-in `staff` account has `KNOWN_PASSWORD`, so it can change its own password. The
+    first ticket has a suggestion that ended unavailable, so a retry is valid and no console
+    call depends on the AI.
 
     Args:
         builder: The test data builder.
@@ -104,10 +120,32 @@ async def build_world(builder: DatabaseBuilder, password_hash: PasswordHash) -> 
         },
         product_id=await builder.product(name="Mug"),
         order_id=order_id,
-        ticket_id=await builder.ticket(customer_id, order_id),
+        ticket_id=await ticket_with_failed_suggestion(builder, customer_id, order_id),
+        other_ticket_id=await builder.ticket(customer_id, order_id),
+        authority_ticket_id=await builder.ticket(
+            customer_id, order_id, TicketSpec(is_authority_required=True)
+        ),
         target_account_id=await builder.account(AccountSpec("staff")),
         admin_account_id=admin,
     )
+
+
+async def ticket_with_failed_suggestion(
+    builder: DatabaseBuilder, customer_id: UUID, order_id: str
+) -> str:
+    """Insert a ticket whose current suggestion ended unavailable.
+
+    Args:
+        builder: The test data builder.
+        customer_id: The customer.
+        order_id: The customer's order.
+
+    Returns:
+        The ticket ID.
+    """
+    ticket_id = await builder.ticket(customer_id, order_id)
+    await builder.suggestion(ticket_id, FAILED_SUGGESTION)
+    return ticket_id
 
 
 def valid_calls(world: World) -> Mapping[str, Call]:
@@ -119,7 +157,15 @@ def valid_calls(world: World) -> Mapping[str, Call]:
     Returns:
         The calls by `operationId`.
     """
-    target = world.target_account_id
+    return {
+        **_session_and_health_calls(),
+        **_shop_calls(world),
+        **_console_calls(world),
+        **_admin_calls(world),
+    }
+
+
+def _session_and_health_calls() -> Mapping[str, Call]:
     return {
         "createSession": Call(
             "POST", SESSIONS, body={"login_name": LOGIN_NAME, "password": KNOWN_PASSWORD}
@@ -137,6 +183,13 @@ def valid_calls(world: World) -> Mapping[str, Call]:
             },
         ),
         "deleteCurrentSession": Call("DELETE", CURRENT_SESSION, role="customer"),
+        "checkLiveness": Call("GET", "/health/live"),
+        "checkReadiness": Call("GET", "/health/ready"),
+    }
+
+
+def _shop_calls(world: World) -> Mapping[str, Call]:
+    return {
         "listShopProducts": Call("GET", PRODUCTS, role="customer"),
         "getShopProduct": Call("GET", f"{PRODUCTS}/{world.product_id}", role="customer"),
         "listShopOrders": Call("GET", ORDERS, role="customer"),
@@ -150,31 +203,59 @@ def valid_calls(world: World) -> Mapping[str, Call]:
             body={"order_id": world.order_id, "message": "Where is my parcel?"},
         ),
         "getShopTicket": Call("GET", f"{TICKETS}/{world.ticket_id}", role="customer"),
+    }
+
+
+def _console_calls(world: World) -> Mapping[str, Call]:
+    console_ticket = f"{CONSOLE_TICKETS}/{world.ticket_id}"
+    return {
+        "listConsoleTickets": Call("GET", CONSOLE_TICKETS, role="staff", params={"status": "open"}),
+        "getConsoleTicket": Call("GET", console_ticket, role="staff"),
+        "recordTicketView": Call("POST", f"{console_ticket}/views", role="staff", key=KEY),
+        # A retry, valid because the current suggestion of `ticket_id` ended unavailable
+        # (`ticket_with_failed_suggestion`), so this call gets `202`.
+        "createSuggestion": Call(
+            "POST", f"{console_ticket}/suggestions", role="staff", key=KEY, body={}
+        ),
+        "createReplyProposal": Call(
+            "POST",
+            f"{console_ticket}/reply-proposals",
+            role="staff",
+            key=KEY,
+            body=REPLY_WITHOUT_A_DRAFT,
+        ),
+        "sendReply": Call(
+            "POST", f"{console_ticket}/replies", role="staff", key=KEY, body=REPLY_WITHOUT_A_DRAFT
+        ),
+        "createEscalation": Call(
+            "POST", f"{console_ticket}/escalations", role="staff", key=KEY, body=ESCALATION
+        ),
+        # The current suggestion of `ticket_id` has no pending part, so this call gets `204`.
+        "getSuggestionEvents": Call("GET", f"{console_ticket}/suggestion-events", role="staff"),
+        "getConsoleKbDocumentVersion": Call("GET", KB_DOCUMENT_VERSION, role="staff"),
+        "getConsoleReport": Call("GET", CONSOLE_REPORTS, role="manager", params=REPORT_PERIOD),
+    }
+
+
+def _admin_calls(world: World) -> Mapping[str, Call]:
+    target = f"{ACCOUNTS}/{world.target_account_id}"
+    return {
         "listAdminAccounts": Call("GET", ACCOUNTS, role="admin"),
+        "getAdminVersions": Call("GET", ADMIN_VERSIONS, role="admin"),
         "createAdminAccount": Call("POST", ACCOUNTS, role="admin", key=KEY, body=NEW_ACCOUNT),
         "changeAccountRole": Call(
-            "POST",
-            f"{ACCOUNTS}/{target}/role-changes",
-            role="admin",
-            key=KEY,
-            body={"role": "manager"},
+            "POST", f"{target}/role-changes", role="admin", key=KEY, body={"role": "manager"}
         ),
         "changeAccountStatus": Call(
-            "POST",
-            f"{ACCOUNTS}/{target}/status-changes",
-            role="admin",
-            key=KEY,
-            body={"is_active": False},
+            "POST", f"{target}/status-changes", role="admin", key=KEY, body={"is_active": False}
         ),
         "resetAccountPassword": Call(
             "POST",
-            f"{ACCOUNTS}/{target}/password-resets",
+            f"{target}/password-resets",
             role="admin",
             key=KEY,
             body={"password": NEW_PASSWORD, "is_signed_out_everywhere": True},
         ),
-        "checkLiveness": Call("GET", "/health/live"),
-        "checkReadiness": Call("GET", "/health/ready"),
     }
 
 

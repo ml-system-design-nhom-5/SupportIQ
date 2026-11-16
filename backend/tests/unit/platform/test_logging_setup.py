@@ -27,6 +27,12 @@ ORDER_ID = "ORD-20931"
 RAW_SESSION_ID = "Zk3Qm9xR2vT8wY1aB4cD7eF0gH3jK6lM9nP2qS5uV8x"
 TICKET_ID = "TCK-1042"
 TIMESTAMP_PATTERN = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z")
+# Events of each level of the catalog, none of them with a handled-input level.
+LEVELS_OF_THE_CATALOG = [
+    (EventName.TICKET_CREATED, "info"),
+    (EventName.PERMISSION_DENIED, "warning"),
+    (EventName.REQUEST_FAILED, "error"),
+]
 
 
 class CapturedLog:
@@ -124,18 +130,44 @@ def test_event_line_keeps_integers_and_booleans(captured: CapturedLog) -> None:
     assert (line["old_is_active"], line["new_is_active"], line["duration_ms"]) == (True, False, 12)
 
 
-@pytest.mark.parametrize(
-    ("event", "level"),
-    [
-        (EventName.TICKET_CREATED, "info"),
-        (EventName.PERMISSION_DENIED, "warning"),
-        (EventName.REQUEST_FAILED, "error"),
-    ],
-)
+@pytest.mark.parametrize(("event", "level"), LEVELS_OF_THE_CATALOG)
 def test_event_line_has_the_level_of_the_catalog(
     captured: CapturedLog, event: EventName, level: str
 ) -> None:
     captured.events.record(event)
+
+    (line,) = captured.lines()
+
+    assert line["level"] == level
+
+
+def test_handled_input_line_has_the_handled_input_level_of_the_event(
+    captured: CapturedLog,
+) -> None:
+    captured.events.record_handled_input(EventName.PSEUDONYMIZATION_FAILED)
+
+    (line,) = captured.lines()
+
+    assert line["level"] == "warning"
+    assert line["event"] == "pseudonymization.failed"
+
+
+def test_event_line_keeps_the_catalog_level_of_an_event_with_a_handled_input_level(
+    captured: CapturedLog,
+) -> None:
+    captured.events.record(EventName.PSEUDONYMIZATION_FAILED)
+
+    (line,) = captured.lines()
+
+    assert line["level"] == "error"
+    assert line["event"] == "pseudonymization.failed"
+
+
+@pytest.mark.parametrize(("event", "level"), LEVELS_OF_THE_CATALOG)
+def test_handled_input_line_of_an_event_without_a_handled_input_level_keeps_its_level(
+    captured: CapturedLog, event: EventName, level: str
+) -> None:
+    captured.events.record_handled_input(event)
 
     (line,) = captured.lines()
 

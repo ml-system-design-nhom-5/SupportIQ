@@ -2,7 +2,8 @@
 
 Only the composition root creates `Settings` and passes plain values on, so no other code
 reads the environment. Every setting is listed with a comment in `backend/.env.example`. The
-initial values come from the Settings table of the backend foundation design.
+initial values come from the Settings tables of the backend foundation design and of the
+backend ticket workflow design.
 """
 
 import json
@@ -75,6 +76,22 @@ class Settings(BaseSettings):
     seed_password_staff: SeedPassword = None
     seed_password_manager: SeedPassword = None
     seed_password_admin: SeedPassword = None
+    ai_service_base_url: HttpUrl
+    # An empty token would send `Authorization: Bearer ` and fail every call (ERR-17).
+    ai_service_token: Annotated[SecretStr, Field(min_length=1)]
+    ai_service_analysis_timeout_ms: PositiveInt = 3_000
+    ai_service_draft_timeout_ms: PositiveInt = 11_000
+    ai_service_read_timeout_ms: PositiveInt = 3_000
+    # The `backend_version` of `getAdminVersions`, from 1 to 64 characters (backend contract).
+    backend_build_version: Annotated[str, Field(min_length=1, max_length=64)]
+    suggestion_workers_per_replica: PositiveInt = 5
+    suggestion_job_lease_ms: PositiveInt = 15_000
+    suggestion_job_max_attempts: PositiveInt = 3
+    suggestion_queue_poll_ms: PositiveInt = 500
+    suggestion_events_poll_ms: PositiveInt = 1_000
+    suggestion_events_max_ms: PositiveInt = 600_000
+    # uvicorn takes whole seconds; after this wait it cancels every open response (ADR-0023).
+    graceful_shutdown_timeout_ms: Annotated[PositiveInt, Field(multiple_of=1_000)] = 15_000
     trace_exporter: TraceExporter = TraceExporter.NONE
     otlp_traces_endpoint: HttpUrl | None = None
     otlp_export_timeout_ms: PositiveInt = 10_000
@@ -111,6 +128,10 @@ class Settings(BaseSettings):
             raise _OTLP_ENDPOINT_RULE.error()
         if self.session_touch_interval_ms >= self.session_idle_timeout_ms:
             raise _TOUCH_INTERVAL_RULE.error()
+        # A lease shorter than the draft call would let a second worker claim a running job
+        # (ADR-0011, Suggestion job queue, item 3).
+        if self.suggestion_job_lease_ms <= self.ai_service_draft_timeout_ms:
+            raise _LEASE_RULE.error()
         return self
 
 
@@ -140,6 +161,13 @@ _TOUCH_INTERVAL_RULE = _SettingRule(
     "setting_too_large",
     "Must be shorter than session_idle_timeout_ms",
     "session_touch_interval_ms",
+)
+
+
+_LEASE_RULE = _SettingRule(
+    "setting_too_small",
+    "Must be longer than ai_service_draft_timeout_ms",
+    "suggestion_job_lease_ms",
 )
 
 

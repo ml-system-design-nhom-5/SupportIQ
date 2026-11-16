@@ -34,6 +34,7 @@ from supportiq_backend.platform.web.requests import (
 from supportiq_backend.platform.web.responses import (
     JSON_MEDIA_TYPE,
     NonUtcTimestampError,
+    format_optional_timestamp,
     format_timestamp,
     json_response,
     provide,
@@ -60,6 +61,7 @@ __all__ = [
     "build_problem_response",
     "decode_cursor",
     "encode_cursor",
+    "format_optional_timestamp",
     "format_timestamp",
     "install_exception_handling",
     "json_response",

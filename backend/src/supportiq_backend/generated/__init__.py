@@ -749,6 +749,12 @@ class ConsoleCustomerView(BaseModel):
 
 class AnalysisStatus(StrEnum):
     pending = "pending"
+    ready = "ready"
+    unavailable = "unavailable"
+
+
+class AnalysisStatus1(StrEnum):
+    pending = "pending"
 
 
 class PendingAnalysisPart(BaseModel):
@@ -758,11 +764,11 @@ class PendingAnalysisPart(BaseModel):
     ]
 
 
-class AnalysisStatus1(StrEnum):
+class AnalysisStatus2(StrEnum):
     ready = "ready"
 
 
-class AnalysisStatus2(StrEnum):
+class AnalysisStatus3(StrEnum):
     unavailable = "unavailable"
 
 
@@ -902,7 +908,7 @@ class ModeHandlingTime(BaseModel):
     ticket_count: Annotated[
         int,
         Field(
-            description="The closed tickets of the mode that have a first view. Data class: Internal.",
+            description="The closed tickets of the mode whose first view came no later than their reply. A ticket first viewed after its reply is left out, because its handling time would be negative. Data class: Internal.",
             ge=0,
         ),
     ]
@@ -1553,6 +1559,28 @@ class ConsoleOtherOrderView(BaseModel):
     ]
 
 
+class SuggestionProgressEvent(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    suggestion_id: Annotated[
+        str,
+        Field(
+            description="The identifier of the current suggestion (CON-15). Data class: Internal.",
+            min_length=1,
+        ),
+    ]
+    analysis_status: Annotated[
+        AnalysisStatus,
+        Field(
+            description="The status of the analysis part, as `analysis_status` of `AnalysisPart`. Consumers map an unknown value to `unavailable` (CON-22). Data class: Internal."
+        ),
+    ]
+    draft_status: Annotated[
+        DraftStatus, Field(description="The status of the draft part. Data class: Internal.")
+    ]
+
+
 class UnavailableAnalysisPart(BaseModel):
     analysis_status: Annotated[
         Literal["unavailable"],
@@ -2000,7 +2028,7 @@ class ConsoleReport(BaseModel):
     end_to_end_latency: Annotated[
         EndToEndLatency,
         Field(
-            description="From ticket creation until the draft part of the ticket's first suggestion left `pending`, for those drafts completed in the period (NFR-08: p95 at most 12 s). Data class: Internal."
+            description="From ticket creation until the draft part of the ticket's first suggestion left `pending`, for those drafts completed in the period (NFR-08: p95 at most 12 s). A ticket whose first draft part was `cancelled`, for example by an intent correction, is left out, because staff got no result from it; a first draft that ended `unavailable` or `llm_unavailable` counts. Data class: Internal."
         ),
     ]
     ai_error_rate: Annotated[

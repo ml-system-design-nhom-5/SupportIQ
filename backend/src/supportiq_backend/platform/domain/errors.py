@@ -11,7 +11,11 @@ class ErrorCode(StrEnum):
     INVALID_REQUEST = "invalid-request"
     UNAUTHENTICATED = "unauthenticated"
     FORBIDDEN = "forbidden"
+    AUTHORITY_REQUIRED = "authority-required"
     NOT_FOUND = "not-found"
+    INVALID_TICKET_STATE = "invalid-ticket-state"
+    SUGGESTION_PENDING = "suggestion-pending"
+    SUGGESTION_SUPERSEDED = "suggestion-superseded"
     IDEMPOTENCY_KEY_REUSED = "idempotency-key-reused"
     LOGIN_NAME_TAKEN = "login-name-taken"
     NOT_READY = "not-ready"
@@ -27,6 +31,10 @@ class BackendError(Exception):
     """
 
     code: ClassVar[ErrorCode] = ErrorCode.INTERNAL_ERROR
+    # True only for an error that the code which raised it already logged, with the event of
+    # its cause, so the exception handler marks the span and logs nothing more (ERR-05). Every
+    # other error is logged by the handler.
+    is_logged_where_handled: ClassVar[bool] = False
 
     def __init__(self, detail: str) -> None:
         """Keep the safe detail of the error.

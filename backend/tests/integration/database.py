@@ -41,6 +41,14 @@ BACKEND_TABLE_NAMES = (
     "tickets",
     "customer_messages",
     "audit_log_entries",
+    "suggestions",
+    "suggestion_parts",
+    "suggestion_jobs",
+    "pseudonym_map_entries",
+    "reply_proposals",
+    "replies",
+    "escalations",
+    "staff_decisions",
 )
 # The timeouts of the design's Settings table.
 DESIGN_TIMEOUTS = DatabaseTimeouts(

@@ -8,12 +8,13 @@ import httpx
 from tests.integration.application import (
     session_headers,
 )
-from tests.integration.builders import DatabaseBuilder
+from tests.integration.builders import AccountSpec, DatabaseBuilder
 from tests.unit.platform.fakes import (
     FAKE_CLOCK_START,
 )
 
 TICKETS = "/v1/shop/tickets"
+CONSOLE_TICKETS = "/v1/console/tickets"
 KEY = "00000000-0000-4000-8000-000000000001"
 OTHER_KEY = "00000000-0000-4000-8000-000000000002"
 MESSAGE = "Where is my parcel?"
@@ -23,6 +24,9 @@ HELD_REQUEST_HASH = bytes(32)
 RETENTION_MS = 86_400_000
 NEWEST = FAKE_CLOCK_START + timedelta(hours=2)
 OLDEST = FAKE_CLOCK_START - timedelta(hours=2)
+REPLY_BODY = "Your parcel left our warehouse today."
+# `FAKE_CLOCK_START`, the time of the application's clock when staff send the reply.
+REPLY_SENT_AT = "2026-11-05T09:00:00Z"
 type Customer = tuple[UUID, dict[str, str]]
 
 
@@ -48,6 +52,18 @@ async def create_ticket(
 async def sign_in_as_new_customer(builder: DatabaseBuilder) -> Customer:
     account_id, customer_id = await builder.customer_account()
     return customer_id, session_headers(await builder.session(account_id, "customer"))
+
+
+async def send_reply(
+    client: httpx.AsyncClient, builder: DatabaseBuilder, ticket_id: str
+) -> httpx.Response:
+    """Send `REPLY_BODY` as a new staff account, the one way a ticket gets a reply (FR-04)."""
+    staff = await builder.account(AccountSpec("staff"))
+    return await client.post(
+        f"{CONSOLE_TICKETS}/{ticket_id}/replies",
+        json={"basis": "no_ai_draft", "body": REPLY_BODY},
+        headers={**session_headers(await builder.session(staff, "staff")), "Idempotency-Key": KEY},
+    )
 
 
 async def count_tickets(builder: DatabaseBuilder) -> object:

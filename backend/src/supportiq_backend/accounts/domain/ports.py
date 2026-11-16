@@ -4,12 +4,14 @@ They follow ADR-0009, statement 9, and ADR-0015. The ports of new passwords are 
 `password_ports`.
 """
 
+from collections.abc import Mapping
 from datetime import datetime
 from typing import Protocol
 
 from supportiq_backend.accounts.domain.admin import InternalAccount, NewInternalAccount
 from supportiq_backend.accounts.domain.identity import (
     AccountId,
+    DisplayName,
     LoginName,
     Password,
     PasswordHash,
@@ -278,4 +280,21 @@ class SessionTokenGenerator(Protocol):
 
     def generate(self) -> SessionToken:
         """Return a new random session identifier."""
+        ...
+
+
+class StaffDirectory(Protocol):
+    """Name the staff and managers who acted on a ticket, for the console (ADR-0012)."""
+
+    async def load_display_names(
+        self, account_ids: frozenset[AccountId]
+    ) -> Mapping[AccountId, DisplayName]:
+        """Load the display names of internal accounts in one query.
+
+        Args:
+            account_ids: The accounts.
+
+        Returns:
+            The display name of each known internal account. Confidential.
+        """
         ...

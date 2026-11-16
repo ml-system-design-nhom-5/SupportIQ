@@ -7,9 +7,10 @@ from dataclasses import dataclass
 import httpx
 from fastapi import FastAPI
 
-from supportiq_backend.composition_root import create_app
+from supportiq_backend.composition_root import BackgroundWork, create_app
 from supportiq_backend.platform import EventRecorder
 from supportiq_backend.platform.settings import Settings
+from tests.integration.ai_service_doubles import FakeAiService, refuse_connection
 from tests.integration.database import WorkerDatabase
 from tests.unit.platform.fakes import FakeClock, RecordingEventRecorder
 from tests.unit.platform.settings_builders import build_test_settings
@@ -60,13 +61,20 @@ def build_settings(worker_database: WorkerDatabase, **overrides: object) -> Sett
         "database_url_app": worker_database.app_url,
         "allowed_origins": (ALLOWED_ORIGIN,),
         "session_cookie_secure": False,
+        # The test client returns only once a stream ends, and the fake clock ends each wait
+        # at once, so a stream of a pending part ends at this limit after one re-read.
+        "suggestion_events_max_ms": 2_000,
     }
     return build_test_settings(**(values | overrides))
 
 
 @asynccontextmanager
 async def running_client(
-    settings: Settings, events: EventRecorder, clock: FakeClock
+    settings: Settings,
+    events: EventRecorder,
+    clock: FakeClock,
+    *,
+    ai_service: FakeAiService | None = None,
 ) -> AsyncGenerator[httpx.AsyncClient]:
     """Start the application with its lifespan and yield an HTTP client to it.
 
@@ -74,11 +82,20 @@ async def running_client(
         settings: The settings of the replica.
         events: Where the application records events.
         clock: The clock of the application.
+        ai_service: The in-memory ai-service; by default one that refuses every connection.
 
     Yields:
         A client whose requests go to the application in the test process.
     """
-    async with running_app(create_app(settings, events, clock)) as client:
+    # No claim loop: no job runs behind the back of a test of the HTTP operations.
+    app = create_app(
+        settings,
+        events,
+        clock,
+        background=BackgroundWork.NONE,
+        ai_service_transport=FakeAiService(refuse_connection) if ai_service is None else ai_service,
+    )
+    async with running_app(app) as client:
         yield client
 
 

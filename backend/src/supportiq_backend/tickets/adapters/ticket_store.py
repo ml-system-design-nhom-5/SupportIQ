@@ -1,5 +1,6 @@
 """The `TicketStore` port on the `tickets` and `customer_messages` tables."""
 
+from collections.abc import Mapping
 from datetime import datetime
 from uuid import UUID
 
@@ -10,8 +11,9 @@ from supportiq_backend.accounts import CustomerId
 from supportiq_backend.commerce import OrderId
 from supportiq_backend.platform import is_storable_text
 from supportiq_backend.platform.persistence import BYTE_ORDER_COLLATION
-from supportiq_backend.tickets.adapters.tables import CustomerMessageRow, TicketRow
+from supportiq_backend.tickets.adapters.tables import CustomerMessageRow, ReplyRow, TicketRow
 from supportiq_backend.tickets.domain import (
+    ShopReply,
     ShopTicket,
     ShopTicketRecord,
     TicketId,
@@ -84,7 +86,9 @@ class PostgresTicketStore:
             _select_shop_tickets(customer_id).where(TicketRow.ticket_id == ticket_id)
         )
         row = result.one_or_none()
-        return None if row is None else _to_shop_ticket(row)
+        if row is None:
+            return None
+        return _to_shop_ticket(row, await self._load_replies((row.ticket_id,)))
 
     async def load_shop_tickets(
         self,
@@ -116,10 +120,23 @@ class PostgresTicketStore:
                     and_(TicketRow.created_at == after.created_at, ticket_order > after.ticket_id),
                 )
             )
-        result = await self._session.execute(
-            statement.order_by(TicketRow.created_at.desc(), ticket_order).limit(limit)
+        rows = (
+            await self._session.execute(
+                statement.order_by(TicketRow.created_at.desc(), ticket_order).limit(limit)
+            )
+        ).all()
+        replies = await self._load_replies(tuple(row.ticket_id for row in rows))
+        return tuple(_to_shop_ticket(row, replies) for row in rows)
+
+    async def _load_replies(self, ticket_ids: tuple[str, ...]) -> Mapping[str, ShopReply]:
+        if not ticket_ids:
+            return {}
+        rows = await self._session.execute(
+            select(ReplyRow.ticket_id, ReplyRow.body, ReplyRow.sent_at).where(
+                ReplyRow.ticket_id.in_(ticket_ids)
+            )
         )
-        return tuple(_to_shop_ticket(row) for row in result)
+        return {row.ticket_id: ShopReply(row.body, row.sent_at) for row in rows}
 
 
 def _select_shop_tickets(customer_id: CustomerId) -> Select[_ShopTicketColumns]:
@@ -139,6 +156,14 @@ def _select_shop_tickets(customer_id: CustomerId) -> Select[_ShopTicketColumns]:
     )
 
 
-def _to_shop_ticket(row: Row[_ShopTicketColumns]) -> ShopTicket:
+def _to_shop_ticket(
+    row: Row[_ShopTicketColumns], reply_by_ticket: Mapping[str, ShopReply]
+) -> ShopTicket:
     # The constraint `tickets_shop_tickets_have_an_order` gives every shop ticket an order.
-    return ShopTicket(TicketId(row.ticket_id), OrderId(row.order_id), row.body, row.created_at)
+    return ShopTicket(
+        TicketId(row.ticket_id),
+        OrderId(row.order_id),
+        row.body,
+        row.created_at,
+        reply_by_ticket.get(row.ticket_id),
+    )

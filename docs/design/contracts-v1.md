@@ -3,8 +3,8 @@
 - **Status:** Approved
 - **Owner:** contracts gatekeeper
 - **Reviewers:** ML engineer, RAG engineer, backend engineer, frontend engineer
-- **Last reviewed:** 2026-11-12
-- **Related:** [Requirements](../product/requirements.md) (FR-01 to FR-11, ESC-01 to ESC-05), [ADR-0001](../decisions/0001-system-architecture.md), [ADR-0004](../decisions/0004-api-conventions.md), [ADR-0005](../decisions/0005-intent-independent-retrieval.md), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md), [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md), [ADR-0014](../decisions/0014-citations-to-order-context.md), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md), [ADR-0016](../decisions/0016-hosting-on-free-tiers.md), [account management design](account-management.md), [contract rules](../rules/contracts.md)
+- **Last reviewed:** 2026-11-15
+- **Related:** [Requirements](../product/requirements.md) (FR-01 to FR-11, ESC-01 to ESC-05), [ADR-0001](../decisions/0001-system-architecture.md), [ADR-0004](../decisions/0004-api-conventions.md), [ADR-0005](../decisions/0005-intent-independent-retrieval.md), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md), [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md), [ADR-0014](../decisions/0014-citations-to-order-context.md), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md), [ADR-0016](../decisions/0016-hosting-on-free-tiers.md), [account management design](account-management.md), [contract rules](../rules/contracts.md), [ADR-0022](../decisions/0022-server-sent-events-for-suggestion-progress.md)
 
 ## Summary
 
@@ -33,6 +33,7 @@ The team agreed the product behavior:
 - the update of 2026-11-08, as `backend.openapi.yaml` 1.0.1 states: the problem type `idempotency-key-reused` also covers the same key with different path parameters; the ingress answers `502` or `504` also when a write in flight fails, and a retry with the same key then cannot repeat its effect; a product appears at most once in an order;
 - the update of 2026-11-11, for `backend` contract 1.1.0 ([ADR-0015](../decisions/0015-account-creation-and-password-changes.md)): the own password change, admin account creation and password reset, the problem type `login-name-taken`, and three audit log events. The [account management design](account-management.md) holds their details;
 - the update of 2026-11-12, for `backend` contract 1.2.0: the console's KB document read is named `getConsoleKbDocumentVersion`, the queue order and the message excerpt of `TicketSummary` are fixed, and latencies are integer `_ms` fields inside objects, as CON-18 requires. After the review of the same day, staff get `403 authority-required` before `409 suggestion-pending`, a retry keeps the intent that staff chose, `source_review_overdue` refers to retrieved document versions, `StepLatencies` and `KbDocumentVersion` are shared schemas, and the report breaks down edits and rejections by staff reason code. The [backend ticket workflow design](backend-ticket-workflow.md) holds the details.
+- the update of 2026-11-15, for [ADR-0022](../decisions/0022-server-sent-events-for-suggestion-progress.md) and `backend` contract 1.2.1: the console receives the progress of a suggestion from a server-sent events stream while one of its parts is `pending`, so push updates are no longer a non-goal for that one case, and no other view of `frontend` polls more often than every 30 s. The report's end-to-end latency leaves out a ticket whose first draft part was `cancelled`, and its handling time counts only tickets first viewed no later than their reply, as the project lead decided on 2026-11-14. The project lead approved the update of 2026-11-15 on that day.
 
 Revision 2 needs a new approval.
 
@@ -57,7 +58,7 @@ Revision 2 needs a new approval.
 - Production-grade authentication ([ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md) records the revisit).
 - Admin features beyond accounts, roles, account status, account creation, password resets, and version display ([ADR-0012](../decisions/0012-roles-v1.md), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md)).
 - A cart, a checkout, or any operation that creates or changes orders ([ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md)).
-- Streaming or push updates. `frontend` polls.
+- Push updates other than the progress of a suggestion while one of its parts is `pending`, which a server-sent events stream delivers ([ADR-0022](../decisions/0022-server-sent-events-for-suggestion-progress.md)). No other view of `frontend` polls more often than every 30 s.
 - KB content. This design fixes the structure; content arrives with the approved KB files.
 - Assigning tickets to individual staff members. All staff share one open queue.
 - Staff creating tickets on behalf of customers. Tickets come from the shop and from the evaluation import.
@@ -685,10 +686,10 @@ An escalation records `escalate`. For a reply proposal, the record keeps both th
 | `draft_decisions` | Counts and shares of `approve`, `edit`, and `reject` among replies sent in the period whose basis, or whose proposal's basis, was `ai_draft` or `rejected_ai_draft`, with the edits and the rejections by staff reason code |
 | `escalations` | Escalations in the period, by staff reason code |
 | `ai_outcomes` | Suggestions completed in the period, by draft status and by AI reason code, without `cancelled` drafts |
-| `end_to_end_latency` | `p50_ms` and `p95_ms`, from ticket creation until the draft part of the ticket's first suggestion left `pending` ([NFR-08](../product/requirements.md#5-quality-requirements)) |
+| `end_to_end_latency` | `p50_ms` and `p95_ms`, from ticket creation until the draft part of the ticket's first suggestion left `pending` ([NFR-08](../product/requirements.md#5-quality-requirements)). A ticket whose first draft part was `cancelled` is left out, because staff got no result from it; a first draft that ended `unavailable` or `llm_unavailable` counts |
 | `ai_error_rate` | Share of suggestions with a part `unavailable` or a draft `llm_unavailable` |
 | `llm_cost_micro_usd` | Total, and average per suggestion that called the LLM |
-| `handling_time` | `p50_ms` by handling mode (NFR-11) |
+| `handling_time` | `p50_ms` by handling mode (NFR-11), for tickets whose first view came no later than their reply |
 
 Only managers see the report ([ADR-0012](../decisions/0012-roles-v1.md)). The console shows each figure with a label in business language, its unit, and its target where the requirements give one ([UI-44](../rules/ui.md#console-interaction)). The report holds no intent figures, such as the override rate or decisions by intent, and no latency per suggestion part: those are developer metrics on the Staff outcomes and AI pipeline dashboards of Grafana ([LOG-27](../rules/logging-and-observability.md#dashboards)). The breakdown of edits and rejections by intent that [ADR-0006, Validation](../decisions/0006-staff-feedback-and-reason-codes.md#validation) asks for comes from the decision-record export `backend export-decisions` ([backend ticket workflow design](backend-ticket-workflow.md#the-decision-record-export)) and the Staff outcomes dashboard, as the project lead decided on 2026-11-12.
 
@@ -820,7 +821,7 @@ Values missing from the source files are never invented. A document without a re
 - **One `/v1/suggestions` endpoint in `ai-service`** instead of analyses and drafts: rejected in [ADR-0005](../decisions/0005-intent-independent-retrieval.md).
 - **One ticket view for every role**, with fields hidden by role: rejected, because a hidden field can leak through a bug. Separate shop, console, and admin schemas make "a customer never sees a draft" and "an admin never sees a ticket" structural.
 - **Synchronous AI call during ticket creation:** rejected, because the customer would wait for the LLM and an AI failure would fail ticket creation.
-- **Push updates (server-sent events or WebSockets):** deferred. Polling fits v1. With more than one `backend` replica, push would also need a shared publish-subscribe channel ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)).
+- **Polling alone, without push updates:** the rule of revision 2 until 2026-11-15. On 2026-11-13 the project lead ruled out polling more often than every 30 s, and [ADR-0022](../decisions/0022-server-sent-events-for-suggestion-progress.md) chose a server-sent events stream for the progress of a pending suggestion. It needs no shared publish-subscribe channel: each stream re-reads the part statuses, as the claim loop does ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)).
 - **Authority taken only from the current suggestion:** rejected after review, because an intent correction could remove the flag. The flag is sticky per ticket.
 - **Staff may send authority-required replies after acknowledging a warning:** rejected by the team in favor of manager approval.
 - **Reports as Grafana dashboards:** rejected. Telemetry is disposable and is not the record of truth ([LOG-33](../rules/logging-and-observability.md#alerts-and-retention)). Grafana sits outside the access control of `backend` (FR-08). Grafana stays the developer view.
@@ -894,6 +895,7 @@ Every schema property states its data class ([SEC-03](../rules/security-and-priv
    - the evaluation protocol ([DATA-20](../rules/data-and-ml.md#splits-and-evaluation-protocol)).
 10. Done on 2026-11-12: the project lead approved the remaining `frontend` ↔ `backend` part of revision 2, the console operations and `getAdminVersions`, with the decisions of 2026-11-11 on reports and dev mode applied above. The `ai-service` contract followed in step 11. On the same day the project lead decided that the LLM never sets `requires_authority`: only the intent model and the sensitive-term list do, and the LLM only writes the draft ([Authority rule](#authority-rule-fr-06)). The KB data contract stays open until the KB files arrive (step 8).
 11. Done on 2026-11-12: the project lead approved the `ai-service` part of revision 2 with `ai-service` contract 1.0.0, the update of that day for `backend` contract 1.2.0 with its review fixes, and the [backend ticket workflow design](backend-ticket-workflow.md). Revision 2 is approved in full; the KB data contract still waits for the KB files (step 8). The service token, pseudonymization, and the LLM inputs need the two approvals of [SEC-35](../rules/security-and-privacy.md#security-review); the project lead's approval stands for them.
+12. Done on 2026-11-15: the project lead approved the update of 2026-11-15, for ADR-0022 and `backend` contract 1.2.1. `backend` contract 1.3.0 adds the stream of ADR-0022.
 
 Nothing is deployed yet, so no migration or rollback is needed.
 

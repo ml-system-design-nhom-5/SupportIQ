@@ -35,7 +35,17 @@ PROBLEM_DESCRIPTIONS: Mapping[ErrorCode, ProblemDescription] = MappingProxyType(
         ),
         ErrorCode.UNAUTHENTICATED: ProblemDescription(HTTPStatus.UNAUTHORIZED, "Not authenticated"),
         ErrorCode.FORBIDDEN: ProblemDescription(HTTPStatus.FORBIDDEN, "Forbidden"),
+        ErrorCode.AUTHORITY_REQUIRED: ProblemDescription(
+            HTTPStatus.FORBIDDEN, "Authority required"
+        ),
         ErrorCode.NOT_FOUND: ProblemDescription(HTTPStatus.NOT_FOUND, "Not found"),
+        ErrorCode.INVALID_TICKET_STATE: ProblemDescription(
+            HTTPStatus.CONFLICT, "Invalid ticket state"
+        ),
+        ErrorCode.SUGGESTION_PENDING: ProblemDescription(HTTPStatus.CONFLICT, "Suggestion pending"),
+        ErrorCode.SUGGESTION_SUPERSEDED: ProblemDescription(
+            HTTPStatus.CONFLICT, "Suggestion superseded"
+        ),
         ErrorCode.IDEMPOTENCY_KEY_REUSED: ProblemDescription(
             HTTPStatus.CONFLICT, "Idempotency key reused"
         ),

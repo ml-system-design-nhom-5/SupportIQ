@@ -1,11 +1,22 @@
-"""Guardrail: no admin operation returns or changes a customer account (TEST-26, SEC-41)."""
+"""Guardrail: no admin operation returns or changes a customer account (TEST-26, SEC-41).
+
+The versions in use hold versions only: no ticket, message, order, or customer.
+"""
 
 from http import HTTPStatus
 
 import pytest
 
-from tests.integration.application import RunningBackend, session_headers
-from tests.integration.builders import AccountSpec, DatabaseBuilder
+from tests.integration.ai_service_doubles import FakeAiService, serve_examples
+from tests.integration.application import (
+    RunningBackend,
+    build_settings,
+    running_client,
+    session_headers,
+)
+from tests.integration.builders import AccountSpec, DatabaseBuilder, TicketSpec
+from tests.integration.database import WorkerDatabase
+from tests.unit.platform.fakes import FakeClock, RecordingEventRecorder
 
 pytestmark = pytest.mark.anyio
 
@@ -13,6 +24,7 @@ CUSTOMER_NAME = "Customer Of The Shop"
 KEY = "00000000-0000-4000-8000-000000000001"
 OTHER_KEY = "00000000-0000-4000-8000-000000000002"
 RESET_PASSWORD = "reset-test-password"
+CUSTOMER_MESSAGE = "My parcel to 12 Hang Bac street never arrived."
 
 
 @pytest.fixture
@@ -97,3 +109,26 @@ async def test_password_reset_of_a_customer_account_returns_404_and_changes_noth
         )
         == password_hash
     )
+
+
+async def test_the_versions_in_use_hold_versions_only(
+    worker_database: WorkerDatabase, builder: DatabaseBuilder, admin_headers: dict[str, str]
+) -> None:
+    _, customer_id = await builder.customer_account(display_name=CUSTOMER_NAME)
+    order_id = await builder.order_of_one_product(customer_id)
+    ticket_id = await builder.ticket(customer_id, order_id, TicketSpec(message=CUSTOMER_MESSAGE))
+    ai_service = FakeAiService(serve_examples)
+
+    async with running_client(
+        build_settings(worker_database),
+        RecordingEventRecorder(),
+        FakeClock(),
+        ai_service=ai_service,
+    ) as client:
+        response = await client.get("/v1/admin/versions", headers=admin_headers)
+
+    customer_values = (CUSTOMER_NAME, CUSTOMER_MESSAGE, ticket_id, order_id, str(customer_id))
+    assert response.status_code == HTTPStatus.OK
+    assert set(response.json()) == {"backend_version", "ai_service_status", "ai_service_versions"}
+    assert ai_service.paths() == ["/v1/asset-versions"]
+    assert [value for value in customer_values if value in response.text] == []

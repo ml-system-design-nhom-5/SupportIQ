@@ -1,6 +1,6 @@
 # Architecture decision records
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-12
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-13
 
 An architecture decision record (ADR) captures one significant decision: its context, the options, what we chose, and what it costs. This page lists every ADR and explains the process. Writing rules are in the [documentation handbook](../README.md#adrs).
 
@@ -25,6 +25,11 @@ An architecture decision record (ADR) captures one significant decision: its con
 | [0015](0015-account-creation-and-password-changes.md) | Account creation, password changes, and password resets | Accepted | 2026-11-11 |
 | [0016](0016-hosting-on-free-tiers.md) | Hosting of the demo on free tiers | Accepted | 2026-11-12 |
 | [0017](0017-named-entity-model-from-its-release-url.md) | The named-entity model from its release URL | Accepted | 2026-11-12 |
+| [0019](0019-one-label-for-text-in-the-placeholder-syntax.md) | One label for text in the placeholder syntax | Accepted | 2026-11-13 |
+| [0020](0020-storage-errors-of-the-pseudonym-map.md) | Storage errors of the pseudonym map | Accepted | 2026-11-13 |
+| [0022](0022-server-sent-events-for-suggestion-progress.md) | Server-sent events for the suggestion progress of an open ticket | Accepted | 2026-11-13 |
+| [0023](0023-graceful-shutdown-of-suggestion-progress-streams.md) | Graceful shutdown of suggestion progress streams | Accepted | 2026-11-16 |
+| [0024](0024-event-schema-of-the-suggestion-progress-stream.md) | Event schema of the suggestion progress stream | Accepted | 2026-11-16 |
 
 Notes on the index:
 
@@ -32,6 +37,11 @@ Notes on the index:
 - [ADR-0013](0013-shop-demo-with-read-only-catalog.md) was accepted on 2026-11-05 and supersedes [ADR-0002](0002-shop-demo-scope.md).
 - [ADR-0015](0015-account-creation-and-password-changes.md) was accepted on 2026-11-11 by the project lead and replaces part of statement 1 of ADR-0009 and admin limit 9 of ADR-0012, extends the `admin` row of ADR-0012's role table, and adds the own password change to the `/shop` list of ADR-0013. The rest of those ADRs still holds.
 - [ADR-0016](0016-hosting-on-free-tiers.md) was accepted on 2026-11-12 by the project lead and replaces one part of [ADR-0007](0007-observability-stack.md): the telemetry of the deployed demo goes to a hosted service, Grafana Cloud. Local development keeps the local Grafana stack, and the rest of ADR-0007 still holds.
+- [ADR-0019](0019-one-label-for-text-in-the-placeholder-syntax.md) was accepted on 2026-11-16 by the project lead. It replaces one passage of [ADR-0010](0010-pseudonymization-and-egress-control.md): the separate label of a restored `LITERAL` in Restoring and sending, item 3. The rest of ADR-0010 still holds.
+- [ADR-0020](0020-storage-errors-of-the-pseudonym-map.md) was accepted on 2026-11-16 by the project lead. It replaces two passages of [ADR-0010](0010-pseudonymization-and-egress-control.md): the words "or the map cannot be stored" in the first row of Failure handling, and the words "storage error" in the first branch of the Overview sequence diagram. The rest of ADR-0010 still holds.
+- [ADR-0022](0022-server-sent-events-for-suggestion-progress.md) was accepted on 2026-11-14 by the project lead, who chose its recommended option, and changes statement 4 of [ADR-0016, `frontend` and the ingress](0016-hosting-on-free-tiers.md#frontend-and-the-ingress-on-cloudflare-pages) for one route. The project lead gave the number 0021 to the ADR on the repository layout and the AI and ML migration of the branch `build/join-main`, so this branch does not use it.
+- [ADR-0023](0023-graceful-shutdown-of-suggestion-progress-streams.md) was accepted on 2026-11-16 by the project lead. It replaces one point of [ADR-0022](0022-server-sent-events-for-suggestion-progress.md), statement 5: "At shutdown: the lifespan ends every stream before uvicorn's graceful shutdown". The rest of ADR-0022 still holds.
+- [ADR-0024](0024-event-schema-of-the-suggestion-progress-stream.md) was accepted on 2026-11-16 by the project lead. It replaces the words "with a string schema" of [ADR-0022](0022-server-sent-events-for-suggestion-progress.md), statement 9. The rest of ADR-0022 still holds.
 
 ## Lifecycle
 
