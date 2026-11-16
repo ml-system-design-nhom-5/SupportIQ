@@ -17,6 +17,10 @@ from sqlalchemy import Row, Select, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from supportiq_backend.platform import UnexpectedFailureError
+from supportiq_backend.platform.persistence import (
+    parse_optional_stored_enum,
+    parse_stored_enum,
+)
 from supportiq_backend.reports.adapters.sql_periods import (
     handling_duration,
     in_period,
@@ -107,7 +111,7 @@ class PostgresDecisionRecordSource:
 
         Raises:
             UnexpectedFailureError: A stored JSON value does not have the shape that backend
-                writes: a defect.
+                writes, or a stored text is no value of its enum: a defect.
         """
         tickets = (await self._session.execute(_select_tickets(period))).all()
         snapshots = await self._load_snapshots(
@@ -127,7 +131,8 @@ class PostgresDecisionRecordSource:
             return {}
         parts = await self._session.execute(_select_parts(suggestion_ids))
         part_by_key = {
-            (row.suggestion_id, SuggestionPart(row.part)): _to_part(row) for row in parts
+            (row.suggestion_id, parse_stored_enum(SuggestionPart, row.part)): _to_part(row)
+            for row in parts
         }
         suggestions = await self._session.execute(_select_suggestions(suggestion_ids))
         return {row.suggestion_id: _to_snapshot(row, part_by_key) for row in suggestions}
@@ -216,7 +221,7 @@ def _to_record(
     suggestion_id = row.current_suggestion_id
     return DecisionRecord(
         ticket_id=TicketId(row.ticket_id),
-        handling_mode=HandlingMode(row.handling_mode),
+        handling_mode=parse_stored_enum(HandlingMode, row.handling_mode),
         study_pair_id=row.study_pair_id,
         study_batch=row.study_batch,
         created_at=row.created_at,
@@ -236,8 +241,8 @@ def _to_snapshot(
 ) -> SuggestionSnapshot:
     return SuggestionSnapshot(
         suggestion_id=SuggestionId(str(row.suggestion_id)),
-        trigger=SuggestionTrigger(row.trigger),
-        intent_override=None if row.intent_override is None else IntentLabel(row.intent_override),
+        trigger=parse_stored_enum(SuggestionTrigger, row.trigger),
+        intent_override=parse_optional_stored_enum(IntentLabel, row.intent_override),
         created_at=row.created_at,
         pseudonymized_message=row.pseudonymized_message,
         # Every suggestion is inserted with both parts (backend ticket workflow design, Tables).
@@ -248,21 +253,25 @@ def _to_snapshot(
 
 def _to_part(row: Row[_PartColumns]) -> ExportedPart:
     return ExportedPart(
-        status=PartStatus(row.status),
-        reason_codes=tuple(AiReasonCode(code) for code in _as_texts(row.reason_codes)),
+        status=parse_stored_enum(PartStatus, row.status),
+        reason_codes=tuple(
+            parse_stored_enum(AiReasonCode, code) for code in _as_texts(row.reason_codes)
+        ),
         completed_at=row.completed_at,
-        result_fields=_select_result_fields(SuggestionPart(row.part), row.result),
+        result_fields=_select_result_fields(
+            parse_stored_enum(SuggestionPart, row.part), row.result
+        ),
     )
 
 
 def _to_decision(row: Row[_DecisionColumns]) -> ExportedDecision:
     return ExportedDecision(
-        decision_type=DecisionType(row.decision_type),
+        decision_type=parse_stored_enum(DecisionType, row.decision_type),
         staff_reason_codes=tuple(
-            StaffReasonCode(code) for code in _as_texts(row.staff_reason_codes)
+            parse_stored_enum(StaffReasonCode, code) for code in _as_texts(row.staff_reason_codes)
         ),
         change_ratio=row.change_ratio,
-        final_intent=None if row.final_intent is None else IntentLabel(row.final_intent),
+        final_intent=parse_optional_stored_enum(IntentLabel, row.final_intent),
         is_proposal_changed=row.is_proposal_changed,
         decided_at=row.decided_at,
     )

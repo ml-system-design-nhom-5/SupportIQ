@@ -8,6 +8,7 @@ from supportiq_backend.accounts.domain import (
     Role,
     SessionAccount,
 )
+from supportiq_backend.platform.persistence import parse_stored_enum
 
 
 def to_session_account(row: AccountRow) -> SessionAccount:
@@ -18,10 +19,13 @@ def to_session_account(row: AccountRow) -> SessionAccount:
 
     Returns:
         The domain object.
+
+    Raises:
+        UnexpectedFailureError: The stored role is no value of its enum: a defect.
     """
     return SessionAccount(
         account_id=AccountId(str(row.account_id)),
-        role=Role(row.role),
+        role=parse_stored_enum(Role, row.role),
         display_name=DisplayName(row.display_name),
         customer_id=None if row.customer_id is None else CustomerId(str(row.customer_id)),
     )

@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from supportiq_backend.platform.persistence import parse_stored_enum
 from supportiq_backend.pseudonymization.adapters.tables import PseudonymMapEntryRow
 from supportiq_backend.pseudonymization.domain import (
     MapTicketId,
@@ -66,6 +67,10 @@ class PostgresPseudonymMapStore:
 
         Returns:
             The entries, ordered by pseudonym; empty when there is no map.
+
+        Raises:
+            UnexpectedFailureError: A stored pseudonym type is no value of its enum: a defect.
+                The error never holds an original value (SEC-37).
         """
         rows = await self._session.scalars(
             select(PseudonymMapEntryRow)
@@ -73,6 +78,10 @@ class PostgresPseudonymMapStore:
             .order_by(PseudonymMapEntryRow.pseudonym)
         )
         return tuple(
-            PseudonymEntry(row.pseudonym, PseudonymType(row.pseudonym_type), row.original_value)
+            PseudonymEntry(
+                row.pseudonym,
+                parse_stored_enum(PseudonymType, row.pseudonym_type),
+                row.original_value,
+            )
             for row in rows
         )

@@ -13,7 +13,6 @@ import pytest
 
 from tests.integration.application import RunningBackend
 from tests.integration.builders import DatabaseBuilder, TicketSpec
-from tests.integration.database import WorkerDatabase
 from tests.integration.tickets.console_requests import (
     AUTHORITY_REQUIRED,
     DECISION_ROWS,
@@ -88,13 +87,11 @@ async def test_staff_get_403_forbidden_when_they_reply_to_an_awaiting_ticket(
 
 
 async def test_authority_needs_a_proposal_that_a_manager_sends_with_both_accounts_recorded(
-    backend: RunningBackend, builder: DatabaseBuilder, worker_database: WorkerDatabase
+    backend: RunningBackend, builder: DatabaseBuilder
 ) -> None:
     staff = await sign_in_as_support(builder)
     manager = await sign_in_as_manager(builder)
-    ticket, suggestion_id = await ticket_with_a_ready_draft(
-        builder, worker_database, is_authority_required=True
-    )
+    ticket, suggestion_id = await ticket_with_a_ready_draft(builder, is_authority_required=True)
     path = ticket_path(ticket.ticket_id, REPLIES)
 
     refused = await act_on_ticket(backend.client, staff, path, on_the_draft(suggestion_id))
@@ -128,13 +125,11 @@ async def test_authority_needs_a_proposal_that_a_manager_sends_with_both_account
 
 
 async def test_reply_from_a_proposal_answers_201_in_the_shape_of_the_contract(
-    backend: RunningBackend, builder: DatabaseBuilder, worker_database: WorkerDatabase
+    backend: RunningBackend, builder: DatabaseBuilder
 ) -> None:
     staff = await sign_in_as_support(builder)
     manager = await sign_in_as_manager(builder)
-    ticket, suggestion_id = await ticket_with_a_ready_draft(
-        builder, worker_database, is_authority_required=True
-    )
+    ticket, suggestion_id = await ticket_with_a_ready_draft(builder, is_authority_required=True)
     proposal = await propose(backend, staff, ticket.ticket_id, on_the_draft(suggestion_id))
 
     response = await act_on_ticket(

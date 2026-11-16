@@ -179,8 +179,8 @@ class SuggestionStore(Protocol):
             The suggestion, or None when it is unknown.
 
         Raises:
-            UnexpectedFailureError: A stored part breaks an invariant, or a stored result no
-                longer matches the contract: a defect.
+            UnexpectedFailureError: A stored part breaks an invariant, a stored text is no value
+                of its enum, or a stored result no longer matches the contract: a defect.
         """
         ...
 
@@ -196,8 +196,8 @@ class SuggestionStore(Protocol):
             Each known suggestion by its ID.
 
         Raises:
-            UnexpectedFailureError: A stored part breaks an invariant, or a stored result no
-                longer matches the contract: a defect.
+            UnexpectedFailureError: A stored part breaks an invariant, a stored text is no value
+                of its enum, or a stored result no longer matches the contract: a defect.
         """
         ...
 
@@ -228,6 +228,9 @@ class SuggestionJobStore(Protocol):
 
         Returns:
             The job, or None when it is unknown.
+
+        Raises:
+            UnexpectedFailureError: The stored state is no value of `JobState`: a defect.
         """
         ...
 

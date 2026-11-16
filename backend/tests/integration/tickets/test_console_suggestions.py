@@ -9,7 +9,6 @@ import pytest
 
 from tests.integration.application import ORIGIN_HEADERS, RunningBackend
 from tests.integration.builders import DatabaseBuilder
-from tests.integration.database import WorkerDatabase
 from tests.integration.tickets.console_requests import (
     CORRECTED_INTENT,
     INVALID_KEY_HEADERS,
@@ -32,13 +31,11 @@ CORRECTION = {"intent_override": CORRECTED_INTENT}
 
 
 async def test_intent_correction_answers_202_with_the_new_pending_suggestion(
-    backend: RunningBackend, builder: DatabaseBuilder, worker_database: WorkerDatabase
+    backend: RunningBackend, builder: DatabaseBuilder
 ) -> None:
     headers = (await sign_in_as_support(builder)).headers
     ticket = await open_ticket(builder)
-    await insert_suggestion(
-        worker_database, builder, ticket.ticket_id, analysis_ready_draft_pending()
-    )
+    await insert_suggestion(builder, ticket.ticket_id, analysis_ready_draft_pending())
 
     response = await backend.client.post(
         ticket_path(ticket.ticket_id, SUGGESTIONS), json=CORRECTION, headers=key_headers(headers)
@@ -55,13 +52,11 @@ async def test_intent_correction_answers_202_with_the_new_pending_suggestion(
 
 
 async def test_new_suggestion_becomes_the_current_one_of_the_ticket(
-    backend: RunningBackend, builder: DatabaseBuilder, worker_database: WorkerDatabase
+    backend: RunningBackend, builder: DatabaseBuilder
 ) -> None:
     headers = (await sign_in_as_support(builder)).headers
     ticket = await open_ticket(builder)
-    await insert_suggestion(
-        worker_database, builder, ticket.ticket_id, analysis_ready_draft_pending()
-    )
+    await insert_suggestion(builder, ticket.ticket_id, analysis_ready_draft_pending())
 
     response = await backend.client.post(
         ticket_path(ticket.ticket_id, SUGGESTIONS), json=CORRECTION, headers=key_headers(headers)
@@ -75,13 +70,11 @@ async def test_new_suggestion_becomes_the_current_one_of_the_ticket(
 
 
 async def test_repeated_correction_with_the_same_key_returns_the_original_response(
-    backend: RunningBackend, builder: DatabaseBuilder, worker_database: WorkerDatabase
+    backend: RunningBackend, builder: DatabaseBuilder
 ) -> None:
     headers = (await sign_in_as_support(builder)).headers
     ticket = await open_ticket(builder)
-    await insert_suggestion(
-        worker_database, builder, ticket.ticket_id, analysis_ready_draft_pending()
-    )
+    await insert_suggestion(builder, ticket.ticket_id, analysis_ready_draft_pending())
     path = ticket_path(ticket.ticket_id, SUGGESTIONS)
     first = await backend.client.post(path, json=CORRECTION, headers=key_headers(headers))
 

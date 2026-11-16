@@ -6,22 +6,22 @@ stores: each part result is the body that ai-service answered, and the request h
 order context that was sent. Every value is synthetic (TEST-18).
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import timedelta
 from uuid import UUID
 
 import httpx
-from sqlalchemy import insert, null, update
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy import update
 
-from supportiq_backend.suggestions.adapters.tables import SuggestionPartRow, SuggestionRow
-from supportiq_backend.tickets.adapters.tables import TicketRow
+from supportiq_backend.suggestions.adapters.tables import SuggestionPartRow
 from tests.integration.application import session_headers
 from tests.integration.builders import (
     AccountSpec,
     DatabaseBuilder,
     LineSpec,
     OrderSpec,
+    SuggestionPartSpec,
+    SuggestionSpec,
     TicketSpec,
 )
 from tests.integration.database import WorkerDatabase, create_owner_engine
@@ -57,7 +57,6 @@ TICKET_CREATED_TEXT = "2026-11-05T08:00:00Z"
 ORDER_PLACED_TEXT = "2026-11-03T09:00:00Z"
 OTHER_ORDER_PLACED_TEXT = "2026-10-27T09:00:00Z"
 SUGGESTION_CREATED_TEXT = "2026-11-05T08:30:00Z"
-TRACE_ID = "4bf92f3577b34da6a3ce929d0e0e4736"
 WARNING_ID = "w1"
 PREDICTED_INTENT = "track_order"
 PREDICTED_PROBABILITY = 0.91
@@ -93,35 +92,6 @@ DECISION_ROWS = """
     ))
     FROM staff_decisions
 """
-
-
-@dataclass(frozen=True, slots=True)
-class PartSpec:
-    """One stored part of a suggestion.
-
-    Attributes:
-        status: The stored status, such as `pending`, `ready`, or `draft_ready`.
-        result: The body that ai-service answered; absent for a part without a result.
-    """
-
-    status: str = PENDING
-    result: dict[str, object] | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class SuggestionSpec:
-    """A suggestion to insert as a ticket's current one.
-
-    Attributes:
-        analysis: The analysis part.
-        draft: The draft part.
-        request: The stored request, with the order context that was sent; absent before
-            pseudonymization.
-    """
-
-    analysis: PartSpec = field(default_factory=PartSpec)
-    draft: PartSpec = field(default_factory=PartSpec)
-    request: dict[str, object] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -196,27 +166,9 @@ async def open_ticket(builder: DatabaseBuilder, spec: TicketSpec | None = None) 
     return ConsoleTicket(ticket_id, customer_id, order_id, product_id)
 
 
-async def insert_suggestion(
-    worker_database: WorkerDatabase, builder: DatabaseBuilder, ticket_id: str, spec: SuggestionSpec
-) -> str:
-    """Insert a suggestion with its two parts and make it the ticket's current one.
-
-    Args:
-        worker_database: The database of the worker.
-        builder: Gives the suggestion a deterministic ID.
-        ticket_id: The ticket.
-        spec: The parts and the request.
-
-    Returns:
-        The suggestion ID.
-    """
-    suggestion_id = builder.next_uuid()
-    engine = create_owner_engine(worker_database)
-    try:
-        await _insert_suggestion_rows(engine, suggestion_id, ticket_id, spec)
-    finally:
-        await engine.dispose()
-    return str(suggestion_id)
+async def insert_suggestion(builder: DatabaseBuilder, ticket_id: str, spec: SuggestionSpec) -> str:
+    """Insert a suggestion as the ticket's current one and return its ID as text."""
+    return str(await builder.suggestion(ticket_id, spec))
 
 
 async def complete_draft(worker_database: WorkerDatabase, suggestion_id: str) -> None:
@@ -362,16 +314,36 @@ def sent_request() -> dict[str, object]:
     }
 
 
+def stored_suggestion(
+    *,
+    analysis: SuggestionPartSpec | None = None,
+    draft: SuggestionPartSpec | None = None,
+    request: dict[str, object] | None = None,
+) -> SuggestionSpec:
+    """A suggestion created at `SUGGESTION_CREATED_AT`; a part left out is `pending`."""
+    return SuggestionSpec(
+        created_at=SUGGESTION_CREATED_AT, request=request, analysis=analysis, draft=draft
+    )
+
+
 def analysis_ready_draft_pending() -> SuggestionSpec:
-    return SuggestionSpec(analysis=PartSpec("ready", ready_analysis()), request=sent_request())
+    return stored_suggestion(
+        analysis=stored_part("ready", ready_analysis()), request=sent_request()
+    )
 
 
 def draft_ready() -> SuggestionSpec:
-    return SuggestionSpec(
-        analysis=PartSpec("ready", ready_analysis()),
-        draft=PartSpec("draft_ready", draft_ready_outcome()),
+    return stored_suggestion(
+        analysis=stored_part("ready", ready_analysis()),
+        draft=stored_part("draft_ready", draft_ready_outcome()),
         request=sent_request(),
     )
+
+
+def stored_part(status: str, result: dict[str, object] | None = None) -> SuggestionPartSpec:
+    """A stored part; a part that is not `pending` completed at `PART_COMPLETED_AT`."""
+    completed_at = None if status == PENDING else PART_COMPLETED_AT
+    return SuggestionPartSpec(status, completed_at, result=result)
 
 
 def without_fields(response: httpx.Response, *names: str) -> dict[str, object]:
@@ -380,35 +352,3 @@ def without_fields(response: httpx.Response, *names: str) -> dict[str, object]:
 
 async def count_replies(builder: DatabaseBuilder) -> object:
     return await builder.scalar("SELECT count(*) FROM replies")
-
-
-async def _insert_suggestion_rows(
-    engine: AsyncEngine, suggestion_id: UUID, ticket_id: str, spec: SuggestionSpec
-) -> None:
-    async with engine.begin() as connection:
-        await connection.execute(
-            insert(SuggestionRow).values(
-                suggestion_id=suggestion_id,
-                ticket_id=ticket_id,
-                trigger="ticket_created",
-                created_at=SUGGESTION_CREATED_AT,
-                trace_id=TRACE_ID,
-                request=null() if spec.request is None else spec.request,
-            )
-        )
-        for part, part_spec in (("analysis", spec.analysis), ("draft", spec.draft)):
-            await connection.execute(
-                insert(SuggestionPartRow).values(
-                    suggestion_id=suggestion_id,
-                    part=part,
-                    status=part_spec.status,
-                    reason_codes=[],
-                    completed_at=None if part_spec.status == PENDING else PART_COMPLETED_AT,
-                    result=null() if part_spec.result is None else part_spec.result,
-                )
-            )
-        await connection.execute(
-            update(TicketRow)
-            .where(TicketRow.ticket_id == ticket_id)
-            .values(current_suggestion_id=suggestion_id)
-        )

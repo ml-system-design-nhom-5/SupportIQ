@@ -111,6 +111,10 @@ class PostgresCustomerRecords:
         Returns:
             The ticket's order first, then the other orders by `placed_at` descending, then by
             order ID by code point.
+
+        Raises:
+            UnexpectedFailureError: A stored order, shipment, or refund status is no value of its
+                enum: a defect.
         """
         is_other_order = case((OrderRow.order_id == ticket_order_id, 0), else_=1)
         rows = (

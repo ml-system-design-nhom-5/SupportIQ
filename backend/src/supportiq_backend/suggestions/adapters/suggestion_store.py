@@ -17,6 +17,10 @@ from sqlalchemy.orm import aliased
 
 from supportiq_backend.accounts import AccountId
 from supportiq_backend.platform import TraceId, UnexpectedFailureError
+from supportiq_backend.platform.persistence import (
+    parse_optional_stored_enum,
+    parse_stored_enum,
+)
 from supportiq_backend.suggestions.adapters.ai_service_payloads import (
     parse_stored_analysis,
     parse_stored_draft_outcome,
@@ -151,8 +155,8 @@ class PostgresSuggestionStore:
             The suggestion, or None when it is unknown.
 
         Raises:
-            UnexpectedFailureError: A stored part breaks an invariant, or a stored result no
-                longer matches the contract: a defect.
+            UnexpectedFailureError: A stored part breaks an invariant, a stored text is no value
+                of its enum, or a stored result no longer matches the contract: a defect.
         """
         suggestions = await self.load_suggestions(frozenset({suggestion_id}))
         return suggestions.get(suggestion_id)
@@ -169,8 +173,8 @@ class PostgresSuggestionStore:
             Each known suggestion by its ID.
 
         Raises:
-            UnexpectedFailureError: A stored part breaks an invariant, or a stored result no
-                longer matches the contract: a defect.
+            UnexpectedFailureError: A stored part breaks an invariant, a stored text is no value
+                of its enum, or a stored result no longer matches the contract: a defect.
         """
         if not suggestion_ids:
             return {}
@@ -252,6 +256,9 @@ class PostgresSuggestionJobStore:
 
         Returns:
             The job, or None when it is unknown.
+
+        Raises:
+            UnexpectedFailureError: The stored state is no value of `JobState`: a defect.
         """
         row = (
             await self._session.execute(
@@ -260,7 +267,9 @@ class PostgresSuggestionJobStore:
                 .with_for_update()
             )
         ).one_or_none()
-        return None if row is None else LockedJob(JobState(row.state), row.attempt_number)
+        if row is None:
+            return None
+        return LockedJob(parse_stored_enum(JobState, row.state), row.attempt_number)
 
     async def save_request(self, suggestion_id: SuggestionId, request: SuggestionRequest) -> None:
         """Write the request of a suggestion when it is still absent.
@@ -341,8 +350,8 @@ def _to_suggestion(
     return Suggestion(
         suggestion_id=SuggestionId(str(row.suggestion_id)),
         ticket_id=SuggestionTicketId(row.ticket_id),
-        trigger=SuggestionTrigger(row.trigger),
-        intent_override=None if row.intent_override is None else IntentLabel(row.intent_override),
+        trigger=parse_stored_enum(SuggestionTrigger, row.trigger),
+        intent_override=parse_optional_stored_enum(IntentLabel, row.intent_override),
         requested_by=(
             None
             if row.requested_by_account_id is None
@@ -360,7 +369,7 @@ def _to_analysis_state(row: SuggestionPartRow) -> AnalysisState:
     common = _to_common_state(row)
     if common is not None:
         return common
-    if PartStatus(row.status) is not PartStatus.READY:
+    if parse_stored_enum(PartStatus, row.status) is not PartStatus.READY:
         raise UnexpectedFailureError
     return parse_stored_analysis(row.result)
 
@@ -369,7 +378,7 @@ def _to_draft_state(row: SuggestionPartRow) -> DraftState:
     common = _to_common_state(row)
     if common is not None:
         return common
-    if PartStatus(row.status) is PartStatus.READY:
+    if parse_stored_enum(PartStatus, row.status) is PartStatus.READY:
         raise UnexpectedFailureError
     return parse_stored_draft_outcome(row.result)
 
@@ -378,13 +387,13 @@ def _to_common_state(
     row: SuggestionPartRow,
 ) -> PendingPart | CancelledPart | UnavailablePart | None:
     # The states without a result; the check constraint of `r0003` allows no other status.
-    status = PartStatus(row.status)
+    status = parse_stored_enum(PartStatus, row.status)
     if status is PartStatus.PENDING:
         return PendingPart()
     if status is PartStatus.CANCELLED:
         return CancelledPart()
     if status is PartStatus.UNAVAILABLE:
-        return UnavailablePart(AiReasonCode(row.reason_codes[0]))
+        return UnavailablePart(parse_stored_enum(AiReasonCode, row.reason_codes[0]))
     return None
 
 

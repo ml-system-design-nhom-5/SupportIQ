@@ -12,7 +12,6 @@ import pytest
 
 from tests.integration.application import ORIGIN_HEADERS, RunningBackend
 from tests.integration.builders import DatabaseBuilder, TicketSpec
-from tests.integration.database import WorkerDatabase
 from tests.integration.tickets.console_requests import (
     DRAFT_TEXT,
     FORBIDDEN,
@@ -55,12 +54,10 @@ pytestmark = pytest.mark.anyio
 
 
 async def test_proposal_on_the_draft_answers_201_in_the_shape_of_the_contract(
-    backend: RunningBackend, builder: DatabaseBuilder, worker_database: WorkerDatabase
+    backend: RunningBackend, builder: DatabaseBuilder
 ) -> None:
     staff = await sign_in_as_support(builder)
-    ticket, suggestion_id = await ticket_with_a_ready_draft(
-        builder, worker_database, is_authority_required=True
-    )
+    ticket, suggestion_id = await ticket_with_a_ready_draft(builder, is_authority_required=True)
 
     response = await act_on_ticket(
         backend.client, staff, ticket_path(ticket.ticket_id, PROPOSALS), on_the_draft(suggestion_id)
@@ -98,12 +95,10 @@ async def test_proposal_without_a_draft_answers_201_in_the_shape_of_the_contract
 
 
 async def test_proposal_that_rejects_the_draft_returns_its_reasons_and_note(
-    backend: RunningBackend, builder: DatabaseBuilder, worker_database: WorkerDatabase
+    backend: RunningBackend, builder: DatabaseBuilder
 ) -> None:
     staff = await sign_in_as_support(builder)
-    ticket, suggestion_id = await ticket_with_a_ready_draft(
-        builder, worker_database, is_authority_required=False
-    )
+    ticket, suggestion_id = await ticket_with_a_ready_draft(builder, is_authority_required=False)
     body = {
         "basis": "rejected_ai_draft",
         "body": OWN_TEXT,
@@ -203,13 +198,11 @@ async def test_proposal_on_an_escalated_ticket_returns_409_invalid_ticket_state(
 
 
 async def test_proposal_while_the_draft_is_pending_returns_409_suggestion_pending(
-    backend: RunningBackend, builder: DatabaseBuilder, worker_database: WorkerDatabase
+    backend: RunningBackend, builder: DatabaseBuilder
 ) -> None:
     staff = await sign_in_as_support(builder)
     ticket = await open_ticket(builder)
-    await insert_suggestion(
-        worker_database, builder, ticket.ticket_id, analysis_ready_draft_pending()
-    )
+    await insert_suggestion(builder, ticket.ticket_id, analysis_ready_draft_pending())
 
     response = await act_on_ticket(
         backend.client, staff, ticket_path(ticket.ticket_id, PROPOSALS), WITHOUT_DRAFT
@@ -222,12 +215,10 @@ async def test_proposal_while_the_draft_is_pending_returns_409_suggestion_pendin
 
 
 async def test_proposal_on_another_suggestion_returns_409_suggestion_superseded(
-    backend: RunningBackend, builder: DatabaseBuilder, worker_database: WorkerDatabase
+    backend: RunningBackend, builder: DatabaseBuilder
 ) -> None:
     staff = await sign_in_as_support(builder)
-    ticket, _suggestion_id = await ticket_with_a_ready_draft(
-        builder, worker_database, is_authority_required=False
-    )
+    ticket, _suggestion_id = await ticket_with_a_ready_draft(builder, is_authority_required=False)
 
     response = await act_on_ticket(
         backend.client,
@@ -261,12 +252,10 @@ async def test_proposal_with_a_placeholder_returns_422_and_stores_nothing(
 
 
 async def test_proposal_with_a_repeated_reason_code_returns_422_at_its_location(
-    backend: RunningBackend, builder: DatabaseBuilder, worker_database: WorkerDatabase
+    backend: RunningBackend, builder: DatabaseBuilder
 ) -> None:
     staff = await sign_in_as_support(builder)
-    ticket, suggestion_id = await ticket_with_a_ready_draft(
-        builder, worker_database, is_authority_required=False
-    )
+    ticket, suggestion_id = await ticket_with_a_ready_draft(builder, is_authority_required=False)
     body = {
         "basis": "rejected_ai_draft",
         "body": OWN_TEXT,

@@ -12,7 +12,6 @@ import pytest
 
 from tests.integration.application import ORIGIN_HEADERS, RunningBackend
 from tests.integration.builders import DatabaseBuilder, TicketSpec
-from tests.integration.database import WorkerDatabase
 from tests.integration.tickets.console_requests import (
     DECISION_ROWS,
     ESCALATIONS,
@@ -52,13 +51,11 @@ NOTE_REQUIRED_DETAIL = "A note is required when staff_reason_codes contains othe
 
 
 async def test_escalation_answers_201_in_the_shape_of_the_contract(
-    backend: RunningBackend, builder: DatabaseBuilder, worker_database: WorkerDatabase
+    backend: RunningBackend, builder: DatabaseBuilder
 ) -> None:
     staff = await sign_in_as_support(builder)
     ticket = await open_ticket(builder)
-    suggestion_id = await insert_suggestion(
-        worker_database, builder, ticket.ticket_id, draft_ready()
-    )
+    suggestion_id = await insert_suggestion(builder, ticket.ticket_id, draft_ready())
     body = {"staff_reason_codes": ["other"], "note": NOTE, "suggestion_id": suggestion_id}
 
     response = await act_on_ticket(
@@ -76,13 +73,11 @@ async def test_escalation_answers_201_in_the_shape_of_the_contract(
 
 
 async def test_escalation_moves_the_ticket_and_records_the_decision_escalate(
-    backend: RunningBackend, builder: DatabaseBuilder, worker_database: WorkerDatabase
+    backend: RunningBackend, builder: DatabaseBuilder
 ) -> None:
     staff = await sign_in_as_support(builder)
     ticket = await open_ticket(builder)
-    suggestion_id = await insert_suggestion(
-        worker_database, builder, ticket.ticket_id, draft_ready()
-    )
+    suggestion_id = await insert_suggestion(builder, ticket.ticket_id, draft_ready())
     body = {"staff_reason_codes": ["case_exception"], "suggestion_id": suggestion_id}
 
     response = await act_on_ticket(
@@ -125,13 +120,11 @@ async def test_escalation_without_a_suggestion_omits_it_and_records_no_intent(
 
 
 async def test_staff_escalate_while_the_draft_is_pending(
-    backend: RunningBackend, builder: DatabaseBuilder, worker_database: WorkerDatabase
+    backend: RunningBackend, builder: DatabaseBuilder
 ) -> None:
     staff = await sign_in_as_support(builder)
     ticket = await open_ticket(builder)
-    await insert_suggestion(
-        worker_database, builder, ticket.ticket_id, analysis_ready_draft_pending()
-    )
+    await insert_suggestion(builder, ticket.ticket_id, analysis_ready_draft_pending())
 
     response = await act_on_ticket(
         backend.client, staff, ticket_path(ticket.ticket_id, ESCALATIONS), CASE_EXCEPTION
@@ -270,11 +263,11 @@ async def test_escalation_of_a_ticket_awaiting_approval_returns_409_invalid_tick
 
 
 async def test_escalation_on_another_suggestion_returns_409_before_the_note_rule(
-    backend: RunningBackend, builder: DatabaseBuilder, worker_database: WorkerDatabase
+    backend: RunningBackend, builder: DatabaseBuilder
 ) -> None:
     staff = await sign_in_as_support(builder)
     ticket = await open_ticket(builder)
-    await insert_suggestion(worker_database, builder, ticket.ticket_id, draft_ready())
+    await insert_suggestion(builder, ticket.ticket_id, draft_ready())
     body = {"staff_reason_codes": ["other"], "suggestion_id": UNKNOWN_SUGGESTION_ID}
 
     response = await act_on_ticket(

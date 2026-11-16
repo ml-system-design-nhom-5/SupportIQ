@@ -33,14 +33,13 @@ from supportiq_backend.suggestions import (
     build_draft_completion,
 )
 from supportiq_backend.suggestions.adapters.suggestion_store import PostgresSuggestionStore
-from tests.integration.builders import AccountSpec, DatabaseBuilder
-from tests.integration.database import WorkerDatabase
+from tests.integration.builders import AccountSpec, DatabaseBuilder, SuggestionSpec
 from tests.integration.tickets.console_requests import (
-    PartSpec,
-    SuggestionSpec,
     draft_ready_outcome,
     ready_analysis,
     sent_request,
+    stored_part,
+    stored_suggestion,
 )
 from tests.integration.tickets.console_requests import (
     insert_suggestion as insert_stored_suggestion,
@@ -94,12 +93,12 @@ PART_RESULTS_ARE_ABSENT = """
 # A stored analysis, draft outcome, and request that no longer match the contract: a boolean
 # as text, a reason code that the contract does not list, and a message that is no text.
 OUTSIDE_THE_CONTRACT = [
-    SuggestionSpec(analysis=PartSpec("ready", ready_analysis() | {"is_in_scope": "yes"})),
-    SuggestionSpec(
-        analysis=PartSpec("ready", ready_analysis()),
-        draft=PartSpec("draft_ready", draft_ready_outcome() | {"reason_codes": ["unknown"]}),
+    stored_suggestion(analysis=stored_part("ready", ready_analysis() | {"is_in_scope": "yes"})),
+    stored_suggestion(
+        analysis=stored_part("ready", ready_analysis()),
+        draft=stored_part("draft_ready", draft_ready_outcome() | {"reason_codes": ["unknown"]}),
     ),
-    SuggestionSpec(request=sent_request() | {"message": 7}),
+    stored_suggestion(request=sent_request() | {"message": 7}),
 ]
 OUTSIDE_IDS = ["analysis", "draft-outcome", "request"]
 
@@ -259,12 +258,11 @@ async def test_load_suggestion_reads_the_order_context_of_the_stored_request(
 @pytest.mark.parametrize("spec", OUTSIDE_THE_CONTRACT, ids=OUTSIDE_IDS)
 async def test_load_suggestion_of_a_stored_value_outside_the_contract_is_an_unexpected_failure(
     app_engine: AsyncEngine,
-    worker_database: WorkerDatabase,
     builder: DatabaseBuilder,
     spec: SuggestionSpec,
 ) -> None:
     ticket_id = await insert_ticket(builder)
-    suggestion_id = await insert_stored_suggestion(worker_database, builder, ticket_id, spec)
+    suggestion_id = await insert_stored_suggestion(builder, ticket_id, spec)
 
     with pytest.raises(UnexpectedFailureError) as caught:
         await load_suggestion(app_engine, SuggestionId(suggestion_id))

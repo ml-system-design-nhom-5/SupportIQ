@@ -10,6 +10,7 @@ from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from supportiq_backend.accounts import AccountId
+from supportiq_backend.platform.persistence import parse_stored_enum
 from supportiq_backend.tickets.adapters.identifiers import (
     to_optional_suggestion_id,
     to_optional_uuid,
@@ -62,6 +63,9 @@ class PostgresEscalationStore:
 
         Returns:
             The escalation, or None before staff escalate.
+
+        Raises:
+            UnexpectedFailureError: A stored reason code is no value of its enum: a defect.
         """
         row = await self._session.scalar(
             select(EscalationRow).where(EscalationRow.ticket_id == ticket_id)
@@ -72,7 +76,9 @@ class PostgresEscalationStore:
             escalation_id=EscalationId(row.escalation_id),
             ticket_id=TicketId(row.ticket_id),
             request=EscalationRequest(
-                staff_reason_codes=tuple(StaffReasonCode(code) for code in row.staff_reason_codes),
+                staff_reason_codes=tuple(
+                    parse_stored_enum(StaffReasonCode, code) for code in row.staff_reason_codes
+                ),
                 note=row.note,
                 suggestion_id=to_optional_suggestion_id(row.suggestion_id),
             ),

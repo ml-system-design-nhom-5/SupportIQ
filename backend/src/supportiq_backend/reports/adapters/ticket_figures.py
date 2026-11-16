@@ -10,6 +10,7 @@ from collections.abc import Mapping, Sequence
 from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from supportiq_backend.platform.persistence import parse_stored_enum
 from supportiq_backend.reports.adapters.code_arrays import CODE_COLUMN, expand_codes, join_codes
 from supportiq_backend.reports.adapters.sql_periods import (
     handling_duration,
@@ -60,6 +61,9 @@ class PostgresTicketFigures:
 
         Returns:
             The counts.
+
+        Raises:
+            UnexpectedFailureError: A stored handling mode is no value of its enum: a defect.
         """
         is_created = in_period(TICKETS.c.created_at, period)
         is_closed = in_period(TICKETS.c.closed_at, period)
@@ -74,8 +78,12 @@ class PostgresTicketFigures:
         )
         counts = rows.tuples().all()
         return TicketCounts(
-            created=_to_mode_counts({HandlingMode(mode): created for mode, created, _ in counts}),
-            closed=_to_mode_counts({HandlingMode(mode): closed for mode, _, closed in counts}),
+            created=_to_mode_counts(
+                {parse_stored_enum(HandlingMode, mode): created for mode, created, _ in counts}
+            ),
+            closed=_to_mode_counts(
+                {parse_stored_enum(HandlingMode, mode): closed for mode, _, closed in counts}
+            ),
         )
 
     async def load_handling_time(self, period: ReportPeriod) -> HandlingTime:
@@ -89,6 +97,9 @@ class PostgresTicketFigures:
 
         Returns:
             The handling time of each mode.
+
+        Raises:
+            UnexpectedFailureError: A stored handling mode is no value of its enum: a defect.
         """
         duration = handling_duration()
         # `count` of the duration counts the tickets that have one; the median ignores NULL.
@@ -98,7 +109,9 @@ class PostgresTicketFigures:
             .group_by(TICKETS.c.handling_mode)
         )
         time_by_mode = {
-            HandlingMode(mode): ModeHandlingTime(count, to_optional_milliseconds(median))
+            parse_stored_enum(HandlingMode, mode): ModeHandlingTime(
+                count, to_optional_milliseconds(median)
+            )
             for mode, count, median in rows.tuples()
         }
         return HandlingTime(
@@ -114,6 +127,9 @@ class PostgresTicketFigures:
 
         Returns:
             The counts, overall and by staff reason code.
+
+        Raises:
+            UnexpectedFailureError: A stored text is no value of its enum: a defect.
         """
         is_decided = in_period(STAFF_DECISIONS.c.decided_at, period)
         count_by_type = await self._load_count_by_decision_type(is_decided)
@@ -134,6 +150,9 @@ class PostgresTicketFigures:
 
         Returns:
             The counts, overall and by staff reason code.
+
+        Raises:
+            UnexpectedFailureError: A stored reason code is no value of its enum: a defect.
         """
         is_escalated = in_period(ESCALATIONS.c.escalated_at, period)
         total = await self._session.scalar(
@@ -150,7 +169,8 @@ class PostgresTicketFigures:
         return Escalations(
             escalation_count=total or 0,
             count_by_reason={
-                StaffReasonCode(reason): count for reason, count in by_reason.tuples()
+                parse_stored_enum(StaffReasonCode, reason): count
+                for reason, count in by_reason.tuples()
             },
         )
 
@@ -163,7 +183,7 @@ class PostgresTicketFigures:
             .where(is_decided, decision_type.in_(_DRAFT_DECISION_TYPES))
             .group_by(decision_type)
         )
-        return {DecisionType(name): count for name, count in totals.tuples()}
+        return {parse_stored_enum(DecisionType, name): count for name, count in totals.tuples()}
 
     async def _load_reason_counts_of_decisions(
         self, is_decided: ColumnElement[bool]
@@ -184,9 +204,9 @@ def _count_by_reason(
     counts: Sequence[tuple[str, str, int]], decision_type: DecisionType
 ) -> Mapping[StaffReasonCode, int]:
     return {
-        StaffReasonCode(reason): count
+        parse_stored_enum(StaffReasonCode, reason): count
         for name, reason, count in counts
-        if DecisionType(name) is decision_type
+        if parse_stored_enum(DecisionType, name) is decision_type
     }
 
 

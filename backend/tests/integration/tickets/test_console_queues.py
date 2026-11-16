@@ -10,7 +10,6 @@ from supportiq_backend.platform.web import encode_cursor
 from supportiq_backend.tickets import MESSAGE_EXCERPT_LENGTH
 from tests.integration.application import ORIGIN_HEADERS, RunningBackend
 from tests.integration.builders import DatabaseBuilder, TicketSpec
-from tests.integration.database import WorkerDatabase
 from tests.integration.tickets.console_requests import (
     CONSOLE_TICKETS,
     CUSTOMER_NAME,
@@ -58,13 +57,11 @@ async def test_open_queue_lists_a_ticket_in_the_shape_of_the_contract(
 
 
 async def test_summary_shows_the_draft_status_and_the_predicted_intent(
-    backend: RunningBackend, builder: DatabaseBuilder, worker_database: WorkerDatabase
+    backend: RunningBackend, builder: DatabaseBuilder
 ) -> None:
     headers = (await sign_in_as_support(builder)).headers
     ticket = await open_ticket(builder)
-    await insert_suggestion(
-        worker_database, builder, ticket.ticket_id, analysis_ready_draft_pending()
-    )
+    await insert_suggestion(builder, ticket.ticket_id, analysis_ready_draft_pending())
 
     response = await backend.client.get(CONSOLE_TICKETS, params=OPEN_QUEUE, headers=headers)
 

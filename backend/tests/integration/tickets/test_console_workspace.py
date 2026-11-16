@@ -10,13 +10,13 @@ import pytest
 
 from tests.integration.application import ORIGIN_HEADERS, RunningBackend
 from tests.integration.builders import (
+    SUGGESTION_TRACE_ID,
     DatabaseBuilder,
     LineSpec,
     OrderSpec,
     RefundSpec,
     ShipmentSpec,
 )
-from tests.integration.database import WorkerDatabase
 from tests.integration.tickets.console_requests import (
     CURRENCY,
     CUSTOMER_NAME,
@@ -29,9 +29,7 @@ from tests.integration.tickets.console_requests import (
     SHIPPING_COST_MINOR,
     SUGGESTION_CREATED_TEXT,
     TICKET_CREATED_TEXT,
-    TRACE_ID,
     UNKNOWN_TICKET_ID,
-    SuggestionSpec,
     asset_versions,
     draft_latencies,
     draft_ready,
@@ -42,6 +40,7 @@ from tests.integration.tickets.console_requests import (
     order_total,
     ready_analysis,
     sign_in_as_support,
+    stored_suggestion,
     ticket_path,
     without_fields,
 )
@@ -133,13 +132,11 @@ async def test_workspace_lists_the_other_orders_of_the_customer_without_addresse
 
 
 async def test_workspace_shows_the_ready_draft_with_the_value_of_each_order_citation(
-    backend: RunningBackend, builder: DatabaseBuilder, worker_database: WorkerDatabase
+    backend: RunningBackend, builder: DatabaseBuilder
 ) -> None:
     headers = (await sign_in_as_support(builder)).headers
     ticket = await open_ticket(builder)
-    suggestion_id = await insert_suggestion(
-        worker_database, builder, ticket.ticket_id, draft_ready()
-    )
+    suggestion_id = await insert_suggestion(builder, ticket.ticket_id, draft_ready())
 
     response = await backend.client.get(ticket_path(ticket.ticket_id), headers=headers)
 
@@ -147,7 +144,7 @@ async def test_workspace_shows_the_ready_draft_with_the_value_of_each_order_cita
         "suggestion_id": suggestion_id,
         "trigger": "ticket_created",
         "created_at": SUGGESTION_CREATED_TEXT,
-        "trace_id": TRACE_ID,
+        "trace_id": SUGGESTION_TRACE_ID,
         "analysis": {"analysis_status": "ready", **ready_analysis()},
         "draft": {
             "draft_status": "draft_ready",
@@ -170,11 +167,11 @@ async def test_workspace_shows_the_ready_draft_with_the_value_of_each_order_cita
 
 
 async def test_ready_draft_allows_staff_to_correct_the_intent(
-    backend: RunningBackend, builder: DatabaseBuilder, worker_database: WorkerDatabase
+    backend: RunningBackend, builder: DatabaseBuilder
 ) -> None:
     headers = (await sign_in_as_support(builder)).headers
     ticket = await open_ticket(builder)
-    await insert_suggestion(worker_database, builder, ticket.ticket_id, draft_ready())
+    await insert_suggestion(builder, ticket.ticket_id, draft_ready())
 
     response = await backend.client.get(ticket_path(ticket.ticket_id), headers=headers)
 
@@ -187,11 +184,11 @@ async def test_ready_draft_allows_staff_to_correct_the_intent(
 
 
 async def test_pending_suggestion_shows_both_parts_pending_and_blocks_sending(
-    backend: RunningBackend, builder: DatabaseBuilder, worker_database: WorkerDatabase
+    backend: RunningBackend, builder: DatabaseBuilder
 ) -> None:
     headers = (await sign_in_as_support(builder)).headers
     ticket = await open_ticket(builder)
-    await insert_suggestion(worker_database, builder, ticket.ticket_id, SuggestionSpec())
+    await insert_suggestion(builder, ticket.ticket_id, stored_suggestion())
 
     response = await backend.client.get(ticket_path(ticket.ticket_id), headers=headers)
 

@@ -87,6 +87,10 @@ class PostgresCommerceGateway:
 
         Returns:
             The orders.
+
+        Raises:
+            UnexpectedFailureError: A stored order, shipment, or refund status is no value of its
+                enum: a defect.
         """
         rows = await self._session.scalars(
             select(OrderRow)
@@ -106,6 +110,10 @@ class PostgresCommerceGateway:
 
         Returns:
             The order, or None when it is unknown or belongs to another customer.
+
+        Raises:
+            UnexpectedFailureError: A stored order, shipment, or refund status is no value of its
+                enum: a defect.
         """
         if not is_storable_text(order_id):
             return None

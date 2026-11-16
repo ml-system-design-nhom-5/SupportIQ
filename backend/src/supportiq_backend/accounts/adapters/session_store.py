@@ -15,7 +15,7 @@ from supportiq_backend.accounts.domain import (
     SessionIdHash,
     StoredSession,
 )
-from supportiq_backend.platform.persistence import delete_rows_not_held
+from supportiq_backend.platform.persistence import delete_rows_not_held, parse_stored_enum
 
 
 class PostgresSessionStore:
@@ -54,6 +54,9 @@ class PostgresSessionStore:
 
         Returns:
             The session, or None when no session has this hash.
+
+        Raises:
+            UnexpectedFailureError: A stored role is no value of its enum: a defect.
         """
         row = (
             await self._session.execute(
@@ -68,7 +71,7 @@ class PostgresSessionStore:
         return StoredSession(
             session_id_hash=session_id_hash,
             account=to_session_account(account_row),
-            role_at_creation=Role(session_row.role),
+            role_at_creation=parse_stored_enum(Role, session_row.role),
             is_account_active=account_row.is_active,
             last_seen_at=session_row.last_seen_at,
             expires_at=session_row.expires_at,

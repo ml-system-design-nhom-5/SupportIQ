@@ -28,6 +28,7 @@ from supportiq_backend.commerce.domain import (
     Shipment,
     ShipmentStatus,
 )
+from supportiq_backend.platform.persistence import parse_stored_enum
 
 _NO_SHIPMENT_RECORD = Shipment(ShipmentStatus.NOT_SHIPPED)
 
@@ -41,6 +42,10 @@ async def load_order_details(session: AsyncSession, rows: Sequence[OrderRow]) ->
 
     Returns:
         The orders, in the order of the rows.
+
+    Raises:
+        UnexpectedFailureError: A stored order, shipment, or refund status is no value of its
+            enum: a defect.
     """
     order_ids = [row.order_id for row in rows]
     lines = await _load_lines(session, order_ids)
@@ -53,7 +58,7 @@ async def load_order_details(session: AsyncSession, rows: Sequence[OrderRow]) ->
     return tuple(
         Order(
             order_id=OrderId(row.order_id),
-            status=OrderStatus(row.order_status),
+            status=parse_stored_enum(OrderStatus, row.order_status),
             placed_at=row.placed_at,
             order_total=Money(row.order_total_amount_minor, row.order_total_currency),
             shipping_cost=Money(row.shipping_cost_amount_minor, row.shipping_cost_currency),
@@ -83,7 +88,7 @@ async def _load_lines(
 
 def _to_shipment(row: ShipmentRow) -> Shipment:
     return Shipment(
-        status=ShipmentStatus(row.shipment_status),
+        status=parse_stored_enum(ShipmentStatus, row.shipment_status),
         estimated_delivery_at=row.estimated_delivery_at,
         delivered_at=row.delivered_at,
     )
@@ -91,7 +96,7 @@ def _to_shipment(row: ShipmentRow) -> Shipment:
 
 def _to_refund(row: RefundRow) -> Refund:
     return Refund(
-        status=RefundStatus(row.refund_status),
+        status=parse_stored_enum(RefundStatus, row.refund_status),
         amount=Money(row.refund_amount_minor, row.refund_currency),
         requested_at=row.refund_requested_at,
     )

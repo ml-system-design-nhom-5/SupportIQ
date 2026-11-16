@@ -10,6 +10,7 @@ from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from supportiq_backend.accounts import AccountId
+from supportiq_backend.platform.persistence import parse_stored_enum
 from supportiq_backend.tickets.adapters.identifiers import (
     to_optional_suggestion_id,
     to_optional_uuid,
@@ -67,6 +68,9 @@ class PostgresReplyStore:
 
         Returns:
             The reply, or None before it is sent.
+
+        Raises:
+            UnexpectedFailureError: A stored text is no value of its enum: a defect.
         """
         row = await self._session.scalar(select(ReplyRow).where(ReplyRow.ticket_id == ticket_id))
         if row is None:
@@ -74,12 +78,14 @@ class PostgresReplyStore:
         return SentReply(
             reply_id=ReplyId(row.reply_id),
             ticket_id=TicketId(row.ticket_id),
-            basis=ReplyBasis(row.basis),
+            basis=parse_stored_enum(ReplyBasis, row.basis),
             body=row.body,
             suggestion_id=to_optional_suggestion_id(row.suggestion_id),
             proposal_id=None if row.proposal_id is None else ProposalId(row.proposal_id),
             acknowledged_warning_ids=tuple(row.acknowledged_warning_ids),
-            staff_reason_codes=tuple(StaffReasonCode(code) for code in row.staff_reason_codes),
+            staff_reason_codes=tuple(
+                parse_stored_enum(StaffReasonCode, code) for code in row.staff_reason_codes
+            ),
             note=row.note,
             sent_by=AccountId(str(row.sent_by_account_id)),
             sent_at=row.sent_at,

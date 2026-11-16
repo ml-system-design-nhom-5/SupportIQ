@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from supportiq_backend.accounts import CustomerId
 from supportiq_backend.commerce import OrderId
 from supportiq_backend.platform import is_storable_text
-from supportiq_backend.platform.persistence import BYTE_ORDER_COLLATION
+from supportiq_backend.platform.persistence import BYTE_ORDER_COLLATION, parse_stored_enum
 from supportiq_backend.suggestions import (
     SuggestionId,
     SuggestionTicketId,
@@ -64,6 +64,9 @@ class PostgresConsoleTicketStore:
 
         Returns:
             The ticket, or None when it is unknown.
+
+        Raises:
+            UnexpectedFailureError: A stored text is no value of its enum: a defect.
         """
         if not is_storable_text(ticket_id):
             return None
@@ -83,6 +86,9 @@ class PostgresConsoleTicketStore:
 
         Returns:
             The ticket, or None when it is unknown.
+
+        Raises:
+            UnexpectedFailureError: A stored text is no value of its enum: a defect.
         """
         if not is_storable_text(ticket_id):
             return None
@@ -102,6 +108,9 @@ class PostgresConsoleTicketStore:
 
         Returns:
             The tickets.
+
+        Raises:
+            UnexpectedFailureError: A stored text is no value of its enum: a defect.
         """
         ticket_order = collate(TicketRow.ticket_id, BYTE_ORDER_COLLATION)
         statement = _select_console_tickets().where(TicketRow.status == status.value)
@@ -148,6 +157,9 @@ class PostgresTicketLinks:
 
         Returns:
             The ticket, or None when it is unknown.
+
+        Raises:
+            UnexpectedFailureError: A stored text is no value of its enum: a defect.
         """
         if not is_storable_text(ticket_id):
             return None
@@ -162,8 +174,8 @@ class PostgresTicketLinks:
             return None
         return TicketForSuggestion(
             current_suggestion_id=to_optional_suggestion_id(row.current_suggestion_id),
-            is_open=TicketStatus(row.status) is TicketStatus.OPEN,
-            is_assisted=HandlingMode(row.handling_mode) is HandlingMode.ASSISTED,
+            is_open=parse_stored_enum(TicketStatus, row.status) is TicketStatus.OPEN,
+            is_assisted=parse_stored_enum(HandlingMode, row.handling_mode) is HandlingMode.ASSISTED,
             status_name=row.status,
         )
 
@@ -245,8 +257,8 @@ def _select_console_tickets() -> Select[_ConsoleColumns]:
 def _to_console_ticket(row: Row[_ConsoleColumns]) -> ConsoleTicket:
     return ConsoleTicket(
         ticket_id=TicketId(row.ticket_id),
-        status=TicketStatus(row.status),
-        handling_mode=HandlingMode(row.handling_mode),
+        status=parse_stored_enum(TicketStatus, row.status),
+        handling_mode=parse_stored_enum(HandlingMode, row.handling_mode),
         is_authority_required=row.is_authority_required,
         created_at=row.created_at,
         handling_started_at=row.handling_started_at,

@@ -11,6 +11,7 @@ from decimal import Decimal
 from sqlalchemy import ColumnElement, Subquery, and_, func, not_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from supportiq_backend.platform.persistence import parse_stored_enum
 from supportiq_backend.reports.adapters.code_arrays import CODE_COLUMN, expand_codes, join_codes
 from supportiq_backend.reports.adapters.sql_periods import (
     in_period,
@@ -56,6 +57,9 @@ class PostgresAiFigures:
 
         Returns:
             The counts by status and by AI reason code.
+
+        Raises:
+            UnexpectedFailureError: A stored text is no value of its enum: a defect.
         """
         is_counted = and_(_is_draft_completed_in(period), SUGGESTION_PARTS.c.status != _CANCELLED)
         statuses = await self._session.execute(
@@ -73,9 +77,11 @@ class PostgresAiFigures:
         )
         return AiOutcomes(
             count_by_draft_status={
-                PartStatus(status): count for status, count in statuses.tuples()
+                parse_stored_enum(PartStatus, status): count for status, count in statuses.tuples()
             },
-            count_by_reason_code={AiReasonCode(name): count for name, count in codes.tuples()},
+            count_by_reason_code={
+                parse_stored_enum(AiReasonCode, name): count for name, count in codes.tuples()
+            },
         )
 
     async def load_end_to_end_latency(self, period: ReportPeriod) -> EndToEndLatency:

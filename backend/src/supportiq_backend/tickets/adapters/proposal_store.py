@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from supportiq_backend.accounts import AccountId
 from supportiq_backend.platform import UnexpectedFailureError
+from supportiq_backend.platform.persistence import parse_stored_enum
 from supportiq_backend.suggestions import SuggestionId
 from supportiq_backend.tickets.adapters.identifiers import (
     to_optional_suggestion_id,
@@ -75,7 +76,8 @@ class PostgresReplyProposalStore:
             The proposal, or None before staff submit one.
 
         Raises:
-            UnexpectedFailureError: The stored proposal breaks an invariant of its basis.
+            UnexpectedFailureError: The stored proposal breaks an invariant of its basis, or a
+                stored text is no value of its enum.
         """
         rows = await self._session.scalars(
             select(ReplyProposalRow).where(ReplyProposalRow.ticket_id == ticket_id)
@@ -93,8 +95,10 @@ class PostgresReplyProposalStore:
 
 
 def _to_request(row: ReplyProposalRow) -> ProposalRequest:
-    reason_codes = tuple(StaffReasonCode(code) for code in row.staff_reason_codes)
-    basis = ReplyBasis(row.basis)
+    reason_codes = tuple(
+        parse_stored_enum(StaffReasonCode, code) for code in row.staff_reason_codes
+    )
+    basis = parse_stored_enum(ReplyBasis, row.basis)
     match basis:
         case ReplyBasis.AI_DRAFT:
             return AiDraftReply(

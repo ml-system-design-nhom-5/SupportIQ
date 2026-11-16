@@ -2,7 +2,6 @@
 
 from tests.integration.application import RunningBackend
 from tests.integration.builders import DatabaseBuilder, TicketSpec
-from tests.integration.database import WorkerDatabase
 from tests.integration.tickets.console_requests import (
     DRAFT_TEXT,
     MESSAGE,
@@ -38,7 +37,7 @@ def on_the_proposal(proposal_id: str, body: str = OWN_TEXT) -> dict[str, object]
 
 
 async def ticket_with_a_ready_draft(
-    builder: DatabaseBuilder, worker_database: WorkerDatabase, *, is_authority_required: bool
+    builder: DatabaseBuilder, *, is_authority_required: bool
 ) -> tuple[ConsoleTicket, str]:
     spec = TicketSpec(
         message=MESSAGE,
@@ -46,9 +45,7 @@ async def ticket_with_a_ready_draft(
         is_authority_required=is_authority_required,
     )
     ticket = await open_ticket(builder, spec)
-    suggestion_id = await insert_suggestion(
-        worker_database, builder, ticket.ticket_id, draft_ready()
-    )
+    suggestion_id = await insert_suggestion(builder, ticket.ticket_id, draft_ready())
     return ticket, suggestion_id
 
 

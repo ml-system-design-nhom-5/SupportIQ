@@ -13,35 +13,32 @@ import pytest
 from supportiq_backend.platform import EventName
 from tests.integration.application import RunningBackend
 from tests.integration.builders import DatabaseBuilder
-from tests.integration.database import WorkerDatabase
 from tests.integration.suggestions.read_requests import problem_example, problem_of
 from tests.integration.tickets.console_requests import (
-    PartSpec,
-    SuggestionSpec,
     insert_suggestion,
     open_ticket,
     ready_analysis,
     sent_request,
     sign_in_as_support,
+    stored_part,
+    stored_suggestion,
     ticket_path,
 )
 
 pytestmark = pytest.mark.anyio
 
 # A stored analysis with a boolean as text, which strict parsing refuses.
-ANALYSIS_OUTSIDE_THE_CONTRACT = SuggestionSpec(
-    analysis=PartSpec("ready", ready_analysis() | {"is_in_scope": "yes"}), request=sent_request()
+ANALYSIS_OUTSIDE_THE_CONTRACT = stored_suggestion(
+    analysis=stored_part("ready", ready_analysis() | {"is_in_scope": "yes"}), request=sent_request()
 )
 
 
 async def test_a_stored_result_outside_the_contract_is_500_logged_once_as_a_failed_request(
-    backend: RunningBackend, worker_database: WorkerDatabase, builder: DatabaseBuilder
+    backend: RunningBackend, builder: DatabaseBuilder
 ) -> None:
     headers = (await sign_in_as_support(builder)).headers
     ticket = await open_ticket(builder)
-    await insert_suggestion(
-        worker_database, builder, ticket.ticket_id, ANALYSIS_OUTSIDE_THE_CONTRACT
-    )
+    await insert_suggestion(builder, ticket.ticket_id, ANALYSIS_OUTSIDE_THE_CONTRACT)
 
     response = await backend.client.get(ticket_path(ticket.ticket_id), headers=headers)
 

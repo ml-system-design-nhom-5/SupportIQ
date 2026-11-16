@@ -92,13 +92,11 @@ async def test_reply_id_names_the_stored_reply(
 
 
 async def test_reply_on_the_draft_names_its_suggestion(
-    backend: RunningBackend, builder: DatabaseBuilder, worker_database: WorkerDatabase
+    backend: RunningBackend, builder: DatabaseBuilder
 ) -> None:
     staff = await sign_in_as_support(builder)
     ticket = await open_ticket(builder)
-    suggestion_id = await insert_suggestion(
-        worker_database, builder, ticket.ticket_id, draft_ready()
-    )
+    suggestion_id = await insert_suggestion(builder, ticket.ticket_id, draft_ready())
 
     response = await act_on_ticket(
         backend.client, staff, ticket_path(ticket.ticket_id, REPLIES), on_the_draft(suggestion_id)
@@ -115,7 +113,7 @@ async def test_a_key_refused_while_the_draft_is_pending_sends_once_the_draft_is_
     staff = await sign_in_as_support(builder)
     ticket = await open_ticket(builder)
     suggestion_id = await insert_suggestion(
-        worker_database, builder, ticket.ticket_id, analysis_ready_draft_pending()
+        builder, ticket.ticket_id, analysis_ready_draft_pending()
     )
     path = ticket_path(ticket.ticket_id, REPLIES)
 
@@ -168,15 +166,12 @@ async def test_a_key_refused_while_the_draft_is_pending_sends_once_the_draft_is_
 async def test_repeated_item_of_a_unique_array_returns_422_and_sends_nothing(
     backend: RunningBackend,
     builder: DatabaseBuilder,
-    worker_database: WorkerDatabase,
     body: dict[str, object],
     location: str,
 ) -> None:
     staff = await sign_in_as_support(builder)
     ticket = await open_ticket(builder)
-    suggestion_id = await insert_suggestion(
-        worker_database, builder, ticket.ticket_id, draft_ready()
-    )
+    suggestion_id = await insert_suggestion(builder, ticket.ticket_id, draft_ready())
 
     response = await backend.client.post(
         ticket_path(ticket.ticket_id, REPLIES),
