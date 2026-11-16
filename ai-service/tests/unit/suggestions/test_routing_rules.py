@@ -4,7 +4,7 @@ import dataclasses
 
 import pytest
 
-from supportiq_ai_service.intent import INTENT_LABELS, IntentDistribution, IntentProbability
+from supportiq_ai_service.intent import INTENT_LABELS
 from supportiq_ai_service.release.manifest import ReleaseInvalidError
 from supportiq_ai_service.suggestions.domain import (
     AuthorityCategory,
@@ -25,6 +25,7 @@ from supportiq_ai_service.suggestions.domain.routing_rules import (
     requires_authority,
     route,
 )
+from tests.unit.intent.fakes import distribution
 
 CONFIGURATION = RoutingConfiguration(
     version="routing-sample-1",
@@ -43,16 +44,6 @@ CONFIGURATION = RoutingConfiguration(
 TRACK_ORDER = IntentName("track_order")
 # The in-scope intents of the requirements (§3.2).
 IN_SCOPE_COUNT = 12
-
-
-def distribution(*entries: tuple[str, float]) -> IntentDistribution:
-    """Return a distribution with the given probabilities first, and 0 for every other label."""
-    given = dict(entries)
-    rest = [label for label in INTENT_LABELS if label not in given]
-    return IntentDistribution(
-        tuple(IntentProbability(label, probability) for label, probability in entries)
-        + tuple(IntentProbability(label, 0.0) for label in rest)
-    )
 
 
 def _assessed(*entries: tuple[str, float]) -> IntentAssessment:

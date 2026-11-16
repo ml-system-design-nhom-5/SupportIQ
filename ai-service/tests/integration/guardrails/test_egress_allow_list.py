@@ -24,6 +24,7 @@ from supportiq_ai_service.platform.adapters.egress import (
     packaged_egress_allow_list,
 )
 from tests.integration.application import build_settings
+from tests.unit.composition_root.fakes import load_fake_models
 from tests.unit.platform.fakes import RecordingEgressClientFactory, RecordingEventRecorder
 from tests.unit.release.release_folder import write_release
 
@@ -85,6 +86,7 @@ async def test_the_client_of_a_replica_refuses_every_other_host_before_it_connec
 ) -> None:
     factory = RecordingEgressClientFactory()
     monkeypatch.setattr(cli, "create_egress_client", factory)
+    monkeypatch.setattr(cli, "load_release_models", load_fake_models)
     settings = build_settings(write_release(tmp_path))
 
     app = cli.build_application(settings, RecordingEventRecorder())

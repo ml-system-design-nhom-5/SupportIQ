@@ -22,8 +22,10 @@ from supportiq_ai_service.suggestions.domain import (
     SuggestionInput,
 )
 from tests.unit.suggestions.fakes import (
+    EXAMPLE_ABSTAINED,
     EXAMPLE_ANALYSIS,
     EXAMPLE_DRAFT_READY,
+    EXAMPLE_ESCALATION_RECOMMENDED,
     EXAMPLE_LLM_UNAVAILABLE,
 )
 
@@ -123,6 +125,8 @@ def test_a_staff_intent_has_no_probability_and_no_band() -> None:
     [
         (EXAMPLE_DRAFT_READY, "createDraft/draft-ready.json"),
         (EXAMPLE_LLM_UNAVAILABLE, "createDraft/llm-unavailable.json"),
+        (EXAMPLE_ABSTAINED, "createDraft/abstained.json"),
+        (EXAMPLE_ESCALATION_RECOMMENDED, "createDraft/escalation-recommended.json"),
     ],
 )
 def test_a_draft_outcome_is_its_contract_example(outcome: DraftOutcome, example_name: str) -> None:

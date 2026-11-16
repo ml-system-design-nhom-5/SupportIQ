@@ -1,10 +1,12 @@
 """In-memory fakes of the suggestions ports, built from the contract's examples (ARCH-27).
 
 `EXAMPLE_ANALYSIS` is `contracts/examples/createAnalysis/draft.json`, `EXAMPLE_DRAFT_READY` is
-`createDraft/draft-ready.json`, and `EXAMPLE_LLM_UNAVAILABLE` is `createDraft/llm-unavailable.json`.
+`createDraft/draft-ready.json`, `EXAMPLE_LLM_UNAVAILABLE` is `createDraft/llm-unavailable.json`,
+`EXAMPLE_ABSTAINED` is `createDraft/abstained.json`, and `EXAMPLE_ESCALATION_RECOMMENDED` is
+`createDraft/escalation-recommended.json`.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 
 from supportiq_ai_service.release import LoadedRelease
@@ -137,6 +139,66 @@ EXAMPLE_LLM_UNAVAILABLE = NoDraft(
         ),
     ),
     status=NoDraftStatus.LLM_UNAVAILABLE,
+)
+
+
+EXAMPLE_ABSTAINED = NoDraft(
+    details=OutcomeDetails(
+        reason_codes=(ReasonCode("low_confidence"),),
+        analysis=replace(
+            EXAMPLE_ANALYSIS,
+            intent=ModelIntent(
+                label=IntentName("cancel_order"),
+                probability=0.41,
+                confidence_band=ConfidenceBand.LOW,
+            ),
+            alternatives=(
+                IntentCandidate(label=IntentName("change_order"), probability=0.33),
+                IntentCandidate(label=IntentName("track_order"), probability=0.12),
+            ),
+            documents=(replace(EXAMPLE_ANALYSIS.documents[1], rank=1),),
+            routing=Routing(
+                recommendation=RoutingRecommendation.ABSTAIN,
+                reason_codes=(ReasonCode("low_confidence"),),
+            ),
+            step_latencies=StepLatencies(total_ms=179, analysis_ms=179),
+        ),
+        versions=EXAMPLE_VERSIONS,
+        step_latencies=StepLatencies(total_ms=181, analysis_ms=179),
+        mask_counts=MaskCounts(email=0, phone=0, card=0),
+        staff_note=(
+            "The intent is uncertain. Confirm the intent or choose another to get a draft."
+        ),
+    ),
+    status=NoDraftStatus.ABSTAINED,
+)
+
+EXAMPLE_ESCALATION_RECOMMENDED = NoDraft(
+    details=OutcomeDetails(
+        reason_codes=(ReasonCode("human_agent_requested"),),
+        analysis=replace(
+            EXAMPLE_ANALYSIS,
+            intent=ModelIntent(
+                label=IntentName("human_agent"),
+                probability=0.97,
+                confidence_band=ConfidenceBand.HIGH,
+            ),
+            alternatives=(IntentCandidate(label=IntentName("customer_service"), probability=0.02),),
+            documents=(),
+            routing=Routing(
+                recommendation=RoutingRecommendation.ESCALATE,
+                reason_codes=(ReasonCode("human_agent_requested"),),
+            ),
+            step_latencies=StepLatencies(total_ms=168, analysis_ms=168),
+        ),
+        versions=EXAMPLE_VERSIONS,
+        step_latencies=StepLatencies(total_ms=170, analysis_ms=168),
+        mask_counts=MaskCounts(email=0, phone=0, card=0),
+        staff_note=(
+            "The customer asks to talk to a person. Escalation to a manager is recommended."
+        ),
+    ),
+    status=NoDraftStatus.ESCALATION_RECOMMENDED,
 )
 
 

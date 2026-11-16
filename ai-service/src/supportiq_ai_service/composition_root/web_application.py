@@ -102,9 +102,9 @@ def _build_lifespan(
         events.record(EventName.STARTUP_COMPLETED)
         yield
         events.record(EventName.SHUTDOWN_STARTED)
-        # The command created this client once, before the server started. No adapter sends a
-        # request with it yet, because the pipeline of `main` is not wired in. Closing it may
-        # close sockets, so it runs off the event loop.
+        # The command created this client once, before the server started, and the Gemini
+        # client of the pipeline sends every LLM call with it. Closing it may close sockets, so
+        # it runs off the event loop.
         await run_in_threadpool(egress_client.close)
 
     return lifespan

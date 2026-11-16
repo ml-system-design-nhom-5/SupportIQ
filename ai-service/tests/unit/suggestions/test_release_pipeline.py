@@ -21,7 +21,7 @@ from supportiq_ai_service.drafting import (
     UnanswerableRequest,
     WrittenDraft,
 )
-from supportiq_ai_service.intent import INTENT_LABELS, IntentDistribution, IntentProbability
+from supportiq_ai_service.intent import IntentDistribution
 from supportiq_ai_service.platform import EventName
 from supportiq_ai_service.retrieval import DocumentMatch
 from supportiq_ai_service.suggestions.application.release_pipeline import (
@@ -51,6 +51,7 @@ from supportiq_ai_service.suggestions.domain import (
     StepLatencies,
     SuggestionInput,
 )
+from tests.unit.intent.fakes import distribution
 from tests.unit.platform.fakes import RecordingEventRecorder
 from tests.unit.release.fakes import EXAMPLE_RELEASE
 from tests.unit.retrieval.fakes import EXAMPLE_DOCUMENT
@@ -58,6 +59,10 @@ from tests.unit.retrieval.fakes import EXAMPLE_DOCUMENT
 AS_OF = datetime(2026, 11, 5, 9, 30, tzinfo=UTC)
 DELIVERY = dataclasses.replace(
     EXAMPLE_DOCUMENT, document_id="DELIVERY", policy_key="delivery", body="Parcels ship daily."
+)
+# Another version in effect with the same policy key, so the two conflict.
+SECOND_DELIVERY = dataclasses.replace(
+    DELIVERY, document_id="DELIVERY-2", body="Parcels ship weekly."
 )
 ROUTING = RoutingConfiguration(
     version="routing-sample-1",
@@ -91,15 +96,6 @@ GROUNDED = WrittenDraft(
     is_clarification=False,
     usage=USAGE,
 )
-
-
-def distribution(*entries: tuple[str, float]) -> IntentDistribution:
-    """Return a distribution with the given probabilities first, and 0 for every other label."""
-    given = dict(entries)
-    return IntentDistribution(
-        tuple(IntentProbability(label, probability) for label, probability in entries)
-        + tuple(IntentProbability(label, 0.0) for label in INTENT_LABELS if label not in given)
-    )
 
 
 @dataclass(slots=True)
@@ -260,6 +256,36 @@ async def test_an_intent_outside_the_scope_is_marked_and_abstains() -> None:
 
 
 @pytest.mark.anyio
+async def test_a_staff_choice_is_the_intent_of_the_draft() -> None:
+    # The model alone is not confident enough to draft (ESC-01).
+    model = FakeModel(intents=distribution(("delivery_time", 0.4), ("track_order", 0.39)))
+
+    outcome = await _pipeline(model).draft(
+        _request(intent_override=IntentName("track_order")), EXAMPLE_RELEASE
+    )
+
+    assert isinstance(outcome, DraftReady)
+    assert outcome.details.analysis.intent == StaffIntent(IntentName("track_order"))
+    assert [request.intent for request in model.requests] == ["track_order"]
+
+
+@pytest.mark.anyio
+async def test_a_sensitive_intent_chosen_by_staff_requires_authority() -> None:
+    # The model leans to `track_order`, and the message holds no sensitive term (FR-06).
+    model = FakeModel()
+    requires_authority = ReasonCode("requires_authority")
+
+    outcome = await _pipeline(model).draft(
+        _request(intent_override=IntentName("request_refund")), EXAMPLE_RELEASE
+    )
+
+    assert isinstance(outcome, DraftReady)
+    assert requires_authority in outcome.details.analysis.routing.reason_codes
+    assert requires_authority in outcome.details.reason_codes
+    assert [request.requires_authority for request in model.requests] == [True]
+
+
+@pytest.mark.anyio
 async def test_a_staff_choice_has_no_band_and_no_alternatives() -> None:
     model = FakeModel(intents=distribution(("delivery_time", 0.4), ("track_order", 0.39)))
 
@@ -286,6 +312,21 @@ async def test_a_staff_choice_has_no_band_and_no_alternatives() -> None:
             FakeModel(intents=distribution(("track_order", 0.4), ("delivery_time", 0.35))),
             NoDraftStatus.ABSTAINED,
             ("low_confidence",),
+        ),
+        (
+            FakeModel(
+                matches=(
+                    DocumentMatch(DELIVERY, 0.9, (DELIVERY.body,)),
+                    DocumentMatch(SECOND_DELIVERY, 0.85, (SECOND_DELIVERY.body,)),
+                )
+            ),
+            NoDraftStatus.ABSTAINED,
+            ("conflicting_sources",),
+        ),
+        (
+            FakeModel(intents=distribution(("store_location", 0.95))),
+            NoDraftStatus.ABSTAINED,
+            ("out_of_scope_intent",),
         ),
     ],
 )

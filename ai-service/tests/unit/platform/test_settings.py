@@ -138,6 +138,10 @@ def test_a_missing_llm_setting_without_default_stops_startup(
         ("LLM_TEMPERATURE", "2.5", "llm_temperature"),
         ("LLM_ATTEMPT_TIMEOUT_MS", "10000", "llm_attempt_timeout_ms"),
         ("LLM_BACKOFF_BASE_MS", "0", "llm_backoff_base_ms"),
+        ("GROUNDING_UNCITED_SEGMENT_MAX_CHARS", "41", "grounding_uncited_segment_max_chars"),
+        ("GROUNDING_UNCITED_SEGMENT_MAX_CHARS", "0", "grounding_uncited_segment_max_chars"),
+        ("RETRIEVAL_TOP_K_DOCUMENTS", "0", "retrieval_top_k_documents"),
+        ("MODEL_CPU_THREADS", "0", "model_cpu_threads"),
     ],
 )
 def test_an_llm_setting_out_of_its_range_stops_startup(
@@ -172,3 +176,47 @@ def test_a_backoff_maximum_below_its_base_stops_startup(monkeypatch: pytest.Monk
         load_settings(RecordingEventRecorder())
 
     assert raised.value.setting_names == ("llm_backoff_max_ms",)
+
+
+def test_the_pipeline_settings_have_the_values_of_main(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(SERVICE_TOKEN_VARIABLE, SERVICE_TOKEN)
+
+    settings = load_settings(RecordingEventRecorder())
+
+    assert (
+        settings.retrieval_top_k_documents,
+        settings.retrieval_max_chunks_per_document,
+        settings.retrieval_token_budget_tokens,
+        settings.grounding_uncited_segment_max_chars,
+        settings.model_cpu_threads,
+    ) == (3, 2, 1_500, 40, 2)
+
+
+def _set_prices(monkeypatch: pytest.MonkeyPatch, input_price: str, output_price: str) -> None:
+    monkeypatch.setenv(SERVICE_TOKEN_VARIABLE, SERVICE_TOKEN)
+    monkeypatch.setenv("LLM_INPUT_PRICE_MICRO_USD_PER_MILLION_TOKENS", input_price)
+    monkeypatch.setenv("LLM_OUTPUT_PRICE_MICRO_USD_PER_MILLION_TOKENS", output_price)
+
+
+def test_two_prices_that_sum_to_the_cost_cap_of_the_contract_are_valid(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _set_prices(monkeypatch, "9999999", "1")
+
+    settings = load_settings(RecordingEventRecorder())
+
+    assert (
+        settings.llm_input_price_micro_usd_per_million_tokens,
+        settings.llm_output_price_micro_usd_per_million_tokens,
+    ) == (9_999_999, 1)
+
+
+def test_two_prices_above_the_cost_cap_of_the_contract_stop_startup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _set_prices(monkeypatch, "10000000", "1")
+
+    with pytest.raises(SettingsInvalidError) as raised:
+        load_settings(RecordingEventRecorder())
+
+    assert raised.value.setting_names == ("llm_output_price_micro_usd_per_million_tokens",)

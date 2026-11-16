@@ -18,6 +18,12 @@ _MAX_LLM_BUDGET_MS = 10_000
 _MAX_LLM_ATTEMPTS = 3
 # The range of the temperature that the Gemini API accepts.
 _MAX_TEMPERATURE = 2.0
+# The cap of the cost of one LLM call in the contract (`LlmUsage`), in micro-dollars. With token
+# counts of at most 1 000 000 each, prices that sum to at most this cap keep every cost in it.
+_MAX_COST_MICRO_USD = 10_000_000
+# The longest segment without a citation of `main`. A setting may only tighten the grounding
+# check, never loosen it (ARCH-37, guardrail 5).
+_MAX_UNCITED_SEGMENT_CHARS = 40
 
 
 class Settings(BaseSettings):
@@ -63,6 +69,22 @@ class Settings(BaseSettings):
     llm_max_output_tokens: Annotated[int, Field(ge=1)] = 1_024
     # The temperature of a draft, which only Gemini 2.5 models take; the value of `main`.
     llm_temperature: Annotated[float, Field(ge=0, le=_MAX_TEMPERATURE)] = 0.1
+    # The number of top documents of an analysis, after validity and reranking (ADR-0005,
+    # statement 2); the value of `main`.
+    retrieval_top_k_documents: Annotated[int, Field(ge=1)] = 3
+    # The passages kept for each document version that a search finds; the value of `main`.
+    retrieval_max_chunks_per_document: Annotated[int, Field(ge=1)] = 2
+    # The tokens of KB passages that one prompt may hold; the first passage always goes. The
+    # value of `main`.
+    retrieval_token_budget_tokens: Annotated[int, Field(ge=1)] = 1_500
+    # The longest segment of a draft without a citation, such as a greeting; the value of
+    # `main`, and its upper bound (FR-03).
+    grounding_uncited_segment_max_chars: Annotated[
+        int, Field(ge=1, le=_MAX_UNCITED_SEGMENT_CHARS)
+    ] = _MAX_UNCITED_SEGMENT_CHARS
+    # The CPU threads of the intent model and the encoder; the value of `main` for its replica
+    # of 2 GiB (ADR-0018, Platform).
+    model_cpu_threads: Annotated[int, Field(ge=1)] = 2
 
     @model_validator(mode="after")
     def _llm_values_fit_together(self) -> Self:
@@ -70,6 +92,12 @@ class Settings(BaseSettings):
             raise _ATTEMPT_TIMEOUT_RULE.error()
         if self.llm_backoff_max_ms < self.llm_backoff_base_ms:
             raise _BACKOFF_MAXIMUM_RULE.error()
+        prices = (
+            self.llm_input_price_micro_usd_per_million_tokens
+            + self.llm_output_price_micro_usd_per_million_tokens
+        )
+        if prices > _MAX_COST_MICRO_USD:
+            raise _PRICE_CAP_RULE.error()
         return self
 
 
@@ -88,6 +116,11 @@ _ATTEMPT_TIMEOUT_RULE = _SettingRule(
     "attempt_timeout_above_budget",
     "One attempt must fit in the budget of the LLM step",
     "llm_attempt_timeout_ms",
+)
+_PRICE_CAP_RULE = _SettingRule(
+    "prices_above_cost_cap",
+    "The two token prices must sum to at most the cost cap of the contract",
+    "llm_output_price_micro_usd_per_million_tokens",
 )
 _BACKOFF_MAXIMUM_RULE = _SettingRule(
     "backoff_maximum_below_base",

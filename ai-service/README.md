@@ -44,7 +44,7 @@ These steps work from a fresh clone, on Linux, macOS, and Windows. Only Linux ge
    cp .env.example .env
    ```
 
-`ai-service serve` validates the settings first. A missing or invalid setting stops it with exit status 2 and a `settings.invalid` line that names the setting, never its value ([ARCH-34](../docs/rules/architecture.md)). It then reads the egress allow-list, and a missing or invalid file stops it the same way, with an `egress_allow_list.invalid` line that names the file ([Egress and secrets](#egress-and-secrets)). It then checks the release, and a missing, incomplete, or changed release stops it the same way, with a `release.invalid` line that names the reason ([Release manifest](#release-manifest)). There is no fallback model, so without a release whose files are on the machine, `ai-service serve` does not start.
+`ai-service serve` validates the settings first. A missing or invalid setting stops it with exit status 2 and a `settings.invalid` line that names the setting, never its value ([ARCH-34](../docs/rules/architecture.md)). It then reads the egress allow-list, and a missing or invalid file stops it the same way, with an `egress_allow_list.invalid` line that names the file ([Egress and secrets](#egress-and-secrets)). It then checks the release, and a missing, incomplete, or changed release stops it the same way, with a `release.invalid` line that names the reason ([Release manifest](#release-manifest)). It then reads every asset and loads the two models, and an asset that breaks its format, or a model that cannot be loaded, stops it the same way ([Asset formats](#asset-formats)). There is no fallback model, so without a release whose files are on the machine, `ai-service serve` does not start.
 
 Docker is not part of local development. CI builds the [`Dockerfile`](Dockerfile), which installs the `torch` group.
 
@@ -79,11 +79,11 @@ ai-service/
 ├── src/supportiq_ai_service/
 │   ├── platform/           # Clock, errors, events, settings, logging, trace context, egress, the service token, web
 │   ├── release/            # The release manifest: loading, checksums, the asset versions, readiness
-│   ├── suggestions/        # For now createAnalysis and createDraft: use cases, results, the pipeline port
+│   ├── suggestions/        # createAnalysis and createDraft: use cases, results, the rules of routing and grounding, the pipeline
 │   ├── intent/             # The 46 intent labels, the intent distribution and its port, and the DistilBERT model
 │   ├── retrieval/          # getKbDocumentVersion, and the search of the KB: chunking, the index, and the BGE encoder
 │   ├── drafting/           # One LLM call and its cost, the Gemini client, and the budget of the LLM step
-│   ├── composition_root/   # The only place that wires everything: the app and its command
+│   ├── composition_root/   # The only place that wires everything: the app, its command, and the assets and models of a release
 │   └── generated/          # Models generated from the contract; never edited by hand
 ├── tests/
 │   ├── unit/               # Domain and application, with fakes; the network is blocked
@@ -93,7 +93,7 @@ ai-service/
 └── pyproject.toml          # Dependencies and the configuration of every tool
 ```
 
-`platform/`, `release/`, `composition_root/`, `generated/`, and the test folders are fixed. `suggestions/` is an interim feature named after the tag of its two operations in the contract: it holds their use cases, the types of their results in the shape of the contract, and the port of the pipeline, which computes nothing itself. `intent/`, `retrieval/`, and `drafting/` hold the adapters taken over from `main`. The pipeline design decides the features of the pipeline and replaces this split ([Open questions](#open-questions)).
+`platform/`, `release/`, `composition_root/`, `generated/`, and the test folders are fixed. `suggestions/` is an interim feature named after the tag of its two operations in the contract: it holds their use cases, the types of their results in the shape of the contract, the rules of routing, evidence, masking, grounding, and usage, and `ReleasePipeline`, which runs those rules over the ports of `intent`, `retrieval`, and `drafting` ([Routing](#routing)). `intent/`, `retrieval/`, and `drafting/` hold the adapters taken over from `main`. The pipeline design decides the features of the pipeline and replaces this split ([Open questions](#open-questions)).
 
 Each feature has the layers of [ARCH-16](../docs/rules/architecture.md):
 
@@ -109,16 +109,39 @@ Features depend on each other in one direction and only through the `__init__.py
 ## Egress and secrets
 
 - `ai-service` calls outside the system only the hosts of the egress allow-list ([ADR-0010, Egress control](../docs/decisions/0010-pseudonymization-and-egress-control.md#egress-control)). The list is [`egress-allow-list.v1.json`](src/supportiq_ai_service/platform/adapters/egress-allow-list.v1.json), version `1`, and holds only `generativelanguage.googleapis.com`. It ships inside the package and is read with `importlib.resources`. It is not a setting, so no environment can change it: only a change in the repository with the approval of [SEC-35](../docs/rules/security-and-privacy.md#security-review) can. At startup it is read strictly: an unknown field, another version, an empty or repeated host, or a host that is not a lowercase DNS name stops the replica.
-- Egress is enforced in code, because the hosting has no outbound filter ([ADR-0018, Egress](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#egress)). [`platform/adapters/egress.py`](src/supportiq_ai_service/platform/adapters/egress.py) is the only module that creates an HTTP client or transport ([ARCH-19](../docs/rules/architecture.md)). Its `AllowListedTransport` refuses, before it connects, every request that is not HTTPS on the default port to an allow-listed host, and the LLM client handles a refusal like any failed call: `llm_unavailable` ([ADR-0010, Failure handling](../docs/decisions/0010-pseudonymization-and-egress-control.md#failure-handling)). The client reads no proxy setting from the environment (`trust_env=False`) and follows no redirect (`follow_redirects=False`). `ai-service serve` creates the one client in the composition root, right after it reads the allow-list and before the server starts, which does no I/O; the lifespan of the app closes it at shutdown ([ARCH-21](../docs/rules/architecture.md), [ARCH-24](../docs/rules/architecture.md)). No other place creates one.
+- Egress is enforced in code, because the hosting has no outbound filter ([ADR-0018, Egress](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#egress)). [`platform/adapters/egress.py`](src/supportiq_ai_service/platform/adapters/egress.py) is the only module that creates an HTTP client or transport ([ARCH-19](../docs/rules/architecture.md)). Its `AllowListedTransport` refuses, before it connects, every request that is not HTTPS on the default port to an allow-listed host, and the LLM client handles a refusal like any failed call: `llm_unavailable` ([ADR-0010, Failure handling](../docs/decisions/0010-pseudonymization-and-egress-control.md#failure-handling)). The client reads no proxy setting from the environment (`trust_env=False`) and follows no redirect (`follow_redirects=False`). `ai-service serve` creates the one client in the composition root, after it has checked the release, read its assets, and loaded its models, and before the server starts; creating it does no I/O, and the lifespan of the app closes it at shutdown ([ARCH-21](../docs/rules/architecture.md), [ARCH-24](../docs/rules/architecture.md)). No other place creates one.
 - The guardrail [`tests/integration/guardrails/test_egress_allow_list.py`](tests/integration/guardrails/test_egress_allow_list.py) fails when the packaged list holds another host, when the client of a replica sends a request outside the list or stays open after shutdown, and when another module of `src/` does one of these, in any import form:
   - calls `httpx.Client`, `httpx.AsyncClient`, `httpx.HTTPTransport`, `httpx.AsyncHTTPTransport`, or one of the request functions of `httpx` (`get`, `post`, `put`, `patch`, `delete`, `head`, `options`, `request`, `stream`);
   - calls `socket.socket` or `socket.create_connection`;
   - imports `urllib.request`, `http.client`, `requests`, `urllib3`, `httpcore`, `aiohttp`, or `huggingface_hub`, which downloads models while `ai-service` downloads nothing when it runs.
 
   Type annotations do not count ([SEC-40](../docs/rules/security-and-privacy.md#transport-and-runtime)).
-- The intent model and the BGE encoder ship with each release, and Hugging Face runs offline, so `ai-service` downloads nothing when it starts. Both load with `local_files_only=True` from their folder in the release only, so a missing file stops startup instead of starting a download ([ADR-0018, Egress](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#egress)).
+- The intent model and the BGE encoder ship with each release, and Hugging Face runs offline, so `ai-service` downloads nothing when it starts. Both load with `local_files_only=True` from their folder in the release only, so a missing file stops startup instead of starting a download ([ADR-0018, Egress](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#egress)). The model library reads `HF_HUB_OFFLINE`, `TRANSFORMERS_OFFLINE`, and `HF_HUB_DISABLE_TELEMETRY` when it is imported, so the command sets each to `1` before it imports [`composition_root/release_models.py`](src/supportiq_ai_service/composition_root/release_models.py), the only module that leads to that library.
 - Every operation except `/health/live` and `/health/ready` checks the service token ([ADR-0018, Access](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#access)).
 - Provider responses, prompts, and keys are never logged ([LOG-29](../docs/rules/logging-and-observability.md#privacy-in-telemetry)). The Gemini API key and the service token are Modal Secrets ([ADR-0018, Secrets](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#secrets)).
+
+## Routing
+
+[`suggestions/application/release_pipeline.py`](src/supportiq_ai_service/suggestions/application/release_pipeline.py) runs both operations over the assets of the release. `createAnalysis` and `createDraft` compute the same analysis, and only a draft may call the LLM ([ADR-0005](../docs/decisions/0005-intent-independent-retrieval.md)).
+
+1. The intent model gives the intent distribution, and the search gives the relevant KB document versions with their passages. Both run off the event loop.
+2. The intent is the most likely label. Its band is `low` when its probability is below τ or its lead over the second label is below δ, `high` from `high_band_min_probability`, and `medium` otherwise. The next four labels are the alternatives. An intent that staff chose replaces the distribution: it has no probability, no band, and no alternatives, and its confidence is never low (ADR-0005, statement 7).
+3. Each version gets its validity at `as_of`: a version that starts after `as_of` is left out, one that has ended is `expired`, and two versions in effect with one `policy_key` are both `conflicting`. The score of a version adds λ times the probability of the intents that the mapping gives it. Versions in effect come before expired ones, and the first `RETRIEVAL_TOP_K_DOCUMENTS` are kept.
+4. Authority is required when a sensitive intent of the routing configuration has at least `sensitive_intent_min_probability` or is the intent that staff chose, or when the message holds a sensitive term (FR-06).
+5. The recommendation is `escalate` for `human_agent` (ESC-03); `abstain` for a low confidence, an intent outside the 12 in-scope intents, or evidence that is missing, only expired, or conflicting (ESC-01, ESC-02, ESC-04); and `draft` otherwise. Authority adds `requires_authority` and never prevents a draft.
+6. When no top version maps to the intent, the analysis carries the warning `signal_disagreement`, and a `high` band becomes `medium` ([Known limits](#known-limits)).
+
+A draft follows the recommendation. `abstain` and `escalate` give `abstained` and `escalation_recommended` without an LLM call. For `draft`, the second layer masks the message ([SEC-06](../docs/rules/security-and-privacy.md#data-sent-to-llm-providers)), and the passages of the valid versions go into the prompt, best first, while they fit in `RETRIEVAL_TOKEN_BUDGET_TOKENS` tokens of the encoder; the first passage always goes. The order facts follow them ([LLM call](#llm-call)). The output is then checked: its token counts against the cap of the contract, and the grounding of each segment, where a segment without a citation holds at most `GROUNDING_UNCITED_SEGMENT_MAX_CHARS` characters and no commitment. A failure of the LLM call or of a check is an outcome with its reason code, never an error.
+
+The settings of the pipeline have the values of `main` as defaults:
+
+| Setting | Default | Sets |
+|---|---|---|
+| `RETRIEVAL_TOP_K_DOCUMENTS` | 3 | The top documents of an analysis |
+| `RETRIEVAL_MAX_CHUNKS_PER_DOCUMENT` | 2 | The passages kept for each version |
+| `RETRIEVAL_TOKEN_BUDGET_TOKENS` | 1 500 | The tokens of KB passages in one prompt |
+| `GROUNDING_UNCITED_SEGMENT_MAX_CHARS` | 40, and at most 40 | The longest segment without a citation |
+| `MODEL_CPU_THREADS` | 2 | The CPU threads of the two models |
 
 ## LLM call
 
@@ -186,8 +209,8 @@ Every log line is one JSON object on standard output, with the attributes of an 
 | `startup.completed`, `shutdown.started` | A replica starts or stops |
 | `settings.loaded`, `settings.invalid` | The settings are read; `settings.invalid` names the settings, never a value |
 | `egress_allow_list.invalid` | The egress allow-list is missing or invalid, so the replica stops; it names the file, never its content |
-| `release.loaded` | The release manifest and every file it names pass the check, with the `release_id` |
-| `release.invalid` | The release manifest or a file it names fails the check, so the replica stops; it names the reason, the asset, and the path of the file, never its content |
+| `release.loaded` | The release manifest, every file it names, and every asset pass the check, and the two models are loaded, with the `release_id` |
+| `release.invalid` | The release manifest, a file it names, or an asset fails the check, or a model cannot be loaded, so the replica stops; it names the reason, the asset, and the path of the file, never its content |
 | `request.completed` | Every request ends, with the route template, the method, the status, and the duration |
 | `request.failed` | A request fails unexpectedly, with the error type |
 | `request.refused` | A request answers `503 not-ready`, because no verified release is loaded |
@@ -211,16 +234,14 @@ Every request continues the trace of a valid `traceparent` or starts a new one, 
 - No test reads `.env` or uses an API key from the environment, and no test calls an LLM: a fake LLM adapter replaces Gemini ([ADR-0021, CI](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#ci), statement 2).
 - Tests that load real model weights carry the marker `real_model`. An empty `HF_HOME` does not stop a test from loading weights from a local path, so every test that needs real weights carries the marker, without exception. They are skipped by default and in CI, and run only with `-m real_model` on a machine that holds the release assets. The real model is otherwise tested on the Modal deployment ([ADR-0021, Python and dependencies](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#python-and-dependencies), statement 3).
 - CI runs the tests on Linux twice: without torch, with fakes, and with torch from the CPU index (ADR-0021, CI, statement 4).
-- Tests that build and run models carry the marker `torch` and skip, with their reason, where torch is not installed. They build tiny models with random weights from a vocabulary of a few words, so they download nothing and need no release assets. Only the two adapters that load a model need torch; the softmax, the chunking, the index, and the search are tested everywhere with fakes.
+- Tests that build and run models carry the marker `torch` and skip, with their reason, where torch is not installed. They build tiny models with random weights from a vocabulary of a few words, so they download nothing and need no release assets. Only the two adapters that load a model, and `composition_root/release_models.py`, which loads both with the threads of `MODEL_CPU_THREADS`, need torch; the softmax, the chunking, the index, and the search are tested everywhere with fakes.
 
 ## Known limits
 
-- The pipeline of `main` is not wired in yet. A replica checks the checksums of its release but does not read its assets yet. With a verified release it answers ready, but `createAnalysis` and `createDraft` answer `503 not-ready`, and `getKbDocumentVersion` finds no document.
 - The model weights and the encoder are not in git. They are assets of GitHub Releases, named with their checksums in the release manifest ([ADR-0018, Artifact store](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#artifact-store)). `ai-service` has no fallback model: without a verified release it does not start, and `backend` falls back to manual handling.
 - The model artifact holds every part that [DATA-35](../docs/rules/data-and-ml.md#models-and-artifacts) requires except calibration: its interim format requires `"calibration": null`, so the intent model of `main` reports uncalibrated softmax scores. Calibrated probabilities (FR-01, DATA-34) wait for a calibration fitted on validation data and a new format of the artifact ([contracts v1 design, Work for the join](../docs/design/contracts-v1.md#work-for-the-join-with-the-ai-and-ml-code)).
-- The first release serves no KB document, so every policy question leads to abstention (ESC-04) until a new KB version arrives ([ADR-0021, KB ingestion](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#kb-ingestion)).
+- The first release serves no KB document, so no request gets a draft: each one abstains with `no_valid_document` (ESC-04), or is escalated for `human_agent`, until a new KB version arrives ([ADR-0021, KB ingestion](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#kb-ingestion)).
 - The masks that `ai-service` writes before an LLM call come from patterns. A personal value that no pattern matches, such as an address written in slang, can remain ([ADR-0010, Detection](../docs/decisions/0010-pseudonymization-and-egress-control.md#detection)).
-- No adapter sends a request with the client of the egress allow-list yet: the pipeline of `main` is not wired into the app.
 - The static scan of the egress guardrail covers only the code of `ai-service`. A dependency that opens its own connection is caught only when a test runs it under the network block of pytest-socket ([ADR-0018, Consequences](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#consequences)).
 - The Gemini API has rate limits. When a call fails or the budget runs out, a draft returns `llm_unavailable` with a reason code, and staff handle the ticket manually (ESC-05).
 - httpx applies the timeout of an LLM attempt to each phase of the request (connect, write, read, and pool), not to the whole request. The budget is checked only before each attempt and before each wait, so in the worst case one attempt, and so the whole LLM step, runs past `LLM_BUDGET_MS`; `main` stated the same limit ([ERR-10, ERR-11](../docs/rules/errors-and-reliability.md#timeouts-and-latency-budget)).
@@ -232,6 +253,7 @@ Every request continues the trace of a valid `traceparent` or starts a new one, 
 - Each paragraph of a draft is one segment, and the grounding check reads a segment as a whole, as `main` did. A sentence without a citation passes when its paragraph cites a source, such as "Your order is in transit [S1]. You will get a refund in 5 days." A check sentence by sentence follows the merge, with its own issue, because the limit of 40 characters applies to a whole paragraph.
 - The grounding check refuses a segment that cites only order fields and words a policy, such as `eligible`, `policy`, `fee`, or `within 5 days`, because an order field never supports a policy ([ADR-0014](../docs/decisions/0014-citations-to-order-context.md), statement 2). The word list is a heuristic: a policy in other words can pass, and staff check every claim (FR-04).
 - `signal_disagreement` is a warning and lowers the band to `medium` at most; it never lowers the probability below τ, because no factor for that is tuned yet ([contracts v1 design, Reason codes](../docs/design/contracts-v1.md#reason-codes)). The `ai-service` pipeline design decides it.
+- The pipeline writes no `staff_note`, which the contract allows: the reason codes explain each outcome. Notes for staff wait for their own issue.
 - A token count above the cap of the contract (1 000 000) refuses the output as `llm_invalid_output`, and the outcome carries no `llm_usage`, so no number outside the contract is sent.
 - Structural checks on a draft, such as citation identity and placeholder provenance, do not prove that a cited source supports a claim. Staff verify every claim before they send a reply (FR-04).
 - The cold start, the latency from `backend`, and the memory in use are not measured yet ([ADR-0018, Validation](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#validation)).

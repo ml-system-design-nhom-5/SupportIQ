@@ -5,23 +5,34 @@ the names of the bad settings, when one is missing or invalid (ARCH-34). It then
 packaged egress allow-list, and stops the same way, after logging `egress_allow_list.invalid`
 with the file name, when the file is missing or invalid (SEC-40). It then checks the release
 manifest and every file it names, and stops the same way, after logging `release.invalid`
-with the reason, when one is missing or does not match (DATA-56). From the allow-list it
-creates the one HTTP client that leaves the system, before the server starts.
+with the reason, when one is missing or does not match (DATA-56). It then reads every asset of
+the release, loads its two models offline, and wires its pipeline, and stops the same way when
+an asset breaks its format. From the allow-list it creates the one HTTP client that leaves the
+system, before the server starts.
 """
 
 import argparse
+import os
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from types import MappingProxyType
 
 import uvicorn
 from fastapi import FastAPI
 
+from supportiq_ai_service.composition_root.release_assets import (
+    SYSTEM_TIMING,
+    ReleaseModels,
+    build_release_services,
+    read_release_assets,
+)
 from supportiq_ai_service.composition_root.settings_loading import (
     SettingsInvalidError,
     load_settings,
 )
 from supportiq_ai_service.composition_root.web_application import ServicePorts, create_app
+from supportiq_ai_service.intent.adapters.model_artifact import ModelArtifact
 from supportiq_ai_service.platform import EventAttributeValue, EventName, EventRecorder
 from supportiq_ai_service.platform.adapters.egress import (
     EgressAllowListInvalidError,
@@ -37,12 +48,17 @@ from supportiq_ai_service.platform.adapters.logging_setup import (
 from supportiq_ai_service.platform.adapters.system_clock import SystemClock
 from supportiq_ai_service.platform.settings import Settings
 from supportiq_ai_service.release.manifest import ReleaseInvalidError, verify_release
-from supportiq_ai_service.retrieval.adapters.no_kb_documents import NoKbDocuments
-from supportiq_ai_service.suggestions.adapters import UnavailablePipeline
+from supportiq_ai_service.retrieval.adapters.index_file import IndexConfiguration
 
 EXIT_SUCCESS = 0
 EXIT_CONFIGURATION_INVALID = 2
 SERVE_COMMAND = "serve"
+# The model library reads these when it is imported, so the command sets them before it imports
+# it: the models load from the release only, and nothing is downloaded or reported
+# (ADR-0018, Egress).
+HUGGING_FACE_OFFLINE: Mapping[str, str] = MappingProxyType(
+    {"HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1", "HF_HUB_DISABLE_TELEMETRY": "1"}
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,9 +112,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 def build_application(settings: Settings, events: EventRecorder) -> FastAPI:
     """Wire one replica: its adapters, its ports, and its application (ARCH-21).
 
-    It checks the release before it creates anything, and it creates the HTTP client of the
-    egress allow-list here, once, and nowhere else. Creating the client does no I/O, and the
-    lifespan of the application closes it at shutdown (ARCH-24, SEC-40).
+    It checks the release, reads its assets, and loads its models before it creates anything,
+    and it creates the HTTP client of the egress allow-list here, once, and nowhere else.
+    Creating the client does no I/O, and the lifespan of the application closes it at shutdown
+    (ARCH-24, SEC-40).
 
     Args:
         settings: The validated settings.
@@ -109,18 +126,42 @@ def build_application(settings: Settings, events: EventRecorder) -> FastAPI:
 
     Raises:
         EgressAllowListInvalidError: The packaged egress allow-list is missing or invalid.
-        ReleaseInvalidError: The release manifest, or a file it names, fails its check.
+        ReleaseInvalidError: The release manifest, a file it names, or an asset fails its
+            check, or a model cannot be loaded.
     """
     allow_list = packaged_egress_allow_list()
     release_source = verify_release(settings.release_manifest_path)
+    assets = read_release_assets(release_source, settings, load_release_models)
     events.record(EventName.RELEASE_LOADED, release_id=release_source.manifest.release_id)
     egress_client = create_egress_client(allow_list)
+    services = build_release_services(assets, settings, events, egress_client, SYSTEM_TIMING)
     ports = ServicePorts(
         release_source=release_source,
-        pipeline=UnavailablePipeline(),
-        kb_documents=NoKbDocuments(),
+        pipeline=services.pipeline,
+        kb_documents=services.kb_documents,
     )
     return create_app(settings, events, SystemClock(), ports, egress_client)
+
+
+def load_release_models(
+    artifact: ModelArtifact, index: IndexConfiguration, cpu_threads: int
+) -> ReleaseModels:
+    """Set Hugging Face offline, then import the models module and load the two models.
+
+    Args:
+        artifact: The checked model artifact.
+        index: The checked configuration of the index.
+        cpu_threads: The CPU threads that the models use.
+
+    Returns:
+        The loaded models.
+    """
+    os.environ.update(HUGGING_FACE_OFFLINE)
+    from supportiq_ai_service.composition_root.release_models import (  # noqa: PLC0415  # torch exists only on Linux, and the model library reads the offline environment when imported (ADR-0021, ADR-0018)
+        load_release_models as load,
+    )
+
+    return load(artifact, index, cpu_threads)
 
 
 def release_refusal_attributes(error: ReleaseInvalidError) -> dict[str, EventAttributeValue]:
