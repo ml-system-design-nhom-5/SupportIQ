@@ -1,6 +1,6 @@
 # ADR-0019: One label for text in the placeholder syntax
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-13
 - **Deciders:** Project lead
 - **Related:** [Requirements](../product/requirements.md) (FR-04, FR-09, NFR-11), [ADR-0010](0010-pseudonymization-and-egress-control.md) ([Placeholder syntax](0010-pseudonymization-and-egress-control.md#placeholder-syntax), [Restoring and sending](0010-pseudonymization-and-egress-control.md#restoring-and-sending)), [UI rules](../rules/ui.md#console-interaction) (UI-43), [security rules](../rules/security-and-privacy.md#pseudonymization) (SEC-38), [console UI design](../design/console-ui.md#draft-editing-and-citations)

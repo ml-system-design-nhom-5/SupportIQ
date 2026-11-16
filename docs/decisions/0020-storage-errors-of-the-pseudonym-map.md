@@ -1,6 +1,6 @@
 # ADR-0020: Storage errors of the pseudonym map
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-13
 - **Deciders:** Project lead
 - **Related:** [Requirements](../product/requirements.md) (FR-09, NFR-06, NFR-07), [ADR-0010](0010-pseudonymization-and-egress-control.md) ([Overview](0010-pseudonymization-and-egress-control.md#overview), [Detection](0010-pseudonymization-and-egress-control.md#detection), [Storage and lifecycle](0010-pseudonymization-and-egress-control.md#storage-and-lifecycle), [Failure handling](0010-pseudonymization-and-egress-control.md#failure-handling)), [ADR-0011](0011-deployment-and-runtime-topology.md#suggestion-job-queue), [ADR-0017](0017-named-entity-model-from-its-release-url.md), [security rules](../rules/security-and-privacy.md#pseudonymization) (SEC-36), [backend ticket workflow design](../design/backend-ticket-workflow.md#pseudonymization)
