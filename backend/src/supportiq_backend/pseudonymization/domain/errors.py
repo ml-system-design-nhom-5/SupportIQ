@@ -32,6 +32,14 @@ class PseudonymizationError(BackendError):
         super().__init__("The message could not be pseudonymized, so nothing was sent.")
 
 
+class NamedEntityModelMissingError(BackendError):
+    """The pinned named-entity model is not installed, so `backend` does not start (ERR-17)."""
+
+    def __init__(self) -> None:
+        """Build the error with its fixed detail."""
+        super().__init__("The named-entity model en_core_web_sm is not installed.")
+
+
 class DetectorError(PseudonymizationError):
     """A detector could not run. A detector adapter raises it for every failure (ARCH-28)."""
 

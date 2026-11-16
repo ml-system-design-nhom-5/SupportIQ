@@ -190,6 +190,37 @@ def find_whole_words(pattern: str, text: str) -> Iterator[re.Match[str]]:
     return re.finditer(rf"(?<!\w){re.escape(pattern)}(?!\w)", text)
 
 
+def drop_product_names(
+    detections: Iterable[Detection], message: str, product_names: Iterable[str]
+) -> tuple[Detection, ...]:
+    """Drop the named-entity detections that overlap a product name of the catalog.
+
+    Product names are no personal data, so "Apple Watch" stays as written; the detections of
+    the earlier steps are all kept (ADR-0010, Detection, step 4).
+
+    Args:
+        detections: Every detection of every detector.
+        message: The raw message.
+        product_names: The names of the catalog, compared without case and diacritics.
+
+    Returns:
+        The detections without those of the named-entity step on a product name.
+    """
+    folded = fold_text(message)
+    products = [
+        folded.to_original_span(match.start(), match.end())
+        for name in product_names
+        if name
+        for match in find_whole_words(fold_value(name), folded.text)
+    ]
+    return tuple(
+        detection
+        for detection in detections
+        if detection.source is not DetectionSource.NAMED_ENTITY
+        or not any(detection.start < end and start < detection.end for start, end in products)
+    )
+
+
 def resolve_overlaps(detections: Iterable[Detection]) -> tuple[Detection, ...]:
     """Keep at most one detection for every character (ADR-0010, Detection, step 5).
 

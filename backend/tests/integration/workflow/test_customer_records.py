@@ -103,6 +103,18 @@ async def test_load_contact_returns_the_personal_values_of_the_customer(
     assert [contact.display_name, contact.email, contact.phone] == await builder.scalar(CONTACT)
 
 
+async def test_load_product_names_returns_the_name_of_every_product(
+    app_engine: AsyncEngine, builder: DatabaseBuilder
+) -> None:
+    await builder.product(name="Desk lamp")
+    await builder.product(name="Jordan Runner")
+
+    async with create_session_factory(app_engine)() as session:
+        names = await PostgresCustomerRecords(session).load_product_names()
+
+    assert sorted(names) == ["Desk lamp", "Jordan Runner"]
+
+
 async def test_load_contact_of_an_unknown_customer_is_none(app_engine: AsyncEngine) -> None:
     assert await load_contact(app_engine, UNKNOWN_CUSTOMER_ID) is None
 

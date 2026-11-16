@@ -23,6 +23,7 @@ from supportiq_backend.pseudonymization import (
 )
 from supportiq_backend.pseudonymization.domain import (
     Detection,
+    DetectionSource,
     KnownValue,
     PseudonymEntry,
     PseudonymType,
@@ -75,6 +76,24 @@ class FailingDetector:
         """Raise the error of a detector that cannot run."""
         del message, known_values
         raise DetectorError
+
+
+@dataclass(slots=True)
+class NamedEntityOf:
+    """A named-entity step that finds one phrase as a name, as the model can for a product."""
+
+    phrase: str
+
+    def detect(
+        self, message: str, known_values: tuple[KnownValue, ...], /
+    ) -> tuple[Detection, ...]:
+        """Find the phrase where it first appears."""
+        del known_values
+        start = message.find(self.phrase)
+        if start < 0:
+            return ()
+        end = start + len(self.phrase)
+        return (Detection(start, end, PseudonymType.NAME, DetectionSource.NAMED_ENTITY),)
 
 
 @dataclass(slots=True)
@@ -141,6 +160,17 @@ async def test_no_seeded_personal_value_remains_in_the_pseudonymized_text(
     text = await harness.pseudonymize.pseudonymize(ticket_message())
 
     assert seeded_value not in text
+
+
+@pytest.mark.anyio
+async def test_a_product_name_of_the_catalog_stays_as_written() -> None:
+    message = "The Jordan Runner shoes are great."
+    harness = build_harness(
+        (*DETECTORS, NamedEntityOf("Jordan Runner")),
+        FakeCustomerRecords(product_names=("Jordan Runner",)),
+    )
+
+    assert await harness.pseudonymize.pseudonymize(ticket_message(message)) == message
 
 
 @pytest.mark.anyio

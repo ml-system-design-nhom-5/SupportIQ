@@ -74,7 +74,7 @@ The checks of [ADR-0016, Validation](../docs/decisions/0016-hosting-on-free-tier
 | With the keep-alive paused for 17 minutes, opening the app sends the wake request, and sign-in succeeds once `backend` runs ([backend wake-up design](../docs/design/backend-wake-up.md#testing-and-evaluation)) | Not run yet |
 | The NFR-08 load test against the deployed demo, with the sign-in latency on the free instance | Not run yet |
 | The suggestion progress stream stays open through the Function beyond 10 000 ms ([ADR-0022](../docs/decisions/0022-server-sent-events-for-suggestion-progress.md#decision), statement 8) | Not run yet |
-| Once the named-entity detector runs: `backend` starts with the model, and its memory and the p95 of pseudonymization fit the free instance ([ADR-0017](../docs/decisions/0017-named-entity-model-from-its-release-url.md#validation)) | Not run yet |
+| `backend` starts with the named-entity model, and its memory and the p95 of pseudonymization fit the free instance ([ADR-0017](../docs/decisions/0017-named-entity-model-from-its-release-url.md#validation)) | Not run yet |
 
 ## Every month
 

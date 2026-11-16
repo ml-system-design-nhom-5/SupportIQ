@@ -1,6 +1,6 @@
 """The named-entity detector of ADR-0010, step 4, on spaCy and `en_core_web_sm` (ADR-0017)."""
 
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterator
 
 import spacy
 from spacy.tokens import Doc, Span
@@ -10,12 +10,8 @@ from supportiq_backend.pseudonymization.domain import (
     DetectionSource,
     DetectorError,
     KnownValue,
+    NamedEntityModelMissingError,
     PseudonymType,
-)
-from supportiq_backend.pseudonymization.domain.detection import (
-    find_whole_words,
-    fold_text,
-    fold_value,
 )
 
 MODEL_NAME = "en_core_web_sm"
@@ -26,24 +22,26 @@ _PLACE_LABELS = frozenset({"GPE", "LOC"})
 
 
 class SpacyNamedEntityDetector:
-    """Step 4: person names and postal addresses that the earlier steps did not find."""
+    """Step 4: person names and postal addresses that the earlier steps did not find.
 
-    def __init__(self, product_names: Iterable[str]) -> None:
-        """Load the pinned model, which fails when it is not installed (ERR-17).
+    Pseudonymization drops its detections on product names (`drop_product_names`).
+    """
 
-        Args:
-            product_names: The names of the catalog, which are never personal data.
+    def __init__(self) -> None:
+        """Load the pinned model.
 
         Raises:
-            OSError: The model is not installed.
+            NamedEntityModelMissingError: The model is not installed (ERR-17).
         """
-        self._nlp = spacy.load(MODEL_NAME, exclude=_UNUSED_COMPONENTS)
-        self._product_names = tuple(fold_value(name) for name in product_names)
+        try:
+            self._nlp = spacy.load(MODEL_NAME, exclude=_UNUSED_COMPONENTS)
+        except OSError as error:
+            raise NamedEntityModelMissingError from error
 
     def detect(
         self, message: str, _known_values: tuple[KnownValue, ...], /
     ) -> tuple[Detection, ...]:
-        """Find the names and addresses of the message, outside the product names.
+        """Find the names and addresses of the message.
 
         Args:
             message: The raw message.
@@ -60,7 +58,7 @@ class SpacyNamedEntityDetector:
         except Exception as error:
             # Any failure of the model fails closed (SEC-36).
             raise DetectorError from error
-        found = (
+        return (
             *(
                 _detection(entity, PseudonymType.NAME)
                 for entity in doc.ents
@@ -68,18 +66,6 @@ class SpacyNamedEntityDetector:
             ),
             *(_detection(span, PseudonymType.ADDRESS) for span in _find_addresses(doc)),
         )
-        products = tuple(self._find_products(message))
-        return tuple(
-            detection
-            for detection in found
-            if not any(detection.start < end and start < detection.end for start, end in products)
-        )
-
-    def _find_products(self, message: str) -> Iterator[tuple[int, int]]:
-        folded = fold_text(message)
-        for name in self._product_names:
-            for match in find_whole_words(name, folded.text):
-                yield folded.to_original_span(match.start(), match.end())
 
 
 def _find_addresses(doc: Doc) -> Iterator[Span]:

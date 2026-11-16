@@ -5,6 +5,7 @@ from supportiq_backend.pseudonymization.domain.detection import (
     DetectionSource,
     Detector,
     KnownValue,
+    drop_product_names,
     resolve_overlaps,
 )
 from supportiq_backend.pseudonymization.domain.detectors import (
@@ -15,6 +16,7 @@ from supportiq_backend.pseudonymization.domain.detectors import (
 )
 from supportiq_backend.pseudonymization.domain.errors import (
     DetectorError,
+    NamedEntityModelMissingError,
     PseudonymizationError,
     PseudonymizationFailureReason,
     PseudonymizedTextTooLongError,
@@ -47,6 +49,7 @@ __all__ = [
     "KnownValueDetector",
     "LiteralPlaceholderDetector",
     "MapTicketId",
+    "NamedEntityModelMissingError",
     "PatternDetector",
     "PseudonymEntry",
     "PseudonymLimitExceededError",
@@ -60,6 +63,7 @@ __all__ = [
     "StoredMapDiffersError",
     "build_pseudonymized_message",
     "contains_placeholder",
+    "drop_product_names",
     "is_luhn_valid",
     "resolve_overlaps",
     "restore_pseudonyms",

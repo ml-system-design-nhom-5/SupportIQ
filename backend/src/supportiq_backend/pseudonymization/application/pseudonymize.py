@@ -46,6 +46,7 @@ from supportiq_backend.pseudonymization.domain import (
     PseudonymType,
     StoredMapDiffersError,
     build_pseudonymized_message,
+    drop_product_names,
     resolve_overlaps,
 )
 
@@ -163,8 +164,9 @@ class PseudonymizeMessage:
         async with self._transactions.begin() as transaction:
             stores = transaction.stores
             known_values = build_known_values(*await _load_records(stores.records, message))
+            product_names = await stores.records.load_product_names()
             result = build_pseudonymized_message(
-                message.message, self._detect(message.message, known_values)
+                message.message, self._detect(message.message, known_values, product_names)
             )
             await _keep_one_map(
                 stores.pseudonyms, message.ticket_id, result.entries, self._ports.clock.now()
@@ -173,7 +175,9 @@ class PseudonymizeMessage:
             await transaction.commit()
         return result
 
-    def _detect(self, message: str, known_values: tuple[KnownValue, ...]) -> tuple[Detection, ...]:
+    def _detect(
+        self, message: str, known_values: tuple[KnownValue, ...], product_names: tuple[str, ...]
+    ) -> tuple[Detection, ...]:
         detections: list[Detection] = []
         for detector in self._ports.detectors:
             try:
@@ -182,7 +186,7 @@ class PseudonymizeMessage:
                 # Any exception of any detector fails closed (backend ticket workflow
                 # design, Pseudonymization, item 1).
                 raise DetectorError from error
-        return resolve_overlaps(detections)
+        return resolve_overlaps(drop_product_names(detections, message, product_names))
 
     async def _audit_failure(self, ticket_id: MapTicketId, error: PseudonymizationError) -> None:
         # The transaction of the failed run rolled back, so no row of its map is kept

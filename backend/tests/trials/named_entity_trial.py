@@ -30,6 +30,7 @@ from supportiq_backend.pseudonymization.domain import (
     PatternDetector,
     PseudonymType,
     build_pseudonymized_message,
+    drop_product_names,
     resolve_overlaps,
 )
 
@@ -56,7 +57,8 @@ def main(output: Path) -> None:
     trial = json.loads(TRIAL_SET.read_text(encoding="utf-8"))
     seed = json.loads(SEED.read_text(encoding="utf-8"))
     rss_before_model = _peak_rss_mib()
-    named_entities = SpacyNamedEntityDetector(p["name"] for p in seed["commerce"]["products"])
+    product_names = tuple(p["name"] for p in seed["commerce"]["products"])
+    named_entities = SpacyNamedEntityDetector()
     rss_with_model = _peak_rss_mib()
     detectors = (
         LiteralPlaceholderDetector(),
@@ -66,7 +68,8 @@ def main(output: Path) -> None:
     )
 
     def pseudonymize(text: str) -> tuple[Detection, ...]:
-        kept = resolve_overlaps(d for detector in detectors for d in detector.detect(text, ()))
+        found = (d for detector in detectors for d in detector.detect(text, ()))
+        kept = resolve_overlaps(drop_product_names(found, text, product_names))
         build_pseudonymized_message(text, kept)
         return kept
 

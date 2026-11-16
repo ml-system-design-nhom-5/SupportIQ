@@ -1,5 +1,6 @@
 """The wiring of suggestions and pseudonymization: the ai-service client, the queue, and reads."""
 
+import functools
 from dataclasses import dataclass
 
 import httpx
@@ -22,6 +23,9 @@ from supportiq_backend.pseudonymization import (
     PseudonymizationPorts,
     PseudonymizationStores,
     PseudonymizeMessage,
+)
+from supportiq_backend.pseudonymization.adapters.named_entity_detector import (
+    SpacyNamedEntityDetector,
 )
 from supportiq_backend.pseudonymization.adapters.pseudonym_map_store import (
     PostgresPseudonymMapStore,
@@ -343,15 +347,35 @@ def _build_read_routers(
     )
 
 
+@functools.cache
+def load_named_entity_detector() -> SpacyNamedEntityDetector:
+    """Load the named-entity model once per process.
+
+    The model adds about 40 MiB (backend ticket workflow design, Choice 1), so every app of a
+    process, such as those that the tests create, shares one detector, which only reads it.
+
+    Returns:
+        The detector.
+
+    Raises:
+        NamedEntityModelMissingError: The model is not installed (ERR-17).
+    """
+    return SpacyNamedEntityDetector()
+
+
 def _build_pseudonymizer(
     session_factory: async_sessionmaker[AsyncSession], shared: SharedPorts
 ) -> PseudonymizeMessage:
-    # The detectors of ADR-0010 in the order of its steps. The named-entity detector of step 4
-    # joins them with ADR-0017, as one more `Detector`.
+    # The detectors of ADR-0010 in the order of its steps.
     return PseudonymizeMessage(
         SqlAlchemyTransactionRunner(session_factory, build_pseudonymization_stores),
         PseudonymizationPorts(
-            detectors=(LiteralPlaceholderDetector(), KnownValueDetector(), PatternDetector()),
+            detectors=(
+                LiteralPlaceholderDetector(),
+                KnownValueDetector(),
+                PatternDetector(),
+                load_named_entity_detector(),
+            ),
             clock=shared.clock,
             ids=shared.ids,
             traces=shared.traces,

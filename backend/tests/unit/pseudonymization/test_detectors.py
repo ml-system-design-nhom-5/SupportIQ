@@ -21,6 +21,7 @@ from supportiq_backend.pseudonymization.domain import (
     PseudonymType,
     build_pseudonymized_message,
     contains_placeholder,
+    drop_product_names,
     is_luhn_valid,
     resolve_overlaps,
     restore_pseudonyms,
@@ -256,6 +257,35 @@ def test_commerce_patterns_ignore_other_formats(message: str) -> None:
 )
 def test_luhn_check_accepts_only_valid_card_numbers(number: str, *, is_valid: bool) -> None:
     assert is_luhn_valid(number) is is_valid
+
+
+def named_entity(message: str, phrase: str) -> Detection:
+    start = message.index(phrase)
+    return Detection(start, start + len(phrase), PseudonymType.NAME, DetectionSource.NAMED_ENTITY)
+
+
+def test_a_named_entity_on_a_product_name_is_dropped_whatever_its_case_and_diacritics() -> None:
+    message = "My JORDAN RÚNNER shoes are torn."
+
+    kept = drop_product_names(
+        (named_entity(message, "JORDAN RÚNNER"),), message, ("Jordan Runner",)
+    )
+
+    assert kept == ()
+
+
+def test_a_known_value_on_a_product_name_is_kept() -> None:
+    message = "Ask Jordan Runner about it."
+    known = KnownValueDetector().detect(message, (KnownValue(PseudonymType.NAME, "Jordan Runner"),))
+
+    assert drop_product_names(known, message, ("Jordan Runner",)) == known
+
+
+def test_a_named_entity_that_holds_a_product_name_inside_a_longer_word_is_kept() -> None:
+    message = "Ask Lampson about it."
+    detection = named_entity(message, "Lampson")
+
+    assert drop_product_names((detection,), message, ("Lamp",)) == (detection,)
 
 
 def test_overlap_keeps_the_longer_span() -> None:

@@ -130,7 +130,11 @@ def run_command(arguments: CommandArguments, settings: Settings, events: EventRe
     """
     match arguments:
         case ServeArguments():
-            app = create_app(settings, events, SystemClock())
+            try:
+                app = create_app(settings, events, SystemClock())
+            except BackendError as error:
+                # Such as a missing named-entity model, which stops `backend` (ERR-17).
+                return report_failure(error, events)
             uvicorn.run(
                 app,
                 host=arguments.host,

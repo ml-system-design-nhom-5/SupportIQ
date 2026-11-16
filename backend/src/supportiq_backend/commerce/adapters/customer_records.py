@@ -12,7 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from supportiq_backend.accounts import CustomerId
 from supportiq_backend.commerce.adapters.order_rows import load_order_details
-from supportiq_backend.commerce.adapters.tables import CustomerRow, OrderRow, ShipmentRow
+from supportiq_backend.commerce.adapters.tables import (
+    CustomerRow,
+    OrderRow,
+    ProductRow,
+    ShipmentRow,
+)
 from supportiq_backend.commerce.domain import (
     AddressedOrder,
     CustomerContact,
@@ -77,6 +82,14 @@ class PostgresCustomerRecords:
             transaction_id=row.transaction_id,
             shipping_address=row.shipping_address,
         )
+
+    async def load_product_names(self) -> tuple[str, ...]:
+        """Load the name of every product of the catalog, which is no personal data.
+
+        Returns:
+            The names.
+        """
+        return tuple(await self._session.scalars(select(ProductRow.name)))
 
     async def load_display_names(
         self, customer_ids: frozenset[CustomerId]

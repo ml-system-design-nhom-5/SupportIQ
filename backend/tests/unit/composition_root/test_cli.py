@@ -28,6 +28,7 @@ from supportiq_backend.platform import DatabaseUnavailableError, EventName
 from supportiq_backend.platform.adapters.database_roles import AppRoleUrlError
 from supportiq_backend.platform.adapters.telemetry import RedactingSpanProcessor
 from supportiq_backend.platform.settings import TraceExporter
+from supportiq_backend.pseudonymization.domain import NamedEntityModelMissingError
 from tests.unit.platform.fakes import RecordingEventRecorder
 from tests.unit.platform.settings_builders import build_test_settings
 
@@ -169,6 +170,33 @@ def test_serve_gives_uvicorn_the_graceful_shutdown_of_the_settings(
 
     assert status == EXIT_SUCCESS
     assert calls[0]["timeout_graceful_shutdown"] == GRACEFUL_SHUTDOWN_S
+
+
+def test_serve_without_the_named_entity_model_stops_before_uvicorn_runs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def missing_model() -> None:
+        raise NamedEntityModelMissingError
+
+    def record_run(_app: object, **options: object) -> None:
+        calls.append(options)
+
+    # The loader is replaced, not its cache, so later tests still share the one model.
+    monkeypatch.setattr(
+        "supportiq_backend.composition_root.suggestions_wiring.load_named_entity_detector",
+        missing_model,
+    )
+    monkeypatch.setattr("supportiq_backend.composition_root.cli.uvicorn.run", record_run)
+    events = RecordingEventRecorder()
+
+    status = run_command(ServeArguments(host="127.0.0.1", port=PORT), build_test_settings(), events)
+
+    (failed,) = events.of(EventName.COMMAND_FAILED)
+    assert status == EXIT_FAILURE
+    assert failed.attributes["error_type"] == "NamedEntityModelMissingError"
+    assert calls == []
 
 
 def test_serve_without_a_port_stops_with_a_usage_error() -> None:

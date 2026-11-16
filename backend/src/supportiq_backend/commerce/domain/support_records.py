@@ -3,7 +3,9 @@
 Every value here is Confidential except the identifiers that the backend foundation design
 marks Internal, so no class has a generated `repr` and no value reaches a log, a trace, or an
 error (LOG-29). Only `backend` reads them: pseudonymization for the known values of a ticket,
-and the console for the ticket workspace.
+and the console for the ticket workspace. The port also reads the product names of the catalog,
+which are Public and no personal data: pseudonymization drops them from its named-entity step
+(ADR-0010, Detection, step 4).
 """
 
 from collections.abc import Mapping
@@ -60,7 +62,10 @@ class AddressedOrder:
 
 
 class CustomerRecords(Protocol):
-    """Read the commerce records of one customer for support; it never writes (ADR-0013)."""
+    """Read the records of one customer, and the product names, for support (ADR-0013).
+
+    It never writes.
+    """
 
     async def load_contact(self, customer_id: CustomerId) -> CustomerContact | None:
         """Load the personal values of a customer.
@@ -84,6 +89,14 @@ class CustomerRecords(Protocol):
 
         Returns:
             The values, or None when the order is unknown or another customer's.
+        """
+        ...
+
+    async def load_product_names(self) -> tuple[str, ...]:
+        """Load the name of every product of the catalog, which is no personal data.
+
+        Returns:
+            The names.
         """
         ...
 

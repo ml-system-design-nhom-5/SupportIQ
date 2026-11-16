@@ -62,6 +62,7 @@ class FakeCustomerRecords:
     names: Mapping[CustomerId, str] = field(
         default_factory=lambda: {CUSTOMER_ID: CONTACT.display_name}
     )
+    product_names: tuple[str, ...] = ()
 
     async def load_contact(self, customer_id: CustomerId) -> CustomerContact | None:
         """Return the contact of the one customer."""
@@ -74,6 +75,10 @@ class FakeCustomerRecords:
         if customer_id != CUSTOMER_ID or self.references is None:
             return None
         return self.references if order_id == self.references.order_id else None
+
+    async def load_product_names(self) -> tuple[str, ...]:
+        """Return the product names of the catalog."""
+        return self.product_names
 
     async def load_display_names(
         self, customer_ids: frozenset[CustomerId]

@@ -6,23 +6,24 @@ value is synthetic (TEST-18).
 
 import pytest
 
+from supportiq_backend.pseudonymization.adapters import named_entity_detector
 from supportiq_backend.pseudonymization.adapters.named_entity_detector import (
     SpacyNamedEntityDetector,
 )
 from supportiq_backend.pseudonymization.domain import (
     DetectionSource,
     DetectorError,
+    NamedEntityModelMissingError,
     PseudonymType,
 )
 
-PRODUCT_NAMES = ("Jordan Runner", "Desk lamp")
 # spaCy refuses a text longer than its default `max_length` of 1 000 000 characters.
 TOO_LONG_FOR_THE_MODEL = "a" * 1_000_001
 
 
 @pytest.fixture(scope="module")
 def detector() -> SpacyNamedEntityDetector:
-    return SpacyNamedEntityDetector(PRODUCT_NAMES)
+    return SpacyNamedEntityDetector()
 
 
 def found(detector: SpacyNamedEntityDetector, message: str, kind: PseudonymType) -> list[str]:
@@ -79,16 +80,23 @@ def test_a_message_without_a_person_or_a_facility_has_no_name_or_address(
     assert detector.detect(message, ()) == ()
 
 
-def test_a_catalog_product_name_is_no_name(detector: SpacyNamedEntityDetector) -> None:
-    assert detector.detect("The Jordan Runner shoes are great.", ()) == ()
-
-
 def test_every_detection_comes_from_the_named_entity_step(
     detector: SpacyNamedEntityDetector,
 ) -> None:
     detections = detector.detect("Elizabeth Taylor works at 9 Oak Avenue, Leeds.", ())
 
     assert {detection.source for detection in detections} == {DetectionSource.NAMED_ENTITY}
+
+
+def test_a_missing_model_stops_the_detector_from_loading(monkeypatch: pytest.MonkeyPatch) -> None:
+    def load_nothing(name: str, *, exclude: tuple[str, ...]) -> None:
+        del exclude
+        raise OSError(name)
+
+    monkeypatch.setattr(named_entity_detector.spacy, "load", load_nothing)
+
+    with pytest.raises(NamedEntityModelMissingError):
+        SpacyNamedEntityDetector()
 
 
 def test_a_message_that_the_model_refuses_fails_closed(
