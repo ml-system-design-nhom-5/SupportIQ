@@ -3,13 +3,35 @@
  * it on or off for themselves. It only adds developer details to the screens of a role, never
  * changes permissions, and customers never get it.
  *
- * `staff`, `manager`, and `admin` can switch it on, as UI-35 says. In this version only the ticket
- * workspace has developer details, so the switch changes nothing yet on the screens of `admin`.
+ * `staff`, `manager`, and `admin` can switch it on, as UI-35 says: the ticket workspace and the
+ * screens of the admin area have developer details.
  */
 import type { AccountRole } from "@/features/session/model/session";
 
 /** The roles that can switch dev mode on (UI-35). */
 const devModeRoles: ReadonlySet<AccountRole> = new Set(["staff", "manager", "admin"]);
+
+/** A setting of frontend with the value in use; absent when it is not set. */
+export type ShownSetting = {
+  readonly name: string;
+  readonly value?: string;
+};
+
+/** A Grafana dashboard of LOG-27 that the developer details link to. */
+export type DashboardLink = {
+  readonly title: string;
+  readonly href: string;
+};
+
+/** What frontend tells about itself in the developer details (admin UI design). */
+export type FrontendDetails = {
+  /** The build version of frontend; absent when the build was given none. */
+  readonly buildVersion?: string;
+  /** Every `VITE_` setting, in the order of the settings. */
+  readonly settings: readonly ShownSetting[];
+  /** The dashboards whose setting is set. */
+  readonly dashboards: readonly DashboardLink[];
+};
 
 /**
  * The part of the Grafana trace link that the trace ID replaces (UI-35). The settings check that

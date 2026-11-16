@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildAssetVersionRows,
+  buildVersionBlock,
   toAiServiceStatus,
   toVersionsInUse,
   type VersionsInUse,
@@ -30,12 +31,14 @@ const availableVersions: VersionsInUse = {
       indexVersion: "index-sample-1",
     },
   },
+  rawStatus: "available",
 };
 
 /** The versions of the example `ai-service-unavailable`. */
 const unavailableVersions: VersionsInUse = {
   backendVersion: "880b33a",
   aiService: { status: "unavailable" },
+  rawStatus: "unavailable",
 };
 
 /** Bodies that each lack one member that the contract requires, or that the status requires. */
@@ -65,7 +68,34 @@ describe("toVersionsInUse", () => {
       ai_service_status: "a_later_status",
     });
 
-    expect(Reflect.apply(toVersionsInUse, undefined, [body])).toEqual(unavailableVersions);
+    expect(Reflect.apply(toVersionsInUse, undefined, [body])).toEqual({
+      ...unavailableVersions,
+      rawStatus: "a_later_status",
+    });
+  });
+});
+
+describe("buildVersionBlock (admin UI design, Developer details in the admin area)", () => {
+  it("lists the build, the status, and every field of ai_service_versions", () => {
+    expect(buildVersionBlock(availableVersions)).toBe(
+      [
+        "backend_version: 880b33a",
+        "ai_service_status: available",
+        "release_id: release-2026-11-12-sample",
+        "model_version: intent-model-sample-1",
+        "kb_version: kb-sample-1",
+        "mapping_version: mapping-sample-1",
+        "prompt_version: prompts-sample-1",
+        "routing_version: routing-sample-1",
+        "index_version: index-sample-1",
+      ].join("\n"),
+    );
+  });
+
+  it("lists the raw status without versions while ai-service is not available", () => {
+    expect(buildVersionBlock({ ...unavailableVersions, rawStatus: "a_later_status" })).toBe(
+      "backend_version: 880b33a\nai_service_status: a_later_status",
+    );
   });
 });
 

@@ -7,7 +7,11 @@ import { use, useSyncExternalStore } from "react";
 
 import { DevModeContext, type DevModeSetup } from "@/features/session/api/dev-mode-preferences";
 import { useSignedInAccountId, useSignedInRole } from "@/features/session/api/use-current-session";
-import { buildTraceUrl, canUseDevMode } from "@/features/session/model/dev-mode";
+import {
+  buildTraceUrl,
+  canUseDevMode,
+  type FrontendDetails,
+} from "@/features/session/model/dev-mode";
 
 /** Dev mode for the signed-in account. */
 export type DevMode = {
@@ -18,6 +22,7 @@ export type DevMode = {
   readonly setIsOn: (isOn: boolean) => void;
   /** The link to a trace in Grafana, or undefined when no Grafana is set up. */
   readonly traceHrefOf: (traceId: string) => string | undefined;
+  readonly frontendDetails: FrontendDetails;
 };
 
 /**
@@ -47,6 +52,7 @@ export function useDevMode(): DevMode {
     },
     traceHrefOf: (traceId) =>
       grafanaTraceUrl === undefined ? undefined : buildTraceUrl(grafanaTraceUrl, traceId),
+    frontendDetails: setup.frontendDetails,
   };
 }
 

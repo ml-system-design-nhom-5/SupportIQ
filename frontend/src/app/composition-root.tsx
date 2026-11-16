@@ -32,6 +32,7 @@ import {
   DevModeContext,
   type DevModeSetup,
   endSession,
+  type FrontendDetails,
   type PreferenceStorage,
 } from "@/features/session";
 
@@ -104,7 +105,27 @@ export function createAppDependencies(options: AppDependencyOptions): AppDepende
       isAvailable: isDevModeAvailable,
       ...(grafanaTraceUrl === undefined ? {} : { grafanaTraceUrl }),
       preferences: createDevModePreferences(options.preferenceStorage),
+      frontendDetails: buildFrontendDetails(options.settings),
     },
+  };
+}
+
+/**
+ * Describe frontend for the developer details of the admin area (admin UI design).
+ *
+ * @param settings - The settings.
+ * @returns The build version, every `VITE_` setting, and the dashboards whose link is set.
+ */
+function buildFrontendDetails(settings: FrontendSettings): FrontendDetails {
+  const { frontendBuildVersion } = settings;
+  const dashboards = [
+    { title: "System overview", href: settings.grafanaSystemOverviewUrl },
+    { title: "AI pipeline", href: settings.grafanaAiPipelineUrl },
+  ].flatMap(({ title, href }) => (href === undefined ? [] : [{ title, href }]));
+  return {
+    ...(frontendBuildVersion === undefined ? {} : { buildVersion: frontendBuildVersion }),
+    settings: settings.viteSettings,
+    dashboards,
   };
 }
 

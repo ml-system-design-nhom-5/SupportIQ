@@ -8,6 +8,7 @@
  */
 import { PageHeader, Stack, Text } from "@/design-system";
 import { useVersionsInUse } from "@/features/admin-versions/api/use-versions-in-use";
+import { VersionsDeveloperDetails } from "@/features/admin-versions/components/versions-developer-details";
 import { VersionsLoading } from "@/features/admin-versions/components/versions-loading";
 import { VersionsPanels } from "@/features/admin-versions/components/versions-panels";
 import { getRequestFailure } from "@/features/backend-requests";
@@ -55,7 +56,10 @@ export function VersionsPage() {
       {versionsQuery.data === undefined ? (
         <VersionsLoading />
       ) : (
-        <VersionsPanels versions={versionsQuery.data} />
+        <>
+          <VersionsPanels versions={versionsQuery.data} />
+          <VersionsDeveloperDetails versions={versionsQuery.data} />
+        </>
       )}
     </Stack>
   );

@@ -30,3 +30,13 @@ export async function chooseFromAccountMenu(user: UserEvent, item: AccountMenuIt
   const menu = await openAccountMenu(user);
   await user.click(within(menu).getByRole("menuitem", { name: item }));
 }
+
+/**
+ * Switch dev mode in the account menu, where dev mode is available (UI-35).
+ *
+ * @param user - The user-event instance.
+ */
+export async function switchDevMode(user: UserEvent): Promise<void> {
+  const menu = await openAccountMenu(user);
+  await user.click(within(menu).getByRole("menuitemcheckbox", { name: "Dev mode" }));
+}

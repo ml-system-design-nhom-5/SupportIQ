@@ -1,7 +1,9 @@
 /**
  * The accounts table (admin UI design, Accounts): the display name, the login name in the
- * monospace font, the role, the status, and the actions of each row. The table shows no email,
- * password, password hash, or session data (SEC-41).
+ * monospace font, the role, the status, and the actions of each row. In dev mode, a column shows
+ * the raw `role` and `is_active` as `backend` sent them (admin UI design, Developer details in the
+ * admin area). The table shows no email, password, password hash, session data, or `account_id`
+ * (SEC-41).
  */
 import {
   Button,
@@ -24,6 +26,7 @@ import {
 } from "@/features/admin-accounts/model/account";
 import { getChangeLabel } from "@/features/admin-accounts/model/account-change-text";
 import { accountFormText } from "@/features/admin-accounts/model/account-form-text";
+import { useDevMode } from "@/features/session";
 
 const accountColumns: readonly DataTableColumn<AccountColumn>[] = [
   { key: "account", label: "Account", isRowHeader: true },
@@ -33,8 +36,15 @@ const accountColumns: readonly DataTableColumn<AccountColumn>[] = [
   { key: "actions", label: "Actions", align: "end" },
 ];
 
+/** The columns in dev mode: the raw values come before the actions. */
+const devModeColumns: readonly DataTableColumn<AccountColumn>[] = [
+  ...accountColumns.slice(0, -1),
+  { key: "rawValues", label: "Raw values" },
+  ...accountColumns.slice(-1),
+];
+
 /** The columns of the table. */
-type AccountColumn = "account" | "loginName" | "role" | "status" | "actions";
+type AccountColumn = "account" | "loginName" | "role" | "status" | "rawValues" | "actions";
 
 /** A change that the admin chose, with the button that asked for it. */
 export type ChosenAccountChange = {
@@ -79,10 +89,11 @@ type RowActionsProps = RowActionHandlers & {
  * @returns The table.
  */
 export function AccountsTable({ accounts, ...rowProps }: AccountsTableProps) {
+  const devMode = useDevMode();
   return (
     <DataTable
       caption="Internal accounts"
-      columns={accountColumns}
+      columns={devMode.isOn ? devModeColumns : accountColumns}
       rows={accounts.map((account) => buildRow(account, rowProps))}
     />
   );
@@ -163,6 +174,9 @@ function buildRow(
         <StatusBadge
           presentation={presentationByAccountStatus[account.isActive ? "active" : "deactivated"]}
         />
+      ),
+      rawValues: (
+        <Identifier>{`role: ${account.rawRole} · is_active: ${String(account.isActive)}`}</Identifier>
       ),
       actions: (
         <RowActions

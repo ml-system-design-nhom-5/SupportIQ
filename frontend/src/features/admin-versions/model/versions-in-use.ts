@@ -12,16 +12,20 @@ import type {
 } from "@/features/admin-versions/api/contract-types";
 import { requireMembers } from "@/features/backend-requests";
 
-/** The terms of the rows of `ai-service`, in the order of `AssetVersions` (admin UI design). */
-const assetTerms: readonly (readonly [keyof AssetVersions, string])[] = [
-  ["releaseId", "Release"],
-  ["modelVersion", "Model artifact"],
-  ["kbVersion", "KB"],
-  ["mappingVersion", "Document-to-intent mapping"],
-  ["promptVersion", "Prompts"],
-  ["routingVersion", "Routing configuration"],
-  ["indexVersion", "Retrieval index"],
-];
+/**
+ * The rows of `ai-service`, in the order of `AssetVersions` (admin UI design): the version, its
+ * term on the screen, and its field in the contract, which the copied version block uses.
+ */
+const assetTerms: readonly (readonly [keyof AssetVersions, string, keyof AssetVersionsContract])[] =
+  [
+    ["releaseId", "Release", "release_id"],
+    ["modelVersion", "Model artifact", "model_version"],
+    ["kbVersion", "KB", "kb_version"],
+    ["mappingVersion", "Document-to-intent mapping", "mapping_version"],
+    ["promptVersion", "Prompts", "prompt_version"],
+    ["routingVersion", "Routing configuration", "routing_version"],
+    ["indexVersion", "Retrieval index", "index_version"],
+  ];
 
 /** The release and asset versions that `ai-service` serves (`AssetVersions`). */
 export type AssetVersions = {
@@ -49,6 +53,8 @@ export type VersionsInUse = {
   /** The build version of `backend`, such as a commit SHA. */
   readonly backendVersion: string;
   readonly aiService: AiServiceVersions;
+  /** The `ai_service_status` as `backend` sent it, also one that this version does not know. */
+  readonly rawStatus: string;
 };
 
 /** One row of the `ai-service` panel: an asset and its version. */
@@ -66,7 +72,11 @@ export type AssetVersionRow = {
  */
 export function toVersionsInUse(view: AdminVersionsContract): VersionsInUse {
   requireMembers(view, ["backend_version", "ai_service_status"]);
-  return { backendVersion: view.backend_version, aiService: toAiServiceVersions(view) };
+  return {
+    backendVersion: view.backend_version,
+    aiService: toAiServiceVersions(view),
+    rawStatus: view.ai_service_status,
+  };
 }
 
 /**
@@ -90,6 +100,27 @@ export function buildAssetVersionRows(aiService: AiServiceVersions): readonly As
   return assetTerms.map(([key, term]) =>
     aiService.status === "available" ? { term, version: aiService.assetVersions[key] } : { term },
   );
+}
+
+/**
+ * Build the version block that dev mode copies for a bug report (admin UI design, Developer
+ * details in the admin area): `backend_version`, `ai_service_status`, and every field of
+ * `ai_service_versions` while `ai-service` is available, one `field: value` per line.
+ *
+ * @param versions - The versions in use.
+ * @returns The text.
+ */
+export function buildVersionBlock(versions: VersionsInUse): string {
+  const { aiService } = versions;
+  const assetLines =
+    aiService.status === "available"
+      ? assetTerms.map(([key, , field]) => `${field}: ${aiService.assetVersions[key]}`)
+      : [];
+  return [
+    `backend_version: ${versions.backendVersion}`,
+    `ai_service_status: ${versions.rawStatus}`,
+    ...assetLines,
+  ].join("\n");
 }
 
 /**

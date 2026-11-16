@@ -52,6 +52,7 @@ export const testSettings: FrontendSettings = {
   requestRetryBaseDelayMs: 1,
   isDevModeAvailable: false,
   backendWakeTimeoutMs: 90_000,
+  viteSettings: [],
 };
 
 /** What a rendering helper returns. */

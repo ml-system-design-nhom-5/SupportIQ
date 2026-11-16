@@ -26,6 +26,7 @@ function buildAccount(overrides: Partial<Account> = {}): Account {
     loginName: "staff-1",
     displayName: "Mai Nguyen",
     role: "staff",
+    rawRole: "staff",
     isActive: true,
     ...overrides,
   };
@@ -40,7 +41,17 @@ describe("toAccount", () => {
       loginName: "staff-1",
       displayName: "Mai Nguyen",
       role: "manager",
+      rawRole: "manager",
       isActive: true,
+    });
+  });
+
+  it("keeps a role that this version does not know as backend sent it (UI-35)", () => {
+    const view = readOperationExample("changeAccountRole", 201, "made-manager");
+
+    expect(Reflect.apply(toAccount, undefined, [{ ...view, role: "auditor" }])).toMatchObject({
+      role: "unknown",
+      rawRole: "auditor",
     });
   });
 });

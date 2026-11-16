@@ -31,6 +31,7 @@ function createQueryClient() {
       requestRetryBaseDelayMs: RETRY_BASE_DELAY_MS,
       isDevModeAvailable: false,
       backendWakeTimeoutMs: 90_000,
+      viteSettings: [],
     },
     baseUrl: TEST_BASE_URL,
     fetch: () => Promise.reject(new Error("not used")),

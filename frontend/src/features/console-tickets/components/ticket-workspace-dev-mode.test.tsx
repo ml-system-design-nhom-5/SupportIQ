@@ -2,7 +2,7 @@ import { screen, within } from "@testing-library/react";
 import type { UserEvent } from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
-import { openAccountMenu } from "@/test/account-menu";
+import { openAccountMenu, switchDevMode } from "@/test/account-menu";
 import { openConsole, TICKET_PATH, workspaceExample } from "@/test/console-screen";
 import { createMemoryStorage, type MemoryStorage } from "@/test/memory-storage";
 import { testSettings } from "@/test/render-app";
@@ -36,16 +36,6 @@ async function waitForWorkspace(): Promise<HTMLElement> {
  */
 function openWithDevMode(memory: MemoryStorage) {
   return openConsole(TICKET_PATH, { settings: devModeSettings, preferenceStorage: memory.storage });
-}
-
-/**
- * Switch dev mode in the account menu.
- *
- * @param user - The user-event instance.
- */
-async function switchDevMode(user: UserEvent): Promise<void> {
-  const menu = await openAccountMenu(user);
-  await user.click(within(menu).getByRole("menuitemcheckbox", { name: "Dev mode" }));
 }
 
 /**

@@ -5,6 +5,7 @@
  */
 import { screen, within } from "@testing-library/react";
 
+import type { FrontendSettings } from "@/app/settings";
 import { VERSIONS_PATH } from "@/features/admin-versions";
 import { getAdminVersionsRoute, getCurrentSessionRoute } from "@/test/backend-routes";
 import {
@@ -24,6 +25,8 @@ export type VersionsAnswers = {
   readonly session?: string;
   /** The answers of `getAdminVersions`; the `ai-service-available` example by default. */
   readonly versions?: readonly FakeAnswer[];
+  /** The settings; {@link testSettings} by default. */
+  readonly settings?: FrontendSettings;
 };
 
 /** One row of a panel as the screen shows it. */
@@ -69,7 +72,7 @@ export function answerVersions(backend: FakeBackend, answers: VersionsAnswers = 
 export function openVersions(answers: VersionsAnswers = {}) {
   const backend = createFakeBackend();
   answerVersions(backend, answers);
-  return renderApp({ path: VERSIONS_PATH, backend, settings: testSettings });
+  return renderApp({ path: VERSIONS_PATH, backend, settings: answers.settings ?? testSettings });
 }
 
 /**

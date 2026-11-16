@@ -39,6 +39,7 @@ const preview: Preview = {
             requestRetryBaseDelayMs: 1,
             isDevModeAvailable: false,
             backendWakeTimeoutMs: 90_000,
+            viteSettings: [],
           },
           baseUrl: window.location.origin,
           fetch: () => Promise.reject(new TypeError("Stories have no backend.")),

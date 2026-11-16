@@ -6,7 +6,7 @@
  */
 import { createContext } from "react";
 
-import { buildDevModePreferenceKey } from "@/features/session/model/dev-mode";
+import { buildDevModePreferenceKey, type FrontendDetails } from "@/features/session/model/dev-mode";
 
 /** The stored value of a switch that is on. */
 const ON_VALUE = "on";
@@ -35,6 +35,8 @@ export type DevModeSetup = {
   /** The Grafana trace link, with `{trace_id}`; absent when no Grafana is set up. */
   readonly grafanaTraceUrl?: string;
   readonly preferences: DevModePreferences;
+  /** What frontend tells about itself in the developer details of the admin area. */
+  readonly frontendDetails: FrontendDetails;
 };
 
 /** Holds the dev mode setup that the composition root provides. */

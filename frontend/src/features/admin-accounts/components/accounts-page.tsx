@@ -32,7 +32,7 @@ import {
   type RequestFailure,
   useCreateIdempotencyKey,
 } from "@/features/backend-requests";
-import { AreaLoadFailure, AreaPermissionDenied } from "@/features/session";
+import { AreaLoadFailure, AreaPermissionDenied, DevModeDetailsPanel } from "@/features/session";
 
 /** The stable ID of Create account, which gets the focus back when its dialog closes (UI-30). */
 const CREATE_ACCOUNT_BUTTON_ID = "create-account";
@@ -173,6 +173,7 @@ export function AccountsPage() {
           openFormDialog({ kind: "reset", ...chosen });
         }}
       />
+      <DevModeDetailsPanel />
       {chosenChange === null ? null : (
         <AccountChangeDialog
           chosen={chosenChange}

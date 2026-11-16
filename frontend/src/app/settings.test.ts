@@ -6,11 +6,14 @@ import { parseFrontendSettings } from "@/app/settings";
 /** A Grafana trace link of the local stack. */
 const TRACE_URL = "http://localhost:3000/explore?trace={trace_id}";
 
+/** A Grafana dashboard link of the local stack. */
+const DASHBOARD_URL = "http://localhost:3000/d/system-overview";
+
 describe("parseFrontendSettings", () => {
   it("uses the defaults of the contract and ERR-13 when no variable is set", () => {
     const settings = parseFrontendSettings({});
 
-    expect(settings).toEqual({
+    expect(settings).toMatchObject({
       requestTimeoutMs: 10_000,
       requestRetryMaxCount: 2,
       requestRetryBaseDelayMs: 500,
@@ -28,9 +31,12 @@ describe("parseFrontendSettings", () => {
       VITE_GRAFANA_TRACE_URL: TRACE_URL,
       VITE_BACKEND_WAKE_ORIGIN: "https://backend.example.com",
       VITE_BACKEND_WAKE_TIMEOUT_MS: "60000",
+      VITE_FRONTEND_BUILD_VERSION: "cc489d3",
+      VITE_GRAFANA_SYSTEM_OVERVIEW_URL: DASHBOARD_URL,
+      VITE_GRAFANA_AI_PIPELINE_URL: "https://grafana.example/d/ai-pipeline",
     });
 
-    expect(settings).toEqual({
+    expect(settings).toMatchObject({
       requestTimeoutMs: 2500,
       requestRetryMaxCount: 0,
       requestRetryBaseDelayMs: 100,
@@ -38,7 +44,58 @@ describe("parseFrontendSettings", () => {
       grafanaTraceUrl: TRACE_URL,
       backendWakeOrigin: "https://backend.example.com",
       backendWakeTimeoutMs: 60_000,
+      frontendBuildVersion: "cc489d3",
+      grafanaSystemOverviewUrl: DASHBOARD_URL,
+      grafanaAiPipelineUrl: "https://grafana.example/d/ai-pipeline",
     });
+  });
+});
+
+describe("parseFrontendSettings, the list of the developer details (admin UI design)", () => {
+  it("lists every VITE_ setting with the value in use, in the order of the settings", () => {
+    expect(parseFrontendSettings({}).viteSettings).toEqual([
+      { name: "VITE_REQUEST_TIMEOUT_MS", value: "10000" },
+      { name: "VITE_REQUEST_RETRY_MAX_COUNT", value: "2" },
+      { name: "VITE_REQUEST_RETRY_BASE_DELAY_MS", value: "500" },
+      { name: "VITE_DEV_MODE", value: "false" },
+      { name: "VITE_GRAFANA_TRACE_URL" },
+      { name: "VITE_FRONTEND_BUILD_VERSION" },
+      { name: "VITE_GRAFANA_SYSTEM_OVERVIEW_URL" },
+      { name: "VITE_GRAFANA_AI_PIPELINE_URL" },
+      { name: "VITE_BACKEND_WAKE_ORIGIN" },
+      { name: "VITE_BACKEND_WAKE_TIMEOUT_MS", value: "90000" },
+    ]);
+  });
+
+  it("lists the value of a variable that is set", () => {
+    const { viteSettings } = parseFrontendSettings({ VITE_GRAFANA_TRACE_URL: TRACE_URL });
+
+    expect(viteSettings).toContainEqual({ name: "VITE_GRAFANA_TRACE_URL", value: TRACE_URL });
+  });
+});
+
+describe("parseFrontendSettings, the build version (admin UI design)", () => {
+  it.each([
+    ["is local on the dev server", { DEV: true }, "local"],
+    ["is absent in a production build", { DEV: false }, undefined],
+    ["is the value of a build", { DEV: false, VITE_FRONTEND_BUILD_VERSION: "cc489d3" }, "cc489d3"],
+  ])("%s", (_case, environment, buildVersion) => {
+    expect(parseFrontendSettings(environment).frontendBuildVersion).toBe(buildVersion);
+  });
+});
+
+describe("parseFrontendSettings, the Grafana dashboard links (admin UI design, SEC-28)", () => {
+  it.each(["https://grafana.example/d/system-overview", DASHBOARD_URL])("accepts %s", (url) => {
+    expect(
+      parseFrontendSettings({ VITE_GRAFANA_SYSTEM_OVERVIEW_URL: url }).grafanaSystemOverviewUrl,
+    ).toBe(url);
+  });
+
+  it.each([
+    ["VITE_GRAFANA_SYSTEM_OVERVIEW_URL", "http://grafana.example/d/system-overview"],
+    ["VITE_GRAFANA_AI_PIPELINE_URL", "https://grafana.example/explore?trace={trace_id}"],
+  ])("stops startup with a message naming %s when it is %s", (name, value) => {
+    expect(() => parseFrontendSettings({ [name]: value })).toThrow(name);
   });
 });
 

@@ -27,12 +27,19 @@ export { AreaPermissionDenied } from "@/features/session/components/area-permiss
 export { ChangePasswordPage } from "@/features/session/components/change-password-page";
 export type { ConsolePermissionDeniedProps } from "@/features/session/components/console-permission-denied";
 export { ConsolePermissionDenied } from "@/features/session/components/console-permission-denied";
+export type { DevModeDetailsPanelProps } from "@/features/session/components/dev-mode-details-panel";
+export { DevModeDetailsPanel } from "@/features/session/components/dev-mode-details-panel";
 export type { RequireSessionProps } from "@/features/session/components/require-session";
 export { RequireSession } from "@/features/session/components/require-session";
 export type { SessionAccountMenuProps } from "@/features/session/components/session-account-menu";
 export { SessionAccountMenu } from "@/features/session/components/session-account-menu";
 export { SignInPage } from "@/features/session/components/sign-in-page";
 export { StartPage } from "@/features/session/components/start-page";
+export type {
+  DashboardLink,
+  FrontendDetails,
+  ShownSetting,
+} from "@/features/session/model/dev-mode";
 export { TRACE_ID_SLOT } from "@/features/session/model/dev-mode";
 export type { PasswordLength } from "@/features/session/model/password";
 export { classifyPasswordLength, PASSWORD_TOO_LONG_TEXT } from "@/features/session/model/password";

@@ -13,6 +13,7 @@ const mai: Account = {
   loginName: "staff-1",
   displayName: "Mai Nguyen",
   role: "staff",
+  rawRole: "staff",
   isActive: true,
 };
 
