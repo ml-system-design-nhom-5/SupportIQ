@@ -1,6 +1,6 @@
 # backend
 
-`backend` is the SupportIQ component that owns sign-in, the read-only shop, the ticket workflow behind `/console`, internal accounts, the simulated commerce data, the pseudonym maps, and the audit log ([ADR-0001](../docs/decisions/0001-system-architecture.md)). It implements the [backend foundation design](../docs/design/backend-foundation.md), the [account management design](../docs/design/account-management.md), and the [backend ticket workflow design](../docs/design/backend-ticket-workflow.md) against [`contracts/backend.openapi.yaml`](../contracts/backend.openapi.yaml) 1.2.0, and it calls `ai-service` through [`contracts/ai-service.openapi.yaml`](../contracts/ai-service.openapi.yaml) 1.0.0. The ticket workflow lands in steps on the branch `build/ticket-workflow` ([design, Rollout](../docs/design/backend-ticket-workflow.md#rollout)): `listConsoleTickets`, `getConsoleTicket`, `recordTicketView`, `createSuggestion`, `createReplyProposal`, `sendReply`, `createEscalation`, `getConsoleKbDocumentVersion`, `getConsoleReport`, and `getAdminVersions` are served, and `backend export-decisions` runs. `backend import-tickets` is postponed ([Known limits](#known-limits)), and the named-entity detector of [ADR-0017](../docs/decisions/0017-named-entity-model-from-its-release-url.md) is not there yet.
+`backend` is the SupportIQ component that owns sign-in, the read-only shop, the ticket workflow behind `/console`, internal accounts, the simulated commerce data, the pseudonym maps, and the audit log ([ADR-0001](../docs/decisions/0001-system-architecture.md)). It implements the [backend foundation design](../docs/design/backend-foundation.md), the [account management design](../docs/design/account-management.md), and the [backend ticket workflow design](../docs/design/backend-ticket-workflow.md) against [`contracts/backend.openapi.yaml`](../contracts/backend.openapi.yaml) 1.2.0, and it calls `ai-service` through [`contracts/ai-service.openapi.yaml`](../contracts/ai-service.openapi.yaml) 1.0.0. The ticket workflow lands in steps on the branch `build/ticket-workflow` ([design, Rollout](../docs/design/backend-ticket-workflow.md#rollout)): `listConsoleTickets`, `getConsoleTicket`, `recordTicketView`, `createSuggestion`, `createReplyProposal`, `sendReply`, `createEscalation`, `getConsoleKbDocumentVersion`, `getConsoleReport`, and `getAdminVersions` are served, and `backend export-decisions` runs. `backend import-tickets` is postponed ([Known limits](#known-limits)), and the named-entity detector of [ADR-0017](../docs/decisions/0017-named-entity-model-from-its-release-url.md), which the project lead adopted on 2026-11-16, has its adapter but does not run yet ([Known limits](#known-limits)).
 
 ## Run and test
 
@@ -76,6 +76,7 @@ Every subcommand validates the settings first. A missing or invalid setting stop
 | `backend migrate` | owner | Applies every migration |
 | `backend seed` | owner | Loads [`seed/synthetic-dev-only-v1.json`](seed/synthetic-dev-only-v1.json) into an empty database. It fails on a seeded database and changes nothing |
 | `backend reset` | owner | Empties every backend table and seeds again in one transaction. It asks first; `--yes` skips the question |
+| `python -m tests.trials.named_entity_trial <path>`, with `uv run` | — | Runs the trial of the named-entity detector on [its `synthetic-dev-only` set](tests/trials/synthetic-dev-only-named-entity-trial-v1.json) and writes the report to `<path>`, a file in the git-ignored folder `exports/` ([design, Choice 1](../docs/design/backend-ticket-workflow.md#choice-1-the-named-entity-library)). It needs no database |
 | `backend export-decisions --start-at <timestamp> --end-at <timestamp> --output <path>` | `supportiq_app` | Writes one JSON line per ticket closed or escalated in [`start_at`, `end_at`) for the evaluation and the product-value study ([design, The decision-record export](../docs/design/backend-ticket-workflow.md#the-decision-record-export)). The path must resolve inside the git-ignored folder `exports/` of the working directory, after `..` and symbolic links; any other path stops the command before anything is read (SEC-33) |
 
 Run the seed and reset commands in `backend/`, because the path of the seed file is relative to the working directory.
@@ -205,7 +206,8 @@ Every request has a trace with its database spans, and ticket creation has the s
 - `backend import-tickets` of the [backend ticket workflow design](../docs/design/backend-ticket-workflow.md#handling-modes-for-the-product-value-study) does not exist yet. The project lead postponed it on 2026-11-14 until the shared scenario sets of groups 2 and 5 and the protocol of the product-value study exist, because its file format depends on both ([design, Open questions](../docs/design/backend-ticket-workflow.md#open-questions)). Until then every ticket comes from the shop, with `default_handling_mode`.
 - The LLM cost of a draft that is cancelled, for example by an intent correction while it runs, is not recorded. `backend` cancels its call to `ai-service`, so it never receives the `llm_usage` of that call, although the LLM may already have charged for it. The report and the export therefore undercount the LLM cost of NFR-10 by the calls that a newer suggestion superseded.
 - Logs and metrics are not exported over OTLP (LOG-01, LOG-24, #2): logs go to standard output, only traces reach the exporter, and the metric `http.server.request.duration` does not exist yet. The design's Goals do not include them, and no collector exists until `deploy/`.
-- Pseudonymization runs without the named-entity detector of ADR-0010, step 4, until ADR-0017 lands it, so unknown names and addresses that no other step finds reach `ai-service`. The design does not allow a replica to run without that detector: the branch is not merged before it lands.
+- Pseudonymization runs without the named-entity detector of ADR-0010, step 4, so unknown names and addresses that no other step finds reach `ai-service`. The project lead adopted it on 2026-11-16 after its trial ([ADR-0017](../docs/decisions/0017-named-entity-model-from-its-release-url.md), statement 6); its adapter exists and joins pseudonymization in a later step. The design does not allow a replica to run without that detector: the branch is not merged before it does.
+- The named-entity detector finds few addresses: 1 of 12 in its trial, against 10 of 12 names ([design, Choice 1](../docs/design/backend-ticket-workflow.md#choice-1-the-named-entity-library)). Once it runs, an address that no other step finds still reaches `ai-service`.
 - Eight `pyright: ignore` comments remain in `tests/contract/`, on calls into Schemathesis, whose public types leave generics unparametrized ([PY-13](../docs/rules/python.md), #3).
 
 ## Tests
@@ -215,6 +217,7 @@ Every request has a trace with its database spans, and ticket creation has the s
 | Unit | `tests/unit/` | Domain and application logic with a fake for every port, and the property that no sequence of role and status changes leaves no active manager or admin |
 | Integration | `tests/integration/` | Privileges and triggers, idempotency, account changes, creations, and password changes under concurrency, seed and reset, and each flow over HTTP |
 | Guardrails | `tests/integration/guardrails/` | The cases of [TEST-26](../docs/rules/testing.md) that apply here. `tests/contract/test_operations.py` and `tests/contract/test_permissions.py` hold the others |
+| Trials | `tests/trials/` | The trial of the named-entity detector, which runs on demand, never in the test suite |
 | Contract | `tests/contract/` | Schemathesis over every operation, one test for each documented status, and every operation against all four roles. `tests/contract/consumer/` reads every example of the `ai-service` contract through the client (CON-28) and needs no database |
 
 Tests run in random order and in parallel. Time comes from a fake clock, and Hypothesis runs derandomized, so a run repeats exactly with the `--randomly-seed=<seed>` value that pytest prints. The contract tests read `../contracts/`, so they need the whole repository.
@@ -234,6 +237,8 @@ Each direct dependency, with why it is here ([WF-27](../docs/rules/workflow.md#d
 | pydantic-settings | 2.16.2 | MIT | Typed settings, validated at startup (ARCH-34, PY-43) |
 | sqlalchemy (with the `asyncio` extra, which adds greenlet) | 2.0.57 | MIT | Persistence (ADR-0003). Not 2.1, which the OpenTelemetry instrumentation does not support yet |
 | alembic | 1.20.1 | MIT | Migrations (ADR-0003) |
+| spacy | 3.8.18 | MIT | The named-entity detector of pseudonymization ([ADR-0010](../docs/decisions/0010-pseudonymization-and-egress-control.md#detection), step 4; [design, Choice 1](../docs/design/backend-ticket-workflow.md#choice-1-the-named-entity-library)) |
+| en-core-web-sm | 3.8.0 | MIT | The English pipeline of spaCy, installed from its release URL with the checksum in `uv.lock` ([ADR-0017](../docs/decisions/0017-named-entity-model-from-its-release-url.md)). The CI audit leaves it out, because pip-audit cannot audit a URL requirement |
 | asyncpg | 0.32.0 | Apache-2.0 | The async PostgreSQL driver of SQLAlchemy, with a permissive license (WF-30) |
 | argon2-cffi | 25.1.0 | MIT | Argon2id password hashes ([ADR-0009](../docs/decisions/0009-demo-accounts-and-cookie-sessions.md), statement 3) |
 | starlette | 1.10.0 | BSD-3-Clause | The ASGI types and routing classes under FastAPI, imported directly by the middleware and the exception handler |
@@ -250,6 +255,11 @@ These runtime dependencies have a license outside the list of WF-30, and the pro
 - `cffi` (MIT-0), through `argon2-cffi-bindings`.
 - `greenlet` (MIT AND PSF-2.0), through `sqlalchemy[asyncio]`.
 - `typing_extensions` (PSF-2.0), through `pydantic` and other packages.
+
+These come through `spacy`, and their licenses were approved by the project lead on 2026-11-16 (WF-30):
+
+- `numpy` (BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0), through `spacy`, `thinc`, and `blis`.
+- `tqdm` (MPL-2.0 AND MIT), through `spacy`.
 
 ### Development
 

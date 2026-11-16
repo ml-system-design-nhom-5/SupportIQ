@@ -55,9 +55,11 @@ jobs:
         run: pre-commit run backend-generated --all-files --show-diff-on-failure
       - name: Audit every locked dependency for known vulnerabilities (WF-31)
         working-directory: backend
+        # pip-audit cannot audit the URL requirement of the named-entity model, so the export
+        # leaves out that one package; its checksum in uv.lock protects it (ADR-0017, item 3).
         run: |
-          uv export --locked --all-groups --no-emit-project --format requirements-txt \
-            --output-file "$RUNNER_TEMP/requirements.txt"
+          uv export --locked --all-groups --no-emit-project --no-emit-package en-core-web-sm \
+            --format requirements-txt --output-file "$RUNNER_TEMP/requirements.txt"
           uv run --locked pip-audit --strict --disable-pip --require-hashes \
             --requirement "$RUNNER_TEMP/requirements.txt"
 

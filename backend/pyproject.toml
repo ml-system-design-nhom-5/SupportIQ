@@ -10,6 +10,7 @@ dependencies = [
     "alembic==1.20.1",
     "argon2-cffi==25.1.0",
     "asyncpg==0.32.0",
+    "en-core-web-sm==3.8.0",
     "fastapi==0.162.0",
     "httpx==0.28.1",
     "opentelemetry-api==1.45.2",
@@ -20,6 +21,7 @@ dependencies = [
     "pydantic==2.14.3",
     "pydantic-core==2.50.4",
     "pydantic-settings==2.16.2",
+    "spacy==3.8.18",
     "sqlalchemy[asyncio]==2.0.57",
     "starlette==1.10.0",
     "uvicorn==0.54.0",
@@ -50,6 +52,11 @@ dev = [
 [build-system]
 requires = ["uv_build>=0.11.11,<0.12"]
 build-backend = "uv_build"
+
+# The named-entity model is not on PyPI. ADR-0017 allows this one release URL; uv.lock pins its
+# checksum, and `uv sync --locked` refuses a wheel that differs (SEC-30, SEC-31).
+[tool.uv.sources]
+en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
 
 # ----- Code generation (CON-25, CON-26) -----
 # `uv run datamodel-codegen` reads these options. The output is never edited by hand, and CI
@@ -260,8 +267,8 @@ source_modules = [
     "supportiq_backend.platform.application",
 ]
 forbidden_modules = [
-    "alembic", "argon2", "asyncpg", "fastapi", "httpx", "opentelemetry", "pydantic",
-    "pydantic_settings", "sqlalchemy", "starlette", "uvicorn",
+    "alembic", "argon2", "asyncpg", "en_core_web_sm", "fastapi", "httpx", "opentelemetry",
+    "pydantic", "pydantic_settings", "spacy", "sqlalchemy", "starlette", "uvicorn",
     "supportiq_backend.generated",
     "supportiq_backend.migrations",
     "supportiq_backend.platform.settings",

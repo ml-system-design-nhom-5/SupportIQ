@@ -3,7 +3,7 @@
 - **Status:** Approved
 - **Owner:** backend engineer
 - **Reviewers:** project lead, frontend engineer, ML engineer
-- **Last reviewed:** 2026-11-15
+- **Last reviewed:** 2026-11-16
 - **Related:** [Requirements](../product/requirements.md) (FR-04 to FR-10, NFR-06 to NFR-11, ESC-01 to ESC-05), [ADR-0005](../decisions/0005-intent-independent-retrieval.md), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md), [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0014](../decisions/0014-citations-to-order-context.md), [ADR-0016](../decisions/0016-hosting-on-free-tiers.md), [ADR-0017](../decisions/0017-named-entity-model-from-its-release-url.md), [ADR-0020](../decisions/0020-storage-errors-of-the-pseudonym-map.md), [contracts v1 design](contracts-v1.md), [backend foundation design](backend-foundation.md), [console UI design](console-ui.md), `backend` contract 1.2.0 and `ai-service` contract 1.0.0 ([CHANGELOG](../../contracts/CHANGELOG.md)), [ADR-0022](../decisions/0022-server-sent-events-for-suggestion-progress.md)
 
 ## Summary
@@ -201,6 +201,20 @@ The detectors, their order, and the overlap rule are those of [ADR-0010](../deci
 | GLiNER 0.2.30 | Apache-2.0; Python 3.10 or later; Python 3.14 support is not stated ([GLiNER on PyPI](https://pypi.org/project/gliner/)). Its example loads a model from the Hugging Face Hub | Weights from outside PyPI as well, and a model runtime whose memory must fit beside `backend` in 512 MB |
 
 **Recommendation, chosen by the project lead on 2026-11-12:** spaCy 3.8.18 with `en_core_web_sm`, pinned by version and hash, under [ADR-0017](../decisions/0017-named-entity-model-from-its-release-url.md) for the model's install URL (SEC-31). The trial that ADR-0010 requires decides adoption: a fixed `synthetic-dev-only` set of English messages with Vietnamese and English names and addresses, at least five positive and five negative cases per type, measuring recall and over-detection per type, the resident memory of `backend` with the model loaded, and the p95 latency of pseudonymizing one message on the free instance. With the recommended queue values, the queue wait, the claim, and pseudonymization must fit in the 1 000 ms that the draft timeout of 11 000 ms leaves inside the 12 s target ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md#suggestion-job-queue), item 8). If the trial fails, the lead chooses between another candidate and a lower draft timeout.
+
+**Trial results:** [`named_entity_trial`](../../backend/tests/trials/named_entity_trial.py) on [its set](../../backend/tests/trials/synthetic-dev-only-named-entity-trial-v1.json) of 32 messages with 12 names and 12 addresses, with every detector and the overlap rule, on an Intel Mac (macOS 13.7.8, x86_64, Python 3.14.4):
+
+| Measure | Result |
+|---|---|
+| `NAME` | 10 of 12 found (recall 0.833); 2 Vietnamese names missed; 0 over-detections |
+| `ADDRESS` | 1 of 12 found (recall 0.083); 0 over-detections. The model labels most streets as a person, an amount, a percentage, or a place, not as a facility |
+| Peak resident memory | 79.1 MiB before the model loads, 120.7 MiB with it |
+| Latency of one message, 640 runs | p50 2.84 ms, p95 10.33 ms, max 119.81 ms |
+| Install size | 137 MiB more in the virtual environment |
+
+Not measured yet: the memory and the p95 on the free instance ([ADR-0017, Validation](../decisions/0017-named-entity-model-from-its-release-url.md#validation)), and whether the queue wait, the claim, and pseudonymization fit in 1 000 ms at p95, which the NFR-08 load test measures ([deploy guide, First-deploy checklist](../../deploy/README.md#first-deploy-checklist)).
+
+**Decision of 2026-11-16:** the project lead adopted spaCy with `en_core_web_sm` after the trial ([ADR-0017](../decisions/0017-named-entity-model-from-its-release-url.md), statement 6). The low `ADDRESS` recall is a known limit ([Open questions](#open-questions)).
 
 ### The `ai-service` client
 
@@ -441,4 +455,5 @@ The NFR-08 load test and the pseudonymization trial run before the demo. No mode
 
 - The study protocol decides how authority-related requests are treated in both handling modes ([contracts v1, Open questions](contracts-v1.md#open-questions)).
 - The NFR-08 load test and the trial of Choice 1 may change the initial values of Choice 3 and the draft timeout.
+- `ADDRESS` needs another way of detection, because the model found 1 of 12 addresses in the trial of Choice 1. A pattern rule for `ADDRESS` needs a new ADR, because [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#detection) rules out address patterns.
 - The import file format of `backend import-tickets` depends on the shared scenario sets of groups 2 and 5, which have not arrived ([requirements §8](../product/requirements.md#8-open-questions)), and on the study protocol, which decides how imports repeat for each staff member ([Handling modes for the product-value study](#handling-modes-for-the-product-value-study)).
