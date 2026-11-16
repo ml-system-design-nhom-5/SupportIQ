@@ -36,6 +36,7 @@ from supportiq_backend.platform.adapters.database import begin_transaction
 from supportiq_backend.platform.settings import Settings
 
 # Relative to the working directory: `backend/` in a clone, the working directory of the image.
+# TODO(#11): the seed file has no dataset manifest (DATA-09).
 SEED_FILE = Path("seed/synthetic-dev-only-v1.json")
 
 
