@@ -8,16 +8,20 @@
 - `build-candidate` copies the six assets that a spec names into a new folder, writes the
   manifest of a candidate, and checks it as `ai-service` checks a release (ADR-0021, Release
   and the offline evaluation gate). The candidate has no gate run, so no replica serves it.
+- `run-gate` and `publish-candidate` run the offline evaluation gate on a candidate and
+  publish a candidate that passed it (`gate_commands.py`).
 
 Every expected failure is an error of the root `ReleaseCommandError` or a `ReleaseInvalidError`
 of `ai-service`: the command prints its message and exits with status 2, and the output folder
-is left as it was. Nothing that the command prints holds text of the KB.
+is left as it was. Any other failure, such as a file that cannot be written, prints only the
+name of its type and exits with status 2 too, so status 1 always means a gate run that failed.
+Nothing that the command prints holds text of the KB.
 """
 
 import argparse
 import re
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from supportiq_ai_service.release.manifest import ReleaseInvalidError
@@ -31,6 +35,12 @@ from supportiq_release.candidate.adapters import (
     write_candidate_manifest,
 )
 from supportiq_release.candidate.domain import MANIFEST_FILE_NAME
+from supportiq_release.composition_root.exit_statuses import (
+    EXIT_INPUT_INVALID,
+    EXIT_QUARANTINE_NOT_ACCEPTED,
+    EXIT_SUCCESS,
+)
+from supportiq_release.composition_root.gate_commands import add_gate_commands, publish, run_gate
 from supportiq_release.errors import ReleaseCommandError
 from supportiq_release.files import new_output_folder
 from supportiq_release.kb_ingestion.adapters import (
@@ -41,9 +51,6 @@ from supportiq_release.kb_ingestion.adapters import (
 )
 from supportiq_release.kb_ingestion.domain import admit
 
-EXIT_SUCCESS = 0
-EXIT_INPUT_INVALID = 2
-EXIT_QUARANTINE_NOT_ACCEPTED = 3
 _ISSUE_URL = re.compile(r"https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/issues/[1-9][0-9]*")
 
 
@@ -54,13 +61,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         argv: The arguments after the program name; the process arguments when None.
 
     Returns:
-        The exit status: 0 when the command succeeded, 2 for an input that cannot be used or
-        a candidate that `ai-service` refuses, and 3 when quarantined records wait for an
-        issue that accepts them.
+        The exit status: 0 when the command succeeded, 1 when a gate run failed, 2 for an
+        input that cannot be used or a candidate that `ai-service` refuses, and 3 when
+        quarantined records wait for an issue that accepts them.
     """
     arguments = _parser().parse_args(sys.argv[1:] if argv is None else argv)
+    commands: dict[str, Callable[[argparse.Namespace], int]] = {
+        "ingest-kb": _ingest_kb,
+        "build-candidate": _build,
+        "run-gate": run_gate,
+        "publish-candidate": publish,
+    }
     try:
-        return _ingest_kb(arguments) if arguments.command == "ingest-kb" else _build(arguments)
+        return commands[arguments.command](arguments)
     except ReleaseCommandError as error:
         sys.stderr.write(f"{error}\n")
     except ReleaseInvalidError as error:
@@ -71,6 +84,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             if value is not None
         )
         sys.stderr.write(f"{error}{where}\n")
+    except Exception as error:  # the top of the process (PY-21): status 2, never 1
+        # Only the type: the message of an unexpected error could hold any text.
+        sys.stderr.write(f"The command stopped on an unexpected {type(error).__name__}.\n")
     return EXIT_INPUT_INVALID
 
 
@@ -130,6 +146,7 @@ def _parser() -> argparse.ArgumentParser:
         "--release-records", required=True, help="eval/releases: one folder for each release ID."
     )
     build.add_argument("--output", required=True, help="A new or empty folder.")
+    add_gate_commands(commands.add_parser)
     return parser
 
 

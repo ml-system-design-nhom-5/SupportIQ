@@ -5,10 +5,16 @@ description = "SupportIQ release command: KB ingestion, the candidate release ma
 readme = "README.md"
 # One Python version for all Python code, pinned with ../../.python-version (PY-01).
 requires-python = "~=3.14.4"
-# KB ingestion needs only the standard library. The candidate manifest uses ai-service, through
-# its public module `supportiq_ai_service.release.manifest` only (ADR-0021, Where the code of
-# main goes, statements 1 and 3). Every dependency is justified in README.md (WF-27).
-dependencies = ["supportiq-ai-service"]
+# KB ingestion needs only the standard library. The candidate manifest and the gate use
+# ai-service through its public modules only (ADR-0021, Where the code of main goes, statements 1
+# and 3). Each version is the one of ai-service/uv.lock. Every dependency is justified in
+# README.md (WF-27).
+dependencies = [
+    "defusedxml==0.7.1",
+    "httpx==0.28.1",
+    "starlette==1.10.0",
+    "supportiq-ai-service",
+]
 
 [tool.uv.sources]
 # The ai-service of this repository, so a candidate is checked by the code that serves it.
@@ -136,27 +142,40 @@ name = "Layers: the composition root, then adapters, then shared files, then dom
 type = "layers"
 layers = [
     "supportiq_release.composition_root",
+    "supportiq_release.gate.adapters",
     "supportiq_release.kb_ingestion.adapters | supportiq_release.candidate.adapters",
     "supportiq_release.files",
-    "supportiq_release.kb_ingestion.domain | supportiq_release.candidate.domain",
+    "supportiq_release.kb_ingestion.domain | supportiq_release.candidate.domain | supportiq_release.gate.domain",
     "supportiq_release.errors",
 ]
 
 [[tool.importlinter.contracts]]
 name = "Domain code reads no file and uses no library (ARCH-11, ARCH-12)"
 type = "forbidden"
-source_modules = ["supportiq_release.kb_ingestion.domain", "supportiq_release.candidate.domain"]
+source_modules = [
+    "supportiq_release.kb_ingestion.domain",
+    "supportiq_release.candidate.domain",
+    "supportiq_release.gate.domain",
+]
 forbidden_modules = ["json", "pathlib", "hashlib", "argparse", "supportiq_ai_service"]
 
 [[tool.importlinter.contracts]]
-name = "The release command imports only the module release.manifest of ai-service (ADR-0021, statement 1)"
+name = "The release command imports only public modules of ai-service (ADR-0021, statement 1)"
 type = "forbidden"
-# Every module of ai-service is forbidden, a future one too, except the one direct import that
-# the ignore names. The imports of release.manifest itself are those of ai-service.
+# Every module of ai-service is forbidden, a future one too, except the direct imports that the
+# ignores name: release.manifest, the entry point of the gate in composition_root, and the
+# public API of the three packages whose ports the gate gives a candidate. Each is a package
+# `__init__` or a public module; every module inside those packages stays forbidden.
 allow_indirect_imports = true
 source_modules = ["supportiq_release"]
 forbidden_modules = ["supportiq_ai_service"]
-ignore_imports = ["supportiq_release.** -> supportiq_ai_service.release.manifest"]
+ignore_imports = [
+    "supportiq_release.** -> supportiq_ai_service.release.manifest",
+    "supportiq_release.gate.adapters.** -> supportiq_ai_service.composition_root",
+    "supportiq_release.gate.adapters.** -> supportiq_ai_service.drafting",
+    "supportiq_release.gate.adapters.** -> supportiq_ai_service.intent",
+    "supportiq_release.gate.adapters.** -> supportiq_ai_service.retrieval",
+]
 
 [[tool.importlinter.contracts]]
 name = "The release command uses no code of main, ml, or eval, and no other component (ADR-0021, statement 3)"

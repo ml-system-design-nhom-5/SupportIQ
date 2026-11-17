@@ -1094,6 +1094,9 @@ name = "supportiq-release"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "defusedxml" },
+    { name = "httpx" },
+    { name = "starlette" },
     { name = "supportiq-ai-service" },
 ]
 
@@ -1112,7 +1115,12 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "supportiq-ai-service", editable = "../../ai-service" }]
+requires-dist = [
+    { name = "defusedxml", specifier = "==0.7.1" },
+    { name = "httpx", specifier = "==0.28.1" },
+    { name = "starlette", specifier = "==1.10.0" },
+    { name = "supportiq-ai-service", editable = "../../ai-service" },
+]
 
 [package.metadata.requires-dev]
 dev = [

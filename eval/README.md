@@ -4,7 +4,7 @@
 
 Two parts live here:
 
-- the release command, in [`release/`](release/README.md): new code at the rule level of `ai-service`, which ingests the KB and builds the candidate releases that the offline evaluation gate checks;
+- the release command, in [`release/`](release/README.md): new code at the rule level of `ai-service`, which ingests the KB, builds candidate releases, runs the offline evaluation gate on them, and publishes those that pass;
 - the evaluation code and the suites of `main`, which came from `pipeline/evaluation/`, `data/benchmarks/`, and `data/knowledge/`. The join moved them as they were: their only changes are the format fixes that the root hooks need and the deletion of the code that imports a deleted module ([ADR-0021, CI](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#ci), statement 5). The code cannot run yet ([State after the join](#state-after-the-join)).
 
 ## Layout
@@ -40,9 +40,9 @@ Until then, only the release command runs.
 
 ## The offline evaluation gate
 
-The release command builds a candidate release manifest, runs the gate on exactly that manifest, and publishes it only when the gate passes ([ADR-0021, Release and the offline evaluation gate](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#release-and-the-offline-evaluation-gate), [DATA-57](../docs/rules/data-and-ml.md#models-and-artifacts)). It builds the candidate already; the gate itself follows ([`release/README.md`, Known limits](release/README.md#known-limits)).
+The release command builds a candidate release manifest, runs the gate on exactly that manifest, and publishes it only when the gate passes ([ADR-0021, Release and the offline evaluation gate](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#release-and-the-offline-evaluation-gate), [DATA-57](../docs/rules/data-and-ml.md#models-and-artifacts)). `supportiq-release run-gate` runs the gate in Docker, and `publish-candidate` publishes a candidate whose run passed ([`release/README.md`, The offline evaluation gate](release/README.md#the-offline-evaluation-gate)). The gate has not run yet.
 
-- The gate of the first release is the minimum of DATA-57: every guardrail test of [TEST-26](../docs/rules/testing.md#guardrail-tests) and every mandatory escalation case passes, with exactly that manifest loaded where a test uses `ai-service`. No current release exists to compare with.
+- The gate of the first release is the minimum of DATA-57: every guardrail test of [TEST-26](../docs/rules/testing.md#guardrail-tests) and every mandatory escalation case passes, with exactly that manifest loaded where a test uses `ai-service`. The escalation cases and the checks on the candidate load it; the guardrail tests check code and settings that no asset of the manifest changes ([`release/README.md`, Known limits](release/README.md#known-limits)). No current release exists to compare with.
 - The shared scenario set of Groups 2 and 5 does not exist yet. Until it is in `eval/`, ADR-0021 replaces it with interim cases written from ESC-01 to ESC-05: fixtures in `eval/`, approved by the project lead, and labeled "interim, not the shared scenario set" ([ADR-0021, Exception to TEST-26](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#exception-to-test-26)). The fixtures are [`suites/escalation/interim-v1/`](suites/escalation/interim-v1/README.md), written for the routing configuration `main-untuned-v1` ([ADR-0025](../docs/decisions/0025-routing-configuration-of-the-first-release.md)); the project lead approved and froze them on 2026-11-17, before the first gate run. Every report of the gate must state the TEST-26 item on the shared scenario set as not met.
 - The gate runs by command before each release, not on every PR.
 - Groundedness is graded by two people, each sample independently, with their agreement reported ([DATA-46](../docs/rules/data-and-ml.md#evaluation-and-reporting), NFR-04).

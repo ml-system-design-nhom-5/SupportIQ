@@ -1,0 +1,71 @@
+# The backend guardrail tests of the offline evaluation gate (DATA-57, ADR-0021), against a
+# throwaway PostgreSQL 17, with the steps of the CI job backend-tests. run-gate.sh builds the
+# image of backend-guardrails, sets GATE_COMMIT and GATE_JUNIT_DIR, and runs this project; no
+# service reaches outside its internal network.
+name: supportiq-gate
+
+services:
+  postgres:
+    # PostgreSQL 17.11, the image of the CI job backend-tests (WF-20).
+    image: postgres:17.11@sha256:748a18a54d3842d43bc156f0840d78029b8d349e0feca98c12b9c4ce3404a6b3
+    environment:
+      POSTGRES_USER: postgres
+      # Throwaway, never real secrets: the data lives only in tmpfs for one run.
+      POSTGRES_PASSWORD: gate-superuser
+    tmpfs:
+      - /var/lib/postgresql/data
+    volumes:
+      - ./postgres-init.sql:/docker-entrypoint-initdb.d/postgres-init.sql:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "--username", "postgres"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    networks:
+      - gate
+
+  backend-guardrails:
+    image: supportiq-gate-backend-guardrails:${GATE_COMMIT:?run-gate.sh sets GATE_COMMIT}
+    # The integration tests of backend reach only the loopback addresses (backend/tests/
+    # conftest.py), so this service shares the network namespace of postgres, which it finds at
+    # 127.0.0.1, inside the internal network.
+    network_mode: service:postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment:
+      HOME: /tmp
+      # Throwaway, never real secrets, as in the CI job backend-tests.
+      DATABASE_URL_OWNER: postgresql+asyncpg://supportiq_owner:gate-owner@127.0.0.1:5432/supportiq
+      DATABASE_URL_APP: postgresql+asyncpg://supportiq_app:gate-app@127.0.0.1:5432/supportiq
+      # The service runs PostgreSQL in this network namespace without TLS (backend README, TLS).
+      DATABASE_TLS: disable
+      ALLOWED_ORIGINS: '["http://localhost:5173"]'
+      SEED_PASSWORD_CUSTOMER: gate-customer
+      SEED_PASSWORD_STAFF: gate-staff
+      SEED_PASSWORD_MANAGER: gate-manager
+      SEED_PASSWORD_ADMIN: gate-admin
+      # A dummy service token and an address where nothing listens: the tests serve ai-service
+      # from in-memory fakes (TEST-16).
+      AI_SERVICE_BASE_URL: http://ai-service.invalid
+      AI_SERVICE_TOKEN: gate-ai-service-token
+      # The commit of the images, as a deploy sets it.
+      BACKEND_BUILD_VERSION: ${GATE_COMMIT:?run-gate.sh sets GATE_COMMIT}
+    volumes:
+      - ${GATE_JUNIT_DIR:?run-gate.sh sets GATE_JUNIT_DIR}:/junit
+    # The steps of the CI job backend-tests. A failed test still writes the report, which the
+    # gate records as failed (TEST-20); a failed setup writes none, and run-gate.sh stops.
+    command:
+      - sh
+      - -c
+      - >-
+        backend create-app-role && backend migrate &&
+        pytest tests/integration/guardrails --junitxml=/junit/backend-guardrails.xml
+        -o junit_suite_name=backend_guardrails -p no:cacheprovider
+
+networks:
+  gate:
+    internal: true

@@ -101,7 +101,7 @@ The gate and `publish-candidate` refuse the set unless `status` is `frozen`, `ap
 
 ## How the gate runs a case
 
-The gate code does not exist yet ([`release/README.md`, Known limits](../../../release/README.md#known-limits)). It reads the set as follows.
+`supportiq-release run-gate` reads the set as follows ([`release/README.md`, The offline evaluation gate](../../../release/README.md#the-offline-evaluation-gate)).
 
 1. Check that [`approval.json`](#approval-record) freezes exactly this `cases.json`, then check `label` and each field of `written_for` as [What the set is written for](#what-the-set-is-written-for) states, and stop without a result when one differs.
 2. Start `ai-service` with exactly the candidate manifest, with an LLM adapter that records each call and never calls a provider. CI never calls a real LLM ([ADR-0021, CI](../../../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#ci), statement 2), and no case of this set reaches the LLM.
@@ -161,4 +161,4 @@ Every `200` case expects `llm_called` `false`, and `draft_status` follows the re
 
 ## Open questions
 
-- **Injected parts in the gate.** Whether the project lead accepts cases that replace the intent model, the search, or the LLM adapter as mandatory escalation cases. Without them, ESC-01 and ESC-05 have no case. Recommended default: accept them, because TEST-26 asks that routing be correct and ESC-05 cannot be produced through a message.
+None. The project lead decided on 2026-11-17 that the cases that replace the intent model, the search, or the LLM adapter count as mandatory escalation cases. Without them, ESC-01 and ESC-05 would have no case, because TEST-26 asks that routing be correct and ESC-05 cannot be produced through a message.

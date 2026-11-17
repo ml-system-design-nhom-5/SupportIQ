@@ -1,18 +1,23 @@
 # Release command
 
-`supportiq-release` builds what a release of `ai-service` serves, and is the release command of [ADR-0021, Release and the offline evaluation gate](../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#release-and-the-offline-evaluation-gate). It has two commands:
+`supportiq-release` builds what a release of `ai-service` serves, runs the offline evaluation gate on it, and publishes it. It is the release command of [ADR-0021, Release and the offline evaluation gate](../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#release-and-the-offline-evaluation-gate), with four commands:
 
 - `ingest-kb` admits or quarantines the KB document versions of a raw KB folder ([KB ingestion](#kb-ingestion));
-- `build-candidate` copies the six assets into a new folder and writes the manifest of a candidate release, which no replica serves until the offline evaluation gate passes ([Candidate release](#candidate-release)).
+- `build-candidate` copies the six assets into a new folder and writes the manifest of a candidate release, which no replica serves until the offline evaluation gate passes ([Candidate release](#candidate-release));
+- `run-gate` runs the offline evaluation gate on a candidate and records the run ([The offline evaluation gate](#the-offline-evaluation-gate));
+- `publish-candidate` copies a candidate whose gate run passed into a release folder and links the run in its manifest ([Publish](#publish)).
 
-The gate itself is not part of this command yet ([Known limits](#known-limits)).
+The gate has not run yet ([Known limits](#known-limits)).
 
 It is a project of its own, apart from the evaluation code that `eval/` took over from `main`:
 
 - ADR-0021 (Where the code of `main` goes, statement 3) makes the release command new code that uses none of the moved evaluation code.
 - ADR-0021 (CI, statement 7) holds it to the rule level of `ai-service` now, while the moved code waits for the interim level of statements 8 and 9.
 
-It reaches `ai-service` only through the formats of the release manifest and its assets, and never imports the internals of `ai-service` (ADR-0021, Where the code of `main` goes, statement 1).
+It imports only public modules of `ai-service`, never their internals (ADR-0021, Where the code of `main` goes, statement 1), and a contract of import-linter checks this:
+
+- `supportiq_ai_service.release.manifest`, to check a candidate and a published release;
+- in the gate only, `supportiq_ai_service.composition_root`, `intent`, `retrieval`, and `drafting`, to build the application of a candidate with the ports of the gate.
 
 ## Run and test
 
@@ -29,14 +34,30 @@ uv run --project eval/release supportiq-release ingest-kb \
 uv run --project eval/release supportiq-release build-candidate \
   --spec <release spec> \
   --release-records eval/releases \
+  --output <new folder outside the repository>
+```
+
+```bash
+eval/release/gate/run-gate.sh \
+  --candidate <candidate folder> \
+  --cases eval/suites/escalation/interim-v1/cases.json
+```
+
+```bash
+uv run --project eval/release supportiq-release publish-candidate \
+  --candidate <candidate folder> \
+  --cases eval/suites/escalation/interim-v1/cases.json \
+  --release-records eval/releases \
   --output <new folder>
 ```
+
+`run-gate` itself needs torch, so `run-gate.sh` runs it in Docker ([Run in Docker](#run-in-docker)). `build-candidate` and `publish-candidate` need no torch.
 
 ```bash
 uv run --project eval/release pytest eval/release
 ```
 
-The tests need no network and no `.env`. They read `data/raw/kb/v2/`, `contracts/schemas/IntentLabel.yaml`, `eval/kb-ingestion/v2/`, and `ai-service/prompts/grounded-v4/` without changing them.
+The tests need no network, no `.env`, and no torch: the gate runs on a fake application of a candidate. They read `data/raw/kb/v2/`, `contracts/schemas/IntentLabel.yaml`, `eval/kb-ingestion/v2/`, `eval/suites/escalation/interim-v1/`, and `ai-service/prompts/grounded-v4/` without changing them.
 
 ## Set up
 
@@ -199,6 +220,98 @@ The command stops with exit status 2 and writes nothing when any of these fails,
 
 Each file is then copied byte for byte into a file that did not exist, and the manifest lists the SHA-256 and the size of the copied bytes. `verify_candidate` checks the manifest, the links, the sizes, and the checksums, not the formats of the assets: the gate checks those when it loads the candidate. If `verify_candidate` refuses the candidate, or a source cannot be read during the copy, the command prints the reason, the asset, and the path inside the release, never the content of a file, and exits with status 2; nothing is left in the output ([Output](#output)).
 
+## The offline evaluation gate
+
+`run-gate` runs the gate of the first release, the minimum of [DATA-57](../../docs/rules/data-and-ml.md#models-and-artifacts) that ADR-0021 (Release and the offline evaluation gate, statement 3) sets: every case of a frozen set of escalation cases, three checks on the application of the candidate, and both folders of guardrail tests of [TEST-26](../../docs/rules/testing.md#guardrail-tests). The cases are [`../suites/escalation/interim-v1/`](../suites/escalation/interim-v1/README.md), which replace the shared scenario set ([ADR-0021, Exception to TEST-26](../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#exception-to-test-26)).
+
+### Checks before the run
+
+The command stops with exit status 2 and writes no record when any of these fails, in this order:
+
+1. `verify_candidate` accepts the candidate, and its KB is one file with a list of document versions.
+2. The cases have the format of their README, and no case ID is given twice. Each request holds a message; each recommendation, draft status, and reason code is a value of contract 1.0.0; and each injected distribution lists intent labels once each, most likely first, with probabilities that add up to at most 1 and stay above the equal share of the rest. A refusal names the case when it can.
+3. `approval.json`, next to `cases.json`, has its format, is for the same set, is `frozen` with `approved_by` and `approved_on`, and covers the SHA-256 of `cases.json` as it is ([Approval record](../suites/escalation/interim-v1/README.md#approval-record)).
+4. `label` and each field of `written_for` match the candidate: contract 1.0.0, the model version, the routing version, the KB version, and the number of KB document versions. The message names each field that differs.
+5. Each JUnit XML file of the guardrail tests is the report of its folder: a regular file whose every `testsuite` has the name of the folder (`ai_service_guardrails` or `backend_guardrails`, which `run-gate.sh` sets with `-o junit_suite_name`), holds `tests`, `failures`, `errors`, and `skipped` as integers of at least 0, and holds one `testcase` for each test, each in `tests.integration.guardrails`. A document type, an entity, and an external reference are refused. A report that is missing or cannot be read therefore gives no record; `run-gate.sh` produces both reports or stops before `run-gate`.
+6. `--release-records` names an existing folder that holds no entry named by the release ID. `--git-commit` takes the 40 lowercase hexadecimal characters of a commit.
+
+### The run
+
+`run-gate` builds the application of the candidate in its own process with `build_candidate_application` of `ai-service`, and the ports of `gate/adapters/gate_ports.py`:
+
+- the intent model and the search of the candidate, except for a case that injects an intent distribution or a failure ([How the gate runs a case](../suites/escalation/interim-v1/README.md#how-the-gate-runs-a-case));
+- an LLM step that records each call and fails it with `llm_unavailable`, so the gate never calls a provider ([ADR-0021, CI](../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#ci), statement 2).
+
+The settings come from the environment of the process, as for `serve`. The command line sets the ones of the gate once, before it builds the application: a service token made for the run, and LLM settings that no call reads. The manifest is an argument, not a setting. Each case sends its request to `createAnalysis` and then to `createDraft` through an ASGI transport, inside the lifespan of the application, so no port is opened, and every field of `expected` is compared with both responses.
+
+The checks on the candidate are:
+
+- `routes_are_those_of_contract_1_0_0`: the application serves exactly the six routes of contract 1.0.0, none of which performs a transaction (FR-06);
+- `no_case_text_in_the_logs`: no log line holds the message of a case or a placeholder in it ([LOG-29](../../docs/rules/logging-and-observability.md#privacy-in-telemetry));
+- `no_llm_call`: the LLM step received no call.
+
+The gate passes only when every case and every check passes, and each folder of guardrail tests ran at least one test with no failure, no error, and no skip, because a skipped guardrail test is not a pass ([TEST-20](../../docs/rules/testing.md#flaky-and-skipped-tests)). Which parts load the candidate is in [Known limits](#known-limits).
+
+### The record
+
+Each run, passed or failed, writes `eval/releases/<release_id>/gate-run.json` into a folder that it creates exclusively, so a release ID gets one gate run ([ARCH-40](../../docs/rules/architecture.md#versioned-assets)). The record is in `supportiq-gate-run/interim-1` and holds identifiers, versions, checksums, counts, and codes, never text of a message or of the KB.
+
+| Field | Holds |
+|---|---|
+| `format` | Always `supportiq-gate-run/interim-1` |
+| `run_id`, `release_id` | The release ID of the candidate, which the run takes as its ID |
+| `manifest_sha256` | The SHA-256 of the manifest file of the candidate |
+| `git_commit` | The commit of the repository that the run used |
+| `escalation_cases` | The name of the set, the SHA-256 of `cases.json`, the number of cases, the number of each kind, and for each case its ID, its rule, its kind, the injected failure if any, whether it passed, and each field that did not match, as `<operation>.<field>` |
+| `candidate_checks` | Each check on the candidate and whether it passed |
+| `candidate_scope` | The parts that run on the candidate, the parts that do not, and why |
+| `guardrails` | For each folder of guardrail tests: the tests, failures, errors, and skips, the test classes that ran, and whether it passed |
+| `llm` | The calls that the LLM step received, and a sentence that no call was made or that a call fails the gate |
+| `test_26` | The TEST-26 item on the shared scenario set, stated as not met ([Exception to TEST-26](../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#exception-to-test-26), statement 3) |
+| `known_gaps` | The three gaps of ADR-0021 (Release and the offline evaluation gate, statement 4) and the untuned routing of [ADR-0025](../../docs/decisions/0025-routing-configuration-of-the-first-release.md) |
+| `outcome` | `passed` or `failed` |
+
+The kind of a case is what its outcome rests on: `real_model`, `injected_distribution`, `injected_failure`, or `staff_choice`. Of the 27 cases of `interim-v1`, 6 rest on the real model, 17 on an injected distribution, 2 on an injected failure, and 2 on an intent that staff chose.
+
+`run-gate` exits with status 0 when the gate passed and 1 when it failed; the record is written either way. It prints the release ID, the number of cases and of failed cases, the outcome, and the path of the record. Any other failure of any command, such as a record that cannot be written, prints only the name of its type and exits with status 2, so status 1 always means a gate run that failed.
+
+### Publish
+
+`publish-candidate` checks the approval of the cases as `run-gate` does, then reads the record of the release ID. It stops with exit status 2, names the problem, and leaves the output as it was when:
+
+- the record is not a JSON object in `supportiq-gate-run/interim-1`, or did not pass;
+- the record names another release ID or another SHA-256 of the manifest;
+- the record ran other bytes of the cases;
+- the release ID is already published: `eval/releases/<release_id>/release-manifest.json` exists;
+- `--release-records` is not a relative path inside the repository, such as `eval/releases`, which the manifest uses to link the record.
+
+It then copies every file of the candidate into a staging folder next to the output, writes the manifest with `gate_run` (the run ID of the record, `passed`, the path of the record, and its SHA-256), checks it with `verify_release`, and moves the folder to the output. Only then does it write the same manifest next to the record, which links the release ([ADR-0021, Release and the offline evaluation gate](../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#release-and-the-offline-evaluation-gate), statement 1). A move that fails leaves neither the output nor the link, so the command can run again ([ERR-04](../../docs/rules/errors-and-reliability.md#handling-rules)).
+
+### Run in Docker
+
+`run-gate` loads the model of the candidate, which needs torch on Linux, so [`gate/run-gate.sh`](gate/run-gate.sh) runs the whole gate in Docker. It needs Docker with Compose v2 (`docker compose`, not `docker-compose`), because `gate/compose.yaml` names its project with the top-level `name`. BuildKit (`docker buildx`) is required: the repository has no `.dockerignore` at its root, and only BuildKit reads `gate/Dockerfile.dockerignore`, so `run-gate.sh` stops with status 2 without it.
+
+| File | Does |
+|---|---|
+| `gate/Dockerfile` | Builds two images from the repository root. `gate` holds `ai-service` with its torch and dev groups, the release command, and the tests of `ai-service` in one environment; `backend-guardrails` holds `backend` with its dev group for its guardrail tests |
+| `gate/check_locks.py` | Stops the build of the `gate` image when `ai-service/uv.lock` and `eval/release/uv.lock` pin a shared package at different versions, and names the package and both versions |
+| `gate/Dockerfile.dockerignore` | Lets into the build context only the projects, locks, sources, and tests that the two images need, never a `.env` file, `data/`, `eval/releases/`, or `.git` |
+| `gate/compose.yaml` | Runs the guardrail tests of `backend` against a throwaway PostgreSQL 17 in tmpfs, on an internal network, with the steps and settings of the CI job `backend-tests` |
+| `gate/postgres-init.sql` | Creates the owner role and the database of those tests, with a throwaway password |
+| `gate/run-gate.sh` | Runs the steps below and exits with the status of `run-gate`: 0 passed, 1 failed, 2 for an input that cannot be used or a step that wrote no report |
+
+`run-gate.sh --candidate <folder> --cases <folder>/cases.json` runs these steps:
+
+1. It refuses a worktree with any change, untracked files included, because the images and the record must match one commit. The candidate therefore lies outside the repository or in an ignored path, and the record of a previous run is committed before the next run.
+2. It takes the commit with `git rev-parse HEAD` and creates `eval/releases/` when it is missing. An empty folder is not a change for git.
+3. It builds both images from the worktree.
+4. It runs the guardrail tests of `backend`, then those of `ai-service` in the `gate` image without network, each writing a JUnit XML file, named after its folder, into a temporary folder from `mktemp -d`. A failed test does not stop the script, so the gate records it; a step that writes no report, such as a failed migration, stops it with status 2.
+5. It runs `supportiq-release run-gate` in the `gate` image without network, with the candidate, the folder of the cases, and the reports mounted read-only, and `eval/releases/` mounted writable.
+
+Every container runs as the user who runs the script, so the record and the reports belong to them. When Docker cannot mount the default temporary folder, set `TMPDIR` to a folder that it can mount.
+
+`publish-candidate` needs no torch, so it runs on the machine with `uv run` ([Run and test](#run-and-test)).
+
 ## Layout
 
 | Path | Holds |
@@ -207,10 +320,14 @@ Each file is then copied byte for byte into a file that did not exist, and the m
 | `src/supportiq_release/kb_ingestion/adapters/` | Reading the raw KB folder and the intent labels, and writing the output |
 | `src/supportiq_release/candidate/domain/` | The spec of a candidate and the rules of its paths, with no file access |
 | `src/supportiq_release/candidate/adapters/` | Reading the spec, checking the release ID, copying the sources, and writing and checking the manifest |
-| `src/supportiq_release/files/` | Strict JSON files and new or empty output folders, for both commands |
+| `src/supportiq_release/gate/domain/` | The escalation cases, their approval, the comparison of a case with the responses, and the outcome of a gate run, with no file access |
+| `src/supportiq_release/gate/adapters/` | Reading the cases, their approval, the facts of a candidate, and the JUnit XML files; the ports of the gate; running the cases; writing the record; publishing |
+| `src/supportiq_release/files/` | Strict JSON files and new or empty output folders, for every command |
 | `src/supportiq_release/errors.py` | `ReleaseCommandError`, the root of every error that the command raises on purpose ([PY-20](../../docs/rules/python.md#errors)); the command line prints its message and exits with status 2 |
-| `src/supportiq_release/composition_root/` | The command line |
-| `tests/` | Unit tests of each module; the test of KB v2; a candidate from the files of the repository |
+| `src/supportiq_release/composition_root/` | The command line; `gate_commands.py` holds `run-gate` and `publish-candidate`, and `exit_statuses.py` the exit statuses |
+| `gate/` | The Docker files and the script of a gate run ([Run in Docker](#run-in-docker)) |
+| `typings/defusedxml/` | The types of the names of `defusedxml` that the command uses, because the package ships none |
+| `tests/` | Unit tests of each module, with a fake application of a candidate for the gate; the test of KB v2; a candidate from the files of the repository; the test of `gate/check_locks.py` |
 
 ## Dependencies
 
@@ -220,7 +337,10 @@ Each dependency is justified here ([WF-27](../../docs/rules/workflow.md#dependen
 
 | Name | Version | License | Why |
 |---|---|---|---|
-| supportiq-ai-service | The `ai-service/` of the same commit, as a path dependency | Not published | `verify_candidate` checks a candidate with the code that serves it. Only `supportiq_ai_service.release.manifest` is imported, which a contract of import-linter checks (ADR-0021, Where the code of `main` goes, statement 1) |
+| supportiq-ai-service | The `ai-service/` of the same commit, as a path dependency | Not published | `verify_candidate` checks a candidate, and `build_candidate_application` builds it for the gate, with the code that serves it. Only the public modules of the introduction are imported, which a contract of import-linter checks (ADR-0021, Where the code of `main` goes, statement 1) |
+| defusedxml | 0.7.1 | PSF-2.0 | Reads the JUnit XML files of the guardrail tests, refusing a document type, an entity, and an external reference, which `xml.etree` would read (ruff `S314`) |
+| httpx | 0.28.1 | BSD-3-Clause | Sends the requests of each case to the application of the candidate through its ASGI transport, without opening a port. The version of `ai-service` |
+| starlette | 1.10.0 | BSD-3-Clause | The type of the application of the candidate and of its routes, which the gate checks. The version of `ai-service` |
 
 KB ingestion itself needs only the standard library.
 
@@ -241,16 +361,19 @@ Each development dependency has the version that `ai-service` uses, for the same
 | import-linter | 2.16 | BSD-2-Clause | Layer boundaries (ARCH-11) |
 | pip-audit | 2.10.1 | Apache-2.0 | Dependency vulnerabilities ([rules](../../docs/rules/README.md#enforcement)) |
 
-These transitive dependencies have a license outside the list of [WF-30](../../docs/rules/workflow.md#dependencies). Each one is also a dependency of `ai-service` or of `backend`:
+These dependencies have a license outside the list of [WF-30](../../docs/rules/workflow.md#dependencies). Each one is also a dependency of `ai-service` or of `backend`:
 
 - through `ai-service`: `certifi` (MPL-2.0), `numpy` (0BSD, Zlib, and CC0-1.0 for bundled parts), `regex` (Apache-2.0 AND CNRI-Python), `tqdm` (MPL-2.0 AND MIT), and `typing-extensions` (PSF-2.0). They wait for the approval of the project lead in the join PR, as `ai-service/README.md` (Dependencies) states;
-- through `pip-audit`: `defusedxml` (PSF-2.0), which the project lead accepted for `backend`.
+- `defusedxml` (PSF-2.0), a runtime dependency here and a dependency of `pip-audit`, which the project lead accepted for `backend`.
 
 The build backend is `uv_build`, from the same release as uv (MIT or Apache-2.0).
 
 ## Known limits
 
-- The offline evaluation gate is not part of the command yet: it waits for the routing values and the model of the first release, the interim escalation cases ([ADR-0021, Exception to TEST-26](../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#exception-to-test-26)), and a way to build `ai-service` from a candidate in the same process. Until then, no candidate gets a gate run, `eval/releases/` does not exist, and `build-candidate` stops with `release_records_folder_missing` outside the tests.
+- The gate has not run yet. Its Docker files have not been built, so the first run of `run-gate.sh` also checks them, and `eval/releases/` holds no record. `build-candidate` stops with `release_records_folder_missing` until `eval/releases/` exists; create it before the first candidate.
+- Only some parts of the gate load the candidate. The 27 escalation cases and the checks on the candidate (the routes of contract 1.0.0, no case text in the logs, no LLM call) run on the application of the candidate, with its manifest loaded. The guardrail tests do not load it: those of `ai-service` check the service token and the packaged egress allow-list, those of `backend` serve `ai-service` from fakes, and no asset of the manifest changes what they check. They run at the commit that the record names, those of `ai-service` in the image of the gate. This reads ADR-0021 (Release and the offline evaluation gate, statement 3) as "where a test depends on what the manifest serves", and `candidate_scope` in the record states the same split.
+- No CI job checks a published manifest yet, although ADR-0021 (Release and the offline evaluation gate, statement 2) asks CI to reject a manifest without a passing gate run or with a wrong checksum. `publish-candidate` writes the manifest next to the record for that check.
+- The six cases that rest on the real model were written without a run of model `v1.0.0`, so the first gate run is also their first check ([Limits of the set](../suites/escalation/interim-v1/README.md#limits-of-the-set)).
 - The formats of the spec and of the three outputs of ingestion are interim, and the readers of `ai-service` define the KB and mapping formats. A data contract replaces them ([ADR-0021, Follow-ups](../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#follow-ups)).
 - Ingestion neither copies `last_reviewed_at` nor lists the versions without it, as the freshness rule of the [contracts v1 design, KB data contract](../../docs/design/contracts-v1.md#kb-data-contract-contractskb-contractmd) requires. KB v2 provides no `last_reviewed_at`, no policy area has a freshness rule yet, and ingestion admits no version of KB v2, so no output changes yet. The `tech-debt` issue for `source_review_overdue` adds both.
 - The issue that accepts the quarantine of KB v2 does not exist yet, so the committed report has no `quarantine_accepted_in`, and ADR-0021 (Validation) is not met yet. Once the issue exists, the report is written again with `--accepted-quarantine`, and `tests/integration/test_kb_v2.py` names the issue URL as a constant and expects exit status 0.
