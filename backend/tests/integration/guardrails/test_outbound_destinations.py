@@ -48,7 +48,7 @@ NETWORK_MODULES = (
 )
 ENGINE_FACTORIES = ("create_async_engine", "create_engine")
 # The client of ai-service and the modules that pass its transport or hold it as a type; the
-# driver and the engine of the database; and the exporter of spans.
+# driver, the engine, and the verified TLS of the database; and the exporter of spans.
 IMPORTERS = {
     "httpx": {
         "composition_root/runtime.py",
@@ -58,6 +58,7 @@ IMPORTERS = {
     },
     "asyncpg": {"platform/adapters/database.py"},
     "create_async_engine": {"platform/adapters/database.py"},
+    "ssl": {"platform/adapters/database.py"},
     "opentelemetry.exporter": {"platform/adapters/telemetry.py"},
 }
 DATABASE_URL = "postgresql+asyncpg://supportiq_app:not-a-password@db.destination.test:6543/demo"

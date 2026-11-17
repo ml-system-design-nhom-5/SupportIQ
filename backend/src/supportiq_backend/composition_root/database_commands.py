@@ -6,7 +6,7 @@ foundation design, Database roles and privileges).
 
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from supportiq_backend.composition_root.runtime import database_timeouts
+from supportiq_backend.composition_root.runtime import database_ca_file, database_timeouts
 from supportiq_backend.composition_root.settings_loading import require_setting
 from supportiq_backend.platform import EventName, EventRecorder
 from supportiq_backend.platform.adapters.database import create_database_engine
@@ -64,6 +64,12 @@ def create_owner_engine(settings: Settings) -> AsyncEngine:
 
     Raises:
         SettingRequiredError: `database_url_owner` is absent.
+        DatabaseCaFileError: `database_tls` is `verify-full`, and `database_ca_file` holds no
+            certificate authority.
     """
     owner_url = require_setting(settings.database_url_owner, "database_url_owner")
-    return create_database_engine(owner_url.get_secret_value(), database_timeouts(settings))
+    return create_database_engine(
+        owner_url.get_secret_value(),
+        database_timeouts(settings),
+        ca_file=database_ca_file(settings),
+    )

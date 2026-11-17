@@ -45,6 +45,7 @@ from supportiq_backend.platform import (
     EventName,
     EventRecorder,
 )
+from supportiq_backend.platform.adapters.database import DatabaseCaFileError
 from supportiq_backend.platform.adapters.database_roles import AppRoleUrlError
 from supportiq_backend.platform.adapters.system_clock import SystemClock
 from supportiq_backend.platform.adapters.telemetry import (
@@ -99,22 +100,29 @@ def report_failure(error: BackendError, events: EventRecorder) -> int:
     Returns:
         2 for a missing or invalid setting, 1 for any other failure.
     """
+    setting_name = _invalid_setting_name(error)
+    if setting_name is not None:
+        events.record(EventName.SETTINGS_INVALID, setting_names=setting_name)
+        return EXIT_SETTINGS_INVALID
+    if isinstance(error, ExportPathRefusedError):
+        # The person needs the refused path to correct it. Standard output holds only JSON
+        # lines (LOG-02), so the message goes to standard error, as the reset question does.
+        sys.stderr.write(error.detail + "\n")
+    events.record(EventName.COMMAND_FAILED, error_type=type(error).__name__)
+    return EXIT_FAILURE
+
+
+def _invalid_setting_name(error: BackendError) -> str | None:
+    # A failure that a wrong setting causes names that setting, never its value.
     match error:
         case SettingRequiredError():
-            events.record(EventName.SETTINGS_INVALID, setting_names=error.setting_name)
-            return EXIT_SETTINGS_INVALID
+            return error.setting_name
         case AppRoleUrlError():
-            events.record(EventName.SETTINGS_INVALID, setting_names="database_url_app")
-            return EXIT_SETTINGS_INVALID
-        case ExportPathRefusedError():
-            # The person needs the refused path to correct it. Standard output holds only JSON
-            # lines (LOG-02), so the message goes to standard error, as the reset question does.
-            sys.stderr.write(error.detail + "\n")
-            events.record(EventName.COMMAND_FAILED, error_type=type(error).__name__)
-            return EXIT_FAILURE
+            return "database_url_app"
+        case DatabaseCaFileError():
+            return "database_ca_file"
         case _:
-            events.record(EventName.COMMAND_FAILED, error_type=type(error).__name__)
-            return EXIT_FAILURE
+            return None
 
 
 def run_command(arguments: CommandArguments, settings: Settings, events: EventRecorder) -> int:

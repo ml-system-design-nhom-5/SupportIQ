@@ -1,5 +1,7 @@
 """Tests of the `backend` command line and of settings loading (ARCH-34)."""
 
+from pathlib import Path
+
 import pytest
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter
@@ -25,9 +27,10 @@ from supportiq_backend.composition_root.settings_loading import (
     require_setting,
 )
 from supportiq_backend.platform import DatabaseUnavailableError, EventName
+from supportiq_backend.platform.adapters.database import DatabaseCaFileError
 from supportiq_backend.platform.adapters.database_roles import AppRoleUrlError
 from supportiq_backend.platform.adapters.telemetry import RedactingSpanProcessor
-from supportiq_backend.platform.settings import TraceExporter
+from supportiq_backend.platform.settings import DatabaseTls, TraceExporter
 from supportiq_backend.pseudonymization.domain import NamedEntityModelMissingError
 from tests.unit.platform.fakes import RecordingEventRecorder
 from tests.unit.platform.settings_builders import build_test_settings
@@ -35,6 +38,8 @@ from tests.unit.platform.settings_builders import build_test_settings
 PORT = 8000
 OTLP_ENDPOINT = "http://collector.test:4318/v1/traces"
 GRACEFUL_SHUTDOWN_S = 20
+OWNER_URL = "postgresql+asyncpg://supportiq_owner:owner-test-password@127.0.0.1:5433/supportiq"
+CA_FILE_REFUSED = {"setting_names": "database_ca_file"}
 
 
 def test_serve_takes_the_host_and_the_port() -> None:
@@ -199,6 +204,41 @@ def test_serve_without_the_named_entity_model_stops_before_uvicorn_runs(
     assert calls == []
 
 
+def test_serve_with_an_unusable_ca_file_stops_at_startup(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def record_run(_app: object, **options: object) -> None:
+        calls.append(options)
+
+    monkeypatch.setattr("supportiq_backend.composition_root.cli.uvicorn.run", record_run)
+    settings = build_test_settings(
+        database_tls=DatabaseTls.VERIFY_FULL, database_ca_file=tmp_path / "absent.crt"
+    )
+    events = RecordingEventRecorder()
+
+    status = run_command(ServeArguments(host="127.0.0.1", port=PORT), settings, events)
+
+    assert status == EXIT_SETTINGS_INVALID
+    assert events.of(EventName.SETTINGS_INVALID)[0].attributes == CA_FILE_REFUSED
+    assert calls == []
+
+
+def test_migrate_with_an_unusable_ca_file_stops_before_it_connects(tmp_path: Path) -> None:
+    settings = build_test_settings(
+        database_url_owner=OWNER_URL,
+        database_tls=DatabaseTls.VERIFY_FULL,
+        database_ca_file=tmp_path / "absent.crt",
+    )
+    events = RecordingEventRecorder()
+
+    status = run_command(OneOffArguments(OneOffCommand.MIGRATE), settings, events)
+
+    assert status == EXIT_SETTINGS_INVALID
+    assert events.of(EventName.SETTINGS_INVALID)[0].attributes == CA_FILE_REFUSED
+
+
 def test_serve_without_a_port_stops_with_a_usage_error() -> None:
     with pytest.raises(SystemExit) as caught:
         parse_arguments(["serve", "--host", "127.0.0.1"])
@@ -226,6 +266,15 @@ def test_app_url_without_the_app_role_is_reported_as_an_invalid_setting() -> Non
     assert events.of(EventName.SETTINGS_INVALID)[0].attributes == {
         "setting_names": "database_url_app"
     }
+
+
+def test_an_unusable_ca_file_is_reported_as_an_invalid_setting() -> None:
+    events = RecordingEventRecorder()
+
+    status = report_failure(DatabaseCaFileError(), events)
+
+    assert status == EXIT_SETTINGS_INVALID
+    assert events.of(EventName.SETTINGS_INVALID)[0].attributes == CA_FILE_REFUSED
 
 
 def test_database_failure_of_a_command_is_logged_once_with_its_type() -> None:

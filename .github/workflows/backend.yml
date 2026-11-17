@@ -85,6 +85,8 @@ jobs:
       # Passwords of a throwaway database that exists only in this job; never real secrets.
       DATABASE_URL_OWNER: postgresql+asyncpg://supportiq_owner:ci-owner@127.0.0.1:5432/supportiq
       DATABASE_URL_APP: postgresql+asyncpg://supportiq_app:ci-app@127.0.0.1:5432/supportiq
+      # The service runs PostgreSQL on this runner without TLS (backend README, TLS).
+      DATABASE_TLS: disable
       ALLOWED_ORIGINS: '["http://localhost:5173"]'
       SEED_PASSWORD_CUSTOMER: ci-customer
       SEED_PASSWORD_STAFF: ci-staff

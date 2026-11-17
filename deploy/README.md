@@ -7,10 +7,10 @@ This guide holds no real value: no URL, project reference, token, or password. E
 ## Setup order
 
 1. **Supabase.** Create one free project in `ap-southeast-1` ([ADR-0016, PostgreSQL on Supabase](../docs/decisions/0016-hosting-on-free-tiers.md#postgresql-on-supabase)). Turn on "Enforce SSL on incoming connections" ([TLS to PostgreSQL](#tls-to-postgresql)). Run the [PostgreSQL checks](#postgresql-checks) and record their results.
-2. **The app role.** In `backend/.env` on your machine, set `DATABASE_URL_OWNER` and `DATABASE_URL_APP` to the session pooler URLs of the two roles, each with `ssl=require` in its query ([TLS to PostgreSQL](#tls-to-postgresql)). Run `uv run backend create-app-role` in `backend/` ([backend README, Commands](../backend/README.md#commands)).
+2. **The app role.** In `backend/.env` on your machine, set `DATABASE_URL_OWNER` and `DATABASE_URL_APP` to the session pooler URLs of the two roles, without a query, and set `DATABASE_TLS` to `verify-full`, because `.env.example` sets `disable` for the local cluster ([TLS to PostgreSQL](#tls-to-postgresql)). Run `uv run backend create-app-role` in `backend/` ([backend README, Commands](../backend/README.md#commands)).
 3. **Render.** Create one free web service in Singapore, built from `backend/Dockerfile`. Set `PORT` to `8000`, turn auto-deploy off, and create a deploy hook ([ADR-0016, `backend` on Render](../docs/decisions/0016-hosting-on-free-tiers.md#backend-on-render)). Enter the [Render settings](#render-settings).
 4. **GitHub.** Add two repository secrets, which only the deploy workflow reads ([ADR-0016, Migrations and one-off commands](../docs/decisions/0016-hosting-on-free-tiers.md#migrations-and-one-off-commands), item 4):
-   - `DEPLOY_DATABASE_URL_OWNER`: the session pooler URL of `supportiq_owner.<project-ref>`, port 5432, with the scheme `postgresql+asyncpg` and `ssl=require` in its query ([TLS to PostgreSQL](#tls-to-postgresql));
+   - `DEPLOY_DATABASE_URL_OWNER`: the session pooler URL of `supportiq_owner.<project-ref>`, port 5432, with the scheme `postgresql+asyncpg`, without a query ([TLS to PostgreSQL](#tls-to-postgresql));
    - `RENDER_DEPLOY_HOOK_URL`: the deploy hook URL as Render shows it, with its `key`.
 5. **First deploy.** On GitHub, open Actions, select the workflow `deploy`, and run it on the branch `main`. It runs the jobs of `backend.yml` again, then `backend migrate` as the owner role, then calls the deploy hook with `ref` set to that commit. A failed job or a failed migration deploys nothing, and a run on another branch stops before the migration ([repository checks, What runs where](../docs/guides/repository-checks.md#what-runs-where)).
 6. **Seed.** In `backend/.env` on your machine, set the four `SEED_PASSWORD_*` settings. Run `uv run backend seed` in `backend/`.
@@ -24,8 +24,9 @@ This guide holds no real value: no URL, project reference, token, or password. E
 Every connection to Supabase leaves the host that opens it, so it uses TLS ([SEC-28](../docs/rules/security-and-privacy.md#transport-and-runtime)):
 
 1. In Supabase, open Database Settings, then SSL Configuration, and turn on "Enforce SSL on incoming connections". The database restarts for a few minutes, and the setting applies to the session pooler too. From then on, Supabase refuses every connection without TLS.
-2. Every URL of the database ends with `?ssl=require`, its only query parameter. This holds for `DATABASE_URL_APP` on Render, the secret `DEPLOY_DATABASE_URL_OWNER`, and the two URLs in `backend/.env` on your machine.
-3. With the scheme `postgresql+asyncpg`, the parameter is `ssl`, not `sslmode`. `backend` accepts no other query: any other parameter or value stops it at startup with a `settings.invalid` line that names the setting, never its value.
+2. `DATABASE_TLS` is `verify-full` for every connection to Supabase. It is the default, so Render leaves it unset; the job `deploy-migrate` sets it in its environment; and `backend/.env` on your machine sets it, because `.env.example` sets `disable` for the local cluster.
+3. With `verify-full`, `backend` requires a server certificate signed by the root authority of Supabase and checks that it names the host of the URL. The authority is `backend/certs/supabase-root-ca.crt`, the default of `DATABASE_CA_FILE`, relative to the working directory, so Render, the deploy workflow, and your machine set no authority ([backend README, TLS to the database](../backend/README.md#tls-to-the-database)). The image copies it, and the deploy workflow runs from the checkout of `backend/`. If Supabase replaces its authority, download the new one from Database Settings, SSL Configuration, and replace the file and its record in the backend README together.
+4. No URL of the database holds a query: not `DATABASE_URL_APP` on Render, not the secret `DEPLOY_DATABASE_URL_OWNER`, and not the two URLs in `backend/.env`. A URL entered before this rule may still end with `?ssl=require`: remove the query on Render and in the secret before the next deploy. `backend` refuses any query at startup with a `settings.invalid` line that names the setting, never its value.
 
 ## Render settings
 
@@ -33,7 +34,7 @@ Every connection to Supabase leaves the host that opens it, so it uses TLS ([SEC
 
 | Setting | Value |
 |---|---|
-| `DATABASE_URL_APP` | The session pooler URL of `supportiq_app.<project-ref>`, port 5432, with `ssl=require` in its query ([ADR-0016, PostgreSQL on Supabase](../docs/decisions/0016-hosting-on-free-tiers.md#postgresql-on-supabase), item 1; [TLS to PostgreSQL](#tls-to-postgresql)) |
+| `DATABASE_URL_APP` | The session pooler URL of `supportiq_app.<project-ref>`, port 5432, without a query ([ADR-0016, PostgreSQL on Supabase](../docs/decisions/0016-hosting-on-free-tiers.md#postgresql-on-supabase), item 1; [TLS to PostgreSQL](#tls-to-postgresql)) |
 | `ALLOWED_ORIGINS` | Only the production origin of the Pages project ([ADR-0016, `frontend` and the ingress on Cloudflare Pages](../docs/decisions/0016-hosting-on-free-tiers.md#frontend-and-the-ingress-on-cloudflare-pages), item 9) |
 | `BACKEND_BUILD_VERSION` | The commit that Render deploys ([Open questions](#open-questions)) |
 | `AI_SERVICE_BASE_URL`, `AI_SERVICE_TOKEN` | The values of the deployed `ai-service` ([Open questions](#open-questions)) |
@@ -66,6 +67,9 @@ Run these when the project is created, before the first deploy ([ADR-0016, Postg
 |---|---|
 | Both roles log in through the session pooler | Not run yet |
 | A connection without TLS is refused, after "Enforce SSL on incoming connections" is on | Not run yet |
+| `psql` with `sslmode=verify-full` and the root authority of `backend/certs/` reaches the session pooler (`select 1`) | Passed on 2026-11-17 |
+| The TLS handshake of Python with the root authority of `backend/certs/` passes for the session pooler: Python checks certificates more strictly than `psql` | Passed on 2026-11-17 |
+| `backend migrate` with `DATABASE_TLS=verify-full` reaches the session pooler | Not run yet |
 | The pool of `backend`, 5 connections plus 10 overflow, fits the pool size of `supportiq_app`, 15 by default | Not run yet |
 | The PostgreSQL major version is 17, the version that CI tests | Not run yet |
 | The keep-alive keeps the project out of the pause after 1 week without activity | Not run yet |
@@ -97,7 +101,6 @@ Call the deploy hook with `ref` set to the previous commit. Every migration keep
 
 ## Open questions
 
-- Whether the connections to Supabase also check its server certificate. Without a root certificate in `PGSSLROOTCERT` or `~/.postgresql/root.crt`, asyncpg encrypts a connection with `ssl=require` but does not check the certificate. A check needs the root certificate of Supabase on Render, on the runner, and on each developer machine ([TLS to PostgreSQL](#tls-to-postgresql)).
 - `backend` has no setting for the OTLP authorization header yet ([ADR-0016, Follow-ups](../docs/decisions/0016-hosting-on-free-tiers.md#follow-ups)). Until it has, traces stay off on Render.
 - Which variable of Render fills `BACKEND_BUILD_VERSION` with the deployed commit.
 - The Pages Function, `_routes.json`, and the setting of the `backend` URL are on the branch `build/console-ui`: link after the merge of build/console-ui.

@@ -1,5 +1,7 @@
 """Tests of the settings: names, initial values, and validation (ARCH-33 to ARCH-37, PY-44)."""
 
+from pathlib import Path
+
 import pytest
 from pydantic import SecretStr, ValidationError
 
@@ -9,7 +11,12 @@ from supportiq_backend.composition_root.settings_loading import (
     load_settings,
 )
 from supportiq_backend.platform import EventName
-from supportiq_backend.platform.settings import HandlingModeSetting, Settings, TraceExporter
+from supportiq_backend.platform.settings import (
+    DatabaseTls,
+    HandlingModeSetting,
+    Settings,
+    TraceExporter,
+)
 from tests.unit.platform.fakes import RecordingEventRecorder
 from tests.unit.platform.settings_builders import (
     TEST_AI_SERVICE_TOKEN,
@@ -35,6 +42,24 @@ DRAFT_TIMEOUT_MS = 11_000
 build_settings = build_test_settings
 
 
+ENVIRONMENT = {
+    "DATABASE_URL_APP": APP_URL,
+    "AI_SERVICE_BASE_URL": TEST_AI_SERVICE_URL,
+    "AI_SERVICE_TOKEN": TEST_AI_SERVICE_TOKEN,
+    "BACKEND_BUILD_VERSION": TEST_BUILD_VERSION,
+    "ALLOWED_ORIGINS": f'["{TEST_ORIGIN}"]',
+}
+
+
+def use_only_this_environment(monkeypatch: pytest.MonkeyPatch, values: dict[str, str]) -> None:
+    # The settings read every variable of their names, so a value of the shell, such as a
+    # DATABASE_URL_OWNER of another database, must not reach the test (TEST-14).
+    for name in Settings.model_fields:
+        monkeypatch.delenv(name.upper(), raising=False)
+    for name, value in values.items():
+        monkeypatch.setenv(name, value)
+
+
 def names_of_invalid_settings(**values: object) -> tuple[str, ...]:
     with pytest.raises(ValidationError) as caught:
         SettingsWithoutEnvironment.model_validate(values)
@@ -45,6 +70,8 @@ def names_of_invalid_settings(**values: object) -> tuple[str, ...]:
     ("setting_name", "initial_value"),
     [
         ("database_url_owner", None),
+        ("database_tls", DatabaseTls.VERIFY_FULL),
+        ("database_ca_file", Path("certs/supabase-root-ca.crt")),
         ("database_connect_timeout_ms", 3_000),
         ("database_statement_timeout_ms", 5_000),
         ("database_lock_timeout_ms", 3_000),
@@ -138,10 +165,14 @@ def test_the_service_token_stays_out_of_the_repr_of_the_settings() -> None:
         ("database_url_app", "postgresql+asyncpg://u:p@127.0.0.1:notaport/supportiq"),
         ("database_url_owner", "postgresql+asyncpg://u:p@127.0.0.1:notaport/supportiq"),
         ("database_url_app", f"{APP_URL}?sslmode=require"),
-        ("database_url_owner", f"{APP_URL}?sslmode=require"),
+        ("database_url_owner", f"{APP_URL}?sslmode=verify-full"),
+        ("database_url_app", f"{APP_URL}?ssl=require"),
+        ("database_url_owner", f"{APP_URL}?ssl=require"),
         ("database_url_app", f"{APP_URL}?ssl=verify-full"),
-        ("database_url_owner", f"{APP_URL}?ssl=require&application_name=x"),
-        ("database_url_app", f"{APP_URL}?ssl=require&ssl=require"),
+        ("database_url_owner", f"{APP_URL}?ssl=verify-full"),
+        ("database_url_owner", f"{APP_URL}?application_name=x"),
+        ("database_tls", "require"),
+        ("database_tls", "verify_full"),
         ("allowed_origins", ()),
         ("allowed_origins", ("http://localhost:5173/",)),
         ("allowed_origins", ("HTTP://LOCALHOST:5173",)),
@@ -168,20 +199,19 @@ def test_settings_name_the_one_invalid_setting(setting_name: str, invalid_value:
     assert names == (setting_name,)
 
 
-def test_settings_accept_a_database_url_that_requires_tls() -> None:
-    settings = build_settings(database_url_app=f"{APP_URL}?ssl=require")
+@pytest.mark.parametrize("value", ["disable", "verify-full"])
+def test_settings_accept_both_tls_modes(value: str) -> None:
+    settings = build_settings(database_tls=value)
 
-    assert settings.database_url_app.get_secret_value().endswith("?ssl=require")
+    assert settings.database_tls == value
 
 
 def test_loading_names_a_refused_database_url_query_and_never_shows_the_url(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("DATABASE_URL_APP", f"{APP_URL}?sslmode=require")
-    monkeypatch.setenv("AI_SERVICE_BASE_URL", TEST_AI_SERVICE_URL)
-    monkeypatch.setenv("AI_SERVICE_TOKEN", TEST_AI_SERVICE_TOKEN)
-    monkeypatch.setenv("BACKEND_BUILD_VERSION", TEST_BUILD_VERSION)
-    monkeypatch.setenv("ALLOWED_ORIGINS", f'["{TEST_ORIGIN}"]')
+    use_only_this_environment(
+        monkeypatch, ENVIRONMENT | {"DATABASE_URL_APP": f"{APP_URL}?sslmode=require"}
+    )
     events = RecordingEventRecorder()
 
     with pytest.raises(SettingsInvalidError) as caught:
@@ -254,11 +284,10 @@ def test_settings_never_show_a_secret_in_their_repr() -> None:
 def test_settings_decode_the_origins_of_the_environment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("DATABASE_URL_APP", TEST_APP_URL)
-    monkeypatch.setenv("AI_SERVICE_BASE_URL", TEST_AI_SERVICE_URL)
-    monkeypatch.setenv("AI_SERVICE_TOKEN", TEST_AI_SERVICE_TOKEN)
-    monkeypatch.setenv("BACKEND_BUILD_VERSION", TEST_BUILD_VERSION)
-    monkeypatch.setenv("ALLOWED_ORIGINS", '["http://localhost:5173", "https://shop.example"]')
+    use_only_this_environment(
+        monkeypatch,
+        ENVIRONMENT | {"ALLOWED_ORIGINS": '["http://localhost:5173", "https://shop.example"]'},
+    )
 
     settings = Settings.model_validate({})
 
@@ -269,11 +298,7 @@ def test_settings_decode_the_origins_of_the_environment(
 def test_malformed_origins_of_the_environment_name_their_setting(
     monkeypatch: pytest.MonkeyPatch, value: str
 ) -> None:
-    monkeypatch.setenv("DATABASE_URL_APP", TEST_APP_URL)
-    monkeypatch.setenv("AI_SERVICE_BASE_URL", TEST_AI_SERVICE_URL)
-    monkeypatch.setenv("AI_SERVICE_TOKEN", TEST_AI_SERVICE_TOKEN)
-    monkeypatch.setenv("BACKEND_BUILD_VERSION", TEST_BUILD_VERSION)
-    monkeypatch.setenv("ALLOWED_ORIGINS", value)
+    use_only_this_environment(monkeypatch, ENVIRONMENT | {"ALLOWED_ORIGINS": value})
 
     with pytest.raises(ValidationError) as caught:
         Settings.model_validate({})

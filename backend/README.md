@@ -49,7 +49,7 @@ These steps work from a fresh clone.
    uv sync --locked
    ```
 
-5. Create your settings. `.env` is ignored by git, and its values never leave your machine. Replace every placeholder, and use the same owner password as in step 3. A `.env` made before the ticket workflow needs the three new required settings `AI_SERVICE_BASE_URL`, `AI_SERVICE_TOKEN`, and `BACKEND_BUILD_VERSION` of `.env.example`; without them `backend` does not start. Every deployment sets `BACKEND_BUILD_VERSION` too, to the commit SHA of the build, as CI does; a replica without it does not start.
+5. Create your settings. `.env` is ignored by git, and its values never leave your machine. Replace every placeholder, and use the same owner password as in step 3. A `.env` made before the ticket workflow needs the three new required settings `AI_SERVICE_BASE_URL`, `AI_SERVICE_TOKEN`, and `BACKEND_BUILD_VERSION` of `.env.example`; without them `backend` does not start. Every deployment sets `BACKEND_BUILD_VERSION` too, to the commit SHA of the build, as CI does; a replica without it does not start. A `.env` made before verified TLS also needs `DATABASE_TLS=disable` of `.env.example`, and no query in its two URLs: without it, `backend` asks the local cluster for verified TLS and cannot connect ([TLS to the database](#tls-to-the-database)).
 
    ```bash
    cp .env.example .env
@@ -163,6 +163,27 @@ uv run datamodel-codegen --profile ai-service
 - To add a migration, add one file to [`migrations/versions/`](src/supportiq_backend/migrations/versions/) that follows `r0001_foundation_schema.py`: one schema change, raw SQL, the privileges of every new table, and a working downgrade (PY-40). `tests/integration/schema/test_migration.py` runs upgrade and downgrade.
 - Every table of the backend is listed in [`migrations/tables.py`](src/supportiq_backend/migrations/tables.py), which `reset` empties.
 - Migration `r0003` adds the tables of the ticket workflow ([design, Tables](../docs/design/backend-ticket-workflow.md#tables)). Triggers keep a final suggestion part and a stored request unchanged, and let `tickets.status` change only along the state machine. `supportiq_app` may only select and insert pseudonym maps, replies, proposals, escalations, and staff decisions.
+
+### TLS to the database
+
+`DATABASE_TLS` sets the TLS of every database connection ([SEC-28](../docs/rules/security-and-privacy.md#transport-and-runtime), [deploy guide, TLS to PostgreSQL](../deploy/README.md#tls-to-postgresql)):
+
+- `verify-full`, the default: the database adapter connects over TLS, requires a server certificate signed by the one authority of `DATABASE_CA_FILE`, and checks that the certificate names the host of the URL. A failed check is a `DatabaseUnavailableError`. Python checks certificates strictly, so the authority needs the extensions of a CA (basic constraints, key usage, and key identifiers).
+- `disable`: the adapter passes `ssl=False` to asyncpg, so no connection uses TLS, whatever `PGSSLMODE` the shell holds. Only a database on the same host uses it: the local cluster (`.env.example`), the service of the CI job `backend-tests`, and the integration tests, which set it in `build_settings` and `build_environment`, so `uv run pytest` needs only the two URLs.
+
+A database URL holds no query. Any query, such as `?ssl=require`, stops `backend` with `settings.invalid` that names the setting of the URL, never its value. The composition root creates the engine at startup, in `serve` and in each one-off command, so with `verify-full`, a `DATABASE_CA_FILE` that holds no certificate stops `backend` there with `settings.invalid` that names `database_ca_file`. With `disable`, the file is never read.
+
+The default of `DATABASE_CA_FILE` is [`certs/supabase-root-ca.crt`](certs/supabase-root-ca.crt), relative to the working directory, like the seed file `seed/synthetic-dev-only-v1.json`: `backend/` in a clone, and the working directory of the image, which copies `certs/`. It is a public certificate, not a secret:
+
+| Field | Value |
+|---|---|
+| Subject and issuer | `C=US, ST=Delware, L=New Castle, O=Supabase Inc, CN=Supabase Root 2021 CA`, a self-signed root |
+| Valid until | 2031-04-26 10:56:53 UTC |
+| SHA-256 fingerprint | `80:70:25:AD:50:D4:ED:21:9D:2C:9C:7D:29:9C:00:4F:82:4E:B0:0C:F7:F6:5A:FE:F6:07:D0:7B:72:E6:CA:FA` |
+| SHA-256 of the file | `700723581420dd1ac98fd7e9ac529f0ef210eadcaf87fc868a3ad7d114c2f3b7` |
+| Source | The Supabase dashboard, Database Settings, SSL Configuration, Download certificate, on 2026-11-17 |
+
+`tests/unit/platform/test_database_tls.py` fails when the file no longer has this SHA-256, so the trusted authority changes only together with this table.
 
 ## Suggestion jobs
 

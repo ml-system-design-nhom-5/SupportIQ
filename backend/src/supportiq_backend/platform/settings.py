@@ -10,6 +10,7 @@ import json
 import re
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 from typing import Annotated, LiteralString, Self
 
 from pydantic import Field, HttpUrl, PositiveInt, SecretStr, field_validator, model_validator
@@ -19,10 +20,9 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
 DATABASE_URL_SCHEME = "postgresql+asyncpg://"
-# The only query a database URL may hold. SQLAlchemy passes every query parameter to
-# `asyncpg.connect`, which stops with a TypeError on any other name, such as `sslmode`
-# (deploy guide, TLS to PostgreSQL).
-_ALLOWED_DATABASE_URL_QUERIES: tuple[dict[str, str], ...] = ({}, {"ssl": "require"})
+# Relative to the working directory, as the seed file: `backend/` in a clone, the working
+# directory of the image. The root certificate authority of Supabase (backend README, TLS).
+DEFAULT_DATABASE_CA_FILE = Path("certs/supabase-root-ca.crt")
 # An origin as browsers send it: a lowercase scheme and host, an optional port, and no path
 # (RFC 6454). Comparison with the `Origin` header is exact.
 _ORIGIN_PATTERN = re.compile(r"^https?://([a-z0-9.-]+|\[[0-9a-f:]+\])(:[0-9]{1,5})?$")
@@ -44,6 +44,18 @@ class HandlingModeSetting(StrEnum):
     MANUAL = "manual"
 
 
+class DatabaseTls(StrEnum):
+    """How every connection to PostgreSQL is secured (SEC-28).
+
+    `verify-full` connects over TLS, requires a server certificate signed by the authority of
+    `database_ca_file`, and checks that it names the host of the URL. `disable` connects
+    without TLS, only to a database on the same host, such as the local one and the one of CI.
+    """
+
+    DISABLE = "disable"
+    VERIFY_FULL = "verify-full"
+
+
 class TraceExporter(StrEnum):
     """Where finished trace spans go (ADR-0007).
 
@@ -62,6 +74,8 @@ class Settings(BaseSettings):
 
     database_url_app: SecretStr
     database_url_owner: SecretStr | None = None
+    database_tls: DatabaseTls = DatabaseTls.VERIFY_FULL
+    database_ca_file: Path = DEFAULT_DATABASE_CA_FILE
     database_connect_timeout_ms: PositiveInt = 3_000
     database_statement_timeout_ms: PositiveInt = 5_000
     database_lock_timeout_ms: PositiveInt = 3_000
@@ -108,7 +122,10 @@ class Settings(BaseSettings):
         url = value.get_secret_value()
         if not _is_asyncpg_url(url):
             raise _ASYNCPG_URL_RULE.error()
-        if dict(make_url(url).query) not in _ALLOWED_DATABASE_URL_QUERIES:
+        # TLS comes only from `database_tls`. SQLAlchemy would pass a query to `asyncpg.connect`:
+        # `sslmode` stops it with a TypeError, and the TLS of the engine replaces `ssl` without
+        # a word, so a URL that seems to ask for TLS could get another mode.
+        if make_url(url).query:
             raise _DATABASE_URL_QUERY_RULE.error()
         return value
 
@@ -159,7 +176,7 @@ _ASYNCPG_URL_RULE = _SettingRule(
     "database_url_format", "The value must be a well-formed URL that uses postgresql+asyncpg"
 )
 _DATABASE_URL_QUERY_RULE = _SettingRule(
-    "database_url_query", "The query of the URL may hold only ssl=require"
+    "database_url_query", "The URL may hold no query; database_tls sets TLS"
 )
 _ORIGIN_LIST_RULE = _SettingRule("origin_list_format", "The value must be a JSON list of origins")
 _ORIGIN_RULE = _SettingRule(

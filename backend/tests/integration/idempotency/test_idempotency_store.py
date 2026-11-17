@@ -248,6 +248,7 @@ async def test_wait_longer_than_the_lock_timeout_becomes_database_unavailable(
             lock_ms=SHORT_LOCK_MS,
             pool_ms=DESIGN_TIMEOUTS.pool_ms,
         ),
+        ca_file=None,
     )
     request = build_request(account_id)
 

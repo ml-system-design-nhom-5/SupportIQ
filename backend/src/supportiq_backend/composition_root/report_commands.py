@@ -12,7 +12,7 @@ from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from supportiq_backend.composition_root.runtime import database_timeouts
+from supportiq_backend.composition_root.runtime import database_ca_file, database_timeouts
 from supportiq_backend.platform import EventRecorder, InvalidParameterError
 from supportiq_backend.platform.adapters.database import (
     SqlAlchemyTransactionRunner,
@@ -142,7 +142,9 @@ async def export_decisions(
     """
     destination = JsonLinesDecisionFile(resolve_export_path(arguments.output, working_directory))
     engine = create_database_engine(
-        settings.database_url_app.get_secret_value(), database_timeouts(settings)
+        settings.database_url_app.get_secret_value(),
+        database_timeouts(settings),
+        ca_file=database_ca_file(settings),
     )
     try:
         transactions = SqlAlchemyTransactionRunner(

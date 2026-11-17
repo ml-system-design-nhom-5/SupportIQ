@@ -47,7 +47,7 @@ def build_engine(url: str, **timeouts_ms: int) -> AsyncEngine:
         "lock_ms": DESIGN_TIMEOUTS.lock_ms,
         "pool_ms": DESIGN_TIMEOUTS.pool_ms,
     }
-    return create_database_engine(url, DatabaseTimeouts(**(defaults | timeouts_ms)))
+    return create_database_engine(url, DatabaseTimeouts(**(defaults | timeouts_ms)), ca_file=None)
 
 
 def session_runner(engine: AsyncEngine) -> SqlAlchemyTransactionRunner[AsyncSession]:

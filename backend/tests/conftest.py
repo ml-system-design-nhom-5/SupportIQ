@@ -87,7 +87,7 @@ async def app_engine(worker_database: WorkerDatabase) -> AsyncIterator[AsyncEngi
     Yields:
         The engine, disposed after the test.
     """
-    engine = create_database_engine(worker_database.app_url, DESIGN_TIMEOUTS)
+    engine = create_database_engine(worker_database.app_url, DESIGN_TIMEOUTS, ca_file=None)
     yield engine
     await engine.dispose()
 

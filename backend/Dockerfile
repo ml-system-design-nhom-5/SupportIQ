@@ -26,9 +26,13 @@ COPY --from=build /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
-# The seed and reset commands read the seed file from the working directory.
+# The seed and reset commands read the seed file from the working directory, and the TLS of
+# `database_tls=verify-full`, the default, trusts the certificate authority of
+# `database_ca_file`, by default the public root certificate in certs/ (SEC-28). Neither holds
+# a secret.
 WORKDIR /srv/backend
 COPY seed ./seed
+COPY certs ./certs
 USER backend
 EXPOSE 8000
 # Migrate, seed, and reset run as one-off commands of this image, never at startup (ADR-0011).

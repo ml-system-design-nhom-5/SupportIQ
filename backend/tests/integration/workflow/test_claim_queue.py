@@ -130,7 +130,7 @@ async def other_replica_engine(worker_database: WorkerDatabase) -> AsyncIterator
     Yields:
         The engine, disposed after the test.
     """
-    engine = create_database_engine(worker_database.app_url, DESIGN_TIMEOUTS)
+    engine = create_database_engine(worker_database.app_url, DESIGN_TIMEOUTS, ca_file=None)
     yield engine
     await engine.dispose()
 

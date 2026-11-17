@@ -3,12 +3,17 @@
 Every database call is bounded by the timeout settings (ERR-09): the connect timeout and the
 statement timeout on the client side, `statement_timeout` and `lock_timeout` on the server
 side, and the pool timeout. Every error of the driver or of SQLAlchemy becomes a domain error
-here, so no third-party exception reaches the application layer (ARCH-28).
+here, so no third-party exception reaches the application layer (ARCH-28). With a certificate
+authority, every connection uses TLS and checks the server certificate and its host name
+against that one authority; without one, no connection uses TLS (SEC-28).
 """
 
+import ssl
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from pathlib import Path
+from typing import ClassVar
 
 import asyncpg
 from sqlalchemy import event, text
@@ -27,6 +32,7 @@ from supportiq_backend.platform.domain import (
     BackendError,
     DatabaseOperationError,
     DatabaseUnavailableError,
+    ErrorCode,
     Transaction,
 )
 
@@ -44,6 +50,16 @@ _SQLSTATE_CLASS_LENGTH = 2
 # attempt, such as too many connections, a restart, or an unknown database. Whatever the
 # reason, a replica without a connection is not ready (ERR-18).
 _CONNECTION_FAILURES = (PoolTimeoutError, OSError, TimeoutError, asyncpg.PostgresError)
+
+
+class DatabaseCaFileError(BackendError):
+    """`database_ca_file` holds no certificate authority that TLS can load."""
+
+    code: ClassVar[ErrorCode] = ErrorCode.INTERNAL_ERROR
+
+    def __init__(self) -> None:
+        """Build the error; it names the setting, never a URL."""
+        super().__init__("database_ca_file must name a readable PEM certificate authority")
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,31 +80,65 @@ class DatabaseTimeouts:
     pool_ms: int
 
 
-def create_database_engine(url: str, timeouts: DatabaseTimeouts) -> AsyncEngine:
+def create_database_engine(
+    url: str, timeouts: DatabaseTimeouts, *, ca_file: Path | None
+) -> AsyncEngine:
     """Create an asyncpg engine whose every call is bounded and whose errors are mapped.
 
     Args:
-        url: A `postgresql+asyncpg://` URL. It holds a password, so it is never logged.
+        url: A `postgresql+asyncpg://` URL without a query. It holds a password, so it is
+            never logged.
         timeouts: The bounds of every call.
+        ca_file: The one certificate authority that TLS trusts, or None to connect without
+            TLS.
 
     Returns:
         The engine. The composition root disposes it at shutdown (ARCH-24).
+
+    Raises:
+        DatabaseCaFileError: `ca_file` holds no certificate authority that TLS can load. The
+            composition root creates the engine at startup, so this stops `backend` there.
     """
+    connect_args: dict[str, object] = {
+        "timeout": timeouts.connect_ms / MILLISECONDS_PER_SECOND,
+        "command_timeout": timeouts.statement_ms / MILLISECONDS_PER_SECOND,
+        "server_settings": {
+            "statement_timeout": str(timeouts.statement_ms),
+            "lock_timeout": str(timeouts.lock_ms),
+            "application_name": APPLICATION_NAME,
+        },
+        # False, not absent: without it, asyncpg would follow PGSSLMODE or try TLS unchecked.
+        "ssl": False if ca_file is None else verified_tls_context(ca_file),
+    }
     engine = create_async_engine(
         url,
         pool_timeout=timeouts.pool_ms / MILLISECONDS_PER_SECOND,
-        connect_args={
-            "timeout": timeouts.connect_ms / MILLISECONDS_PER_SECOND,
-            "command_timeout": timeouts.statement_ms / MILLISECONDS_PER_SECOND,
-            "server_settings": {
-                "statement_timeout": str(timeouts.statement_ms),
-                "lock_timeout": str(timeouts.lock_ms),
-                "application_name": APPLICATION_NAME,
-            },
-        },
+        connect_args=connect_args,
     )
     event.listen(engine.sync_engine, "handle_error", _to_domain_error, retval=True)
     return engine
+
+
+def verified_tls_context(ca_file: Path) -> ssl.SSLContext:
+    """Create the TLS context that checks the server certificate against one authority.
+
+    Args:
+        ca_file: The certificate authority to trust, in PEM.
+
+    Returns:
+        A context that requires a server certificate signed by `ca_file` for the host of the
+        URL, and trusts no other authority.
+
+    Raises:
+        DatabaseCaFileError: `ca_file` is missing or holds no certificate authority that TLS
+            can load.
+    """
+    try:
+        # With a CA file, the default context loads no other authority, checks the host name,
+        # and requires a certificate.
+        return ssl.create_default_context(cafile=ca_file)
+    except OSError as error:
+        raise DatabaseCaFileError from error
 
 
 def create_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:

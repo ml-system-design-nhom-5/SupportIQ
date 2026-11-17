@@ -47,6 +47,8 @@ def build_environment(worker_database: WorkerDatabase) -> dict[str, str]:
     return {
         "DATABASE_URL_OWNER": worker_database.owner_url,
         "DATABASE_URL_APP": worker_database.app_url,
+        # The test cluster runs on the same host without TLS (README, TLS to the database).
+        "DATABASE_TLS": "disable",
         "ALLOWED_ORIGINS": '["http://shop.test"]',
         "SEED_PASSWORD_CUSTOMER": CUSTOMER_PASSWORD,
         "SEED_PASSWORD_STAFF": STAFF_PASSWORD,

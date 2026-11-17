@@ -86,6 +86,8 @@ jobs:
       # Passwords of a throwaway database that exists only in this job; never real secrets.
       DATABASE_URL_OWNER: postgresql+asyncpg://supportiq_owner:ci-owner@127.0.0.1:5432/supportiq
       DATABASE_URL_APP: postgresql+asyncpg://supportiq_app:ci-app@127.0.0.1:5432/supportiq
+      # The service runs PostgreSQL on this runner without TLS (backend README, TLS).
+      DATABASE_TLS: disable
       ALLOWED_ORIGINS: '["http://localhost:5173"]'
       SEED_PASSWORD_CUSTOMER: ci-customer
       SEED_PASSWORD_STAFF: ci-staff
@@ -157,6 +159,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
+      # TLS to Supabase that checks the server certificate against backend/certs (SEC-28;
+      # deploy guide, TLS to PostgreSQL). It is the default too; set here so that no default
+      # decides it.
+      DATABASE_TLS: verify-full
       # Settings that backend requires and `migrate` does not use: dummy values, never secrets.
       DATABASE_URL_APP: postgresql+asyncpg://supportiq_app:unused@db.invalid:5432/unused
       ALLOWED_ORIGINS: '["http://localhost:5173"]'

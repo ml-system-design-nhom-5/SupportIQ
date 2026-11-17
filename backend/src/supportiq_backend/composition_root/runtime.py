@@ -1,6 +1,7 @@
 """The long-lived resources of a `backend` replica and the routers wired on them (ARCH-21)."""
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import httpx
 from fastapi import APIRouter
@@ -24,7 +25,7 @@ from supportiq_backend.platform.adapters.telemetry import (
     create_otlp_span_exporter,
     create_tracer_provider,
 )
-from supportiq_backend.platform.settings import Settings, TraceExporter
+from supportiq_backend.platform.settings import DatabaseTls, Settings, TraceExporter
 from supportiq_backend.suggestions import ClaimLoop
 
 
@@ -66,6 +67,21 @@ def database_timeouts(settings: Settings) -> DatabaseTimeouts:
     )
 
 
+def database_ca_file(settings: Settings) -> Path | None:
+    """Return the certificate authority that every database connection checks (SEC-28).
+
+    Args:
+        settings: The validated settings.
+
+    Returns:
+        `database_ca_file` when `database_tls` is `verify-full`; None, so no TLS, when it is
+        `disable`.
+    """
+    if settings.database_tls is DatabaseTls.VERIFY_FULL:
+        return settings.database_ca_file
+    return None
+
+
 def build_tracer_provider(settings: Settings) -> TracerProvider:
     """Create the tracer provider with the exporter that the settings choose.
 
@@ -99,9 +115,15 @@ def build_runtime(
 
     Returns:
         The runtime. Nothing here opens a connection.
+
+    Raises:
+        DatabaseCaFileError: `database_tls` is `verify-full`, and `database_ca_file` holds no
+            certificate authority, so the replica stops at startup.
     """
     engine = create_database_engine(
-        settings.database_url_app.get_secret_value(), database_timeouts(settings)
+        settings.database_url_app.get_secret_value(),
+        database_timeouts(settings),
+        ca_file=database_ca_file(settings),
     )
     session_factory = create_session_factory(engine)
     tracer_provider = build_tracer_provider(settings)

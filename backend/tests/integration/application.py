@@ -9,7 +9,7 @@ from fastapi import FastAPI
 
 from supportiq_backend.composition_root import BackgroundWork, create_app
 from supportiq_backend.platform import EventRecorder
-from supportiq_backend.platform.settings import Settings
+from supportiq_backend.platform.settings import DatabaseTls, Settings
 from tests.integration.ai_service_doubles import FakeAiService, refuse_connection
 from tests.integration.database import WorkerDatabase
 from tests.unit.platform.fakes import FakeClock, RecordingEventRecorder
@@ -59,6 +59,8 @@ def build_settings(worker_database: WorkerDatabase, **overrides: object) -> Sett
     """
     values: dict[str, object] = {
         "database_url_app": worker_database.app_url,
+        # The test cluster runs on the same host without TLS (README, TLS to the database).
+        "database_tls": DatabaseTls.DISABLE,
         "allowed_origins": (ALLOWED_ORIGIN,),
         "session_cookie_secure": False,
         # The test client returns only once a stream ends, and the fake clock ends each wait

@@ -14,6 +14,8 @@ The ticket workflow that involves the AI (suggestion jobs, pseudonymization, the
 
 **Revision of 2026-11-07.** The implementation added the settings `trace_exporter`, `otlp_traces_endpoint`, and `otlp_export_timeout_ms`. The request hash now also covers the path parameters. `supportiq_owner` also runs the create-app-role command, with `CREATEROLE` and `CREATEDB`. The seed file answers the open question about its content: 9 accounts, 3 customers, 8 products, and 10 orders. On 2026-11-08, version 1.0.1 of `contracts/backend.openapi.yaml` recorded the same rule for the `Idempotency-Key`, and stated that a product appears at most once in an order; `order_lines` now enforces this with a unique constraint. The decisions that this revision replaces are under Alternatives considered.
 
+**Revision of 2026-11-17.** The implementation added the settings `database_tls` and `database_ca_file`, so that every connection to the hosted database checks the server certificate ([SEC-28](../rules/security-and-privacy.md#transport-and-runtime)). `database_tls` is `verify-full` by default, and `disable` serves only a database on the same host. A database URL now holds no query. This revision replaces no earlier decision.
+
 ## Goals and non-goals
 
 ### Goals
@@ -233,6 +235,8 @@ All settings live in one `pydantic-settings` class ([PY-43](../rules/python.md#s
 |---|---|---|
 | `database_url_app` (secret) | None; required | [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md) |
 | `database_url_owner` (secret) | None; required only by the create-app-role, migrate, seed, and reset commands | Database roles above |
+| `database_tls` | `verify-full`; `disable` only for a database on the same host, such as the local one and the one of CI | [SEC-28](../rules/security-and-privacy.md#transport-and-runtime), [deploy guide, TLS to PostgreSQL](../../deploy/README.md#tls-to-postgresql) |
+| `database_ca_file` | `certs/supabase-root-ca.crt`, relative to the working directory; read only when `database_tls` is `verify-full` | SEC-28, [backend README, TLS to the database](../../backend/README.md#tls-to-the-database) |
 | `database_connect_timeout_ms` | 3 000 | [ERR-09](../rules/errors-and-reliability.md#timeouts-and-latency-budget) |
 | `database_statement_timeout_ms` | 5 000 | ERR-09 |
 | `database_lock_timeout_ms` | 3 000 | ERR-09; bounds the idempotency wait and the advisory lock |
