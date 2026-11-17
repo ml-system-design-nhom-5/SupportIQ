@@ -514,31 +514,6 @@ class Warning(BaseModel):
     ]
 
 
-class PseudonymizedText(RootModel[str]):
-    root: Annotated[
-        str,
-        Field(
-            description="The customer's message after `backend` pseudonymized it (ADR-0010), from 1 to 4 000 characters, counted in Unicode code points. It may contain pseudonyms, and text that looked like a placeholder in the raw message arrives as a `LITERAL` pseudonym, so every placeholder in it is one that `backend` wrote. It is still Confidential: pseudonymization is not anonymization, and a value that every detector missed can remain. Data class: Confidential.",
-            max_length=4000,
-            min_length=1,
-        ),
-    ]
-
-
-class Source(StrEnum):
-    model = "model"
-
-
-class Source1(StrEnum):
-    staff = "staff"
-
-
-class RoutingRecommendation(StrEnum):
-    draft = "draft"
-    abstain = "abstain"
-    escalate = "escalate"
-
-
 class StepLatencies(BaseModel):
     total_ms: Annotated[
         int,
@@ -564,6 +539,96 @@ class StepLatencies(BaseModel):
             le=60000,
         ),
     ] = MISSING
+
+
+class KbDocumentVersion(BaseModel):
+    document_id: Annotated[
+        KbDocumentId, Field(description="The KB document. Data class: Internal.")
+    ]
+    version: Annotated[
+        KbDocumentVersionTag,
+        Field(description="The version of the document. Data class: Internal."),
+    ]
+    title: Annotated[
+        str,
+        Field(
+            description="The title of the version, from 1 to 200 characters. Data class: Public.",
+            max_length=200,
+            min_length=1,
+        ),
+    ]
+    body: Annotated[
+        str,
+        Field(
+            description="The full text of the version, from 1 to 20 000 characters, exactly as the KB holds it. Every snippet of the version is a passage of it. Data class: Public.",
+            max_length=20000,
+            min_length=1,
+        ),
+    ]
+    policy_key: Annotated[
+        str,
+        Field(
+            description="The topic of the policy that the version states, used to detect conflicts (DATA-16, DATA-19). From 1 to 100 characters. Data class: Public.",
+            max_length=100,
+            min_length=1,
+        ),
+    ]
+    effective_start_at: Annotated[
+        str, Field(description="When the version came into effect. Data class: Public.")
+    ]
+    effective_end_at: Annotated[
+        str | MISSING,
+        Field(
+            description="When the version stopped being in effect, later than `effective_start_at`. Absent when the version is open-ended (DATA-16). Data class: Public."
+        ),
+    ] = MISSING
+    owner: Annotated[
+        str,
+        Field(
+            description="Who owns the policy and reviews it, as the KB source names it: a role or a team, never a person's name. From 1 to 100 characters. Data class: Public.",
+            max_length=100,
+            min_length=1,
+        ),
+    ]
+    source: Annotated[
+        str,
+        Field(
+            description="Where the text of the version comes from, as the KB source names it, such as the approved source document. From 1 to 200 characters. Data class: Public.",
+            max_length=200,
+            min_length=1,
+        ),
+    ]
+    last_reviewed_at: Annotated[
+        str | MISSING,
+        Field(
+            description="When the owner last reviewed the version. Absent when the source does not provide it; it is never invented (DATA-13, DATA-16). Data class: Public."
+        ),
+    ] = MISSING
+
+
+class PseudonymizedText(RootModel[str]):
+    root: Annotated[
+        str,
+        Field(
+            description="The customer's message after `backend` pseudonymized it (ADR-0010), from 1 to 4 000 characters, counted in Unicode code points. It may contain pseudonyms, and text that looked like a placeholder in the raw message arrives as a `LITERAL` pseudonym, so every placeholder in it is one that `backend` wrote. It is still Confidential: pseudonymization is not anonymization, and a value that every detector missed can remain. Data class: Confidential.",
+            max_length=4000,
+            min_length=1,
+        ),
+    ]
+
+
+class Source(StrEnum):
+    model = "model"
+
+
+class Source1(StrEnum):
+    staff = "staff"
+
+
+class RoutingRecommendation(StrEnum):
+    draft = "draft"
+    abstain = "abstain"
+    escalate = "escalate"
 
 
 class Status(StrEnum):
@@ -741,71 +806,6 @@ class AiServiceReasonCode(StrEnum):
     budget_exceeded = "budget_exceeded"
     ai_service_unavailable = "ai_service_unavailable"
     pseudonymization_failed = "pseudonymization_failed"
-
-
-class KbDocumentVersion(BaseModel):
-    document_id: Annotated[
-        KbDocumentId, Field(description="The KB document. Data class: Internal.")
-    ]
-    version: Annotated[
-        KbDocumentVersionTag,
-        Field(description="The version of the document. Data class: Internal."),
-    ]
-    title: Annotated[
-        str,
-        Field(
-            description="The title of the version, from 1 to 200 characters. Data class: Public.",
-            max_length=200,
-            min_length=1,
-        ),
-    ]
-    body: Annotated[
-        str,
-        Field(
-            description="The full text of the version, from 1 to 20 000 characters, exactly as the KB holds it. Every snippet of the version is a passage of it. Data class: Public.",
-            max_length=20000,
-            min_length=1,
-        ),
-    ]
-    policy_key: Annotated[
-        str,
-        Field(
-            description="The topic of the policy that the version states, used to detect conflicts (DATA-16, DATA-19). From 1 to 100 characters. Data class: Public.",
-            max_length=100,
-            min_length=1,
-        ),
-    ]
-    effective_start_at: Annotated[
-        str, Field(description="When the version came into effect. Data class: Public.")
-    ]
-    effective_end_at: Annotated[
-        str | MISSING,
-        Field(
-            description="When the version stopped being in effect, later than `effective_start_at`. Absent when the version is open-ended (DATA-16). Data class: Public."
-        ),
-    ] = MISSING
-    owner: Annotated[
-        str,
-        Field(
-            description="Who owns the policy and reviews it, as the KB source names it: a role or a team, never a person's name. From 1 to 100 characters. Data class: Public.",
-            max_length=100,
-            min_length=1,
-        ),
-    ]
-    source: Annotated[
-        str,
-        Field(
-            description="Where the text of the version comes from, as the KB source names it, such as the approved source document. From 1 to 200 characters. Data class: Public.",
-            max_length=200,
-            min_length=1,
-        ),
-    ]
-    last_reviewed_at: Annotated[
-        str | MISSING,
-        Field(
-            description="When the owner last reviewed the version. Absent when the source does not provide it; it is never invented (DATA-13, DATA-16). Data class: Public."
-        ),
-    ] = MISSING
 
 
 class AnalysisIntent(RootModel[ModelIntent | StaffIntent]):
