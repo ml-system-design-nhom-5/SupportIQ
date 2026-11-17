@@ -108,11 +108,32 @@
   --container-shop: 60rem;
   --container-admin: 65rem;
 
+  /* Console widths (console UI design, Layout and mockups): the default widths of the inbox
+     column, 272 px, and of the AI sidebar, 340 px, for stories of a single component (the
+     resizable columns take theirs from column-sizes.ts, and the ColumnWidths story of
+     tokens.stories.tsx keeps them equal), the KB side sheet, the order popovers, and the citation hint. */
+  --container-inbox: 17rem;
+  --container-ai-sidebar: 21.25rem;
+  --container-sheet: 32.5rem;
+  --container-popover: 22.5rem;
+  --container-popover-wide: 40rem;
+  --container-hint: 20rem;
+
+  /* The least height of the reply panel, which fills the rest of the middle column (console UI
+     design, placement rule 2; mockup.css: `.col > .panel.fill { min-height: 280px }`). */
+  --height-reply-panel: 17.5rem;
+
   /* The neutral product image (UI-38): the same height at every width. */
   --aspect-*: initial;
   --height-product-card: 8.75rem;
   --height-product-detail: 17.5rem;
 }
+
+/* A part of a panel that draws the line above it (PanelSection): every part after the first,
+   except the one right after a PanelHeader, which draws that line itself. One line separates
+   two parts, as in the mockups (mockup.css: `.panel-head` has the bottom border, and only
+   `.panel-body + .panel-body` has a top border). */
+@custom-variant panel-divider (&:not(:first-child, [data-panel-header] + *));
 
 @layer base {
   html {

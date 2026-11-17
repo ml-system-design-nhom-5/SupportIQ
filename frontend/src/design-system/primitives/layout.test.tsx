@@ -66,10 +66,34 @@ describe("Panel", () => {
 
     expect(screen.getByRole("heading", { level: 3, name: "Lines" })).toBeVisible();
   });
+
+  it("shows the icon of the header, hidden from assistive technology", () => {
+    renderUi(
+      <Panel as="section" label="Lines">
+        <PanelHeader icon={LifeBuoy} level={2} title="Lines" />
+      </Panel>,
+    );
+
+    expect(screen.getByRole("region", { name: "Lines" }).querySelector("svg")).toHaveAttribute(
+      "aria-hidden",
+      "true",
+    );
+  });
+
+  it("shows no icon in a header without an icon", () => {
+    renderUi(
+      <Panel as="section" label="backend">
+        <PanelHeader level={2} title="backend" />
+      </Panel>,
+    );
+
+    expect(screen.getByRole("heading", { level: 2, name: "backend" })).toBeVisible();
+    expect(screen.getByRole("region", { name: "backend" }).querySelector("svg")).toBeNull();
+  });
 });
 
 describe("PageColumn", () => {
-  it.each(["shop", "admin"] as const)("is the main landmark of the %s area", (area) => {
+  it.each(["shop", "admin", "console"] as const)("is the main landmark of the %s area", (area) => {
     renderUi(
       <PageColumn area={area}>
         <Text>Content</Text>

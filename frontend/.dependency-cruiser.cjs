@@ -101,6 +101,22 @@ module.exports = {
       from: { path: "^src/", pathNot: "^src/[a-z0-9./-]+$" },
       to: {},
     },
+    {
+      name: "ingress-imports-nothing",
+      comment:
+        "ADR-0016: the Pages Function runs on the Workers runtime, so its code imports only the " +
+        "ingress module: no package, no Node module, and nothing of src/.",
+      severity: "error",
+      from: { path: "^(ingress|functions)/", pathNot: "\\.test\\.ts$" },
+      to: { pathNot: "^ingress/ingress\\.ts$" },
+    },
+    {
+      name: "app-does-not-import-ingress",
+      comment: "The page and the Pages Function are bundled apart, so src/ never imports them.",
+      severity: "error",
+      from: { path: "^src/" },
+      to: { path: "^(ingress|functions)/" },
+    },
   ],
   options: {
     doNotFollow: { path: ["node_modules", "^src/api/generated/"] },

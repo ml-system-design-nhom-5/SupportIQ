@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, within } from "storybook/test";
 
 import { StatusBanner } from "@/design-system/components/status-banner";
+import { authorityRequiredPresentation } from "@/design-system/components/status-presentations";
 import { Button } from "@/design-system/primitives/button";
 
 const meta = {
@@ -32,6 +33,14 @@ export const SuccessWithTheFocus: Story = {
 export const Info: Story = { args: { tone: "info", lead: "Read only.", children: "No change." } };
 export const Warning: Story = {
   args: { tone: "warning", lead: "Out of date.", children: "Reload the list." },
+};
+export const WarningWithThePresentationIcon: Story = {
+  args: {
+    tone: "warning",
+    icon: authorityRequiredPresentation.icon,
+    lead: "Authority required.",
+    children: "A manager decides and sends the reply.",
+  },
 };
 export const DangerWithTraceId: Story = {
   args: {

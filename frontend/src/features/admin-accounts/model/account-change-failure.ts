@@ -19,6 +19,11 @@ const kindByCategory: Readonly<Record<FailureCategory, AccountChangeFailureKind>
   permission_denied: "permission_denied",
   session_expired: "technical",
   conflict: "technical",
+  // The console refusals never answer an account change.
+  authority_required: "technical",
+  invalid_state: "technical",
+  suggestion_pending: "technical",
+  suggestion_superseded: "technical",
   unavailable: "technical",
   too_large: "technical",
   rate_limited: "technical",

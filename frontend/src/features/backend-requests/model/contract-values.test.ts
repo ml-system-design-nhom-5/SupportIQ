@@ -2,10 +2,20 @@ import { describe, expect, it } from "vitest";
 
 import {
   countContractCharacters,
+  MESSAGE_MAX_LENGTH,
   requireMembers,
   toMoney,
 } from "@/features/backend-requests/model/contract-values";
 import { readOperationExample } from "@/test/contract-examples";
+import { readContractSchema } from "@/test/contract-schemas";
+
+describe("MESSAGE_MAX_LENGTH", () => {
+  it("is the maxLength of MessageText in the contract", () => {
+    expect(readContractSchema("MessageText")).toContain(
+      `maxLength: ${String(MESSAGE_MAX_LENGTH)}\n`,
+    );
+  });
+});
 
 describe("requireMembers", () => {
   it("accepts members with a falsy value, which are present", () => {
@@ -22,6 +32,16 @@ describe("requireMembers", () => {
     expect(() => {
       requireMembers({ order_id: value }, ["order_id"]);
     }).toThrow("The response has no order_id.");
+  });
+
+  it("types the members as present after the call, so they read without a check", () => {
+    const body: { readonly kb_version?: string | null } = { kb_version: "kb-2026.11" };
+
+    requireMembers(body, ["kb_version"]);
+    // The type check fails here if requireMembers does not narrow the body.
+    const kbVersion: string = body.kb_version;
+
+    expect(kbVersion).toBe("kb-2026.11");
   });
 });
 

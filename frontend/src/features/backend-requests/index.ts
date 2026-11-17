@@ -15,6 +15,8 @@ export {
   useWriteAttemptSender,
 } from "@/features/backend-requests/api/idempotent-writes";
 export { requestData, requestNoContent } from "@/features/backend-requests/api/request-backend";
+export type { WakeBackend } from "@/features/backend-requests/api/wake-backend";
+export { createBackendWaker } from "@/features/backend-requests/api/wake-backend";
 export type { FailureBannerProps } from "@/features/backend-requests/components/failure-banner";
 export { FailureBanner } from "@/features/backend-requests/components/failure-banner";
 export type { FailureStateProps } from "@/features/backend-requests/components/failure-state";
@@ -24,6 +26,7 @@ export { collectPageItems } from "@/features/backend-requests/model/collect-page
 export type { MoneyContract } from "@/features/backend-requests/model/contract-values";
 export {
   countContractCharacters,
+  MESSAGE_MAX_LENGTH,
   requireMembers,
   toMoney,
 } from "@/features/backend-requests/model/contract-values";
@@ -35,6 +38,11 @@ export {
   categorizeFailure,
   describeFailure,
 } from "@/features/backend-requests/model/describe-failure";
+export {
+  toOrderStatus,
+  toRefundStatus,
+  toShipmentStatus,
+} from "@/features/backend-requests/model/order-statuses";
 export type {
   ProblemType,
   RequestFailure,
@@ -47,5 +55,6 @@ export {
 } from "@/features/backend-requests/model/request-failure";
 export {
   computeRetryDelayMs,
+  isRetryableFailure,
   shouldRetryRequest,
 } from "@/features/backend-requests/model/retry-policy";

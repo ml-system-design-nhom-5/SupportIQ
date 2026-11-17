@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-import { MESSAGE_MAX_LENGTH } from "@/features/shop-support/model/message-text";
 import {
   buildTicketAnchorId,
   readAnchorIdOfHash,
@@ -82,11 +81,5 @@ describe("toShopTicketPage", () => {
 describe("buildTicketAnchorId", () => {
   it("names the element of a ticket on its order page", () => {
     expect(buildTicketAnchorId("TCK-1042")).toBe("ticket-TCK-1042");
-  });
-});
-
-describe("MESSAGE_MAX_LENGTH (MessageText)", () => {
-  it("uses the maxLength of the contract", () => {
-    expect(MESSAGE_MAX_LENGTH).toBe(2000);
   });
 });

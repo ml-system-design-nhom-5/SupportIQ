@@ -4,6 +4,15 @@
  */
 import type { Money } from "@/design-system";
 
+/**
+ * The `maxLength` of `MessageText` (contracts/schemas/MessageText.yaml). The rule of `MessageText`
+ * in the contract: from 1 to 2 000 characters, counted in Unicode code points as JSON Schema counts
+ * string length ({@link countContractCharacters}). frontend checks it before sending as a
+ * convenience; `backend` enforces it with `422` (shop UI design, Components and responsibilities;
+ * console UI design, Actions).
+ */
+export const MESSAGE_MAX_LENGTH = 2000;
+
 /** The shape of the contract's shared `Money` schema (CON-16). */
 export type MoneyContract = {
   readonly amount_minor: number;
@@ -12,16 +21,18 @@ export type MoneyContract = {
 
 /**
  * Stop at a `backend` body that lacks a member the contract requires, so that a body of the wrong
- * shape never reads as a success (CODE-32). `requestData` turns the error into a failure.
+ * shape never reads as a success (CODE-32). `requestData` turns the error into a failure. After
+ * the call, the type of the body has the members as present, so the mapping reads them without
+ * another check, such as a member that the contract sends only in one state.
  *
  * @param body - A body of the contract.
  * @param members - The required members that the mapping reads.
  * @throws TypeError naming the first missing member.
  */
-export function requireMembers<Body extends object>(
+export function requireMembers<Body extends object, Member extends keyof Body>(
   body: Body,
-  members: readonly (keyof Body)[],
-): void {
+  members: readonly Member[],
+): asserts body is Body & { readonly [Key in Member]-?: NonNullable<Body[Key]> } {
   for (const member of members) {
     if (body[member] === undefined || body[member] === null) {
       throw new TypeError(`The response has no ${String(member)}.`);

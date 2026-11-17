@@ -1,40 +1,43 @@
 /**
- * The console app shell of the console UI design, with the account menu and no ticket features yet:
- * the console operations are not in the contract (contracts v1 design, Rollout). No operation answers
- * `403` yet, so the shell opens for every signed-in role.
+ * The console app shell (console UI design, Layout): the app bar with "SupportIQ Console", the
+ * navigation, and the account menu, above the screen of the console at the height of the window.
+ * A session of a role without the console sees only the brand, as in the admin area: `backend`
+ * answers every console operation with `403`, and the screen shows the permission-denied state
+ * with Sign out (UI-40).
  */
-import { Inbox } from "lucide-react";
+import { Outlet } from "react-router";
 
 import { PRODUCT_NAME } from "@/app/area-names";
-import { AppBar, PageColumn, StateMessage } from "@/design-system";
-import { RequireSession, SessionAccountMenu } from "@/features/session";
+import { ConsoleNavigation } from "@/app/layouts/console-navigation";
+import { AppBar, ConsoleShell } from "@/design-system";
+import { getRoleArea, RequireSession, SessionAccountMenu } from "@/features/session";
 
 /**
- * Render the console shell.
+ * Render the console shell around the current console screen.
  *
- * @returns The shell with a note that the ticket features come later.
+ * @returns The shell, or the session's loading, error, or sign-in redirect.
  */
 export function ConsoleLayout() {
   return (
     <RequireSession>
       {(session) => (
-        <>
-          <title>Console · SupportIQ</title>
-          <AppBar
-            variant="console"
-            brandName={PRODUCT_NAME}
-            areaName="Console"
-            account={<SessionAccountMenu session={session} variant="console" />}
-          />
-          <PageColumn area="admin">
-            <StateMessage
-              icon={Inbox}
-              headingLevel={1}
-              title="The ticket inbox is not available yet"
-              description="The console screens come in a later version of SupportIQ."
-            />
-          </PageColumn>
-        </>
+        <ConsoleShell
+          appBar={
+            getRoleArea(session.role) === "console" ? (
+              <AppBar
+                variant="console"
+                brandName={PRODUCT_NAME}
+                areaName="Console"
+                navigation={<ConsoleNavigation role={session.role} />}
+                account={<SessionAccountMenu session={session} variant="console" />}
+              />
+            ) : (
+              <AppBar variant="console" brandName={PRODUCT_NAME} areaName="Console" />
+            )
+          }
+        >
+          <Outlet />
+        </ConsoleShell>
       )}
     </RequireSession>
   );

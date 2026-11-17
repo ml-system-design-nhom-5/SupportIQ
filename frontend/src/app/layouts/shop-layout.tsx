@@ -1,7 +1,8 @@
 /**
  * The shop app shell (shop UI design, Layout): the top bar with "Demo Shop", the navigation, and
- * the account menu, above one content column. At phone width the menu shows only its icon. A session of another role sees
- * only the brand: every shop operation answers it with `403`, which the screen shows.
+ * the account menu, above one content column. At phone width the menu shows only its icon. A
+ * session of another role sees only the brand: every shop operation answers it with `403`, which
+ * the screen shows.
  */
 import { LayoutGrid, LifeBuoy, Package, ShoppingBag } from "lucide-react";
 import { Outlet } from "react-router";
@@ -50,7 +51,7 @@ function renderCustomerBar(session: Session) {
       brandIcon={ShoppingBag}
       navigation={
         <>
-          <NavItem to={PRODUCTS_PATH} icon={LayoutGrid} isExactMatch>
+          <NavItem to={PRODUCTS_PATH} icon={LayoutGrid} current={{ by: "exact-path" }}>
             Products
           </NavItem>
           <NavItem to={ORDERS_PATH} icon={Package}>

@@ -1,7 +1,7 @@
 import { screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { getCurrentSessionRoute } from "@/test/backend-routes";
+import { getCurrentSessionRoute, listConsoleTicketsRoute } from "@/test/backend-routes";
 import { createFakeBackend, exampleAnswer } from "@/test/fake-backend";
 import { renderApp } from "@/test/render-app";
 
@@ -36,6 +36,7 @@ describe("RequireSession", () => {
       { kind: "network_error" },
       exampleAnswer(200, "getCurrentSession", "staff"),
     );
+    backend.answer(listConsoleTicketsRoute, exampleAnswer(200, "listConsoleTickets", "open-queue"));
     const { user } = renderApp({ path: "/console", backend });
 
     expect(

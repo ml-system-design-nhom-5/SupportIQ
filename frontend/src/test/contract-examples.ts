@@ -164,3 +164,22 @@ function readExampleItem(item: ExampleItem): object {
   }
   return original;
 }
+
+/**
+ * Copy a body of an example without some of its optional members, for the cases that no example
+ * covers yet, such as a ticket without a predicted intent.
+ *
+ * @param body - A body read with {@link readOperationExample}.
+ * @param members - The members to leave out.
+ * @returns The copy, typed without those members.
+ */
+export function withoutMembers<Body extends object, Member extends keyof Body>(
+  body: Body,
+  members: readonly Member[],
+): Omit<Body, Member> {
+  const copy = { ...body };
+  for (const member of members) {
+    Reflect.deleteProperty(copy, member);
+  }
+  return copy;
+}

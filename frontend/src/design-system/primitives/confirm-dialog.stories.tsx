@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { Send } from "lucide-react";
 import { fn } from "storybook/test";
 
+import { ReplyPreview } from "@/design-system/components/reply-preview";
 import { ConfirmDialog } from "@/design-system/primitives/confirm-dialog";
 
 const meta = {
@@ -37,6 +39,35 @@ export const Danger: Story = {
       pendingLabel: "Deactivating…",
     },
     tone: "danger",
+  },
+};
+export const CancelLabel: Story = {
+  args: {
+    text: {
+      title: "Send this reply to Linh Tran?",
+      description: "The customer sees it in the shop right away. A sent reply cannot be changed.",
+      confirmLabel: "Send reply",
+      pendingLabel: "Sending…",
+      cancelLabel: "Keep editing",
+    },
+  },
+};
+export const MutedDescriptionWithConfirmIcon: Story = {
+  args: {
+    text: {
+      title: "Send this reply to Linh Tran?",
+      description: (
+        <>
+          The customer sees it in the shop right away. A sent reply cannot be changed.
+          <ReplyPreview text="Thank you for your patience. Your refund request for order ORD-20931 was received on 14 October and is currently under review." />
+        </>
+      ),
+      descriptionTone: "muted",
+      confirmLabel: "Send reply",
+      confirmIcon: Send,
+      pendingLabel: "Sending…",
+      cancelLabel: "Keep editing",
+    },
   },
 };
 export const Pending: Story = { args: { isPending: true } };

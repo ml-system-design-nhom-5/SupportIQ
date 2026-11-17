@@ -1,7 +1,8 @@
 /**
  * The composition root of frontend (ARCH-21): it creates the `backend` client, the query client,
  * and the clock once, and provides them to the app. `main.tsx` passes the real browser
- * dependencies; tests pass a fake fetch, a fixed clock, and fixed random bytes.
+ * dependencies; tests pass a fake fetch, a fixed clock, fixed random bytes, and fake event
+ * sources.
  */
 import {
   focusManager,
@@ -18,13 +19,31 @@ import { type Clock, ClockContext } from "@/design-system";
 import { type RandomBytes, RandomBytesContext } from "@/features/admin-accounts";
 import {
   computeRetryDelayMs,
+  createBackendWaker,
   getRequestFailure,
   IdempotencyKeyFactoryContext,
   idempotentWriteMutationKey,
+  isRetryableFailure,
   isUnauthenticatedError,
   shouldRetryRequest,
+  type WakeBackend,
 } from "@/features/backend-requests";
-import { endSession } from "@/features/session";
+import {
+  EventSourceContext,
+  type OpenEventSource,
+  type SuggestionEventSource,
+} from "@/features/console-tickets";
+import {
+  createDevModePreferences,
+  createPreferenceStore,
+  DevModeContext,
+  type DevModeSetup,
+  endSession,
+  type FrontendDetails,
+  type PreferenceStorage,
+  type PreferenceStore,
+  PreferenceStoreContext,
+} from "@/features/session";
 
 /** Everything the app receives from its composition root. */
 export type AppDependencies = {
@@ -33,6 +52,11 @@ export type AppDependencies = {
   readonly clock: Clock;
   readonly createIdempotencyKey: () => string;
   readonly randomBytes: RandomBytes;
+  readonly devMode: DevModeSetup;
+  /** The display preferences of the screens, such as the widths of the console columns. */
+  readonly preferenceStore: PreferenceStore;
+  /** Opens a stream of `backend`, such as the suggestion progress stream (ADR-0022). */
+  readonly openEventSource: OpenEventSource;
 };
 
 /** What the composition root needs from its caller. */
@@ -48,6 +72,13 @@ export type AppDependencyOptions = {
   readonly createIdempotencyKey: () => string;
   /** The random source of suggested passwords: `crypto.getRandomValues` in the browser. */
   readonly randomBytes: RandomBytes;
+  /**
+   * Where display preferences such as dev mode are kept: `localStorage` in the browser, or
+   * undefined when the browser refuses storage (UI-35).
+   */
+  readonly preferenceStorage: PreferenceStorage | undefined;
+  /** Opens an `EventSource` at an absolute URL: `new EventSource(url)` in the browser. */
+  readonly openEventSource: (url: string) => SuggestionEventSource;
 };
 
 /** Props of {@link AppProviders}. */
@@ -59,22 +90,59 @@ export type AppProvidersProps = {
 /**
  * Create the dependencies of the app.
  *
- * @param options - The settings, the base URL, the fetch implementation, and the sources of
- *   randomness, time, and identifiers.
- * @returns The client, the query client, the clock, the key factory, and the random bytes.
+ * @param options - The settings, the base URL, the fetch implementation, the sources of
+ *   randomness, time, and identifiers, the preference storage, and the opener of streams.
+ * @returns The client, the query client, the clock, the key factory, the random bytes, dev mode,
+ *   the preference store, and the opener of streams at paths of `backend`.
  */
 export function createAppDependencies(options: AppDependencyOptions): AppDependencies {
   listenToWindowFocus();
+  const { isDevModeAvailable, grafanaTraceUrl } = options.settings;
+  const wakeBackend = createBackendWaker({
+    origin: options.settings.backendWakeOrigin,
+    timeoutMs: options.settings.backendWakeTimeoutMs,
+    fetch: options.fetch,
+  });
+  // Backend wake-up design, rule 4: one wake request when the app starts, and one after each
+  // retryable failure of a request (createAppQueryClient).
+  void wakeBackend();
   return {
     backendClient: createBackendClient({
       baseUrl: options.baseUrl,
       requestTimeoutMs: options.settings.requestTimeoutMs,
       fetch: options.fetch,
     }),
-    queryClient: createAppQueryClient(options),
+    queryClient: createAppQueryClient(options, wakeBackend),
     clock: options.clock,
     createIdempotencyKey: options.createIdempotencyKey,
     randomBytes: options.randomBytes,
+    devMode: {
+      isAvailable: isDevModeAvailable,
+      ...(grafanaTraceUrl === undefined ? {} : { grafanaTraceUrl }),
+      preferences: createDevModePreferences(options.preferenceStorage),
+      frontendDetails: buildFrontendDetails(options.settings),
+    },
+    preferenceStore: createPreferenceStore(options.preferenceStorage),
+    openEventSource: (path) => options.openEventSource(new URL(path, options.baseUrl).href),
+  };
+}
+
+/**
+ * Describe frontend for the developer details of the admin area (admin UI design).
+ *
+ * @param settings - The settings.
+ * @returns The build version, every `VITE_` setting, and the dashboards whose link is set.
+ */
+function buildFrontendDetails(settings: FrontendSettings): FrontendDetails {
+  const { frontendBuildVersion } = settings;
+  const dashboards = [
+    { title: "System overview", href: settings.grafanaSystemOverviewUrl },
+    { title: "AI pipeline", href: settings.grafanaAiPipelineUrl },
+  ].flatMap(({ title, href }) => (href === undefined ? [] : [{ title, href }]));
+  return {
+    ...(frontendBuildVersion === undefined ? {} : { buildVersion: frontendBuildVersion }),
+    settings: settings.viteSettings,
+    dashboards,
   };
 }
 
@@ -90,7 +158,15 @@ export function AppProviders({ dependencies, children }: AppProvidersProps) {
       <BackendClientContext value={dependencies.backendClient}>
         <ClockContext value={dependencies.clock}>
           <IdempotencyKeyFactoryContext value={dependencies.createIdempotencyKey}>
-            <RandomBytesContext value={dependencies.randomBytes}>{children}</RandomBytesContext>
+            <RandomBytesContext value={dependencies.randomBytes}>
+              <DevModeContext value={dependencies.devMode}>
+                <PreferenceStoreContext value={dependencies.preferenceStore}>
+                  <EventSourceContext value={dependencies.openEventSource}>
+                    {children}
+                  </EventSourceContext>
+                </PreferenceStoreContext>
+              </DevModeContext>
+            </RandomBytesContext>
           </IdempotencyKeyFactoryContext>
         </ClockContext>
       </BackendClientContext>
@@ -102,7 +178,8 @@ export function AppProviders({ dependencies, children }: AppProvidersProps) {
  * Create the query client with the request policy of frontend.
  *
  * A `401` from any request ends the session: the cached data of the account is removed, and the
- * screen opens sign-in with a return path (contracts v1 design, Common elements). Reads retry only
+ * screen opens sign-in with a return path (contracts v1 design, Common elements). A retryable
+ * failure of any request sends a wake request, because `backend` may have stopped. Reads retry only
  * retryable failures (ERR-12). Writes are never retried, except the mutations
  * whose key starts with {@link idempotentWriteMutationKey}, which send an `Idempotency-Key`
  * (TS-29). Data loads again on window focus only where a screen asks for it (shop UI design,
@@ -112,22 +189,30 @@ export function AppProviders({ dependencies, children }: AppProvidersProps) {
  * boundary of the route, so no screen stays in its loading state (TS-26).
  *
  * @param options - The settings and the random source.
+ * @param wakeBackend - Sends a wake request, unless none is set up or one is in flight.
  * @returns The query client.
  */
-function createAppQueryClient(options: Pick<AppDependencyOptions, "settings" | "random">) {
+function createAppQueryClient(
+  options: Pick<AppDependencyOptions, "settings" | "random">,
+  wakeBackend: WakeBackend,
+) {
   const isDefect = (error: unknown) => getRequestFailure(error) === undefined;
   const retry = (failureCount: number, error: unknown) =>
     shouldRetryRequest(failureCount, error, options.settings.requestRetryMaxCount);
   const retryDelay = (attemptIndex: number) =>
     computeRetryDelayMs(attemptIndex, options.settings.requestRetryBaseDelayMs, options.random());
-  const endSessionOnUnauthenticated = (error: unknown) => {
+  const handleFailure = (error: unknown) => {
     if (isUnauthenticatedError(error)) {
       endSession(queryClient, "no_valid_session");
     }
+    const failure = getRequestFailure(error);
+    if (failure !== undefined && isRetryableFailure(failure)) {
+      void wakeBackend();
+    }
   };
   const queryClient: QueryClient = new QueryClient({
-    queryCache: new QueryCache({ onError: endSessionOnUnauthenticated }),
-    mutationCache: new MutationCache({ onError: endSessionOnUnauthenticated }),
+    queryCache: new QueryCache({ onError: handleFailure }),
+    mutationCache: new MutationCache({ onError: handleFailure }),
     defaultOptions: {
       queries: {
         retry,

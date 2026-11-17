@@ -13,6 +13,7 @@ import {
   listShopTicketsRoute,
 } from "@/test/backend-routes";
 import { createFakeBackend, exampleAnswer } from "@/test/fake-backend";
+import { createFakeEventSources } from "@/test/fake-event-source";
 import {
   fixedRandomBytes,
   renderApp,
@@ -62,6 +63,8 @@ describe("a defect while data loads", () => {
       clock: () => testNow,
       createIdempotencyKey: () => "00000000-0000-4000-8000-000000000000",
       randomBytes: fixedRandomBytes,
+      preferenceStorage: undefined,
+      openEventSource: createFakeEventSources().open,
     });
 
     render(
@@ -99,6 +102,8 @@ describe("a defect in a write", () => {
       clock: () => testNow,
       createIdempotencyKey: () => "00000000-0000-4000-8000-000000000000",
       randomBytes: fixedRandomBytes,
+      preferenceStorage: undefined,
+      openEventSource: createFakeEventSources().open,
     });
     render(
       <AppProviders dependencies={dependencies}>

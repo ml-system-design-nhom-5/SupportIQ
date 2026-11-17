@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAppDependencies } from "@/app/composition-root";
 import { buildIdempotentWriteKey, RequestFailureError } from "@/features/backend-requests";
+import { createFakeEventSources } from "@/test/fake-event-source";
 import { fixedRandomBytes, TEST_BASE_URL, testNow } from "@/test/render-app";
 
 const RETRY_MAX_COUNT = 2;
@@ -29,6 +30,9 @@ function createQueryClient() {
       requestTimeoutMs: 1000,
       requestRetryMaxCount: RETRY_MAX_COUNT,
       requestRetryBaseDelayMs: RETRY_BASE_DELAY_MS,
+      isDevModeAvailable: false,
+      backendWakeTimeoutMs: 90_000,
+      viteSettings: [],
     },
     baseUrl: TEST_BASE_URL,
     fetch: () => Promise.reject(new Error("not used")),
@@ -36,6 +40,8 @@ function createQueryClient() {
     clock: () => testNow,
     createIdempotencyKey: () => "00000000-0000-4000-8000-000000000000",
     randomBytes: fixedRandomBytes,
+    preferenceStorage: undefined,
+    openEventSource: createFakeEventSources().open,
   }).queryClient;
 }
 

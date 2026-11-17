@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, within } from "storybook/test";
 
 import { cn } from "@/design-system/primitives/class-names";
+import { consoleColumnSizes } from "@/design-system/tokens/column-sizes";
 
 /** Each color role of UI-06, its Tailwind class, and its value in tokens.css. */
 const colorRoles = [
@@ -51,6 +53,24 @@ export const Colors: Story = { render: () => <ColorRoles /> };
 export const Typography: Story = { render: () => <TypeScale /> };
 
 /**
+ * The default column widths of tokens.css, which stories of a single component use, are those of
+ * column-sizes.ts, which the resizable columns use.
+ */
+export const ColumnWidths: Story = {
+  render: () => <ColumnWidthSamples />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByText("Inbox").getBoundingClientRect().width).toBe(
+      consoleColumnSizes.inbox.defaultWidth,
+    );
+    await expect(canvas.getByText("AI sidebar").getBoundingClientRect().width).toBe(
+      consoleColumnSizes.aiDetails.defaultWidth,
+    );
+  },
+};
+
+/**
  * Render the color roles.
  *
  * @returns The swatches with their role names and values.
@@ -92,5 +112,19 @@ function TypeScale() {
       ))}
       <li className="font-mono text-xs">TCK-1042 · ORD-20931 · JetBrains Mono</li>
     </ul>
+  );
+}
+
+/**
+ * Render a bar at each default column width.
+ *
+ * @returns The bars, named after their columns.
+ */
+function ColumnWidthSamples() {
+  return (
+    <div className="flex flex-col gap-2 text-sm">
+      <p className="w-inbox bg-ai-subtle">Inbox</p>
+      <p className="w-ai-sidebar bg-ai-subtle">AI sidebar</p>
+    </div>
   );
 }

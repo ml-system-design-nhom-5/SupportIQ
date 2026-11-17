@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { CircleArrowUp } from "lucide-react";
 import { fn } from "storybook/test";
 
 import { FormField } from "@/design-system/components/form-field";
@@ -36,6 +37,22 @@ export const WithDescriptionAndDanger: Story = {
       submitLabel: "Reset password",
     },
     tone: "danger",
+  },
+};
+export const MutedDescriptionWithSubmitIcon: Story = {
+  args: {
+    text: {
+      title: "Escalate ticket TCK-1042 to a manager?",
+      description: "Choose at least one reason. The ticket becomes read-only for you.",
+      descriptionTone: "muted",
+      submitLabel: "Escalate ticket",
+      submitIcon: CircleArrowUp,
+    },
+    children: (
+      <FormField inputId="note" label="Note (required with Other)">
+        <TextInput id="note" />
+      </FormField>
+    ),
   },
 };
 export const Pending: Story = { args: { isPending: true } };

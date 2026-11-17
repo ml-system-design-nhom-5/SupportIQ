@@ -46,6 +46,8 @@ export type StatusBannerTone = "success" | "info" | "warning" | "danger";
 /** Props of {@link StatusBanner}. */
 export type StatusBannerProps = {
   readonly tone: StatusBannerTone;
+  /** The icon of a status presentation, such as Authority required; the tone's icon otherwise. */
+  readonly icon?: LucideIcon;
   /** The bold first sentence: what happened. */
   readonly lead: string;
   /** What it means or what to do next. */
@@ -64,11 +66,13 @@ export type StatusBannerProps = {
 /**
  * Render a banner. A `danger` banner is an alert; the others are status messages.
  *
- * @param props - The tone, the lead, the text, the trace ID, the action, and the focus target ID.
+ * @param props - The tone, the icon, the lead, the text, the trace ID, the action, and the focus
+ *   target ID.
  * @returns The banner.
  */
 export function StatusBanner({
   tone,
+  icon,
   lead,
   children,
   traceId,
@@ -82,7 +86,7 @@ export function StatusBanner({
       role={tone === "danger" ? "alert" : "status"}
       className={cn(bannerVariants({ tone }), FOCUS_RING_CLASSES)}
     >
-      <Icon icon={iconByTone[tone]} tone={tone} />
+      <Icon icon={icon ?? iconByTone[tone]} tone={tone} />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <p className="wrap-break-word">
           <span className={leadVariants({ tone })}>{lead}</span> {children}

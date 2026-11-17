@@ -78,6 +78,32 @@ describe("ConfirmDialog, the focus when it closes (UI-30)", () => {
       expect(row).toHaveFocus();
     });
   });
+
+  it("leaves the focus where the outcome of the dialog moved it", async () => {
+    const { row, opener } = renderRow();
+    const { unmount } = renderDialog({ returnFocus: { opener, fallbackId: "row" } });
+
+    unmount();
+    row.focus();
+    // Radix returns the focus in a timer that the unmount started; this one runs after it.
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(row).toHaveFocus();
+  });
+
+  it("moves the focus to the fallback when the change disabled that element", async () => {
+    const { row, opener } = renderRow();
+    const { unmount } = renderDialog({ returnFocus: { opener, fallbackId: "row" } });
+    opener.setAttribute("disabled", "");
+
+    unmount();
+
+    await waitFor(() => {
+      expect(row).toHaveFocus();
+    });
+  });
 });
 
 describe("ConfirmDialog", () => {

@@ -1,5 +1,6 @@
 /**
- * A link to another page of the app, in the `primary` role.
+ * A link to another page of the app, in the `primary` role. {@link textLinkVariants} also styles
+ * {@link ExternalLink}.
  */
 import { cva } from "class-variance-authority";
 import type { ReactNode } from "react";
@@ -8,9 +9,11 @@ import { Link } from "react-router";
 import { cn } from "@/design-system/primitives/class-names";
 import { FOCUS_RING_CLASSES } from "@/design-system/primitives/focus-ring";
 
-const textLinkVariants = cva("rounded-sm text-primary hover:underline", {
-  variants: { emphasis: { default: "", strong: "font-medium" } },
-});
+/** The classes of a link in text, with the focus ring, shared with the link that leaves the app. */
+export const textLinkVariants = cva(
+  cn("rounded-sm text-primary hover:underline", FOCUS_RING_CLASSES),
+  { variants: { emphasis: { default: "", strong: "font-medium" } } },
+);
 
 /** `default` for links in text, `strong` for the name of an item in a list or a card. */
 export type TextLinkEmphasis = "default" | "strong";
@@ -31,7 +34,7 @@ export type TextLinkProps = {
  */
 export function TextLink({ to, emphasis = "default", children }: TextLinkProps) {
   return (
-    <Link to={to} className={cn(textLinkVariants({ emphasis }), FOCUS_RING_CLASSES)}>
+    <Link to={to} className={textLinkVariants({ emphasis })}>
       {children}
     </Link>
   );

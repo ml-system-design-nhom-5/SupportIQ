@@ -12,6 +12,7 @@ import { AppProviders, createAppDependencies } from "@/app/composition-root";
 import { appRoutes } from "@/app/router";
 import { parseFrontendSettings } from "@/app/settings";
 import { systemClock } from "@/design-system";
+import { whenStorageAllows } from "@/features/session";
 
 const rootElement = document.getElementById("root");
 if (rootElement === null) {
@@ -26,6 +27,9 @@ const dependencies = createAppDependencies({
   createIdempotencyKey: () => crypto.randomUUID(),
   randomBytes: (count) => crypto.getRandomValues(new Uint8Array(count)),
   clock: systemClock,
+  // Reading `localStorage` itself throws where the browser refuses storage.
+  preferenceStorage: whenStorageAllows(() => window.localStorage),
+  openEventSource: (url) => new EventSource(url),
 });
 
 createRoot(rootElement).render(

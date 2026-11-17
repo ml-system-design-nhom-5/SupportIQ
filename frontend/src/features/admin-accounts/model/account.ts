@@ -21,6 +21,8 @@ export type Account = {
   /** Confidential: shown, never logged or stored (admin UI design, Security and privacy). */
   readonly displayName: string;
   readonly role: InternalRoleName;
+  /** The `role` as `backend` sent it, also one that this version does not know (UI-35). */
+  readonly rawRole: string;
   readonly isActive: boolean;
 };
 
@@ -65,6 +67,7 @@ export function toAccount(account: AdminAccountContract): Account {
     loginName: account.login_name,
     displayName: account.display_name,
     role: toInternalRole(account.role),
+    rawRole: account.role,
     isActive: account.is_active,
   };
 }
