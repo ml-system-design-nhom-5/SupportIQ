@@ -26,11 +26,11 @@ const PRESSES_TO_LIMIT = 10;
 const FRAMES_TO_SETTLE = 10;
 
 /**
- * A console narrower than the window of the stories, where the middle column still has 524 px:
- * 1200 − 272 − 16 for the inbox and its splitter, − 32 − 16 for the workspace padding and the
- * splitter, − 340 for the AI sidebar.
+ * The widths of a console whose window a person drags narrower, one per frame, down to one where
+ * the middle column still has 524 px: 1200 − 272 − 16 for the inbox and its splitter, − 32 − 16
+ * for the workspace padding and the splitter, − 340 for the AI sidebar.
  */
-const NARROWER_CONSOLE_WIDTH = 1200;
+const draggedConsoleWidths = [1260, 1240, 1220, 1200];
 
 /** The console at its least width (console UI design, Layout). */
 const consoleViewport = {
@@ -198,14 +198,19 @@ export const ReopensAtTheWidthThatTheSplitterGave: Story = {
 };
 
 /**
- * A narrower console, then a wider one, as a window that is resized gives: the columns keep their
- * px, and the middle column takes the rest. The story root stands in for the window, which a
- * story cannot resize; it stays within the window, so no scrollbar comes and goes.
+ * A narrower console, then a wider one, as a window that a person drags gives: the columns keep
+ * their px, and the middle column takes the rest. The width changes at the start of each frame,
+ * before the layout reads that the frame before asked for, as while the edge of a window moves.
+ * The story root stands in for the window, which a story cannot resize; it stays within the
+ * window, so no scrollbar comes and goes.
  */
 export const ColumnsKeepTheirWidthsWhenTheConsoleResizes: Story = {
   play: async ({ canvasElement }) => {
-    canvasElement.style.width = `${String(NARROWER_CONSOLE_WIDTH)}px`;
     try {
+      for (const width of draggedConsoleWidths) {
+        canvasElement.style.width = `${String(width)}px`;
+        await nextFrame();
+      }
       await waitForWidth(canvasElement, "Inbox", inboxSizes.defaultWidth);
       await waitForWidth(canvasElement, "AI details", aiDetails.defaultWidth);
     } finally {
@@ -344,8 +349,18 @@ function columnWidth(canvasElement: HTMLElement, name: string): number {
  */
 async function nextFrames(): Promise<void> {
   for (let frame = 0; frame < 2; frame += 1) {
-    await new Promise((resolve) => requestAnimationFrame(resolve));
+    await nextFrame();
   }
+}
+
+/**
+ * Let one frame pass.
+ *
+ * @returns A promise that settles at the start of the next frame, before the frame callbacks that
+ *   were asked for after this one.
+ */
+async function nextFrame(): Promise<void> {
+  await new Promise((resolve) => requestAnimationFrame(resolve));
 }
 
 /**
@@ -367,7 +382,7 @@ async function waitForWidth(
     frame < FRAMES_TO_SETTLE && columnWidth(canvasElement, name) !== width;
     frame += 1
   ) {
-    await new Promise((resolve) => requestAnimationFrame(resolve));
+    await nextFrame();
   }
   await expect(columnWidth(canvasElement, name)).toBe(width);
 }

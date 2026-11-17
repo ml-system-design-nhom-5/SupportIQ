@@ -4,7 +4,7 @@
  * person makes with the splitter goes back into the preference, in px.
  */
 import { useEffect } from "react";
-import { usePanelRef } from "react-resizable-panels";
+import { type Layout, type LayoutChangedMeta, usePanelRef } from "react-resizable-panels";
 
 /** A resizable column as the screen keeps it: its width in px and whether it is collapsed. */
 export type ColumnState = {
@@ -38,7 +38,16 @@ export function useColumnPanel(column: ResizableColumn) {
     panel.expand();
     panel.resize(width);
   }, [panelRef, width, isCollapsed]);
-  const reportLayout = () => {
+  const reportLayout = (_layout: Layout, { isUserInteraction }: LayoutChangedMeta) => {
+    // Only a change that the person makes with the splitter goes into the preference. The library
+    // also reports its own changes, such as on mount or when the group resizes, and their size in
+    // px is not reliable: on the next frame the group can have resized again before the library
+    // sizes the panels, because its ResizeObserver runs after the frame callbacks. Such a width
+    // would also move `defaultSize`, and the library registers the group again with its earlier
+    // percentages at the new size (react-resizable-panels.js:1434), which loses the px.
+    if (!isUserInteraction) {
+      return;
+    }
     // The library reports a finished change before React draws it, and the size in px comes from
     // the element (react-resizable-panels.js:1759), so the panel is read on the next frame.
     requestAnimationFrame(() => {
