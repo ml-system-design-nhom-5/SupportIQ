@@ -4,6 +4,7 @@ The release holds two KB document versions, both mapped to the intent that the f
 sure of. The LLM answers from a script, through the client of the egress allow-list.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from http import HTTPStatus
@@ -11,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from supportiq_ai_service.composition_root.cli import release_refusal_attributes
 from supportiq_ai_service.composition_root.release_assets import (
     ReleaseModels,
     ReleaseServices,
@@ -19,12 +21,19 @@ from supportiq_ai_service.composition_root.release_assets import (
     read_release_assets,
 )
 from supportiq_ai_service.intent.adapters.model_artifact import ModelArtifact
+from supportiq_ai_service.platform import EventName
 from supportiq_ai_service.platform.adapters.egress import (
     create_egress_client,
     packaged_egress_allow_list,
 )
 from supportiq_ai_service.platform.settings import Settings
-from supportiq_ai_service.release.manifest import VerifiedReleaseSource
+from supportiq_ai_service.release.manifest import (
+    ReleaseInvalidError,
+    ReleaseInvalidReason,
+    VerifiedReleaseSource,
+)
+from supportiq_ai_service.retrieval import RetrievalError
+from supportiq_ai_service.retrieval.adapters.in_memory_index import Vectors
 from supportiq_ai_service.retrieval.adapters.index_file import IndexConfiguration
 from supportiq_ai_service.suggestions.domain import (
     DraftReady,
@@ -33,35 +42,27 @@ from supportiq_ai_service.suggestions.domain import (
     ReasonCode,
     SuggestionInput,
 )
-from tests.unit.composition_root.fakes import load_fake_models
-from tests.unit.drafting.fakes import ScriptedNetwork, answer, error_response, gemini_response
-from tests.unit.platform.fakes import LLM_ENVIRONMENT, RecordingEventRecorder
-from tests.unit.release.release_folder import (
-    KB_DOCUMENT,
-    KB_ENTRY,
-    MAPPING_DOCUMENT,
-    json_file,
-    verified_release,
+from tests.unit.composition_root.fakes import (
+    KB_RELEASE_CHANGES,
+    LONG_DOCUMENT,
+    SHORT_DOCUMENT,
+    FakeClassifier,
+    load_fake_models,
 )
+from tests.unit.drafting.fakes import ScriptedNetwork, answer, error_response, gemini_response
+from tests.unit.platform.fakes import LLM_ENVIRONMENT, RecordedEvent, RecordingEventRecorder
+from tests.unit.release.fakes import EXAMPLE_VERSIONS
+from tests.unit.release.release_folder import verified_release
+from tests.unit.retrieval.fakes import KeywordEncoder
 
-# 150 words, so the chunking of the release (100 tokens, 10 of overlap) makes two passages.
-LONG_BODY = " ".join(["refund"] * 150)
-LONG = {**KB_ENTRY, "body": LONG_BODY}
-SHORT = {
-    **KB_ENTRY,
-    "document_id": "SAMPLE-REFUND-002",
-    "title": "A fake refund method",
-    "body": "A refund to the card.",
-    "policy_key": "refund_method",
-}
 REQUEST = SuggestionInput(
     message="Where is my refund.", as_of=datetime(2026, 11, 5, 9, 30, tzinfo=UTC)
 )
-# Large enough that the cost tells the two prices apart (LLM_ENVIRONMENT: 1000 and 2000).
 CLOCK_STEP_SECONDS = 0.25
 MAX_OUTPUT_TOKENS = 321
 TEMPERATURE = 0.3
 ATTEMPT_TIMEOUT_MS = 1_234
+# Large enough that the cost tells the two prices apart (LLM_ENVIRONMENT: 1000 and 2000).
 USAGE = {
     "promptTokenCount": 100_000,
     "candidatesTokenCount": 40_000,
@@ -71,25 +72,7 @@ USAGE = {
 
 @pytest.fixture
 def source(tmp_path: Path) -> VerifiedReleaseSource:
-    mapping = [
-        {
-            "document_id": entry["document_id"],
-            "version": entry["version"],
-            "intents": ["track_order"],
-        }
-        for entry in (LONG, SHORT)
-    ]
-    return verified_release(
-        tmp_path,
-        {
-            "kb": {"kb/kb.json": json_file({**KB_DOCUMENT, "documents": [LONG, SHORT]})},
-            "mapping": {
-                "mapping/document-intents.json": json_file(
-                    {**MAPPING_DOCUMENT, "documents": mapping}
-                )
-            },
-        },
-    )
+    return verified_release(tmp_path, KB_RELEASE_CHANGES)
 
 
 def _settings(**changes: object) -> Settings:
@@ -131,11 +114,11 @@ def _services(
     network: ScriptedNetwork,
     timing: FakeTiming | None = None,
 ) -> ReleaseServices:
-    assets = read_release_assets(source, settings, load_fake_models)
+    sources = (timing or FakeTiming()).timing()
+    events = RecordingEventRecorder()
+    assets = read_release_assets(source, settings, load_fake_models, events, sources)
     client = create_egress_client(packaged_egress_allow_list(), network)
-    return build_release_services(
-        assets, settings, RecordingEventRecorder(), client, (timing or FakeTiming()).timing()
-    )
+    return build_release_services(assets, settings, events, client, sources)
 
 
 @pytest.mark.anyio
@@ -277,7 +260,13 @@ def test_the_models_load_with_the_threads_of_the_setting(source: VerifiedRelease
         threads.append(cpu_threads)
         return load_fake_models(artifact, index, cpu_threads)
 
-    read_release_assets(source, _settings(model_cpu_threads=3), load)
+    read_release_assets(
+        source,
+        _settings(model_cpu_threads=3),
+        load,
+        RecordingEventRecorder(),
+        FakeTiming().timing(),
+    )
 
     assert threads == [3]
 
@@ -295,3 +284,74 @@ def test_the_kb_documents_of_the_release_are_served(source: VerifiedReleaseSourc
         "A fake refund method",
     )
     assert services.kb_documents.find("SAMPLE-REFUND-002", "2.0", release) is None
+
+
+def test_loading_records_the_versions_of_the_models_and_of_the_kb(
+    source: VerifiedReleaseSource,
+) -> None:
+    events = RecordingEventRecorder()
+
+    read_release_assets(source, _settings(), load_fake_models, events, FakeTiming().timing())
+
+    assert events.events == [
+        RecordedEvent(
+            EventName.MODEL_LOADED,
+            {
+                "model_version": EXAMPLE_VERSIONS.model_version,
+                "index_version": EXAMPLE_VERSIONS.index_version,
+                # One step of the fake clock passes while the models load.
+                "duration_ms": 250,
+            },
+        ),
+        RecordedEvent(
+            EventName.KB_LOADED,
+            {
+                "kb_version": EXAMPLE_VERSIONS.kb_version,
+                "mapping_version": EXAMPLE_VERSIONS.mapping_version,
+                "document_count": 2,
+            },
+        ),
+    ]
+
+
+class _UnindexableEncoder(KeywordEncoder):
+    """An encoder that fails on every passage of the KB, as a broken encoder would."""
+
+    def encode_passages(self, texts: Sequence[str]) -> Vectors:
+        """Fail.
+
+        Raises:
+            RetrievalError: Always.
+        """
+        del texts
+        raise RetrievalError
+
+
+def _load_unindexable_models(
+    artifact: ModelArtifact, index: IndexConfiguration, cpu_threads: int
+) -> ReleaseModels:
+    del artifact, index, cpu_threads
+    return ReleaseModels(classifier=FakeClassifier(), encoder=_UnindexableEncoder())
+
+
+def test_an_encoder_that_cannot_index_the_kb_refuses_the_release(
+    source: VerifiedReleaseSource,
+) -> None:
+    events = RecordingEventRecorder()
+
+    with pytest.raises(ReleaseInvalidError) as refused:
+        read_release_assets(
+            source, _settings(), _load_unindexable_models, events, FakeTiming().timing()
+        )
+
+    # The models loaded, and the KB did not.
+    assert [event.name for event in events.events] == [EventName.MODEL_LOADED]
+    # `release.invalid` names the asset, never a text of the KB (LOG-29).
+    assert release_refusal_attributes(refused.value) == {
+        "reason": ReleaseInvalidReason.ASSET_INVALID.value,
+        "asset": "index",
+    }
+    detail = str(refused.value)
+    for document in (LONG_DOCUMENT, SHORT_DOCUMENT):
+        assert str(document["title"]) not in detail
+        assert str(document["body"]) not in detail

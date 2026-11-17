@@ -23,11 +23,19 @@ class EventName(StrEnum):
     EGRESS_ALLOW_LIST_INVALID = "egress_allow_list.invalid"
     RELEASE_LOADED = "release.loaded"
     RELEASE_INVALID = "release.invalid"
+    MODEL_LOADED = "model.loaded"
+    KB_LOADED = "kb.loaded"
     SHUTDOWN_STARTED = "shutdown.started"
     REQUEST_COMPLETED = "request.completed"
     REQUEST_FAILED = "request.failed"
     REQUEST_REFUSED = "request.refused"
     SERVICE_TOKEN_REJECTED = "service_token.rejected"  # noqa: S105  # an event name
+    ANALYSIS_COMPLETED = "analysis.completed"
+    DRAFT_GENERATED = "draft.generated"
+    DRAFT_ABSTAINED = "draft.abstained"
+    ESCALATION_RECOMMENDED = "escalation.recommended"
+    LLM_CALL_FAILED = "llm.call_failed"
+    GROUNDING_CHECK_FAILED = "grounding.check_failed"
     PERSONAL_DATA_MASKED = "personal_data.masked"
     LOG_FORWARDED = "log.forwarded"
 
@@ -56,7 +64,9 @@ class EventDescription:
 
 EVENT_DESCRIPTIONS: Mapping[EventName, EventDescription] = MappingProxyType(
     {
-        EventName.STARTUP_COMPLETED: EventDescription(EventLevel.INFO, "ai-service started"),
+        EventName.STARTUP_COMPLETED: EventDescription(
+            EventLevel.INFO, "The ai-service replica started"
+        ),
         EventName.SETTINGS_LOADED: EventDescription(EventLevel.INFO, "Settings loaded"),
         EventName.SETTINGS_INVALID: EventDescription(
             EventLevel.ERROR, "Settings are missing or invalid, so ai-service stops"
@@ -71,8 +81,14 @@ EVENT_DESCRIPTIONS: Mapping[EventName, EventDescription] = MappingProxyType(
             EventLevel.ERROR,
             "The release manifest or one of its files is invalid, so ai-service stops",
         ),
+        EventName.MODEL_LOADED: EventDescription(
+            EventLevel.INFO, "The intent model and the encoder of the release are loaded"
+        ),
+        EventName.KB_LOADED: EventDescription(
+            EventLevel.INFO, "The KB of the release is loaded and indexed"
+        ),
         EventName.SHUTDOWN_STARTED: EventDescription(
-            EventLevel.INFO, "ai-service is shutting down"
+            EventLevel.INFO, "The ai-service replica is shutting down"
         ),
         EventName.REQUEST_COMPLETED: EventDescription(EventLevel.INFO, "Request completed"),
         EventName.REQUEST_FAILED: EventDescription(
@@ -85,6 +101,23 @@ EVENT_DESCRIPTIONS: Mapping[EventName, EventDescription] = MappingProxyType(
             EventLevel.WARNING, "Request refused because it has no valid service token"
         ),
         EventName.LOG_FORWARDED: EventDescription(EventLevel.INFO, "Library log record"),
+        EventName.ANALYSIS_COMPLETED: EventDescription(EventLevel.INFO, "Analysis completed"),
+        # Abstention and escalation are correct behavior, not failures (LOG-16).
+        EventName.DRAFT_GENERATED: EventDescription(
+            EventLevel.INFO, "Draft generated, and it passed its checks"
+        ),
+        EventName.DRAFT_ABSTAINED: EventDescription(
+            EventLevel.INFO, "No draft, because the AI abstained"
+        ),
+        EventName.ESCALATION_RECOMMENDED: EventDescription(
+            EventLevel.INFO, "No draft, because escalation is recommended"
+        ),
+        EventName.LLM_CALL_FAILED: EventDescription(
+            EventLevel.WARNING, "No draft, because the LLM call failed"
+        ),
+        EventName.GROUNDING_CHECK_FAILED: EventDescription(
+            EventLevel.WARNING, "No draft, because the output of the LLM failed its checks"
+        ),
         EventName.PERSONAL_DATA_MASKED: EventDescription(
             EventLevel.WARNING,
             "Personal data masked before an LLM call, because pseudonymization missed it",

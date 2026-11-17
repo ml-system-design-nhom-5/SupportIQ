@@ -27,11 +27,15 @@ from supportiq_ai_service.drafting.adapters.prompt_files import (
 )
 from supportiq_ai_service.intent import IntentClassifier
 from supportiq_ai_service.intent.adapters.model_artifact import ModelArtifact, read_model_artifact
-from supportiq_ai_service.platform import MILLISECONDS_PER_SECOND, EventRecorder
+from supportiq_ai_service.platform import MILLISECONDS_PER_SECOND, EventName, EventRecorder
 from supportiq_ai_service.platform.adapters.system_clock import SystemClock
 from supportiq_ai_service.platform.settings import Settings
-from supportiq_ai_service.release.manifest import VerifiedReleaseSource
-from supportiq_ai_service.retrieval import KbDocument
+from supportiq_ai_service.release.manifest import (
+    ReleaseInvalidError,
+    ReleaseInvalidReason,
+    VerifiedReleaseSource,
+)
+from supportiq_ai_service.retrieval import KbDocument, RetrievalError
 from supportiq_ai_service.retrieval.adapters.in_memory_index import TextEncoder
 from supportiq_ai_service.retrieval.adapters.index_file import (
     IndexConfiguration,
@@ -139,21 +143,28 @@ class ReleaseServices:
 
 
 def read_release_assets(
-    source: VerifiedReleaseSource, settings: Settings, load_models: ModelLoader
+    source: VerifiedReleaseSource,
+    settings: Settings,
+    load_models: ModelLoader,
+    events: EventRecorder,
+    timing: Timing,
 ) -> ReleaseAssets:
-    """Read and check every asset of a verified release, then load its models.
+    """Read and check every asset of a verified release, then load its models and its KB.
 
     Args:
         source: The verified release.
         settings: The validated settings.
         load_models: The loader of the two models.
+        events: Where `model.loaded` and `kb.loaded` are recorded (LOG-19).
+        timing: The clock of the loading time.
 
     Returns:
         The assets, ready to wire.
 
     Raises:
         ReleaseInvalidError: An asset breaks its format, names another version, or cannot be
-            loaded, or the routing configuration names an intent that the model never outputs.
+            loaded, the encoder cannot index the KB, or the routing configuration names an
+            intent that the model never outputs.
     """
     versions = source.current().versions
     artifact = read_model_artifact(source.asset_files("model"))
@@ -165,9 +176,27 @@ def read_release_assets(
     check_sensitive_intents(routing, frozenset(artifact.labels))
     index = read_index_configuration(source.asset_files("index"), versions.kb_version)
     prompts = read_drafting_prompts(source.asset_files("prompts"))
+    started = timing.monotonic()
     models = load_models(artifact, index, settings.model_cpu_threads)
-    retriever = build_semantic_retriever(
-        kb_documents, models.encoder, index, settings.retrieval_max_chunks_per_document
+    events.record(
+        EventName.MODEL_LOADED,
+        model_version=versions.model_version,
+        index_version=versions.index_version,
+        duration_ms=round((timing.monotonic() - started) * MILLISECONDS_PER_SECOND),
+    )
+    try:
+        retriever = build_semantic_retriever(
+            kb_documents, models.encoder, index, settings.retrieval_max_chunks_per_document
+        )
+    except RetrievalError as error:
+        # An encoder that cannot embed the KB of its own release makes the release unusable,
+        # as a model that cannot load does, so startup stops (ERR-17).
+        raise ReleaseInvalidError(ReleaseInvalidReason.ASSET_INVALID, asset="index") from error
+    events.record(
+        EventName.KB_LOADED,
+        kb_version=versions.kb_version,
+        mapping_version=versions.mapping_version,
+        document_count=len(kb_documents),
     )
     return ReleaseAssets(
         kb_documents=kb_documents,

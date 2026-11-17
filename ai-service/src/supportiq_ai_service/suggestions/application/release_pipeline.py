@@ -10,9 +10,10 @@ Nothing of the message, the prompt, or the draft is logged (LOG-29).
 
 import asyncio
 import dataclasses
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC
+from types import MappingProxyType
 
 from supportiq_ai_service.drafting import (
     DraftReply,
@@ -27,7 +28,12 @@ from supportiq_ai_service.drafting import (
     UnanswerableRequest,
 )
 from supportiq_ai_service.intent import IntentClassifier, IntentDistribution
-from supportiq_ai_service.platform import MILLISECONDS_PER_SECOND, EventName, EventRecorder
+from supportiq_ai_service.platform import (
+    MILLISECONDS_PER_SECOND,
+    EventAttributeValue,
+    EventName,
+    EventRecorder,
+)
 from supportiq_ai_service.release import LoadedRelease
 from supportiq_ai_service.retrieval import DocumentSearch
 from supportiq_ai_service.suggestions.domain import (
@@ -59,7 +65,11 @@ from supportiq_ai_service.suggestions.domain.evidence import (
     Ranking,
     assess_evidence,
 )
-from supportiq_ai_service.suggestions.domain.grounding import DraftCheckError, check_draft
+from supportiq_ai_service.suggestions.domain.grounding import (
+    GROUNDING_FAILED,
+    DraftCheckError,
+    check_draft,
+)
 from supportiq_ai_service.suggestions.domain.masking import MaskedText, mask_personal_data
 from supportiq_ai_service.suggestions.domain.routing_rules import (
     IN_SCOPE_INTENTS,
@@ -74,6 +84,7 @@ from supportiq_ai_service.suggestions.domain.usage import UsageOutOfRangeError, 
 SIGNAL_DISAGREEMENT = ReasonCode("signal_disagreement")
 MISSING_INFORMATION = ReasonCode("missing_information")
 _NO_MASKS = MaskCounts(email=0, phone=0, card=0)
+_UNAVAILABLE = ReasonCode(LlmFailure.UNAVAILABLE.value)
 _INVALID_OUTPUT = ReasonCode(LlmFailure.INVALID_OUTPUT.value)
 
 
@@ -122,6 +133,30 @@ class _Analyzed:
     analysis: Analysis
     evidence: Evidence
     authority_required: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _NoDraftKind:
+    # A drafting step that ends without a draft: its status, and the one event that records it
+    # where it is handled (LOG-17).
+    status: NoDraftStatus
+    event: EventName
+
+
+_LLM_FAILED = _NoDraftKind(NoDraftStatus.LLM_UNAVAILABLE, EventName.LLM_CALL_FAILED)
+_CHECK_FAILED = _NoDraftKind(NoDraftStatus.LLM_UNAVAILABLE, EventName.GROUNDING_CHECK_FAILED)
+_UNANSWERABLE = _NoDraftKind(NoDraftStatus.ABSTAINED, EventName.DRAFT_ABSTAINED)
+# The final reason code alone chooses the kind, so each code always leads to the same event
+# (LOG-19; contracts v1 design, Reason codes): a failure at the provider, an output that is
+# unusable, or sources that the LLM found insufficient.
+_NO_DRAFT_KINDS: Mapping[ReasonCode, _NoDraftKind] = MappingProxyType(
+    {
+        _UNAVAILABLE: _LLM_FAILED,
+        _INVALID_OUTPUT: _CHECK_FAILED,
+        GROUNDING_FAILED: _CHECK_FAILED,
+        NO_VALID_DOCUMENT: _UNANSWERABLE,
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -211,30 +246,36 @@ class ReleasePipeline:
         try:
             reply = await asyncio.to_thread(self._ports.writer.write, draft_request)
         except LlmCallError as error:
-            return self._no_draft(
-                drafting,
-                NoDraftStatus.LLM_UNAVAILABLE,
-                ReasonCode(error.failure.value),
-                error.usage,
-            )
+            return self._no_draft(drafting, ReasonCode(error.failure.value), error.usage)
         return self._checked(drafting, draft_request, reply)
 
     def _checked(
         self, drafting: _Drafting, draft_request: DraftRequest, reply: DraftReply
     ) -> DraftOutcome:
         if isinstance(reply, UnanswerableRequest):
-            return self._no_draft(drafting, NoDraftStatus.ABSTAINED, NO_VALID_DOCUMENT, reply.usage)
+            return self._no_draft(drafting, NO_VALID_DOCUMENT, reply.usage)
         try:
             usage = contract_usage(reply.usage, self._values.prices)
             draft = check_draft(reply, draft_request, self._values.uncited_segment_max_chars)
         except UsageOutOfRangeError:
-            return self._no_draft(drafting, NoDraftStatus.LLM_UNAVAILABLE, _INVALID_OUTPUT, None)
+            return self._no_draft(drafting, _INVALID_OUTPUT, None)
         except DraftCheckError as error:
-            return self._no_draft(
-                drafting, NoDraftStatus.LLM_UNAVAILABLE, error.reason_code, reply.usage
-            )
+            return self._no_draft(drafting, error.reason_code, reply.usage)
         codes = (MISSING_INFORMATION,) if reply.is_clarification else ()
-        return DraftReady(details=self._details(drafting, codes, usage), draft=draft)
+        details = self._details(drafting, codes, usage)
+        latencies = details.step_latencies
+        self._events.record(
+            EventName.DRAFT_GENERATED,
+            reason_codes=_joined(details.reason_codes),
+            segment_count=len(draft.segments),
+            citation_count=len(draft.citations),
+            input_token_count=usage.input_token_count,
+            output_token_count=usage.output_token_count,
+            cost_micro_usd=usage.cost_micro_usd,
+            **_llm_ms(latencies),
+            total_ms=latencies.total_ms,
+        )
+        return DraftReady(details=details, draft=draft)
 
     async def _analyzed(
         self, request: SuggestionInput, release: LoadedRelease, started: float
@@ -265,6 +306,14 @@ class ReleasePipeline:
             else ()
         )
         analysis_ms = self._elapsed_ms(started)
+        self._events.record(
+            EventName.ANALYSIS_COMPLETED,
+            recommendation=routing.recommendation.value,
+            reason_codes=_joined(routing.reason_codes),
+            document_count=len(evidence.documents),
+            warning_count=len(warnings),
+            analysis_ms=analysis_ms,
+        )
         analysis = Analysis(
             intent=_with_disagreement(intent, disagreement=evidence.disagreement),
             alternatives=intent.alternatives,
@@ -321,13 +370,7 @@ class ReleasePipeline:
                 )
         return tuple(sources)
 
-    def _no_draft(
-        self,
-        drafting: _Drafting,
-        status: NoDraftStatus,
-        code: ReasonCode,
-        usage: TokenUsage | None,
-    ) -> NoDraft:
+    def _no_draft(self, drafting: _Drafting, code: ReasonCode, usage: TokenUsage | None) -> NoDraft:
         # `llm_usage` is present whenever the LLM answered, also for an output that was refused,
         # unless the usage is beyond the caps of the contract (contracts v1 design, L1).
         llm_usage = None
@@ -336,7 +379,24 @@ class ReleasePipeline:
                 llm_usage = contract_usage(usage, self._values.prices)
             except UsageOutOfRangeError:
                 code = _INVALID_OUTPUT
-        return NoDraft(details=self._details(drafting, (code,), llm_usage), status=status)
+        kind = _NO_DRAFT_KINDS[code]
+        details = self._details(drafting, (code,), llm_usage)
+        latencies = details.step_latencies
+        if kind.event is EventName.DRAFT_ABSTAINED:
+            self._events.record(
+                kind.event,
+                reason_codes=_joined(details.reason_codes),
+                total_ms=latencies.total_ms,
+                **_llm_ms(latencies),
+            )
+        else:
+            self._events.record(
+                kind.event,
+                reason_code=code,
+                **_llm_ms(latencies),
+                **_token_counts(details.llm_usage),
+            )
+        return NoDraft(details=details, status=kind.status)
 
     def _details(
         self, drafting: _Drafting, codes: tuple[ReasonCode, ...], llm_usage: LlmUsage | None
@@ -366,10 +426,38 @@ class ReleasePipeline:
             ),
             mask_counts=_NO_MASKS,
         )
+        event = (
+            EventName.ESCALATION_RECOMMENDED
+            if status is NoDraftStatus.ESCALATION_RECOMMENDED
+            else EventName.DRAFT_ABSTAINED
+        )
+        self._events.record(
+            event,
+            reason_codes=_joined(details.reason_codes),
+            total_ms=details.step_latencies.total_ms,
+        )
         return NoDraft(details=details, status=status)
 
     def _elapsed_ms(self, started: float) -> int:
         return round((self._monotonic() - started) * MILLISECONDS_PER_SECOND)
+
+
+def _joined(codes: tuple[ReasonCode, ...]) -> str:
+    # One scalar for a list (LOG-10): the codes in the order of the contract.
+    return ",".join(codes)
+
+
+def _llm_ms(latencies: StepLatencies) -> dict[str, EventAttributeValue]:
+    return {} if latencies.llm_ms is None else {"llm_ms": latencies.llm_ms}
+
+
+def _token_counts(usage: LlmUsage | None) -> dict[str, EventAttributeValue]:
+    if usage is None:
+        return {}
+    return {
+        "input_token_count": usage.input_token_count,
+        "output_token_count": usage.output_token_count,
+    }
 
 
 def _probability_of(

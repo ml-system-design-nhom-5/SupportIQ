@@ -51,6 +51,22 @@ ALLOWED_ATTRIBUTES = frozenset(
         "mask_type",
         "mask_count",
         "logger_name",
+        # The events of the pipeline: versions, counts, reason codes, and durations only, never
+        # a text of the message, the KB, or the draft (LOG-29).
+        "index_version",
+        "mapping_version",
+        "document_count",
+        "recommendation",
+        "reason_codes",
+        "warning_count",
+        "analysis_ms",
+        "llm_ms",
+        "total_ms",
+        "segment_count",
+        "citation_count",
+        "input_token_count",
+        "output_token_count",
+        "cost_micro_usd",
     }
 )
 # Email addresses, and long random tokens such as the service token or an API key.

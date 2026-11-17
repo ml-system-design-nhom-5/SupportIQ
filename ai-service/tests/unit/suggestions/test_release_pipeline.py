@@ -22,7 +22,7 @@ from supportiq_ai_service.drafting import (
     WrittenDraft,
 )
 from supportiq_ai_service.intent import IntentDistribution
-from supportiq_ai_service.platform import EventName
+from supportiq_ai_service.platform import EventAttributeValue, EventName
 from supportiq_ai_service.retrieval import DocumentMatch
 from supportiq_ai_service.suggestions.application.release_pipeline import (
     PipelinePorts,
@@ -52,13 +52,17 @@ from supportiq_ai_service.suggestions.domain import (
     SuggestionInput,
 )
 from tests.unit.intent.fakes import distribution
-from tests.unit.platform.fakes import RecordingEventRecorder
+from tests.unit.platform.fakes import RecordedEvent, RecordingEventRecorder
 from tests.unit.release.fakes import EXAMPLE_RELEASE
 from tests.unit.retrieval.fakes import EXAMPLE_DOCUMENT
 
 AS_OF = datetime(2026, 11, 5, 9, 30, tzinfo=UTC)
 DELIVERY = dataclasses.replace(
     EXAMPLE_DOCUMENT, document_id="DELIVERY", policy_key="delivery", body="Parcels ship daily."
+)
+# A version that ended before `AS_OF`.
+EXPIRED_DELIVERY = dataclasses.replace(
+    DELIVERY, document_id="OLD", effective_end_at=datetime(2026, 1, 1, tzinfo=UTC)
 )
 # Another version in effect with the same policy key, so the two conflict.
 SECOND_DELIVERY = dataclasses.replace(
@@ -480,6 +484,13 @@ async def test_a_clarification_is_ready_with_missing_information() -> None:
             "llm_invalid_output",
             None,
         ),
+        # The final code chooses the status, so `llm_invalid_output` is never an abstention.
+        (
+            UnanswerableRequest(usage=TokenUsage(1_000_001, 0)),
+            NoDraftStatus.LLM_UNAVAILABLE,
+            "llm_invalid_output",
+            None,
+        ),
     ],
 )
 async def test_a_failure_of_the_drafting_step_is_an_outcome_with_its_reason(
@@ -540,12 +551,9 @@ async def test_a_first_passage_longer_than_the_token_budget_is_still_sent() -> N
 
 @pytest.mark.anyio
 async def test_an_expired_version_is_never_sent_to_the_llm() -> None:
-    expired = dataclasses.replace(
-        DELIVERY, document_id="OLD", effective_end_at=datetime(2026, 1, 1, tzinfo=UTC)
-    )
     model = FakeModel(
         matches=(
-            DocumentMatch(expired, 0.95, ("Old text.",)),
+            DocumentMatch(EXPIRED_DELIVERY, 0.95, ("Old text.",)),
             DocumentMatch(DELIVERY, 0.9, (DELIVERY.body,)),
         )
     )
@@ -567,3 +575,165 @@ async def test_a_ticket_without_an_order_sends_no_order_fact() -> None:
 
     assert isinstance(outcome, DraftReady)
     assert model.requests[0].order_facts == ()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("model", "attributes"),
+    [
+        (
+            FakeModel(),
+            {
+                "recommendation": "draft",
+                "reason_codes": "",
+                "document_count": 1,
+                "warning_count": 0,
+                "analysis_ms": 300,
+            },
+        ),
+        # An expired version is a document of the analysis too.
+        (
+            FakeModel(
+                matches=(
+                    DocumentMatch(EXPIRED_DELIVERY, 0.95, ("Old text.",)),
+                    DocumentMatch(DELIVERY, 0.9, (DELIVERY.body,)),
+                )
+            ),
+            {
+                "recommendation": "draft",
+                "reason_codes": "",
+                "document_count": 2,
+                "warning_count": 0,
+                "analysis_ms": 300,
+            },
+        ),
+        # Two codes, in the order of the contract, and the warning of a disagreement.
+        (
+            FakeModel(intents=distribution(("request_refund", 0.45), ("track_order", 0.4))),
+            {
+                "recommendation": "abstain",
+                "reason_codes": "low_confidence,requires_authority",
+                "document_count": 1,
+                "warning_count": 1,
+                "analysis_ms": 300,
+            },
+        ),
+    ],
+)
+async def test_an_analysis_records_its_recommendation_its_counts_and_its_time(
+    model: FakeModel, attributes: dict[str, EventAttributeValue]
+) -> None:
+    events = RecordingEventRecorder()
+
+    await _pipeline(model, events).analyze(_request(), EXAMPLE_RELEASE)
+
+    assert events.events == [RecordedEvent(EventName.ANALYSIS_COMPLETED, attributes)]
+
+
+# The events that end a draft step; each step records exactly one (LOG-17, LOG-19).
+OUTCOME_EVENTS = frozenset(
+    {
+        EventName.DRAFT_GENERATED,
+        EventName.DRAFT_ABSTAINED,
+        EventName.ESCALATION_RECOMMENDED,
+        EventName.LLM_CALL_FAILED,
+        EventName.GROUNDING_CHECK_FAILED,
+    }
+)
+# The fake model: 0.3 s to analyze, 1.5 s for the LLM.
+TOKENS: dict[str, EventAttributeValue] = {"input_token_count": 1_000, "output_token_count": 500}
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("model", "event", "attributes"),
+    [
+        (
+            FakeModel(),
+            EventName.DRAFT_GENERATED,
+            {
+                "reason_codes": "",
+                "segment_count": 1,
+                "citation_count": 2,
+                **TOKENS,
+                "cost_micro_usd": 2,
+                "llm_ms": 1_500,
+                "total_ms": 1_800,
+            },
+        ),
+        (
+            FakeModel(matches=()),
+            EventName.DRAFT_ABSTAINED,
+            {"reason_codes": "no_valid_document", "total_ms": 300},
+        ),
+        (
+            FakeModel(intents=distribution(("human_agent", 0.95))),
+            EventName.ESCALATION_RECOMMENDED,
+            {"reason_codes": "human_agent_requested", "total_ms": 300},
+        ),
+        (
+            FakeModel(reply=UnanswerableRequest(usage=USAGE)),
+            EventName.DRAFT_ABSTAINED,
+            {"reason_codes": "no_valid_document", "total_ms": 1_800, "llm_ms": 1_500},
+        ),
+        (
+            FakeModel(reply=LlmCallError(LlmFailure.UNAVAILABLE)),
+            EventName.LLM_CALL_FAILED,
+            {"reason_code": "llm_unavailable", "llm_ms": 1_500},
+        ),
+        # Each code leads to one event: `llm_invalid_output` is an unusable output, whichever
+        # check found it (contracts v1 design, Reason codes).
+        (
+            FakeModel(reply=LlmCallError(LlmFailure.INVALID_OUTPUT, USAGE)),
+            EventName.GROUNDING_CHECK_FAILED,
+            {"reason_code": "llm_invalid_output", "llm_ms": 1_500, **TOKENS},
+        ),
+        (
+            FakeModel(
+                reply=dataclasses.replace(
+                    GROUNDED,
+                    text="Your order [ORDER_ID_9] ships daily [S1].",
+                    cited_source_ids=("S1",),
+                )
+            ),
+            EventName.GROUNDING_CHECK_FAILED,
+            {"reason_code": "llm_invalid_output", "llm_ms": 1_500, **TOKENS},
+        ),
+        (
+            FakeModel(
+                reply=dataclasses.replace(
+                    GROUNDED, text="Your parcel is late [S2].", cited_source_ids=("S2",)
+                )
+            ),
+            EventName.GROUNDING_CHECK_FAILED,
+            {"reason_code": "grounding_failed", "llm_ms": 1_500, **TOKENS},
+        ),
+        # Token counts beyond the caps of the contract are never logged either, and they make
+        # the code `llm_invalid_output` on every path.
+        (
+            FakeModel(reply=dataclasses.replace(GROUNDED, usage=TokenUsage(1_000_001, 0))),
+            EventName.GROUNDING_CHECK_FAILED,
+            {"reason_code": "llm_invalid_output", "llm_ms": 1_500},
+        ),
+        (
+            FakeModel(reply=LlmCallError(LlmFailure.UNAVAILABLE, TokenUsage(0, 1_000_001))),
+            EventName.GROUNDING_CHECK_FAILED,
+            {"reason_code": "llm_invalid_output", "llm_ms": 1_500},
+        ),
+        (
+            FakeModel(reply=UnanswerableRequest(usage=TokenUsage(1_000_001, 0))),
+            EventName.GROUNDING_CHECK_FAILED,
+            {"reason_code": "llm_invalid_output", "llm_ms": 1_500},
+        ),
+    ],
+)
+async def test_each_draft_records_one_outcome_event_with_codes_counts_and_times(
+    model: FakeModel, event: EventName, attributes: dict[str, EventAttributeValue]
+) -> None:
+    events = RecordingEventRecorder()
+
+    await _pipeline(model, events).draft(_request(), EXAMPLE_RELEASE)
+
+    recorded = [recorded for recorded in events.events if recorded.name in OUTCOME_EVENTS]
+    assert recorded == [RecordedEvent(event, attributes)]
+    assert events.of(EventName.ANALYSIS_COMPLETED)

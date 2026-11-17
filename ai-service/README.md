@@ -211,12 +211,22 @@ Every log line is one JSON object on standard output, with the attributes of an 
 | `egress_allow_list.invalid` | The egress allow-list is missing or invalid, so the replica stops; it names the file, never its content |
 | `release.loaded` | The release manifest, every file it names, and every asset pass the check, and the two models are loaded, with the `release_id` |
 | `release.invalid` | The release manifest, a file it names, or an asset fails the check, or a model cannot be loaded, so the replica stops; it names the reason, the asset, and the path of the file, never its content |
+| `model.loaded` | The intent model and the encoder are loaded, with `model_version`, `index_version`, and the loading time in `duration_ms` |
+| `kb.loaded` | The KB is loaded and indexed, with `kb_version`, `mapping_version`, and `document_count` |
 | `request.completed` | Every request ends, with the route template, the method, the status, and the duration |
 | `request.failed` | A request fails unexpectedly, with the error type |
 | `request.refused` | A request answers `503 not-ready`, because no verified release is loaded |
 | `service_token.rejected` | A request has no valid service token and answers `401` |
 | `log.forwarded` | A library logs at `warning` or above; the message is redacted |
+| `analysis.completed` | An analysis is complete, in both operations, with `recommendation`, `reason_codes`, `document_count`, `warning_count`, and `analysis_ms` |
+| `draft.generated` | A draft passed its checks, with `reason_codes`, `segment_count`, `citation_count`, the token counts, `cost_micro_usd`, `llm_ms`, and `total_ms` |
+| `draft.abstained` | No draft, because routing abstained or the LLM found the sources insufficient, at `info` (LOG-16), with `reason_codes`, `total_ms`, and `llm_ms` when the LLM was called |
+| `escalation.recommended` | No draft, because escalation is recommended, at `info` (LOG-16), with `reason_codes` and `total_ms` |
+| `llm.call_failed` | No draft, because the LLM call failed at the provider, with the code `llm_unavailable`: a timeout, an error, a rate limit, a call that the egress allow-list refused, or a spent budget. At `warning`, with `reason_code`, `llm_ms`, and the token counts when the LLM answered |
+| `grounding.check_failed` | No draft, because the output of the LLM is unusable, with the code `llm_invalid_output` (it breaks the schema, holds a placeholder that was not in the prompt, or reports token counts beyond the caps of the contract) or `grounding_failed`. At `warning`, with `reason_code`, `llm_ms`, and the token counts within the caps of the contract |
 | `personal_data.masked` | The second layer masked a personal-data pattern before an LLM call, at `warning`, with the type and the number of masks only, because pseudonymization missed it ([SEC-06](../docs/rules/security-and-privacy.md#data-sent-to-llm-providers)) |
+
+Each draft step records exactly one of the five draft events, where its outcome is decided (LOG-17). After the LLM, the final reason code alone chooses the event and the status, so one code always leads to the same event. `reason_codes` holds the codes in the order of the contract, joined by commas, because an attribute is a scalar (LOG-10). No attribute holds a text of the message, the KB, the prompt, or the draft (LOG-29).
 
 Every request continues the trace of a valid `traceparent` or starts a new one, and its log lines and error bodies carry that trace ID ([LOG-04](../docs/rules/logging-and-observability.md), LOG-05). `ai-service` uses only the OpenTelemetry API: no span leaves the process, because a telemetry destination needs a change of ADR-0010 first ([ADR-0018, Follow-ups](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#follow-ups)).
 
@@ -245,6 +255,7 @@ Every request continues the trace of a valid `traceparent` or starts a new one, 
 - The static scan of the egress guardrail covers only the code of `ai-service`. A dependency that opens its own connection is caught only when a test runs it under the network block of pytest-socket ([ADR-0018, Consequences](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#consequences)).
 - The Gemini API has rate limits. When a call fails or the budget runs out, a draft returns `llm_unavailable` with a reason code, and staff handle the ticket manually (ESC-05).
 - httpx applies the timeout of an LLM attempt to each phase of the request (connect, write, read, and pool), not to the whole request. The budget is checked only before each attempt and before each wait, so in the worst case one attempt, and so the whole LLM step, runs past `LLM_BUDGET_MS`; `main` stated the same limit ([ERR-10, ERR-11](../docs/rules/errors-and-reliability.md#timeouts-and-latency-budget)).
+- `ai-service` creates no span for the steps of the pipeline or for the LLM call yet ([LOG-20 to LOG-22](../docs/rules/logging-and-observability.md#traces)), because no span leaves the process while ADR-0010 names no destination for telemetry ([ADR-0018, Follow-ups](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#follow-ups)). The log events and their trace IDs cover each step until then.
 - No circuit breaker stops the calls of a failing provider yet ([ERR-14](../docs/rules/errors-and-reliability.md#retries), a SHOULD): each draft step tries again within its own budget.
 - The latency budget of the whole suggestion, and with it the reason code `budget_exceeded`, waits for the `ai-service` design that ERR-10 asks for; the project lead deferred it on 2026-11-15 ([ERR-11](../docs/rules/errors-and-reliability.md#timeouts-and-latency-budget)). Until then, the LLM step keeps its own budget.
 - Placeholders are not mapped to their type before the classifier and the encoder, because the model of `main` was trained without that step; the project lead deferred [DATA-59](../docs/rules/data-and-ml.md#models-and-artifacts) to the next training on 2026-11-15.

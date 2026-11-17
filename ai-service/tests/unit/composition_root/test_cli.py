@@ -3,6 +3,7 @@
 import importlib.abc
 import importlib.machinery
 import importlib.util
+import json
 import logging
 import os
 import subprocess
@@ -26,11 +27,18 @@ from supportiq_ai_service.platform.adapters.egress import (
     ALLOW_LIST_FILE_NAME,
     EgressAllowList,
     EgressAllowListInvalidError,
+    create_egress_client,
     packaged_egress_allow_list,
 )
 from supportiq_ai_service.platform.adapters.system_clock import SystemClock
 from supportiq_ai_service.retrieval.adapters.index_file import IndexConfiguration
-from tests.unit.composition_root.fakes import load_fake_models
+from tests.unit.composition_root.fakes import (
+    KB_RELEASE_CHANGES,
+    LONG_DOCUMENT,
+    SHORT_DOCUMENT,
+    load_fake_models,
+)
+from tests.unit.drafting.fakes import ScriptedNetwork, answer, gemini_response
 from tests.unit.platform.fakes import LLM_ENVIRONMENT, RecordingEgressClientFactory
 from tests.unit.release.fakes import EXAMPLE_VERSIONS
 from tests.unit.release.release_folder import (
@@ -49,6 +57,29 @@ OFFLINE_VARIABLES = ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_HUB_DISABLE_T
 # The real loader, kept before the fixture `fake_models` replaces it in every test.
 REAL_LOAD_RELEASE_MODELS = cli.load_release_models
 BASE_URL = "http://ai-service.test"
+SAMPLE_DOCUMENTS = (LONG_DOCUMENT, SHORT_DOCUMENT)
+# The attributes of the events of a release that is loaded and a draft that is generated.
+EVENT_ATTRIBUTES = {
+    "model.loaded": {"model_version", "index_version", "duration_ms"},
+    "kb.loaded": {"kb_version", "mapping_version", "document_count"},
+    "analysis.completed": {
+        "recommendation",
+        "reason_codes",
+        "document_count",
+        "warning_count",
+        "analysis_ms",
+    },
+    "draft.generated": {
+        "reason_codes",
+        "segment_count",
+        "citation_count",
+        "input_token_count",
+        "output_token_count",
+        "cost_micro_usd",
+        "llm_ms",
+        "total_ms",
+    },
+}
 SERVICE_TOKEN_HEADERS = {"Authorization": f"Bearer {SERVICE_TOKEN}"}
 
 
@@ -326,6 +357,57 @@ async def test_a_release_without_kb_documents_finds_none(server: RecordingServer
 
     assert response.status_code == HTTPStatus.NOT_FOUND
     assert response.json()["type"] == "urn:supportiq:problem:not-found"
+
+
+@pytest.mark.anyio
+async def test_the_events_of_a_draft_carry_codes_counts_and_times_and_no_text(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    server: RecordingServer,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    manifest = write_release(tmp_path, assets=with_changes(KB_RELEASE_CHANGES))
+    _set_settings(monkeypatch, str(manifest))
+    draft_text = "Refunds go to the card"
+    network = ScriptedNetwork([gemini_response(answer(f"{draft_text} [S1].", ("S1",)))])
+
+    def create_client(allow_list: EgressAllowList) -> httpx.Client:
+        return create_egress_client(allow_list, network)
+
+    monkeypatch.setattr(cli, "create_egress_client", create_client)
+    cli.main(SERVE_ARGUMENTS)
+    ((app, _options),) = server.runs
+    message = "Where is my refund. My word is zebra-umbrella."
+
+    response = await _request(
+        app, "POST", "/v1/drafts", {"message": message, "as_of": "2026-11-05T09:30:00Z"}
+    )
+
+    assert response.json()["status"] == "draft_ready"
+    output = capsys.readouterr().out
+    records = {record["event"]: record for record in map(json.loads, output.splitlines())}
+    # Each attribute survives the allow-list of the log formatter.
+    for event, names in EVENT_ATTRIBUTES.items():
+        assert names <= records[event].keys(), event
+    assert records["model.loaded"]["model_version"] == EXAMPLE_VERSIONS.model_version
+    assert records["kb.loaded"]["document_count"] == len(SAMPLE_DOCUMENTS)
+    assert records["analysis.completed"]["recommendation"] == "draft"
+    generated = records["draft.generated"]
+    # One segment that cites one source; Gemini counted 12 input tokens (gemini_response).
+    assert (generated["segment_count"], generated["citation_count"]) == (1, 1)
+    assert generated["input_token_count"] == 12  # noqa: PLR2004  # the usage of the fake answer
+    # No text of the message, the KB, the prompt, or the draft, and no key (LOG-29, SEC-24).
+    texts = (
+        "zebra-umbrella",
+        "Where is my refund",
+        draft_text,
+        "refund refund",
+        "A fake system prompt",
+        LLM_ENVIRONMENT["GEMINI_API_KEY"],
+        *(str(document["title"]) for document in SAMPLE_DOCUMENTS),
+        *(str(document["body"])[:20] for document in SAMPLE_DOCUMENTS),
+    )
+    assert [text for text in texts if text in output] == []
 
 
 class _ModelsModuleFinder(importlib.abc.MetaPathFinder, importlib.abc.Loader):

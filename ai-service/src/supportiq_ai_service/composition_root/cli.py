@@ -131,7 +131,9 @@ def build_application(settings: Settings, events: EventRecorder) -> FastAPI:
     """
     allow_list = packaged_egress_allow_list()
     release_source = verify_release(settings.release_manifest_path)
-    assets = read_release_assets(release_source, settings, load_release_models)
+    assets = read_release_assets(
+        release_source, settings, load_release_models, events, SYSTEM_TIMING
+    )
     events.record(EventName.RELEASE_LOADED, release_id=release_source.manifest.release_id)
     egress_client = create_egress_client(allow_list)
     services = build_release_services(assets, settings, events, egress_client, SYSTEM_TIMING)

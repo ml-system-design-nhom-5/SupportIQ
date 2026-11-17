@@ -1,11 +1,50 @@
-"""The two models of a release, faked, so that wiring a replica needs no torch and no weights."""
+"""The two models of a release, faked, so that wiring a replica needs no torch and no weights.
+
+`KB_RELEASE_CHANGES` gives a release two KB document versions, both mapped to `track_order`,
+the intent that the fake classifier is sure of.
+"""
 
 from supportiq_ai_service.composition_root.release_assets import ReleaseModels
 from supportiq_ai_service.intent import IntentDistribution
 from supportiq_ai_service.intent.adapters.model_artifact import ModelArtifact
 from supportiq_ai_service.retrieval.adapters.index_file import IndexConfiguration
 from tests.unit.intent.fakes import distribution
+from tests.unit.release.release_folder import (
+    KB_DOCUMENT,
+    KB_ENTRY,
+    MAPPING_DOCUMENT,
+    AssetFileChanges,
+    json_file,
+)
 from tests.unit.retrieval.fakes import KeywordEncoder
+
+# 150 words, so the chunking of the release (100 tokens, 10 of overlap) makes two passages.
+LONG_DOCUMENT = {**KB_ENTRY, "body": " ".join(["refund"] * 150)}
+SHORT_DOCUMENT = {
+    **KB_ENTRY,
+    "document_id": "SAMPLE-REFUND-002",
+    "title": "A fake refund method",
+    "body": "A refund to the card.",
+    "policy_key": "refund_method",
+}
+KB_RELEASE_CHANGES: AssetFileChanges = {
+    "kb": {"kb/kb.json": json_file({**KB_DOCUMENT, "documents": [LONG_DOCUMENT, SHORT_DOCUMENT]})},
+    "mapping": {
+        "mapping/document-intents.json": json_file(
+            {
+                **MAPPING_DOCUMENT,
+                "documents": [
+                    {
+                        "document_id": document["document_id"],
+                        "version": document["version"],
+                        "intents": ["track_order"],
+                    }
+                    for document in (LONG_DOCUMENT, SHORT_DOCUMENT)
+                ],
+            }
+        )
+    },
+}
 
 
 class FakeClassifier:
