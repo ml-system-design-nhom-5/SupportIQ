@@ -1,6 +1,6 @@
 # ADR-0025: Routing configuration of the first release
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-17
 - **Deciders:** Project lead
 - **Related:** [Requirements](../product/requirements.md) (FR-06, [ESC-01 to ESC-05](../product/requirements.md#41-escalation-and-fallback-rules)), [ADR-0005](0005-intent-independent-retrieval.md) (statements 3 and 5), [ADR-0021](0021-repository-layout-and-ai-ml-migration.md) ([Where the code of `main` goes](0021-repository-layout-and-ai-ml-migration.md#where-the-code-of-main-goes), [Release and the offline evaluation gate](0021-repository-layout-and-ai-ml-migration.md#release-and-the-offline-evaluation-gate), [Exception to TEST-26](0021-repository-layout-and-ai-ml-migration.md#exception-to-test-26)), [contracts v1 design, Authority rule](../design/contracts-v1.md#authority-rule-fr-06), [data and ML rules](../rules/data-and-ml.md#models-and-artifacts) (DATA-56 to DATA-58), [ARCH-36 and ARCH-40](../rules/architecture.md#versioned-assets), [WF-22 to WF-24](../rules/workflow.md#technical-debt), [`ai-service` README, Asset formats](../../ai-service/README.md#asset-formats), [interim escalation cases](../../eval/suites/escalation/interim-v1/README.md)
@@ -154,7 +154,6 @@ This exception does not end with the merge of the join PR.
 
 - The tuning issue of [Exception to DATA-58](#exception-to-data-58), statement 2, labeled `tech-debt`, with this ADR as its reason ([WF-22](../rules/workflow.md#technical-debt)).
 - The data contract for the release manifest and its asset formats ([ADR-0021, Follow-ups](0021-repository-layout-and-ai-ml-migration.md#follow-ups)) decides whether τ and δ can be set per intent, through the [contract-first process](../rules/contracts.md#contract-first-process).
-- When this ADR is accepted, a note under the [index](README.md#index) names the passages of ADR-0021 and ADR-0005 that it replaces.
 
 ## Pros and cons of the options
 
@@ -190,5 +189,7 @@ This exception does not end with the merge of the join PR.
 
 ## Open questions
 
-- **Category of the unauthorized-transaction terms.** The project lead named the categories of the dispute and exception terms. This ADR gives the ten unauthorized-transaction terms `suspected_fraud`, as proposed to the project lead on 2026-11-16; `transaction_dispute` is the other candidate.
-- **Review of the terms.** Who the policy owner and the RAG engineer of DATA-58 are, and whether the project lead's approval may stand in for their review, as [Exception to DATA-58](#exception-to-data-58), statement 1, proposes.
+None. The project lead decided both questions of the draft on 2026-11-17:
+
+- **Category of the unauthorized-transaction terms:** the ten unauthorized-transaction terms keep the category `suspected_fraud`, as [Sensitive terms](#sensitive-terms) states.
+- **Review of the terms:** the project lead's approval stands in for the review of the terms by the policy owner and the RAG engineer of DATA-58, as [Exception to DATA-58](#exception-to-data-58), statement 1, states.

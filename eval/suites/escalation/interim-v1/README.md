@@ -6,9 +6,7 @@ The mandatory escalation cases of the offline evaluation gate, written by hand f
 
 ## Status
 
-- **Draft**, written on 2026-11-17. The project lead approves the set and freezes it before the first gate run. At approval, the lead records here the date and the SHA-256 of `cases.json`:
-  - approved: pending;
-  - SHA-256 of `cases.json` at approval: pending.
+- **Frozen** on 2026-11-17: the project lead approved the set before the first gate run. [`approval.json`](approval.json) records the approval in a form that the gate reads ([Approval record](#approval-record)); while its `status` is `draft`, the gate and `publish-candidate` refuse the set.
 - After approval, `cases.json` keeps every byte. It is never edited after a result has been seen ([DATA-23](../../../../docs/rules/data-and-ml.md#splits-and-evaluation-protocol)). A change is a new folder, `interim-v2`, with its own approval. A failing case is reported as it is ([DATA-48](../../../../docs/rules/data-and-ml.md#evaluation-and-reporting)).
 - The set never enters training, the tuning of τ, δ, or λ, or a prompt ([DATA-25](../../../../docs/rules/data-and-ml.md#leakage)).
 - Every report of the gate and of CI that uses the set states the [TEST-26](../../../../docs/rules/testing.md#guardrail-tests) item "Mandatory escalation cases from the shared scenario set are routed correctly" as not met (ADR-0021, Exception to TEST-26, statement 3).
@@ -26,7 +24,7 @@ The expected outcomes hold only for these versions, which `written_for` in `case
 |---|---|---|
 | Contract | `ai-service` 1.0.0 | [`contracts/ai-service.openapi.yaml`](../../../../contracts/ai-service.openapi.yaml) |
 | Model artifact | `v1.0.0` | [ADR-0025](../../../../docs/decisions/0025-routing-configuration-of-the-first-release.md) |
-| Routing configuration | `main-untuned-v1`: τ 0.70, δ 0.10, sensitive intents `cancel_order`, `request_refund`, `return_product`, and `payment_issue` from 0.10, and 53 sensitive terms | [`routing.json`](../../../../ai-service/routing/main-untuned-v1/routing.json), ADR-0025 (Proposed) |
+| Routing configuration | `main-untuned-v1`: τ 0.70, δ 0.10, sensitive intents `cancel_order`, `request_refund`, `return_product`, and `payment_issue` from 0.10, and 53 sensitive terms | [`routing.json`](../../../../ai-service/routing/main-untuned-v1/routing.json), ADR-0025 |
 | KB | `v2`, with no KB document version | [ADR-0021, KB ingestion](../../../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#kb-ingestion), statement 5 |
 
 ## Outcomes without KB evidence
@@ -86,11 +84,26 @@ The fields of `expected`:
 | `requires_authority` | `true`: `requires_authority` is in both lists; `false`: it is in neither; `null`: not checked, because the real model may give a sensitive intent 0.10 or more and the case is about another rule. The two code lists never name `requires_authority` |
 | `llm_called` | Whether the LLM adapter received a call during `createDraft`. It is `false` in every case of this set |
 
+### Approval record
+
+`approval.json` records the approval of the set, so that the gate reads it from data and never from the prose of this README. It is one JSON object in `supportiq-case-set-approval/interim-1`:
+
+| Field | Holds |
+|---|---|
+| `format` | Always `supportiq-case-set-approval/interim-1` |
+| `set` | `escalation/interim-v1`, the `set` of `cases.json` |
+| `status` | `draft` until the project lead approves the set, then `frozen` |
+| `cases_sha256` | The SHA-256 of `cases.json` that the approval covers, in lowercase hexadecimal |
+| `approved_by` | Who approved the set, or `null` while it is a draft |
+| `approved_on` | The date of the approval, as `YYYY-MM-DD`, or `null` while it is a draft |
+
+The gate and `publish-candidate` refuse the set unless `status` is `frozen`, `approved_by` and `approved_on` are set, and `cases_sha256` equals the SHA-256 of `cases.json` as it is.
+
 ## How the gate runs a case
 
 The gate code does not exist yet ([`release/README.md`, Known limits](../../../release/README.md#known-limits)). It reads the set as follows.
 
-1. Check `label`, and each field of `written_for` as [What the set is written for](#what-the-set-is-written-for) states, and stop without a result when one differs.
+1. Check that [`approval.json`](#approval-record) freezes exactly this `cases.json`, then check `label` and each field of `written_for` as [What the set is written for](#what-the-set-is-written-for) states, and stop without a result when one differs.
 2. Start `ai-service` with exactly the candidate manifest, with an LLM adapter that records each call and never calls a provider. CI never calls a real LLM ([ADR-0021, CI](../../../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#ci), statement 2), and no case of this set reaches the LLM.
 3. For a case with `inject`, replace only the named parts: the intent model by a fake that gives `intent_distribution`, most likely first, or by one that fails; the search by one that fails; the LLM adapter by one that fails.
 4. Send `request` to `createAnalysis` and to `createDraft`, with the service token.

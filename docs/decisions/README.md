@@ -32,7 +32,7 @@ An architecture decision record (ADR) captures one significant decision: its con
 | [0022](0022-server-sent-events-for-suggestion-progress.md) | Server-sent events for the suggestion progress of an open ticket | Accepted | 2026-11-13 |
 | [0023](0023-graceful-shutdown-of-suggestion-progress-streams.md) | Graceful shutdown of suggestion progress streams | Accepted | 2026-11-16 |
 | [0024](0024-event-schema-of-the-suggestion-progress-stream.md) | Event schema of the suggestion progress stream | Accepted | 2026-11-16 |
-| [0025](0025-routing-configuration-of-the-first-release.md) | Routing configuration of the first release | Proposed | 2026-11-17 |
+| [0025](0025-routing-configuration-of-the-first-release.md) | Routing configuration of the first release | Accepted | 2026-11-17 |
 
 Notes on the index:
 
@@ -48,6 +48,7 @@ Notes on the index:
 - [ADR-0022](0022-server-sent-events-for-suggestion-progress.md) was accepted on 2026-11-14 by the project lead, who chose its recommended option, and changes statement 4 of [ADR-0016, `frontend` and the ingress](0016-hosting-on-free-tiers.md#frontend-and-the-ingress-on-cloudflare-pages) for one route.
 - [ADR-0023](0023-graceful-shutdown-of-suggestion-progress-streams.md) was accepted on 2026-11-16 by the project lead. It replaces one point of [ADR-0022](0022-server-sent-events-for-suggestion-progress.md), statement 5: "At shutdown: the lifespan ends every stream before uvicorn's graceful shutdown". The rest of ADR-0022 still holds.
 - [ADR-0024](0024-event-schema-of-the-suggestion-progress-stream.md) was accepted on 2026-11-16 by the project lead. It replaces the words "with a string schema" of [ADR-0022](0022-server-sent-events-for-suggestion-progress.md), statement 9. The rest of ADR-0022 still holds.
+- [ADR-0025](0025-routing-configuration-of-the-first-release.md) was accepted on 2026-11-17 by the project lead. It replaces two passages of [ADR-0021](0021-repository-layout-and-ai-ml-migration.md): the words "derived from it ([DATA-58](../rules/data-and-ml.md#models-and-artifacts))" in the row `apps/core_backend/config/policies/intent_policy.v2.json` of Where the code of `main` goes, and "three known gaps" in statement 4 of Release and the offline evaluation gate, which gets a fourth gap, the untuned routing configuration. For the routing configuration `main-untuned-v1` only, it also sets aside statement 3, "λ is tuned on validation data only", and statement 5, "Thresholds are tuned on validation data", of [ADR-0005](0005-intent-independent-retrieval.md#decision), until the tuning issue publishes a tuned version. The rest of ADR-0021 and ADR-0005 still holds.
 
 ## Lifecycle
 
