@@ -79,6 +79,8 @@ repos:
         entry: '^on:\n  push:\n    branches:\n      - main\n      - "build/\*\*"\n  pull_request:\n    branches:\n      - main\n\n+(?=[^\s#])'
         args: [--multiline, --negate]
         files: ^\.github/workflows/
+        # deploy.yml has its own trigger, pinned by deploy-workflow-trigger.
+        exclude: ^\.github/workflows/deploy\.yml$
       - id: workflow-no-path-filters
         name: "Workflow convention 3: no paths or paths-ignore"
         language: pygrep
@@ -127,6 +129,8 @@ repos:
         entry: '^concurrency:\n  group: \$\{\{ github\.workflow \}\}-\$\{\{ github\.ref \}\}\n  cancel-in-progress: true\n'
         args: [--multiline, --negate]
         files: ^\.github/workflows/
+        # deploy.yml has its own concurrency, pinned by deploy-workflow-concurrency.
+        exclude: ^\.github/workflows/deploy\.yml$
       - id: workflow-has-timeout
         name: "Workflow convention 8: timeout-minutes is present"
         language: pygrep
@@ -160,6 +164,62 @@ repos:
         entry: '^\s*(-\s+)?uses:\s*\S*retry|\bgh\s+run\s+rerun\b'
         args: [--ignore-case]
         files: ^\.github/workflows/
+      - id: workflow-secrets-only-in-deploy
+        name: "Workflow convention 13: no workflow but deploy.yml reads a secret"
+        language: pygrep
+        entry: 'secrets\.[A-Za-z_]'
+        files: ^\.github/workflows/
+        exclude: ^\.github/workflows/deploy\.yml$
+      - id: workflow-no-inherited-secrets
+        name: "Workflow convention 13: no secrets: inherit and no environment"
+        language: pygrep
+        entry: '\bsecrets:\s*inherit\b|^\s+environment:'
+        files: ^\.github/workflows/
+      # The exceptions of deploy.yml: its trigger (convention 2), its concurrency (convention 7),
+      # and the two steps that read its two secrets (convention 13).
+      - id: deploy-workflow-trigger
+        name: "Workflow convention 2, deploy.yml: only workflow_dispatch"
+        language: pygrep
+        entry: '^on:\n  workflow_dispatch:\n\n+(?=[^\s#])'
+        args: [--multiline, --negate]
+        files: ^\.github/workflows/deploy\.yml$
+      - id: deploy-workflow-concurrency
+        name: "Workflow convention 7, deploy.yml: one deploy at a time, never cancelled"
+        language: pygrep
+        entry: '^concurrency:\n  group: deploy\n  cancel-in-progress: false\n'
+        args: [--multiline, --negate]
+        files: ^\.github/workflows/deploy\.yml$
+      # Fails on a line that reads a secret and is not one of the two allowed lines, and on an
+      # allowed line that appears twice.
+      - id: deploy-workflow-secrets
+        name: "Workflow convention 13, deploy.yml: only the two secrets of the deploy"
+        language: pygrep
+        entry: '^(?!          DATABASE_URL_OWNER: \$\{\{ secrets\.DEPLOY_DATABASE_URL_OWNER \}\}\n)(?!          RENDER_DEPLOY_HOOK_URL: \$\{\{ secrets\.RENDER_DEPLOY_HOOK_URL \}\}\n)[^\n]*secrets\.[A-Za-z_]|secrets\.DEPLOY_DATABASE_URL_OWNER\b.*secrets\.DEPLOY_DATABASE_URL_OWNER\b|secrets\.RENDER_DEPLOY_HOOK_URL\b.*secrets\.RENDER_DEPLOY_HOOK_URL\b'
+        args: [--multiline]
+        files: ^\.github/workflows/deploy\.yml$
+      # Requires each secret in the env of the one step that uses it, with that step's command,
+      # so no other command of the step can read it and the hook call keeps its limits.
+      - id: deploy-workflow-secret-steps
+        name: "Workflow convention 13, deploy.yml: each secret only in the step that uses it"
+        language: pygrep
+        entry: '^      - name: Apply the migrations on Supabase, as the owner role\n        working-directory: backend\n        env:\n          DATABASE_URL_OWNER: \$\{\{ secrets\.DEPLOY_DATABASE_URL_OWNER \}\}\n        run: uv run --locked --no-dev backend migrate\n.*^      - name: Call the Render deploy hook with ref set to the migrated commit\n        env:\n          RENDER_DEPLOY_HOOK_URL: \$\{\{ secrets\.RENDER_DEPLOY_HOOK_URL \}\}\n        run: >-\n          curl --fail --silent --show-error --max-time 30 --proto ''=https'' --request POST\n          "\$\{RENDER_DEPLOY_HOOK_URL\}&ref=\$\{GITHUB_SHA\}"\n'
+        args: [--multiline, --negate]
+        files: ^\.github/workflows/deploy\.yml$
+      # The jobs of backend.yml, from `jobs:` to the end of the file, renamed to deploy-…, must
+      # equal the jobs of deploy.yml up to its end marker (convention 14). It needs bash, sed,
+      # and diff, and uses only what BSD and GNU sed share. It has no `stages`, so it runs on
+      # commit and in the repository-checks job.
+      - id: deploy-workflow-copies-backend
+        name: "Workflow convention 14: deploy.yml repeats the jobs of backend.yml"
+        language: system
+        entry: >-
+          bash -c 'diff -u
+          <(sed -n "/^jobs:\$/,\$p" .github/workflows/backend.yml
+          | sed -E "s/^  backend-(checks|tests|image):\$/  deploy-\1:/; s/^    name: backend-(checks|tests|image)\$/    name: deploy-\1/")
+          <(sed -n "/^jobs:\$/,/^  # ===== end of the jobs of backend.yml =====\$/p" .github/workflows/deploy.yml
+          | sed "\$d")'
+        files: ^\.github/workflows/(backend|deploy)\.yml$
+        pass_filenames: false
 
   # ===== Contract checks (owner: contracts gatekeeper) =====
   # The tool versions are pinned in contracts/pnpm-lock.yaml, so the hook calls the
@@ -230,7 +290,7 @@ repos:
         stages: [pre-commit]
   # ===== end of backend hooks =====
 
-  # The two component sections stay apart, so changes to both merge without conflicts.
+  # The component sections stay apart, so changes to several of them merge without conflicts.
   # Each component keeps its hook versions in its own lockfile, as contracts-check does,
   # and its workflow runs its hooks with `pre-commit run <hook-id> --all-files`
   # (docs/guides/repository-checks.md).
@@ -251,3 +311,85 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
   # ===== end of frontend hooks =====
+
+  # ===== ai-service hooks (owner: ML engineer and RAG engineer) =====
+  # The same hooks as backend, for every rule that backend follows (ADR-0021, CI, statement 1).
+  # The tool versions are pinned in ai-service/uv.lock, so each hook calls the ai-service project
+  # through `uv run --locked` (docs/guides/repository-checks.md, convention 12). They need uv on
+  # the PATH, and not torch. CI runs them in .github/workflows/ai-service.yml.
+  - repo: local
+    hooks:
+      - id: ai-service-format
+        name: Check the formatting of the ai-service code (ruff format)
+        language: system
+        entry: bash -c 'cd ai-service && uv run --locked ruff format --check .'
+        files: ^ai-service/
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: ai-service-lint
+        name: Lint the ai-service code (ruff)
+        language: system
+        entry: bash -c 'cd ai-service && uv run --locked ruff check .'
+        files: ^ai-service/
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: ai-service-types
+        name: Type-check the ai-service code in strict mode (pyright)
+        language: system
+        entry: bash -c 'cd ai-service && uv run --locked pyright'
+        files: ^ai-service/
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: ai-service-imports
+        name: Check the layer and feature boundaries of ai-service (import-linter)
+        language: system
+        entry: bash -c 'cd ai-service && uv run --locked lint-imports'
+        files: ^ai-service/
+        pass_filenames: false
+        stages: [pre-commit]
+      # Regenerates the models in place, with the options of ai-service/pyproject.toml, and
+      # fails when they differ from the file before; stage the regenerated file then.
+      - id: ai-service-generated
+        name: Check that the generated ai-service models match the contract (CON-26)
+        language: system
+        entry: >-
+          bash -c 'cd ai-service && committed="$(mktemp)" &&
+          cp src/supportiq_ai_service/generated/__init__.py "$committed" &&
+          uv run --locked datamodel-codegen &&
+          diff -u "$committed" src/supportiq_ai_service/generated/__init__.py'
+        files: ^(ai-service/|contracts/ai-service\.openapi\.yaml$|contracts/schemas/)
+        pass_filenames: false
+        stages: [pre-commit]
+      # Until eval.yml exists, the release command in eval/release/ follows the rule level of
+      # ai-service, with its own lockfile (ADR-0021, CI, statement 7). It has no model generated
+      # from a contract. Its types and layer checks read the source of ai-service, so a change
+      # there runs them too.
+      - id: eval-release-format
+        name: Check the formatting of the release command (ruff format)
+        language: system
+        entry: bash -c 'cd eval/release && uv run --locked ruff format --check .'
+        files: ^eval/release/
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: eval-release-lint
+        name: Lint the release command (ruff)
+        language: system
+        entry: bash -c 'cd eval/release && uv run --locked ruff check .'
+        files: ^eval/release/
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: eval-release-types
+        name: Type-check the release command in strict mode (pyright)
+        language: system
+        entry: bash -c 'cd eval/release && uv run --locked pyright'
+        files: ^(eval/release/|ai-service/src/)
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: eval-release-imports
+        name: Check the layer boundaries of the release command (import-linter)
+        language: system
+        entry: bash -c 'cd eval/release && uv run --locked lint-imports'
+        files: ^(eval/release/|ai-service/src/)
+        pass_filenames: false
+        stages: [pre-commit]
+  # ===== end of ai-service hooks =====
