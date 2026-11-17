@@ -91,6 +91,32 @@ The checks of [ADR-0016, Validation](../docs/decisions/0016-hosting-on-free-tier
 | The suggestion progress stream stays open through the Function beyond 10 000 ms ([ADR-0022](../docs/decisions/0022-server-sent-events-for-suggestion-progress.md#decision), statement 8) | Not run yet |
 | `backend` starts with the named-entity model, and its memory and the p95 of pseudonymization fit the free instance ([ADR-0017](../docs/decisions/0017-named-entity-model-from-its-release-url.md#validation)) | Not run yet |
 
+## Removal of the application of `main`
+
+[ADR-0021](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#removal-of-the-application-of-main) deletes `apps/backend`, `apps/frontend`, and `apps/demo` in step 6 of the join, once every row of its checklist names its proof. The proofs are recorded here, because an accepted ADR is not edited ([documentation handbook, ADRs](../docs/README.md#adrs)).
+
+### Rows covered by existing tests
+
+These rows are covered by the tests below (ADR-0021, Removal of the application of `main`, statement 3). Every row is also covered by the contract tests of `backend`: `backend/tests/contract/test_operations.py`, `backend/tests/contract/test_permissions.py`, and `backend/tests/contract/test_schemathesis.py`.
+
+| Row of the checklist | Tests of `backend` | Tests of `frontend` |
+|---|---|---|
+| Sign-in and sessions | `backend/tests/integration/accounts/test_sign_in.py`, `backend/tests/integration/accounts/test_sessions.py`, `backend/tests/unit/accounts/test_sign_in.py`, `backend/tests/unit/accounts/test_session_rules.py`, `backend/tests/unit/accounts/test_session_use_cases.py` | `frontend/src/features/session/components/sign-in-page.test.tsx`, `frontend/src/features/session/components/require-session.test.tsx`, `frontend/src/features/session/components/sign-out-button.test.tsx`, `frontend/src/features/session/model/session.test.ts`, `frontend/e2e/session.spec.ts` |
+| Shop: products, orders, customer tickets | `backend/tests/integration/commerce/test_shop.py`, `backend/tests/integration/tickets/test_create_shop_ticket.py`, `backend/tests/integration/tickets/test_read_shop_tickets.py`, `backend/tests/integration/tickets/test_idempotent_ticket_creation.py`, `backend/tests/unit/commerce/test_shop_use_cases.py`, `backend/tests/unit/tickets/test_shop_tickets.py` | `frontend/src/features/shop-catalog/components/products-page.test.tsx`, `frontend/src/features/shop-catalog/components/product-page.test.tsx`, `frontend/src/features/shop-orders/components/orders-page.test.tsx`, `frontend/src/features/shop-orders/components/order-page.test.tsx`, `frontend/src/features/shop-support/components/support-page.test.tsx`, `frontend/src/features/shop-support/components/order-support-section.test.tsx`, `frontend/src/features/shop-support/components/order-support-sending.test.tsx`, `frontend/e2e/shop-catalog.spec.ts`, `frontend/e2e/shop-order.spec.ts` |
+| Admin: accounts, role and status changes | `backend/tests/integration/accounts/test_account_list.py`, `backend/tests/integration/accounts/test_account_changes.py`, `backend/tests/integration/accounts/test_account_creation.py`, `backend/tests/integration/accounts/test_password_reset.py`, `backend/tests/integration/accounts/test_account_change_concurrency.py`, `backend/tests/integration/guardrails/test_admin_boundary.py`, `backend/tests/unit/accounts/test_admin_rules.py`, `backend/tests/unit/accounts/test_admin_use_cases.py` | `frontend/src/features/admin-accounts/components/accounts-page.test.tsx`, `frontend/src/features/admin-accounts/components/accounts-page-changes.test.tsx`, `frontend/src/features/admin-accounts/components/account-dialogs.test.tsx`, `frontend/e2e/admin-accounts.spec.ts` |
+| Admin: versions in use | `backend/tests/integration/suggestions/test_admin_versions.py`, `backend/tests/unit/suggestions/test_admin_versions.py` | `frontend/src/features/admin-versions/components/versions-page.test.tsx`, `frontend/src/features/admin-versions/model/versions-in-use.test.ts`, `frontend/e2e/admin-versions.spec.ts` |
+| Console: ticket list, ticket, views, KB | `backend/tests/integration/tickets/test_console_queues.py`, `backend/tests/integration/tickets/test_console_workspace.py`, `backend/tests/integration/tickets/test_console_ticket_view.py`, `backend/tests/integration/suggestions/test_console_kb_document_version.py`, `backend/tests/unit/tickets/test_console_use_cases.py`, `backend/tests/unit/tickets/test_console_views.py`, `backend/tests/unit/suggestions/test_kb_document_version_read.py` | `frontend/src/features/console-tickets/components/ticket-inbox.test.tsx`, `frontend/src/features/console-tickets/components/ticket-workspace-page.test.tsx`, `frontend/src/features/console-tickets/components/ticket-workspace-sources.test.tsx`, `frontend/src/features/console-tickets/model/kb-document.test.ts`, `frontend/e2e/console-workspace.spec.ts` |
+| Reports | `backend/tests/integration/reports/test_console_report_figures.py`, `backend/tests/integration/reports/test_console_report_ai_figures.py`, `backend/tests/integration/reports/test_console_report_requests.py`, `backend/tests/integration/guardrails/test_report_holds_no_customer_data.py`, `backend/tests/unit/reports/test_console_report.py`, `backend/tests/unit/reports/test_report_rules.py` | `frontend/src/features/console-reports/components/reports-page.test.tsx`, `frontend/src/features/console-reports/model/report.test.ts`, `frontend/src/features/console-reports/model/reports-access.test.ts`, `frontend/e2e/console-reports.spec.ts` |
+
+### Runs with the real AI
+
+Each row below is run by hand against the Modal deployment of [ADR-0018](../docs/decisions/0018-hosting-of-ai-service-on-modal.md), because CI never calls an LLM (ADR-0021, Removal of the application of `main`, statement 1). A row that needs a draft with a policy citation runs only after a new KB version is admitted (statement 2).
+
+| Row of the checklist | Date | Commit | `release_id` | Steps | Result |
+|---|---|---|---|---|---|
+| Suggestions and drafts in the console; `apps/demo` (running the pipeline, feedback, history) | | | | | Not run yet |
+| FR-04, FR-06, FR-07, FR-09 | | | | | Not run yet |
+
 ## Every month
 
 Check that the Render free hours, the Functions requests, the database size, and the Grafana Cloud usage stay within the free limits ([ADR-0016, Validation](../docs/decisions/0016-hosting-on-free-tiers.md#validation)).
