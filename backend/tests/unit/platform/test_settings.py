@@ -3,8 +3,14 @@
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from supportiq_backend.composition_root.settings_loading import invalid_setting_names
+from supportiq_backend.composition_root.settings_loading import (
+    SettingsInvalidError,
+    invalid_setting_names,
+    load_settings,
+)
+from supportiq_backend.platform import EventName
 from supportiq_backend.platform.settings import HandlingModeSetting, Settings, TraceExporter
+from tests.unit.platform.fakes import RecordingEventRecorder
 from tests.unit.platform.settings_builders import (
     TEST_AI_SERVICE_TOKEN,
     TEST_AI_SERVICE_URL,
@@ -131,6 +137,11 @@ def test_the_service_token_stays_out_of_the_repr_of_the_settings() -> None:
         ("session_cookie_secure", "sometimes"),
         ("database_url_app", "postgresql+asyncpg://u:p@127.0.0.1:notaport/supportiq"),
         ("database_url_owner", "postgresql+asyncpg://u:p@127.0.0.1:notaport/supportiq"),
+        ("database_url_app", f"{APP_URL}?sslmode=require"),
+        ("database_url_owner", f"{APP_URL}?sslmode=require"),
+        ("database_url_app", f"{APP_URL}?ssl=verify-full"),
+        ("database_url_owner", f"{APP_URL}?ssl=require&application_name=x"),
+        ("database_url_app", f"{APP_URL}?ssl=require&ssl=require"),
         ("allowed_origins", ()),
         ("allowed_origins", ("http://localhost:5173/",)),
         ("allowed_origins", ("HTTP://LOCALHOST:5173",)),
@@ -155,6 +166,32 @@ def test_settings_name_the_one_invalid_setting(setting_name: str, invalid_value:
     names = names_of_invalid_settings(**(REQUIRED_VALUES | {setting_name: invalid_value}))
 
     assert names == (setting_name,)
+
+
+def test_settings_accept_a_database_url_that_requires_tls() -> None:
+    settings = build_settings(database_url_app=f"{APP_URL}?ssl=require")
+
+    assert settings.database_url_app.get_secret_value().endswith("?ssl=require")
+
+
+def test_loading_names_a_refused_database_url_query_and_never_shows_the_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DATABASE_URL_APP", f"{APP_URL}?sslmode=require")
+    monkeypatch.setenv("AI_SERVICE_BASE_URL", TEST_AI_SERVICE_URL)
+    monkeypatch.setenv("AI_SERVICE_TOKEN", TEST_AI_SERVICE_TOKEN)
+    monkeypatch.setenv("BACKEND_BUILD_VERSION", TEST_BUILD_VERSION)
+    monkeypatch.setenv("ALLOWED_ORIGINS", f'["{TEST_ORIGIN}"]')
+    events = RecordingEventRecorder()
+
+    with pytest.raises(SettingsInvalidError) as caught:
+        load_settings(events)
+
+    assert events.of(EventName.SETTINGS_INVALID)[0].attributes == {
+        "setting_names": "database_url_app"
+    }
+    assert "app-test-password" not in str(caught.value)
+    assert "sslmode" not in str(caught.value)
 
 
 def test_settings_require_the_otlp_endpoint_when_the_exporter_is_otlp() -> None:

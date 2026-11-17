@@ -24,8 +24,8 @@ This guide holds no real value: no URL, project reference, token, or password. E
 Every connection to Supabase leaves the host that opens it, so it uses TLS ([SEC-28](../docs/rules/security-and-privacy.md#transport-and-runtime)):
 
 1. In Supabase, open Database Settings, then SSL Configuration, and turn on "Enforce SSL on incoming connections". The database restarts for a few minutes, and the setting applies to the session pooler too. From then on, Supabase refuses every connection without TLS.
-2. Every URL of the database has `ssl=require` in its query: add `?ssl=require`, or `&ssl=require` when the URL already has a `?`. This holds for `DATABASE_URL_APP` on Render, the secret `DEPLOY_DATABASE_URL_OWNER`, and the two URLs in `backend/.env` on your machine.
-3. With the scheme `postgresql+asyncpg`, the parameter is `ssl`. asyncpg stops with a `TypeError` on `sslmode`.
+2. Every URL of the database ends with `?ssl=require`, its only query parameter. This holds for `DATABASE_URL_APP` on Render, the secret `DEPLOY_DATABASE_URL_OWNER`, and the two URLs in `backend/.env` on your machine.
+3. With the scheme `postgresql+asyncpg`, the parameter is `ssl`, not `sslmode`. `backend` accepts no other query: any other parameter or value stops it at startup with a `settings.invalid` line that names the setting, never its value.
 
 ## Render settings
 

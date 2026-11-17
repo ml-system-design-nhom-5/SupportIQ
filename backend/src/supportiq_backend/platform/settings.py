@@ -19,6 +19,10 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
 DATABASE_URL_SCHEME = "postgresql+asyncpg://"
+# The only query a database URL may hold. SQLAlchemy passes every query parameter to
+# `asyncpg.connect`, which stops with a TypeError on any other name, such as `sslmode`
+# (deploy guide, TLS to PostgreSQL).
+_ALLOWED_DATABASE_URL_QUERIES: tuple[dict[str, str], ...] = ({}, {"ssl": "require"})
 # An origin as browsers send it: a lowercase scheme and host, an optional port, and no path
 # (RFC 6454). Comparison with the `Origin` header is exact.
 _ORIGIN_PATTERN = re.compile(r"^https?://([a-z0-9.-]+|\[[0-9a-f:]+\])(:[0-9]{1,5})?$")
@@ -99,8 +103,13 @@ class Settings(BaseSettings):
     @field_validator("database_url_app", "database_url_owner")
     @classmethod
     def _require_asyncpg_url(cls, value: SecretStr | None) -> SecretStr | None:
-        if value is not None and not _is_asyncpg_url(value.get_secret_value()):
+        if value is None:
+            return value
+        url = value.get_secret_value()
+        if not _is_asyncpg_url(url):
             raise _ASYNCPG_URL_RULE.error()
+        if dict(make_url(url).query) not in _ALLOWED_DATABASE_URL_QUERIES:
+            raise _DATABASE_URL_QUERY_RULE.error()
         return value
 
     @field_validator("allowed_origins", mode="before")
@@ -148,6 +157,9 @@ class _SettingRule:
 
 _ASYNCPG_URL_RULE = _SettingRule(
     "database_url_format", "The value must be a well-formed URL that uses postgresql+asyncpg"
+)
+_DATABASE_URL_QUERY_RULE = _SettingRule(
+    "database_url_query", "The query of the URL may hold only ssl=require"
 )
 _ORIGIN_LIST_RULE = _SettingRule("origin_list_format", "The value must be a JSON list of origins")
 _ORIGIN_RULE = _SettingRule(
