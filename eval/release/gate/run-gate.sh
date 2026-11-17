@@ -70,8 +70,12 @@ docker buildx build --load --file "$GATE_DIR/Dockerfile" --target gate --tag "$g
 docker buildx build --load --file "$GATE_DIR/Dockerfile" --target backend-guardrails \
   --tag "$backend_image" .
 
-# 4. The test reports go to a temporary folder outside the repository.
-junit=$(mktemp -d)
+# 4. The test reports go to a temporary folder outside the repository, under the home folder by
+#    default: Docker Desktop and Colima share only the home folder with their VM by default, and
+#    a TMPDIR outside it would reach the containers as an empty folder.
+work_dir="${GATE_WORK_DIR:-$HOME/.cache/supportiq-gate}"
+mkdir -p "$work_dir"
+junit=$(mktemp -d "$work_dir/junit.XXXXXX")
 export GATE_COMMIT="$commit" GATE_JUNIT_DIR="$junit"
 compose=(docker compose --file "$GATE_DIR/compose.yaml")
 cleanup() {

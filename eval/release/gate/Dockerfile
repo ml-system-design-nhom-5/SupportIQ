@@ -24,15 +24,18 @@ ENV UV_COMPILE_BYTECODE=1 \
 WORKDIR /build/ai-service
 # 1. ai-service from its lock, with the torch group to load the model of a candidate and the
 #    dev group to run its guardrail tests (ADR-0021, Python and dependencies, statement 2).
-COPY ai-service/pyproject.toml ai-service/uv.lock ai-service/README.md ./
+#    Each dependency layer copies only pyproject.toml and uv.lock, so an edit of a README or of
+#    the code reuses it; the README comes with the code that the build of the project needs.
+COPY ai-service/pyproject.toml ai-service/uv.lock ./
 RUN uv sync --locked --group torch --group dev --no-install-project
+COPY ai-service/README.md ./
 COPY ai-service/src ./src
 RUN uv sync --locked --group torch --group dev --no-editable
 # 2. The runtime dependencies of eval/release from its lock, with their hashes and without
 #    resolving. A package that both locks pin at different versions stops the build with its
 #    name and both versions, so this step never replaces a version of step 1 without a word.
 WORKDIR /build/eval/release
-COPY eval/release/pyproject.toml eval/release/uv.lock eval/release/README.md ./
+COPY eval/release/pyproject.toml eval/release/uv.lock ./
 COPY eval/release/gate/check_locks.py /build/check_locks.py
 RUN uv export --locked --no-dev --no-emit-project --no-emit-package supportiq-ai-service \
         --format requirements-txt --output-file /tmp/release-requirements.txt \
@@ -42,6 +45,7 @@ RUN uv export --locked --no-dev --no-emit-project --no-emit-package supportiq-ai
         --requirement /tmp/release-requirements.txt
 # 3. The release command itself, without dependencies, then a check that every installed
 #    package has its requirements.
+COPY eval/release/README.md ./
 COPY eval/release/src ./src
 RUN uv pip install --python /opt/venv --no-deps . \
     && uv pip check --python /opt/venv
@@ -61,6 +65,10 @@ ENV PATH="/opt/venv/bin:${PATH}" \
 WORKDIR /srv/ai-service
 COPY ai-service/pyproject.toml ./
 COPY ai-service/tests ./tests
+# The tests read the contracts and their examples from the folder next to the component (CON-27).
+COPY contracts/ai-service.openapi.yaml contracts/backend.openapi.yaml /srv/contracts/
+COPY contracts/schemas /srv/contracts/schemas
+COPY contracts/examples /srv/contracts/examples
 USER gate
 
 # ----- backend-guardrails -----
@@ -78,8 +86,9 @@ ENV UV_COMPILE_BYTECODE=1 \
 RUN useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin backend
 WORKDIR /srv/backend
 # backend with its dev group from its lock, as the CI job backend-tests installs it.
-COPY backend/pyproject.toml backend/uv.lock backend/README.md ./
+COPY backend/pyproject.toml backend/uv.lock ./
 RUN uv sync --locked --no-install-project
+COPY backend/README.md ./
 COPY backend/src ./src
 RUN uv sync --locked
 # The tests read the source of backend (the outbound guardrail), and the default TLS of a
@@ -87,4 +96,8 @@ RUN uv sync --locked
 COPY backend/tests ./tests
 COPY backend/seed ./seed
 COPY backend/certs ./certs
+# The fake ai-service of the tests answers with the examples of the contracts (CON-28).
+COPY contracts/ai-service.openapi.yaml contracts/backend.openapi.yaml /srv/contracts/
+COPY contracts/schemas /srv/contracts/schemas
+COPY contracts/examples /srv/contracts/examples
 USER backend

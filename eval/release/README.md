@@ -305,10 +305,10 @@ It then copies every file of the candidate into a staging folder next to the out
 1. It refuses a worktree with any change, untracked files included, because the images and the record must match one commit. The candidate therefore lies outside the repository or in an ignored path, and the record of a previous run is committed before the next run.
 2. It takes the commit with `git rev-parse HEAD` and creates `eval/releases/` when it is missing. An empty folder is not a change for git.
 3. It builds both images from the worktree.
-4. It runs the guardrail tests of `backend`, then those of `ai-service` in the `gate` image without network, each writing a JUnit XML file, named after its folder, into a temporary folder from `mktemp -d`. A failed test does not stop the script, so the gate records it; a step that writes no report, such as a failed migration, stops it with status 2.
+4. It runs the guardrail tests of `backend`, then those of `ai-service` in the `gate` image without network, each writing a JUnit XML file, named after its folder, into the work folder of the run. A failed test does not stop the script, so the gate records it; a step that writes no report, such as a failed migration, stops it with status 2.
 5. It runs `supportiq-release run-gate` in the `gate` image without network, with the candidate, the folder of the cases, and the reports mounted read-only, and `eval/releases/` mounted writable.
 
-Every container runs as the user who runs the script, so the record and the reports belong to them. When Docker cannot mount the default temporary folder, set `TMPDIR` to a folder that it can mount.
+Every container runs as the user who runs the script, so the record and the reports belong to them. Docker Desktop and Colima share only the home folder with their VM by default, so the reports go under `~/.cache/supportiq-gate`; set `GATE_WORK_DIR` to change it.
 
 `publish-candidate` needs no torch, so it runs on the machine with `uv run` ([Run and test](#run-and-test)).
 

@@ -19,6 +19,10 @@
 !backend/tests
 !backend/seed
 !backend/certs
+!contracts/ai-service.openapi.yaml
+!contracts/backend.openapi.yaml
+!contracts/schemas
+!contracts/examples
 **/.env*
 **/.venv
 **/__pycache__
