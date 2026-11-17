@@ -16,6 +16,9 @@ data/datasets/
 *.pt
 *.sqlite3
 
+# Evaluation exports: written only to git-ignored folders, never committed (SEC-33)
+exports/
+
 # Claude Code personal files
 .claude/settings.local.json
 CLAUDE.local.md

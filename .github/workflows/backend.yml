@@ -55,9 +55,11 @@ jobs:
         run: pre-commit run backend-generated --all-files --show-diff-on-failure
       - name: Audit every locked dependency for known vulnerabilities (WF-31)
         working-directory: backend
+        # pip-audit cannot audit the URL requirement of the named-entity model, so the export
+        # leaves out that one package; its checksum in uv.lock protects it (ADR-0017, item 3).
         run: |
-          uv export --locked --all-groups --no-emit-project --format requirements-txt \
-            --output-file "$RUNNER_TEMP/requirements.txt"
+          uv export --locked --all-groups --no-emit-project --no-emit-package en-core-web-sm \
+            --format requirements-txt --output-file "$RUNNER_TEMP/requirements.txt"
           uv run --locked pip-audit --strict --disable-pip --require-hashes \
             --requirement "$RUNNER_TEMP/requirements.txt"
 
@@ -88,6 +90,12 @@ jobs:
       SEED_PASSWORD_STAFF: ci-staff
       SEED_PASSWORD_MANAGER: ci-manager
       SEED_PASSWORD_ADMIN: ci-admin
+      # A dummy service token and an address where nothing listens: the tests serve
+      # ai-service from in-memory fakes and never call ai-service over the network (TEST-16).
+      AI_SERVICE_BASE_URL: http://ai-service.invalid
+      AI_SERVICE_TOKEN: ci-ai-service-token
+      # The build version that getAdminVersions reports: the commit SHA, as a deploy sets it.
+      BACKEND_BUILD_VERSION: ${{ github.sha }}
     steps:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1

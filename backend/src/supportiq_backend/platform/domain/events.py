@@ -36,6 +36,29 @@ class EventName(StrEnum):
     SIGN_IN_THROTTLED = "sign_in.throttled"
     PERMISSION_DENIED = "permission.denied"
     TICKET_CREATED = "ticket.created"
+    SUGGESTION_REQUESTED = "suggestion.requested"
+    SUGGESTION_SUPERSEDED = "suggestion.superseded"
+    SUGGESTION_PART_CANCELLED = "suggestion.part_cancelled"
+    SUGGESTION_COMPLETED = "suggestion.completed"
+    SUGGESTION_JOB_CLAIMED = "suggestion_job.claimed"
+    SUGGESTION_JOB_LEASE_EXPIRED = "suggestion_job.lease_expired"
+    SUGGESTION_JOB_FAILED = "suggestion_job.failed"
+    SUGGESTION_STREAM_ENDED = "suggestion_stream.ended"
+    SUGGESTION_STREAM_FAILED = "suggestion_stream.failed"
+    PSEUDONYMIZATION_FAILED = "pseudonymization.failed"
+    PSEUDONYM_RESTORE_FAILED = "pseudonym.restore_failed"
+    AI_SERVICE_CALLED = "ai_service.called"
+    AI_SERVICE_CALL_FAILED = "ai_service.call_failed"
+    AI_SERVICE_CONTRACT_VIOLATED = "ai_service.contract_violated"
+    TICKET_VIEWED = "ticket.viewed"
+    TICKET_MANUAL_HANDLING_STARTED = "ticket.manual_handling_started"
+    INTENT_OVERRIDDEN = "intent.overridden"
+    REPLY_PROPOSAL_SUBMITTED = "reply_proposal.submitted"
+    DECISION_RECORDED = "decision.recorded"
+    REPLY_SENT = "reply.sent"
+    TICKET_ESCALATED = "ticket.escalated"
+    REPORT_BUILT = "report.built"
+    DECISIONS_EXPORTED = "decisions.exported"
     ACCOUNT_ROLE_CHANGED = "account.role_changed"
     ACCOUNT_STATUS_CHANGED = "account.status_changed"
     ACCOUNT_CREATED = "account.created"
@@ -61,10 +84,15 @@ class EventDescription:
     Attributes:
         level: The severity of the event (LOG-15).
         message: One sentence without variable data and without a trailing period (LOG-14).
+        handled_input_level: The severity when the event comes from input that backend
+            handles as designed instead of from a defect, for the few events that a design
+            gives two levels, such as `pseudonymization.failed` (ADR-0010, Failure handling).
+            Absent for every other event.
     """
 
     level: EventLevel
     message: str
+    handled_input_level: EventLevel | None = None
 
 
 EVENT_DESCRIPTIONS: Mapping[EventName, EventDescription] = MappingProxyType(
@@ -108,6 +136,72 @@ EVENT_DESCRIPTIONS: Mapping[EventName, EventDescription] = MappingProxyType(
             EventLevel.WARNING, "Request refused because the role may not call the operation"
         ),
         EventName.TICKET_CREATED: EventDescription(EventLevel.INFO, "Ticket created"),
+        EventName.SUGGESTION_REQUESTED: EventDescription(
+            EventLevel.INFO, "Suggestion created and its job queued"
+        ),
+        EventName.SUGGESTION_SUPERSEDED: EventDescription(
+            EventLevel.INFO, "Suggestion superseded by a newer one of the ticket"
+        ),
+        EventName.SUGGESTION_PART_CANCELLED: EventDescription(
+            EventLevel.INFO, "Running call cancelled because its suggestion was superseded"
+        ),
+        EventName.SUGGESTION_COMPLETED: EventDescription(
+            EventLevel.INFO, "Suggestion completed with no part pending"
+        ),
+        EventName.SUGGESTION_JOB_CLAIMED: EventDescription(
+            EventLevel.INFO, "Suggestion job claimed under a lease"
+        ),
+        EventName.SUGGESTION_JOB_LEASE_EXPIRED: EventDescription(
+            EventLevel.WARNING,
+            "Suggestion job ran out of attempts, so its pending parts are unavailable",
+        ),
+        EventName.SUGGESTION_JOB_FAILED: EventDescription(
+            EventLevel.ERROR, "Suggestion job failed and waits for its lease to expire"
+        ),
+        EventName.SUGGESTION_STREAM_ENDED: EventDescription(
+            EventLevel.INFO, "Suggestion progress stream ended"
+        ),
+        EventName.SUGGESTION_STREAM_FAILED: EventDescription(
+            EventLevel.WARNING, "Suggestion progress stream ended because a re-read failed"
+        ),
+        EventName.PSEUDONYMIZATION_FAILED: EventDescription(
+            EventLevel.ERROR,
+            "Pseudonymization failed, so nothing was sent to ai-service",
+            handled_input_level=EventLevel.WARNING,
+        ),
+        EventName.PSEUDONYM_RESTORE_FAILED: EventDescription(
+            EventLevel.ERROR, "A pseudonym in stored AI text is missing from the map"
+        ),
+        EventName.AI_SERVICE_CALLED: EventDescription(
+            EventLevel.INFO, "Call to ai-service answered with a result"
+        ),
+        EventName.AI_SERVICE_CALL_FAILED: EventDescription(
+            EventLevel.WARNING, "Call to ai-service timed out, was unreachable, or failed"
+        ),
+        EventName.AI_SERVICE_CONTRACT_VIOLATED: EventDescription(
+            EventLevel.ERROR, "Call to ai-service was refused or answered outside its contract"
+        ),
+        EventName.TICKET_VIEWED: EventDescription(EventLevel.INFO, "Ticket view recorded"),
+        EventName.TICKET_MANUAL_HANDLING_STARTED: EventDescription(
+            EventLevel.WARNING, "The AI could not run, so the ticket is handled manually"
+        ),
+        EventName.INTENT_OVERRIDDEN: EventDescription(
+            EventLevel.INFO, "Intent confirmed or corrected by staff"
+        ),
+        EventName.REPLY_PROPOSAL_SUBMITTED: EventDescription(
+            EventLevel.INFO, "Reply proposal submitted for a manager to send"
+        ),
+        EventName.DECISION_RECORDED: EventDescription(EventLevel.INFO, "Staff decision recorded"),
+        EventName.REPLY_SENT: EventDescription(EventLevel.INFO, "Reply sent to the customer"),
+        EventName.TICKET_ESCALATED: EventDescription(
+            EventLevel.INFO, "Ticket escalated to the manager queue"
+        ),
+        EventName.REPORT_BUILT: EventDescription(
+            EventLevel.INFO, "Report of a period built for a manager"
+        ),
+        EventName.DECISIONS_EXPORTED: EventDescription(
+            EventLevel.INFO, "Decision records of a period written to the export file"
+        ),
         EventName.ACCOUNT_ROLE_CHANGED: EventDescription(EventLevel.INFO, "Account role changed"),
         EventName.ACCOUNT_STATUS_CHANGED: EventDescription(
             EventLevel.INFO, "Account status changed"
@@ -136,11 +230,21 @@ class EventRecorder(Protocol):
     """Record a log event with scalar attributes (LOG-07, LOG-10)."""
 
     def record(self, event: EventName, /, **attributes: EventAttributeValue) -> None:
-        """Record one event.
+        """Record one event at the level of the catalog.
 
         Args:
             event: The event from the catalog.
             **attributes: Internal values only, such as `ticket_id` or `role` (LOG-29). The
                 logging setup drops every attribute that is not allow-listed.
+        """
+        ...
+
+    def record_handled_input(self, event: EventName, /, **attributes: EventAttributeValue) -> None:
+        """Record one event that handled input caused, at its `handled_input_level`.
+
+        Args:
+            event: An event of the catalog that has a `handled_input_level`; any other event
+                keeps its level.
+            **attributes: As for `record`.
         """
         ...

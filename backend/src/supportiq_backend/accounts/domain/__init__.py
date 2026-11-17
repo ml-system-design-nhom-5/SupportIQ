@@ -38,6 +38,8 @@ from supportiq_backend.accounts.domain.identity import (
     Principal,
     Role,
     SessionToken,
+    SupportPrincipal,
+    SupportRole,
 )
 from supportiq_backend.accounts.domain.login_names import (
     LoginNameTakenError,
@@ -67,6 +69,7 @@ from supportiq_backend.accounts.domain.ports import (
     SessionStore,
     SessionTokenGenerator,
     SignInFailureStore,
+    StaffDirectory,
 )
 from supportiq_backend.accounts.domain.sessions import (
     AuthenticatedSession,
@@ -152,8 +155,11 @@ __all__ = [
     "SessionTokenGenerator",
     "SignInAccount",
     "SignInFailureStore",
+    "StaffDirectory",
     "StatusChange",
     "StoredSession",
+    "SupportPrincipal",
+    "SupportRole",
     "ThrottlePolicy",
     "apply_account_change",
     "build_created_account",

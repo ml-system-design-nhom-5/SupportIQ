@@ -211,16 +211,20 @@ repos:
         files: ^backend/
         pass_filenames: false
         stages: [pre-commit]
-      # Regenerates the models in place, with the options of backend/pyproject.toml, and fails
-      # when they differ from the file before; stage the regenerated file then.
+      # Regenerates the models of both contracts in place, with the options of
+      # backend/pyproject.toml (the `ai-service` profile for the client's models), and fails
+      # when they differ from the files before; stage the regenerated files then.
       - id: backend-generated
-        name: Check that the generated backend models match the contract (CON-26)
+        name: Check that the generated backend models match the contracts (CON-26)
         language: system
         entry: >-
-          bash -c 'cd backend && committed="$(mktemp)" &&
-          cp src/supportiq_backend/generated/__init__.py "$committed" &&
+          bash -c 'cd backend && backend_models="$(mktemp)" && client_models="$(mktemp)" &&
+          cp src/supportiq_backend/generated/__init__.py "$backend_models" &&
+          cp src/supportiq_backend/suggestions/adapters/generated/__init__.py "$client_models" &&
           uv run --locked datamodel-codegen &&
-          diff -u "$committed" src/supportiq_backend/generated/__init__.py'
+          uv run --locked datamodel-codegen --profile ai-service &&
+          diff -u "$backend_models" src/supportiq_backend/generated/__init__.py &&
+          diff -u "$client_models" src/supportiq_backend/suggestions/adapters/generated/__init__.py'
         files: ^(backend|contracts)/
         pass_filenames: false
         stages: [pre-commit]

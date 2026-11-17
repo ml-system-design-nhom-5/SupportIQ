@@ -22,6 +22,9 @@ from supportiq_backend.idempotency.domain.errors import (
 from supportiq_backend.platform import OperationId
 
 _KEY_PATTERN = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+# The stored body of a response without one, such as a `204`: the record holds a JSON value,
+# and the JSON value `null` stands for no body.
+NO_CONTENT_BODY = "null"
 
 # A key as the contract defines it: a UUID in lowercase hexadecimal with hyphens.
 IdempotencyKey = NewType("IdempotencyKey", UUID)
@@ -56,7 +59,8 @@ class StoredResponse:
 
     Attributes:
         status_code: The HTTP status, `201` for the writes of this version.
-        body: The exact JSON text of the body. Confidential: a ticket holds a message.
+        body: The exact JSON text of the body, or `NO_CONTENT_BODY` for a response without
+            one. Confidential: a ticket holds a message.
     """
 
     status_code: int

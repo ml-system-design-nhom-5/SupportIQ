@@ -463,6 +463,10 @@ components:
       $ref: ./schemas/DraftSegment.yaml
     Warning:
       $ref: ./schemas/Warning.yaml
+    StepLatencies:
+      $ref: ./schemas/StepLatencies.yaml
+    KbDocumentVersion:
+      $ref: ./schemas/KbDocumentVersion.yaml
     PseudonymizedText:
       description: >-
         The customer's message after `backend` pseudonymized it (ADR-0010), from 1 to 4 000
@@ -719,37 +723,6 @@ components:
         enum:
           - ai_service_unavailable
           - pseudonymization_failed
-    StepLatencies:
-      description: >-
-        Time spent by `ai-service` on one call, in milliseconds, for the developer details of the
-        console (UI-35) and for tuning the step budgets (ERR-10). Data class: Internal.
-      type: object
-      required:
-        - total_ms
-        - analysis_ms
-      properties:
-        total_ms:
-          description: >-
-            From receiving the request to sending the response, in milliseconds. Data class:
-            Internal.
-          type: integer
-          minimum: 0
-          maximum: 60000
-        analysis_ms:
-          description: >-
-            Classification, retrieval, the validity filter, reranking, and routing, in
-            milliseconds. Data class: Internal.
-          type: integer
-          minimum: 0
-          maximum: 60000
-        llm_ms:
-          description: >-
-            The LLM step, retries and output checks included, in milliseconds; its budget is at
-            most 10 000 ms (NFR-07). Absent when the call made no LLM request. Data class:
-            Internal.
-          type: integer
-          minimum: 0
-          maximum: 60000
     DraftOutcome:
       description: >-
         The `200` body of `createDraft`, discriminated by `status`, so a draft exists only when it
@@ -973,75 +946,3 @@ components:
           type: integer
           minimum: 0
           maximum: 10000000
-    KbDocumentVersion:
-      description: >-
-        One immutable version of a KB document, with the fields of the KB data contract that the
-        citation view shows (DATA-16, UI-20). KB text is untrusted data and is shown as plain text
-        (SEC-22, SEC-24). Data class: Public, except the identifiers (Internal).
-      type: object
-      required:
-        - document_id
-        - version
-        - title
-        - body
-        - policy_key
-        - effective_start_at
-        - owner
-        - source
-      properties:
-        document_id:
-          $ref: '#/components/schemas/KbDocumentId'
-          description: >-
-            The KB document. Data class: Internal.
-        version:
-          $ref: '#/components/schemas/KbDocumentVersionTag'
-          description: >-
-            The version of the document. Data class: Internal.
-        title:
-          description: >-
-            The title of the version, from 1 to 200 characters. Data class: Public.
-          type: string
-          minLength: 1
-          maxLength: 200
-        body:
-          description: >-
-            The full text of the version, from 1 to 20 000 characters, exactly as the KB holds
-            it. Every snippet of the version is a passage of it. Data class: Public.
-          type: string
-          minLength: 1
-          maxLength: 20000
-        policy_key:
-          description: >-
-            The topic of the policy that the version states, used to detect conflicts (DATA-16,
-            DATA-19). From 1 to 100 characters. Data class: Public.
-          type: string
-          minLength: 1
-          maxLength: 100
-        effective_start_at:
-          $ref: '#/components/schemas/Timestamp'
-          description: >-
-            When the version came into effect. Data class: Public.
-        effective_end_at:
-          $ref: '#/components/schemas/Timestamp'
-          description: >-
-            When the version stopped being in effect, later than `effective_start_at`. Absent when
-            the version is open-ended (DATA-16). Data class: Public.
-        owner:
-          description: >-
-            Who owns the policy and reviews it, as the KB source names it: a role or a team, never
-            a person's name. From 1 to 100 characters. Data class: Public.
-          type: string
-          minLength: 1
-          maxLength: 100
-        source:
-          description: >-
-            Where the text of the version comes from, as the KB source names it, such as the
-            approved source document. From 1 to 200 characters. Data class: Public.
-          type: string
-          minLength: 1
-          maxLength: 200
-        last_reviewed_at:
-          $ref: '#/components/schemas/Timestamp'
-          description: >-
-            When the owner last reviewed the version. Absent when the source does not provide it;
-            it is never invented (DATA-13, DATA-16). Data class: Public.

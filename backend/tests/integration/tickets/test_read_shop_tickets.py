@@ -1,4 +1,8 @@
-"""Reading the caller's tickets over HTTP against PostgreSQL (SEC-17, CON-14)."""
+"""Reading the caller's tickets over HTTP against PostgreSQL (SEC-17, CON-14).
+
+A ticket shows `replied` with the reply once staff sent it through `sendReply`, and never any
+AI output (contract `ShopTicketView`).
+"""
 
 from datetime import timedelta
 from http import HTTPStatus
@@ -14,8 +18,11 @@ from tests.integration.builders import DatabaseBuilder, TicketSpec
 from tests.integration.tickets.shop_requests import (
     NEWEST,
     OLDEST,
+    REPLY_BODY,
+    REPLY_SENT_AT,
     TICKETS,
     create_ticket,
+    send_reply,
     sign_in_as_new_customer,
     without_trace_id,
 )
@@ -35,6 +42,58 @@ async def test_customer_reads_a_ticket_created_through_the_shop(
 
     assert response.status_code == HTTPStatus.OK
     assert response.json() == created.json()
+
+
+async def test_customer_reads_the_reply_that_staff_sent(
+    backend: RunningBackend,
+    builder: DatabaseBuilder,
+    headers: dict[str, str],
+    customer_id: UUID,
+    order_id: str,
+) -> None:
+    ticket_id = await builder.ticket(customer_id, order_id)
+    await send_reply(backend.client, builder, ticket_id)
+
+    response = await backend.client.get(f"{TICKETS}/{ticket_id}", headers=headers)
+
+    assert response.status_code == HTTPStatus.OK
+    assert response.json()["customer_status"] == "replied"
+    assert response.json()["reply"] == {"body": REPLY_BODY, "sent_at": REPLY_SENT_AT}
+
+
+async def test_ticket_without_a_reply_is_received_and_has_no_reply(
+    backend: RunningBackend,
+    builder: DatabaseBuilder,
+    headers: dict[str, str],
+    customer_id: UUID,
+    order_id: str,
+) -> None:
+    ticket_id = await builder.ticket(customer_id, order_id)
+
+    response = await backend.client.get(f"{TICKETS}/{ticket_id}", headers=headers)
+
+    assert response.json()["customer_status"] == "received"
+    assert "reply" not in response.json()
+
+
+async def test_list_shows_the_reply_only_on_the_ticket_that_has_one(
+    backend: RunningBackend,
+    builder: DatabaseBuilder,
+    headers: dict[str, str],
+    customer_id: UUID,
+    order_id: str,
+) -> None:
+    replied = await builder.ticket(customer_id, order_id, TicketSpec(created_at=NEWEST))
+    received = await builder.ticket(customer_id, order_id, TicketSpec(created_at=OLDEST))
+    await send_reply(backend.client, builder, replied)
+
+    response = await backend.client.get(TICKETS, headers=headers)
+
+    newest, oldest = response.json()["items"]
+    assert (newest["ticket_id"], newest["customer_status"]) == (replied, "replied")
+    assert newest["reply"] == {"body": REPLY_BODY, "sent_at": REPLY_SENT_AT}
+    assert (oldest["ticket_id"], oldest["customer_status"]) == (received, "received")
+    assert "reply" not in oldest
 
 
 async def test_unknown_imported_and_foreign_tickets_return_the_same_404(

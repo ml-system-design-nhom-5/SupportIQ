@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SupportIQ backend API
-  version: 1.2.0
+  version: 1.3.0
   description: |
     The contract between `frontend` and `backend` for sign-in, the read-only shop, the review
     console of staff and managers, and the admin area. Version 1.0.1 holds the operations of
@@ -11,7 +11,9 @@ info:
     [account management design](../docs/design/account-management.md) (ADR-0015). Version
     1.2.0 adds the console operations and `getAdminVersions` of the contracts v1 design, as
     the [backend ticket workflow design](../docs/design/backend-ticket-workflow.md) implements
-    them.
+    them. Version 1.2.1 states which tickets the end-to-end latency and the handling time of
+    the report measure. Version 1.3.0 adds `getSuggestionEvents`, the suggestion progress
+    stream of ADR-0022.
 
     ## Responsibility
 
@@ -79,8 +81,9 @@ info:
 
     - **Latency target:** the requirements set none for these operations. NFR-08 covers a
       suggestion, from ticket creation until its draft part leaves `pending` (p95 at most
-      12 s). `createSuggestion` answers before the suggestion runs, and the console polls
-      `getConsoleTicket`.
+      12 s). `createSuggestion` answers before the suggestion runs, and the console follows it
+      with `getSuggestionEvents`, a stream that the bounds below limit only until its response
+      headers (ADR-0022, statement 8).
     - **Caller's timeout:** `frontend` stops waiting for a response after 10 000 ms per
       request, a `frontend` setting. That is the sum of the single bounds of `backend` below: a
       pool wait of 3 000 ms, one statement of 5 000 ms, and the sign-in delay of 2 000 ms. A
@@ -677,8 +680,10 @@ paths:
         customer's other orders, the current suggestion with pseudonyms restored, the proposal,
         the escalation, the reply, and the actions that the caller may take now. Roles: `staff`
         and `manager`, on a ticket in any state; staff get an empty `allowed_actions` on a ticket
-        that is not `open`. This read changes nothing; the console polls it while a suggestion
-        part is `pending`, and calls `recordTicketView` once when a person opens the ticket.
+        that is not `open`. This read changes nothing; while a suggestion part is `pending`,
+        the console reads it again after each event of `getSuggestionEvents`, or every 30 s
+        when the stream cannot run, and calls `recordTicketView` once when a person opens the
+        ticket.
       security:
         - sessionCookie: []
       x-supportiq-roles:
@@ -715,6 +720,12 @@ paths:
                   $ref: ./examples/getConsoleTicket/closed.json
                 read-only-for-staff:
                   $ref: ./examples/getConsoleTicket/read-only-for-staff.json
+                llm-unavailable:
+                  $ref: ./examples/getConsoleTicket/llm-unavailable.json
+                pseudonymization-failed:
+                  $ref: ./examples/getConsoleTicket/pseudonymization-failed.json
+                intent-corrected:
+                  $ref: ./examples/getConsoleTicket/intent-corrected.json
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '403':
@@ -734,13 +745,16 @@ paths:
       description: >-
         Records that the caller opened the ticket. Roles: `staff` and `manager`, on a ticket in
         any state. The first view of the ticket starts the handling clock (`handling_started_at`,
-        NFR-11). On the first view, when the current suggestion used another KB version than the
-        one `ai-service` has loaded, `backend` starts a suggestion with the trigger
-        `kb_version_changed`. On every view of an `open` ticket in `assisted` mode whose current
-        suggestion has a part `unavailable` with `ai_service_unavailable`, or a draft
-        `llm_unavailable`, and no part `pending`, `backend` starts a suggestion with the trigger
-        `retry`. A retry with the same `Idempotency-Key` returns `204` again and starts nothing
-        more.
+        NFR-11). On the first view of an `open` ticket in `assisted` mode, when the current
+        suggestion used another KB version than the one `ai-service` has loaded, `backend` starts
+        a suggestion with the trigger `kb_version_changed`. When `ai-service` does not answer
+        within `ai_service_read_timeout_ms`, the view is still recorded and no
+        `kb_version_changed` suggestion is started. On every view of an `open` ticket in
+        `assisted` mode whose current suggestion has a part `unavailable` with
+        `ai_service_unavailable`, or a draft `llm_unavailable`, and no part `pending`, `backend`
+        starts a suggestion with the trigger `retry`. A started suggestion repeats the input of
+        the current one, including an intent that staff chose. A retry with the same
+        `Idempotency-Key` returns `204` again and starts nothing more.
       security:
         - sessionCookie: []
       x-supportiq-roles:
@@ -775,16 +789,21 @@ paths:
       summary: Correct the intent or retry the AI
       description: >-
         Starts a new suggestion for an `open` ticket in `assisted` mode and answers at once with
-        it, `pending`; the console then polls `getConsoleTicket`. Roles: `staff` and `manager`.
+        it, `pending`; the console then follows it with `getSuggestionEvents`. Roles: `staff`
+        and `manager`.
         With `intent_override`, the request confirms or corrects the intent (ESC-01), also while
         a draft is generating, which cancels that draft; it needs a known intent: the analysis
         of the current suggestion is `ready`, or the current suggestion already carries an
         override. When no intent is known, it returns `409 suggestion-pending` while a part is
         `pending`, and `422` otherwise. Without `intent_override`, the request is a retry, valid
-        only when `allowed_actions` contains `retry_suggestion`; otherwise it returns `422`. The
-        new suggestion supersedes the previous one, and the authority flag stays as it is
-        (contracts v1 design, authority rule). A retry with the same `Idempotency-Key` and body
-        returns the original `202` and starts no second suggestion.
+        only when `allowed_actions` contains `retry_suggestion`; otherwise it returns `422`. A
+        retry repeats the input of the failed suggestion, including the intent that staff chose,
+        so a failure after an intent correction keeps that intent. On a ticket that is not
+        `open`, or whose handling mode is `manual`, the request returns
+        `409 invalid-ticket-state`. The new suggestion supersedes the previous one, and the
+        authority flag stays as it is (contracts v1 design, authority rule). A retry with the
+        same `Idempotency-Key` and body returns the original `202` and starts no second
+        suggestion.
       security:
         - sessionCookie: []
       x-supportiq-roles:
@@ -823,6 +842,86 @@ paths:
           $ref: '#/components/responses/SuggestionConflict'
         '422':
           $ref: '#/components/responses/InvalidSuggestionRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/console/tickets/{ticket_id}/suggestion-events:
+    get:
+      operationId: getSuggestionEvents
+      tags:
+        - console
+      summary: Follow the progress of the current suggestion
+      description: >-
+        Streams the progress of the current suggestion of an `open` ticket in `assisted` mode
+        as server-sent events while one of its parts is `pending` (ADR-0022). Roles: `staff`
+        and `manager`. Like every read, it has no `Origin` check, because a same-origin
+        `EventSource` sends no `Origin` header. A ticket that is not `open`, a ticket in
+        `manual` mode, and a ticket whose current suggestion has no `pending` part get `204`,
+        which stops `EventSource`. The stream first sends `retry: 3000` and the current state,
+        then one event whenever the current suggestion or the status of one of its parts
+        changes. Each event is named `suggestion`, and its `data` is a
+        `SuggestionProgressEvent`: the suggestion ID and the two part statuses, all Internal.
+        An event holds no text; after each one, the console reloads the workspace with
+        `getConsoleTicket`. When nothing was sent for 15 s, the stream sends the comment
+        `: ping`. The stream ends right after the event that shows no `pending` part, when the
+        ticket leaves `open`, after at most `suggestion_events_max_ms` (600 000 by default),
+        and when the replica shuts down. `EventSource` then reconnects and gets `204` once no
+        part is `pending`. `Last-Event-ID` is ignored, because each connection starts with the
+        current state. Consumers map an unknown status as `getConsoleTicket` does (CON-22).
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - staff
+        - manager
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/ConsoleTicketId'
+      responses:
+        '200':
+          description: >-
+            The stream of `suggestion` events, until no part is `pending`.
+          content:
+            text/event-stream:
+              schema:
+                description: >-
+                  One event of the stream, as the fields of its lines in the format of
+                  server-sent events of the HTML standard. The `retry: 3000` line before the
+                  first event and the `: ping` comments are no events. An event has no `id`,
+                  because each connection starts with the current state. Data class:
+                  Internal.
+                type: object
+                additionalProperties: false
+                required:
+                  - event
+                  - data
+                properties:
+                  event:
+                    description: >-
+                      The name of the event. Data class: Internal.
+                    type: string
+                    enum:
+                      - suggestion
+                  data:
+                    description: >-
+                      A `SuggestionProgressEvent` as JSON text. Data class: Internal.
+                    type: string
+                    contentMediaType: application/json
+                    contentSchema:
+                      $ref: '#/components/schemas/SuggestionProgressEvent'
+              examples:
+                draft-ready:
+                  $ref: ./examples/getSuggestionEvents/draft-ready.json
+        '204':
+          description: >-
+            Nothing to follow: the ticket is not `open`, is in `manual` mode, or no part of its
+            current suggestion is `pending`.
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRole'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalError'
         '503':
@@ -994,7 +1093,7 @@ paths:
         '409':
           $ref: '#/components/responses/EscalationConflict'
         '422':
-          $ref: '#/components/responses/InvalidRequest'
+          $ref: '#/components/responses/InvalidEscalation'
         '500':
           $ref: '#/components/responses/InternalError'
         '503':
@@ -1026,7 +1125,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ConsoleKbDocumentVersionView'
+                $ref: '#/components/schemas/KbDocumentVersion'
               examples:
                 document-version:
                   $ref: ./examples/getConsoleKbDocumentVersion/document-version.json
@@ -1955,8 +2054,24 @@ components:
               $ref: ./examples/problems/reply-basis-invalid.json
             warnings-not-acknowledged:
               $ref: ./examples/problems/warnings-not-acknowledged.json
+            note-required:
+              $ref: ./examples/problems/note-required.json
             placeholder-in-body:
               $ref: ./examples/problems/placeholder-in-body.json
+    InvalidEscalation:
+      description: >-
+        `invalid-request`: the request fails validation against this contract, as for
+        `InvalidRequest`, or `staff_reason_codes` contains `other` and `note` is absent, so the
+        reason would not be recorded (ADR-0006). Nothing changed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            invalid-request:
+              $ref: ./examples/problems/invalid-request.json
+            note-required:
+              $ref: ./examples/problems/note-required.json
     InvalidConsoleListRequest:
       description: >-
         `invalid-request`: `status` is missing or unknown, `limit` is not an integer from 1 to
@@ -2039,6 +2154,10 @@ components:
       $ref: ./schemas/Warning.yaml
     Placeholder:
       $ref: ./schemas/Placeholder.yaml
+    StepLatencies:
+      $ref: ./schemas/StepLatencies.yaml
+    KbDocumentVersion:
+      $ref: ./schemas/KbDocumentVersion.yaml
     AccountChangeRule:
       description: >-
         Why a well-formed account change was refused: the admin limits 3 to 5 of ADR-0012, a
@@ -2741,9 +2860,11 @@ components:
         Why `backend` started the suggestion (contracts v1 design, suggestion lifecycle).
         `ticket_created`: the ticket was created in `assisted` mode.
         `intent_override`: staff or a manager confirmed the predicted intent or chose another.
-        `kb_version_changed`: on the first view, the previous suggestion used another KB version
-        than the one `ai-service` serves.
+        `kb_version_changed`: on the first view of an `open` ticket in `assisted` mode, the
+        previous suggestion used another KB version than the one `ai-service` serves.
         `retry`: staff opened the ticket after an AI failure, or asked for a retry.
+        A `kb_version_changed` or `retry` suggestion repeats the input of the suggestion it
+        replaces, including an intent that staff chose.
         Consumers show an unknown value as an unspecified trigger (CON-22). Data class:
         Internal.
       type: string
@@ -2837,6 +2958,11 @@ components:
           description: >-
             When a person first opened the ticket. Absent until then, so the queue shows which
             tickets nobody opened yet. Data class: Internal.
+        closed_at:
+          $ref: '#/components/schemas/Timestamp'
+          description: >-
+            When the reply was sent, the order of the `closed` queue. Present exactly when
+            `status` is `closed`. Data class: Internal.
         customer:
           $ref: '#/components/schemas/ConsoleCustomerView'
           description: >-
@@ -3117,6 +3243,36 @@ components:
           uniqueItems: true
           items:
             $ref: '#/components/schemas/TicketAction'
+    SuggestionProgressEvent:
+      description: >-
+        The data of one `suggestion` event of `getSuggestionEvents`: the part statuses of the
+        current suggestion of the ticket, never text (ADR-0022, statement 2). Data class:
+        Internal.
+      type: object
+      additionalProperties: false
+      required:
+        - suggestion_id
+        - analysis_status
+        - draft_status
+      properties:
+        suggestion_id:
+          description: >-
+            The identifier of the current suggestion (CON-15). Data class: Internal.
+          type: string
+          minLength: 1
+        analysis_status:
+          description: >-
+            The status of the analysis part, as `analysis_status` of `AnalysisPart`.
+            Consumers map an unknown value to `unavailable` (CON-22). Data class: Internal.
+          type: string
+          enum:
+            - pending
+            - ready
+            - unavailable
+        draft_status:
+          $ref: '#/components/schemas/DraftStatus'
+          description: >-
+            The status of the draft part. Data class: Internal.
     SuggestionView:
       description: >-
         One run of the AI for a ticket, as `backend` recorded it, with the pseudonyms of its AI
@@ -3143,8 +3299,9 @@ components:
         intent_override:
           $ref: '#/components/schemas/IntentLabel'
           description: >-
-            The intent that staff confirmed or chose. Present exactly when `trigger` is
-            `intent_override`. Data class: Internal.
+            The intent that staff confirmed or chose. Present when `trigger` is
+            `intent_override`, and on a `kb_version_changed` or `retry` suggestion that repeats a
+            suggestion with an intent that staff chose. Data class: Internal.
         created_at:
           $ref: '#/components/schemas/Timestamp'
           description: >-
@@ -3180,7 +3337,8 @@ components:
           unavailable: '#/components/schemas/UnavailableAnalysisPart'
     PendingAnalysisPart:
       description: >-
-        An analysis that `ai-service` has not returned yet. The console polls the ticket. Data
+        An analysis that `ai-service` has not returned yet. The console follows it with
+        `getSuggestionEvents`. Data
         class: Internal.
       type: object
       required:
@@ -3258,7 +3416,7 @@ components:
             The release and asset versions that produced the analysis (ARCH-39). Data class:
             Internal.
         step_latencies:
-          $ref: '#/components/schemas/ConsoleStepLatencies'
+          $ref: '#/components/schemas/StepLatencies'
           description: >-
             The time that `ai-service` spent on the analysis. Data class: Internal.
     UnavailableAnalysisPart:
@@ -3401,35 +3559,6 @@ components:
         - draft
         - abstain
         - escalate
-    ConsoleStepLatencies:
-      description: >-
-        The time that `ai-service` spent on one call, in milliseconds, for the developer details
-        (UI-35). Data class: Internal.
-      type: object
-      required:
-        - total_ms
-        - analysis_ms
-      properties:
-        total_ms:
-          description: >-
-            The whole call inside `ai-service`, in milliseconds. Data class: Internal.
-          type: integer
-          minimum: 0
-          maximum: 60000
-        analysis_ms:
-          description: >-
-            Classification, retrieval, the validity filter, reranking, and routing, in
-            milliseconds. Data class: Internal.
-          type: integer
-          minimum: 0
-          maximum: 60000
-        llm_ms:
-          description: >-
-            The LLM step, in milliseconds. Absent when the call made no LLM request. Data class:
-            Internal.
-          type: integer
-          minimum: 0
-          maximum: 60000
     DraftStatus:
       description: >-
         The status of the draft part of a suggestion (contracts v1 design, suggestion
@@ -3474,7 +3603,8 @@ components:
     PendingDraftPart:
       description: >-
         A draft that `ai-service` has not returned yet. While it is pending, nobody can send a
-        reply on the ticket (`409 suggestion-pending`). Data class: Internal.
+        reply on the ticket: `409 suggestion-pending`, or `403 authority-required` for `staff`
+        on a ticket that already requires authority. Data class: Internal.
       type: object
       required:
         - draft_status
@@ -3552,7 +3682,7 @@ components:
             The release and asset versions that produced the draft (ARCH-39). Data class:
             Internal.
         step_latencies:
-          $ref: '#/components/schemas/ConsoleStepLatencies'
+          $ref: '#/components/schemas/StepLatencies'
           description: >-
             The time that `ai-service` spent on the draft call. Data class: Internal.
     NoDraftPart:
@@ -3595,7 +3725,7 @@ components:
           description: >-
             The release and asset versions that produced the outcome. Data class: Internal.
         step_latencies:
-          $ref: '#/components/schemas/ConsoleStepLatencies'
+          $ref: '#/components/schemas/StepLatencies'
           description: >-
             The time that `ai-service` spent on the draft call. Data class: Internal.
     UnavailableDraftPart:
@@ -3703,12 +3833,11 @@ components:
         - $ref: '#/components/schemas/Money'
     ReplyBasis:
       description: >-
-        What a reply or a proposal is based on (contracts v1 design, reply bases).
+        What a reply is based on (contracts v1 design, reply bases).
         `ai_draft`: the draft of the current suggestion, as is or edited.
         `rejected_ai_draft`: staff rejected the draft and wrote their own reply.
         `no_ai_draft`: there was no ready draft, or the ticket is in `manual` mode.
-        `reply_proposal`: a manager sent the proposal of the ticket, as is or edited; only on a
-        reply.
+        `reply_proposal`: a manager sent the proposal of the ticket, as is or edited.
         Consumers show an unknown value as an unspecified basis (CON-22). Data class: Internal.
       type: string
       enum:
@@ -3716,6 +3845,19 @@ components:
         - rejected_ai_draft
         - no_ai_draft
         - reply_proposal
+    ReplyProposalBasis:
+      description: >-
+        What a reply proposal is based on: the values of `ReplyBasis` except `reply_proposal`,
+        because a proposal is never based on another proposal.
+        `ai_draft`: the draft of the current suggestion, as is or edited.
+        `rejected_ai_draft`: staff rejected the draft and wrote their own reply.
+        `no_ai_draft`: there was no ready draft, or the ticket is in `manual` mode.
+        Consumers show an unknown value as an unspecified basis (CON-22). Data class: Internal.
+      type: string
+      enum:
+        - ai_draft
+        - rejected_ai_draft
+        - no_ai_draft
     ReplyBody:
       description: >-
         The text that a customer receives, from 1 to 2 000 characters (`MessageText`), with no
@@ -3750,10 +3892,9 @@ components:
           type: string
           minLength: 1
         basis:
-          $ref: '#/components/schemas/ReplyBasis'
+          $ref: '#/components/schemas/ReplyProposalBasis'
           description: >-
-            What the proposal is based on: `ai_draft`, `rejected_ai_draft`, or `no_ai_draft`.
-            Data class: Internal.
+            What the proposal is based on. Data class: Internal.
         body:
           $ref: '#/components/schemas/ReplyBody'
           description: >-
@@ -3880,8 +4021,9 @@ components:
         intent_override:
           $ref: '#/components/schemas/IntentLabel'
           description: >-
-            The intent that staff confirm or choose (ESC-01). Absent means a retry with the same
-            inputs. Data class: Internal.
+            The intent that staff confirm or choose (ESC-01). Absent means a retry, which
+            repeats the input of the failed suggestion, including the intent that staff chose
+            for it when there was one. Data class: Internal.
     SendReplyRequest:
       description: >-
         The reply to send, discriminated by `basis`, so each basis carries exactly the fields it
@@ -4087,77 +4229,6 @@ components:
             `409 suggestion-superseded`. Absent means none. Data class: Internal.
           type: string
           minLength: 1
-    ConsoleKbDocumentVersionView:
-      description: >-
-        One immutable version of a KB document, as `ai-service` serves it, for the citation view
-        (UI-20). KB text is untrusted data and is shown as plain text (SEC-22, SEC-24). Data
-        class: Public, except the identifiers (Internal).
-      type: object
-      required:
-        - document_id
-        - version
-        - title
-        - body
-        - policy_key
-        - effective_start_at
-        - owner
-        - source
-      properties:
-        document_id:
-          $ref: '#/components/schemas/KbDocumentId'
-          description: >-
-            The KB document. Data class: Internal.
-        version:
-          $ref: '#/components/schemas/KbDocumentVersionTag'
-          description: >-
-            The version of the document. Data class: Internal.
-        title:
-          description: >-
-            The title of the version, from 1 to 200 characters. Data class: Public.
-          type: string
-          minLength: 1
-          maxLength: 200
-        body:
-          description: >-
-            The full text of the version, from 1 to 20 000 characters. Data class: Public.
-          type: string
-          minLength: 1
-          maxLength: 20000
-        policy_key:
-          description: >-
-            The topic of the policy that the version states, from 1 to 100 characters. Data
-            class: Public.
-          type: string
-          minLength: 1
-          maxLength: 100
-        effective_start_at:
-          $ref: '#/components/schemas/Timestamp'
-          description: >-
-            When the version came into effect. Data class: Public.
-        effective_end_at:
-          $ref: '#/components/schemas/Timestamp'
-          description: >-
-            When the version stopped being in effect. Absent when it is open-ended. Data class:
-            Public.
-        owner:
-          description: >-
-            Who owns and reviews the policy: a role or a team, never a person's name. From 1 to
-            100 characters. Data class: Public.
-          type: string
-          minLength: 1
-          maxLength: 100
-        source:
-          description: >-
-            Where the text of the version comes from, as the KB source names it. From 1 to 200
-            characters. Data class: Public.
-          type: string
-          minLength: 1
-          maxLength: 200
-        last_reviewed_at:
-          $ref: '#/components/schemas/Timestamp'
-          description: >-
-            When the owner last reviewed the version. Absent when the source does not provide
-            it. Data class: Public.
     CompletedDraftStatus:
       description: >-
         The status of a draft part that left `pending`, without `cancelled`, as `DraftStatus`
@@ -4197,7 +4268,9 @@ components:
       properties:
         ticket_count:
           description: >-
-            The closed tickets of the mode that have a first view. Data class: Internal.
+            The closed tickets of the mode whose first view came no later than their reply. A
+            ticket first viewed after its reply is left out, because its handling time would be
+            negative. Data class: Internal.
           type: integer
           minimum: 0
         p50_ms:
@@ -4206,6 +4279,24 @@ components:
             class: Internal.
           type: integer
           minimum: 0
+    StaffReasonReplyCount:
+      description: >-
+        The replies of one draft decision that carry one staff reason code. Data class:
+        Internal.
+      type: object
+      required:
+        - staff_reason_code
+        - reply_count
+      properties:
+        staff_reason_code:
+          $ref: '#/components/schemas/StaffReasonCode'
+          description: >-
+            The reason code. Data class: Internal.
+        reply_count:
+          description: >-
+            The replies with this code. Data class: Internal.
+          type: integer
+          minimum: 1
     ConsoleReport:
       description: >-
         The figures of FR-10 and NFR-11 for one period, computed by `backend` from its own
@@ -4259,29 +4350,54 @@ components:
                 Tickets whose `closed_at` falls in the period. Data class: Internal.
         draft_decisions:
           description: >-
-            The staff decisions about a ready draft recorded in the period: approved as is,
-            edited, or rejected (FR-10, ADR-0006). Data class: Internal.
+            The staff decisions about a ready draft, recorded when the reply is sent: approved
+            as is, edited, or rejected, with the edits and rejections by staff reason code
+            (FR-10, ADR-0006). Data class: Internal.
           type: object
           required:
             - approve_count
             - edit_count
             - reject_count
+            - edit_by_reason
+            - reject_by_reason
           properties:
             approve_count:
               description: >-
-                Replies or proposals that used the draft unchanged. Data class: Internal.
+                Replies sent in the period whose basis, or whose proposal's basis, was
+                `ai_draft`, with a body equal to the draft's `text`. Data class: Internal.
               type: integer
               minimum: 0
             edit_count:
               description: >-
-                Replies or proposals that used the draft with changes. Data class: Internal.
+                Replies sent in the period whose basis, or whose proposal's basis, was
+                `ai_draft`, with a body that differs from the draft's `text`. Data class:
+                Internal.
               type: integer
               minimum: 0
             reject_count:
               description: >-
-                Replies or proposals that rejected the draft. Data class: Internal.
+                Replies sent in the period whose basis, or whose proposal's basis, was
+                `rejected_ai_draft`. Data class: Internal.
               type: integer
               minimum: 0
+            edit_by_reason:
+              description: >-
+                The edits of `edit_count` by staff reason code: one item per code that occurs,
+                in the order of `StaffReasonCode`. An edit with two codes counts under each, and
+                an edit without a code under none. Data class: Internal.
+              type: array
+              maxItems: 8
+              items:
+                $ref: '#/components/schemas/StaffReasonReplyCount'
+            reject_by_reason:
+              description: >-
+                The rejections of `reject_count` by staff reason code: one item per code that
+                occurs, in the order of `StaffReasonCode`. Every rejection has at least one
+                code, and a rejection with two codes counts under each. Data class: Internal.
+              type: array
+              maxItems: 8
+              items:
+                $ref: '#/components/schemas/StaffReasonReplyCount'
             approve_share:
               description: >-
                 `approve_count` divided by the sum of the three counts. Absent when the sum is 0.
@@ -4398,8 +4514,10 @@ components:
         end_to_end_latency:
           description: >-
             From ticket creation until the draft part of the ticket's first suggestion left
-            `pending`, for those drafts completed in the period (NFR-08: p95 at most 12 s). Data
-            class: Internal.
+            `pending`, for those drafts completed in the period (NFR-08: p95 at most 12 s). A
+            ticket whose first draft part was `cancelled`, for example by an intent correction, is
+            left out, because staff got no result from it; a first draft that ended `unavailable`
+            or `llm_unavailable` counts. Data class: Internal.
           type: object
           required:
             - ticket_count

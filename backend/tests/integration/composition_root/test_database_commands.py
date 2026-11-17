@@ -7,6 +7,7 @@ from supportiq_backend.composition_root.settings_loading import SettingRequiredE
 from supportiq_backend.platform import EventName
 from tests.integration.application import build_settings
 from tests.integration.database import WorkerDatabase
+from tests.integration.schema.test_migration import HEAD_REVISION
 from tests.unit.platform.fakes import RecordingEventRecorder
 
 pytestmark = pytest.mark.anyio
@@ -21,7 +22,7 @@ async def test_migrate_on_a_migrated_database_records_the_head_revision(
     await migrate(settings, events)
 
     (migrated,) = events.of(EventName.DATABASE_MIGRATED)
-    assert migrated.attributes == {"revision": "0002"}
+    assert migrated.attributes == {"revision": HEAD_REVISION}
 
 
 async def test_create_app_role_records_that_the_role_was_applied(

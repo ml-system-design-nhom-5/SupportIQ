@@ -27,6 +27,8 @@ from supportiq_backend.platform.adapters.migrations import (
     head_revision,
     upgrade_database,
 )
+from supportiq_backend.pseudonymization.adapters.tables import PseudonymizationTables
+from supportiq_backend.suggestions.adapters.tables import SuggestionsTables
 from supportiq_backend.tickets.adapters.tables import TicketsTables
 from tests.integration.database import (
     BACKEND_TABLE_NAMES,
@@ -45,6 +47,8 @@ FEATURE_TABLES: tuple[type[DeclarativeBase], ...] = (
     CommerceTables,
     IdempotencyTables,
     TicketsTables,
+    SuggestionsTables,
+    PseudonymizationTables,
 )
 SCHEMA_OBJECTS = text(
     "SELECT (SELECT count(*) FROM pg_tables WHERE schemaname = 'public'"
@@ -55,11 +59,13 @@ SCHEMA_OBJECTS = text(
     " EXISTS (SELECT FROM pg_namespace, aclexplode(nspacl) AS acl"
     " WHERE nspname = 'public' AND acl.grantee = 'supportiq_app'::regrole)"
 )
-HEAD_REVISION = "0002"
+HEAD_REVISION = "0003"
 FOUNDATION_REVISION = "0001"
-# The three trigger functions of `r0001`, and the one of `r0002`.
+# The three trigger functions of `r0001`, the one of `r0002`, and the three of `r0003`.
 FOUNDATION_TRIGGER_FUNCTION_COUNT = 3
-TRIGGER_FUNCTION_COUNT = 4
+TRIGGER_FUNCTION_COUNT = 7
+# The tables of `r0001`; `r0002` adds none, and `r0003` adds the eight of the ticket workflow.
+FOUNDATION_TABLE_COUNT = 13
 NEW_EVENT_TYPE_COUNT = 3
 TRACE_ID = "4bf92f3577b34da6a3ce929d0e0e4736"
 INSERT_ENTRIES_OF_THE_NEW_EVENT_TYPES = (
@@ -170,7 +176,7 @@ async def test_r0002_downgrade_keeps_entries_of_the_new_event_types_and_refuses_
     assert revision == FOUNDATION_REVISION
     assert refused == CHECK_VIOLATION
     assert kept == NEW_EVENT_TYPE_COUNT
-    assert tuple(objects) == (len(BACKEND_TABLE_NAMES), FOUNDATION_TRIGGER_FUNCTION_COUNT, 1, True)
+    assert tuple(objects) == (FOUNDATION_TABLE_COUNT, FOUNDATION_TRIGGER_FUNCTION_COUNT, 1, True)
 
 
 async def test_migrated_tables_are_exactly_the_tables_that_reset_truncates(

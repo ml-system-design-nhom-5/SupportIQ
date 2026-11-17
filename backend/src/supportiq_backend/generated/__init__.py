@@ -317,6 +317,98 @@ class Placeholder(RootModel[str]):
     ]
 
 
+class StepLatencies(BaseModel):
+    total_ms: Annotated[
+        int,
+        Field(
+            description="From receiving the request to sending the response, in milliseconds. Data class: Internal.",
+            ge=0,
+            le=60000,
+        ),
+    ]
+    analysis_ms: Annotated[
+        int,
+        Field(
+            description="Classification, retrieval, the validity filter, reranking, and routing, in milliseconds. Data class: Internal.",
+            ge=0,
+            le=60000,
+        ),
+    ]
+    llm_ms: Annotated[
+        int | MISSING,
+        Field(
+            description="The LLM step, retries and output checks included, in milliseconds; its budget is at most 10 000 ms (NFR-07). Absent when the call made no LLM request. Data class: Internal.",
+            ge=0,
+            le=60000,
+        ),
+    ] = MISSING
+
+
+class KbDocumentVersion(BaseModel):
+    document_id: Annotated[
+        KbDocumentId, Field(description="The KB document. Data class: Internal.")
+    ]
+    version: Annotated[
+        KbDocumentVersionTag,
+        Field(description="The version of the document. Data class: Internal."),
+    ]
+    title: Annotated[
+        str,
+        Field(
+            description="The title of the version, from 1 to 200 characters. Data class: Public.",
+            max_length=200,
+            min_length=1,
+        ),
+    ]
+    body: Annotated[
+        str,
+        Field(
+            description="The full text of the version, from 1 to 20 000 characters, exactly as the KB holds it. Every snippet of the version is a passage of it. Data class: Public.",
+            max_length=20000,
+            min_length=1,
+        ),
+    ]
+    policy_key: Annotated[
+        str,
+        Field(
+            description="The topic of the policy that the version states, used to detect conflicts (DATA-16, DATA-19). From 1 to 100 characters. Data class: Public.",
+            max_length=100,
+            min_length=1,
+        ),
+    ]
+    effective_start_at: Annotated[
+        str, Field(description="When the version came into effect. Data class: Public.")
+    ]
+    effective_end_at: Annotated[
+        str | MISSING,
+        Field(
+            description="When the version stopped being in effect, later than `effective_start_at`. Absent when the version is open-ended (DATA-16). Data class: Public."
+        ),
+    ] = MISSING
+    owner: Annotated[
+        str,
+        Field(
+            description="Who owns the policy and reviews it, as the KB source names it: a role or a team, never a person's name. From 1 to 100 characters. Data class: Public.",
+            max_length=100,
+            min_length=1,
+        ),
+    ]
+    source: Annotated[
+        str,
+        Field(
+            description="Where the text of the version comes from, as the KB source names it, such as the approved source document. From 1 to 200 characters. Data class: Public.",
+            max_length=200,
+            min_length=1,
+        ),
+    ]
+    last_reviewed_at: Annotated[
+        str | MISSING,
+        Field(
+            description="When the owner last reviewed the version. Absent when the source does not provide it; it is never invented (DATA-13, DATA-16). Data class: Public."
+        ),
+    ] = MISSING
+
+
 class AccountChangeRule(StrEnum):
     own_account = "own_account"
     admin_role_unchangeable = "admin_role_unchangeable"
@@ -657,6 +749,12 @@ class ConsoleCustomerView(BaseModel):
 
 class AnalysisStatus(StrEnum):
     pending = "pending"
+    ready = "ready"
+    unavailable = "unavailable"
+
+
+class AnalysisStatus1(StrEnum):
+    pending = "pending"
 
 
 class PendingAnalysisPart(BaseModel):
@@ -666,11 +764,11 @@ class PendingAnalysisPart(BaseModel):
     ]
 
 
-class AnalysisStatus1(StrEnum):
+class AnalysisStatus2(StrEnum):
     ready = "ready"
 
 
-class AnalysisStatus2(StrEnum):
+class AnalysisStatus3(StrEnum):
     unavailable = "unavailable"
 
 
@@ -686,33 +784,6 @@ class RoutingRecommendation(StrEnum):
     draft = "draft"
     abstain = "abstain"
     escalate = "escalate"
-
-
-class ConsoleStepLatencies(BaseModel):
-    total_ms: Annotated[
-        int,
-        Field(
-            description="The whole call inside `ai-service`, in milliseconds. Data class: Internal.",
-            ge=0,
-            le=60000,
-        ),
-    ]
-    analysis_ms: Annotated[
-        int,
-        Field(
-            description="Classification, retrieval, the validity filter, reranking, and routing, in milliseconds. Data class: Internal.",
-            ge=0,
-            le=60000,
-        ),
-    ]
-    llm_ms: Annotated[
-        int | MISSING,
-        Field(
-            description="The LLM step, in milliseconds. Absent when the call made no LLM request. Data class: Internal.",
-            ge=0,
-            le=60000,
-        ),
-    ] = MISSING
 
 
 class DraftStatus(StrEnum):
@@ -754,6 +825,12 @@ class ReplyBasis(StrEnum):
     rejected_ai_draft = "rejected_ai_draft"
     no_ai_draft = "no_ai_draft"
     reply_proposal = "reply_proposal"
+
+
+class ReplyProposalBasis(StrEnum):
+    ai_draft = "ai_draft"
+    rejected_ai_draft = "rejected_ai_draft"
+    no_ai_draft = "no_ai_draft"
 
 
 class StaffNoteText(RootModel[str]):
@@ -831,7 +908,7 @@ class ModeHandlingTime(BaseModel):
     ticket_count: Annotated[
         int,
         Field(
-            description="The closed tickets of the mode that have a first view. Data class: Internal.",
+            description="The closed tickets of the mode whose first view came no later than their reply. A ticket first viewed after its reply is left out, because its handling time would be negative. Data class: Internal.",
             ge=0,
         ),
     ]
@@ -842,6 +919,15 @@ class ModeHandlingTime(BaseModel):
             ge=0,
         ),
     ] = MISSING
+
+
+class StaffReasonReplyCount(BaseModel):
+    staff_reason_code: Annotated[
+        StaffReasonCode, Field(description="The reason code. Data class: Internal.")
+    ]
+    reply_count: Annotated[
+        int, Field(description="The replies with this code. Data class: Internal.", ge=1)
+    ]
 
 
 class TicketCounts(BaseModel):
@@ -859,21 +945,36 @@ class DraftDecisions(BaseModel):
     approve_count: Annotated[
         int,
         Field(
-            description="Replies or proposals that used the draft unchanged. Data class: Internal.",
+            description="Replies sent in the period whose basis, or whose proposal's basis, was `ai_draft`, with a body equal to the draft's `text`. Data class: Internal.",
             ge=0,
         ),
     ]
     edit_count: Annotated[
         int,
         Field(
-            description="Replies or proposals that used the draft with changes. Data class: Internal.",
+            description="Replies sent in the period whose basis, or whose proposal's basis, was `ai_draft`, with a body that differs from the draft's `text`. Data class: Internal.",
             ge=0,
         ),
     ]
     reject_count: Annotated[
         int,
         Field(
-            description="Replies or proposals that rejected the draft. Data class: Internal.", ge=0
+            description="Replies sent in the period whose basis, or whose proposal's basis, was `rejected_ai_draft`. Data class: Internal.",
+            ge=0,
+        ),
+    ]
+    edit_by_reason: Annotated[
+        list[StaffReasonReplyCount],
+        Field(
+            description="The edits of `edit_count` by staff reason code: one item per code that occurs, in the order of `StaffReasonCode`. An edit with two codes counts under each, and an edit without a code under none. Data class: Internal.",
+            max_length=8,
+        ),
+    ]
+    reject_by_reason: Annotated[
+        list[StaffReasonReplyCount],
+        Field(
+            description="The rejections of `reject_count` by staff reason code: one item per code that occurs, in the order of `StaffReasonCode`. Every rejection has at least one code, and a rejection with two codes counts under each. Data class: Internal.",
+            max_length=8,
         ),
     ]
     approve_share: Annotated[
@@ -1306,6 +1407,12 @@ class TicketSummary(BaseModel):
             description="When a person first opened the ticket. Absent until then, so the queue shows which tickets nobody opened yet. Data class: Internal."
         ),
     ] = MISSING
+    closed_at: Annotated[
+        str | MISSING,
+        Field(
+            description="When the reply was sent, the order of the `closed` queue. Present exactly when `status` is `closed`. Data class: Internal."
+        ),
+    ] = MISSING
     customer: Annotated[
         ConsoleCustomerView,
         Field(description="The customer who wrote the message. Data class: Confidential."),
@@ -1452,6 +1559,28 @@ class ConsoleOtherOrderView(BaseModel):
     ]
 
 
+class SuggestionProgressEvent(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    suggestion_id: Annotated[
+        str,
+        Field(
+            description="The identifier of the current suggestion (CON-15). Data class: Internal.",
+            min_length=1,
+        ),
+    ]
+    analysis_status: Annotated[
+        AnalysisStatus,
+        Field(
+            description="The status of the analysis part, as `analysis_status` of `AnalysisPart`. Consumers map an unknown value to `unavailable` (CON-22). Data class: Internal."
+        ),
+    ]
+    draft_status: Annotated[
+        DraftStatus, Field(description="The status of the draft part. Data class: Internal.")
+    ]
+
+
 class UnavailableAnalysisPart(BaseModel):
     analysis_status: Annotated[
         Literal["unavailable"],
@@ -1592,10 +1721,8 @@ class ReplyProposalView(BaseModel):
         ),
     ]
     basis: Annotated[
-        ReplyBasis,
-        Field(
-            description="What the proposal is based on: `ai_draft`, `rejected_ai_draft`, or `no_ai_draft`. Data class: Internal."
-        ),
+        ReplyProposalBasis,
+        Field(description="What the proposal is based on. Data class: Internal."),
     ]
     body: Annotated[ReplyBody, Field(description="The proposed reply. Data class: Confidential.")]
     suggestion_id: Annotated[
@@ -1705,7 +1832,7 @@ class CreateSuggestionRequest(BaseModel):
     intent_override: Annotated[
         IntentLabel | MISSING,
         Field(
-            description="The intent that staff confirm or choose (ESC-01). Absent means a retry with the same inputs. Data class: Internal."
+            description="The intent that staff confirm or choose (ESC-01). Absent means a retry, which repeats the input of the failed suggestion, including the intent that staff chose for it when there was one. Data class: Internal."
         ),
     ] = MISSING
 
@@ -1831,71 +1958,6 @@ class ReplyProposalReplyRequest(BaseModel):
     ]
 
 
-class ConsoleKbDocumentVersionView(BaseModel):
-    document_id: Annotated[
-        KbDocumentId, Field(description="The KB document. Data class: Internal.")
-    ]
-    version: Annotated[
-        KbDocumentVersionTag,
-        Field(description="The version of the document. Data class: Internal."),
-    ]
-    title: Annotated[
-        str,
-        Field(
-            description="The title of the version, from 1 to 200 characters. Data class: Public.",
-            max_length=200,
-            min_length=1,
-        ),
-    ]
-    body: Annotated[
-        str,
-        Field(
-            description="The full text of the version, from 1 to 20 000 characters. Data class: Public.",
-            max_length=20000,
-            min_length=1,
-        ),
-    ]
-    policy_key: Annotated[
-        str,
-        Field(
-            description="The topic of the policy that the version states, from 1 to 100 characters. Data class: Public.",
-            max_length=100,
-            min_length=1,
-        ),
-    ]
-    effective_start_at: Annotated[
-        str, Field(description="When the version came into effect. Data class: Public.")
-    ]
-    effective_end_at: Annotated[
-        str | MISSING,
-        Field(
-            description="When the version stopped being in effect. Absent when it is open-ended. Data class: Public."
-        ),
-    ] = MISSING
-    owner: Annotated[
-        str,
-        Field(
-            description="Who owns and reviews the policy: a role or a team, never a person's name. From 1 to 100 characters. Data class: Public.",
-            max_length=100,
-            min_length=1,
-        ),
-    ]
-    source: Annotated[
-        str,
-        Field(
-            description="Where the text of the version comes from, as the KB source names it. From 1 to 200 characters. Data class: Public.",
-            max_length=200,
-            min_length=1,
-        ),
-    ]
-    last_reviewed_at: Annotated[
-        str | MISSING,
-        Field(
-            description="When the owner last reviewed the version. Absent when the source does not provide it. Data class: Public."
-        ),
-    ] = MISSING
-
-
 class Period(BaseModel):
     start_at: Annotated[
         str, Field(description="The start of the period, included. Data class: Internal.")
@@ -1948,7 +2010,7 @@ class ConsoleReport(BaseModel):
     draft_decisions: Annotated[
         DraftDecisions,
         Field(
-            description="The staff decisions about a ready draft recorded in the period: approved as is, edited, or rejected (FR-10, ADR-0006). Data class: Internal."
+            description="The staff decisions about a ready draft, recorded when the reply is sent: approved as is, edited, or rejected, with the edits and rejections by staff reason code (FR-10, ADR-0006). Data class: Internal."
         ),
     ]
     escalations: Annotated[
@@ -1966,7 +2028,7 @@ class ConsoleReport(BaseModel):
     end_to_end_latency: Annotated[
         EndToEndLatency,
         Field(
-            description="From ticket creation until the draft part of the ticket's first suggestion left `pending`, for those drafts completed in the period (NFR-08: p95 at most 12 s). Data class: Internal."
+            description="From ticket creation until the draft part of the ticket's first suggestion left `pending`, for those drafts completed in the period (NFR-08: p95 at most 12 s). A ticket whose first draft part was `cancelled`, for example by an intent correction, is left out, because staff got no result from it; a first draft that ended `unavailable` or `llm_unavailable` counts. Data class: Internal."
         ),
     ]
     ai_error_rate: Annotated[
@@ -2140,7 +2202,7 @@ class NoDraftPart(BaseModel):
         ),
     ]
     step_latencies: Annotated[
-        ConsoleStepLatencies,
+        StepLatencies,
         Field(
             description="The time that `ai-service` spent on the draft call. Data class: Internal."
         ),
@@ -2253,7 +2315,7 @@ class ReadyAnalysisPart(BaseModel):
         ),
     ]
     step_latencies: Annotated[
-        ConsoleStepLatencies,
+        StepLatencies,
         Field(
             description="The time that `ai-service` spent on the analysis. Data class: Internal."
         ),
@@ -2328,7 +2390,7 @@ class ReadyDraftPart(BaseModel):
         ),
     ]
     step_latencies: Annotated[
-        ConsoleStepLatencies,
+        StepLatencies,
         Field(
             description="The time that `ai-service` spent on the draft call. Data class: Internal."
         ),
@@ -2359,7 +2421,7 @@ class SuggestionView(BaseModel):
     intent_override: Annotated[
         IntentLabel | MISSING,
         Field(
-            description="The intent that staff confirmed or chose. Present exactly when `trigger` is `intent_override`. Data class: Internal."
+            description="The intent that staff confirmed or chose. Present when `trigger` is `intent_override`, and on a `kb_version_changed` or `retry` suggestion that repeats a suggestion with an intent that staff chose. Data class: Internal."
         ),
     ] = MISSING
     created_at: Annotated[

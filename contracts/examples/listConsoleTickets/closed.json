@@ -9,6 +9,7 @@
         "handling_mode": "manual",
         "is_authority_required": false,
         "handling_started_at": "2026-10-14T09:10:00Z",
+        "closed_at": "2026-10-14T09:25:00Z",
         "customer": {
           "display_name": "Lan Tran"
         },

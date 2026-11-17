@@ -1,21 +1,26 @@
 """Writing responses: JSON bodies, timestamps, and dependency providers (PY-35, PY-37)."""
 
 from collections.abc import Callable
-from datetime import datetime, timedelta
+from datetime import datetime
 from http import HTTPStatus
 
 from fastapi import Response
-from pydantic import BaseModel
+from pydantic import MISSING, BaseModel
 
-from supportiq_backend.platform import UnexpectedFailureError
+from supportiq_backend.platform import NonUtcTimestampError, format_timestamp
 
 JSON_MEDIA_TYPE = "application/json"
-UTC_OFFSET = timedelta(0)
-_UTC_DESIGNATOR = "Z"
 
-
-class NonUtcTimestampError(UnexpectedFailureError):
-    """A timestamp reached a response without being in UTC: a defect (PY-26)."""
+__all__ = [
+    "JSON_MEDIA_TYPE",
+    "NonUtcTimestampError",
+    "format_optional_timestamp",
+    "format_timestamp",
+    "json_response",
+    "provide",
+    "render_json",
+    "stored_json_response",
+]
 
 
 def render_json(model: BaseModel) -> str:
@@ -60,24 +65,6 @@ def stored_json_response(status_code: int, body: str) -> Response:
     return Response(content=body, status_code=status_code, media_type=JSON_MEDIA_TYPE)
 
 
-def format_timestamp(moment: datetime) -> str:
-    """Write a time as the contract's `Timestamp`: RFC 3339 in UTC with `Z` (CON-17).
-
-    Args:
-        moment: A timezone-aware time in UTC.
-
-    Returns:
-        The time with seconds, and microseconds only when they are not zero.
-
-    Raises:
-        NonUtcTimestampError: The time is naive or not in UTC.
-    """
-    if moment.utcoffset() != UTC_OFFSET:
-        raise NonUtcTimestampError
-    timespec = "microseconds" if moment.microsecond else "seconds"
-    return moment.replace(tzinfo=None).isoformat(timespec=timespec) + _UTC_DESIGNATOR
-
-
 def provide[ValueT](value: ValueT) -> Callable[[], ValueT]:
     """Return a FastAPI dependency that provides a value of the composition root (PY-37).
 
@@ -92,3 +79,15 @@ def provide[ValueT](value: ValueT) -> Callable[[], ValueT]:
         return value
 
     return provider
+
+
+def format_optional_timestamp(moment: datetime | None) -> str | MISSING:
+    """Write an optional time as the contract's `Timestamp`, absent when there is none (CON-08).
+
+    Args:
+        moment: A timezone-aware time in UTC, or None.
+
+    Returns:
+        The time as `format_timestamp` writes it, or `MISSING`, so the field stays absent.
+    """
+    return MISSING if moment is None else format_timestamp(moment)

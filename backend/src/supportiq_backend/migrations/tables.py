@@ -11,5 +11,6 @@ that adds a table also adds it here, and reset never leaves it behind.
 TRUNCATE_EVERY_TABLE = (
     "TRUNCATE TABLE accounts, sessions, sign_in_failures, idempotency_records, customers, "
     "products, orders, order_lines, shipments, refunds, tickets, customer_messages, "
-    "audit_log_entries RESTART IDENTITY"
+    "audit_log_entries, suggestions, suggestion_parts, suggestion_jobs, pseudonym_map_entries, "
+    "reply_proposals, replies, escalations, staff_decisions RESTART IDENTITY"
 )

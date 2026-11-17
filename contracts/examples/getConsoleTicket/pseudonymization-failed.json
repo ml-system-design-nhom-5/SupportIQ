@@ -1,0 +1,87 @@
+{
+  "summary": "Pseudonymization failed: manual handling, without a retry",
+  "description": "SEC-36: backend sent nothing to ai-service. A retry would fail the same way, so allowed_actions has no retry_suggestion; staff handle the ticket manually.",
+  "value": {
+    "ticket_id": "TCK-1053",
+    "status": "open",
+    "handling_mode": "assisted",
+    "is_authority_required": false,
+    "created_at": "2026-11-06T11:15:00Z",
+    "handling_started_at": "2026-11-06T11:21:40Z",
+    "customer": {
+      "display_name": "Lan Tran"
+    },
+    "message": {
+      "body": "Can you tell me when my desk lamp will arrive?",
+      "created_at": "2026-11-06T11:15:00Z"
+    },
+    "order": {
+      "order_id": "ORD-20990",
+      "order_status": "shipped",
+      "placed_at": "2026-10-28T15:10:00Z",
+      "order_total": {
+        "amount_minor": 3450,
+        "currency": "USD"
+      },
+      "shipping_cost": {
+        "amount_minor": 450,
+        "currency": "USD"
+      },
+      "lines": [
+        {
+          "product_id": "PRD-1007",
+          "product_name": "Desk lamp",
+          "quantity": 1
+        }
+      ],
+      "shipment": {
+        "shipment_status": "in_transit",
+        "estimated_delivery_at": "2026-11-07T17:00:00Z"
+      },
+      "shipping_address": "12 Sample Street, Sample City"
+    },
+    "other_orders": [
+      {
+        "order_id": "ORD-20931",
+        "order_status": "delivered",
+        "placed_at": "2026-10-02T19:30:00Z",
+        "order_total": {
+          "amount_minor": 8900,
+          "currency": "USD"
+        },
+        "lines": [
+          {
+            "product_id": "PRD-1002",
+            "product_name": "Wireless headphones",
+            "quantity": 1
+          }
+        ],
+        "shipment_status": "delivered",
+        "refund_status": "under_review"
+      }
+    ],
+    "suggestion": {
+      "suggestion_id": "2e7b9d03-6c1a-4f58-8b3e-5a9c1e7d3f62",
+      "trigger": "ticket_created",
+      "created_at": "2026-11-06T11:15:00Z",
+      "trace_id": "1f3a5c7e9b1d3f5a7c9e2b4d6f8a0c2e",
+      "analysis": {
+        "analysis_status": "unavailable",
+        "reason_codes": [
+          "pseudonymization_failed"
+        ]
+      },
+      "draft": {
+        "draft_status": "unavailable",
+        "reason_codes": [
+          "pseudonymization_failed"
+        ]
+      }
+    },
+    "allowed_actions": [
+      "send_reply",
+      "submit_reply_proposal",
+      "escalate"
+    ]
+  }
+}

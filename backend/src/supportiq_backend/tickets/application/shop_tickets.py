@@ -28,6 +28,15 @@ from supportiq_backend.platform import (
     StepTracer,
     TransactionRunner,
 )
+from supportiq_backend.suggestions import (
+    StartedSuggestion,
+    SuggestionStart,
+    SuggestionStarter,
+    SuggestionStore,
+    SuggestionTicketId,
+    SuggestionTickets,
+    SuggestionTrigger,
+)
 from supportiq_backend.tickets.domain import (
     HandlingMode,
     NewShopTicket,
@@ -49,11 +58,15 @@ class ShopTicketStores:
         tickets: The tickets of the shop.
         orders: Tells whose orders are whose. It stays read-only.
         idempotency: The idempotency records.
+        suggestions: The suggestions, for the first one of an assisted ticket.
+        links: The ticket rows that suggestions links.
     """
 
     tickets: TicketStore
     orders: CommerceGateway
     idempotency: IdempotencyStore
+    suggestions: SuggestionStore
+    links: SuggestionTickets
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +80,7 @@ class CreateShopTicketPorts:
         ids: Generates the IDs of customer messages.
         events: Where events are recorded.
         steps: Runs the creation in its span (LOG-20).
+        starter: Starts the first suggestion of an assisted ticket.
     """
 
     guard: IdempotencyGuard
@@ -75,13 +89,15 @@ class CreateShopTicketPorts:
     ids: IdGenerator
     events: EventRecorder
     steps: StepTracer
+    starter: SuggestionStarter
 
 
 class CreateShopTicket:
     """Create a ticket from a customer's message about their order (`createShopTicket`).
 
     The design's diagram, step by step: the idempotency record first, then the order check,
-    and the ticket, its message, and the stored response in one transaction. The customer
+    and the ticket, its message, and the stored response in one transaction. In `assisted`
+    mode the same transaction starts the first suggestion and queues its job. The customer
     never waits for AI: nothing here calls `ai-service`.
     """
 
@@ -168,13 +184,33 @@ class CreateShopTicket:
                 )
             )
             self._ports.steps.record_ticket(ticket_id)
+            started = await self._start_first_suggestion(stores, ticket_id)
             response = self._render_response(
                 ShopTicket(ticket_id, ticket.order_id, ticket.message, created_at)
             )
             await stores.idempotency.save_response(request, response)
             await transaction.commit()
         self._ports.events.record(EventName.TICKET_CREATED, ticket_id=ticket_id)
+        if started is not None:
+            self._ports.starter.announce(started)
         return response
+
+    async def _start_first_suggestion(
+        self, stores: ShopTicketStores, ticket_id: TicketId
+    ) -> StartedSuggestion | None:
+        # A ticket in manual mode never gets a suggestion (backend ticket workflow design).
+        if self._default_handling_mode is HandlingMode.MANUAL:
+            return None
+        return await self._ports.starter.start(
+            stores.suggestions,
+            stores.links,
+            SuggestionStart(
+                SuggestionTicketId(ticket_id),
+                SuggestionTrigger.TICKET_CREATED,
+                intent_override=None,
+                requested_by=None,
+            ),
+        )
 
 
 class ListShopTickets:

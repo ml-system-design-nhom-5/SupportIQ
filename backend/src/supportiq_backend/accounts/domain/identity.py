@@ -86,6 +86,29 @@ class InternalPrincipal:
     role: InternalRole
 
 
+class SupportRole(StrEnum):
+    """A role that works in `/console`: support staff and their managers (ADR-0012)."""
+
+    STAFF = "staff"
+    MANAGER = "manager"
+
+
+@dataclass(frozen=True, slots=True)
+class SupportPrincipal:
+    """An account whose role check for a console operation passed.
+
+    Only `Authorizer.require_support` creates one, so a console use case that takes it can only
+    run after the check (SEC-16).
+
+    Attributes:
+        account_id: The account.
+        role: `staff` or `manager`.
+    """
+
+    account_id: AccountId
+    role: SupportRole
+
+
 @dataclass(frozen=True, slots=True)
 class AdminPrincipal:
     """An account whose role check for an admin operation passed.

@@ -3,7 +3,8 @@
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import BigInteger, Computed, DateTime, Text, text
+from sqlalchemy import BigInteger, Computed, DateTime, Numeric, Text, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -31,6 +32,9 @@ class TicketRow(TicketsTables):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     handling_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    current_suggestion_id: Mapped[UUID | None]
+    study_pair_id: Mapped[str | None] = mapped_column(Text)
+    study_batch: Mapped[str | None] = mapped_column(Text)
 
 
 class CustomerMessageRow(TicketsTables):
@@ -42,3 +46,70 @@ class CustomerMessageRow(TicketsTables):
     ticket_id: Mapped[str] = mapped_column(Text)
     body: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ReplyRow(TicketsTables):
+    """A row of `replies`: at most one per ticket, never updated. Body and note: Confidential."""
+
+    __tablename__ = "replies"
+
+    reply_id: Mapped[UUID] = mapped_column(primary_key=True)
+    ticket_id: Mapped[str] = mapped_column(Text)
+    basis: Mapped[str] = mapped_column(Text)
+    suggestion_id: Mapped[UUID | None]
+    proposal_id: Mapped[UUID | None]
+    acknowledged_warning_ids: Mapped[list[str]] = mapped_column(JSONB)
+    staff_reason_codes: Mapped[list[str]] = mapped_column(JSONB)
+    sent_by_account_id: Mapped[UUID]
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    body: Mapped[str] = mapped_column(Text)
+    note: Mapped[str | None] = mapped_column(Text)
+
+
+class StaffDecisionRow(TicketsTables):
+    """A row of `staff_decisions`: inserted once, never updated; it holds no text (ADR-0006)."""
+
+    __tablename__ = "staff_decisions"
+
+    decision_id: Mapped[UUID] = mapped_column(primary_key=True)
+    ticket_id: Mapped[str] = mapped_column(Text)
+    suggestion_id: Mapped[UUID | None]
+    decision_type: Mapped[str] = mapped_column(Text)
+    staff_reason_codes: Mapped[list[str]] = mapped_column(JSONB)
+    change_ratio: Mapped[float | None] = mapped_column(Numeric(4, 3, asdecimal=False))
+    final_intent: Mapped[str | None] = mapped_column(Text)
+    decided_by_account_id: Mapped[UUID]
+    proposed_by_account_id: Mapped[UUID | None]
+    is_proposal_changed: Mapped[bool | None]
+    decided_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ReplyProposalRow(TicketsTables):
+    """A row of `reply_proposals`: inserted once, never updated. Body and note: Confidential."""
+
+    __tablename__ = "reply_proposals"
+
+    proposal_id: Mapped[UUID] = mapped_column(primary_key=True)
+    ticket_id: Mapped[str] = mapped_column(Text)
+    basis: Mapped[str] = mapped_column(Text)
+    suggestion_id: Mapped[UUID | None]
+    acknowledged_warning_ids: Mapped[list[str]] = mapped_column(JSONB)
+    staff_reason_codes: Mapped[list[str]] = mapped_column(JSONB)
+    proposed_by_account_id: Mapped[UUID]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    body: Mapped[str] = mapped_column(Text)
+    note: Mapped[str | None] = mapped_column(Text)
+
+
+class EscalationRow(TicketsTables):
+    """A row of `escalations`: at most one per ticket, never updated. The note: Confidential."""
+
+    __tablename__ = "escalations"
+
+    escalation_id: Mapped[UUID] = mapped_column(primary_key=True)
+    ticket_id: Mapped[str] = mapped_column(Text)
+    suggestion_id: Mapped[UUID | None]
+    staff_reason_codes: Mapped[list[str]] = mapped_column(JSONB)
+    escalated_by_account_id: Mapped[UUID]
+    escalated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    note: Mapped[str | None] = mapped_column(Text)
