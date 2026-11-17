@@ -80,7 +80,8 @@ class IndexConfiguration:
         encoder_max_length: The number of tokens that the encoder reads of each text.
         chunk_max_tokens: The number of tokens of each chunk of a KB document version.
         chunk_overlap_tokens: The number of tokens that two chunks in a row share.
-        relevance_min_score: The minimum similarity of a relevant chunk, tuned for this encoder.
+        relevance_min_score: The minimum similarity of a relevant chunk, for this encoder; the
+            first release serves the untuned value of `main` (ADR-0027).
     """
 
     encoder_name: str

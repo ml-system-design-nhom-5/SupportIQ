@@ -34,6 +34,7 @@ An architecture decision record (ADR) captures one significant decision: its con
 | [0024](0024-event-schema-of-the-suggestion-progress-stream.md) | Event schema of the suggestion progress stream | Accepted | 2026-11-16 |
 | [0025](0025-routing-configuration-of-the-first-release.md) | Routing configuration of the first release | Accepted | 2026-11-17 |
 | [0026](0026-frozen-intent-scenario-set.md) | Frozen intent scenario set written independently of training | Proposed | 2026-11-12 |
+| [0027](0027-retrieval-index-configuration-of-the-first-release.md) | Retrieval index configuration of the first release | Proposed | 2026-11-17 |
 
 Notes on the index:
 
