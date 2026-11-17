@@ -1,9 +1,22 @@
 /**
  * The public API of the session feature: sign-in, sign-out, the account menu, the own password
- * change, the signed-in account, and the end of a session (ADR-0009, ADR-0015).
+ * change, the signed-in account, the end of a session (ADR-0009, ADR-0015), and dev mode (UI-35).
  */
+export type { DevModePreferences, DevModeSetup } from "@/features/session/api/dev-mode-preferences";
+export {
+  createDevModePreferences,
+  DevModeContext,
+} from "@/features/session/api/dev-mode-preferences";
+export type { PreferenceStorage, PreferenceStore } from "@/features/session/api/preference-store";
+export {
+  createPreferenceStore,
+  PreferenceStoreContext,
+  whenStorageAllows,
+} from "@/features/session/api/preference-store";
 export { endSession } from "@/features/session/api/session-cache";
-export { useSignedInAccountId } from "@/features/session/api/use-current-session";
+export { useSignedInAccountId, useSignedInRole } from "@/features/session/api/use-current-session";
+export type { DevMode } from "@/features/session/api/use-dev-mode";
+export { useDevMode } from "@/features/session/api/use-dev-mode";
 export type { SignInCredentials } from "@/features/session/api/use-sign-in";
 export type { AreaLoadFailureProps } from "@/features/session/components/area-load-failure";
 export { AreaLoadFailure } from "@/features/session/components/area-load-failure";
@@ -13,15 +26,25 @@ export type {
 } from "@/features/session/components/area-permission-denied";
 export { AreaPermissionDenied } from "@/features/session/components/area-permission-denied";
 export { ChangePasswordPage } from "@/features/session/components/change-password-page";
+export type { ConsolePermissionDeniedProps } from "@/features/session/components/console-permission-denied";
+export { ConsolePermissionDenied } from "@/features/session/components/console-permission-denied";
+export type { DevModeDetailsPanelProps } from "@/features/session/components/dev-mode-details-panel";
+export { DevModeDetailsPanel } from "@/features/session/components/dev-mode-details-panel";
 export type { RequireSessionProps } from "@/features/session/components/require-session";
 export { RequireSession } from "@/features/session/components/require-session";
 export type { SessionAccountMenuProps } from "@/features/session/components/session-account-menu";
 export { SessionAccountMenu } from "@/features/session/components/session-account-menu";
 export { SignInPage } from "@/features/session/components/sign-in-page";
 export { StartPage } from "@/features/session/components/start-page";
+export type {
+  DashboardLink,
+  FrontendDetails,
+  ShownSetting,
+} from "@/features/session/model/dev-mode";
+export { TRACE_ID_SLOT } from "@/features/session/model/dev-mode";
 export type { PasswordLength } from "@/features/session/model/password";
 export { classifyPasswordLength, PASSWORD_TOO_LONG_TEXT } from "@/features/session/model/password";
 export { CHANGE_PASSWORD_PATH } from "@/features/session/model/password-change";
 export type { AccountRole, AppArea, Session } from "@/features/session/model/session";
-export { rootPathByArea } from "@/features/session/model/session";
+export { getRoleArea, rootPathByArea } from "@/features/session/model/session";
 export { SIGN_IN_PATH } from "@/features/session/model/sign-in-paths";

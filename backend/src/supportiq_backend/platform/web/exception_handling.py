@@ -2,8 +2,10 @@
 
 Every error that leaves a request becomes a Problem Details body here and nowhere else:
 domain errors, framework validation errors, unknown routes, and unexpected exceptions. An
-error is logged once, here, where it is handled (ERR-05): unexpected failures as
-`request.failed` and database failures as `database.call_failed`. Bodies never carry a stack
+error is logged once, where it is handled (ERR-05): here, unexpected failures as
+`request.failed` and a backend that cannot serve as `database.call_failed`. Only an error
+whose class sets `is_logged_where_handled` was logged by the use case that raised it, with the
+event of its cause, so this handler then only marks the span. Bodies never carry a stack
 trace, an internal name, or a value that was sent (CON-12).
 """
 
@@ -139,6 +141,9 @@ class _ProblemHandler:
     def _record_failure(self, error: BackendError) -> None:
         # One log line and the span of the request (ERR-05, LOG-22). A refusal is no failure.
         cause = _cause_of(error)
+        if error.is_logged_where_handled:
+            self._trace_context.record_failure(cause)
+            return
         match error.code:
             case ErrorCode.NOT_READY:
                 event = EventName.DATABASE_CALL_FAILED
@@ -150,7 +155,11 @@ class _ProblemHandler:
                 ErrorCode.INVALID_REQUEST
                 | ErrorCode.UNAUTHENTICATED
                 | ErrorCode.FORBIDDEN
+                | ErrorCode.AUTHORITY_REQUIRED
                 | ErrorCode.NOT_FOUND
+                | ErrorCode.INVALID_TICKET_STATE
+                | ErrorCode.SUGGESTION_PENDING
+                | ErrorCode.SUGGESTION_SUPERSEDED
                 | ErrorCode.IDEMPOTENCY_KEY_REUSED
                 | ErrorCode.LOGIN_NAME_TAKEN
             ):

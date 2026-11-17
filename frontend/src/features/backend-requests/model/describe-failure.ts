@@ -16,6 +16,13 @@ const messageByCategory: Readonly<Record<FailureCategory, string>> = {
   not_found: "This was not found. Reload the page and try again.",
   invalid_request: "The request was not accepted. Check what you entered and try again.",
   conflict: "This request conflicts with an earlier one. Reload the page and try again.",
+  authority_required:
+    "Only a manager can send the reply of this ticket. Submit the reply for approval instead.",
+  invalid_state: "This ticket changed, so this is no longer possible. Reload it to see its state.",
+  suggestion_pending:
+    "The AI is still working on this ticket. Wait until it is done, then try again.",
+  suggestion_superseded:
+    "The AI made a newer suggestion for this ticket. Reload it and check the new draft.",
   unavailable: "The service is not available right now. Try again in a moment.",
   too_large: "The request is too large. Shorten your text and try again.",
   rate_limited: "Too many requests were sent. Wait a moment, then try again.",
@@ -34,6 +41,10 @@ const categoryByProblemType: Readonly<Record<ProblemType, FailureCategory>> = {
   login_name_taken: "conflict",
   not_ready: "unavailable",
   internal_error: "unexpected",
+  authority_required: "authority_required",
+  invalid_ticket_state: "invalid_state",
+  suggestion_pending: "suggestion_pending",
+  suggestion_superseded: "suggestion_superseded",
   unknown: "unexpected",
 };
 
@@ -61,6 +72,10 @@ export type FailureCategory =
   | "not_found"
   | "invalid_request"
   | "conflict"
+  | "authority_required"
+  | "invalid_state"
+  | "suggestion_pending"
+  | "suggestion_superseded"
   | "unavailable"
   | "too_large"
   | "rate_limited"

@@ -1,6 +1,6 @@
 # Contract rules
 
-> **Status:** Active · **Owner:** contracts gatekeeper · **Last reviewed:** 2026-11-05
+> **Status:** Active · **Owner:** contracts gatekeeper · **Last reviewed:** 2026-11-12
 
 Contracts are the only shared truth between components. This file defines how contracts change, how they are written, and the conventions every API follows. The reasons are in [ADR-0001](../decisions/0001-system-architecture.md) and [ADR-0004](../decisions/0004-api-conventions.md).
 
@@ -108,6 +108,8 @@ An error response that several operations share, such as `401` or `503`, is defi
 | Identifiers | `_id` suffix | `ticket_id` |
 | Counts | `_count` suffix | `citation_count` |
 | Versions | `_version` suffix, string | `model_version` |
+
+The timestamp `as_of` keeps its [glossary](../glossary.md) name, which [ADR-0005](../decisions/0005-intent-independent-retrieval.md) also uses. It is the only exception to the `_at` suffix, and `supportiq/property-naming` allows it by name ([contracts/README.md](../../contracts/README.md#machine-checked-rules)).
 
 ## Evolution
 

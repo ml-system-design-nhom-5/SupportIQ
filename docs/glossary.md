@@ -32,7 +32,7 @@ The canonical meaning of every domain term. Code, contracts, docs, and UI use th
 | Intent | One of the 46 Bitext labels for what the customer wants. | category (a different Bitext field) |
 | Intent distribution | Calibrated probabilities over all intents for one message. | — |
 | Intent override | An intent chosen by staff that replaces the model's prediction for drafting. Choosing the predicted intent itself confirms it (ESC-01). | — |
-| KB document version | One immutable version of a KB document, with an ID, a version, and an effective period (`effective_from`, `effective_to`). | — |
+| KB document version | One immutable version of a KB document, with an ID, a version, and an effective period (`effective_start_at`, `effective_end_at`). | — |
 | Keep-alive | The UptimeRobot monitor that sends `GET /health/ready` straight to the Render origin of `backend` every 5 minutes, so the free instance does not stop. Defined in [ADR-0016](decisions/0016-hosting-on-free-tiers.md#backend-on-render). The wake request is its fallback. | ping (ambiguous) |
 | Knowledge base (KB) | The approved, versioned set of simulated policy and FAQ documents. | policy database, knowledge store |
 | Login name | The name an account signs in with: a role and a number, such as `staff-4`, never a person's name, so it is Internal data. An admin-created account gets `<role>-<number>` from `backend` ([account management design](design/account-management.md#login-names)). | username, user ID |
@@ -56,6 +56,7 @@ The canonical meaning of every domain term. Code, contracts, docs, and UI use th
 | Routing configuration | The versioned thresholds and lists that turn the intent distribution and evidence into a routing recommendation: τ, δ, the rerank weight λ, the list of sensitive intents, and the sensitive-term list. Part of the release manifest. | routing table (older wording) |
 | Routing recommendation | The proposal from `ai-service` for a ticket: draft, abstain, or escalate. | — |
 | Sensitive intent | An intent, such as `request_refund`, that sets the authority requirement when it has a significant probability, even if it is not first ([ADR-0005](decisions/0005-intent-independent-retrieval.md), statement 5). Listed in the routing configuration. | — |
+| Service token | The Secret bearer token that `backend` sends to `ai-service` on every call except the health checks, so that no other client can use `ai-service` ([contracts v1 design](design/contracts-v1.md#common-elements)). It has nothing to do with placeholders. | API key (reserved for the LLM provider key) |
 | Staff | Support employees who use `/console`. As a role, `staff` means Tier 1 support staff; managers are staff with more authority. | agent, operator (`agent` is reserved for AI agents and the `human_agent` intent) |
 | Staff decision | What staff or a manager did with a suggestion: approve, edit, reject, or escalate. | — |
 | Staff note | AI-written text for staff only, such as why escalation is recommended or what information is missing. Never sent to the customer. | — |

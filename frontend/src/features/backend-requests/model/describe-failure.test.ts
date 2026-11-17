@@ -20,6 +20,10 @@ describe("categorizeFailure", () => {
     ["login-name-taken", 409, "conflict"],
     ["not-ready", 503, "unavailable"],
     ["internal-error", 500, "unexpected"],
+    ["authority-required", 403, "authority_required"],
+    ["invalid-ticket-state", 409, "invalid_state"],
+    ["suggestion-pending", 409, "suggestion_pending"],
+    ["suggestion-superseded", 409, "suggestion_superseded"],
   ])("puts the %s problem in %s", (example, status, category) => {
     const failure = parseFailureResponse(status, readExample("problems", example));
 

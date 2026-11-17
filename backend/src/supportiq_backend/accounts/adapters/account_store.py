@@ -28,6 +28,9 @@ class PostgresAccountStore:
 
         Returns:
             The account, or None when the name is unknown.
+
+        Raises:
+            UnexpectedFailureError: A stored role is no value of its enum: a defect.
         """
         if not is_storable_text(login_name):
             return None

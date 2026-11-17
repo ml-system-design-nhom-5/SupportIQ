@@ -1,5 +1,5 @@
 description: >-
-  The status of a simulated order (`synthetic-dev-only` commerce data).
+  The status of a simulated order.
   `placed`: the order was placed and nobody has started preparing it.
   `processing`: the order is being prepared and has not left the warehouse.
   `shipped`: the order was handed to the carrier.

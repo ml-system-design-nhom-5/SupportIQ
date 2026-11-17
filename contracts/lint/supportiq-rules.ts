@@ -9,6 +9,8 @@ const SNAKE_CASE = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 const DATA_CLASS =
   /Data class: (?:(?:Public|Internal|Confidential|Secret)\b|that of the property holding this value\.)/;
 const PROBLEM_TYPE = /^urn:supportiq:problem:[a-z0-9]+(?:-[a-z0-9]+)*$/;
+// CON-18: the timestamps whose glossary name has no `_at` suffix.
+const TIMESTAMP_TERMS: ReadonlySet<string> = new Set(["as_of"]);
 const CLIENT_ERROR_STATUS = /^4(?:\d\d|XX)$/;
 // The schema of a parameter or a header is described by the parameter or header itself.
 const PARAMETER_OR_HEADER_SCHEMA = /\/(?:parameters|headers)\/[^/]+\/schema$/;
@@ -344,13 +346,17 @@ function checkClosed(schema: unknown, ctx: Context, location: Location): void {
 function namingProblems(name: string, property: Node): readonly string[] {
   const type = property.type;
   const isTimestamp = property.format === "date-time";
+  const hasTimestampName = name.endsWith("_at") || TIMESTAMP_TERMS.has(name);
   const checks: readonly [boolean, string][] = [
     [!SNAKE_CASE.test(name), "must be snake_case"],
     [
       type === "boolean" && !/^(?:is|has|can)_/.test(name),
       "is a boolean, so it must start with is_, has_, or can_",
     ],
-    [isTimestamp !== name.endsWith("_at"), "must end with _at exactly when it is a timestamp"],
+    [
+      isTimestamp !== hasTimestampName,
+      "must end with _at exactly when it is a timestamp, or be as_of",
+    ],
     [
       name.endsWith("_ms") && type !== "integer",
       "ends with _ms, so it must be an integer duration",

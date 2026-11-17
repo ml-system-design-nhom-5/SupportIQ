@@ -48,6 +48,8 @@ export default defineConfig({
     {
       command:
         "pnpm exec vite build && pnpm exec vite preview --host 127.0.0.1 --port 4173 --strictPort",
+      // Backend wake-up design, Testing and evaluation: the build sends its wake request to the mock.
+      env: { VITE_BACKEND_WAKE_ORIGIN: MOCK_ORIGIN },
       url: PREVIEW_ORIGIN,
       reuseExistingServer: process.env["CI"] === undefined,
       timeout: SERVER_START_LIMIT_MS,

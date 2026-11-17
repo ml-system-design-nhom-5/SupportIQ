@@ -4,6 +4,9 @@ apis:
   backend:
     root: backend.openapi.yaml
     output: dist/backend.openapi.yaml
+  ai-service:
+    root: ai-service.openapi.yaml
+    output: dist/ai-service.openapi.yaml
 extends:
   - recommended-strict
 plugins:

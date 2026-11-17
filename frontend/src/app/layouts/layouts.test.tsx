@@ -1,7 +1,12 @@
 import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { getCurrentSessionRoute } from "@/test/backend-routes";
+import {
+  getConsoleReportRoute,
+  getCurrentSessionRoute,
+  listConsoleTicketsRoute,
+} from "@/test/backend-routes";
+import { openConsole, TICKET_PATH } from "@/test/console-screen";
 import { createFakeBackend, exampleAnswer } from "@/test/fake-backend";
 import { renderApp } from "@/test/render-app";
 
@@ -15,6 +20,7 @@ import { renderApp } from "@/test/render-app";
 function openWithSession(path: string, sessionExample: string) {
   const backend = createFakeBackend();
   backend.answer(getCurrentSessionRoute, exampleAnswer(200, "getCurrentSession", sessionExample));
+  backend.answer(listConsoleTicketsRoute, exampleAnswer(200, "listConsoleTickets", "open-queue"));
   return renderApp({ path, backend });
 }
 
@@ -45,20 +51,55 @@ describe("ShopLayout", () => {
 });
 
 describe("ConsoleLayout", () => {
-  it("shows the console app shell with the account menu, and no ticket feature", async () => {
+  it("shows SupportIQ Console with Tickets, the account menu, and the inbox", async () => {
     openWithSession("/console", "manager");
 
     const bar = await screen.findByRole("banner");
     expect(bar).toHaveTextContent("SupportIQConsole");
+    expect(within(bar).getByRole("link", { name: "Tickets" })).toHaveAttribute("href", "/console");
     expect(within(bar).getByRole("button", { name: "Hoa Pham · Manager" })).toBeVisible();
-    expect(
-      screen.getByRole("heading", { level: 1, name: "The ticket inbox is not available yet" }),
-    ).toBeVisible();
+    expect(await screen.findByRole("navigation", { name: "Inbox" })).toBeVisible();
+    expect(screen.getByRole("main")).toBeInTheDocument();
+  });
+
+  it("shows only the brand to a session of another role", async () => {
+    openWithSession("/console", "customer");
+
+    const bar = await screen.findByRole("banner");
+    expect(bar).toHaveTextContent("SupportIQConsole");
+    expect(within(bar).queryByRole("navigation")).not.toBeInTheDocument();
+    expect(within(bar).queryByRole("button")).not.toBeInTheDocument();
+  });
+});
+
+describe("ConsoleLayout, the current page of the navigation", () => {
+  it("marks Reports as current on the Reports page, and Tickets as not current", async () => {
+    const backend = createFakeBackend();
+    backend.answer(getCurrentSessionRoute, exampleAnswer(200, "getCurrentSession", "manager"));
+    backend.answer(
+      getConsoleReportRoute,
+      exampleAnswer(200, "getConsoleReport", "period-with-activity"),
+    );
+    renderApp({ path: "/console/reports", backend });
+
+    const bar = await screen.findByRole("banner");
+    const reports = await within(bar).findByRole("link", { name: "Reports" });
+    expect(reports).toHaveAttribute("aria-current", "page");
+    expect(within(bar).getByRole("link", { name: "Tickets" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("marks Tickets as current on a ticket, and Reports as not current", async () => {
+    openConsole(TICKET_PATH, { session: "manager" });
+
+    const bar = await screen.findByRole("banner");
+    const tickets = await within(bar).findByRole("link", { name: "Tickets" });
+    expect(tickets).toHaveAttribute("aria-current", "page");
+    expect(within(bar).getByRole("link", { name: "Reports" })).not.toHaveAttribute("aria-current");
   });
 });
 
 describe("AdminLayout", () => {
-  it("shows SupportIQ Admin with Accounts and the account menu of the admin", async () => {
+  it("shows SupportIQ Admin with Accounts, Versions, and the account menu of the admin", async () => {
     openWithSession("/admin", "admin");
 
     const bar = await screen.findByRole("banner");
@@ -66,6 +107,10 @@ describe("AdminLayout", () => {
     expect(within(bar).getByRole("link", { name: "Accounts" })).toHaveAttribute(
       "href",
       "/admin/accounts",
+    );
+    expect(within(bar).getByRole("link", { name: "Versions" })).toHaveAttribute(
+      "href",
+      "/admin/versions",
     );
     expect(within(bar).getByRole("button", { name: "Quang Vo · Admin" })).toBeVisible();
   });

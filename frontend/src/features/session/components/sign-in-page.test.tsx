@@ -7,7 +7,7 @@ import {
   listShopOrdersRoute,
 } from "@/test/backend-routes";
 import { createFakeBackend, exampleAnswer } from "@/test/fake-backend";
-import { renderApp } from "@/test/render-app";
+import { renderApp, testSettings } from "@/test/render-app";
 
 /**
  * Type the credentials and choose Sign in.
@@ -146,7 +146,7 @@ describe("SignInPage, failures and double submission", () => {
     const { user } = renderApp({
       path: "/sign-in",
       backend,
-      settings: { requestTimeoutMs: 10_000, requestRetryMaxCount: 2, requestRetryBaseDelayMs: 1 },
+      settings: { ...testSettings, requestRetryMaxCount: 2 },
     });
 
     await submitCredentials(user);

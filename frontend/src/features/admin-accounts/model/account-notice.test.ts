@@ -9,6 +9,7 @@ const minh: Account = {
   loginName: "staff-2",
   displayName: "Minh Le",
   role: "staff",
+  rawRole: "staff",
   isActive: false,
 };
 

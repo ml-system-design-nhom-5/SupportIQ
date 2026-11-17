@@ -2,13 +2,16 @@
 
 from dataclasses import dataclass
 
+import httpx
 from fastapi import APIRouter
 from opentelemetry.sdk.trace import TracerProvider
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from supportiq_backend.composition_root.accounts_wiring import wire_accounts
 from supportiq_backend.composition_root.commerce_wiring import wire_commerce
+from supportiq_backend.composition_root.reports_wiring import wire_reports
 from supportiq_backend.composition_root.shared_ports import build_shared_ports
+from supportiq_backend.composition_root.suggestions_wiring import wire_suggestions
 from supportiq_backend.composition_root.tickets_wiring import wire_tickets
 from supportiq_backend.platform import CheckReadiness, Clock, EventRecorder
 from supportiq_backend.platform.adapters.database import (
@@ -22,6 +25,7 @@ from supportiq_backend.platform.adapters.telemetry import (
     create_tracer_provider,
 )
 from supportiq_backend.platform.settings import Settings, TraceExporter
+from supportiq_backend.suggestions import ClaimLoop
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,12 +37,16 @@ class Runtime:
         app_engine: The engine that connects as `supportiq_app`.
         check_readiness: The readiness use case.
         routers: The routers of every feature.
+        ai_client: The HTTP client of ai-service, closed at shutdown.
+        claim_loop: The claim loop of suggestion jobs, run by the lifespan.
     """
 
     tracer_provider: TracerProvider
     app_engine: AsyncEngine
     check_readiness: CheckReadiness
     routers: tuple[APIRouter, ...]
+    ai_client: httpx.AsyncClient
+    claim_loop: ClaimLoop
 
 
 def database_timeouts(settings: Settings) -> DatabaseTimeouts:
@@ -75,13 +83,19 @@ def build_tracer_provider(settings: Settings) -> TracerProvider:
     return create_tracer_provider(None)
 
 
-def build_runtime(settings: Settings, events: EventRecorder, clock: Clock) -> Runtime:
+def build_runtime(
+    settings: Settings,
+    events: EventRecorder,
+    clock: Clock,
+    ai_service_transport: httpx.AsyncBaseTransport | None,
+) -> Runtime:
     """Create the resources of a replica and wire every feature on them.
 
     Args:
         settings: The validated settings.
         events: Where events are recorded.
         clock: The clock of the process.
+        ai_service_transport: The transport of the ai-service client; None for the network.
 
     Returns:
         The runtime. Nothing here opens a connection.
@@ -93,6 +107,9 @@ def build_runtime(settings: Settings, events: EventRecorder, clock: Clock) -> Ru
     tracer_provider = build_tracer_provider(settings)
     shared = build_shared_ports(settings, events, clock, tracer_provider)
     accounts = wire_accounts(settings, session_factory, shared)
+    suggestions = wire_suggestions(
+        settings, session_factory, shared, accounts, ai_service_transport
+    )
     return Runtime(
         tracer_provider=tracer_provider,
         app_engine=engine,
@@ -100,6 +117,10 @@ def build_runtime(settings: Settings, events: EventRecorder, clock: Clock) -> Ru
         routers=(
             *accounts.routers,
             wire_commerce(session_factory, accounts),
-            wire_tickets(settings, session_factory, shared, accounts),
+            *wire_tickets(settings, session_factory, shared, accounts, suggestions),
+            *suggestions.routers,
+            wire_reports(session_factory, shared, accounts),
         ),
+        ai_client=suggestions.ai_client,
+        claim_loop=suggestions.claim_loop,
     )

@@ -14,13 +14,13 @@ import {
   FailureBanner,
   getRequestFailure,
   isWriteOutcomeUnknown,
+  MESSAGE_MAX_LENGTH,
   type RequestFailure,
   useCreateIdempotencyKey,
 } from "@/features/backend-requests";
 import { useCreateShopTicket } from "@/features/shop-support/api/use-create-shop-ticket";
 import { useOrderTickets } from "@/features/shop-support/api/use-ticket-lists";
 import { OrderTickets } from "@/features/shop-support/components/order-tickets";
-import { MESSAGE_MAX_LENGTH } from "@/features/shop-support/model/message-text";
 
 /** Props of {@link OrderSupportSection}. */
 export type OrderSupportSectionProps = {

@@ -2,7 +2,14 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 
 import { StatusBadge } from "@/design-system/components/status-badge";
 import {
+  authorityRequiredPresentation,
   presentationByAccountStatus,
+  presentationByAiServiceStatus,
+  presentationByAiStatus,
+  presentationByCompletedDraftStatus,
+  presentationByConsoleTicketStatus,
+  presentationByDocumentValidity,
+  presentationByHandlingMode,
   presentationByInternalRole,
   presentationByOrderStatus,
   presentationByRefundStatus,
@@ -36,6 +43,28 @@ export const TicketStatuses: Story = {
 export const Roles: Story = { render: () => renderAll(presentationByInternalRole) };
 
 export const AccountStatuses: Story = { render: () => renderAll(presentationByAccountStatus) };
+
+export const ConsoleTicketStatuses: Story = {
+  render: () => renderAll(presentationByConsoleTicketStatus),
+};
+
+export const AiStatuses: Story = { render: () => renderAll(presentationByAiStatus) };
+
+export const CompletedDraftStatuses: Story = {
+  render: () => renderAll(presentationByCompletedDraftStatus),
+};
+
+export const AiServiceStatuses: Story = {
+  render: () => renderAll(presentationByAiServiceStatus),
+};
+
+export const HandlingModes: Story = { render: () => renderAll(presentationByHandlingMode) };
+
+export const DocumentValidities: Story = {
+  render: () => renderAll(presentationByDocumentValidity),
+};
+
+export const AuthorityRequired: Story = { args: { presentation: authorityRequiredPresentation } };
 
 /**
  * Render every presentation of one status set, so the story shows each variant (UI-04).

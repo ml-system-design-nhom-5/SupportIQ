@@ -7,7 +7,7 @@ import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { type BackendClient, useBackendClient } from "@/api/client";
 import { isUnauthenticatedError, requestData } from "@/features/backend-requests";
 import { sessionQueryKeys } from "@/features/session/api/session-query-keys";
-import { type SessionState, toSession } from "@/features/session/model/session";
+import { type AccountRole, type SessionState, toSession } from "@/features/session/model/session";
 
 /**
  * Read the session state.
@@ -31,6 +31,17 @@ export function useCurrentSession(): UseQueryResult<SessionState> {
 export function useSignedInAccountId(): string | undefined {
   const { data: sessionState } = useCurrentSession();
   return sessionState?.kind === "signed_in" ? sessionState.session.accountId : undefined;
+}
+
+/**
+ * Read the role of the signed-in account, for a screen that offers what the role may use, such as
+ * the queues of the console inbox (console UI design, Inbox). `backend` still decides (UI-40).
+ *
+ * @returns The role, or undefined until a session is known.
+ */
+export function useSignedInRole(): AccountRole | undefined {
+  const { data: sessionState } = useCurrentSession();
+  return sessionState?.kind === "signed_in" ? sessionState.session.role : undefined;
 }
 
 /**

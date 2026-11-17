@@ -29,6 +29,9 @@ class PostgresPasswordStore:
 
         Returns:
             The account, or None when no account has this ID.
+
+        Raises:
+            UnexpectedFailureError: A stored role is no value of its enum: a defect.
         """
         row = await self._session.scalar(
             select(AccountRow).where(AccountRow.account_id == UUID(account_id)).with_for_update()

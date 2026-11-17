@@ -6,11 +6,29 @@ import { renderUi } from "@/test/render-app";
 
 const TRACE_ID = "4bf92f3577b34da6a3ce929d0e0e4736";
 
+/** A ready Grafana link of the local stack, as the feature builds it. */
+const TRACE_HREF = `http://localhost:3000/explore?trace=${TRACE_ID}`;
+
 describe("TraceId", () => {
   it("shows the trace ID under Details (UI-25)", () => {
     renderUi(<TraceId traceId={TRACE_ID} />);
 
     expect(screen.getByText(/Details: trace/)).toHaveTextContent(`Details: trace ${TRACE_ID}`);
+  });
+
+  it("has no Grafana link without one", () => {
+    renderUi(<TraceId traceId={TRACE_ID} />);
+
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("links to the trace in Grafana in a new tab and says so (UI-35)", () => {
+    renderUi(<TraceId traceId={TRACE_ID} traceHref={TRACE_HREF} />);
+
+    const link = screen.getByRole("link", { name: "Open in Grafana (opens in a new tab)" });
+    expect(link).toHaveAttribute("href", TRACE_HREF);
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noreferrer");
   });
 
   it("copies the trace ID and says so", async () => {

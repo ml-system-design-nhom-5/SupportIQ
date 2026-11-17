@@ -1,5 +1,6 @@
 """In-memory fake of the `IdempotencyStore` port (ARCH-27)."""
 
+import json
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -57,7 +58,8 @@ class FakeIdempotencyStore:
         return NewRequest()
 
     async def save_response(self, request: IdempotentRequest, response: StoredResponse) -> None:
-        """Store the response in the record of the key."""
+        """Store the response in the record of the key; its body must be JSON, as in the table."""
+        json.loads(response.body)
         self.records[_key_of(request)].response = response
 
 

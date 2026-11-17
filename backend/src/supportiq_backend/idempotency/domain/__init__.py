@@ -7,6 +7,7 @@ from supportiq_backend.idempotency.domain.errors import (
 )
 from supportiq_backend.idempotency.domain.ports import IdempotencyStore
 from supportiq_backend.idempotency.domain.requests import (
+    NO_CONTENT_BODY,
     CanonicalValue,
     ClaimOutcome,
     ExistingRecord,
@@ -24,6 +25,7 @@ from supportiq_backend.idempotency.domain.requests import (
 )
 
 __all__ = [
+    "NO_CONTENT_BODY",
     "CanonicalValue",
     "ClaimOutcome",
     "ExistingRecord",

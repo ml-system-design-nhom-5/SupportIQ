@@ -2,7 +2,11 @@ import { screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { chooseFromAccountMenu } from "@/test/account-menu";
-import { deleteCurrentSessionRoute, getCurrentSessionRoute } from "@/test/backend-routes";
+import {
+  deleteCurrentSessionRoute,
+  getCurrentSessionRoute,
+  listConsoleTicketsRoute,
+} from "@/test/backend-routes";
 import {
   createFakeBackend,
   exampleAnswer,
@@ -21,6 +25,7 @@ import { renderApp, testSettings } from "@/test/render-app";
 async function openConsoleAndSignOut(signOutAnswer: FakeAnswer) {
   const backend = createFakeBackend();
   backend.answer(getCurrentSessionRoute, exampleAnswer(200, "getCurrentSession", "staff"));
+  backend.answer(listConsoleTicketsRoute, exampleAnswer(200, "listConsoleTickets", "open-queue"));
   backend.answer(deleteCurrentSessionRoute, signOutAnswer);
   const rendered = renderApp({
     path: "/console",

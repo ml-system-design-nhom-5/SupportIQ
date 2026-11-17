@@ -20,7 +20,7 @@ from supportiq_backend.platform import (
     UnexpectedFailureError,
     is_storable_text,
 )
-from supportiq_backend.platform.web.responses import UTC_OFFSET
+from supportiq_backend.platform.domain import UTC_OFFSET
 
 # The `Limit` parameter of the contract: from 1 to 100, and 20 when absent.
 PAGE_SIZE_MINIMUM = 1

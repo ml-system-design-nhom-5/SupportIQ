@@ -1,5 +1,11 @@
 /**
- * A table of rows with named columns, for the admin area (desktop widths, UI-33).
+ * A table of rows with named columns, named by a visually hidden caption. The `comfortable` table
+ * is the table of the admin area (admin UI design, Accounts; desktop widths, UI-33): a panel of
+ * its own, rows with 12 px of padding, and row headers in semibold that a screen can move the
+ * focus to (UI-30). The `compact` table sits inside a console panel, below its header, such as
+ * the figures of a report (console UI design, reports.png): no panel of its own, rows with 8 px
+ * of padding, and row headers in the regular weight. Its rows have no actions, so its row headers
+ * are not focus targets and need no ID that is unique in the page.
  */
 import { cva } from "class-variance-authority";
 import type { ReactNode } from "react";
@@ -9,14 +15,23 @@ import { FOCUS_RING_CLASSES } from "@/design-system/primitives/focus-ring";
 
 const cellVariants = cva("px-4 align-middle", {
   variants: {
-    kind: {
-      columnHeader: "py-2 text-xs font-semibold",
-      rowHeader: "py-3 font-semibold wrap-anywhere",
-      data: "py-3",
-    },
+    kind: { columnHeader: "py-2 text-xs font-semibold", rowHeader: "", data: "" },
+    density: { comfortable: "", compact: "" },
     align: { start: "text-left", end: "text-right" },
   },
+  compoundVariants: [
+    { kind: "rowHeader", density: "comfortable", className: "py-3 font-semibold wrap-anywhere" },
+    { kind: "data", density: "comfortable", className: "py-3" },
+    { kind: "rowHeader", density: "compact", className: "py-2 font-normal" },
+    { kind: "data", density: "compact", className: "py-2" },
+  ],
 });
+
+/**
+ * `comfortable` is the table of the admin area, in a panel of its own; `compact` sits inside a
+ * console panel, below its header.
+ */
+export type DataTableDensity = "comfortable" | "compact";
 
 /** One column of a {@link DataTable}. */
 export type DataTableColumn<Key extends string> = {
@@ -39,6 +54,15 @@ export type DataTableProps<Key extends string> = {
   readonly caption: string;
   readonly columns: readonly DataTableColumn<Key>[];
   readonly rows: readonly DataTableRow<Key>[];
+  /** `comfortable` by default. */
+  readonly density?: DataTableDensity;
+};
+
+/** Props of the cell of one row in one column. */
+type BodyCellProps<Key extends string> = {
+  readonly row: DataTableRow<Key>;
+  readonly column: DataTableColumn<Key>;
+  readonly density: DataTableDensity;
 };
 
 /**
@@ -55,61 +79,85 @@ export function buildRowHeaderId(rowId: string): string {
 /**
  * Render a table.
  *
- * @param props - The caption, the columns, and the rows.
- * @returns The table inside a panel.
+ * @param props - The caption, the columns, the rows, and the density.
+ * @returns The table, inside a panel of its own when it is `comfortable`.
  */
-export function DataTable<Key extends string>({ caption, columns, rows }: DataTableProps<Key>) {
-  return (
-    <div className="overflow-hidden rounded-lg border border-border bg-surface shadow-sm">
-      <table className="w-full border-collapse text-sm text-text">
-        <caption className="sr-only">{caption}</caption>
-        <thead className="bg-background text-text-muted">
-          <tr>
+export function DataTable<Key extends string>({
+  caption,
+  columns,
+  rows,
+  density = "comfortable",
+}: DataTableProps<Key>) {
+  const table = (
+    <table className="w-full border-collapse text-sm text-text">
+      <caption className="sr-only">{caption}</caption>
+      <thead className="bg-background text-text-muted">
+        <tr>
+          {columns.map((column) => (
+            <th
+              key={column.key}
+              scope="col"
+              className={cellVariants({
+                kind: "columnHeader",
+                density,
+                align: column.align ?? "start",
+              })}
+            >
+              {column.label}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.id} className="border-t border-border">
             {columns.map((column) => (
-              <th
-                key={column.key}
-                scope="col"
-                className={cellVariants({
-                  kind: "columnHeader",
-                  align: column.align ?? "start",
-                })}
-              >
-                {column.label}
-              </th>
+              <BodyCell key={column.key} row={row} column={column} density={density} />
             ))}
           </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.id} className="border-t border-border">
-              {columns.map((column) =>
-                column.isRowHeader === true ? (
-                  <th
-                    key={column.key}
-                    id={buildRowHeaderId(row.id)}
-                    scope="row"
-                    tabIndex={-1}
-                    className={cn(
-                      cellVariants({ kind: "rowHeader", align: column.align ?? "start" }),
-                      FOCUS_RING_CLASSES,
-                      "focus-visible:-outline-offset-2",
-                    )}
-                  >
-                    {row.cells[column.key]}
-                  </th>
-                ) : (
-                  <td
-                    key={column.key}
-                    className={cellVariants({ kind: "data", align: column.align ?? "start" })}
-                  >
-                    {row.cells[column.key]}
-                  </td>
-                ),
-              )}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+        ))}
+      </tbody>
+    </table>
+  );
+  if (density === "compact") {
+    return table;
+  }
+  return (
+    <div className="overflow-hidden rounded-lg border border-border bg-surface shadow-sm">
+      {table}
     </div>
+  );
+}
+
+/**
+ * Render the cell of a row in a column: a row header when the column names its rows, a data cell
+ * otherwise. Only a `comfortable` row header is a focus target.
+ *
+ * @param props - The row, the column, and the density.
+ * @returns The cell.
+ */
+function BodyCell<Key extends string>({ row, column, density }: BodyCellProps<Key>) {
+  const align = column.align ?? "start";
+  const content = row.cells[column.key];
+  if (column.isRowHeader !== true) {
+    return <td className={cellVariants({ kind: "data", density, align })}>{content}</td>;
+  }
+  const rowHeaderClasses = cellVariants({ kind: "rowHeader", density, align });
+  if (density === "compact") {
+    return (
+      <th scope="row" className={rowHeaderClasses}>
+        {content}
+      </th>
+    );
+  }
+  return (
+    <th
+      id={buildRowHeaderId(row.id)}
+      scope="row"
+      tabIndex={-1}
+      className={cn(rowHeaderClasses, FOCUS_RING_CLASSES, "focus-visible:-outline-offset-2")}
+    >
+      {content}
+    </th>
   );
 }

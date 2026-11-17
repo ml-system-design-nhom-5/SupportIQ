@@ -6,7 +6,10 @@ from pydantic import SecretStr, ValidationError
 from supportiq_backend.composition_root.settings_loading import invalid_setting_names
 from supportiq_backend.platform.settings import HandlingModeSetting, Settings, TraceExporter
 from tests.unit.platform.settings_builders import (
+    TEST_AI_SERVICE_TOKEN,
+    TEST_AI_SERVICE_URL,
     TEST_APP_URL,
+    TEST_BUILD_VERSION,
     TEST_ORIGIN,
     SettingsWithoutEnvironment,
     build_test_settings,
@@ -16,9 +19,13 @@ APP_URL = TEST_APP_URL
 REQUIRED_VALUES: dict[str, object] = {
     "database_url_app": APP_URL,
     "allowed_origins": (TEST_ORIGIN,),
+    "ai_service_base_url": TEST_AI_SERVICE_URL,
+    "ai_service_token": TEST_AI_SERVICE_TOKEN,
+    "backend_build_version": TEST_BUILD_VERSION,
 }
 SEED_PASSWORD = "seed-test-password"
 IDLE_TIMEOUT_MS = 60_000
+DRAFT_TIMEOUT_MS = 11_000
 build_settings = build_test_settings
 
 
@@ -52,6 +59,13 @@ def names_of_invalid_settings(**values: object) -> tuple[str, ...]:
         ("trace_exporter", TraceExporter.NONE),
         ("otlp_traces_endpoint", None),
         ("otlp_export_timeout_ms", 10_000),
+        ("ai_service_analysis_timeout_ms", 3_000),
+        ("ai_service_draft_timeout_ms", 11_000),
+        ("ai_service_read_timeout_ms", 3_000),
+        ("suggestion_workers_per_replica", 5),
+        ("suggestion_job_lease_ms", 15_000),
+        ("suggestion_job_max_attempts", 3),
+        ("suggestion_queue_poll_ms", 500),
     ],
 )
 def test_settings_start_with_the_initial_values_of_the_design(
@@ -64,10 +78,43 @@ def test_settings_start_with_the_initial_values_of_the_design(
     assert value == initial_value
 
 
-def test_settings_name_both_required_settings_when_they_are_missing() -> None:
+def test_settings_name_every_required_setting_when_they_are_missing() -> None:
     names = names_of_invalid_settings()
 
-    assert names == ("database_url_app", "allowed_origins")
+    assert names == (
+        "database_url_app",
+        "allowed_origins",
+        "ai_service_base_url",
+        "ai_service_token",
+        "backend_build_version",
+    )
+
+
+@pytest.mark.parametrize("lease_ms", [DRAFT_TIMEOUT_MS, DRAFT_TIMEOUT_MS - 1])
+def test_settings_refuse_a_lease_that_is_not_longer_than_the_draft_timeout(
+    lease_ms: int,
+) -> None:
+    names = names_of_invalid_settings(
+        **REQUIRED_VALUES,
+        suggestion_job_lease_ms=lease_ms,
+        ai_service_draft_timeout_ms=DRAFT_TIMEOUT_MS,
+    )
+
+    assert names == ("suggestion_job_lease_ms",)
+
+
+def test_settings_accept_a_lease_one_millisecond_longer_than_the_draft_timeout() -> None:
+    settings = build_settings(
+        suggestion_job_lease_ms=DRAFT_TIMEOUT_MS + 1, ai_service_draft_timeout_ms=DRAFT_TIMEOUT_MS
+    )
+
+    assert settings.suggestion_job_lease_ms == DRAFT_TIMEOUT_MS + 1
+
+
+def test_the_service_token_stays_out_of_the_repr_of_the_settings() -> None:
+    settings = build_settings()
+
+    assert TEST_AI_SERVICE_TOKEN not in repr(settings)
 
 
 @pytest.mark.parametrize(
@@ -94,6 +141,10 @@ def test_settings_name_both_required_settings_when_they_are_missing() -> None:
         ("idempotency_retention_ms", 0),
         ("default_handling_mode", "automatic"),
         ("seed_password_admin", ""),
+        ("ai_service_token", ""),
+        ("ai_service_base_url", "not a url"),
+        ("backend_build_version", ""),
+        ("backend_build_version", "x" * 65),
         ("seed_password_staff", "x" * 129),
         ("trace_exporter", "zipkin"),
         ("otlp_traces_endpoint", "not a url"),
@@ -167,6 +218,9 @@ def test_settings_decode_the_origins_of_the_environment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("DATABASE_URL_APP", TEST_APP_URL)
+    monkeypatch.setenv("AI_SERVICE_BASE_URL", TEST_AI_SERVICE_URL)
+    monkeypatch.setenv("AI_SERVICE_TOKEN", TEST_AI_SERVICE_TOKEN)
+    monkeypatch.setenv("BACKEND_BUILD_VERSION", TEST_BUILD_VERSION)
     monkeypatch.setenv("ALLOWED_ORIGINS", '["http://localhost:5173", "https://shop.example"]')
 
     settings = Settings.model_validate({})
@@ -179,6 +233,9 @@ def test_malformed_origins_of_the_environment_name_their_setting(
     monkeypatch: pytest.MonkeyPatch, value: str
 ) -> None:
     monkeypatch.setenv("DATABASE_URL_APP", TEST_APP_URL)
+    monkeypatch.setenv("AI_SERVICE_BASE_URL", TEST_AI_SERVICE_URL)
+    monkeypatch.setenv("AI_SERVICE_TOKEN", TEST_AI_SERVICE_TOKEN)
+    monkeypatch.setenv("BACKEND_BUILD_VERSION", TEST_BUILD_VERSION)
     monkeypatch.setenv("ALLOWED_ORIGINS", value)
 
     with pytest.raises(ValidationError) as caught:

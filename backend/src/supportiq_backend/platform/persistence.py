@@ -4,9 +4,13 @@ This is a public entry point of `platform`, next to `platform.web`, for adapters
 SQLAlchemy, so `platform/__init__.py` does not export it.
 """
 
+from enum import StrEnum
+
 from sqlalchemy import ColumnElement, Text, delete, literal_column, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import DeclarativeBase
+
+from supportiq_backend.platform import UnexpectedFailureError
 
 # Compares text by Unicode code point, whatever the locale of the database.
 BYTE_ORDER_COLLATION = "C"
@@ -34,3 +38,44 @@ async def delete_rows_not_held(
         .where(_ROW_ADDRESS.in_(held_elsewhere_skipped))
         .execution_options(synchronize_session=False)
     )
+
+
+def parse_stored_enum[EnumT: StrEnum](enum_type: type[EnumT], value: str) -> EnumT:
+    """Turn a text that an adapter stored from an enum back into its member.
+
+    Backend stores only values of its enums, so a value that no member has is a defect of
+    backend, such as a migration that allows a value this code does not know, and the read fails
+    as an unexpected failure (ERR-05).
+
+    Args:
+        enum_type: The enum of the column.
+        value: The stored text.
+
+    Returns:
+        The member with that value.
+
+    Raises:
+        UnexpectedFailureError: No member has the value; the `ValueError` is its cause.
+    """
+    try:
+        return enum_type(value)
+    except ValueError as error:
+        raise UnexpectedFailureError from error
+
+
+def parse_optional_stored_enum[EnumT: StrEnum](
+    enum_type: type[EnumT], value: str | None
+) -> EnumT | None:
+    """Turn a nullable text that an adapter stored from an enum back into its member.
+
+    Args:
+        enum_type: The enum of the column.
+        value: The stored text, or None for SQL `NULL`.
+
+    Returns:
+        The member with that value, or None for None.
+
+    Raises:
+        UnexpectedFailureError: No member has the value; the `ValueError` is its cause.
+    """
+    return None if value is None else parse_stored_enum(enum_type, value)

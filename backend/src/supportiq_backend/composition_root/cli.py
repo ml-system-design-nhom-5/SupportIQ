@@ -1,29 +1,37 @@
-"""The `backend` command: run a replica, or run one of the one-off database commands.
+"""The `backend` command: run a replica, or run one of the one-off commands.
 
 Every subcommand reads the settings first and stops with status 2, after logging
 `settings.invalid` with the names of the bad settings, when one is missing or invalid
-(ARCH-34). The one-off commands run as the owner, never at replica startup (ADR-0011,
-`backend` replicas, statements 2 and 3).
+(ARCH-34). The one-off database commands run as the owner, never at replica startup (ADR-0011,
+`backend` replicas, statements 2 and 3). `export-decisions` only reads, so it runs as
+`supportiq_app` (backend ticket workflow design, The decision-record export).
 """
 
 import argparse
 import asyncio
 import sys
-from collections.abc import Sequence
-from dataclasses import dataclass
-from enum import StrEnum
+from collections.abc import Callable, Sequence
+from functools import partial
+from pathlib import Path
 from typing import assert_never
 
 import uvicorn
 
-from supportiq_backend.commerce import (
-    ORDER_ID_PATTERN,
-    PHONE_PATTERN,
-    TRACKING_CODE_PATTERN,
-    TRANSACTION_ID_PATTERN,
+from supportiq_backend.composition_root.command_arguments import (
+    OneOffArguments,
+    OneOffCommand,
+    ServeArguments,
 )
 from supportiq_backend.composition_root.database_commands import create_app_role, migrate
-from supportiq_backend.composition_root.runtime import build_tracer_provider
+from supportiq_backend.composition_root.process_logging import build_event_recorder
+from supportiq_backend.composition_root.report_commands import (
+    EXPORT_DECISIONS_COMMAND,
+    EXPORT_DECISIONS_HELP,
+    ExportDecisionsArguments,
+    add_export_decisions_arguments,
+    export_decisions,
+    to_export_decisions_arguments,
+)
 from supportiq_backend.composition_root.seed_commands import reset, seed
 from supportiq_backend.composition_root.settings_loading import (
     SettingRequiredError,
@@ -31,20 +39,20 @@ from supportiq_backend.composition_root.settings_loading import (
     load_settings,
 )
 from supportiq_backend.composition_root.web_application import create_app
-from supportiq_backend.platform import BackendError, EventName, EventRecorder
-from supportiq_backend.platform.adapters.database_roles import AppRoleUrlError
-from supportiq_backend.platform.adapters.logging_setup import (
-    GENERIC_REDACTION_PATTERNS,
-    Redactor,
-    StandardLibraryEventRecorder,
-    configure_logging,
+from supportiq_backend.platform import (
+    MILLISECONDS_PER_SECOND,
+    BackendError,
+    EventName,
+    EventRecorder,
 )
+from supportiq_backend.platform.adapters.database_roles import AppRoleUrlError
 from supportiq_backend.platform.adapters.system_clock import SystemClock
 from supportiq_backend.platform.adapters.telemetry import (
     OpenTelemetryTraceContext,
     create_tracer_provider,
 )
 from supportiq_backend.platform.settings import Settings
+from supportiq_backend.reports import ExportPathRefusedError
 
 EXIT_SUCCESS = 0
 EXIT_FAILURE = 1
@@ -56,42 +64,7 @@ _RESET_QUESTION = "Every backend table will be emptied and seeded again. Type ye
 _RESET_ANSWER = "yes"
 
 
-class OneOffCommand(StrEnum):
-    """The one-off database commands of `backend`, run as the database owner."""
-
-    CREATE_APP_ROLE = "create-app-role"
-    MIGRATE = "migrate"
-    SEED = "seed"
-    RESET = "reset"
-
-
-@dataclass(frozen=True, slots=True)
-class ServeArguments:
-    """The arguments of `backend serve`.
-
-    Attributes:
-        host: The interface to listen on.
-        port: The TCP port to listen on.
-    """
-
-    host: str
-    port: int
-
-
-@dataclass(frozen=True, slots=True)
-class OneOffArguments:
-    """The arguments of a one-off database command.
-
-    Attributes:
-        command: The command to run.
-        is_confirmed: Whether `--yes` confirmed a reset in advance.
-    """
-
-    command: OneOffCommand
-    is_confirmed: bool = False
-
-
-type CommandArguments = ServeArguments | OneOffArguments
+type CommandArguments = ServeArguments | OneOffArguments | ExportDecisionsArguments
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -116,6 +89,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 def report_failure(error: BackendError, events: EventRecorder) -> int:
     """Log a failure of a command once and turn it into an exit status (PY-21, ERR-05).
 
+    A refused export path is also written to standard error, because the person needs it to
+    correct the command, and standard output holds only JSON lines (LOG-02).
+
     Args:
         error: The failure.
         events: Where the failure is logged.
@@ -130,6 +106,12 @@ def report_failure(error: BackendError, events: EventRecorder) -> int:
         case AppRoleUrlError():
             events.record(EventName.SETTINGS_INVALID, setting_names="database_url_app")
             return EXIT_SETTINGS_INVALID
+        case ExportPathRefusedError():
+            # The person needs the refused path to correct it. Standard output holds only JSON
+            # lines (LOG-02), so the message goes to standard error, as the reset question does.
+            sys.stderr.write(error.detail + "\n")
+            events.record(EventName.COMMAND_FAILED, error_type=type(error).__name__)
+            return EXIT_FAILURE
         case _:
             events.record(EventName.COMMAND_FAILED, error_type=type(error).__name__)
             return EXIT_FAILURE
@@ -148,7 +130,11 @@ def run_command(arguments: CommandArguments, settings: Settings, events: EventRe
     """
     match arguments:
         case ServeArguments():
-            app = create_app(settings, events, SystemClock())
+            try:
+                app = create_app(settings, events, SystemClock())
+            except BackendError as error:
+                # Such as a missing named-entity model, which stops `backend` (ERR-17).
+                return report_failure(error, events)
             uvicorn.run(
                 app,
                 host=arguments.host,
@@ -156,38 +142,18 @@ def run_command(arguments: CommandArguments, settings: Settings, events: EventRe
                 log_config=None,
                 access_log=False,
                 server_header=False,
+                timeout_graceful_shutdown=settings.graceful_shutdown_timeout_ms
+                // MILLISECONDS_PER_SECOND,
             )
             return EXIT_SUCCESS
         case OneOffArguments():
-            return _run_one_off(arguments, settings, events)
+            work = partial(_run_database_command, arguments, settings, events)
+            return _run_one_off(arguments.command.value, events, work)
+        case ExportDecisionsArguments():
+            work = partial(_export_decisions, arguments, settings, events)
+            return _run_one_off(EXPORT_DECISIONS_COMMAND, events, work)
         case _:
             assert_never(arguments)
-
-
-def build_event_recorder() -> EventRecorder:
-    """Send every log record of the process to standard output as JSON lines (LOG-02).
-
-    Returns:
-        The event recorder of the process.
-    """
-    return StandardLibraryEventRecorder(configure_logging(sys.stdout, build_redactor()))
-
-
-def build_redactor() -> Redactor:
-    """Combine the generic patterns with the documented ID formats of commerce (LOG-30).
-
-    Returns:
-        The redactor of every log line.
-    """
-    return Redactor(
-        (
-            *GENERIC_REDACTION_PATTERNS,
-            ORDER_ID_PATTERN,
-            TRACKING_CODE_PATTERN,
-            TRANSACTION_ID_PATTERN,
-            PHONE_PATTERN,
-        )
-    )
 
 
 def parse_arguments(argv: Sequence[str]) -> CommandArguments:
@@ -221,9 +187,13 @@ def parse_arguments(argv: Sequence[str]) -> CommandArguments:
         help="Empty every backend table and seed again, as the database owner.",
     )
     reset_parser.add_argument("--yes", action="store_true", help="Skip the confirmation.")
+    export_parser = commands.add_parser(EXPORT_DECISIONS_COMMAND, help=EXPORT_DECISIONS_HELP)
+    add_export_decisions_arguments(export_parser)
     namespace = parser.parse_args(argv)
     if namespace.command == SERVE_COMMAND:
         return ServeArguments(host=str(namespace.host), port=int(namespace.port))
+    if namespace.command == EXPORT_DECISIONS_COMMAND:
+        return to_export_decisions_arguments(namespace, export_parser)
     return OneOffArguments(
         command=OneOffCommand(str(namespace.command)),
         is_confirmed=bool(getattr(namespace, "yes", False)),
@@ -239,35 +209,49 @@ def _load_settings_in_a_span(events: EventRecorder) -> Settings:
         return load_settings(events)
 
 
-def _run_one_off(arguments: OneOffArguments, settings: Settings, events: EventRecorder) -> int:
+def _run_one_off(command_name: str, events: EventRecorder, work: Callable[[], None]) -> int:
     # Work outside a request starts its own span, so all its log lines, a failure included,
-    # carry a trace ID (LOG-06).
-    tracer_provider = build_tracer_provider(settings)
-    span_name = arguments.command.value.replace("-", "_")
+    # carry a trace ID (LOG-06). The span never leaves the process: a one-off command connects
+    # only to the database (ADR-0010, Egress control, item 3; SEC-40).
+    tracer_provider = create_tracer_provider(None)
+    span_name = command_name.replace("-", "_")
     try:
         with tracer_provider.get_tracer(TRACER_NAME).start_as_current_span(span_name):
-            return _run_work(arguments, settings, events)
+            return _run_work(work, events)
     finally:
         tracer_provider.shutdown()
 
 
-def _run_work(arguments: OneOffArguments, settings: Settings, events: EventRecorder) -> int:
+def _run_work(work: Callable[[], None], events: EventRecorder) -> int:
     try:
-        match arguments.command:
-            case OneOffCommand.CREATE_APP_ROLE:
-                asyncio.run(create_app_role(settings, events))
-            case OneOffCommand.MIGRATE:
-                asyncio.run(migrate(settings, events))
-            case OneOffCommand.SEED:
-                asyncio.run(seed(settings, events))
-            case OneOffCommand.RESET:
-                _reset_after_confirmation(arguments, settings, events)
-            case _:
-                assert_never(arguments.command)
+        work()
     except BackendError as error:
         OpenTelemetryTraceContext().record_failure(error)
         return report_failure(error, events)
     return EXIT_SUCCESS
+
+
+def _run_database_command(
+    arguments: OneOffArguments, settings: Settings, events: EventRecorder
+) -> None:
+    match arguments.command:
+        case OneOffCommand.CREATE_APP_ROLE:
+            asyncio.run(create_app_role(settings, events))
+        case OneOffCommand.MIGRATE:
+            asyncio.run(migrate(settings, events))
+        case OneOffCommand.SEED:
+            asyncio.run(seed(settings, events))
+        case OneOffCommand.RESET:
+            _reset_after_confirmation(arguments, settings, events)
+        case _:
+            assert_never(arguments.command)
+
+
+def _export_decisions(
+    arguments: ExportDecisionsArguments, settings: Settings, events: EventRecorder
+) -> None:
+    # `exports/` belongs to the working directory of the command (SEC-33).
+    asyncio.run(export_decisions(settings, events, arguments, working_directory=Path.cwd()))
 
 
 def _reset_after_confirmation(

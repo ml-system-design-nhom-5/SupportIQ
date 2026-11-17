@@ -60,3 +60,43 @@ export function readBackendSchema(name: string): string {
   );
   return `${lines.slice(start, end === -1 ? undefined : end).join("\n")}\n`;
 }
+
+/**
+ * Read the values of the `enum` of a schema, in their order.
+ *
+ * @param schema - The text of a schema, from {@link readContractSchema} or
+ *   {@link readBackendSchema}.
+ * @returns The values listed under its first `enum:`.
+ * @throws Error when the schema has no `enum`.
+ */
+export function readEnumValues(schema: string): readonly string[] {
+  const lines = schema.split("\n");
+  const start = lines.findIndex((line) => line.trim() === "enum:");
+  if (start === -1) {
+    throw new Error("The schema has no enum.");
+  }
+  const values: string[] = [];
+  for (const line of lines.slice(start + 1)) {
+    const match = /^\s*- (\S+)$/.exec(line);
+    if (match?.[1] === undefined) {
+      break;
+    }
+    values.push(match[1]);
+  }
+  return values;
+}
+
+/**
+ * Read the `pattern` of a schema.
+ *
+ * @param schema - The text of a schema, from {@link readContractSchema}.
+ * @returns The regular expression, without the YAML quotes.
+ * @throws Error when the schema has no single-quoted `pattern`.
+ */
+export function readPattern(schema: string): string {
+  const match = /^pattern: '(.+)'$/m.exec(schema);
+  if (match?.[1] === undefined) {
+    throw new Error("The schema has no single-quoted pattern.");
+  }
+  return match[1];
+}

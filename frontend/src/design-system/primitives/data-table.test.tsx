@@ -72,3 +72,69 @@ describe("DataTable", () => {
     expect(screen.getByRole("columnheader", { name: "Account" })).toBeInTheDocument();
   });
 });
+
+describe("DataTable, compact", () => {
+  it("names the table, its columns, and the row header of each row", () => {
+    renderCompactTable("Speed");
+
+    const table = screen.getByRole("table", { name: "Speed" });
+    expect(
+      within(table)
+        .getAllByRole("columnheader")
+        .map((header) => header.textContent),
+    ).toEqual(["Figure", "Value"]);
+    const row = within(table).getByRole("row", { name: /End-to-end latency p50/ });
+    expect(within(row).getByRole("rowheader")).toHaveTextContent("End-to-end latency p50");
+    expect(within(row).getByRole("cell")).toHaveTextContent("3.6 s");
+  });
+
+  it("has no panel of its own, so it fits inside a panel", () => {
+    const { container } = renderCompactTable("Speed");
+
+    expect(container.firstElementChild).toBe(screen.getByRole("table", { name: "Speed" }));
+  });
+
+  it("keeps its row headers out of the focus targets, so tables can share row IDs", () => {
+    renderUi(
+      <>
+        {buildCompactTable("Speed")}
+        {buildCompactTable("Speed, last period")}
+      </>,
+    );
+
+    for (const header of screen.getAllByRole("rowheader")) {
+      expect(header).not.toHaveAttribute("id");
+      expect(header).not.toHaveAttribute("tabindex");
+    }
+  });
+});
+
+/**
+ * Build a compact table with one figure, whose row ID is always "latency-p50".
+ *
+ * @param caption - The name of the table.
+ * @returns The table element.
+ */
+function buildCompactTable(caption: string) {
+  return (
+    <DataTable
+      density="compact"
+      caption={caption}
+      columns={[
+        { key: "figure", label: "Figure", isRowHeader: true },
+        { key: "value", label: "Value", align: "end" },
+      ]}
+      rows={[{ id: "latency-p50", cells: { figure: "End-to-end latency p50", value: "3.6 s" } }]}
+    />
+  );
+}
+
+/**
+ * Render a compact table with one figure.
+ *
+ * @param caption - The name of the table.
+ * @returns What {@link renderUi} returns.
+ */
+function renderCompactTable(caption: string) {
+  return renderUi(buildCompactTable(caption));
+}

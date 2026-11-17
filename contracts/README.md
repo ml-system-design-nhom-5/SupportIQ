@@ -6,19 +6,20 @@ This folder holds the API and data contracts between `frontend`, `backend`, and 
 
 | Path | Content |
 |---|---|
-| [`backend.openapi.yaml`](backend.openapi.yaml) | The `frontend` ↔ `backend` contract, version 1.1.0 |
+| [`backend.openapi.yaml`](backend.openapi.yaml) | The `frontend` ↔ `backend` contract, version 1.2.0 |
+| [`ai-service.openapi.yaml`](ai-service.openapi.yaml) | The `backend` ↔ `ai-service` contract, version 1.0.0 |
 | [`schemas/`](schemas/) | JSON Schemas shared by the OpenAPI files, one file per schema, named after its key in `components.schemas`, such as `Money.yaml` for `Money` ([CON-09](../docs/rules/contracts.md#openapi-style)). The same name in both places gives each shared schema exactly one name in the bundle and in generated code |
 | [`examples/`](examples/) | One example file per outcome: `<operationId>/<outcome>.json`, and `problems/<outcome>.json` for the error responses that several operations share |
 | [`CHANGELOG.md`](CHANGELOG.md) | Every contract change, with its version ([CON-24](../docs/rules/contracts.md#evolution)) |
 | [`lint/supportiq-rules.ts`](lint/supportiq-rules.ts) | The custom lint rules |
 | [`lint/fixtures/violations.openapi.yaml`](lint/fixtures/violations.openapi.yaml) | Test data that breaks each custom rule once. It is not a contract |
 | [`scripts/check-lint-rules.ts`](scripts/check-lint-rules.ts) | The check that every custom rule reports its violation in the fixture |
-| [`scripts/check-mock.ts`](scripts/check-mock.ts) | The check of the sign-in flow and the example files through the Prism mock |
+| [`scripts/check-mock.ts`](scripts/check-mock.ts) | The check of the sign-in flow, the service token, the closed request body, and the example files through the Prism mock of each contract |
 | `redocly.yaml` | The lint configuration |
 | `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml` | The pinned tooling, the lodash override, and the audit exception ([Tools](#tools)) |
 | `tsconfig.json`, `eslint.config.js`, `.prettierrc.json` | Type checking, linting, and formatting of the TypeScript files |
 
-The `ai-service` contract and the KB data contract come in contract PRs 1 and 3 ([contracts v1 design, Rollout](../docs/design/contracts-v1.md#rollout)).
+The KB data contract comes in contract PR 3 ([contracts v1 design, Rollout](../docs/design/contracts-v1.md#rollout)).
 
 ## Set up
 
@@ -44,9 +45,10 @@ Run every command in this folder.
 | `pnpm run check` | Type-checks, lints (ESLint), and checks the formatting (Prettier) of the TypeScript files; lints the contracts and validates every example file; then checks that every custom rule still reports its violation in the fixture. The `contracts-check` hook of pre-commit runs this command, locally and in CI |
 | `pnpm run lint` | Lints the contracts and validates every example file against its schema ([Machine-checked rules](#machine-checked-rules)) |
 | `pnpm run format` | Formats the TypeScript and JavaScript files with Prettier |
-| `pnpm run check:mock` | Starts the Prism mock on port 4011 and checks that `createSession` sets the `supportiq_session` cookie, that `getCurrentSession` answers `401` without it and `200` with it, and that the mock serves the `value` of an example file unchanged. CI runs this command |
-| `pnpm run bundle` | Writes each contract as one file, with every `$ref` resolved, to `dist/backend.openapi.yaml`. `dist/` is not committed |
+| `pnpm run check:mock` | Starts the Prism mock of each contract in turn and checks it. On port 4011, the `backend` mock: `createSession` sets the `supportiq_session` cookie, and `getCurrentSession` answers `401` without it and `200` with it. On port 4013, the `ai-service` mock: `createDraft` answers `401` without a bearer token, `200` with one, and `422` to an `order_context` field outside the allow-list. For both, the mock serves the `value` of an example file unchanged. CI runs this command |
+| `pnpm run bundle` | Writes each contract as one file, with every `$ref` resolved, to `dist/backend.openapi.yaml` and `dist/ai-service.openapi.yaml`. `dist/` is not committed |
 | `pnpm run mock` | Serves the `backend` contract as a mock at `http://127.0.0.1:4010` ([For consumers](#for-consumers)) |
+| `pnpm run mock:ai-service` | Serves the `ai-service` contract as a mock at `http://127.0.0.1:4012` ([The `ai-service` mock](#the-ai-service-mock)) |
 
 ## Tools
 
@@ -79,7 +81,7 @@ Run every command in this folder.
 | A `4xx` response on every operation, except one that needs no session and takes no input other than `traceparent`, such as a health check (CON-06, [ERR-18](../docs/rules/errors-and-reliability.md#startup-and-health)) | `supportiq/operation-4xx-response`, which replaces the built-in `operation-4xx-response` |
 | A description on every schema, property, parameter, and header, with its data class ([CON-05](../docs/rules/contracts.md#openapi-style), [SEC-03](../docs/rules/security-and-privacy.md#data-classification)) | `supportiq/schema-description` |
 | `additionalProperties: false` on request bodies and the objects inside them ([CON-07](../docs/rules/contracts.md#openapi-style)) | `supportiq/request-body-closed` |
-| snake_case properties and query or path parameters, and the prefixes and suffixes of the naming table ([CON-18](../docs/rules/contracts.md#naming)) | `supportiq/property-naming`, `paths-kebab-case` |
+| snake_case properties and query or path parameters, and the prefixes and suffixes of the naming table, with `as_of` as the one timestamp without `_at` ([CON-18](../docs/rules/contracts.md#naming)) | `supportiq/property-naming`, `paths-kebab-case` |
 | Problem types of the form `urn:supportiq:problem:<kebab-case-name>` ([CON-12](../docs/rules/contracts.md#api-conventions)) | `supportiq/problem-type-urn` |
 | A `maximum` on every `limit` ([CON-14](../docs/rules/contracts.md#api-conventions)) | `supportiq/limit-maximum` |
 | At least one example file for each response with a body, at the path that its operation or the shared folder fixes, and no unused file in an operation's folder ([CON-06](../docs/rules/contracts.md#openapi-style)) | `supportiq/response-examples` |
@@ -115,11 +117,12 @@ The `backend` and `frontend` work streams build against these files in parallel.
 
 - Each component pins its generator in its own lockfile and documents the generation command in its README.
 - Both generators read the contract directly and follow its relative `$ref`s. On 2026-11-05, `openapi-typescript` 7.10.1 and `datamodel-code-generator` 0.35.0 both generated code from `backend.openapi.yaml` and from the output of `pnpm run bundle`. From the source file, `openapi-typescript` warns that example names repeat across operations; the warnings do not change the generated types, and the bundle gives none. A tool that cannot follow relative `$ref`s reads the bundle. `backend` now pins `datamodel-code-generator` 0.90.0 in its lockfile.
+- On 2026-11-12, `datamodel-code-generator` 0.90.0 also generated models from `ai-service.openapi.yaml`, for the `ai-service` client of `backend`. It ignores `not`: the generated `AiServiceReasonCode` keeps the two codes that only `backend` sets, and `NoDraftOutcome` accepts a `draft`. These two rules are therefore checked by the example validation, the mock, and the provider tests of `ai-service`, not by the generated types.
 - Generated files live only in folders named `generated/`. They are never edited by hand and are excluded from linters and coverage. CI regenerates them and fails when the committed output differs ([CON-25, CON-26](../docs/rules/contracts.md#generated-code)).
 
 ### The mock
 
-Run `pnpm run mock` in this folder. Prism serves the contract at `http://127.0.0.1:4010`, validates every request against it, and answers with the example files.
+Run `pnpm run mock` in this folder. Prism serves the `backend` contract at `http://127.0.0.1:4010`, validates every request against it, and answers with the example files.
 
 - During `frontend` development, proxy `/v1/` from the Vite dev server to `http://127.0.0.1:4010`, so the session cookie stays on the same origin as the page.
 - Sign-in works as in `backend`: `createSession` answers `201` with `Set-Cookie: supportiq_session=EXAMPLE-NOT-A-SESSION-ID; …`. An operation that needs a session answers `401` without the cookie and its success example with it. Prism checks only that the cookie is present, not its value.
@@ -136,13 +139,22 @@ Choose the outcome of a request with the `Prefer` header:
 | An error outcome | `Prefer: code=<status>`, for example `Prefer: code=404` |
 | One error example among several | `Prefer: code=<status>, example=<name>`, for example `Prefer: code=403, example=forbidden-origin` or `Prefer: code=422, example=last-active-manager` |
 
-The example names of each response are the file names in its folder: `examples/<operationId>/` for success outcomes, and `examples/problems/` for the error outcomes. The `examples` map of each response in `backend.openapi.yaml` lists them.
+The example names of each response are the file names in its folder: `examples/<operationId>/` for success outcomes, and `examples/problems/` for the error outcomes. The `examples` map of each response in the contract lists them.
+
+### The `ai-service` mock
+
+Run `pnpm run mock:ai-service` in this folder. Prism serves the `ai-service` contract at `http://127.0.0.1:4012`, so `backend` can call it during development with `ai_service_base_url` set to that address.
+
+- Every operation except the health checks needs `Authorization: Bearer <token>` and answers `401` without it. Prism checks only that a bearer token is present, not its value.
+- A body that breaks the contract, such as an unknown field or an `order_context` field outside the allow-list, gets `422` with the first `422` example of the operation.
+- The mock does not run the pipeline: it answers every valid request with the chosen example, whatever the message says. Choose the outcome with the `Prefer` header as above, for example `Prefer: example=llm-unavailable` on `createDraft`, `Prefer: example=staff-intent` on `createAnalysis`, or `Prefer: code=422, example=unknown-kb-version`.
 
 ### Example files as test fixtures
 
-Cross-component tests use these files, never hand-written imitations of `backend` ([TEST-11](../docs/rules/testing.md#test-doubles)).
+Cross-component tests use these files, never hand-written imitations of `backend` or `ai-service` ([TEST-11](../docs/rules/testing.md#test-doubles)).
 
 - A test fixture reads the `value` of an example file. `summary` and `description` are documentation only.
 - `frontend` component and feature tests answer a mocked request with the `value` of the example for that outcome, so every state of a screen is tested against a body that the contract validates.
+- `backend` tests of its `ai-service` client answer each call with the `value` of the example for that outcome, so every draft status, every reason code, and every problem is handled against a body that the contract validates ([CON-28](../docs/rules/contracts.md#contract-tests)).
 - `backend` provider tests run Schemathesis against every operation ([CON-27](../docs/rules/contracts.md#contract-tests)). State-changing requests need an `Origin` header from `allowed_origins`, and protected operations need the cookie of a seeded account. Provider tests may use example values as request data or expected shapes.
 - Tests never change the example files. An outcome that no example covers is added here first, through a contract change.

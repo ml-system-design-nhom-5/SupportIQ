@@ -4,10 +4,14 @@ Creating the application does no I/O. The engine connects on the first request, 
 lifespan closes the engine and the tracer provider at shutdown (ARCH-24, PY-34).
 """
 
+import asyncio
 from collections.abc import AsyncGenerator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from enum import StrEnum
 
+import httpx
 from fastapi import FastAPI
+from opentelemetry.trace import Tracer
 
 from supportiq_backend.composition_root.runtime import Runtime, build_runtime
 from supportiq_backend.platform import Clock, EventName, EventRecorder
@@ -29,20 +33,41 @@ START_SPAN = "start_backend"
 STOP_SPAN = "stop_backend"
 
 
-def create_app(settings: Settings, events: EventRecorder, clock: Clock) -> FastAPI:
+class BackgroundWork(StrEnum):
+    """What a replica runs beside its requests (ARCH-41).
+
+    A replica runs the claim loop of suggestion jobs. Tests of the HTTP operations run without
+    it, so no job runs behind their back; the tests of the queue run the loop themselves.
+    """
+
+    SUGGESTION_JOBS = "suggestion_jobs"
+    NONE = "none"
+
+
+def create_app(
+    settings: Settings,
+    events: EventRecorder,
+    clock: Clock,
+    *,
+    background: BackgroundWork = BackgroundWork.SUGGESTION_JOBS,
+    ai_service_transport: httpx.AsyncBaseTransport | None = None,
+) -> FastAPI:
     """Create the application with every route of the contract and the health checks.
 
     Args:
         settings: The validated settings.
         events: Where events are recorded.
         clock: The clock of the process.
+        background: What the replica runs beside its requests.
+        ai_service_transport: The transport of the ai-service client; None for the network.
+            Tests pass an in-memory one, so no test opens a socket to ai-service.
 
     Returns:
         The application, ready for an ASGI server.
     """
-    runtime = build_runtime(settings, events, clock)
+    runtime = build_runtime(settings, events, clock, ai_service_transport)
     app = FastAPI(
-        lifespan=_build_lifespan(runtime, events),
+        lifespan=_build_lifespan(runtime, events, background),
         openapi_url=None,
         docs_url=None,
         redoc_url=None,
@@ -59,7 +84,7 @@ def create_app(settings: Settings, events: EventRecorder, clock: Clock) -> FastA
 
 
 def _build_lifespan(
-    runtime: Runtime, events: EventRecorder
+    runtime: Runtime, events: EventRecorder, background: BackgroundWork
 ) -> Callable[[FastAPI], AbstractAsyncContextManager[None]]:
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
@@ -67,11 +92,29 @@ def _build_lifespan(
         with tracer.start_as_current_span(START_SPAN):
             instrument_engine(runtime.app_engine, runtime.tracer_provider)
             events.record(EventName.STARTUP_COMPLETED)
-        yield
-        with tracer.start_as_current_span(STOP_SPAN):
-            events.record(EventName.SHUTDOWN_STARTED)
-            uninstrument_engines()
-            await runtime.app_engine.dispose()
-        runtime.tracer_provider.shutdown()
+        try:
+            # The claim loop is owned by a task group, so it is awaited at shutdown (PY-33).
+            async with asyncio.TaskGroup() as group:
+                if background is BackgroundWork.SUGGESTION_JOBS:
+                    group.create_task(runtime.claim_loop.run())
+                try:
+                    yield
+                finally:
+                    runtime.claim_loop.stop()
+        finally:
+            await _shut_down(runtime, events, tracer)
 
     return lifespan
+
+
+async def _shut_down(runtime: Runtime, events: EventRecorder, tracer: Tracer) -> None:
+    # Runs even when the server stops with an error. The tracer provider is shut down last,
+    # and even when releasing another resource fails, so the spans of the shutdown are exported.
+    try:
+        with tracer.start_as_current_span(STOP_SPAN):
+            events.record(EventName.SHUTDOWN_STARTED)
+            await runtime.ai_client.aclose()
+            uninstrument_engines()
+            await runtime.app_engine.dispose()
+    finally:
+        runtime.tracer_provider.shutdown()

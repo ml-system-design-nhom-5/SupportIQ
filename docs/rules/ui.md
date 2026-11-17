@@ -1,6 +1,6 @@
 # UI rules
 
-> **Status:** Active · **Owner:** frontend · **Last reviewed:** 2026-11-12
+> **Status:** Active · **Owner:** frontend · **Last reviewed:** 2026-11-15
 
 A strict design system and interaction rules, so every screen looks and behaves the same, staff can work quickly and safely, and developers can build and review UI with confidence. The console exists to help staff check the AI, not to make them trust it blindly. Design-system structure: [ADR-0008](../decisions/0008-ui-design-system.md). Shop scope: [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md). Roles: [ADR-0012](../decisions/0012-roles-v1.md).
 
@@ -61,7 +61,7 @@ flowchart TB
 
 **UI-11.** Color is never the only signal. Status is always shown with an icon and a text label as well.
 
-**UI-12.** Each ticket and suggestion status has exactly one presentation (token, icon, label), defined once in the design system and used everywhere. Screens never define their own status colors.
+**UI-12.** Each ticket and suggestion status has exactly one presentation (token, icon, label), defined once in the design system and used everywhere. Screens never define their own status colors. A report that counts statuses apart may give each its own label where one presentation groups them, with the same token and icon; the console UI design lists each such label.
 
 **UI-13.** AI-generated content always carries the `ai` marker and a label ("AI draft", "AI suggestion"). Text written by staff never carries it.
 
@@ -69,7 +69,7 @@ flowchart TB
 
 ## Console interaction
 
-**UI-15.** The console uses one fixed workspace layout, defined in the console design doc. Panels and actions never move between tickets.
+**UI-15.** The console uses one fixed workspace layout, defined in the console design doc. Panels and actions never move between tickets. Staff may resize and collapse the inbox and the AI sidebar; the widths and the collapsed state are a display preference of each account and stay the same for every ticket.
 
 **UI-16.** The main actions are always visible, in the same place: Edit, Reject draft, Escalate, and Send reply. When authority is required, staff see Submit for approval instead of Send reply; otherwise it sits in a secondary menu, and in the manual-handling state it is a visible button. Actions that `backend` does not list in `allowed_actions` are disabled, with the reason shown. There is no automatic send.
 
@@ -89,7 +89,7 @@ flowchart TB
 
 **UI-42.** When a draft abstained for low confidence (ESC-01), the console shows the top three candidate intents with their confidence, each with a "Use this intent" action, and says that no draft is created until staff choose. The draft area shows no draft and no filler text.
 
-**UI-43.** AI text is shown exactly as `backend` returns it. Any text that matches the placeholder syntax ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#placeholder-syntax)), which means a mask or a pseudonym that `backend` could not restore, is highlighted with the label "Personal data hidden: replace before sending". Customer text that only looks like a placeholder (a restored `LITERAL`) is highlighted with the label "Customer text in a reserved format: rephrase before sending". Send reply and Submit for approval stay disabled while the reply editor contains text in the placeholder syntax. The UI never tries to restore or remove placeholders itself.
+**UI-43.** AI text is shown exactly as `backend` returns it. Every text that matches the placeholder syntax ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#placeholder-syntax)), whether a mask, a pseudonym that `backend` could not restore, or customer text that only looks like a placeholder (a restored `LITERAL`), is highlighted with one label: "Personal data or reserved text: replace before sending" ([ADR-0019](../decisions/0019-one-label-for-text-in-the-placeholder-syntax.md)). Send reply and Submit for approval stay disabled while the reply editor contains text in the placeholder syntax. The UI never tries to restore or remove placeholders itself.
 
 ## States
 

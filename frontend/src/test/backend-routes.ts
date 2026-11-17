@@ -4,6 +4,7 @@
  */
 import type { FakeRoute } from "@/test/fake-backend";
 
+export const checkLivenessRoute: FakeRoute = { method: "GET", path: "/health/live" };
 export const createSessionRoute: FakeRoute = { method: "POST", path: "/v1/sessions" };
 export const getCurrentSessionRoute: FakeRoute = { method: "GET", path: "/v1/sessions/current" };
 export const deleteCurrentSessionRoute: FakeRoute = {
@@ -37,3 +38,34 @@ export const resetAccountPasswordRoute: FakeRoute = {
   method: "POST",
   path: /^\/v1\/admin\/accounts\/[^/]+\/password-resets$/,
 };
+export const getAdminVersionsRoute: FakeRoute = { method: "GET", path: "/v1/admin/versions" };
+export const listConsoleTicketsRoute: FakeRoute = { method: "GET", path: "/v1/console/tickets" };
+export const getConsoleTicketRoute: FakeRoute = {
+  method: "GET",
+  path: /^\/v1\/console\/tickets\/[^/]+$/,
+};
+export const recordTicketViewRoute: FakeRoute = {
+  method: "POST",
+  path: /^\/v1\/console\/tickets\/[^/]+\/views$/,
+};
+export const getConsoleKbDocumentVersionRoute: FakeRoute = {
+  method: "GET",
+  path: /^\/v1\/console\/kb-documents\/[^/]+\/versions\/[^/]+$/,
+};
+export const createSuggestionRoute: FakeRoute = {
+  method: "POST",
+  path: /^\/v1\/console\/tickets\/[^/]+\/suggestions$/,
+};
+export const sendReplyRoute: FakeRoute = {
+  method: "POST",
+  path: /^\/v1\/console\/tickets\/[^/]+\/replies$/,
+};
+export const createReplyProposalRoute: FakeRoute = {
+  method: "POST",
+  path: /^\/v1\/console\/tickets\/[^/]+\/reply-proposals$/,
+};
+export const createEscalationRoute: FakeRoute = {
+  method: "POST",
+  path: /^\/v1\/console\/tickets\/[^/]+\/escalations$/,
+};
+export const getConsoleReportRoute: FakeRoute = { method: "GET", path: "/v1/console/reports" };

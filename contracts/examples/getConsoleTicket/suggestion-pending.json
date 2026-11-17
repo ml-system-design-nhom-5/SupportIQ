@@ -1,0 +1,85 @@
+{
+  "summary": "An open ticket whose suggestion is still running",
+  "description": "Nobody can send or propose a reply until no part is pending; the console polls the ticket.",
+  "value": {
+    "ticket_id": "TCK-1042",
+    "status": "open",
+    "handling_mode": "assisted",
+    "is_authority_required": false,
+    "created_at": "2026-11-05T08:12:30Z",
+    "customer": {
+      "display_name": "Lan Tran"
+    },
+    "message": {
+      "body": "I asked for a refund for the headphones three weeks ago. When will it be paid?",
+      "created_at": "2026-11-05T08:12:30Z"
+    },
+    "order": {
+      "order_id": "ORD-20931",
+      "order_status": "delivered",
+      "placed_at": "2026-10-02T19:30:00Z",
+      "order_total": {
+        "amount_minor": 8900,
+        "currency": "USD"
+      },
+      "shipping_cost": {
+        "amount_minor": 0,
+        "currency": "USD"
+      },
+      "lines": [
+        {
+          "product_id": "PRD-1002",
+          "product_name": "Wireless headphones",
+          "quantity": 1
+        }
+      ],
+      "shipment": {
+        "shipment_status": "delivered",
+        "delivered_at": "2026-10-06T12:05:00Z"
+      },
+      "refund": {
+        "refund_status": "under_review",
+        "refund_amount": {
+          "amount_minor": 8900,
+          "currency": "USD"
+        },
+        "refund_requested_at": "2026-10-14T09:20:00Z"
+      },
+      "shipping_address": "12 Sample Street, Sample City"
+    },
+    "other_orders": [
+      {
+        "order_id": "ORD-20990",
+        "order_status": "shipped",
+        "placed_at": "2026-10-28T15:10:00Z",
+        "order_total": {
+          "amount_minor": 3450,
+          "currency": "USD"
+        },
+        "lines": [
+          {
+            "product_id": "PRD-1007",
+            "product_name": "Desk lamp",
+            "quantity": 1
+          }
+        ],
+        "shipment_status": "in_transit"
+      }
+    ],
+    "suggestion": {
+      "suggestion_id": "6b1f0c3e-2a4d-4e8f-9b7c-1d3e5f7a9b20",
+      "trigger": "ticket_created",
+      "created_at": "2026-11-05T08:12:30Z",
+      "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+      "analysis": {
+        "analysis_status": "pending"
+      },
+      "draft": {
+        "draft_status": "pending"
+      }
+    },
+    "allowed_actions": [
+      "escalate"
+    ]
+  }
+}

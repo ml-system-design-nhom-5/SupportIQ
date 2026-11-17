@@ -1,0 +1,156 @@
+{
+  "summary": "No draft: the intent is uncertain",
+  "description": "ESC-01: staff confirm the predicted intent or choose another (correct_intent), or reply without a draft.",
+  "value": {
+    "ticket_id": "TCK-1042",
+    "status": "open",
+    "handling_mode": "assisted",
+    "is_authority_required": false,
+    "created_at": "2026-11-05T08:12:30Z",
+    "handling_started_at": "2026-11-05T08:20:05Z",
+    "customer": {
+      "display_name": "Lan Tran"
+    },
+    "message": {
+      "body": "I asked for a refund for the headphones three weeks ago. When will it be paid?",
+      "created_at": "2026-11-05T08:12:30Z"
+    },
+    "order": {
+      "order_id": "ORD-20931",
+      "order_status": "delivered",
+      "placed_at": "2026-10-02T19:30:00Z",
+      "order_total": {
+        "amount_minor": 8900,
+        "currency": "USD"
+      },
+      "shipping_cost": {
+        "amount_minor": 0,
+        "currency": "USD"
+      },
+      "lines": [
+        {
+          "product_id": "PRD-1002",
+          "product_name": "Wireless headphones",
+          "quantity": 1
+        }
+      ],
+      "shipment": {
+        "shipment_status": "delivered",
+        "delivered_at": "2026-10-06T12:05:00Z"
+      },
+      "refund": {
+        "refund_status": "under_review",
+        "refund_amount": {
+          "amount_minor": 8900,
+          "currency": "USD"
+        },
+        "refund_requested_at": "2026-10-14T09:20:00Z"
+      },
+      "shipping_address": "12 Sample Street, Sample City"
+    },
+    "other_orders": [
+      {
+        "order_id": "ORD-20990",
+        "order_status": "shipped",
+        "placed_at": "2026-10-28T15:10:00Z",
+        "order_total": {
+          "amount_minor": 3450,
+          "currency": "USD"
+        },
+        "lines": [
+          {
+            "product_id": "PRD-1007",
+            "product_name": "Desk lamp",
+            "quantity": 1
+          }
+        ],
+        "shipment_status": "in_transit"
+      }
+    ],
+    "suggestion": {
+      "suggestion_id": "6b1f0c3e-2a4d-4e8f-9b7c-1d3e5f7a9b20",
+      "trigger": "ticket_created",
+      "created_at": "2026-11-05T08:12:30Z",
+      "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+      "analysis": {
+        "analysis_status": "ready",
+        "intent": {
+          "source": "model",
+          "label": "refund_status",
+          "probability": 0.41,
+          "confidence_band": "low"
+        },
+        "alternatives": [
+          {
+            "label": "request_refund",
+            "probability": 0.33
+          },
+          {
+            "label": "track_order",
+            "probability": 0.12
+          }
+        ],
+        "is_in_scope": true,
+        "documents": [
+          {
+            "document_id": "SAMPLE-REFUND-001",
+            "version": "1.0",
+            "title": "Sample refund document",
+            "policy_key": "sample_refund_timeline",
+            "effective_start_at": "2026-01-01T00:00:00Z",
+            "effective_end_at": "2027-01-01T00:00:00Z",
+            "validity": "valid",
+            "rank": 1,
+            "snippet": "This is sample text. It is not KB content and not a policy."
+          }
+        ],
+        "routing": {
+          "recommendation": "abstain",
+          "reason_codes": [
+            "low_confidence"
+          ]
+        },
+        "warnings": [],
+        "versions": {
+          "release_id": "release-2026-11-12-sample",
+          "model_version": "intent-model-sample-1",
+          "kb_version": "kb-sample-1",
+          "mapping_version": "mapping-sample-1",
+          "prompt_version": "prompts-sample-1",
+          "routing_version": "routing-sample-1",
+          "index_version": "index-sample-1"
+        },
+        "step_latencies": {
+          "total_ms": 181,
+          "analysis_ms": 179
+        }
+      },
+      "draft": {
+        "draft_status": "abstained",
+        "reason_codes": [
+          "low_confidence"
+        ],
+        "staff_note": "The intent is uncertain. Confirm the intent or choose another to get a draft.",
+        "versions": {
+          "release_id": "release-2026-11-12-sample",
+          "model_version": "intent-model-sample-1",
+          "kb_version": "kb-sample-1",
+          "mapping_version": "mapping-sample-1",
+          "prompt_version": "prompts-sample-1",
+          "routing_version": "routing-sample-1",
+          "index_version": "index-sample-1"
+        },
+        "step_latencies": {
+          "total_ms": 181,
+          "analysis_ms": 179
+        }
+      }
+    },
+    "allowed_actions": [
+      "send_reply",
+      "submit_reply_proposal",
+      "escalate",
+      "correct_intent"
+    ]
+  }
+}

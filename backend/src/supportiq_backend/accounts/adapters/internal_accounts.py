@@ -16,7 +16,7 @@ from supportiq_backend.accounts.domain import (
     LoginNameTakenError,
     NewInternalAccount,
 )
-from supportiq_backend.platform.persistence import BYTE_ORDER_COLLATION
+from supportiq_backend.platform.persistence import BYTE_ORDER_COLLATION, parse_stored_enum
 
 # The key of the transaction-level advisory lock that serializes every account change across
 # replicas. Any fixed number works; this one spells "ACCT" in ASCII.
@@ -198,7 +198,8 @@ def _to_internal_account(row: AccountRow) -> InternalAccount:
         account_id=AccountId(str(row.account_id)),
         login_name=LoginName(row.login_name),
         display_name=DisplayName(row.display_name),
-        role=InternalRole(row.role),
+        # The queries select only the internal roles, so this parse never fails.
+        role=parse_stored_enum(InternalRole, row.role),
         is_active=row.is_active,
     )
 

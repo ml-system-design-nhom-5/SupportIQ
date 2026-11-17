@@ -11,7 +11,9 @@ import { type AppDependencies, AppProviders, createAppDependencies } from "@/app
 import { appRoutes } from "@/app/router";
 import type { FrontendSettings } from "@/app/settings";
 import { ClockContext } from "@/design-system";
+import type { PreferenceStorage } from "@/features/session";
 import { createFakeBackend, type FakeBackend } from "@/test/fake-backend";
+import { createFakeEventSources, type FakeEventSources } from "@/test/fake-event-source";
 
 /** The time that every test treats as now (TEST-14). */
 export const testNow = new Date("2026-11-05T09:00:00Z");
@@ -41,11 +43,17 @@ export const FIXED_SUGGESTED_PASSWORD = "test-test-test";
 /** The origin of the app in tests. */
 export const TEST_BASE_URL = "http://localhost:3000";
 
-/** Settings without automatic retries, so a failure shows at once. Retry tests set their own. */
+/**
+ * Settings without automatic retries, so a failure shows at once, and without a wake origin, so
+ * no wake request is sent. Retry and wake tests set their own.
+ */
 export const testSettings: FrontendSettings = {
   requestTimeoutMs: 10_000,
   requestRetryMaxCount: 0,
   requestRetryBaseDelayMs: 1,
+  isDevModeAvailable: false,
+  backendWakeTimeoutMs: 90_000,
+  viteSettings: [],
 };
 
 /** What a rendering helper returns. */
@@ -53,6 +61,8 @@ export type RenderedApp = RenderResult & {
   readonly user: UserEvent;
   readonly backend: FakeBackend;
   readonly dependencies: AppDependencies;
+  /** The streams that the app opened, such as the suggestion progress stream. */
+  readonly eventSources: FakeEventSources;
 };
 
 /** Options of {@link renderApp} and {@link renderWithDependencies}. */
@@ -62,27 +72,38 @@ export type RenderAppOptions = {
   /** The fake backend; a new one by default. */
   readonly backend?: FakeBackend;
   readonly settings?: FrontendSettings;
+  /** The browser storage of display preferences, such as dev mode; none by default. */
+  readonly preferenceStorage?: PreferenceStorage;
+};
+
+/** The settings, the storage, and the streams of {@link createTestDependencies}. */
+export type TestDependencyOptions = Pick<RenderAppOptions, "settings" | "preferenceStorage"> & {
+  /** The streams that the app opens; streams that send nothing by default. */
+  readonly eventSources?: FakeEventSources;
 };
 
 /**
  * Create the dependencies of a test, with the fake backend and the fixed clock.
  *
  * @param backend - The fake backend.
- * @param settings - The settings.
+ * @param options - The settings, {@link testSettings} by default, the preference storage, and the
+ *   streams.
  * @returns The dependencies.
  */
 export function createTestDependencies(
   backend: FakeBackend,
-  settings: FrontendSettings = testSettings,
+  options: TestDependencyOptions = {},
 ): AppDependencies {
   let keyCount = 0;
   return createAppDependencies({
-    settings,
+    settings: options.settings ?? testSettings,
     baseUrl: TEST_BASE_URL,
     fetch: backend.fetch,
     random: () => 0,
     clock: () => testNow,
     randomBytes: fixedRandomBytes,
+    preferenceStorage: options.preferenceStorage,
+    openEventSource: (options.eventSources ?? createFakeEventSources()).open,
     createIdempotencyKey: () => {
       keyCount += 1;
       return `00000000-0000-4000-8000-${String(keyCount).padStart(12, "0")}`;
@@ -100,7 +121,8 @@ export function renderApp(options: RenderAppOptions): RenderedApp & {
   readonly router: ReturnType<typeof createMemoryRouter>;
 } {
   const backend = options.backend ?? createFakeBackend();
-  const dependencies = createTestDependencies(backend, options.settings);
+  const eventSources = createFakeEventSources();
+  const dependencies = createTestDependencies(backend, { ...options, eventSources });
   const router = createMemoryRouter(appRoutes, { initialEntries: [options.path] });
   const user = userEvent.setup();
   const result = render(
@@ -108,7 +130,7 @@ export function renderApp(options: RenderAppOptions): RenderedApp & {
       <RouterProvider router={router} />
     </AppProviders>,
   );
-  return { ...result, user, backend, dependencies, router };
+  return { ...result, user, backend, dependencies, eventSources, router };
 }
 
 /**
@@ -120,14 +142,15 @@ export function renderApp(options: RenderAppOptions): RenderedApp & {
  */
 export function renderWithDependencies(ui: ReactNode, options: RenderAppOptions): RenderedApp {
   const backend = options.backend ?? createFakeBackend();
-  const dependencies = createTestDependencies(backend, options.settings);
+  const eventSources = createFakeEventSources();
+  const dependencies = createTestDependencies(backend, { ...options, eventSources });
   const user = userEvent.setup();
   const result = render(
     <AppProviders dependencies={dependencies}>
       <MemoryRouter initialEntries={[options.path]}>{ui}</MemoryRouter>
     </AppProviders>,
   );
-  return { ...result, user, backend, dependencies };
+  return { ...result, user, backend, dependencies, eventSources };
 }
 
 /**

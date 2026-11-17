@@ -1,0 +1,25 @@
+{
+  "summary": "The approval queue of managers",
+  "value": {
+    "items": [
+      {
+        "ticket_id": "TCK-1046",
+        "created_at": "2026-11-06T09:00:00Z",
+        "status": "awaiting_approval",
+        "handling_mode": "assisted",
+        "is_authority_required": true,
+        "handling_started_at": "2026-11-06T09:04:10Z",
+        "customer": {
+          "display_name": "Lan Tran"
+        },
+        "message_excerpt": "The headphones stopped working. I want my money back.",
+        "draft_status": "draft_ready",
+        "predicted_intent": {
+          "label": "request_refund",
+          "probability": 0.91,
+          "confidence_band": "high"
+        }
+      }
+    ]
+  }
+}

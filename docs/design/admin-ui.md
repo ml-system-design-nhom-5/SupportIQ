@@ -3,8 +3,8 @@
 - **Status:** Approved
 - **Owner:** frontend engineer
 - **Reviewers:** backend engineer, contracts gatekeeper
-- **Last reviewed:** 2026-11-12
-- **Related:** [Requirements](../product/requirements.md) (FR-08), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md), [contracts v1 design](contracts-v1.md#admin-operations) (revision 2, in review), [account management design](account-management.md), [console UI design](console-ui.md) (tokens and app shell), [UI-45](../rules/ui.md#admin), [SEC-41](../rules/security-and-privacy.md#authentication-and-authorization)
+- **Last reviewed:** 2026-11-15
+- **Related:** [Requirements](../product/requirements.md) (FR-08), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md), [contracts v1 design](contracts-v1.md#admin-operations) (revision 2, in review), [account management design](account-management.md), [console UI design](console-ui.md) (tokens and app shell), [UI-35](../rules/ui.md#developer-views), [UI-45](../rules/ui.md#admin), [SEC-41](../rules/security-and-privacy.md#authentication-and-authorization)
 
 ## Summary
 
@@ -15,6 +15,8 @@ UI-45 and the [admin operations](contracts-v1.md#admin-operations) fix what each
 **Revision of 2026-11-07, decided by the project lead:** after a timeout, a lost connection, `502`, or `504`, nobody knows whether a change happened: `backend` may finish a write after `frontend` stopped waiting (`backend` contract, Timeouts), and a write in flight can fail with `502` ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)). Version 1.0.1 of the `backend` contract states this in its text on responses from the ingress. The same holds for a `2xx` whose body cannot be read, and for a retry that fails after one of these, unless `backend` refuses it with `422` or `404`. The banner now says that the change may have happened, and the list loads again. Confirming the same change again after a failure reuses its `Idempotency-Key`, so a change that already happened is not repeated. The first decision is kept under [Alternatives considered](#alternatives-considered). The revision also records where the focus goes when a dialog closes.
 
 **Revision of 2026-11-11, for [ADR-0015](../decisions/0015-account-creation-and-password-changes.md):** the accounts screen gains a Login name column, the button Create account, and the row action Reset password. The account menu replaces the display name and Sign out of the app bar. The dialogs, their texts, and their states are defined once, in the [account management design](account-management.md#screens-and-dialogs); this design places them. UI-45 gains the two new actions in the phase that builds them ([account management design](account-management.md#rule-changes)). The earlier non-goal that excluded account creation and password changes is kept under [Alternatives considered](#alternatives-considered).
+
+**Revision of 2026-11-15, for dev mode ([UI-35](../rules/ui.md#developer-views)):** the project lead agreed on the content on 2026-11-14 and approved this revision on 2026-11-15. In dev mode, the accounts screen and the versions page add developer details, within the data that the contract already returns, and `frontend` gets three new settings: its build version and the links of two Grafana dashboards ([Developer details in the admin area](#developer-details-in-the-admin-area)). `account_id` stays hidden, also in dev mode. In the `frontend` code of 2026-11-15, the account menu of an admin already holds the Dev mode item, but no admin screen shows developer details yet. The project lead decided the open points of the draft on 2026-11-15.
 
 ## Goals and non-goals
 
@@ -92,12 +94,41 @@ The mockups of the form dialogs are shown in the account management design: [adm
 ### Versions in use
 
 - The page is read-only and says so.
-- The asset rows follow `AssetVersions` in the release manifest ([DATA-56](../rules/data-and-ml.md#models-and-artifacts)): the release ID, the model artifact, the KB, the document-to-intent mapping, the prompts, the routing configuration, and the retrieval index. The exact field names are set in contract PR 1.
+- The asset rows follow `AssetVersions` in the release manifest ([DATA-56](../rules/data-and-ml.md#models-and-artifacts)): the release ID, the model artifact, the KB, the document-to-intent mapping, the prompts, the routing configuration, and the retrieval index, in the fields `release_id`, `model_version`, `kb_version`, `mapping_version`, `prompt_version`, `routing_version`, and `index_version` of `AssetVersions` (contract PR 1).
 - When `ai_service_status` is `unavailable`, a banner in the `danger` role says so and tells the admin to reload the page later, and every `ai-service` row shows "Unknown". The `backend` build is still shown.
 
 ![Versions in use](assets/admin-ui/admin-versions.png)
 
 ![Versions in use when ai-service cannot be reached](assets/admin-ui/admin-versions-unavailable.png)
+
+### Developer details in the admin area
+
+Where dev mode is available and the admin switched it on in the [account menu](account-management.md#account-menu) ([UI-35](../rules/ui.md#developer-views)), both screens add developer details. With dev mode off, both screens stay exactly as described above.
+
+| Screen | Developer details |
+|---|---|
+| Accounts | For each row, the raw values of `role` and `is_active` as `backend` sent them. `account_id` stays hidden, as [Data and contracts](#data-and-contracts) states |
+| Versions in use | The raw value of `ai_service_status`, also a value that this version does not know and shows as Unavailable ([CON-22](../rules/contracts.md#evolution)); the raw value of `backend_version` and of each field of `ai_service_versions`, which the page already shows as `backend` sent them; and one button that copies the whole version block as text for a bug report: `backend_version`, `ai_service_status`, and every field of `ai_service_versions` when `ai-service` is available |
+| Both | The build version of `frontend`; every `VITE_` setting that [frontend/README.md](../../frontend/README.md#settings) lists, with its value; and links to the Grafana dashboards System overview and AI pipeline ([LOG-27](../rules/logging-and-observability.md#dashboards)), each shown only when its setting is set |
+
+Three new frontend settings serve these details. Like every `VITE_` setting, they are built into the page, so they never hold a secret, and an invalid value stops `frontend` at startup with the name of the setting ([ARCH-34](../rules/architecture.md#configuration)).
+
+| Setting | Values | Not set |
+|---|---|---|
+| `VITE_FRONTEND_BUILD_VERSION` | The build version of `frontend`, named after the setting `BACKEND_BUILD_VERSION` of `backend` | `local` on the dev server, where `DEV` is true, the value that [backend/.env.example](../../backend/.env.example) gives `BACKEND_BUILD_VERSION`; "Not set" in a production build, so a build never shows a wrong version |
+| `VITE_GRAFANA_SYSTEM_OVERVIEW_URL` | The link to the dashboard System overview. It is an https URL, or an http URL whose host is `localhost`, `127.0.0.1`, or `[::1]`, as `VITE_GRAFANA_TRACE_URL` requires ([console UI design](console-ui.md#frontend-settings)); it has no slot | No link to the dashboard |
+| `VITE_GRAFANA_AI_PIPELINE_URL` | The link to the dashboard AI pipeline, checked as `VITE_GRAFANA_SYSTEM_OVERVIEW_URL`; it has no slot | No link to the dashboard |
+
+On Cloudflare Pages:
+
+- Cloudflare Pages sets the variable `CF_PAGES_COMMIT_SHA` to the commit SHA in its builds by default ([Cloudflare: Build configuration](https://developers.cloudflare.com/pages/configuration/build-configuration/)). Vite passes only `VITE_` variables to the page, so the build command of the Pages project sets `VITE_FRONTEND_BUILD_VERSION` from `CF_PAGES_COMMIT_SHA`. That build command is deployment configuration and is recorded in `deploy/` ([ARCH-42](../rules/architecture.md#component-boundaries)).
+
+Limits:
+
+- Of the data from `backend`, dev mode shows only what the contract already returns, from `listAdminAccounts` and `getAdminVersions`, and needs no change to the operations or the schemas of the contract. The build version and the settings come from `frontend` itself.
+- It adds no permission and shows no customer or ticket data ([UI-35](../rules/ui.md#developer-views), [SEC-41](../rules/security-and-privacy.md#authentication-and-authorization)). `backend` enforces every rule exactly as without dev mode.
+- An in-app developer screen that shows every record stays rejected, as the project lead decided on 2026-11-12 ([contracts v1, Alternatives considered](contracts-v1.md#alternatives-considered)).
+- The trace ID on errors stays as it is, with or without dev mode: the error states show it under "Details" when there is one ([UI-25](../rules/ui.md#states)).
 
 ### States
 
@@ -181,12 +212,14 @@ sequenceDiagram
 - **A role dropdown in each row:** not chosen. Only one other role is ever possible, so a button that names it ("Make manager") states the change in one word and still opens the confirmation.
 - **Admin screens inside the console app:** not chosen. The admin role may not call any `/v1/console/` operation ([SEC-41](../rules/security-and-privacy.md#authentication-and-authorization)), so a separate area keeps the navigation honest.
 - **A banner that says "was not changed" after every failure:** the first decision of this design, replaced on 2026-11-07. After a timeout, a lost connection, `502`, or `504`, `backend` may still finish the write, so that banner could be false.
+- **`account_id` with a copy button in the developer details of the accounts screen:** the draft of 2026-11-15. Not chosen by the project lead on 2026-11-15: the `backend` contract describes `account_id` of `AdminAccountView` as an identifier that `frontend` never shows, and [SEC-41](../rules/security-and-privacy.md#authentication-and-authorization) limits admin account lists to display names, login names, roles, and statuses.
 - **No account creation and no password changes in the admin area:** a non-goal of this design until 2026-11-11, following [ADR-0012](../decisions/0012-roles-v1.md). Replaced by [ADR-0015](../decisions/0015-account-creation-and-password-changes.md), so that staff can be onboarded and a forgotten password recovered without a developer.
 
 ## Testing and evaluation
 
 - **Storybook:** the accounts table with every row type, each dialog, the versions page when `ai-service` is reachable and when it is not, and the loading, load error, and permission-denied states, with axe checks ([UI-32](../rules/ui.md#accessibility)). The stories and tests of the create and reset dialogs are listed in the [account management design](account-management.md#testing-and-evaluation).
 - **Component tests:** row actions by role and for the caller's own account, dialog texts that name the account and the change, the mapping of `422` with each `violated_rule` value, an unknown one included, and of `404`, `403`, and `401` to messages, the banner and the reload after an unknown outcome, the key of a repeated confirmation, and the focus when a dialog closes.
+- **Dev mode:** stories and component tests of both screens with dev mode on and off; with it off, no developer detail is in the page. The copy button of the version block is tested, and the links of the Grafana dashboards with and without their settings, an invalid value included.
 - **End-to-end tests (Playwright):** an admin makes a staff account a manager; that account's old session gets `401`, and after signing in again it can open reports.
 - No model metric changes.
 
@@ -200,6 +233,7 @@ sequenceDiagram
 - The admin area shows display names, which are staff identity and Confidential ([SEC-01](../rules/security-and-privacy.md#data-classification)), and login names, roles, account status, and versions, which are Internal. `frontend` never logs or stores display names.
 - A password that an admin sets is Secret. It exists only in the open dialog and is never stored ([account management design](account-management.md#security-and-privacy)).
 - Authorization is enforced by `backend`. Hiding an action in `frontend` is a convenience ([SEC-20](../rules/security-and-privacy.md#authentication-and-authorization)).
+- The developer details hold Internal data only: raw roles and statuses, versions, the build version of `frontend`, the frontend settings, and the links of two dashboards. `VITE_` settings are built into the page, so they never hold a secret.
 - The mockups use sample data only (`synthetic-dev-only`). Their names, IDs, and version labels are stand-ins.
 
 ## Rollout
@@ -207,6 +241,7 @@ sequenceDiagram
 1. Done on 2026-11-05: the backend and frontend owners approved this design.
 2. Implementation against Prism mocks: the accounts table and dialogs after contract PR 2, then the versions page after the contract change that adds `getAdminVersions`.
 3. Done on 2026-11-11: the project lead approved the revision of 2026-11-11, in place of a PR review. Its screens are built after `backend` contract 1.1.0 ([account management design](account-management.md#rollout)).
+4. Done on 2026-11-15: the project lead approved the revision of 2026-11-15. `frontend` then builds the developer details of both screens and the three settings, and the setup in `deploy/` sets `VITE_FRONTEND_BUILD_VERSION` on Cloudflare Pages. The versions page of the `frontend` code of 2026-11-15 does not have them yet.
 
 ### Mockup sources
 

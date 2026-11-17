@@ -125,6 +125,23 @@ export default defineConfig(
     languageOptions: { globals: globals.node },
   },
   {
+    // RULE-05: the Pages Function runs on the Workers runtime (ADR-0016). Pages bundles functions/
+    // without the `@/` alias, which points to src/, so its routes import the ingress by a relative
+    // path in place of the alias of TS-07, and nothing in it may import src/.
+    files: ["ingress/**/*.ts", "functions/**/*.ts"],
+    languageOptions: { globals: globals.serviceworker },
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        { patterns: [{ group: ["@/*"], message: "ADR-0016: the Function never imports src/." }] },
+      ],
+    },
+  },
+  {
+    files: ["ingress/**/*.test.ts"],
+    languageOptions: { globals: globals.node },
+  },
+  {
     files: ["src/**/*.{ts,tsx}", ".storybook/**/*.{ts,tsx}"],
     extends: [
       react.configs.flat.recommended,
@@ -186,6 +203,16 @@ export default defineConfig(
     files: ["src/design-system/tokens/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-syntax": ["error", ...languageRestrictions, ...classComponentRestrictions],
+    },
+  },
+  {
+    // RULE-05: the barrel of the design system is its only public API (CODE-20, UI-01). It holds
+    // re-exports and nothing else, one `export type` and one `export` per module as every index.ts
+    // does, so it grows with each component and has no logic to split. Only this one file may
+    // pass the 300-line limit of TS-04; every other file, in the design system too, keeps it.
+    files: ["src/design-system/index.ts"],
+    rules: {
+      "max-lines": "off",
     },
   },
 );
