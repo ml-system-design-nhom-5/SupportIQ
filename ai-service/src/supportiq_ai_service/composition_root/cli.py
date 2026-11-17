@@ -9,6 +9,11 @@ with the reason, when one is missing or does not match (DATA-56). It then reads 
 the release, loads its two models offline, and wires its pipeline, and stops the same way when
 an asset breaks its format. From the allow-list it creates the one HTTP client that leaves the
 system, before the server starts.
+
+`build_candidate_application` builds the same application from a candidate release, in the
+process of the offline evaluation gate, with the ports that the gate passes in and without a
+server (ADR-0021, Release and the offline evaluation gate). `serve` never calls it, so a replica
+only ever serves a release that links a passing gate run.
 """
 
 import argparse
@@ -16,14 +21,21 @@ import os
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from types import MappingProxyType
+from typing import TextIO
 
+import httpx
 import uvicorn
 from fastapi import FastAPI
 
 from supportiq_ai_service.composition_root.release_assets import (
     SYSTEM_TIMING,
+    CandidatePorts,
+    ReleaseAssets,
     ReleaseModels,
+    ReleaseServices,
+    build_candidate_services,
     build_release_services,
     read_release_assets,
 )
@@ -47,7 +59,12 @@ from supportiq_ai_service.platform.adapters.logging_setup import (
 )
 from supportiq_ai_service.platform.adapters.system_clock import SystemClock
 from supportiq_ai_service.platform.settings import Settings
-from supportiq_ai_service.release.manifest import ReleaseInvalidError, verify_release
+from supportiq_ai_service.release.manifest import (
+    ReleaseInvalidError,
+    VerifiedReleaseSource,
+    verify_candidate,
+    verify_release,
+)
 from supportiq_ai_service.retrieval.adapters.index_file import IndexConfiguration
 
 EXIT_SUCCESS = 0
@@ -131,12 +148,68 @@ def build_application(settings: Settings, events: EventRecorder) -> FastAPI:
     """
     allow_list = packaged_egress_allow_list()
     release_source = verify_release(settings.release_manifest_path)
+    assets = _load_release(release_source, settings, events)
+    egress_client = create_egress_client(allow_list)
+    services = build_release_services(assets, settings, events, egress_client, SYSTEM_TIMING)
+    return _release_application(release_source, services, settings, events, egress_client)
+
+
+def build_candidate_application(
+    manifest_path: Path, ports: CandidatePorts, log_stream: TextIO
+) -> FastAPI:
+    """Build the application of a candidate release for the offline evaluation gate, in process.
+
+    It reads the settings from the environment as `serve` does, except the release manifest,
+    which is the candidate named here, so `RELEASE_MANIFEST_PATH` is neither needed nor read.
+    It sends every event to `log_stream` as JSON lines. It
+    checks the candidate with `verify_candidate`, reads its assets, and loads its models as
+    `serve` does, then wires the pipeline with the ports of the gate. Only the release command
+    in `eval/release/` calls it (ADR-0021, Release and the offline evaluation gate).
+
+    Args:
+        manifest_path: The manifest of the candidate; its assets are in its folder.
+        ports: The ports that the gate gives the candidate.
+        log_stream: Where the JSON lines of the events go.
+
+    Returns:
+        The application, for an ASGI transport in the same process.
+
+    Raises:
+        SettingsInvalidError: A setting is missing or invalid.
+        EgressAllowListInvalidError: The packaged egress allow-list is missing or invalid.
+        ReleaseInvalidError: The candidate, a file it names, or an asset fails its check, or a
+            model cannot be loaded.
+    """
+    events = StandardLibraryEventRecorder(
+        configure_logging(log_stream, Redactor(GENERIC_REDACTION_PATTERNS))
+    )
+    settings = load_settings(events, release_manifest_path=manifest_path)
+    allow_list = packaged_egress_allow_list()
+    release_source = verify_candidate(manifest_path)
+    assets = _load_release(release_source, settings, events)
+    # The application closes this client at shutdown; the writer of the gate never uses it.
+    egress_client = create_egress_client(allow_list)
+    services = build_candidate_services(assets, settings, events, ports, SYSTEM_TIMING)
+    return _release_application(release_source, services, settings, events, egress_client)
+
+
+def _load_release(
+    release_source: VerifiedReleaseSource, settings: Settings, events: EventRecorder
+) -> ReleaseAssets:
     assets = read_release_assets(
         release_source, settings, load_release_models, events, SYSTEM_TIMING
     )
     events.record(EventName.RELEASE_LOADED, release_id=release_source.manifest.release_id)
-    egress_client = create_egress_client(allow_list)
-    services = build_release_services(assets, settings, events, egress_client, SYSTEM_TIMING)
+    return assets
+
+
+def _release_application(
+    release_source: VerifiedReleaseSource,
+    services: ReleaseServices,
+    settings: Settings,
+    events: EventRecorder,
+    egress_client: httpx.Client,
+) -> FastAPI:
     ports = ServicePorts(
         release_source=release_source,
         pipeline=services.pipeline,

@@ -1,5 +1,6 @@
 """Loading the settings at startup, and stopping with the names of invalid ones (ARCH-34)."""
 
+from pathlib import Path
 from typing import ClassVar
 
 from pydantic import ValidationError
@@ -25,11 +26,13 @@ class SettingsInvalidError(AiServiceError):
         self.setting_names = setting_names
 
 
-def load_settings(events: EventRecorder) -> Settings:
+def load_settings(events: EventRecorder, release_manifest_path: Path | None = None) -> Settings:
     """Read and validate every setting from the environment.
 
     Args:
         events: Where `settings.loaded` or `settings.invalid` is recorded.
+        release_manifest_path: The release manifest, in place of `RELEASE_MANIFEST_PATH`. Only
+            the offline evaluation gate passes one: the candidate that it runs.
 
     Returns:
         The validated settings.
@@ -38,10 +41,13 @@ def load_settings(events: EventRecorder) -> Settings:
         SettingsInvalidError: A setting is missing or invalid. The event names every such
             setting and never a value, because values can be secrets (PY-44).
     """
+    given = (
+        {} if release_manifest_path is None else {"release_manifest_path": release_manifest_path}
+    )
     try:
-        # A settings class reads its values from the environment during validation; the empty
-        # mapping adds none of its own.
-        settings = Settings.model_validate({})
+        # A settings class reads its values from the environment during validation; a value
+        # given here takes the place of its environment variable.
+        settings = Settings.model_validate(given)
     except ValidationError as error:
         names = invalid_setting_names(error)
         events.record(EventName.SETTINGS_INVALID, setting_names=",".join(names))

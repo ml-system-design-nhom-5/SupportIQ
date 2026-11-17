@@ -189,6 +189,15 @@ The format is interim. `ReleaseManifest` in [`release/adapters/manifest_file.py`
 
 The release command checks a candidate with `verify_candidate`, which accepts `"gate_run": null`, and runs the gate in its own process on exactly that candidate ([ADR-0021, Release and the offline evaluation gate](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#release-and-the-offline-evaluation-gate)). `ai-service serve` always calls `verify_release` and has no option to serve a candidate.
 
+The gate builds the application of a candidate with `build_candidate_application` of `supportiq_ai_service.composition_root`, its one entry point into `ai-service` besides `release.manifest`:
+
+- it reads the settings from the environment as `serve` does, except the release manifest, which is the candidate that it names, and sends the events to a stream that the gate passes in, as JSON lines;
+- it checks the candidate with `verify_candidate`, reads its assets, and loads its models as `serve` does;
+- it wires the pipeline with `CandidatePorts`: the gate wraps the intent model and the search of the candidate, and gives the LLM step. The gate's step never calls a provider, so a gate run makes no LLM call;
+- it opens no port: the gate sends its requests through an ASGI transport in the same process.
+
+The fakes of the gate live in the release command in `eval/release/`. `ai-service` holds none, and `serve` never wires `CandidatePorts` (ADR-0021, decision driver 1).
+
 ### Asset formats
 
 After the checksums match, the adapter of each asset reads its files in an interim format, as strictly as the manifest. A file that breaks its format, or a version that differs from the manifest, is refused with the reason `asset_invalid`, the asset, and the path. The data contract replaces these formats too ([Open questions](#open-questions)).

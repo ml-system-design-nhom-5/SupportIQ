@@ -5,6 +5,12 @@ comes first and wiring second, so a release that fails creates nothing. The two
 models load through a loader that the command passes in, because loading them needs torch,
 which only the `torch` dependency group installs on Linux (ADR-0021, Python and dependencies,
 statement 2).
+
+A release is wired with its own ports, and with the Gemini client for the LLM step. A candidate
+under the offline evaluation gate is wired with the ports that the gate passes in instead: the
+gate wraps the intent model and the search of the candidate, and replaces the LLM step, so the
+gate never calls a provider. The fakes of the gate live in the release command in `eval/`;
+`ai-service` holds none (ADR-0021, Release and the offline evaluation gate, decision driver 1).
 """
 
 import secrets
@@ -15,7 +21,7 @@ from typing import Protocol
 
 import httpx
 
-from supportiq_ai_service.drafting import TokenPrices
+from supportiq_ai_service.drafting import DraftWriter, TokenPrices
 from supportiq_ai_service.drafting.adapters.budgeted_draft_client import (
     BudgetedDraftWriter,
     RetryPolicy,
@@ -35,7 +41,7 @@ from supportiq_ai_service.release.manifest import (
     ReleaseInvalidReason,
     VerifiedReleaseSource,
 )
-from supportiq_ai_service.retrieval import KbDocument, RetrievalError
+from supportiq_ai_service.retrieval import DocumentSearch, KbDocument, RetrievalError
 from supportiq_ai_service.retrieval.adapters.in_memory_index import TextEncoder
 from supportiq_ai_service.retrieval.adapters.index_file import (
     IndexConfiguration,
@@ -127,6 +133,24 @@ class Timing:
 
 # The jitter comes from the system source, never from a seeded one.
 SYSTEM_TIMING = Timing(time.monotonic, time.sleep, secrets.SystemRandom().random)
+
+
+@dataclass(frozen=True, slots=True)
+class CandidatePorts:
+    """The ports that the offline evaluation gate gives a candidate release (ADR-0021).
+
+    Only the gate of the release command in `eval/release/` builds them, for
+    `build_candidate_application`. `ai-service serve` never does.
+
+    Attributes:
+        classifier: Takes the intent model of the candidate and returns the one to use.
+        search: Takes the search of the candidate and returns the one to use.
+        writer: The LLM step to use instead of the Gemini client.
+    """
+
+    classifier: Callable[[IntentClassifier], IntentClassifier]
+    search: Callable[[DocumentSearch], DocumentSearch]
+    writer: DraftWriter
 
 
 @dataclass(frozen=True, slots=True)
@@ -251,14 +275,63 @@ def build_release_services(
         timing.sleep,
         timing.random,
     )
+    ports = _pipeline_ports(assets, assets.models.classifier, assets.retriever, writer)
+    return _release_services(assets, settings, events, ports, timing)
+
+
+def build_candidate_services(
+    assets: ReleaseAssets,
+    settings: Settings,
+    events: EventRecorder,
+    ports: CandidatePorts,
+    timing: Timing,
+) -> ReleaseServices:
+    """Wire the pipeline of a candidate with the ports of the offline evaluation gate, no I/O.
+
+    Args:
+        assets: The checked assets of the candidate.
+        settings: The validated settings.
+        events: Where events are recorded.
+        ports: The ports of the gate, around the intent model and the search of the candidate.
+        timing: The sources of time and randomness.
+
+    Returns:
+        The pipeline and the KB of the candidate.
+    """
+    pipeline_ports = _pipeline_ports(
+        assets,
+        ports.classifier(assets.models.classifier),
+        ports.search(assets.retriever),
+        ports.writer,
+    )
+    return _release_services(assets, settings, events, pipeline_ports, timing)
+
+
+def _pipeline_ports(
+    assets: ReleaseAssets,
+    classifier: IntentClassifier,
+    search: DocumentSearch,
+    writer: DraftWriter,
+) -> PipelinePorts:
+    # Tokens are always counted by the encoder of the release, as the index was built with it.
     encoder = assets.models.encoder
+    return PipelinePorts(
+        classifier=classifier,
+        search=search,
+        writer=writer,
+        count_tokens=lambda text: len(encoder.token_spans(text)),
+    )
+
+
+def _release_services(
+    assets: ReleaseAssets,
+    settings: Settings,
+    events: EventRecorder,
+    ports: PipelinePorts,
+    timing: Timing,
+) -> ReleaseServices:
     pipeline = ReleasePipeline(
-        PipelinePorts(
-            classifier=assets.models.classifier,
-            search=assets.retriever,
-            writer=writer,
-            count_tokens=lambda text: len(encoder.token_spans(text)),
-        ),
+        ports,
         PipelineValues(
             routing=assets.routing,
             mapping=assets.mapping,
