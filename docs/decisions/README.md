@@ -1,6 +1,6 @@
 # Architecture decision records
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-16
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-17
 
 An architecture decision record (ADR) captures one significant decision: its context, the options, what we chose, and what it costs. This page lists every ADR and explains the process. Writing rules are in the [documentation handbook](../README.md#adrs).
 
@@ -32,6 +32,7 @@ An architecture decision record (ADR) captures one significant decision: its con
 | [0022](0022-server-sent-events-for-suggestion-progress.md) | Server-sent events for the suggestion progress of an open ticket | Accepted | 2026-11-13 |
 | [0023](0023-graceful-shutdown-of-suggestion-progress-streams.md) | Graceful shutdown of suggestion progress streams | Accepted | 2026-11-16 |
 | [0024](0024-event-schema-of-the-suggestion-progress-stream.md) | Event schema of the suggestion progress stream | Accepted | 2026-11-16 |
+| [0025](0025-routing-configuration-of-the-first-release.md) | Routing configuration of the first release | Proposed | 2026-11-17 |
 
 Notes on the index:
 

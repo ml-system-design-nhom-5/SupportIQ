@@ -1,6 +1,6 @@
 # Data and ML rules
 
-> **Status:** Active · **Owner:** ai-service · **Last reviewed:** 2026-11-12
+> **Status:** Active · **Owner:** ai-service · **Last reviewed:** 2026-11-17
 
 Rules for datasets, the knowledge base (KB), splits, training, prompts, and evaluation. They follow the [requirements](../product/requirements.md) and the course lectures on architecture (Lecture 3) and data quality engineering (Lecture 4). Every reported number must be reproducible from the repository.
 
@@ -111,7 +111,7 @@ data/
 
 If the gate fails, the current release stays in service. Missed targets are reported as they are (DATA-48). The gate never tunes anything on test data (DATA-25).
 
-**DATA-58.** The routing configuration is a versioned file that holds τ (the minimum top-1 probability), δ (the minimum gap between the top two probabilities), the rerank weight λ, the list of sensitive intents, and the sensitive-term list (ESC-01, ESC-03). τ, δ, and λ are tuned on validation data for one model artifact version, and the file records that version. Each entry of the sensitive-term list states its category (legal claim, suspected fraud) and is reviewed by the policy owner and the RAG engineer. Any change produces a new version ([ARCH-40](architecture.md#versioned-assets)) and a new evaluation.
+**DATA-58.** The routing configuration is a versioned file that holds τ (the minimum top-1 probability), δ (the minimum gap between the top two probabilities), the rerank weight λ, the list of sensitive intents, and the sensitive-term list (ESC-01, ESC-03). τ, δ, and λ are tuned on validation data for one model artifact version, and the file records that version. Each entry of the sensitive-term list states its category (legal claim, suspected fraud, transaction dispute, or policy exception; [ADR-0025](../decisions/0025-routing-configuration-of-the-first-release.md)) and is reviewed by the policy owner and the RAG engineer. Any change produces a new version ([ARCH-40](architecture.md#versioned-assets)) and a new evaluation.
 
 **DATA-59.** The classifier, the retrieval index, and the evaluation sets see the same kind of text that `ai-service` receives in service: pseudonymized text. Preprocessing maps every placeholder to its type alone (for example `[ORDER_ID_1]` to `[ORDER_ID]`) in training, evaluation, and serving, inside the same pipeline object (DATA-26). The scenario sets include messages with placeholders and messages that name third persons, and robustness results report them as separate slices.
 
