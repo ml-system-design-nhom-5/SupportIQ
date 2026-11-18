@@ -11,7 +11,7 @@ The code came from `pipeline/preparation/` and `pipeline/training/` on `main`. T
 - `ml/` has no `pyproject.toml`, no `uv.lock`, and no CI workflow. `requirements.txt` and `requirements-transformers.txt` set minimum versions (`>=`), not exact ones ([WF-28](../docs/rules/workflow.md#dependencies)). `scipy` is imported but not listed, and `cloudpickle` is listed but not imported.
 - `tests/unit/test_training.py` takes `ml/` as its root (`parents[2]`). It reads `ml/pipeline/configs/training.json`, which does not exist, because the configuration is now `ml/configs/training.json`. It also expects the line `/artifacts/training/` in `ml/.gitignore`, which does not exist; the root `.gitignore` has no such line either.
 
-The first PR after the join brings `ml.yml`, the project files, and the interim rule level ([ADR-0021, CI](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#ci), statements 8 and 9), and its `tech-debt` issue tracks this work. The commands below are those of `main`, with the module paths of `main`: they run only after that PR.
+The first PR after the join brings `ml.yml`, the project files, and the interim rule level ([ADR-0021, CI](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#ci), statements 8 and 9), and its `tech-debt` issue, [#33](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/33), tracks this work. The commands below are those of `main`, with the module paths of `main`: they run only after that PR.
 
 ## Layout
 

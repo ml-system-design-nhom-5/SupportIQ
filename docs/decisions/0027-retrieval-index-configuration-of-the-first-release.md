@@ -14,7 +14,7 @@ The first release manifest of `ai-service` needs an index asset: `index.json` an
 - [ADR-0005](0005-intent-independent-retrieval.md#decision), statement 5: "Thresholds are tuned on validation data and stored in versioned configuration."
 - [DATA-56](../rules/data-and-ml.md#models-and-artifacts) and [ARCH-40](../rules/architecture.md#versioned-assets): the index is a versioned asset of the release manifest, identified by its version and checksums.
 - [ADR-0018, Artifact store](0018-hosting-of-ai-service-on-modal.md#artifact-store), and its Egress section, statement 2: the encoder is stored as an asset of the GitHub Releases of the organization repository, ships with each release, and is never downloaded at runtime.
-- [ADR-0021, Python and dependencies](0021-repository-layout-and-ai-ml-migration.md#python-and-dependencies), statement 4: the choice of the embedding model, `BAAI/bge-small-en-v1.5`, is not decided there and has its own `tech-debt` issue.
+- [ADR-0021, Python and dependencies](0021-repository-layout-and-ai-ml-migration.md#python-and-dependencies), statement 4: the choice of the embedding model, `BAAI/bge-small-en-v1.5`, is not decided there and has its own `tech-debt` issue, [#30](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/30).
 
 ### What the reader of `ai-service` accepts
 
@@ -49,7 +49,7 @@ The first release manifest of `ai-service` needs an index asset: `index.json` an
 
 ## Considered options
 
-1. The values of `main`, not tuned, with the encoder files of the release `v2.0.0-model`, as a recorded exception to ADR-0005 statement 5 that a tuning issue ends.
+1. The values of `main`, not tuned, with the encoder files of the release `v2.0.0-model`, as a recorded exception to ADR-0005 statement 5 that a tuning issue, [#38](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/38), ends.
 2. Tune the minimum similarity on validation data before the first release.
 3. Download the encoder from Hugging Face at a pinned revision instead of the release asset.
 
@@ -66,7 +66,7 @@ flowchart LR
     CAND --> GATE{"Offline evaluation<br/>gate passes?"}
     GATE -->|"yes"| REL["First release"]
     GATE -.->|"no: nothing is published"| CFG
-    ISSUE["Tuning issue: minimum similarity<br/>on validation data, once a KB<br/>version with documents is served"] -->|"run record"| TUNED["A new index version"]
+    ISSUE["Tuning issue #38: minimum similarity<br/>on validation data, once a KB<br/>version with documents is served"] -->|"run record"| TUNED["A new index version"]
     TUNED -->|"passes the gate:<br/>the exception ends"| REL2["A later release"]
 ```
 
@@ -85,14 +85,14 @@ flowchart LR
    | `relevance_min_score` | 0.55 | `adapter.py`, line 50 |
 
 3. The encoder files of the index asset are the six files of the snapshot `5c38ec7c405ec4b44b94cc5a9bb96e735b38267a` in `bge-small-en-v1.5-hf-cache.zip` of the release `v2.0.0-model`: `config.json`, `model.safetensors`, `special_tokens_map.json`, `tokenizer.json`, `tokenizer_config.json`, and `vocab.txt`, with the checksums that the [README of the source](../../ai-service/index/bge-small-en-v1.5-main-untuned-v1-kb-v2/README.md) lists. They go into `index/encoder/` of the release; the rest of the archive belongs to the cache layout.
-4. This ADR does not choose the embedding model. That choice stays with the `tech-debt` issue of [ADR-0021, Python and dependencies](0021-repository-layout-and-ai-ml-migration.md#python-and-dependencies), statement 4.
+4. This ADR does not choose the embedding model. That choice stays with [#30](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/30), the `tech-debt` issue of [ADR-0021, Python and dependencies](0021-repository-layout-and-ai-ml-migration.md#python-and-dependencies), statement 4.
 
 ### Exception to ADR-0005
 
 This exception does not end with the merge of the join PR.
 
 1. This ADR weakens exactly one passage, for the index configuration `bge-small-en-v1.5-main-untuned-v1-kb-v2` only: [ADR-0005](0005-intent-independent-retrieval.md#decision), statement 5, "Thresholds are tuned on validation data", for the minimum similarity `relevance_min_score`. The rest of ADR-0005 still holds.
-2. One issue labeled `tech-debt` tunes `relevance_min_score` on validation data, once a KB version with document versions is served, with a run record of its own ([DATA-30](../rules/data-and-ml.md#experiments-and-reproducibility)), never on test data ([DATA-25](../rules/data-and-ml.md#leakage)). Its result is a new index version with a new name, which passes the offline evaluation gate before it is served. The exception ends when that version is published.
+2. One issue labeled `tech-debt`, [#38](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/38), tunes `relevance_min_score` on validation data, once a KB version with document versions is served, with a run record of its own ([DATA-30](../rules/data-and-ml.md#experiments-and-reproducibility)), never on test data ([DATA-25](../rules/data-and-ml.md#leakage)). Its result is a new index version with a new name, which passes the offline evaluation gate before it is served. The exception ends when that version is published.
 3. The README of the source and the Known limits of the [`ai-service` README](../../ai-service/README.md#known-limits) state that the index values are not tuned, with a link to this ADR.
 
 ## Consequences
@@ -105,13 +105,13 @@ This exception does not end with the merge of the join PR.
 
 ### Negative
 
-- The minimum similarity is not tuned. The first release that serves KB documents uses 0.55 until the tuning issue closes, so relevant documents can be dropped or weak ones kept.
+- The minimum similarity is not tuned. The first release that serves KB documents uses 0.55 until the tuning issue ([#38](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/38)) closes, so relevant documents can be dropped or weak ones kept.
 - The chunk length and the overlap are not measured against retrieval quality either; only the minimum similarity is a threshold of ADR-0005, but none of the values has evidence behind it.
 - The encoder files come from a cache archive of `main`, not from a download that this repository can repeat. The snapshot ID names the revision of Hugging Face, but nothing here downloads it again.
 
 ### Follow-ups
 
-- The tuning issue of [Exception to ADR-0005](#exception-to-adr-0005), statement 2, labeled `tech-debt`, with this ADR as its reason ([WF-22](../rules/workflow.md#technical-debt)).
+- The tuning issue [#38](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/38) of [Exception to ADR-0005](#exception-to-adr-0005), statement 2, labeled `tech-debt`, with this ADR as its reason ([WF-22](../rules/workflow.md#technical-debt)).
 - A new index version for each new KB version, since the version names its KB.
 
 ## Pros and cons of the options
@@ -135,7 +135,7 @@ This exception does not end with the merge of the join PR.
 
 - [`ai-service/tests/unit/retrieval/test_index_sources.py`](../../ai-service/tests/unit/retrieval/test_index_sources.py) checks that the source is a valid index asset for the KB version `v2`, with the values of [The configuration](#the-configuration).
 - The candidate release with this index passes `verify_candidate`, and `ai-service` loads the encoder from `index/encoder/` offline during the first gate run.
-- Revisit when the tuning issue closes, when a KB version with documents is served, or when the issue on the embedding model decides another encoder.
+- Revisit when the tuning issue ([#38](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/38)) closes, when a KB version with documents is served, or when the issue on the embedding model ([#30](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/30)) decides another encoder.
 
 ## Open questions
 
