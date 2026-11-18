@@ -1,6 +1,6 @@
 # Sequence Diagrams — Core Backend (SupportIQ)
 
-Thư mục này chứa các biểu đồ tuần tự (Sequence Diagrams) mô tả chi tiết luồng xử lý của Core Backend, bám sát đặc tả [2026-10-27-core-backend-design.md](../superpowers/specs/2026-10-27-core-backend-design.md) và hợp đồng [core-backend.openapi.yaml](../api/core-backend.openapi.yaml).
+Thư mục này chứa các biểu đồ tuần tự (Sequence Diagrams) mô tả chi tiết luồng xử lý của Core Backend, bám sát tài liệu kiến trúc [ARCHITECTURE.md](../ARCHITECTURE.md) và hợp đồng [core-backend.openapi.yaml](../api/core-backend.openapi.yaml).
 
 ## Danh mục biểu đồ
 

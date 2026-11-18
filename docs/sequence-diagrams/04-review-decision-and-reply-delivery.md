@@ -1,9 +1,10 @@
 # 04. Nhân viên Kiểm duyệt (Review Decision) & Chủ động Gửi trả lời (Publish Reply)
 
-Tham chiếu đặc tả:
-- [Mục 3 — Bất biến bắt buộc](../superpowers/specs/2026-10-27-core-backend-design.md#3-bất-biến-bắt-buộc)
-- [Mục 5.2 — Quyết định kiểm duyệt và gửi trả lời](../superpowers/specs/2026-10-27-core-backend-design.md#52-quyết-định-kiểm-duyệt-và-gửi-trả-lời)
-- [Mục 7.1 — Transaction và đồng thời](../superpowers/specs/2026-10-27-core-backend-design.md#71-transaction-và-đồng-thời)
+Tham chiếu:
+- Kiến trúc tổng quan: [ARCHITECTURE.md](../ARCHITECTURE.md)
+- Quyết định kiến trúc: [ADR-0003 Human In The Loop Safety](../decisions/0003-human-in-the-loop-safety.md)
+- Hợp đồng API: [core-backend.openapi.yaml](../api/core-backend.openapi.yaml)
+- Luồng xử lý: Nhân viên kiểm duyệt và phân phối câu trả lời
 
 ```mermaid
 sequenceDiagram

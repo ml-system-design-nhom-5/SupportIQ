@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary
 
-This report documents the verification, test results, and performance evaluation for the SupportIQ Core Backend modular monolith, implemented in accordance with the specification in `docs/superpowers/plans/2026-10-27-core-backend-team-plan.md`.
+This report documents the verification, test results, and performance evaluation for the SupportIQ Core Backend modular monolith, implemented in accordance with the system specification in `docs/ARCHITECTURE.md`.
 
 All 13 implementation tasks (Task 0 through Task 12) have been developed following strict Test-Driven Development (TDD: Red-Green-Refactor) and are 100% verified.
 

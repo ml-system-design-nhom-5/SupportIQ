@@ -35,15 +35,14 @@ The frontend calls only the application backend. The backend enforces all roles 
 ## Documentation
 
 - [Requirements](docs/product/requirements.md), [accepted decisions](docs/decisions/README.md), and [approved screen designs](docs/design/console-ui.md).
-- [Current limitations and operational boundaries](docs/CURRENT_LIMITATIONS.md).
 - [Actual application API](contracts/backend.openapi.json), [design tokens](DESIGN.md), and [verification scope and limits](docs/guides/application-verification.md).
-- [Existing core architecture](docs/ARCHITECTURE.md) and [core backend design](docs/superpowers/specs/2026-10-27-core-backend-design.md).
+- [Existing core architecture](docs/ARCHITECTURE.md).
 
 Native runtime instructions describe the running application; proposed multi-replica hosting remains separate release work.
 
 ## Checks
 
-See the [Topic 1 integration report](docs/audits/2026-11-12-topic-1-integration.md) for current verification evidence, AI grading, and acceptance limits. The shared retrieval benchmark targets an older KB; its recall is not certified for the current application release.
+See the [application verification guide](docs/guides/application-verification.md) for current verification evidence and acceptance limits. The shared retrieval benchmark targets an older KB; its recall is not certified for the current application release.
 
 ```powershell
 # Python unit and application tests

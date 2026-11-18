@@ -4,7 +4,7 @@
 
 This handbook tells you where each document lives and how to write it. It applies to every contributor, human or AI agent. A change is not done until its documentation is correct.
 
-Current Topic 1 work: [initial review](audits/2026-11-12-topic-1-review.md), [specification](superpowers/specs/2026-11-12-topic-1-improvements-design.md), [plan and status](superpowers/plans/2026-11-12-topic-1-improvements.md), and [integration evidence and limits](audits/2026-11-12-topic-1-integration.md).
+Historical Topic 1 audit logs and evaluation snapshots are archived at git tag `archive/pre-doc-pruning` (`git checkout archive/pre-doc-pruning -- docs/audits/`).
 
 ## Principles
 

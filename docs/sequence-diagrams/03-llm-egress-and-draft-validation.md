@@ -1,9 +1,9 @@
 # 03. Egress Buffer gọi External LLM & Xác thực Draft
 
-Tham chiếu đặc tả:
-- [Mục 6.1 — Tiếp nhận và tạo draft (Bước 9–11)](../superpowers/specs/2026-10-27-core-backend-design.md#61-tiếp-nhận-và-tạo-draft)
-- [Mục 6.3 — Worker, timeout và retry](../superpowers/specs/2026-10-27-core-backend-design.md#63-worker-timeout-và-retry)
-- [Mục 9.2 — Evidence và grounding](../superpowers/specs/2026-10-27-core-backend-design.md#92-evidence-và-grounding)
+Tham chiếu:
+- Kiến trúc tổng quan: [ARCHITECTURE.md](../ARCHITECTURE.md)
+- Quyết định kiến trúc: [ADR-0006 LLM Egress Isolation](../decisions/0006-llm-egress-isolation.md)
+- Luồng xử lý: Egress Proxy allowlist, gọi External LLM, và xác thực Draft grounding/evidence
 
 ```mermaid
 sequenceDiagram
