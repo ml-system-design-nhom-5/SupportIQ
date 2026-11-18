@@ -89,14 +89,18 @@ The AI and ML code of `main` is joined into the layout of [ADR-0021](docs/decisi
 | [`ai-service/`](ai-service/README.md) | The AI pipeline for `backend`: intent classification, retrieval of KB document versions, the routing recommendation, and LLM drafting with citations |
 | [`ml/`](ml/README.md) | The data preparation, the training, the baseline, and the cross-validation of the intent model, with the run records in `ml/runs/` |
 | [`eval/`](eval/README.md) | The evaluation code, the test and scenario sets with their frozen inputs, the release command, and the gate run records and published manifests of the releases in `eval/releases/` |
-| [`deploy/`](deploy/README.md) | The setup of the demo on free plans: the setup order, the settings of each platform, and the checks before and after the first deploy |
+| [`deploy/`](deploy/README.md) | The setup of the demo on free plans: the setup order, the settings of each platform, and the checks before and after the first deploy; and, in `deploy/local/`, the local run of the whole system ([local run guide](docs/guides/local-run.md)) |
 | `data/` | Raw data, committed unchanged: the KB versions in `data/raw/kb/<kb_version>/` and the KB drafts of `main` in `data/raw/knowledge/`. Downloaded datasets, such as Bitext, are not committed ([DATA-06 to DATA-08](docs/rules/data-and-ml.md#data-layout)) |
 
 ## Run and test on your machine
 
-Each part runs on its own today. Set it up and run it as its README states; the commands below come from those READMEs.
+One command starts the whole system with Docker, on Linux, macOS, and WSL2 on Windows: PostgreSQL 17, `backend` with the simulated demo data, and `frontend` at <http://localhost:5173>. The [local run guide](docs/guides/local-run.md) gives the requirements, the demo accounts, the mode with AI, and how to stop it.
 
-One command that starts the whole system: planned, not available yet.
+```bash
+deploy/local/local-run.sh start
+```
+
+Each part also runs on its own. Set it up and run it as its README states; the commands below come from those READMEs.
 
 - **`frontend`** ([Set up](frontend/README.md#set-up), [Run](frontend/README.md#run), [Test](frontend/README.md#test)): `pnpm run dev:mock` serves the app at <http://localhost:5173> against the Prism mock of the `backend` contract, on Linux, macOS, and WSL2 on Windows. The mock answers every sign-in with the customer of the examples, so a browser reaches the shop but not the console or the admin area. `pnpm run dev` proxies to the `backend` that `SUPPORTIQ_BACKEND_URL` names instead ([Settings](frontend/README.md#settings)). `pnpm test` runs every test.
 - **`contracts/`** ([Set up](contracts/README.md#set-up), [Commands](contracts/README.md#commands)): `pnpm run check` checks both contracts. `pnpm run mock` serves the `backend` contract as a mock at `http://127.0.0.1:4010`, and `pnpm run mock:ai-service` serves the `ai-service` contract at `http://127.0.0.1:4012`, which `backend` can call during development ([The `ai-service` mock](contracts/README.md#the-ai-service-mock)).
@@ -116,6 +120,7 @@ Start with [docs/README.md](docs/README.md): where every document lives and how 
 | How we write code | [Engineering rules](docs/rules/README.md) |
 | What a term means | [Glossary](docs/glossary.md) |
 | API contracts and the mock | [contracts/README.md](contracts/README.md) |
+| How to run the whole system on your machine | [Local run](docs/guides/local-run.md) |
 | How to run the repository checks | [Repository checks and CI](docs/guides/repository-checks.md) |
 | Instructions for AI coding agents | [AGENTS.md](AGENTS.md) |
 

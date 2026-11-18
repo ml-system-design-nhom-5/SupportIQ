@@ -66,6 +66,14 @@ repos:
         # shellcheck and pyflakes exist on CI runners but not on every machine; turning
         # them off keeps the result the same everywhere (WF-20).
         args: [-shellcheck=, -pyflakes=]
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: 745eface02aef23e168a8afb6b5737818efbea95  # frozen: v0.11.0.1
+    hooks:
+      # The bash scripts of the local run and of the gate (docs/design/local-run.md). This
+      # version installs shellcheck 0.11.0, which is GPL-3.0: the team approved it on 2026-11-18
+      # as a development tool that runs only here and is never shipped (WF-30).
+      - id: shellcheck
+        files: ^(deploy/local/|eval/release/gate/).*\.sh$
 
   # The workflow convention of docs/guides/repository-checks.md, for every item that a pattern
   # can check (RULE-03). A hook fails when its pattern matches a line or, with --negate, when

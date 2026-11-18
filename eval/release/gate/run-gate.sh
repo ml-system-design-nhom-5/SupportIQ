@@ -78,6 +78,7 @@ mkdir -p "$work_dir"
 junit=$(mktemp -d "$work_dir/junit.XXXXXX")
 export GATE_COMMIT="$commit" GATE_JUNIT_DIR="$junit"
 compose=(docker compose --file "$GATE_DIR/compose.yaml")
+# shellcheck disable=SC2329 # the EXIT trap below runs it
 cleanup() {
   if ! "${compose[@]}" down --volumes --remove-orphans > /dev/null 2>&1; then
     echo "run-gate.sh: docker compose down failed; remove the project supportiq-gate by hand" >&2

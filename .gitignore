@@ -19,6 +19,9 @@ data/datasets/
 # Evaluation exports: written only to git-ignored folders, never committed (SEC-33)
 exports/
 
+# The local run: its generated secrets, logs, and lock (docs/design/local-run.md)
+/.local-run/
+
 # Claude Code personal files
 .claude/settings.local.json
 CLAUDE.local.md

@@ -39,6 +39,15 @@ from supportiq_backend.platform.settings import Settings
 # TODO(#11): the seed file has no dataset manifest (DATA-09).
 SEED_FILE = Path("seed/synthetic-dev-only-v1.json")
 
+# Whether one of the tables that the seed writes holds a row (local run design, Data and
+# contracts). The seed writes them in one transaction, so they are all empty or all seeded.
+_SEED_ROWS_EXIST = text(
+    "SELECT EXISTS (SELECT FROM customers) OR EXISTS (SELECT FROM accounts) "
+    "OR EXISTS (SELECT FROM products) OR EXISTS (SELECT FROM orders) "
+    "OR EXISTS (SELECT FROM order_lines) OR EXISTS (SELECT FROM shipments) "
+    "OR EXISTS (SELECT FROM refunds)"
+)
+
 
 class SeedFileInvalidError(UnexpectedFailureError):
     """The seed file is missing or does not match its format."""
@@ -150,6 +159,39 @@ async def seed(settings: Settings, events: EventRecorder, *, seed_file: Path = S
     engine = create_owner_engine(settings)
     try:
         async with begin_transaction(engine) as connection:
+            await insert_seed(connection, document, password_hashes)
+    finally:
+        await engine.dispose()
+    events.record(EventName.SEED_LOADED)
+
+
+async def seed_if_empty(
+    settings: Settings, events: EventRecorder, *, seed_file: Path = SEED_FILE
+) -> None:
+    """Load the seed file as `seed` does, or change nothing when the database is seeded.
+
+    The local run calls it at every start, so a second start keeps the data of the first
+    (local run design, Data and contracts). The check and the inserts share one transaction,
+    and the passwords are hashed only when the seed is loaded.
+
+    Args:
+        settings: The validated settings, with the owner URL and the seed passwords.
+        events: Where `seed.loaded` or `seed.skipped` is recorded.
+        seed_file: The seed file.
+
+    Raises:
+        SettingRequiredError: A setting that the command needs is absent.
+        SeedFileInvalidError: The file is missing or invalid.
+    """
+    document = load_seed_document(seed_file)
+    passwords = seed_passwords(settings)
+    engine = create_owner_engine(settings)
+    try:
+        async with begin_transaction(engine) as connection:
+            if await connection.scalar(_SEED_ROWS_EXIST):
+                events.record(EventName.SEED_SKIPPED)
+                return
+            password_hashes = await hash_account_passwords(document, passwords)
             await insert_seed(connection, document, password_hashes)
     finally:
         await engine.dispose()

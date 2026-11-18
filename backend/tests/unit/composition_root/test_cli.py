@@ -76,6 +76,21 @@ def test_seed_takes_no_confirmation_flag() -> None:
     assert caught.value.code == EXIT_SETTINGS_INVALID
 
 
+def test_seed_with_if_empty_skips_a_seeded_database() -> None:
+    arguments = parse_arguments(["seed", "--if-empty"])
+
+    assert arguments == OneOffArguments(
+        command=OneOffCommand.SEED, should_skip_seeded_database=True
+    )
+
+
+def test_reset_takes_no_if_empty_flag() -> None:
+    with pytest.raises(SystemExit) as caught:
+        parse_arguments(["reset", "--if-empty"])
+
+    assert caught.value.code == EXIT_SETTINGS_INVALID
+
+
 @pytest.mark.parametrize(
     "value",
     ["ORD-20901", "TRK-1000000001", "TXN-10000001", "+84 90 123 4567", "person@example.com"],

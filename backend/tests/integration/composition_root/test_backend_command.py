@@ -117,6 +117,18 @@ async def test_seed_on_a_seeded_database_exits_with_a_failure(
     assert '"event":"command.failed"' in result.output
 
 
+async def test_seed_if_empty_on_a_seeded_database_exits_with_success(
+    environment: dict[str, str], builder: DatabaseBuilder
+) -> None:
+    await run_backend(environment, "seed", "--if-empty")
+
+    result = await run_backend(environment, "seed", "--if-empty")
+
+    assert result.status == EXIT_SUCCESS
+    assert '"event":"seed.skipped"' in result.output
+    assert await count_accounts(builder) == SEEDED_ACCOUNTS
+
+
 async def test_reset_with_yes_runs_without_a_question(
     environment: dict[str, str], builder: DatabaseBuilder
 ) -> None:

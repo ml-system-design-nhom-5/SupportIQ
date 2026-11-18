@@ -63,7 +63,7 @@ These steps work from a fresh clone.
    uv run --env-file .env backend seed
    ```
 
-Docker is not part of local development. CI builds the [`Dockerfile`](Dockerfile), and Render runs it in the demo deployment ([ADR-0016](../docs/decisions/0016-hosting-on-free-tiers.md)).
+CI builds the [`Dockerfile`](Dockerfile), and Render runs it in the demo deployment ([ADR-0016](../docs/decisions/0016-hosting-on-free-tiers.md)). The local run of the whole system runs the same image with Docker, against a PostgreSQL 17 of its own, so it needs none of the steps above; it also lets you run the tests against that database ([local run guide](../docs/guides/local-run.md#run-the-backend-tests-against-the-local-database)).
 
 ## Commands
 
@@ -75,6 +75,7 @@ Every subcommand validates the settings first. A missing or invalid setting stop
 | `backend create-app-role` | owner | Creates or updates `supportiq_app` with the password of `DATABASE_URL_APP`, from [`create_app_role.sql`](src/supportiq_backend/migrations/create_app_role.sql). It refuses a role that has `SUPERUSER`, `REPLICATION`, or `BYPASSRLS` |
 | `backend migrate` | owner | Applies every migration |
 | `backend seed` | owner | Loads [`seed/synthetic-dev-only-v1.json`](seed/synthetic-dev-only-v1.json) into an empty database. It fails on a seeded database and changes nothing |
+| `backend seed --if-empty` | owner | Loads the seed as `backend seed` does when the tables that the seed writes hold no row. When one of them holds a row, it changes nothing, logs `seed.skipped`, and exits with status 0. The check and the inserts share one transaction. The local run calls it at every start ([local run design](../docs/design/local-run.md#data-and-contracts)) |
 | `backend reset` | owner | Empties every backend table and seeds again in one transaction. It asks first; `--yes` skips the question |
 | `python -m tests.trials.named_entity_trial <path>`, with `uv run` | — | Runs the trial of the named-entity detector on [its `synthetic-dev-only` set](tests/trials/synthetic-dev-only-named-entity-trial-v1.json) and writes the report to `<path>`, a file in the git-ignored folder `exports/` ([design, Choice 1](../docs/design/backend-ticket-workflow.md#choice-1-the-named-entity-library)). It needs no database |
 | `backend export-decisions --start-at <timestamp> --end-at <timestamp> --output <path>` | `supportiq_app` | Writes one JSON line per ticket closed or escalated in [`start_at`, `end_at`) for the evaluation and the product-value study ([design, The decision-record export](../docs/design/backend-ticket-workflow.md#the-decision-record-export)). The path must resolve inside the git-ignored folder `exports/` of the working directory, after `..` and symbolic links; any other path stops the command before anything is read (SEC-33) |
@@ -223,7 +224,7 @@ Every log line is one JSON object on standard output, with the attributes of an 
 | `report.built`, `decisions.exported` | A manager reads the report of a period; `backend export-decisions` writes its file |
 | `command.failed` | A one-off command fails, with the error type |
 | `database.migrated`, `database_role.applied` | A one-off database command succeeds |
-| `seed.loaded`, `seed.reset`, `seed.reset_cancelled` | The seed and reset commands |
+| `seed.loaded`, `seed.skipped`, `seed.reset`, `seed.reset_cancelled` | The seed and reset commands; `seed.skipped` when `seed --if-empty` finds the seed rows already there |
 
 Every request has a trace with its database spans, and ticket creation has the span `create_ticket` with `ticket_id` ([LOG-20](../docs/rules/logging-and-observability.md), LOG-07). A suggestion job runs in the span `run_suggestion_job`, in the trace of the request that created its suggestion, whose trace ID the suggestion stores; inside it are `pseudonymize_message` with `pseudonym_count` and `call_ai_service` with `ai_service_operation`. `sendReply` has the spans `send_reply` and `save_decision`, `createEscalation` has `save_decision`, `getConsoleReport` has `build_report`, and `backend export-decisions` runs in `export_decisions`. The reads of `ai-service` (the KB version read of a first view, `getConsoleKbDocumentVersion`, and `getAdminVersions`) run in `call_ai_service` too. A failure marks the span of its request or command with the status and an exception event (LOG-22). `TRACE_EXPORTER` chooses whether spans leave the process; before they do, every attribute outside an allow-list is dropped, an exception keeps only its type, and a status keeps only its code. A line that a library logs outside every span carries IDs of the process.
 

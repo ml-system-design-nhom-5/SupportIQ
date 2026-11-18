@@ -46,7 +46,7 @@ These steps work from a fresh clone, on Linux, macOS, and Windows. Only Linux ge
 
 `ai-service serve` validates the settings first. A missing or invalid setting stops it with exit status 2 and a `settings.invalid` line that names the setting, never its value ([ARCH-34](../docs/rules/architecture.md)). It then reads the egress allow-list, and a missing or invalid file stops it the same way, with an `egress_allow_list.invalid` line that names the file ([Egress and secrets](#egress-and-secrets)). It then checks the release, and a missing, incomplete, or changed release stops it the same way, with a `release.invalid` line that names the reason ([Release manifest](#release-manifest)). It then reads every asset and loads the two models, and an asset that breaks its format, or a model that cannot be loaded, stops it the same way ([Asset formats](#asset-formats)). There is no fallback model, so without a release whose files are on the machine, `ai-service serve` does not start.
 
-Docker is not part of local development. CI builds the [`Dockerfile`](Dockerfile), which installs the `torch` group.
+CI builds the [`Dockerfile`](Dockerfile), which installs the `torch` group. To run the real model on macOS or Windows, where torch is not locked, use the mode with AI of the local run, which runs this image ([local run guide, With AI](../docs/guides/local-run.md#with-ai)).
 
 ## Commands
 
@@ -285,6 +285,7 @@ Every request continues the trace of a valid `traceparent` or starts a new one, 
 - Structural checks on a draft, such as citation identity and placeholder provenance, do not prove that a cited source supports a claim. Staff verify every claim before they send a reply (FR-04).
 - No Modal app of `ai-service` and no download script exist yet, so no release of contract 1.0.0 is deployed ([ADR-0018, Deploy](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#deploy); [#41](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/41)). The first release, `release-2026-11-18-02`, passed the offline evaluation gate; its record and its published manifest are in [`eval/releases/release-2026-11-18-02/`](../eval/releases/release-2026-11-18-02/release-manifest.json).
 - The cold start, the latency from `backend`, and the memory in use are not measured yet ([ADR-0018, Validation](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#validation)).
+- When `analysis_ms` or `total_ms` exceeds 60 000, the maximum of `StepLatencies` in the contract, `ai-service` answers `500` and logs `request.failed` with `ValidationError`, without a result. It happened in the local run with AI and Grafana together on a virtual machine with 2 CPUs; `backend` had already timed out, so staff handled the ticket manually ([local run guide, Modes](../docs/guides/local-run.md#modes)).
 
 ## Dependencies
 

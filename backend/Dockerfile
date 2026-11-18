@@ -1,5 +1,5 @@
-# The image of one backend replica (ARCH-10). CI builds it; Docker Compose comes with deploy/
-# once ADR-0011 or the hosting ADR is accepted (backend foundation design, Rollout, step 4).
+# The image of one backend replica (ARCH-10). CI builds it, Render runs it, and the local run of
+# deploy/local/compose.yaml runs it with Docker Compose (docs/design/local-run.md).
 # Both base images are pinned by digest, so every build starts from the same layers (WF-20).
 # The image holds no secret and no development credential (SEC-29): settings come from the
 # environment at run time.

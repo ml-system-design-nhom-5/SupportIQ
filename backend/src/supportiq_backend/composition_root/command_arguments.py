@@ -33,7 +33,10 @@ class OneOffArguments:
     Attributes:
         command: The command to run.
         is_confirmed: Whether `--yes` confirmed a reset in advance.
+        should_skip_seeded_database: Whether `--if-empty` asked the seed to change nothing on a
+            database that already holds seed rows.
     """
 
     command: OneOffCommand
     is_confirmed: bool = False
+    should_skip_seeded_database: bool = False

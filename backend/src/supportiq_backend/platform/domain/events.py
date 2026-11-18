@@ -29,6 +29,7 @@ class EventName(StrEnum):
     DATABASE_MIGRATED = "database.migrated"
     DATABASE_ROLE_APPLIED = "database_role.applied"
     SEED_LOADED = "seed.loaded"
+    SEED_SKIPPED = "seed.skipped"
     SEED_RESET = "seed.reset"
     SEED_RESET_CANCELLED = "seed.reset_cancelled"
     SESSION_CREATED = "session.created"
@@ -121,6 +122,9 @@ EVENT_DESCRIPTIONS: Mapping[EventName, EventDescription] = MappingProxyType(
             EventLevel.INFO, "Application database role created or updated"
         ),
         EventName.SEED_LOADED: EventDescription(EventLevel.INFO, "Seed data loaded"),
+        EventName.SEED_SKIPPED: EventDescription(
+            EventLevel.INFO, "Seed skipped because the database already holds seed rows"
+        ),
         EventName.SEED_RESET: EventDescription(EventLevel.INFO, "Backend tables reset to the seed"),
         EventName.SEED_RESET_CANCELLED: EventDescription(
             EventLevel.INFO, "Reset cancelled without changes"

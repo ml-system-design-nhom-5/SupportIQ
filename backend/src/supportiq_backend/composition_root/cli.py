@@ -32,7 +32,7 @@ from supportiq_backend.composition_root.report_commands import (
     export_decisions,
     to_export_decisions_arguments,
 )
-from supportiq_backend.composition_root.seed_commands import reset, seed
+from supportiq_backend.composition_root.seed_commands import reset, seed, seed_if_empty
 from supportiq_backend.composition_root.settings_loading import (
     SettingRequiredError,
     SettingsInvalidError,
@@ -186,9 +186,14 @@ def parse_arguments(argv: Sequence[str]) -> CommandArguments:
         OneOffCommand.MIGRATE.value,
         help="Apply every database migration, as the database owner.",
     )
-    commands.add_parser(
+    seed_parser = commands.add_parser(
         OneOffCommand.SEED.value,
         help="Load the seed file into an empty database, as the database owner.",
+    )
+    seed_parser.add_argument(
+        "--if-empty",
+        action="store_true",
+        help="Change nothing and succeed when the database already holds seed rows.",
     )
     reset_parser = commands.add_parser(
         OneOffCommand.RESET.value,
@@ -205,6 +210,7 @@ def parse_arguments(argv: Sequence[str]) -> CommandArguments:
     return OneOffArguments(
         command=OneOffCommand(str(namespace.command)),
         is_confirmed=bool(getattr(namespace, "yes", False)),
+        should_skip_seeded_database=bool(getattr(namespace, "if_empty", False)),
     )
 
 
@@ -247,6 +253,8 @@ def _run_database_command(
             asyncio.run(create_app_role(settings, events))
         case OneOffCommand.MIGRATE:
             asyncio.run(migrate(settings, events))
+        case OneOffCommand.SEED if arguments.should_skip_seeded_database:
+            asyncio.run(seed_if_empty(settings, events))
         case OneOffCommand.SEED:
             asyncio.run(seed(settings, events))
         case OneOffCommand.RESET:

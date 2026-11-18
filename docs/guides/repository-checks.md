@@ -1,6 +1,6 @@
 # Repository checks and CI
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-17
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-18
 
 How to run the repository-wide checks locally, which GitHub Actions workflows run them, and the convention that every workflow file follows. Read it before you add hooks to `.pre-commit-config.yaml` or a workflow to `.github/workflows/`. The contract tooling itself is described in [contracts/README.md](../../contracts/README.md).
 
@@ -17,11 +17,13 @@ flowchart LR
     Push --> Be["backend.yml:<br/>jobs backend-checks,<br/>backend-tests, backend-image"]
     Push --> Ai["ai-service.yml:<br/>jobs ai-service-checks, ai-service-tests,<br/>ai-service-tests-torch,<br/>ai-service-release-command, ai-service-image"]
     Push --> Fe["frontend.yml:<br/>job frontend-checks"]
+    Push --> Lr["local-run.yml:<br/>job local-run-compose"]
     Repo -->|"pre-commit run --all-files<br/>--hook-stage manual"| Result{"All checks pass?"}
     Con -->|"audit, pre-commit run contracts-check,<br/>bundle, mock check"| Result
     Be -->|"backend hooks, audit, tests with coverage,<br/>image build"| Result
     Ai -->|"ai-service and release command hooks, audits,<br/>tests without and with torch, image build"| Result
     Fe -->|"audit, pre-commit run frontend-check,<br/>tests, stories, build, UI flow tests"| Result
+    Lr -->|"script tests, start with Compose,<br/>health checks, sign-ins, stop"| Result
     Result -->|"no"| Red["Merge blocked (WF-19)"]
     Result -->|"yes"| Green["Merge allowed"]
 ```
@@ -40,7 +42,7 @@ flowchart LR
     Hook -->|"200, or 202 while another<br/>deploy of Render runs"| Render["Render builds and starts<br/>that commit"]
 ```
 
-Each tool is justified here, as [WF-27](../rules/workflow.md#dependencies) requires. All of them have a permissive license ([WF-30](../rules/workflow.md#dependencies)), apart from the frontend licenses that [frontend/README.md](../../frontend/README.md#dependencies) says were approved.
+Each tool is justified here, as [WF-27](../rules/workflow.md#dependencies) requires. All of them have a permissive license ([WF-30](../rules/workflow.md#dependencies)), apart from the frontend licenses that [frontend/README.md](../../frontend/README.md#dependencies) says were approved, and shellcheck, which is GPL-3.0: the team approved it on 2026-11-18 as a development tool that runs only in pre-commit and is never shipped.
 
 | Check | Tool and license | Why this tool | On commit | In CI |
 |---|---|---|---|---|
@@ -49,6 +51,7 @@ Each tool is justified here, as [WF-27](../rules/workflow.md#dependencies) requi
 | Secrets in every commit reachable from `HEAD` | gitleaks 8.30.1 (`gitleaks-history`), MIT | The same scanner, over the history of the checked-out branch | — | `repository-checks` |
 | Markdown style ([docs/README.md](../README.md#files-and-formatting)), and every relative link and `#fragment` | markdownlint-cli2 0.24.0 with `markdownlint-rule-relative-links` 5.1.4, both MIT | The Markdown linter of the [enforcement table](../rules/README.md#enforcement). The rule plugin checks links and anchors offline, so no website can fail the check | Yes | `repository-checks` |
 | Workflow files | actionlint 1.7.12, MIT | Checks the syntax, expressions, and action inputs of GitHub Actions workflows, which no other tool here understands | Yes | `repository-checks` |
+| The bash scripts of `deploy/local/` and `eval/release/gate/` | `shellcheck-py` 0.11.0.1, MIT, which installs shellcheck 0.11.0, GPL-3.0 | The standard linter of shell scripts: unquoted expansions, unset variables, and bash features that the bash 3.2 of macOS lacks. The wrapper installs it with pip, so no system package is needed | Yes | `repository-checks` |
 | The workflow convention ([Who checks each rule](#who-checks-each-rule)) | The `workflow-*` and `deploy-workflow-*` pygrep hooks of pre-commit 4.7.0, and `deploy-workflow-copies-backend`, which compares two workflows with bash, sed, and diff | Pattern checks and a file comparison that need no new tool | Yes | `repository-checks` |
 | Contract lint, custom rules, example validation, and the TypeScript checks | `contracts-check`, with the tools of [contracts/README.md](../../contracts/README.md#tools) | [RULE-03](../rules/README.md#enforcement), CON-04 to CON-18 | Yes | `contract-checks` |
 | High and critical vulnerabilities in the contract tools | `pnpm audit --audit-level=high` in `contracts/` | [WF-31](../rules/workflow.md#dependencies) | — | `contract-checks` |
@@ -65,6 +68,7 @@ Each tool is justified here, as [WF-27](../rules/workflow.md#dependencies) requi
 | The `ai-service` image build, with torch from the CPU index | `docker build` of `ai-service/Dockerfile` | ARCH-10 | — | `ai-service-image` |
 | Format, lint, types, boundaries, and the generated client of frontend | `frontend-check`, with the tools of [frontend/README.md](../../frontend/README.md#dependencies) | [RULE-03](../rules/README.md#enforcement), [TS-02](../rules/typescript.md#toolchain), [TS-27](../rules/typescript.md#api-access) | Yes | `frontend-checks` |
 | High and critical vulnerabilities, unit tests, stories, the build, and the UI flow tests | `pnpm audit`, `test:unit`, `test:stories`, `build`, `test:e2e` in `frontend/` | [WF-31](../rules/workflow.md#dependencies), [TEST-21](../rules/testing.md#coverage), [UI-32](../rules/ui.md#accessibility) | — | `frontend-checks` |
+| The local run: the script tests of `local-run.sh`, then one start with Compose without AI, its health checks, a sign-in through each origin, a second start without a question, and a stop that leaves nothing ([local run design](../design/local-run.md#testing-and-evaluation)) | `deploy/local/tests/test-local-run.sh`, `deploy/local/local-run.sh`, and `deploy/local/tests/smoke-check.sh`, with the Docker and curl of the runner | WF-32, WF-33, TEST-01 | — | `local-run-compose` |
 
 pre-commit installs the runtimes of the hooks at the versions in `default_language_version`: Go 1.27.3 for gitleaks and actionlint, and Node.js 24.22.2 for markdownlint-cli2.
 
@@ -115,7 +119,7 @@ Run every command in the repository root.
 
 Every file in `.github/workflows/` follows these rules, including the `backend.yml`, `ai-service.yml`, and `frontend.yml` files that the component owners add ([WF-19](../rules/workflow.md#continuous-integration)). `deploy.yml` departs from rules 2 and 7 only, as those rules state. actionlint checks the syntax of every workflow, the `workflow-*` and `deploy-workflow-*` hooks of `.pre-commit-config.yaml` check every rule that a tool can check, and reviewers check the rest ([Who checks each rule](#who-checks-each-rule)).
 
-1. **One workflow per area.** The file is `.github/workflows/<area>.yml` with `name: <area>`: `repository`, `contracts`, `backend`, `ai-service`, `frontend`, `deploy`.
+1. **One workflow per area.** The file is `.github/workflows/<area>.yml` with `name: <area>`: `repository`, `contracts`, `backend`, `ai-service`, `frontend`, `local-run`, `deploy`. `local-run` holds the smoke tests of the [local run](local-run.md), which span every component.
 2. **Triggers.** Exactly these, and nothing else ([ADR-0021, CI](../decisions/0021-repository-layout-and-ai-ml-migration.md#ci), statement 3):
 
    ```yaml
@@ -154,7 +158,7 @@ Every file in `.github/workflows/` follows these rules, including the `backend.y
 8. **Timeouts.** Every job sets `timeout-minutes`.
 9. **Frozen installs.** Tools come from the pinned files only: `.nvmrc`, `packageManager`, and `pnpm install --frozen-lockfile` for Node.js; `.python-version` and `uv sync --locked` for Python; pre-commit 4.7.0 installed with `uv tool install --python 3.12 pre-commit==4.7.0`.
 10. **Failures stay failures.** No `continue-on-error`, no `|| true` or other way to ignore an exit code, no automatic reruns, and no retry actions.
-11. **Unique job names.** Every job sets a `name` that is unique across all workflows and starts with its area: `repository-checks`, `contract-checks`, `backend-…`, `ai-service-…`, `frontend-…`, `deploy-…`. Branch protection matches required checks by these names.
+11. **Unique job names.** Every job sets a `name` that is unique across all workflows and starts with its area: `repository-checks`, `contract-checks`, `backend-…`, `ai-service-…`, `frontend-…`, `local-run-…`, `deploy-…`. Branch protection matches required checks by these names.
 12. **Hooks through pre-commit.** A component's repository-wide hooks go in its marked section of `.pre-commit-config.yaml`:
     - each hook sets `stages: [pre-commit]`, so the `repository-checks` job does not run it;
     - each hook calls the component's own locked toolchain, as `contracts-check` runs `pnpm run check` inside `contracts/`, so its tool versions stay pinned in the component's lockfile;
@@ -190,22 +194,23 @@ The `workflow-*` and `deploy-workflow-*` hooks are pygrep hooks, which come with
 Set these on GitHub for `main` (Settings → Branches, or a ruleset), right after the join PR is merged ([ADR-0021, Merge procedure](../decisions/0021-repository-layout-and-ai-ml-migration.md#merge-procedure), statement 10):
 
 - Require a pull request before merging, with at least one approval ([WF-15](../rules/workflow.md#reviews)).
-- Require status checks to pass, with the branch up to date before merging. Required checks: `repository-checks`, `contract-checks`, `backend-checks`, `backend-tests`, `backend-image`, `ai-service-checks`, `ai-service-tests`, `ai-service-tests-torch`, `ai-service-release-command`, `ai-service-image`, and `frontend-checks`. The `deploy-*` jobs are not required checks, because they run only when the project lead runs the deploy.
+- Require status checks to pass, with the branch up to date before merging. Required checks: `repository-checks`, `contract-checks`, `backend-checks`, `backend-tests`, `backend-image`, `ai-service-checks`, `ai-service-tests`, `ai-service-tests-torch`, `ai-service-release-command`, `ai-service-image`, `frontend-checks`, and `local-run-compose`, which the project lead made a required check on 2026-11-18. The `deploy-*` jobs are not required checks, because they run only when the project lead runs the deploy.
 - Block force pushes and deletions ([WF-07](../rules/workflow.md#branches)).
 
 ## The first CI run
 
 GitHub Actions cannot run locally. On the first push, check:
 
-1. All five workflows that a push starts run, and the jobs `repository-checks`, `contract-checks`, `backend-checks`, `backend-tests`, `backend-image`, `ai-service-checks`, `ai-service-tests`, `ai-service-tests-torch`, `ai-service-release-command`, `ai-service-image`, and `frontend-checks` appear. `deploy.yml` does not start on a push. A missing workflow means a trigger or syntax problem. `frontend-checks` installs Chromium with `playwright install --with-deps chromium`.
+1. All six workflows that a push starts run, and the jobs `repository-checks`, `contract-checks`, `backend-checks`, `backend-tests`, `backend-image`, `ai-service-checks`, `ai-service-tests`, `ai-service-tests-torch`, `ai-service-release-command`, `ai-service-image`, `frontend-checks`, and `local-run-compose` appear. `deploy.yml` does not start on a push. A missing workflow means a trigger or syntax problem. `frontend-checks` installs Chromium with `playwright install --with-deps chromium`.
 2. Every `uses:` step resolves. "Unable to resolve action" means a wrong commit SHA.
 3. `contract-checks` installs pnpm 12.16.1 and Node.js 24.22.2, and `pnpm install --frozen-lockfile` neither reports an outdated lockfile nor stops on an ignored build script.
 4. `repository-checks`, `contract-checks`, `backend-checks`, `ai-service-checks`, `ai-service-release-command`, and `frontend-checks` install pre-commit 4.7.0. The first `repository-checks` run downloads Go 1.27.3 and Node.js 24.22.2 for the hooks and saves the cache; the second run is faster.
 5. `repository-checks` passes `Detect hardcoded secrets in the git history`. It scans only the commits reachable from `HEAD`: other branches of the clone, such as `main`, are not scanned.
 6. `pnpm audit --audit-level=high` reports no high or critical advisory except the one ignored in `contracts/pnpm-workspace.yaml`, and `pnpm run check:mock` prints seven `ok` lines: three for `backend.openapi.yaml` and four for `ai-service.openapi.yaml`.
-7. `backend-tests` reaches the PostgreSQL 17 service, creates `supportiq_owner` and `supportiq_app`, and passes both coverage reports. `backend-image` builds `backend/Dockerfile`, which only CI builds.
+7. `backend-tests` reaches the PostgreSQL 17 service, creates `supportiq_owner` and `supportiq_app`, and passes both coverage reports. `backend-image` builds `backend/Dockerfile`, which `local-run-compose` builds again for the local run.
 8. `ai-service-tests-torch` prints the torch version `2.15.0+cpu` and allows no skip, and `ai-service-tests` allows only the skips of the tests that need torch. `ai-service-checks` audits torch as `torch==2.15.0`. `ai-service-image` builds `ai-service/Dockerfile` with torch.
-9. All jobs finish within their `timeout-minutes`. Then set the branch protection above.
+9. `local-run-compose` passes the script tests, starts the local run, signs in at both origins, starts it again without a question, and leaves no container after `stop`. Its log gives the durations of both starts, from which the deadlines of `deploy/local/local-run.sh` are set.
+10. All jobs finish within their `timeout-minutes`. Then set the branch protection above.
 
 The first deploy is step 5 of the [deploy guide, Setup order](../../deploy/README.md#setup-order).
 

@@ -27,6 +27,7 @@ from supportiq_backend.composition_root.seed_commands import (
     load_seed_document,
     reset,
     seed,
+    seed_if_empty,
 )
 from supportiq_backend.composition_root.settings_loading import SettingRequiredError
 from supportiq_backend.platform import DatabaseOperationError, EventName
@@ -248,6 +249,33 @@ async def test_seed_on_a_seeded_database_fails_and_changes_nothing(
         await seed(seeded, RecordingEventRecorder(), seed_file=SEED_PATH)
 
     assert await read_every_table(owner_engine) == before
+
+
+async def test_seed_if_empty_on_an_empty_database_loads_the_rows_of_seed(
+    owner_engine: AsyncEngine, worker_database: WorkerDatabase
+) -> None:
+    settings = seed_settings(worker_database)
+    events = RecordingEventRecorder()
+
+    await seed_if_empty(settings, events, seed_file=SEED_PATH)
+    loaded = await read_every_table(owner_engine)
+    await reset(settings, RecordingEventRecorder(), seed_file=SEED_PATH)
+
+    assert loaded == await read_every_table(owner_engine)
+    assert events.names() == (EventName.SEED_LOADED,)
+
+
+async def test_seed_if_empty_on_a_seeded_database_changes_nothing_and_logs_seed_skipped(
+    owner_engine: AsyncEngine, builder: DatabaseBuilder, seeded: Settings
+) -> None:
+    await builder.ticket(await customer_of_the_seed(builder), SEEDED_ORDER)
+    before = await read_every_table(owner_engine)
+    events = RecordingEventRecorder()
+
+    await seed_if_empty(seeded, events, seed_file=SEED_PATH)
+
+    assert await read_every_table(owner_engine) == before
+    assert events.names() == (EventName.SEED_SKIPPED,)
 
 
 async def test_seed_names_a_missing_password_setting(worker_database: WorkerDatabase) -> None:
