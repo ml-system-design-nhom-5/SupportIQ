@@ -206,7 +206,8 @@ def _case_entry(result: CaseResult) -> dict[str, object]:
         "kind": result.kind.value,
         **failure,
         "passed": result.passed,
-        "mismatches": list(result.mismatches),
+        "mismatches": [mismatch.field for mismatch in result.mismatches],
+        "observed": {mismatch.field: mismatch.observed for mismatch in result.mismatches},
     }
 
 
@@ -223,7 +224,11 @@ def _llm_part(llm_calls: int) -> dict[str, object]:
 
 
 def _check_entry(result: CheckResult) -> dict[str, object]:
-    return {"check": result.check.value, "passed": result.passed}
+    return {
+        "check": result.check.value,
+        "passed": result.passed,
+        "observed": list(result.observed),
+    }
 
 
 def _guardrail_entry(result: GuardrailResult) -> dict[str, object]:

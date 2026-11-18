@@ -12,15 +12,17 @@ a service token made for this run only, and a model name and a key for the LLM p
 call ever uses, because the LLM step of the gate never calls a provider. This module never
 changes the environment itself.
 
-The routes of the application are read for the check of the contract routes. A route of
-another kind, such as a mount or a websocket route, or a route for every method, is read under
-a name that no route of the contract has, so the check fails on it instead of skipping it.
+The routes of the application are read for the check of the contract routes. FastAPI keeps
+each included router as one route, so the reader walks into it and reads its leaf routes, with
+the prefix of the inclusion. A leaf route of another kind, such as a mount or a websocket
+route, or a route for every method, is read under a name that no route of the contract has, so
+the check fails on it instead of skipping it.
 """
 
 import asyncio
 import io
 import secrets
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TextIO, cast
@@ -188,14 +190,48 @@ async def _post(client: httpx.AsyncClient, path: str, body: Mapping[str, object]
 
 
 def _routes(app: Starlette) -> frozenset[tuple[str, str]]:
-    return frozenset(entry for route in app.routes for entry in _methods_and_path(route))
+    # A router that the gate cannot read gives no route, so the check of the routes fails.
+    return frozenset(_leaf_routes(_routes_of_router(app.router) or (), ""))
 
 
-def _methods_and_path(route: BaseRoute) -> frozenset[tuple[str, str]]:
+def _leaf_routes(routes: Sequence[BaseRoute], prefix: str) -> Iterator[tuple[str, str]]:
+    for route in routes:
+        included = _included_router(route)
+        if included is None:
+            yield from _methods_and_path(route, prefix)
+        else:
+            router_routes, router_prefix = included
+            yield from _leaf_routes(router_routes, prefix + router_prefix)
+
+
+def _included_router(route: BaseRoute) -> tuple[Sequence[BaseRoute], str] | None:
+    # FastAPI keeps each router that `include_router` added as one route, which holds the router
+    # as `original_router` and the prefix of the inclusion in `include_context`. Anything else
+    # is a leaf, so a router of another shape is read as an unknown route and fails the check.
+    routes = _routes_of_router(getattr(route, "original_router", None))
+    prefix = getattr(getattr(route, "include_context", None), "prefix", None)
+    if routes is None or not isinstance(prefix, str):
+        return None
+    return routes, prefix
+
+
+def _routes_of_router(router: object) -> Sequence[BaseRoute] | None:
+    # Every route that a router serves: `routes`, and the routes that FastAPI serves after them,
+    # such as those of `frontend()`, which it keeps in `_low_priority_routes`.
+    routes = getattr(router, "routes", None)
+    low_priority = getattr(router, "_low_priority_routes", [])
+    if not isinstance(routes, list) or not isinstance(low_priority, list):
+        return None
+    # The casts only name the type of the routes of a router, which `isinstance` found (PY-12).
+    return [*cast("list[BaseRoute]", routes), *cast("list[BaseRoute]", low_priority)]
+
+
+def _methods_and_path(route: BaseRoute, prefix: str) -> frozenset[tuple[str, str]]:
     if not isinstance(route, Route):
-        return frozenset({(type(route).__name__, str(getattr(route, "path", "")))})
+        # A route of another kind, such as the frontend group at the root, whose path is empty.
+        unknown_path = prefix + str(getattr(route, "path", ""))
+        return frozenset({(type(route).__name__, unknown_path or "/")})
+    path = prefix + route.path
     if route.methods is None:
-        return frozenset({(_EVERY_METHOD, route.path)})
-    return frozenset(
-        (method, route.path) for method in route.methods if method not in _IMPLICIT_METHODS
-    )
+        return frozenset({(_EVERY_METHOD, path)})
+    return frozenset((method, path) for method in route.methods if method not in _IMPLICIT_METHODS)

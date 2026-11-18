@@ -1,7 +1,8 @@
 """KB v2 admits 0 versions and quarantines 17, each with its reasons (ADR-0021, Validation).
 
 The run reads `data/raw/kb/v2/` and `contracts/schemas/IntentLabel.yaml` only, and the files of
-`eval/kb-ingestion/v2/` are exactly what it writes.
+`eval/kb-ingestion/v2/` are exactly what it writes. Issue #13 accepts the quarantine (DATA-13),
+so the run names it with `--accepted-quarantine` and succeeds.
 """
 
 import hashlib
@@ -17,6 +18,8 @@ RAW_KB_V2 = REPOSITORY_ROOT / "data" / "raw" / "kb" / "v2"
 INTENT_LABEL_SCHEMA = REPOSITORY_ROOT / "contracts" / "schemas" / "IntentLabel.yaml"
 COMMITTED_OUTPUT = REPOSITORY_ROOT / "eval" / "kb-ingestion" / "v2"
 FILES = ("kb.json", "document-intents.json", "ingestion-report.json")
+# The issue that reviewed and accepted the quarantine of KB v2 (DATA-13).
+ISSUE = "https://github.com/ml-system-design-nhom-5/SupportIQ/issues/13"
 NO_POLICY_KEY = [{"code": "missing_field", "field": "policy_key"}]
 UNKNOWN_INTENT = {"code": "unknown_intent", "field": "supported_intents"}
 NO_POLICY_KEY_AND_UNKNOWN_INTENT = [*NO_POLICY_KEY, UNKNOWN_INTENT]
@@ -59,12 +62,14 @@ def output(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> Path:
             str(INTENT_LABEL_SCHEMA),
             "--output",
             str(tmp_path / "v2"),
+            "--accepted-quarantine",
+            ISSUE,
         ]
     )
-    assert status == cli.EXIT_QUARANTINE_NOT_ACCEPTED
+    assert status == cli.EXIT_SUCCESS
     assert capsys.readouterr().out == (
         "kb_version=v2 admitted=0 quarantined=17 conflicts=0 released_but_absent=0"
-        " quarantine=not accepted\n"
+        " quarantine=accepted\n"
     )
     # The raw KB keeps every byte (DATA-06).
     assert _sha256(RAW_KB_V2) == before
@@ -83,6 +88,7 @@ def test_kb_v2_admits_no_version_and_quarantines_each_with_its_reasons(output: P
         _sha256(RAW_KB_V2)["kb-release.json"],
         _sha256(RAW_KB_V2)["approved_kb.v2.json"],
     ]
+    assert report["quarantine_accepted_in"] == ISSUE
 
 
 def test_the_committed_output_is_exactly_what_the_command_writes(output: Path) -> None:

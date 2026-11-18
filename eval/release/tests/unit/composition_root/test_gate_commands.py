@@ -32,6 +32,7 @@ from tests.unit.gate.fakes import (
     build_fake_candidate,
     case_document,
     expected_document,
+    failure_expected,
     fake_application_factory,
     junit_xml,
     set_document,
@@ -193,9 +194,14 @@ def test_a_case_that_fails_fails_the_gate_with_status_1_and_still_records_the_ru
 
     status = _run_gate()
 
+    record = _record(workspace)
     assert status == EXIT_FAILED
     assert "failed_cases=1 outcome=failed" in capsys.readouterr().out
-    assert _record(workspace)["outcome"] == "failed"
+    assert record["outcome"] == "failed"
+    assert _entries(_object(record["escalation_cases"])["results"])[0]["observed"] == {
+        "createAnalysis.recommendation": "abstain",
+        "createDraft.recommendation": "abstain",
+    }
 
 
 def test_a_log_that_holds_the_message_fails_the_gate(
@@ -221,6 +227,32 @@ def test_a_route_outside_the_contract_fails_the_gate(
         "routes_are_those_of_contract_1_0_0": False,
         "no_case_text_in_the_logs": True,
         "no_llm_call": True,
+    }
+    route_check = _entries(_record(workspace)["candidate_checks"])[0]
+    assert route_check["observed"] == ["+POST /v1/refunds"]
+
+
+def test_an_injected_failure_with_the_problem_of_the_contract_passes_its_case(
+    workspace: Path,
+) -> None:
+    # A fake case that injects a failure, as the injected-failure cases of ESC-05 in the first
+    # run: there, the `status` of the problem was read as the status of the draft.
+    case = case_document(
+        inject={"intent_distribution": None, "failure": "intent_model"},
+        depends_on_model=False,
+        expected=failure_expected(),
+    )
+    write_set(workspace / "set", set_document(case))
+
+    assert _run_gate() == EXIT_PASSED
+    assert _entries(_object(_record(workspace)["escalation_cases"])["results"])[0] == {
+        "case_id": "fake-case-1",
+        "esc_rule": "ESC-04",
+        "kind": "injected_failure",
+        "injected_failure": "intent_model",
+        "passed": True,
+        "mismatches": [],
+        "observed": {},
     }
 
 

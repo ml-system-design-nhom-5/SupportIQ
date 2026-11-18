@@ -36,6 +36,16 @@ class DraftStatus(StrEnum):
     LLM_UNAVAILABLE = "llm_unavailable"
 
 
+class ProblemType(StrEnum):
+    """The `type` of each Problem Details body that contract 1.0.0 of `ai-service` gives."""
+
+    INTERNAL_ERROR = "urn:supportiq:problem:internal-error"
+    INVALID_REQUEST = "urn:supportiq:problem:invalid-request"
+    NOT_FOUND = "urn:supportiq:problem:not-found"
+    NOT_READY = "urn:supportiq:problem:not-ready"
+    UNAUTHENTICATED = "urn:supportiq:problem:unauthenticated"
+
+
 class ReasonCode(StrEnum):
     """`AiServiceReasonCode` of contract 1.0.0 of `ai-service`."""
 
@@ -100,7 +110,7 @@ class Expected:
     """
 
     http_status: int
-    problem_type: str | None
+    problem_type: ProblemType | None
     recommendation: Recommendation | None
     draft_status: DraftStatus | None
     required_reason_codes: frozenset[ReasonCode]

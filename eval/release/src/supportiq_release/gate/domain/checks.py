@@ -1,20 +1,29 @@
 """Compare the responses of a candidate with the expected outcome of each case (DATA-57).
 
 A case passes only when every field of its expected outcome matches both operations,
-`createAnalysis` and `createDraft`. A mismatch names the operation and the field only, never a
-value of the response, because a response can hold text of the message (LOG-29).
+`createAnalysis` and `createDraft`. The fields of an outcome are read only from a `200` body,
+and the type of a problem only from a Problem Details body, so the `status` of a problem is
+never read as the status of a draft.
+
+A mismatch names the operation and the field, with what the candidate gave: an HTTP status, a
+value of a closed set of the contract, or reason codes. A value outside the closed set shows as
+`other`, never as the text itself, because a response can hold text of the message (LOG-29).
 """
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import cast
 
 from supportiq_release.gate.domain.cases import (
     Case,
     CaseKind,
     CaseSet,
+    DraftStatus,
     Failure,
+    ProblemType,
     ReasonCode,
+    Recommendation,
     WrittenFor,
 )
 
@@ -25,6 +34,9 @@ REQUIRES_AUTHORITY = ReasonCode.REQUIRES_AUTHORITY
 HTTP_OK = 200
 ANALYSIS = "createAnalysis"
 DRAFT = "createDraft"
+_NULL = "null"
+_OTHER = "other"
+_EMPTY = "empty"
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +68,20 @@ class Observation:
 
 
 @dataclass(frozen=True, slots=True)
+class Mismatch:
+    """One field of a case that did not match.
+
+    Attributes:
+        field: The field, as `<operation>.<field>`.
+        observed: What the candidate gave for it: an HTTP status, a value of a closed set of the
+            contract, or reason codes, never text (`other` for a value outside the set).
+    """
+
+    field: str
+    observed: str
+
+
+@dataclass(frozen=True, slots=True)
 class CaseResult:
     """The result of one case.
 
@@ -64,14 +90,14 @@ class CaseResult:
         esc_rule: The escalation rule of the case.
         kind: What the outcome rests on: the real model, an injected part, or a staff choice.
         injected_failure: The part that the case made fail, or None.
-        mismatches: Each field that did not match, as `<operation>.<field>`; none when passed.
+        mismatches: Each field that did not match, with what was observed; none when passed.
     """
 
     case_id: str
     esc_rule: str
     kind: CaseKind
     injected_failure: Failure | None
-    mismatches: tuple[str, ...]
+    mismatches: tuple[Mismatch, ...]
 
     @property
     def passed(self) -> bool:
@@ -118,7 +144,7 @@ def check_case(case: Case, observation: Observation) -> CaseResult:
         *_reason_code_mismatches(case, DRAFT, _draft_codes(observation.draft)),
     ]
     if observation.llm_called != case.expected.llm_called:
-        mismatches.append(f"{DRAFT}.llm_called")
+        mismatches.append(Mismatch(f"{DRAFT}.llm_called", str(observation.llm_called).lower()))
     return CaseResult(
         case_id=case.case_id,
         esc_rule=case.esc_rule,
@@ -128,36 +154,52 @@ def check_case(case: Case, observation: Observation) -> CaseResult:
     )
 
 
-def _status_mismatches(case: Case, observation: Observation) -> list[str]:
+def _status_mismatches(case: Case, observation: Observation) -> list[Mismatch]:
     expected = case.expected
-    mismatches: list[str] = []
+    mismatches: list[Mismatch] = []
     for operation, response in ((ANALYSIS, observation.analysis), (DRAFT, observation.draft)):
         if response.status != expected.http_status:
-            mismatches.append(f"{operation}.http_status")
-        problem_type = response.body.get("type") if expected.problem_type is not None else None
+            mismatches.append(Mismatch(f"{operation}.http_status", str(response.status)))
+        problem_type = _problem(response).get("type")
         if problem_type != expected.problem_type:
-            mismatches.append(f"{operation}.problem_type")
+            shown = _shown_member(problem_type, ProblemType)
+            mismatches.append(Mismatch(f"{operation}.problem_type", shown))
     return mismatches
 
 
-def _routing_mismatches(case: Case, observation: Observation) -> list[str]:
+def _routing_mismatches(case: Case, observation: Observation) -> list[Mismatch]:
     expected = case.expected
-    mismatches: list[str] = []
-    if _field(observation.analysis.body, "routing", "recommendation") != expected.recommendation:
-        mismatches.append(f"{ANALYSIS}.recommendation")
-    draft_recommendation = _field(observation.draft.body, "analysis", "routing", "recommendation")
-    if draft_recommendation != expected.recommendation:
-        mismatches.append(f"{DRAFT}.recommendation")
-    if _field(observation.draft.body, "status") != expected.draft_status:
-        mismatches.append(f"{DRAFT}.draft_status")
-    return mismatches
+    analysis, draft = _outcome(observation.analysis), _outcome(observation.draft)
+    fields = (
+        (
+            f"{ANALYSIS}.recommendation",
+            _field(analysis, "routing", "recommendation"),
+            expected.recommendation,
+            Recommendation,
+        ),
+        (
+            f"{DRAFT}.recommendation",
+            _field(draft, "analysis", "routing", "recommendation"),
+            expected.recommendation,
+            Recommendation,
+        ),
+        (f"{DRAFT}.draft_status", _field(draft, "status"), expected.draft_status, DraftStatus),
+    )
+    return [
+        Mismatch(name, _shown_member(value, members))
+        for name, value, wanted, members in fields
+        if value != wanted
+    ]
 
 
-def _reason_code_mismatches(case: Case, operation: str, codes: frozenset[str] | None) -> list[str]:
+def _reason_code_mismatches(
+    case: Case, operation: str, codes: frozenset[str] | None
+) -> list[Mismatch]:
     expected = case.expected
     if codes is None:
         # A response without reason codes matches only a case that expects a failure.
-        return [] if expected.http_status != HTTP_OK else [f"{operation}.reason_codes"]
+        missing = Mismatch(f"{operation}.reason_codes", _NULL)
+        return [] if expected.http_status != HTTP_OK else [missing]
     authority = frozenset({REQUIRES_AUTHORITY} if expected.requires_authority else ())
     checks = (
         ("required_reason_codes", expected.required_reason_codes <= codes),
@@ -173,15 +215,45 @@ def _reason_code_mismatches(case: Case, operation: str, codes: frozenset[str] | 
             or (REQUIRES_AUTHORITY in codes) == expected.requires_authority,
         ),
     )
-    return [f"{operation}.{name}" for name, matches in checks if not matches]
+    return [
+        Mismatch(f"{operation}.{name}", _shown_codes(codes))
+        for name, matches in checks
+        if not matches
+    ]
 
 
 def _analysis_codes(response: Response) -> frozenset[str] | None:
-    return _codes(_field(response.body, "routing", "reason_codes"))
+    return _codes(_field(_outcome(response), "routing", "reason_codes"))
 
 
 def _draft_codes(response: Response) -> frozenset[str] | None:
-    return _codes(_field(response.body, "reason_codes"))
+    return _codes(_field(_outcome(response), "reason_codes"))
+
+
+def _outcome(response: Response) -> Mapping[str, object]:
+    # Only a 200 body holds the fields of an outcome. A Problem Details body holds none: its
+    # `status` is the HTTP status, never the status of a draft.
+    return response.body if response.status == HTTP_OK else {}
+
+
+def _problem(response: Response) -> Mapping[str, object]:
+    # Only a body of another status is a Problem Details body with a `type`.
+    return response.body if response.status != HTTP_OK else {}
+
+
+def _shown_member(value: object, members: type[StrEnum]) -> str:
+    # A value of the closed set, `null`, or `other`: never a text that the candidate wrote.
+    if value is None:
+        return _NULL
+    return value if isinstance(value, str) and value in {m.value for m in members} else _OTHER
+
+
+def _shown_codes(codes: frozenset[str]) -> str:
+    # The codes of the contract, sorted; any other code only as a count.
+    known = sorted(code for code in codes if code in {m.value for m in ReasonCode})
+    others = len(codes) - len(known)
+    shown = [*known, *([f"{_OTHER}:{others}"] if others else [])]
+    return ",".join(shown) if shown else _EMPTY
 
 
 def _codes(value: object) -> frozenset[str] | None:

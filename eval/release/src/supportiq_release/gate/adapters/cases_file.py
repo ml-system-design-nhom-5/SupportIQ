@@ -2,12 +2,12 @@
 
 The format is the one that `eval/suites/escalation/interim-v1/README.md` (Format) states. A
 field that is missing, unknown, or of another type refuses the whole set, so a case is never
-skipped or read in part. A recommendation, a draft status, or a reason code outside contract
-1.0.0 refuses the set too, so a typo never shows as a failed case. An injected distribution
-lists each intent label of the model at most once, most likely first, with probabilities that
-add up to at most 1 and that each stay above the equal share of the rest, so the listed intents
-come first. The SHA-256 of the file goes into the record of the gate run, and the approval of
-the set must cover it.
+skipped or read in part. A problem type, a recommendation, a draft status, or a reason code
+outside contract 1.0.0 refuses the set too, so a typo never shows as a failed case. An injected
+distribution lists each intent label of the model at most once, most likely first, with
+probabilities that add up to at most 1 and that each stay above the equal share of the rest, so
+the listed intents come first. The SHA-256 of the file goes into the record of the gate run,
+and the approval of the set must cover it.
 """
 
 import math
@@ -28,6 +28,7 @@ from supportiq_release.gate.domain import (
     Expected,
     Failure,
     Injection,
+    ProblemType,
     ReasonCode,
     Recommendation,
     WrittenFor,
@@ -213,15 +214,11 @@ def _expected(value: object, case_id: str) -> Expected:
         raise CasesInvalidError(CasesProblem.SHAPE_INVALID, case_id)
     if authority is not None and not isinstance(authority, bool):
         raise CasesInvalidError(CasesProblem.SHAPE_INVALID, case_id)
-    recommendation = _optional_text(fields["recommendation"], case_id)
-    draft_status = _optional_text(fields["draft_status"], case_id)
     return Expected(
         http_status=status,
-        problem_type=_optional_text(fields["problem_type"], case_id),
-        recommendation=None
-        if recommendation is None
-        else _member(Recommendation, recommendation, case_id),
-        draft_status=None if draft_status is None else _member(DraftStatus, draft_status, case_id),
+        problem_type=_optional_member(ProblemType, fields["problem_type"], case_id),
+        recommendation=_optional_member(Recommendation, fields["recommendation"], case_id),
+        draft_status=_optional_member(DraftStatus, fields["draft_status"], case_id),
         required_reason_codes=_codes(fields["required_reason_codes"], case_id),
         forbidden_reason_codes=_codes(fields["forbidden_reason_codes"], case_id),
         no_other_reason_codes=_flag(fields["no_other_reason_codes"], case_id),
@@ -241,6 +238,13 @@ def _member[Member: StrEnum](values: type[Member], value: str, case_id: str) -> 
     if value not in set(values):
         raise CasesInvalidError(CasesProblem.SHAPE_INVALID, case_id)
     return values(value)
+
+
+def _optional_member[Member: StrEnum](
+    values: type[Member], value: object, case_id: str
+) -> Member | None:
+    text = _optional_text(value, case_id)
+    return None if text is None else _member(values, text, case_id)
 
 
 # Each cast below only names the type that `isinstance` found in a JSON value (PY-12).

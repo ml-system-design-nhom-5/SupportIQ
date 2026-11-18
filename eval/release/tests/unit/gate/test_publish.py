@@ -26,6 +26,7 @@ from supportiq_release.gate.domain import (
     GateOutcome,
     GuardrailResult,
     GuardrailSuite,
+    Mismatch,
 )
 from tests.unit.candidate.fakes import RELEASE_FILES, RELEASE_ID
 from tests.unit.gate.fakes import SET_NAME, build_fake_candidate
@@ -34,7 +35,7 @@ RECORDS = Path("releases")
 CASES_SHA256 = "d" * 64
 PASSED = GateOutcome(
     cases=(CaseResult("real", "ESC-04", CaseKind.REAL_MODEL, None, ()),),
-    checks=tuple(CheckResult(check, passed=True) for check in CandidateCheck),
+    checks=tuple(CheckResult(check) for check in CandidateCheck),
     guardrails=tuple(GuardrailResult(suite, 3, 0, 0, 0) for suite in GuardrailSuite),
     llm_calls=0,
 )
@@ -112,7 +113,9 @@ def test_the_run_id_comes_from_the_record(candidate: Path, output: Path) -> None
 
 
 def _failed(candidate: Path) -> None:
-    failed_case = CaseResult("real", "ESC-04", CaseKind.REAL_MODEL, None, ("createDraft.x",))
+    failed_case = CaseResult(
+        "real", "ESC-04", CaseKind.REAL_MODEL, None, (Mismatch("createDraft.x", "y"),)
+    )
     _record(candidate, GateOutcome((failed_case,), PASSED.checks, PASSED.guardrails, 0))
 
 

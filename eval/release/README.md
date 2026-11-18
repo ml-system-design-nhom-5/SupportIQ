@@ -7,7 +7,7 @@
 - `run-gate` runs the offline evaluation gate on a candidate and records the run ([The offline evaluation gate](#the-offline-evaluation-gate));
 - `publish-candidate` copies a candidate whose gate run passed into a release folder and links the run in its manifest ([Publish](#publish)).
 
-The gate has not run yet ([Known limits](#known-limits)).
+No gate run has passed yet ([Known limits](#known-limits)).
 
 It is a project of its own, apart from the evaluation code that `eval/` took over from `main`:
 
@@ -57,7 +57,7 @@ uv run --project eval/release supportiq-release publish-candidate \
 uv run --project eval/release pytest eval/release
 ```
 
-The tests need no network, no `.env`, and no torch: the gate runs on a fake application of a candidate. They read `data/raw/kb/v2/`, `contracts/schemas/IntentLabel.yaml`, `eval/kb-ingestion/v2/`, `eval/suites/escalation/interim-v1/`, and `ai-service/prompts/grounded-v4/` without changing them.
+The tests need no network, no `.env`, and no torch: the gate runs on a fake application of a candidate, and the routes of the real application of `ai-service` are read from its `create_app` with fake ports, through the FastAPI that `ai-service` locks. They read `data/raw/kb/v2/`, `contracts/schemas/IntentLabel.yaml`, `eval/kb-ingestion/v2/`, `eval/suites/escalation/interim-v1/`, and `ai-service/prompts/grounded-v4/` without changing them.
 
 ## Set up
 
@@ -158,7 +158,7 @@ So two admitted versions conflict exactly when they share a `policy_key` and the
 | `document-intents.json` | `supportiq-document-intents/interim-1` | The intents of each admitted version. Its version is the KB version |
 | `ingestion-report.json` | `supportiq-kb-ingestion-report/interim-1` | The KB version, the release of the KB holder, the SHA-256 of both input files, and, by document ID and version only, the admitted versions, the quarantined records with their reasons, the conflicts, and the released versions that the KB file lacks |
 
-`ai-service` reads the first two formats (`ai-service/README.md`, Asset formats). A data contract in `contracts/` replaces all three (ADR-0021, Follow-ups). Each file is UTF-8 JSON with two-space indents, LF line ends, and a final newline, and the same input always gives the same bytes.
+`ai-service` reads the first two formats (`ai-service/README.md`, Asset formats). A data contract in `contracts/` replaces all three (ADR-0021, Follow-ups; [#21](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/21)). Each file is UTF-8 JSON with two-space indents, LF line ends, and a final newline, and the same input always gives the same bytes.
 
 Both commands write their files into a new hidden folder next to the output, `.<name>.partial-<random>`, and move it to the output only once every file is written. A run that fails for any reason removes that folder, so the output is complete or absent, never half written. A process that is killed can leave the hidden folder behind; no command reads it.
 
@@ -171,7 +171,7 @@ A quarantined record is named by its position in the KB file, from 0, and by its
 - the 14 `POL-…` documents: `missing_field` for `policy_key`. `POL-ORD-003` and `POL-SHIP-001` also get `unknown_intent`, because their `supported_intents` name `edit_order`, `change_shipping_address`, and `delivery_options`, which are not labels of the contract;
 - the 3 `b1000000-…` documents: `not_in_release`, and `invalid_field` for `version`, which is a number.
 
-The run fails until the issue that reviews the quarantine accepts it (DATA-13). A test checks that the committed files equal a new run, and that the raw folder keeps its SHA-256.
+Issue [#13](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/13) reviewed the quarantine and the project lead accepted it there (DATA-13), so the committed report records that issue as `quarantine_accepted_in`, and ADR-0021 (Validation) is met for KB v2. A test runs the command with `--accepted-quarantine` and that issue, checks that it exits with status 0 and that the committed files equal the new run, and that the raw folder keeps its SHA-256.
 
 ### The checks of the importer of `main`
 
@@ -242,11 +242,11 @@ The command stops with exit status 2 and writes no record when any of these fail
 - the intent model and the search of the candidate, except for a case that injects an intent distribution or a failure ([How the gate runs a case](../suites/escalation/interim-v1/README.md#how-the-gate-runs-a-case));
 - an LLM step that records each call and fails it with `llm_unavailable`, so the gate never calls a provider ([ADR-0021, CI](../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#ci), statement 2).
 
-The settings come from the environment of the process, as for `serve`. The command line sets the ones of the gate once, before it builds the application: a service token made for the run, and LLM settings that no call reads. The manifest is an argument, not a setting. Each case sends its request to `createAnalysis` and then to `createDraft` through an ASGI transport, inside the lifespan of the application, so no port is opened, and every field of `expected` is compared with both responses.
+The settings come from the environment of the process, as for `serve`. The command line sets the ones of the gate once, before it builds the application: a service token made for the run, and LLM settings that no call reads. The manifest is an argument, not a setting. Each case sends its request to `createAnalysis` and then to `createDraft` through an ASGI transport, inside the lifespan of the application, so no port is opened, and every field of `expected` is compared with both responses. The fields of an outcome are read only from a `200` body, and the problem type only from a Problem Details body, whose `status` is the HTTP status and never the status of a draft.
 
 The checks on the candidate are:
 
-- `routes_are_those_of_contract_1_0_0`: the application serves exactly the six routes of contract 1.0.0, none of which performs a transaction (FR-06);
+- `routes_are_those_of_contract_1_0_0`: the application serves exactly the six routes of contract 1.0.0, none of which performs a transaction (FR-06). FastAPI keeps each included router as one route, so the gate reads the routes inside it, with the prefix of the inclusion. It also reads the routes that FastAPI serves after all others, such as those that `frontend()` adds. A route of another kind, such as a websocket route or a frontend, fails the check;
 - `no_case_text_in_the_logs`: no log line holds the message of a case or a placeholder in it ([LOG-29](../../docs/rules/logging-and-observability.md#privacy-in-telemetry));
 - `no_llm_call`: the LLM step received no call.
 
@@ -262,8 +262,8 @@ Each run, passed or failed, writes `eval/releases/<release_id>/gate-run.json` in
 | `run_id`, `release_id` | The release ID of the candidate, which the run takes as its ID |
 | `manifest_sha256` | The SHA-256 of the manifest file of the candidate |
 | `git_commit` | The commit of the repository that the run used |
-| `escalation_cases` | The name of the set, the SHA-256 of `cases.json`, the number of cases, the number of each kind, and for each case its ID, its rule, its kind, the injected failure if any, whether it passed, and each field that did not match, as `<operation>.<field>` |
-| `candidate_checks` | Each check on the candidate and whether it passed |
+| `escalation_cases` | The name of the set, the SHA-256 of `cases.json`, the number of cases, the number of each kind, and for each case its ID, its rule, its kind, the injected failure if any, whether it passed, each field that did not match, as `<operation>.<field>`, and what the candidate gave for it: an HTTP status, a value of a closed set of the contract, or reason codes, with `null` for an absent value or list, `empty` for an empty list of codes, and `other` for a value outside the set, never its text |
+| `candidate_checks` | Each check on the candidate, whether it passed, and what made it fail: each route outside contract 1.0.0 as `+<method> <path>` and each missing one as `-<method> <path>`, the IDs of the cases whose text was logged, or the number of LLM calls |
 | `candidate_scope` | The parts that run on the candidate, the parts that do not, and why |
 | `guardrails` | For each folder of guardrail tests: the tests, failures, errors, and skips, the test classes that ran, and whether it passed |
 | `llm` | The calls that the LLM step received, and a sentence that no call was made or that a call fails the gate |
@@ -370,17 +370,16 @@ The build backend is `uv_build`, from the same release as uv (MIT or Apache-2.0)
 
 ## Known limits
 
-- The gate has not run yet. Its Docker files have not been built, so the first run of `run-gate.sh` also checks them, and `eval/releases/` holds no record. `build-candidate` stops with `release_records_folder_missing` until `eval/releases/` exists; create it before the first candidate.
+- No gate run has passed yet. The first run, of `release-2026-11-18-01`, failed on two defects of the gate itself, which are fixed: the `status` of a Problem Details body was read as the status of a draft, and the routes inside the included routers of FastAPI were not read. Its record stays in [`../releases/release-2026-11-18-01/`](../releases/release-2026-11-18-01/gate-run.json), and that release ID is never used again ([DATA-48](../../docs/rules/data-and-ml.md#evaluation-and-reporting), [ARCH-40](../../docs/rules/architecture.md#versioned-assets)). `build-candidate` stops with `release_records_folder_missing` until `eval/releases/` exists.
 - Only some parts of the gate load the candidate. The 27 escalation cases and the checks on the candidate (the routes of contract 1.0.0, no case text in the logs, no LLM call) run on the application of the candidate, with its manifest loaded. The guardrail tests do not load it: those of `ai-service` check the service token and the packaged egress allow-list, those of `backend` serve `ai-service` from fakes, and no asset of the manifest changes what they check. They run at the commit that the record names, those of `ai-service` in the image of the gate. This reads ADR-0021 (Release and the offline evaluation gate, statement 3) as "where a test depends on what the manifest serves", and `candidate_scope` in the record states the same split.
 - No CI job checks a published manifest yet, although ADR-0021 (Release and the offline evaluation gate, statement 2) asks CI to reject a manifest without a passing gate run or with a wrong checksum. `publish-candidate` writes the manifest next to the record for that check.
-- The six cases that rest on the real model were written without a run of model `v1.0.0`, so the first gate run is also their first check ([Limits of the set](../suites/escalation/interim-v1/README.md#limits-of-the-set)).
-- The formats of the spec and of the three outputs of ingestion are interim, and the readers of `ai-service` define the KB and mapping formats. A data contract replaces them ([ADR-0021, Follow-ups](../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#follow-ups)).
-- Ingestion neither copies `last_reviewed_at` nor lists the versions without it, as the freshness rule of the [contracts v1 design, KB data contract](../../docs/design/contracts-v1.md#kb-data-contract-contractskb-contractmd) requires. KB v2 provides no `last_reviewed_at`, no policy area has a freshness rule yet, and ingestion admits no version of KB v2, so no output changes yet. The `tech-debt` issue for `source_review_overdue` adds both.
-- The issue that accepts the quarantine of KB v2 does not exist yet, so the committed report has no `quarantine_accepted_in`, and ADR-0021 (Validation) is not met yet. Once the issue exists, the report is written again with `--accepted-quarantine`, and `tests/integration/test_kb_v2.py` names the issue URL as a constant and expects exit status 0.
+- The six cases that rest on the real model were written without a run of model `v1.0.0` ([Limits of the set](../suites/escalation/interim-v1/README.md#limits-of-the-set)). In the first gate run, all six matched.
+- The formats of the spec and of the three outputs of ingestion are interim, and the readers of `ai-service` define the KB and mapping formats. A data contract replaces them ([ADR-0021, Follow-ups](../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#follow-ups); [#21](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/21)).
+- Ingestion neither copies `last_reviewed_at` nor lists the versions without it, as the freshness rule of the [contracts v1 design, KB data contract](../../docs/design/contracts-v1.md#kb-data-contract-contractskb-contractmd) requires. KB v2 provides no `last_reviewed_at`, no policy area has a freshness rule yet, and ingestion admits no version of KB v2, so no output changes yet. The `tech-debt` issue for `source_review_overdue` adds both ([#22](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/22)).
 - `build-candidate` does not reserve the release ID. Until a gate run writes its record in `eval/releases/<release_id>/`, two candidates built with one ID and other sources can both exist; only one of them can then get a gate run.
 - The acceptance of a quarantine names an issue, but it is not bound to the report it accepts, such as by the SHA-256 of the inputs, and a run with nothing to accept still records the URL.
 - Sources are checked, then opened, so a link made in between would be followed. The candidate stays consistent, because the manifest lists the checksums of the bytes that were copied, and `verify_candidate` checks them.
 - Release IDs are compared with their case, so on macOS two IDs that differ only in case name one folder of records.
 - The rule of conflicts is a copy of the rule of `ai-service`. Their tests hold the same cases, but a change on one side needs the same change on the other.
 - The intent labels are read from the layout of `contracts/schemas/IntentLabel.yaml` without a YAML library: one `enum:` line, then one line for each label, with two spaces before `- <label>`. A file with any other layout stops the run.
-- `ai-service.yml` runs the checks of this project until `eval.yml` exists ([ADR-0021, CI](../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#ci), statement 7).
+- `ai-service.yml` runs the checks of this project until `eval.yml` exists ([ADR-0021, CI](../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#ci), statement 7; [#34](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/34)).

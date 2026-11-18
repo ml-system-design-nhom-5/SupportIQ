@@ -25,7 +25,7 @@ from tests.unit.gate.fakes import (
     ABSTAIN,
     FAILS,
     FAKE_LABELS,
-    INTERNAL_ERROR,
+    INTERNAL_ERROR_PROBLEM,
     LLM_MESSAGE,
     MESSAGE,
     fake_application_factory,
@@ -141,7 +141,7 @@ def test_an_injected_failure_fails_both_operations_of_its_case_only(failure: Fai
 
     failed, real = run.observations
     assert failed.analysis.status == failed.draft.status == HTTPStatus.INTERNAL_SERVER_ERROR
-    assert failed.analysis.body == failed.draft.body == {"type": INTERNAL_ERROR}
+    assert failed.analysis.body == failed.draft.body == INTERNAL_ERROR_PROBLEM
     assert real.analysis.status == HTTPStatus.OK
 
 

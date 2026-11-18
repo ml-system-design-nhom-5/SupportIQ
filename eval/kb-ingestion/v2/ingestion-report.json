@@ -217,5 +217,6 @@
     }
   ],
   "conflicts": [],
-  "released_but_absent": []
+  "released_but_absent": [],
+  "quarantine_accepted_in": "https://github.com/ml-system-design-nhom-5/SupportIQ/issues/13"
 }

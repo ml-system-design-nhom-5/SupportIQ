@@ -30,6 +30,7 @@ from supportiq_release.gate.domain import (
     GateOutcome,
     GuardrailResult,
     GuardrailSuite,
+    Mismatch,
 )
 from tests.unit.gate.fakes import SET_NAME
 
@@ -47,7 +48,7 @@ CASES = (
     CaseResult("staff", "ESC-01", CaseKind.STAFF_CHOICE, None, ()),
     CaseResult("also-real", "ESC-02", CaseKind.REAL_MODEL, None, ()),
 )
-CHECKS = tuple(CheckResult(check, passed=True) for check in CandidateCheck)
+CHECKS = tuple(CheckResult(check) for check in CandidateCheck)
 AUTHORIZATION_CLASS = "tests.integration.guardrails.test_service_token"
 AUDIT_CLASS = "tests.integration.guardrails.test_audit_log"
 GUARDRAILS = (
@@ -82,6 +83,7 @@ def test_the_record_identifies_the_candidate_the_commit_and_the_cases() -> None:
                 "kind": "real_model",
                 "passed": True,
                 "mismatches": [],
+                "observed": {},
             },
             {
                 "case_id": "injected",
@@ -89,6 +91,7 @@ def test_the_record_identifies_the_candidate_the_commit_and_the_cases() -> None:
                 "kind": "injected_distribution",
                 "passed": True,
                 "mismatches": [],
+                "observed": {},
             },
             {
                 "case_id": "failed",
@@ -97,6 +100,7 @@ def test_the_record_identifies_the_candidate_the_commit_and_the_cases() -> None:
                 "injected_failure": "retrieval",
                 "passed": True,
                 "mismatches": [],
+                "observed": {},
             },
             {
                 "case_id": "staff",
@@ -104,6 +108,7 @@ def test_the_record_identifies_the_candidate_the_commit_and_the_cases() -> None:
                 "kind": "staff_choice",
                 "passed": True,
                 "mismatches": [],
+                "observed": {},
             },
             {
                 "case_id": "also-real",
@@ -111,6 +116,7 @@ def test_the_record_identifies_the_candidate_the_commit_and_the_cases() -> None:
                 "kind": "real_model",
                 "passed": True,
                 "mismatches": [],
+                "observed": {},
             },
         ],
     }
@@ -120,9 +126,9 @@ def test_the_record_states_every_part_the_gaps_and_that_no_llm_call_was_made() -
     document = gate_record_document(IDENTITY, PASSED)
 
     assert document["candidate_checks"] == [
-        {"check": "routes_are_those_of_contract_1_0_0", "passed": True},
-        {"check": "no_case_text_in_the_logs", "passed": True},
-        {"check": "no_llm_call", "passed": True},
+        {"check": "routes_are_those_of_contract_1_0_0", "passed": True, "observed": []},
+        {"check": "no_case_text_in_the_logs", "passed": True, "observed": []},
+        {"check": "no_llm_call", "passed": True, "observed": []},
     ]
     assert document["guardrails"] == [
         {
@@ -185,7 +191,7 @@ def test_a_skipped_guardrail_test_is_recorded_and_fails_the_run() -> None:
 
 
 def test_an_llm_call_is_recorded_and_fails_the_run() -> None:
-    checks = (*CHECKS[:2], CheckResult(CandidateCheck.NO_LLM_CALL, passed=False))
+    checks = (*CHECKS[:2], CheckResult(CandidateCheck.NO_LLM_CALL, ("1",)))
     outcome = GateOutcome(cases=CASES, checks=checks, guardrails=GUARDRAILS, llm_calls=1)
 
     document = gate_record_document(IDENTITY, outcome)
@@ -199,7 +205,9 @@ def test_an_llm_call_is_recorded_and_fails_the_run() -> None:
 
 
 def test_a_failed_case_is_recorded_with_its_mismatches() -> None:
-    failed = CaseResult("real", "ESC-04", CaseKind.REAL_MODEL, None, ("createDraft.llm_called",))
+    failed = CaseResult(
+        "real", "ESC-04", CaseKind.REAL_MODEL, None, (Mismatch("createDraft.llm_called", "true"),)
+    )
     outcome = GateOutcome(cases=(failed,), checks=CHECKS, guardrails=GUARDRAILS, llm_calls=0)
 
     document = gate_record_document(IDENTITY, outcome)
@@ -213,6 +221,7 @@ def test_a_failed_case_is_recorded_with_its_mismatches() -> None:
             "kind": "real_model",
             "passed": False,
             "mismatches": ["createDraft.llm_called"],
+            "observed": {"createDraft.llm_called": "true"},
         }
     ]
     assert document["outcome"] == "failed"

@@ -14,6 +14,7 @@ from supportiq_release.gate.domain import (
     GateOutcome,
     GuardrailResult,
     GuardrailSuite,
+    Mismatch,
     candidate_checks,
 )
 from tests.unit.gate.fakes import ABSTAIN
@@ -28,8 +29,10 @@ CASE = Case(
     expected=ABSTAIN,
 )
 PASSED_CASE = CaseResult("fake-case-1", "ESC-04", CaseKind.REAL_MODEL, None, ())
-FAILED_CASE = CaseResult("fake-case-2", "ESC-04", CaseKind.REAL_MODEL, None, ("createDraft.x",))
-PASSED_CHECKS = tuple(CheckResult(check, passed=True) for check in CandidateCheck)
+FAILED_CASE = CaseResult(
+    "fake-case-2", "ESC-04", CaseKind.REAL_MODEL, None, (Mismatch("createDraft.x", "y"),)
+)
+PASSED_CHECKS = tuple(CheckResult(check) for check in CandidateCheck)
 PASSED_GUARDRAILS = tuple(GuardrailResult(suite, 5, 0, 0, 0) for suite in GuardrailSuite)
 
 
@@ -70,7 +73,12 @@ def test_a_gate_whose_every_part_passed_passes() -> None:
         {"cases": ()},
         {"cases": (PASSED_CASE, FAILED_CASE)},
         {"checks": PASSED_CHECKS[1:]},
-        {"checks": (CheckResult(CandidateCheck.ROUTES, passed=False), *PASSED_CHECKS[1:])},
+        {
+            "checks": (
+                CheckResult(CandidateCheck.ROUTES, ("+POST /v1/refunds",)),
+                *PASSED_CHECKS[1:],
+            )
+        },
         {"guardrails": PASSED_GUARDRAILS[1:]},
         {
             "guardrails": (
@@ -99,20 +107,23 @@ def test_the_routes_of_contract_1_0_0_and_clean_logs_pass_every_check() -> None:
 
 
 @pytest.mark.parametrize(
-    "routes",
+    ("routes", "observed"),
     [
-        CONTRACT_ROUTES | {("POST", "/v1/refunds")},
-        CONTRACT_ROUTES - {("GET", "/health/ready")},
-        CONTRACT_ROUTES - {("POST", "/v1/drafts")} | {("PUT", "/v1/drafts")},
+        (CONTRACT_ROUTES | {("POST", "/v1/refunds")}, ("+POST /v1/refunds",)),
+        (CONTRACT_ROUTES - {("GET", "/health/ready")}, ("-GET /health/ready",)),
+        (
+            CONTRACT_ROUTES - {("POST", "/v1/drafts")} | {("PUT", "/v1/drafts")},
+            ("+PUT /v1/drafts", "-POST /v1/drafts"),
+        ),
     ],
     ids=["an extra route", "a missing route", "another method"],
 )
-def test_routes_other_than_those_of_contract_1_0_0_fail_the_route_check(
-    routes: frozenset[tuple[str, str]],
+def test_routes_other_than_those_of_contract_1_0_0_fail_the_route_check_and_are_named(
+    routes: frozenset[tuple[str, str]], observed: tuple[str, ...]
 ) -> None:
     results = candidate_checks(routes, "", [CASE], 0)
 
-    assert results[0] == CheckResult(CandidateCheck.ROUTES, passed=False)
+    assert results[0] == CheckResult(CandidateCheck.ROUTES, observed)
     assert all(result.passed for result in results[1:])
 
 
@@ -124,10 +135,12 @@ def test_routes_other_than_those_of_contract_1_0_0_fail_the_route_check(
     ],
     ids=["the message", "a placeholder of the message"],
 )
-def test_a_log_that_holds_text_of_a_case_fails_the_log_check(log_text: str) -> None:
+def test_a_log_that_holds_text_of_a_case_fails_the_log_check_and_names_only_the_case(
+    log_text: str,
+) -> None:
     results = candidate_checks(CONTRACT_ROUTES, log_text, [CASE], 0)
 
-    assert CheckResult(CandidateCheck.NO_CASE_TEXT_IN_LOGS, passed=False) in results
+    assert results[1] == CheckResult(CandidateCheck.NO_CASE_TEXT_IN_LOGS, ("fake-case-1",))
 
 
 def test_a_placeholder_that_is_not_in_any_message_may_be_logged() -> None:
@@ -145,4 +158,4 @@ def test_a_case_without_a_message_never_matches_an_empty_log() -> None:
 def test_one_llm_call_fails_the_llm_check() -> None:
     results = candidate_checks(CONTRACT_ROUTES, "", [CASE], 1)
 
-    assert results[2] == CheckResult(CandidateCheck.NO_LLM_CALL, passed=False)
+    assert results[2] == CheckResult(CandidateCheck.NO_LLM_CALL, ("1",))

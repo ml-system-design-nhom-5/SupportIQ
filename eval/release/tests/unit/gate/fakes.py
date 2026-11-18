@@ -29,6 +29,7 @@ from supportiq_release.gate.domain import (
     DraftStatus,
     Expected,
     GuardrailSuite,
+    ProblemType,
     ReasonCode,
     Recommendation,
 )
@@ -47,6 +48,12 @@ MESSAGE = "Where is [ORDER_ID_1] now?"
 # A message that makes the fake application call the LLM step during `createDraft`.
 LLM_MESSAGE = "Please write me a reply about [ORDER_ID_1]."
 INTERNAL_ERROR = "urn:supportiq:problem:internal-error"
+# The Problem Details body of a 500 of contract 1.0.0, from its example: its `status` member is
+# the HTTP status, which the gate must never read as the status of a draft.
+REPOSITORY_ROOT = Path(__file__).resolve().parents[5]
+INTERNAL_ERROR_PROBLEM: dict[str, object] = json.loads(
+    (REPOSITORY_ROOT / "contracts" / "examples" / "problems" / "internal-error.json").read_text()
+)["value"]
 # The labels of the fake model, and the distribution it gives every message.
 FAKE_LABELS = ("track_order", "request_refund", "human_agent")
 FAKE_DISTRIBUTION = (("track_order", 0.9), ("request_refund", 0.06), ("human_agent", 0.04))
@@ -66,7 +73,7 @@ ABSTAIN = Expected(
 )
 FAILS = Expected(
     http_status=500,
-    problem_type=INTERNAL_ERROR,
+    problem_type=ProblemType.INTERNAL_ERROR,
     recommendation=None,
     draft_status=None,
     required_reason_codes=frozenset(),
@@ -368,7 +375,7 @@ class _FakeApplication:
         try:
             recommendation, codes = self._analyse(message)
         except IntentModelError, RetrievalError:
-            return JSONResponse({"type": INTERNAL_ERROR}, 500)
+            return JSONResponse(INTERNAL_ERROR_PROBLEM, 500)
         return JSONResponse({"routing": {"recommendation": recommendation, "reason_codes": codes}})
 
     async def drafts(self, request: Request) -> JSONResponse:
@@ -379,7 +386,7 @@ class _FakeApplication:
         try:
             recommendation, codes = self._analyse(message)
         except IntentModelError, RetrievalError:
-            return JSONResponse({"type": INTERNAL_ERROR}, 500)
+            return JSONResponse(INTERNAL_ERROR_PROBLEM, 500)
         routing = {"recommendation": recommendation, "reason_codes": list(codes)}
         if message == LLM_MESSAGE:
             try:

@@ -176,6 +176,12 @@ def test_the_checksum_is_that_of_the_bytes_of_the_file(tmp_path: Path) -> None:
         pytest.param(case_document(request={"as_of": "2026-11-17T09:00:00Z"}), id="no-message"),
         pytest.param(case_document(request={"message": ""}), id="message-empty"),
         pytest.param(
+            case_document(
+                expected=expected_document(problem_type="urn:supportiq:problem:where-is-my-order")
+            ),
+            id="problem-type-outside-the-contract",
+        ),
+        pytest.param(
             case_document(expected=expected_document(recommendation="abstained")),
             id="recommendation-outside-the-contract",
         ),

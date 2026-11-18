@@ -104,11 +104,18 @@ class CheckResult:
 
     Attributes:
         check: The check.
-        passed: Whether it passed.
+        observed: What made it fail, never text of a case: each route outside contract 1.0.0
+            as `+<method> <path>` and each missing route as `-<method> <path>`, the IDs of the
+            cases whose text was logged, or the number of LLM calls; none when it passed.
     """
 
     check: CandidateCheck
-    passed: bool
+    observed: tuple[str, ...] = ()
+
+    @property
+    def passed(self) -> bool:
+        """Whether nothing made the check fail."""
+        return not self.observed
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,12 +161,21 @@ def candidate_checks(
     Returns:
         The result of each check of `CandidateCheck`.
     """
-    leaked = any(_case_text_in(log_text, case) for case in cases)
-    return (
-        CheckResult(CandidateCheck.ROUTES, frozenset(routes) == CONTRACT_ROUTES),
-        CheckResult(CandidateCheck.NO_CASE_TEXT_IN_LOGS, not leaked),
-        CheckResult(CandidateCheck.NO_LLM_CALL, llm_calls == 0),
+    served = frozenset(routes)
+    route_differences = (
+        *sorted(f"+{method} {path}" for method, path in served - CONTRACT_ROUTES),
+        *sorted(f"-{method} {path}" for method, path in CONTRACT_ROUTES - served),
     )
+    leaked = tuple(case.case_id for case in cases if _case_text_in(log_text, case))
+    return (
+        CheckResult(CandidateCheck.ROUTES, route_differences),
+        CheckResult(CandidateCheck.NO_CASE_TEXT_IN_LOGS, leaked),
+        CheckResult(CandidateCheck.NO_LLM_CALL, _observed_calls(llm_calls)),
+    )
+
+
+def _observed_calls(llm_calls: int) -> tuple[str, ...]:
+    return (str(llm_calls),) if llm_calls else ()
 
 
 def _case_text_in(log_text: str, case: Case) -> bool:
