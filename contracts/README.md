@@ -67,7 +67,8 @@ Run every command in this folder.
 - Redocly CLI telemetry is turned off in `redocly.yaml`, so no project data leaves the machine ([SEC-01](../docs/rules/security-and-privacy.md#data-classification)).
 - Prism depends on `@scarf/scarf`, an install-time analytics package. `pnpm-workspace.yaml` forbids its install script, so it never sends anything.
 - CI runs `pnpm audit --audit-level=high` ([WF-31](../docs/rules/workflow.md#dependencies)). `pnpm-workspace.yaml` overrides the lodash of `postman-collection` to 4.18.1, which fixes GHSA-r5fr-rjxr-66jc and GHSA-xxjr-mmjv-4gpg.
-- `pnpm-workspace.yaml` also accepts one high advisory, GHSA-qxc2-j82w-r537 in `@faker-js/faker` 5.5.3, which Prism pulls through `postman-collection`. The fixed version, 10.5.0, breaks `postman-collection`. Prism mocks only this repository's own contract, so no untrusted template reaches faker. The exception is removed when Prism no longer pulls a vulnerable faker.
+- `pnpm-workspace.yaml` also accepts one high advisory, GHSA-qxc2-j82w-r537 in `@faker-js/faker` 5.5.3, which Prism pulls through `postman-collection`. The fixed version, 10.5.0, breaks `postman-collection`. Prism mocks only this repository's own contract, so no untrusted template reaches faker. The exception is removed when Prism no longer pulls a vulnerable faker ([#40](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/40)).
+- It accepts a second high advisory, GHSA-fc5q-39xc-vjpf in `picomatch` 2.3.2 and 4.0.7, which chokidar of Prism and tinyglobby of `typescript-eslint` pull. No patched version exists. The ReDoS needs a glob that an attacker chooses, and these tools read globs only from this repository's configuration. The exception is removed when a patched `picomatch` is released ([#39](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/39)).
 
 ## Machine-checked rules
 

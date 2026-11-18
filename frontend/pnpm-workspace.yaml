@@ -4,3 +4,12 @@
 # which pnpm already installs as an optional dependency, so it never runs.
 allowBuilds:
   esbuild: false
+
+# WF-31: picomatch 4.0.7 (GHSA-fc5q-39xc-vjpf, high, a ReDoS) comes through Vite, Vitest,
+# tinyglobby, @rollup/pluginutils, and dependency-cruiser, all development tools. No patched
+# version exists. The ReDoS needs a glob that an attacker chooses, and these tools read globs
+# only from this repository's own configuration; `pnpm why picomatch --prod` is empty, so the
+# built app holds none. Accepted only with its tech-debt issue #39.
+auditConfig:
+  ignoreGhsas:
+    - GHSA-fc5q-39xc-vjpf

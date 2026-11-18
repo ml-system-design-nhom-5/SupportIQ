@@ -13,8 +13,14 @@ overrides:
 # WF-31: Prism 5.16.0 pulls @faker-js/faker 5.5.3 through postman-collection
 # (GHSA-qxc2-j82w-r537, high). The fix, 10.5.0, breaks postman-collection at load time.
 # Prism only mocks this repository's own contract, on a developer machine or in CI, so no
-# untrusted template reaches faker. Accepted only with its tech-debt issue
+# untrusted template reaches faker. Accepted only with its tech-debt issue #40
 # ("Remove the faker audit exception once Prism no longer pulls @faker-js/faker below 10.5.0").
 auditConfig:
   ignoreGhsas:
     - GHSA-qxc2-j82w-r537
+    # WF-31: picomatch 2.3.2 and 4.0.7 (GHSA-fc5q-39xc-vjpf, high, a ReDoS) come through chokidar
+    # of Prism and through tinyglobby of typescript-eslint. No patched version exists. The ReDoS
+    # needs a glob that an attacker chooses, and these tools read globs only from this
+    # repository's own configuration; no production dependency pulls picomatch. Accepted only
+    # with its tech-debt issue #39.
+    - GHSA-fc5q-39xc-vjpf
