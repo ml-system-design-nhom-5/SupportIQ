@@ -1,9 +1,9 @@
 """Doubles for the tests that run the claim loop of a replica (TEST-14).
 
-The waits of `WakeUpOnlyClock` end only when they are cancelled, so only a wake-up or a stop
-ends a poll wait of the loop, the time never moves, and no lease expires during a test.
-`SignallingEventRecorder` lets a test wait for an event instead of polling, so no test waits
-for real time.
+The waits of `WakeUpOnlyClock` end when they are cancelled, or at once after a failed claim, so
+only a wake-up, a stop, or a failed claim ends a poll wait of the loop, the time never moves,
+and no lease expires during a test. `SignallingEventRecorder` lets a test wait for an event
+instead of polling, so no test waits for real time.
 """
 
 import asyncio
@@ -60,25 +60,56 @@ class SignallingEventRecorder:
             self._changed.clear()
             await self._changed.wait()
 
+    def failed_claim_count(self) -> int:
+        """Return how many claims failed so far.
+
+        The claim loop records a failed claim as `suggestion_job.failed` without a ticket, and a
+        failed attempt of a job with its ticket.
+
+        Returns:
+            The number of failed claims.
+        """
+        return sum(
+            name is EventName.SUGGESTION_JOB_FAILED and "ticket_id" not in attributes
+            for name, attributes in self._recorded
+        )
+
     def _keep(self, event: EventName, attributes: Mapping[str, EventAttributeValue]) -> None:
         self._recorded.append((event, attributes))
         self._changed.set()
 
 
 class WakeUpOnlyClock(FakeClock):
-    """A fake clock whose waits end only when cancelled, so only a wake-up ends a poll wait."""
+    """A fake clock whose waits end when cancelled, or at once after a failed claim.
 
-    def __init__(self) -> None:
-        """Start the clock at the fake start time, with no wait yet."""
+    After a failed claim, the claim loop sleeps its poll interval and claims again. A wait of
+    this clock never ends by itself, so without the failed claim rule, one transient failure of
+    PostgreSQL would leave the job queued until the bound of the test.
+    """
+
+    def __init__(self, events: SignallingEventRecorder) -> None:
+        """Start the clock at the fake start time, with no wait yet.
+
+        Args:
+            events: The recorder of the replica, which counts its failed claims.
+        """
         super().__init__()
         self.is_waiting = asyncio.Event()
+        self._events = events
+        self._failed_claims_seen = 0
 
     async def sleep(self, duration_ms: int) -> None:
-        """Record the wait, and wait until it is cancelled; the time does not move.
+        """Record the wait; end it at once after a new failed claim, or when it is cancelled.
+
+        The time does not move either way, so no lease expires.
 
         Args:
             duration_ms: The duration of the wait, in milliseconds.
         """
         self.sleeps_ms.append(duration_ms)
+        failed_claims = self._events.failed_claim_count()
+        if failed_claims > self._failed_claims_seen:
+            self._failed_claims_seen = failed_claims
+            return
         self.is_waiting.set()
         await asyncio.Event().wait()

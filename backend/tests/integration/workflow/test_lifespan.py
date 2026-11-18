@@ -8,9 +8,9 @@ lifespan awaits the loop, so a loop that does not stop makes the shutdown hang, 
 each test fails it instead.
 
 The ai-service of these tests is an in-memory transport that never answers, so no socket opens
-and a job stays in the middle of its call until the shutdown. The waits of the clock end only
-when they are cancelled, so only a wake-up or a stop ends a poll wait, the time never moves,
-and no lease expires during a test (TEST-14).
+and a job stays in the middle of its call until the shutdown. The waits of the clock end when
+they are cancelled, or at once after a failed claim, so only a wake-up, a stop, or a failed
+claim ends a poll wait, the time never moves, and no lease expires during a test (TEST-14).
 """
 
 import asyncio
@@ -110,10 +110,11 @@ async def shut_down_in_the_middle_of_a_call(
         The suggestion of the job.
     """
     suggestion_id = await new_suggestion(app_engine, builder)
+    events = SignallingEventRecorder(RecordingEventRecorder())
     app = create_app(
         build_settings(worker_database),
-        RecordingEventRecorder(),
-        WakeUpOnlyClock(),
+        events,
+        WakeUpOnlyClock(events),
         ai_service_transport=ai_service.transport,
     )
     async with bounded(), running_app(app):
@@ -133,7 +134,7 @@ async def test_startup_starts_the_claim_loop_which_claims_a_job_queued_before(
     app = create_app(
         build_settings(worker_database),
         events,
-        WakeUpOnlyClock(),
+        WakeUpOnlyClock(events),
         ai_service_transport=ai_service.transport,
     )
 
@@ -148,10 +149,11 @@ async def test_startup_starts_the_claim_loop_which_claims_a_job_queued_before(
 async def test_shutdown_ends_the_wait_of_an_idle_claim_loop_and_closes_the_ai_service_client(
     worker_database: WorkerDatabase, ai_service: SilentAiService
 ) -> None:
-    clock = WakeUpOnlyClock()
+    events = SignallingEventRecorder(RecordingEventRecorder())
+    clock = WakeUpOnlyClock(events)
     app = create_app(
         build_settings(worker_database),
-        RecordingEventRecorder(),
+        events,
         clock,
         ai_service_transport=ai_service.transport,
     )
@@ -165,8 +167,9 @@ async def test_shutdown_ends_the_wait_of_an_idle_claim_loop_and_closes_the_ai_se
 async def test_an_error_of_the_server_still_stops_the_claim_loop_and_releases_the_resources(
     worker_database: WorkerDatabase, ai_service: SilentAiService
 ) -> None:
-    clock = WakeUpOnlyClock()
-    events = RecordingEventRecorder()
+    recorded = RecordingEventRecorder()
+    events = SignallingEventRecorder(recorded)
+    clock = WakeUpOnlyClock(events)
     app = create_app(
         build_settings(worker_database), events, clock, ai_service_transport=ai_service.transport
     )
@@ -178,7 +181,7 @@ async def test_an_error_of_the_server_still_stops_the_claim_loop_and_releases_th
             raise ServerStoppedError
 
     assert ai_service.transport.is_closed
-    assert EventName.SHUTDOWN_STARTED in events.names()
+    assert EventName.SHUTDOWN_STARTED in recorded.names()
 
 
 async def test_shutdown_in_the_middle_of_a_call_closes_the_ai_service_client(

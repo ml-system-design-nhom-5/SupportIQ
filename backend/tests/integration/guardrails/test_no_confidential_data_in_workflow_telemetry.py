@@ -257,7 +257,7 @@ async def test_no_personal_or_ai_text_reaches_telemetry_or_ai_service(
     app = create_app(
         build_settings(worker_database),
         events,
-        WakeUpOnlyClock(),
+        WakeUpOnlyClock(events),
         background=BackgroundWork.SUGGESTION_JOBS,
         ai_service_transport=ai_service,
     )

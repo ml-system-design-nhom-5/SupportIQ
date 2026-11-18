@@ -45,7 +45,7 @@ async def test_a_third_person_reaches_ai_service_as_a_pseudonym_and_a_product_as
     app = create_app(
         build_settings(worker_database),
         events,
-        WakeUpOnlyClock(),
+        WakeUpOnlyClock(events),
         background=BackgroundWork.SUGGESTION_JOBS,
         ai_service_transport=ai_service,
     )
