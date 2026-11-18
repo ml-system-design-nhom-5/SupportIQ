@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # The script tests of deploy/local/local-run.sh (docs/design/local-run.md, Errors and
 # guardrails). Each test copies the script, compose.yaml, and local-run.env into a new temporary
-# root, with free high ports, and puts a stub `docker` and a stub `id` first on PATH, so no test
-# starts a container or touches the real .local-run/. The tests run in random order (TEST-15);
+# root, with free high ports, and runs it with a PATH of the stubs `docker` and `id` and of the
+# system tools without any docker, so no test reaches the real Docker, starts a container, or
+# touches the real .local-run/, on any machine. The tests run in random order (TEST-15);
 # the seed is printed, and TEST_SEED repeats an order. They need bash and python3, and no other
 # tool.
 #
@@ -16,10 +17,27 @@ readonly SECRET_PATTERN='^[0-9a-f]{64}$'
 readonly EXIT_INTERRUPTED=130
 
 root=""
+tools=""
+fixture_path=""
 run_status=0
 run_output=""
 
 # ----- the fixture -----
+
+# A folder of links to every tool of /usr/bin and /bin except docker*. On Linux, the real docker
+# lies in /usr/bin, so a PATH with /usr/bin would let a test that removes the stub run the real
+# Docker on the project supportiq-local of the person. The tests run with this folder instead.
+make_tools() {
+  local tool name
+  tools=$(mktemp -d)
+  for tool in /usr/bin/* /bin/*; do
+    name=${tool##*/}
+    case "$name" in docker*) continue ;; esac
+    # -L, not -e: /bin can be a link to /usr/bin, so a name comes twice, and a broken link of
+    # /usr/bin would make -e false and ln fail the second time.
+    [ -L "$tools/$name" ] || ln -s "$tool" "$tools/$name"
+  done
+}
 
 write_stubs() {
   cat > "$1/docker" << 'STUB'
@@ -72,6 +90,7 @@ free_port() {
 
 new_root() {
   root=$(mktemp -d)
+  fixture_path="$root/bin:$tools"
   mkdir -p "$root/deploy/local" "$root/bin"
   cp "$REPOSITORY_ROOT/deploy/local/local-run.sh" "$REPOSITORY_ROOT/deploy/local/compose.yaml" \
     "$root/deploy/local/"
@@ -92,7 +111,7 @@ port_of() {
 # Run local-run.sh in the fixture without a terminal; keep its status and its output.
 run_script() {
   run_status=0
-  run_output=$(PATH="$root/bin:/usr/bin:/bin" STUB_DOCKER_LOG="$root/docker.log" \
+  run_output=$(PATH="$fixture_path" STUB_DOCKER_LOG="$root/docker.log" \
     bash "$root/deploy/local/local-run.sh" "$@" < /dev/null 2>&1) || run_status=$?
 }
 
@@ -101,7 +120,7 @@ run_script_on_a_terminal() {
   local answer=$1
   shift
   run_status=0
-  run_output=$(PATH="$root/bin:/usr/bin:/bin" STUB_DOCKER_LOG="$root/docker.log" \
+  run_output=$(PATH="$fixture_path" STUB_DOCKER_LOG="$root/docker.log" \
     python3 - "$answer" "$root/deploy/local/local-run.sh" "$@" << 'PYTHON'
 import os
 import pty
@@ -137,7 +156,7 @@ run_script_on_a_terminal_and_press_ctrl_c() {
   local text=$1
   shift
   run_status=0
-  run_output=$(PATH="$root/bin:/usr/bin:/bin" STUB_DOCKER_LOG="$root/docker.log" \
+  run_output=$(PATH="$fixture_path" STUB_DOCKER_LOG="$root/docker.log" \
     python3 - "$text" "$root/deploy/local/local-run.sh" "$@" << 'PYTHON'
 import os
 import pty
@@ -174,7 +193,7 @@ run_script_and_signal() {
   local signal_name=$1 text=$2
   shift 2
   run_status=0
-  run_output=$(PATH="$root/bin:/usr/bin:/bin" STUB_DOCKER_LOG="$root/docker.log" \
+  run_output=$(PATH="$fixture_path" STUB_DOCKER_LOG="$root/docker.log" \
     python3 - "$signal_name" "$text" "$root/deploy/local/local-run.sh" "$@" << 'PYTHON'
 import signal
 import subprocess
@@ -283,7 +302,10 @@ test_every_command_refuses_root() {
 
 test_start_without_docker_names_it_and_changes_nothing() {
   rm "$root/bin/docker"
+  [ -z "$(PATH="$fixture_path" bash -c 'command -v docker' || true)" ] \
+    || fail_test "the PATH of the fixture reaches a real docker"
   run_script start --yes
+  [ ! -s "$root/docker.log" ] || fail_test "a docker command ran"
   expect_status 1
   expect_output "Docker is missing"
   expect_no_state
@@ -769,6 +791,8 @@ main() {
   unset GEMINI_API_KEY LLM_INPUT_PRICE_MICRO_USD_PER_MILLION_TOKENS \
     LLM_OUTPUT_PRICE_MICRO_USD_PER_MILLION_TOKENS LOCAL_GRAFANA_ADMIN_PASSWORD LOCAL_DB_PORT
   echo "test-local-run.sh: seed $seed"
+  trap 'rm -rf "$tools"' EXIT
+  make_tools
   for name in $(declare -F | awk '{print $3}' | grep '^test_' \
     | awk -v seed="$seed" 'BEGIN { srand(seed) } { print rand() "\t" $0 }' | sort | cut -f2-); do
     count=$((count + 1))
