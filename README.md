@@ -68,36 +68,42 @@ sequenceDiagram
 
 ## Project status
 
-`frontend` and the `backend` foundation are implemented; the ticket workflow and `ai-service` come next. Decisions are recorded in [docs/decisions/](docs/decisions/README.md).
+The AI and ML code of `main` is joined into the layout of [ADR-0021](docs/decisions/0021-repository-layout-and-ai-ml-migration.md). Decisions are recorded in [docs/decisions/](docs/decisions/README.md), and contract changes in the [contracts changelog](contracts/CHANGELOG.md).
 
-- Revision 2 of the contracts v1 design ([docs/design/contracts-v1.md](docs/design/contracts-v1.md)) aligns the design with the team's specification. The project lead approved its `ai-service` part on 2026-11-12, so the whole revision is approved. ADR-0012 and ADR-0013 were accepted on 2026-11-05, and ADR-0010, ADR-0011, and ADR-0014 on 2026-11-12.
-- On 2026-11-05 the project lead approved the `frontend` ↔ `backend` part of revision 2 for contract PR 2. Contract PR 2 adds [`contracts/backend.openapi.yaml`](contracts/backend.openapi.yaml) 1.0.0 with an example for every outcome, a Prism mock, and the contract checks ([contracts/README.md](contracts/README.md)).
-- Version 1.0.1 of `contracts/backend.openapi.yaml` (2026-11-08) clarifies the reuse of an `Idempotency-Key`, the responses from the ingress, and the products of an order ([CHANGELOG](contracts/CHANGELOG.md)). The [backend foundation design](docs/design/backend-foundation.md) was revised for what the implementation brought, and the project lead approved the revision on 2026-11-12.
-- Repository checks run with pre-commit locally and with GitHub Actions in CI ([docs/guides/repository-checks.md](docs/guides/repository-checks.md)).
-- `backend` is scaffolded: [backend/README.md](backend/README.md) gives setup, commands, and demo accounts.
-- `frontend` is scaffolded and runs against the Prism mock: sign-in, the shop, and the Accounts screen of the admin area ([frontend/README.md](frontend/README.md)). `ai-service` is not scaffolded yet.
-- [ADR-0015](docs/decisions/0015-account-creation-and-password-changes.md), accepted on 2026-11-11 by the project lead, adds account creation, password changes, and password resets. The project lead also approved the [account management design](docs/design/account-management.md) and the admin, shop, and console UI designs with their revisions. `backend` contract 1.1.0 ([CHANGELOG](contracts/CHANGELOG.md)) and its implementation in `backend` and `frontend` were merged into `chore/fe-be-supportiq-ecom` on 2026-11-12.
-- [ADR-0016](docs/decisions/0016-hosting-on-free-tiers.md), accepted on 2026-11-12 by the project lead, puts the demo on free plans: `frontend` on Cloudflare Pages behind a same-origin proxy, `backend` on Render, PostgreSQL on Supabase, and telemetry on Grafana Cloud. A keep-alive keeps `backend` running, and the [backend wake-up design](docs/design/backend-wake-up.md), approved the same day, is its fallback. ADR-0010 and ADR-0011 were revised the same day to leave the platform to it, and accepted together with ADR-0014. The project lead also approved the console operations and `getAdminVersions` of the contracts v1 design, and its `ai-service` part later the same day.
-- Contract PR 1 adds [`contracts/ai-service.openapi.yaml`](contracts/ai-service.openapi.yaml) 1.0.0 ([CHANGELOG](contracts/CHANGELOG.md)) with the remaining shared schemas, an example for every outcome, and a Prism mock, so `backend` can build its `ai-service` client against it. It follows the project lead's decisions of 2026-11-12: a service token on every call except the health checks, no authority signal from the LLM, and the rules wherever the AI and ML code on `org/main` differs. The contracts v1 design lists that [work for the join](docs/design/contracts-v1.md#work-for-the-join-with-the-ai-and-ml-code). The project lead approved it with the `ai-service` part of the design on 2026-11-12.
-- The [backend ticket workflow design](docs/design/backend-ticket-workflow.md), approved on 2026-11-12 by the project lead, and `backend` contract 1.2.0 ([CHANGELOG](contracts/CHANGELOG.md)), with the console operations and `getAdminVersions`, are on the branch `build/ticket-workflow`, with [ADR-0017](docs/decisions/0017-named-entity-model-from-its-release-url.md), accepted the same day, for the install of the named-entity model. The implementation in `backend` and `frontend` follows; the branch merges into `chore/fe-be-supportiq-ecom` once the provider contract tests of `backend` pass.
+- `frontend`, `backend`, `ai-service`, `ml/`, `eval/`, `contracts/`, and `deploy/` exist, each with its README ([Repository layout](#repository-layout)).
+- The first release of `ai-service`, `release-2026-11-18-02`, passed the offline evaluation gate. Its gate run record and its manifest are in [eval/releases/release-2026-11-18-02/](eval/releases/release-2026-11-18-02/). It serves no KB document, so no request gets a draft yet ([ai-service README, Known limits](ai-service/README.md#known-limits)).
+- No release of `ai-service` is deployed: its Modal app and the download script of a release wait for [#41](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/41) ([ADR-0018, Deploy](docs/decisions/0018-hosting-of-ai-service-on-modal.md#deploy)).
+- Follow-ups are the [open issues labeled `tech-debt`](https://github.com/ml-system-design-nhom-5/SupportIQ/issues?q=is%3Aissue%20is%3Aopen%20label%3Atech-debt).
 
-## Target repository layout
+## Repository layout
 
-```text
-supportiq-ecom/
-├── README.md        # This file
-├── AGENTS.md        # Instructions for AI coding agents
-├── docs/            # Requirements, decisions, rules, glossary
-├── .github/         # CI workflows (docs/guides/repository-checks.md)
-├── contracts/       # API and data contracts, their examples, and their tooling
-├── frontend/        # /shop, /console, and /admin; see frontend/README.md
-├── backend/         # See backend/README.md
-├── ai-service/      # Created at scaffold
-├── ml/              # Training and offline evaluation (created at scaffold)
-├── eval/            # Shared test sets and evaluation runs (created at scaffold)
-├── deploy/          # Hosting setup, platform settings, observability (created once ADR-0016 is accepted)
-└── data/            # Local datasets; large files are not committed
-```
+| Path | Holds |
+|---|---|
+| `README.md` | This file |
+| [`AGENTS.md`](AGENTS.md) | Instructions for AI coding agents |
+| [`docs/`](docs/README.md) | Requirements, decisions, designs, rules, guides, templates, and the glossary |
+| `.github/` | The CI workflows ([repository checks](docs/guides/repository-checks.md)) |
+| [`contracts/`](contracts/README.md) | The API and data contracts between `frontend`, `backend`, and `ai-service`, with their examples, their changelog, and the tooling that checks them and serves them as mocks |
+| [`frontend/`](frontend/README.md) | The web app: sign-in, the demo shop at `/shop`, the console at `/console`, and the admin area at `/admin`, with the Pages Function that is the ingress of the demo deployment |
+| [`backend/`](backend/README.md) | Sign-in, the read-only shop, the ticket workflow behind `/console`, internal accounts, the simulated commerce data, the pseudonym maps, and the audit log |
+| [`ai-service/`](ai-service/README.md) | The AI pipeline for `backend`: intent classification, retrieval of KB document versions, the routing recommendation, and LLM drafting with citations |
+| [`ml/`](ml/README.md) | The data preparation, the training, the baseline, and the cross-validation of the intent model, with the run records in `ml/runs/` |
+| [`eval/`](eval/README.md) | The evaluation code, the test and scenario sets with their frozen inputs, the release command, and the gate run records and published manifests of the releases in `eval/releases/` |
+| [`deploy/`](deploy/README.md) | The setup of the demo on free plans: the setup order, the settings of each platform, and the checks before and after the first deploy |
+| `data/` | Raw data, committed unchanged: the KB versions in `data/raw/kb/<kb_version>/` and the KB drafts of `main` in `data/raw/knowledge/`. Downloaded datasets, such as Bitext, are not committed ([DATA-06 to DATA-08](docs/rules/data-and-ml.md#data-layout)) |
+
+## Run and test on your machine
+
+Each part runs on its own today. Set it up and run it as its README states; the commands below come from those READMEs.
+
+One command that starts the whole system: planned, not available yet.
+
+- **`frontend`** ([Set up](frontend/README.md#set-up), [Run](frontend/README.md#run), [Test](frontend/README.md#test)): `pnpm run dev:mock` serves the app at <http://localhost:5173> against the Prism mock of the `backend` contract, on Linux, macOS, and WSL2 on Windows. The mock answers every sign-in with the customer of the examples, so a browser reaches the shop but not the console or the admin area. `pnpm run dev` proxies to the `backend` that `SUPPORTIQ_BACKEND_URL` names instead ([Settings](frontend/README.md#settings)). `pnpm test` runs every test.
+- **`contracts/`** ([Set up](contracts/README.md#set-up), [Commands](contracts/README.md#commands)): `pnpm run check` checks both contracts. `pnpm run mock` serves the `backend` contract as a mock at `http://127.0.0.1:4010`, and `pnpm run mock:ai-service` serves the `ai-service` contract at `http://127.0.0.1:4012`, which `backend` can call during development ([The `ai-service` mock](contracts/README.md#the-ai-service-mock)).
+- **`backend`** ([Set up](backend/README.md#set-up), [Run and test](backend/README.md#run-and-test)): one replica and every test run against PostgreSQL 17, with the settings of `backend/.env`, made from `.env.example`. The README sets up PostgreSQL 17 with Homebrew. The unit tests need no database: `uv run pytest tests/unit`.
+- **`ai-service`** ([Set up](ai-service/README.md#set-up), [Run and test](ai-service/README.md#run-and-test)): `uv run pytest` runs the tests on Linux, macOS, and Windows; without torch, the tests that need it are skipped. `ai-service serve` loads the real model, so it runs only on Linux, because torch is locked for Linux only ([ADR-0021, Python and dependencies](docs/decisions/0021-repository-layout-and-ai-ml-migration.md#python-and-dependencies)). It also needs the files of a published release on the machine; without them it does not start.
+- **The release command in `eval/release/`** ([Set up](eval/release/README.md#set-up), [Run and test](eval/release/README.md#run-and-test)): `uv run --project eval/release pytest eval/release` runs its tests from the repository root. The offline evaluation gate runs in Docker.
+- **`ml/` and the rest of `eval/`** ([ml/ State after the join](ml/README.md#state-after-the-join), [eval/ State after the join](eval/README.md#state-after-the-join)): the code moved from `main` does not run yet, because it has no project files. [#33](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/33) and [#34](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/34) add them.
 
 ## Documentation
 

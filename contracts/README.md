@@ -6,7 +6,7 @@ This folder holds the API and data contracts between `frontend`, `backend`, and 
 
 | Path | Content |
 |---|---|
-| [`backend.openapi.yaml`](backend.openapi.yaml) | The `frontend` ↔ `backend` contract, version 1.2.0 |
+| [`backend.openapi.yaml`](backend.openapi.yaml) | The `frontend` ↔ `backend` contract, version 1.3.0 |
 | [`ai-service.openapi.yaml`](ai-service.openapi.yaml) | The `backend` ↔ `ai-service` contract, version 1.0.0 |
 | [`schemas/`](schemas/) | JSON Schemas shared by the OpenAPI files, one file per schema, named after its key in `components.schemas`, such as `Money.yaml` for `Money` ([CON-09](../docs/rules/contracts.md#openapi-style)). The same name in both places gives each shared schema exactly one name in the bundle and in generated code |
 | [`examples/`](examples/) | One example file per outcome: `<operationId>/<outcome>.json`, and `problems/<outcome>.json` for the error responses that several operations share |

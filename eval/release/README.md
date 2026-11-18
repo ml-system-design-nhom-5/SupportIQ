@@ -7,7 +7,7 @@
 - `run-gate` runs the offline evaluation gate on a candidate and records the run ([The offline evaluation gate](#the-offline-evaluation-gate));
 - `publish-candidate` copies a candidate whose gate run passed into a release folder and links the run in its manifest ([Publish](#publish)).
 
-No gate run has passed yet ([Known limits](#known-limits)).
+The gate run of `release-2026-11-18-02` passed, and its record is [`../releases/release-2026-11-18-02/gate-run.json`](../releases/release-2026-11-18-02/gate-run.json). The first run, of `release-2026-11-18-01`, failed on two defects of the gate itself, fixed in `86f73df`; its record stays in [`../releases/release-2026-11-18-01/`](../releases/release-2026-11-18-01/gate-run.json), and that release ID is never used again ([DATA-48](../../docs/rules/data-and-ml.md#evaluation-and-reporting), [ARCH-40](../../docs/rules/architecture.md#versioned-assets)).
 
 It is a project of its own, apart from the evaluation code that `eval/` took over from `main`:
 
@@ -370,7 +370,6 @@ The build backend is `uv_build`, from the same release as uv (MIT or Apache-2.0)
 
 ## Known limits
 
-- No gate run has passed yet. The first run, of `release-2026-11-18-01`, failed on two defects of the gate itself, which are fixed: the `status` of a Problem Details body was read as the status of a draft, and the routes inside the included routers of FastAPI were not read. Its record stays in [`../releases/release-2026-11-18-01/`](../releases/release-2026-11-18-01/gate-run.json), and that release ID is never used again ([DATA-48](../../docs/rules/data-and-ml.md#evaluation-and-reporting), [ARCH-40](../../docs/rules/architecture.md#versioned-assets)). `build-candidate` stops with `release_records_folder_missing` until `eval/releases/` exists.
 - Only some parts of the gate load the candidate. The 27 escalation cases and the checks on the candidate (the routes of contract 1.0.0, no case text in the logs, no LLM call) run on the application of the candidate, with its manifest loaded. The guardrail tests do not load it: those of `ai-service` check the service token and the packaged egress allow-list, those of `backend` serve `ai-service` from fakes, and no asset of the manifest changes what they check. They run at the commit that the record names, those of `ai-service` in the image of the gate. This reads ADR-0021 (Release and the offline evaluation gate, statement 3) as "where a test depends on what the manifest serves", and `candidate_scope` in the record states the same split.
 - No CI job checks a published manifest yet, although ADR-0021 (Release and the offline evaluation gate, statement 2) asks CI to reject a manifest without a passing gate run or with a wrong checksum. `publish-candidate` writes the manifest next to the record for that check.
 - The six cases that rest on the real model were written without a run of model `v1.0.0` ([Limits of the set](../suites/escalation/interim-v1/README.md#limits-of-the-set)). In the first gate run, all six matched.
