@@ -37,7 +37,7 @@ Every connection to Supabase leaves the host that opens it, so it uses TLS ([SEC
 | `DATABASE_URL_APP` | The session pooler URL of `supportiq_app.<project-ref>`, port 5432, without a query ([ADR-0016, PostgreSQL on Supabase](../docs/decisions/0016-hosting-on-free-tiers.md#postgresql-on-supabase), item 1; [TLS to PostgreSQL](#tls-to-postgresql)) |
 | `ALLOWED_ORIGINS` | Only the production origin of the Pages project ([ADR-0016, `frontend` and the ingress on Cloudflare Pages](../docs/decisions/0016-hosting-on-free-tiers.md#frontend-and-the-ingress-on-cloudflare-pages), item 9) |
 | `BACKEND_BUILD_VERSION` | The commit that Render deploys ([Open questions](#open-questions)) |
-| `AI_SERVICE_BASE_URL`, `AI_SERVICE_TOKEN` | The values of the deployed `ai-service` ([Open questions](#open-questions)) |
+| `AI_SERVICE_BASE_URL`, `AI_SERVICE_TOKEN` | The values of the `ai-service` deployment on Modal ([ADR-0018](../docs/decisions/0018-hosting-of-ai-service-on-modal.md)), which [#41](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/41) adds |
 | `TRACE_EXPORTER` | `none`, until `backend` has a setting for the OTLP authorization header ([Open questions](#open-questions)) |
 
 Never set `DATABASE_URL_OWNER` on Render ([ADR-0016, `backend` on Render](../docs/decisions/0016-hosting-on-free-tiers.md#backend-on-render), item 3).
@@ -57,7 +57,7 @@ The Dockerfile installs with `uv sync --locked`, so the Render build uses `uv.lo
 | When the daily Functions limit is used up | Fail closed |
 | `VITE_BACKEND_WAKE_ORIGIN` | The Render origin ([backend wake-up design](../docs/design/backend-wake-up.md#rules)) |
 | `VITE_DEV_MODE` | Unset, so dev mode is off in the build ([console UI design](../docs/design/console-ui.md#frontend-settings)) |
-| The `backend` URL of the Pages Function | The Render URL. The Function and its setting are not on this branch yet ([Open questions](#open-questions)) |
+| The `backend` URL of the Pages Function | `SUPPORTIQ_BACKEND_URL`, set to the Render origin ([frontend README, Deploy on Cloudflare Pages](../frontend/README.md#deploy-on-cloudflare-pages)). The Function is [`frontend/functions/`](../frontend/functions/) with its code in [`frontend/ingress/`](../frontend/ingress/), and its routes are [`frontend/public/_routes.json`](../frontend/public/_routes.json) |
 
 ## PostgreSQL checks
 
@@ -110,7 +110,7 @@ These rows are covered by the tests below (ADR-0021, Removal of the application 
 
 ### Runs with the real AI
 
-Each row below is run by hand against the Modal deployment of [ADR-0018](../docs/decisions/0018-hosting-of-ai-service-on-modal.md), because CI never calls an LLM (ADR-0021, Removal of the application of `main`, statement 1). A row that needs a draft with a policy citation runs only after a new KB version is admitted (statement 2).
+The rows wait for [#41](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/41): the repository has neither the Modal app of `ai-service` nor the download script of [ADR-0018, Deploy](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#deploy), so no release is deployed yet. Each row below is run by hand against the Modal deployment of [ADR-0018](../docs/decisions/0018-hosting-of-ai-service-on-modal.md), because CI never calls an LLM (ADR-0021, Removal of the application of `main`, statement 1). A row that needs a draft with a policy citation runs only after a new KB version is admitted (statement 2).
 
 | Row of the checklist | Date | Commit | `release_id` | Steps | Result |
 |---|---|---|---|---|---|
@@ -129,7 +129,5 @@ Call the deploy hook with `ref` set to the previous commit. Every migration keep
 
 - `backend` has no setting for the OTLP authorization header yet ([ADR-0016, Follow-ups](../docs/decisions/0016-hosting-on-free-tiers.md#follow-ups)). Until it has, traces stay off on Render.
 - Which variable of Render fills `BACKEND_BUILD_VERSION` with the deployed commit.
-- The Pages Function, `_routes.json`, and the setting of the `backend` URL are on the branch `build/console-ui`: link after the merge of build/console-ui.
-- Where `ai-service` runs, and so the values of `AI_SERVICE_BASE_URL` and `AI_SERVICE_TOKEN` ([ADR-0016, Open questions](../docs/decisions/0016-hosting-on-free-tiers.md#open-questions)).
 - Whether `backend` accepts only requests that come through the Function, and how the per-client rate limit is enforced ([ADR-0016, Open questions](../docs/decisions/0016-hosting-on-free-tiers.md#open-questions)).
 - Whether the free tier of Grafana Cloud offers the Singapore region at sign-up ([ADR-0016, Platforms](../docs/decisions/0016-hosting-on-free-tiers.md#platforms)).

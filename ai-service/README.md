@@ -283,6 +283,7 @@ Every request continues the trace of a valid `traceparent` or starts a new one, 
 - The pipeline writes no `staff_note`, which the contract allows: the reason codes explain each outcome. Notes for staff wait for their own issue ([#26](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/26)).
 - A token count above the cap of the contract (1 000 000) refuses the output as `llm_invalid_output`, and the outcome carries no `llm_usage`, so no number outside the contract is sent.
 - Structural checks on a draft, such as citation identity and placeholder provenance, do not prove that a cited source supports a claim. Staff verify every claim before they send a reply (FR-04).
+- No Modal app of `ai-service` and no download script exist yet, so no release of contract 1.0.0 is deployed ([ADR-0018, Deploy](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#deploy); [#41](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/41)). The first release, `release-2026-11-18-02`, passed the offline evaluation gate; its record and its published manifest are in [`eval/releases/release-2026-11-18-02/`](../eval/releases/release-2026-11-18-02/release-manifest.json).
 - The cold start, the latency from `backend`, and the memory in use are not measured yet ([ADR-0018, Validation](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#validation)).
 
 ## Dependencies
