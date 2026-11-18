@@ -58,10 +58,11 @@ jobs:
         working-directory: backend
         # pip-audit cannot audit the URL requirement of the named-entity model, so the export
         # leaves out that one package; its checksum in uv.lock protects it (ADR-0017, item 3).
+        # PyPI reads can exceed 15 s on CI, so each may take 60 s; a timeout still fails the step.
         run: |
           uv export --locked --all-groups --no-emit-project --no-emit-package en-core-web-sm \
             --format requirements-txt --output-file "$RUNNER_TEMP/requirements.txt"
-          uv run --locked pip-audit --strict --disable-pip --require-hashes \
+          uv run --locked pip-audit --strict --disable-pip --require-hashes --timeout 60 \
             --requirement "$RUNNER_TEMP/requirements.txt"
 
   deploy-tests:

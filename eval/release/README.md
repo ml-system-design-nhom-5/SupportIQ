@@ -80,7 +80,7 @@ Run each check in `eval/release/`.
 | Layer boundaries | `uv run lint-imports` |
 | Tests | `uv run pytest` |
 | Coverage | `uv run pytest --cov --cov-report=`, then the two reports below |
-| Dependency vulnerabilities | `uv export --locked --all-groups --no-emit-project --no-emit-local --format requirements-txt --output-file <temporary file>`, then `uv run --locked pip-audit --strict --disable-pip --require-hashes --requirement <temporary file>`, as in `backend` CI. `--no-emit-local` leaves out the path dependency on `ai-service`, which has no hash; its own dependencies are in the export |
+| Dependency vulnerabilities | `uv export --locked --all-groups --no-emit-project --no-emit-local --format requirements-txt --output-file <temporary file>`, then `uv run --locked pip-audit --strict --disable-pip --require-hashes --timeout 60 --requirement <temporary file>`, as in `backend` CI. `--no-emit-local` leaves out the path dependency on `ai-service`, which has no hash; its own dependencies are in the export |
 
 ```bash
 uv run coverage report --fail-under=80

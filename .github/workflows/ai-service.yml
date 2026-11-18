@@ -63,10 +63,11 @@ jobs:
         # local version `+cpu` of the CPU build of torch. The first export leaves torch out. torch
         # is then audited as the public release of its version in uv.lock, built from the same
         # source, so the advisories of that release are those of the CPU build.
+        # PyPI reads can exceed 15 s on CI, so each may take 60 s; a timeout still fails the step.
         run: |
           uv export --locked --all-groups --no-emit-project --no-emit-package torch \
             --format requirements-txt --output-file "$RUNNER_TEMP/requirements.txt"
-          uv run --locked pip-audit --strict --disable-pip --require-hashes \
+          uv run --locked pip-audit --strict --disable-pip --require-hashes --timeout 60 \
             --requirement "$RUNNER_TEMP/requirements.txt"
           torch_requirement="$(uv export --locked --only-group torch --no-emit-project \
             --no-hashes --format requirements-txt \
@@ -77,7 +78,7 @@ jobs:
             exit 1
           fi
           printf '%s\n' "$torch_requirement" > "$RUNNER_TEMP/torch-requirement.txt"
-          uv run --locked pip-audit --strict --disable-pip --no-deps \
+          uv run --locked pip-audit --strict --disable-pip --no-deps --timeout 60 \
             --requirement "$RUNNER_TEMP/torch-requirement.txt"
 
   ai-service-tests:
@@ -236,10 +237,11 @@ jobs:
         working-directory: eval/release
         # The editable path dependency on ai-service has no hashes, so the export leaves out the
         # local packages, and the dependencies of ai-service are audited from the export.
+        # PyPI reads can exceed 15 s on CI, so each may take 60 s; a timeout still fails the step.
         run: |
           uv export --locked --all-groups --no-emit-project --no-emit-local \
             --format requirements-txt --output-file "$RUNNER_TEMP/requirements-release.txt"
-          uv run --locked pip-audit --strict --disable-pip --require-hashes \
+          uv run --locked pip-audit --strict --disable-pip --require-hashes --timeout 60 \
             --requirement "$RUNNER_TEMP/requirements-release.txt"
 
   ai-service-image:
