@@ -1,0 +1,968 @@
+{
+  "config": {
+    "schema_version": 1,
+    "seed": 42,
+    "n_folds": 10,
+    "cv_target_macro_f1": 0.85,
+    "tfidf": {
+      "ngram_range": [
+        1,
+        2
+      ],
+      "max_features": 10000,
+      "min_df": 2,
+      "sublinear_tf": true,
+      "lowercase": true
+    },
+    "models": [
+      {
+        "model_id": "multinomial_nb",
+        "estimator": "MultinomialNB",
+        "grid": {
+          "alpha": [
+            0.01,
+            0.02,
+            0.03,
+            0.04,
+            0.05,
+            0.06,
+            0.07,
+            0.08,
+            0.09,
+            0.1,
+            0.15,
+            0.2,
+            0.25,
+            0.3,
+            0.35,
+            0.4,
+            0.45,
+            0.5,
+            0.6,
+            0.7,
+            0.8,
+            0.9,
+            1.0,
+            1.2,
+            1.5,
+            1.8,
+            2.0,
+            2.5,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            8.0,
+            10.0
+          ]
+        },
+        "fixed_params": {
+          "fit_prior": true
+        }
+      },
+      {
+        "model_id": "logistic_regression",
+        "estimator": "LogisticRegression",
+        "grid": {
+          "C": [
+            0.01,
+            0.02,
+            0.05,
+            0.08,
+            0.1,
+            0.15,
+            0.2,
+            0.3,
+            0.4,
+            0.5,
+            0.6,
+            0.7,
+            0.8,
+            0.9,
+            1.0,
+            1.2,
+            1.5,
+            2.0,
+            2.5,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            12.0,
+            15.0,
+            18.0,
+            20.0,
+            25.0,
+            30.0
+          ]
+        },
+        "fixed_params": {
+          "solver": "lbfgs",
+          "max_iter": 2000,
+          "tol": 0.0001,
+          "class_weight": null
+        }
+      },
+      {
+        "model_id": "linear_svm",
+        "estimator": "LinearSVC",
+        "grid": {
+          "C": [
+            0.01,
+            0.02,
+            0.05,
+            0.08,
+            0.1,
+            0.15,
+            0.2,
+            0.3,
+            0.4,
+            0.5,
+            0.6,
+            0.7,
+            0.8,
+            0.9,
+            1.0,
+            1.2,
+            1.5,
+            2.0,
+            2.5,
+            3.0,
+            4.0,
+            5.0,
+            6.0,
+            7.0,
+            8.0,
+            9.0,
+            10.0,
+            12.0,
+            15.0,
+            18.0,
+            20.0,
+            25.0,
+            30.0
+          ]
+        },
+        "fixed_params": {
+          "dual": "auto",
+          "max_iter": 5000,
+          "tol": 0.0001,
+          "class_weight": null,
+          "random_state": 42
+        }
+      }
+    ],
+    "tie_break": [
+      "macro_f1_mean_desc",
+      "macro_f1_std_asc",
+      "config_order"
+    ]
+  },
+  "config_hash": "F674268F5541303FF9FA4F216EE34969E25FDB9E2D88AFF7A9488C822DACF866",
+  "candidates": [
+    {
+      "candidate_id": "multinomial_nb__alpha=0.01",
+      "model_id": "multinomial_nb",
+      "order": 0,
+      "params": {
+        "alpha": 0.01
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=0.02",
+      "model_id": "multinomial_nb",
+      "order": 1,
+      "params": {
+        "alpha": 0.02
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=0.03",
+      "model_id": "multinomial_nb",
+      "order": 2,
+      "params": {
+        "alpha": 0.03
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=0.04",
+      "model_id": "multinomial_nb",
+      "order": 3,
+      "params": {
+        "alpha": 0.04
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=0.05",
+      "model_id": "multinomial_nb",
+      "order": 4,
+      "params": {
+        "alpha": 0.05
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=0.06",
+      "model_id": "multinomial_nb",
+      "order": 5,
+      "params": {
+        "alpha": 0.06
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=0.07",
+      "model_id": "multinomial_nb",
+      "order": 6,
+      "params": {
+        "alpha": 0.07
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=0.08",
+      "model_id": "multinomial_nb",
+      "order": 7,
+      "params": {
+        "alpha": 0.08
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=0.09",
+      "model_id": "multinomial_nb",
+      "order": 8,
+      "params": {
+        "alpha": 0.09
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=0.1",
+      "model_id": "multinomial_nb",
+      "order": 9,
+      "params": {
+        "alpha": 0.1
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=0.15",
+      "model_id": "multinomial_nb",
+      "order": 10,
+      "params": {
+        "alpha": 0.15
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=0.2",
+      "model_id": "multinomial_nb",
+      "order": 11,
+      "params": {
+        "alpha": 0.2
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=0.25",
+      "model_id": "multinomial_nb",
+      "order": 12,
+      "params": {
+        "alpha": 0.25
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=0.3",
+      "model_id": "multinomial_nb",
+      "order": 13,
+      "params": {
+        "alpha": 0.3
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=0.35",
+      "model_id": "multinomial_nb",
+      "order": 14,
+      "params": {
+        "alpha": 0.35
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=0.4",
+      "model_id": "multinomial_nb",
+      "order": 15,
+      "params": {
+        "alpha": 0.4
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=0.45",
+      "model_id": "multinomial_nb",
+      "order": 16,
+      "params": {
+        "alpha": 0.45
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=0.5",
+      "model_id": "multinomial_nb",
+      "order": 17,
+      "params": {
+        "alpha": 0.5
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=0.6",
+      "model_id": "multinomial_nb",
+      "order": 18,
+      "params": {
+        "alpha": 0.6
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=0.7",
+      "model_id": "multinomial_nb",
+      "order": 19,
+      "params": {
+        "alpha": 0.7
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=0.8",
+      "model_id": "multinomial_nb",
+      "order": 20,
+      "params": {
+        "alpha": 0.8
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=0.9",
+      "model_id": "multinomial_nb",
+      "order": 21,
+      "params": {
+        "alpha": 0.9
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=1.0",
+      "model_id": "multinomial_nb",
+      "order": 22,
+      "params": {
+        "alpha": 1.0
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=1.2",
+      "model_id": "multinomial_nb",
+      "order": 23,
+      "params": {
+        "alpha": 1.2
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=1.5",
+      "model_id": "multinomial_nb",
+      "order": 24,
+      "params": {
+        "alpha": 1.5
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=1.8",
+      "model_id": "multinomial_nb",
+      "order": 25,
+      "params": {
+        "alpha": 1.8
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=2.0",
+      "model_id": "multinomial_nb",
+      "order": 26,
+      "params": {
+        "alpha": 2.0
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=2.5",
+      "model_id": "multinomial_nb",
+      "order": 27,
+      "params": {
+        "alpha": 2.5
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=3.0",
+      "model_id": "multinomial_nb",
+      "order": 28,
+      "params": {
+        "alpha": 3.0
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=4.0",
+      "model_id": "multinomial_nb",
+      "order": 29,
+      "params": {
+        "alpha": 4.0
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=5.0",
+      "model_id": "multinomial_nb",
+      "order": 30,
+      "params": {
+        "alpha": 5.0
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=6.0",
+      "model_id": "multinomial_nb",
+      "order": 31,
+      "params": {
+        "alpha": 6.0
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=8.0",
+      "model_id": "multinomial_nb",
+      "order": 32,
+      "params": {
+        "alpha": 8.0
+      }
+    },
+    {
+      "candidate_id": "multinomial_nb__alpha=10.0",
+      "model_id": "multinomial_nb",
+      "order": 33,
+      "params": {
+        "alpha": 10.0
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=0.01",
+      "model_id": "logistic_regression",
+      "order": 34,
+      "params": {
+        "C": 0.01
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=0.02",
+      "model_id": "logistic_regression",
+      "order": 35,
+      "params": {
+        "C": 0.02
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=0.05",
+      "model_id": "logistic_regression",
+      "order": 36,
+      "params": {
+        "C": 0.05
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=0.08",
+      "model_id": "logistic_regression",
+      "order": 37,
+      "params": {
+        "C": 0.08
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=0.1",
+      "model_id": "logistic_regression",
+      "order": 38,
+      "params": {
+        "C": 0.1
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=0.15",
+      "model_id": "logistic_regression",
+      "order": 39,
+      "params": {
+        "C": 0.15
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=0.2",
+      "model_id": "logistic_regression",
+      "order": 40,
+      "params": {
+        "C": 0.2
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=0.3",
+      "model_id": "logistic_regression",
+      "order": 41,
+      "params": {
+        "C": 0.3
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=0.4",
+      "model_id": "logistic_regression",
+      "order": 42,
+      "params": {
+        "C": 0.4
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=0.5",
+      "model_id": "logistic_regression",
+      "order": 43,
+      "params": {
+        "C": 0.5
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=0.6",
+      "model_id": "logistic_regression",
+      "order": 44,
+      "params": {
+        "C": 0.6
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=0.7",
+      "model_id": "logistic_regression",
+      "order": 45,
+      "params": {
+        "C": 0.7
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=0.8",
+      "model_id": "logistic_regression",
+      "order": 46,
+      "params": {
+        "C": 0.8
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=0.9",
+      "model_id": "logistic_regression",
+      "order": 47,
+      "params": {
+        "C": 0.9
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=1.0",
+      "model_id": "logistic_regression",
+      "order": 48,
+      "params": {
+        "C": 1.0
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=1.2",
+      "model_id": "logistic_regression",
+      "order": 49,
+      "params": {
+        "C": 1.2
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=1.5",
+      "model_id": "logistic_regression",
+      "order": 50,
+      "params": {
+        "C": 1.5
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=2.0",
+      "model_id": "logistic_regression",
+      "order": 51,
+      "params": {
+        "C": 2.0
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=2.5",
+      "model_id": "logistic_regression",
+      "order": 52,
+      "params": {
+        "C": 2.5
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=3.0",
+      "model_id": "logistic_regression",
+      "order": 53,
+      "params": {
+        "C": 3.0
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=4.0",
+      "model_id": "logistic_regression",
+      "order": 54,
+      "params": {
+        "C": 4.0
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=5.0",
+      "model_id": "logistic_regression",
+      "order": 55,
+      "params": {
+        "C": 5.0
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=6.0",
+      "model_id": "logistic_regression",
+      "order": 56,
+      "params": {
+        "C": 6.0
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=7.0",
+      "model_id": "logistic_regression",
+      "order": 57,
+      "params": {
+        "C": 7.0
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=8.0",
+      "model_id": "logistic_regression",
+      "order": 58,
+      "params": {
+        "C": 8.0
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=9.0",
+      "model_id": "logistic_regression",
+      "order": 59,
+      "params": {
+        "C": 9.0
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=10.0",
+      "model_id": "logistic_regression",
+      "order": 60,
+      "params": {
+        "C": 10.0
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=12.0",
+      "model_id": "logistic_regression",
+      "order": 61,
+      "params": {
+        "C": 12.0
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=15.0",
+      "model_id": "logistic_regression",
+      "order": 62,
+      "params": {
+        "C": 15.0
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=18.0",
+      "model_id": "logistic_regression",
+      "order": 63,
+      "params": {
+        "C": 18.0
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=20.0",
+      "model_id": "logistic_regression",
+      "order": 64,
+      "params": {
+        "C": 20.0
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=25.0",
+      "model_id": "logistic_regression",
+      "order": 65,
+      "params": {
+        "C": 25.0
+      }
+    },
+    {
+      "candidate_id": "logistic_regression__C=30.0",
+      "model_id": "logistic_regression",
+      "order": 66,
+      "params": {
+        "C": 30.0
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=0.01",
+      "model_id": "linear_svm",
+      "order": 67,
+      "params": {
+        "C": 0.01
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=0.02",
+      "model_id": "linear_svm",
+      "order": 68,
+      "params": {
+        "C": 0.02
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=0.05",
+      "model_id": "linear_svm",
+      "order": 69,
+      "params": {
+        "C": 0.05
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=0.08",
+      "model_id": "linear_svm",
+      "order": 70,
+      "params": {
+        "C": 0.08
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=0.1",
+      "model_id": "linear_svm",
+      "order": 71,
+      "params": {
+        "C": 0.1
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=0.15",
+      "model_id": "linear_svm",
+      "order": 72,
+      "params": {
+        "C": 0.15
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=0.2",
+      "model_id": "linear_svm",
+      "order": 73,
+      "params": {
+        "C": 0.2
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=0.3",
+      "model_id": "linear_svm",
+      "order": 74,
+      "params": {
+        "C": 0.3
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=0.4",
+      "model_id": "linear_svm",
+      "order": 75,
+      "params": {
+        "C": 0.4
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=0.5",
+      "model_id": "linear_svm",
+      "order": 76,
+      "params": {
+        "C": 0.5
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=0.6",
+      "model_id": "linear_svm",
+      "order": 77,
+      "params": {
+        "C": 0.6
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=0.7",
+      "model_id": "linear_svm",
+      "order": 78,
+      "params": {
+        "C": 0.7
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=0.8",
+      "model_id": "linear_svm",
+      "order": 79,
+      "params": {
+        "C": 0.8
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=0.9",
+      "model_id": "linear_svm",
+      "order": 80,
+      "params": {
+        "C": 0.9
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=1.0",
+      "model_id": "linear_svm",
+      "order": 81,
+      "params": {
+        "C": 1.0
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=1.2",
+      "model_id": "linear_svm",
+      "order": 82,
+      "params": {
+        "C": 1.2
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=1.5",
+      "model_id": "linear_svm",
+      "order": 83,
+      "params": {
+        "C": 1.5
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=2.0",
+      "model_id": "linear_svm",
+      "order": 84,
+      "params": {
+        "C": 2.0
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=2.5",
+      "model_id": "linear_svm",
+      "order": 85,
+      "params": {
+        "C": 2.5
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=3.0",
+      "model_id": "linear_svm",
+      "order": 86,
+      "params": {
+        "C": 3.0
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=4.0",
+      "model_id": "linear_svm",
+      "order": 87,
+      "params": {
+        "C": 4.0
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=5.0",
+      "model_id": "linear_svm",
+      "order": 88,
+      "params": {
+        "C": 5.0
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=6.0",
+      "model_id": "linear_svm",
+      "order": 89,
+      "params": {
+        "C": 6.0
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=7.0",
+      "model_id": "linear_svm",
+      "order": 90,
+      "params": {
+        "C": 7.0
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=8.0",
+      "model_id": "linear_svm",
+      "order": 91,
+      "params": {
+        "C": 8.0
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=9.0",
+      "model_id": "linear_svm",
+      "order": 92,
+      "params": {
+        "C": 9.0
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=10.0",
+      "model_id": "linear_svm",
+      "order": 93,
+      "params": {
+        "C": 10.0
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=12.0",
+      "model_id": "linear_svm",
+      "order": 94,
+      "params": {
+        "C": 12.0
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=15.0",
+      "model_id": "linear_svm",
+      "order": 95,
+      "params": {
+        "C": 15.0
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=18.0",
+      "model_id": "linear_svm",
+      "order": 96,
+      "params": {
+        "C": 18.0
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=20.0",
+      "model_id": "linear_svm",
+      "order": 97,
+      "params": {
+        "C": 20.0
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=25.0",
+      "model_id": "linear_svm",
+      "order": 98,
+      "params": {
+        "C": 25.0
+      }
+    },
+    {
+      "candidate_id": "linear_svm__C=30.0",
+      "model_id": "linear_svm",
+      "order": 99,
+      "params": {
+        "C": 30.0
+      }
+    }
+  ]
+}

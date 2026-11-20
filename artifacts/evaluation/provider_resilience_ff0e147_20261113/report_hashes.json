@@ -1,0 +1,9 @@
+{
+  "after_candidate.json": "e61235be76a5993e1fbdc797bf0630214270b1432bd6461879160f23003a91b2",
+  "AFTER_CANDIDATE_REPORT.md": "44d33e7523d2faac399aa29be4bb3b40b67278401475a72999c4df2cd5e4ea76",
+  "before_after_comparison.json": "a316e557adfeeb399c211f9d4ac5fe6e45f0649de2bfd0aaaa1863289b615986",
+  "BEFORE_AFTER_COMPARISON.md": "7a355b114b6e988ecad4dcd74680655bd694d644d648efaa45b04be986081658",
+  "before_baseline.json": "da2ccaf3fa0d857a10d8165d2a2a365cd806ae0f5dc357357051d6ee4562aa17",
+  "BEFORE_BASELINE_REPORT.md": "a21a36cf867822969e7f3a12e41abe721affaeca66728408832d87274f79b6c5",
+  "candidate_edge_contracts.json": "de2e05593e3799164a71d69a0fe54d3c5bf3cd317aeb5256eb3790beebf55a1f"
+}

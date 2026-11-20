@@ -1,0 +1,50 @@
+{
+  "config": {
+    "schema_version": 1,
+    "seed": 42,
+    "device": "cpu",
+    "num_threads": 4,
+    "max_length": 64,
+    "timing": {
+      "warmup_requests": 20,
+      "benchmark_requests": 1000,
+      "latency_batch_size": 1,
+      "throughput_batch_size": 256
+    },
+    "metrics": {
+      "zero_division": 0
+    },
+    "baseline_training_manifest": "artifacts/training/03-11-2026-00/manifest.json",
+    "historical_evaluation_manifest": "artifacts/evaluation/03-11-2026-00/manifest.json",
+    "models": {
+      "multinomial_nb": {
+        "type": "baseline"
+      },
+      "logistic_regression": {
+        "type": "baseline"
+      },
+      "linear_svm": {
+        "type": "baseline"
+      },
+      "supportiq_distilbert": {
+        "type": "transformer",
+        "model_dir": "artifacts/models/trained/distilbert-supportiq",
+        "provenance": {
+          "origin": "local_finetuned",
+          "base_model": "distilbert/distilbert-base-uncased",
+          "membership_evidence": null
+        }
+      },
+      "supportpilot_distilbert": {
+        "type": "transformer",
+        "model_dir": "artifacts/models/finetuned/supportpilot-distilbert",
+        "provenance": {
+          "origin": "external_finetuned",
+          "base_model": "abdulmuinnn/supportpilot-distilbert",
+          "membership_evidence": null
+        }
+      }
+    }
+  },
+  "mode": "comparison"
+}

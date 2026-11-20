@@ -1,0 +1,121 @@
+{
+  "summary": {
+    "total_cases": 156,
+    "executed_cases": 156,
+    "completed_ok": 154,
+    "timeouts": 2,
+    "errors": 0,
+    "missing": 0
+  },
+  "routing": {
+    "total_cases": 156,
+    "must_escalate_total": 63,
+    "must_escalate_correct": 41,
+    "must_escalate_success_rate": 0.6508,
+    "must_escalate_ci": [
+      0.5275,
+      0.7567
+    ],
+    "guardrail_passed": false,
+    "coverage": 0.2821,
+    "coverage_ci": [
+      0.2173,
+      0.3572
+    ],
+    "selective_accuracy": 0.75,
+    "selective_accuracy_ci": [
+      0.6056,
+      0.8543
+    ],
+    "draft_yield": 0.1282
+  },
+  "retrieval": {
+    "total_cases": 156,
+    "answerable_count": 34,
+    "unanswerable_count": 122,
+    "recall_at_3": 0.3824,
+    "recall_at_3_raw": 0.38235294117647056,
+    "hit_at_3": 0.3824,
+    "hit_at_3_ci": [
+      0.239,
+      0.5496
+    ],
+    "false_evidence_count": 25,
+    "false_evidence_rate": 0.2049,
+    "false_evidence_ci": [
+      0.1428,
+      0.285
+    ],
+    "safety_violations": 0,
+    "safety_guardrail_passed": true
+  },
+  "drafting": {
+    "draft_expected_count": 34,
+    "draft_produced_count": 7,
+    "draft_coverage": 0.2059
+  },
+  "by_slice": {
+    "supported": {
+      "total": 60,
+      "ok": 60,
+      "error": 0,
+      "timeout": 0,
+      "missing": 0
+    },
+    "unsupported": {
+      "total": 34,
+      "ok": 34,
+      "error": 0,
+      "timeout": 0,
+      "missing": 0
+    },
+    "answerable": {
+      "total": 24,
+      "ok": 24,
+      "error": 0,
+      "timeout": 0,
+      "missing": 0
+    },
+    "unanswerable": {
+      "total": 18,
+      "ok": 18,
+      "error": 0,
+      "timeout": 0,
+      "missing": 0
+    },
+    "uncertainty_and_faults": {
+      "total": 20,
+      "ok": 18,
+      "error": 0,
+      "timeout": 2,
+      "missing": 0
+    }
+  },
+  "latency": {
+    "measurement_scope": "api_total",
+    "p50_seconds": 0.0857,
+    "warm_p95_seconds": 1.1247,
+    "requests_count": 100,
+    "warmup_count": 5
+  },
+  "ml": {
+    "status": "verified",
+    "model_type": "supportiq_distilbert",
+    "package_version": "v1.0.0",
+    "macro_f1": 0.9952684306823985,
+    "cv_protocol": "10-fold cross-validation",
+    "cv_report_sha256": "9609b6604c0c137365db927f0eb149bdd4af54fdf3ca22aa1adb235bf22a3972",
+    "release_sha256": "3C78752ADFFC5350F8A8EAF40224141BD57CFFE3CE94336780157BEDD0CFF607",
+    "per_intent": {}
+  },
+  "oversight": {
+    "total_scenarios": 7,
+    "passed_scenarios": 3,
+    "failed_scenarios": 4,
+    "status": "fail"
+  },
+  "component_probes": {
+    "total_probes": 156,
+    "successful_probes": 154
+  }
+}

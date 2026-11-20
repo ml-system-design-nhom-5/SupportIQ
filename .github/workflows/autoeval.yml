@@ -1,0 +1,140 @@
+name: autoeval
+
+# Automatic evaluation of the ML (intent + routing) and LLM (draft generation) modules.
+# See docs/autoeval.md for configuration (model download URL, Gemini secret, enforcement).
+
+on:
+  pull_request:
+    paths:
+      - "apps/core_backend/intent/**"
+      - "apps/core_backend/llm/**"
+      - "apps/core_backend/orchestration/**"
+      - "apps/core_backend/config/policies/**"
+      - "apps/ml_inference/**"
+      - "data/benchmarks/**"
+      - "data/knowledge/**"
+      - "pipeline/evaluation/autoeval/**"
+      - "pipeline/configs/autoeval*.json"
+  schedule:
+    - cron: "17 19 * * *"   # 02:17 Asia/Bangkok, daily
+  workflow_dispatch:
+    inputs:
+      llm_mode:
+        description: "LLM suite mode"
+        type: choice
+        options: [offline, live]
+        default: offline
+      judge:
+        description: "Live mode: also run the LLM-as-judge grounding check"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: autoeval-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Repository variables (Settings > Secrets and variables > Actions > Variables)
+  MODEL_URL: ${{ vars.SUPPORTIQ_MODEL_URL }}         # zip containing distilbert-supportiq/ (model.safetensors, tokenizer.json, config.json)
+  ENFORCE: ${{ vars.AUTOEVAL_ENFORCE || 'false' }}    # 'true' = failing blocking gates fail the job
+
+jobs:
+  offline:
+    name: ML + LLM offline (no API cost)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies (CPU torch)
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r apps/demo/requirements.txt -r pipeline/requirements.txt -r pipeline/requirements-transformers.txt pytest pytest-asyncio
+
+      - name: Fetch released model
+        if: env.MODEL_URL != ''
+        run: |
+          mkdir -p artifacts/models/trained
+          curl -fsSL "$MODEL_URL" -o /tmp/model.zip
+          unzip -q /tmp/model.zip -d /tmp/model
+          src=$(dirname "$(find /tmp/model -name model.safetensors | head -1)")
+          rm -rf artifacts/models/trained/distilbert-supportiq
+          cp -r "$src" artifacts/models/trained/distilbert-supportiq
+
+      - name: Unit tests for the evaluator
+        run: python -m pytest tests/unit/test_autoeval.py -q
+
+      - name: Run autoeval
+        id: run
+        run: |
+          suites=llm
+          if [ -f artifacts/models/trained/distilbert-supportiq/model.safetensors ]; then suites=ml,llm; else echo "::warning::Model not available (set vars.SUPPORTIQ_MODEL_URL); ML suite skipped"; fi
+          set +e
+          python -m pipeline.evaluation.autoeval run --suite "$suites" --backend torch \
+            --compare pipeline/configs/autoeval_baseline.json --tag "ci-${{ github.run_number }}"
+          code=$?
+          set -e
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          cat "$(cat artifacts/evaluation/autoeval/latest.txt)/report.md" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$code" = "2" ]; then exit 2; fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: autoeval-offline-${{ github.run_number }}
+          path: artifacts/evaluation/autoeval/
+          retention-days: 30
+
+      - name: Enforce gates
+        if: env.ENFORCE == 'true' && steps.run.outputs.exit_code != '0'
+        run: |
+          echo "Blocking autoeval gates failed (see job summary)."
+          exit 1
+
+  live:
+    name: LLM live (Gemini, costs API calls)
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.llm_mode == 'live')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies (CPU torch)
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r apps/demo/requirements.txt -r pipeline/requirements.txt -r pipeline/requirements-transformers.txt
+      - name: Run live LLM evaluation
+        if: env.GEMINI_API_KEY != ''
+        run: |
+          judge=""
+          if [ "${{ inputs.judge }}" = "true" ]; then judge="--judge"; fi
+          set +e
+          python -m pipeline.evaluation.autoeval run --suite llm --llm-mode live $judge --tag "live-${{ github.run_number }}"
+          code=$?
+          set -e
+          cat "$(cat artifacts/evaluation/autoeval/latest.txt)/report.md" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$code" = "2" ] || { [ "$ENFORCE" = "true" ] && [ "$code" != "0" ]; }; then exit 1; fi
+      - name: Missing secret
+        if: env.GEMINI_API_KEY == ''
+        run: echo "::warning::secrets.GEMINI_API_KEY is not set; live LLM evaluation skipped"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: autoeval-live-${{ github.run_number }}
+          path: artifacts/evaluation/autoeval/
+          retention-days: 30

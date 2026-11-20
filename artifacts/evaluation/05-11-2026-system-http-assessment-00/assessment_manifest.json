@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "status": "completed",
+  "acceptance_status": "not_certified",
+  "human_grounding_status": "pending_human_review",
+  "created_at": "2026-11-05T02:58:04.379526+00:00",
+  "parent_manifest_sha256": "faabc546b7c7d67647688de09c6972e67b4e96eaca152e67b3e2a7d60ab3a737",
+  "http_study_manifest_sha256": "0db74a751aee75fd3794fad883d55077f731aee657a2077a440fb9ab119725f6",
+  "files": {
+    "config.resolved.json": {
+      "path": "config.resolved.json",
+      "sha256": "d9dfe4d6cb6020c0abe42a01e1bf860007fe8f708854b383d8bfbe2247eefdce"
+    },
+    "http_cost.json": {
+      "path": "http_cost.json",
+      "sha256": "a56c3b37a6a72bd651c06b72571abdb857f6f17964ccfad908f5b2ef3cb83dd4"
+    },
+    "http_latency.json": {
+      "path": "http_latency.json",
+      "sha256": "22a6b8529b010c9ab894862776cf7f132ac49eebf34053439b4a31477372be02"
+    },
+    "http_latency_slices.json": {
+      "path": "http_latency_slices.json",
+      "sha256": "327e2e192c16cd24c13fcf8ceee9071c230940cd732be5b533bf865a55468830"
+    },
+    "http_results.jsonl": {
+      "path": "http_results.jsonl",
+      "sha256": "20576c57a822d3151a31534d0322a07fbeb4c19ab9c9c0d4eff114b051ca676b"
+    },
+    "http_results.normalized.jsonl": {
+      "path": "http_results.normalized.jsonl",
+      "sha256": "ed7a62279a353dd556426ed3a1a0def7f4e0c4ce58909548c9d7a012f98106b4"
+    },
+    "manifest.json": {
+      "path": "manifest.json",
+      "sha256": "0db74a751aee75fd3794fad883d55077f731aee657a2077a440fb9ab119725f6"
+    },
+    "normalization.json": {
+      "path": "normalization.json",
+      "sha256": "22c3e25e5572fbd0f47a6100eb2b98f5378cefeb924eea06e0bbe20332d37b0e"
+    },
+    "report.md": {
+      "path": "report.md",
+      "sha256": "cd7cb6f39b542fbd3a8925b9e50b1aad5c007f3faaf133254fa9e92d4f5fa281"
+    },
+    "state.json": {
+      "path": "state.json",
+      "sha256": "7e0f2b3079f17e0def71a2664d0d98ab9b4a9b3c9e7f6399f7bd562ab6f8db2f"
+    },
+    "verification.json": {
+      "path": "verification.json",
+      "sha256": "f33d2e8a70d60caee7898a1c970c643bee9b33b95d8fe3fc5484f869c858708c"
+    },
+    "grounding/ai_annotations.jsonl": {
+      "path": "grounding/ai_annotations.jsonl",
+      "sha256": "d090bd97f80aaa9f43bdf081a6f47413e300ddf894a96100032fa3fa08c437d8"
+    },
+    "grounding/evidence.jsonl": {
+      "path": "grounding/evidence.jsonl",
+      "sha256": "2b5033bdfde4274e901e1d659f90e5813ab5a4827fbd51aa53c24dafd2343e95"
+    },
+    "grounding/human_review.jsonl": {
+      "path": "grounding/human_review.jsonl",
+      "sha256": "e8772a9a664bf07b257bfe019c471144e5ea5414ca2616203244b8dd283f78e9"
+    },
+    "grounding/review.md": {
+      "path": "grounding/review.md",
+      "sha256": "ea295cebb8dc321e7dc78736e84d8f1eb0d905aa5832716e155562d7f99137cf"
+    },
+    "grounding/summary.json": {
+      "path": "grounding/summary.json",
+      "sha256": "5bdb51d98736796c7cb10ee45e5cddfa111042f576a97edf21b3c8a1666be265"
+    }
+  }
+}

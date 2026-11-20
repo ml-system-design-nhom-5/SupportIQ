@@ -1,0 +1,21 @@
+{
+  "python_version": "3.12.14 (main, Sep  1 2026, 14:17:39) [MSC v.1944 64 bit (AMD64)]",
+  "platform": "Windows-11-10.0.26300-SP0",
+  "machine": "AMD64",
+  "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "cpu_count": 20,
+  "libraries": {
+    "pandas": "3.1.0",
+    "numpy": "2.5.4",
+    "scikit-learn": "1.9.1",
+    "scipy": "1.18.1",
+    "joblib": "1.6.0",
+    "torch": "2.15.0",
+    "transformers": "5.22.1",
+    "tokenizers": "0.23.3",
+    "safetensors": "0.8.0"
+  },
+  "git_revision": "2df5fc20d7a0f5cafd10cbb8ad4929c4b994c446",
+  "git_dirty": true,
+  "captured_at": "2026-11-04T02:08:28.197088+00:00"
+}

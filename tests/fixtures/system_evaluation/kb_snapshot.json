@@ -1,0 +1,26 @@
+[
+  {
+    "doc_id": "KB-RET-001",
+    "title": "Standard Return Policy",
+    "version": "1.0",
+    "status": "approved",
+    "allowed_roles": ["agent", "customer", "staff"],
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": "2027-01-01T00:00:00Z",
+    "approved_by": "compliance_lead",
+    "approved_at": "2026-01-01T00:00:00Z",
+    "content": "Customers may return products within 30 days of receipt in original packaging."
+  },
+  {
+    "doc_id": "KB-REF-001",
+    "title": "Refund Processing Timeline",
+    "version": "1.0",
+    "status": "approved",
+    "allowed_roles": ["agent", "customer", "staff"],
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": "2027-01-01T00:00:00Z",
+    "approved_by": "compliance_lead",
+    "approved_at": "2026-01-01T00:00:00Z",
+    "content": "Approved refunds are credited to the original payment method within 5 to 7 business days."
+  }
+]

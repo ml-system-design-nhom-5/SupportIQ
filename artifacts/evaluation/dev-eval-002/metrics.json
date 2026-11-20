@@ -1,0 +1,85 @@
+{
+  "summary": {
+    "total_cases": 50,
+    "executed_cases": 50,
+    "completed_ok": 50,
+    "timeouts": 0,
+    "errors": 0,
+    "missing": 0
+  },
+  "routing": {
+    "total_cases": 50,
+    "must_escalate_total": 0,
+    "must_escalate_correct": 0,
+    "must_escalate_success_rate": "N/A",
+    "must_escalate_ci": null,
+    "guardrail_passed": "N/A",
+    "coverage": 0.98,
+    "coverage_ci": [
+      0.895,
+      0.9965
+    ],
+    "selective_accuracy": 0.2245,
+    "selective_accuracy_ci": [
+      0.1302,
+      0.3588
+    ],
+    "draft_yield": 0.04
+  },
+  "retrieval": {
+    "total_cases": 50,
+    "answerable_count": 10,
+    "unanswerable_count": 40,
+    "recall_at_3": 0.2,
+    "recall_at_3_raw": 0.2,
+    "hit_at_3": 0.2,
+    "hit_at_3_ci": [
+      0.0567,
+      0.5098
+    ],
+    "false_evidence_count": 0,
+    "false_evidence_rate": 0.0,
+    "false_evidence_ci": [
+      0.0,
+      0.0876
+    ],
+    "safety_violations": 0,
+    "safety_guardrail_passed": true
+  },
+  "drafting": {
+    "draft_expected_count": 10,
+    "draft_produced_count": 2,
+    "draft_coverage": 0.2
+  },
+  "by_slice": {
+    "supported": {
+      "total": 50,
+      "ok": 50,
+      "error": 0,
+      "timeout": 0,
+      "missing": 0
+    }
+  },
+  "latency": {
+    "measurement_scope": "pipeline_total",
+    "p50_seconds": 0.0213,
+    "warm_p95_seconds": 0.0324,
+    "requests_count": 10,
+    "warmup_count": 2
+  },
+  "ml": {
+    "status": "N/A",
+    "macro_f1": null,
+    "per_intent": {}
+  },
+  "oversight": {
+    "total_scenarios": 7,
+    "passed_scenarios": 7,
+    "failed_scenarios": 0,
+    "status": "pass"
+  },
+  "component_probes": {
+    "total_probes": 50,
+    "successful_probes": 50
+  }
+}

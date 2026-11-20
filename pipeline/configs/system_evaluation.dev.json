@@ -1,0 +1,33 @@
+{
+  "schema_version": "v1.0",
+  "seed": 42,
+  "concurrency": 1,
+  "warmup_requests": 2,
+  "latency_requests": 10,
+  "max_llm_calls": 50,
+  "deadline_seconds": 30.0,
+  "ml_timeout_seconds": 3.0,
+  "llm_timeout_seconds": 15.0,
+  "demo_timeout_seconds": 20.0,
+  "max_estimated_cost_usd": 1.0,
+  "pricing": {
+    "model": "gemini-3.1-flash-lite",
+    "currency": "USD",
+    "input_cost_per_million": 0.075,
+    "output_cost_per_million": 0.30,
+    "source": "Google AI Studio Pricing (Standard tier, Nov 2026)"
+  },
+  "mandatory_gates": [
+    "routing_guardrails",
+    "retrieval_safety",
+    "retrieval_recall_at_3",
+    "oversight_compliance"
+  ],
+  "thresholds": {
+    "ml_macro_f1": 0.85,
+    "recall_at_3": 0.80,
+    "grounded_claims": 0.90,
+    "warm_p95_seconds": 12.0,
+    "guardrail_accuracy": 1.00
+  }
+}

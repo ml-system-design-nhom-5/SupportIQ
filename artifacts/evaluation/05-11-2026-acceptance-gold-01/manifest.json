@@ -1,0 +1,107 @@
+{
+  "schema_version": "v1.0",
+  "run_id": "05-11-2026-acceptance-gold-01",
+  "profile": "live",
+  "status": "completed",
+  "completed_at": "2026-11-05T08:40:07.442123+00:00",
+  "evidence_kind": "live",
+  "all_mandatory_passed": false,
+  "expected_draft_cases": [
+    "v3-sup-return_policy-01",
+    "v3-sup-return_policy-02",
+    "v3-sup-return_policy-03",
+    "v3-sup-return_policy-04",
+    "v3-sup-return_policy-05",
+    "v3-sup-refund_policy-01",
+    "v3-sup-refund_policy-02",
+    "v3-sup-refund_policy-03",
+    "v3-sup-refund_policy-04",
+    "v3-sup-refund_policy-05",
+    "v3-ans-return_policy-01",
+    "v3-ans-return_policy-02",
+    "v3-ans-return_policy-03",
+    "v3-ans-return_policy-04",
+    "v3-ans-return_policy-05",
+    "v3-ans-return_policy-06",
+    "v3-ans-return_policy-07",
+    "v3-ans-return_policy-08",
+    "v3-ans-return_policy-09",
+    "v3-ans-return_policy-10",
+    "v3-ans-refund_policy-01",
+    "v3-ans-refund_policy-02",
+    "v3-ans-refund_policy-03",
+    "v3-ans-refund_policy-04",
+    "v3-ans-refund_policy-05",
+    "v3-ans-refund_policy-06",
+    "v3-ans-refund_policy-07",
+    "v3-ans-refund_policy-08",
+    "v3-ans-cancel_order-01",
+    "v3-ans-cancel_order-02",
+    "v3-ans-cancel_order-03",
+    "v3-ans-cancel_order-04",
+    "v3-ans-cancel_order-05",
+    "v3-ans-cancel_order-06"
+  ],
+  "files": {
+    "config.resolved.json": {
+      "path": "config.resolved.json",
+      "sha256": "53043B5D8292BFEBF3D59E682E6E9C189484C7B93F584941B285596F94E29B06"
+    },
+    "environment.json": {
+      "path": "environment.json",
+      "sha256": "3B09F49843427F5FD18C3DC79A195A49F6438AD16D2070A4B0F710FB857F4F55"
+    },
+    "inputs.json": {
+      "path": "inputs.json",
+      "sha256": "7BC2229CF6F0841E46E64FA81E4E331E91031F4EFBAC306C7EC5BE07B26A2227"
+    },
+    "results.jsonl": {
+      "path": "results.jsonl",
+      "sha256": "34C9C10510594F50EEB4988198E5996423A160156A3541AF6214B4F956338B2A"
+    },
+    "component_results.jsonl": {
+      "path": "component_results.jsonl",
+      "sha256": "FC22AB30130240B5BF4F5AA426004C93A27924A29DBAA7AAC712C544242FA9D1"
+    },
+    "oversight_results.jsonl": {
+      "path": "oversight_results.jsonl",
+      "sha256": "E9E65FC7C5CF9A9168BB11D5ACDC926932D7E838A41F52E6DFDC28BF974435B6"
+    },
+    "metrics.json": {
+      "path": "metrics.json",
+      "sha256": "F23AE8FAC2A28058B7DBA6BAB3EEC02D2731DE222DD1BCF63320DFBDD427AF6D"
+    },
+    "slices.csv": {
+      "path": "slices.csv",
+      "sha256": "7F4B1549199FE22355862E49763DF83914CE7960F5D526A8D9959D0E0C07ABB5"
+    },
+    "requirements_matrix.csv": {
+      "path": "requirements_matrix.csv",
+      "sha256": "DCB5D5FE693D3C49A09FBCE960D186D257232DDACD9A2A70D3CF87AA78CAB56C"
+    },
+    "latency.json": {
+      "path": "latency.json",
+      "sha256": "53B9B90939F7F00E1560C86FA1B0756A84AB44F54CB038B3F7855E27A1E32C98"
+    },
+    "latency_results.jsonl": {
+      "path": "latency_results.jsonl",
+      "sha256": "582EB127BBE4B4C3975B9E76F5B44BFB55AC25D24A510DDD1F88022F8656F38A"
+    },
+    "cost.json": {
+      "path": "cost.json",
+      "sha256": "9A0F4B2DB653D6B5201B8EC1D9A7A3609CDC607B5628E28E4405BD0BEC5F69A6"
+    },
+    "claims_to_annotate.jsonl": {
+      "path": "claims_to_annotate.jsonl",
+      "sha256": "CE89E39F3F7187FD4EE8556B1C27A2656EE6CBD7810C75A139CE0D32D8AB26C3"
+    },
+    "product_sessions.template.csv": {
+      "path": "product_sessions.template.csv",
+      "sha256": "B8632A779A520024F9AE9B771CD64BFB3E409BF5FA2D9EEF824C8704803B0DBB"
+    },
+    "report.md": {
+      "path": "report.md",
+      "sha256": "F3739ACE09C069B5A4E54833CE15ADA0D1557CA6DF8DCA2ACE99CA82EEF26B36"
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "provider": "google_ai_studio",
+  "model": "gemini-3.1-flash-lite",
+  "currency": "USD",
+  "tier": "standard_paid",
+  "modality": "text",
+  "input_cost_per_million": 0.25,
+  "output_cost_per_million": 1.5,
+  "output_includes_thinking": true,
+  "source_url": "https://aistudio.google.com/docs/pricing#gemini-3.1-flash-lite",
+  "requested_source_url": "https://ai.google.dev/gemini-api/docs/pricing",
+  "verified_on": "2026-11-12",
+  "verified_by": "coordinator_ai_primary_source_review",
+  "verification_scope": "Published standard paid-tier text token list prices only; actual account billing tier and invoiced charges are not verified.",
+  "calculation": "(uncached_input_tokens * 0.25 + (candidate_tokens + thinking_tokens) * 1.5) / 1000000",
+  "limitations": [
+    "Use for a list-price estimate on matching model/provider/tier, not an invoiced charge.",
+    "Free, batch, flex, priority, cached-input, tool and non-text usage need their own rates and usage records.",
+    "Do not assume thinking or failed-attempt usage is zero when the provider response or application evidence omits it.",
+    "Stored gateway smoke captures input and candidate tokens only; without complete usage, its exact total cost remains unavailable."
+  ]
+}

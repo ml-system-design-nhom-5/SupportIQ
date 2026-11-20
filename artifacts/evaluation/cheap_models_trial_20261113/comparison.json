@@ -1,0 +1,127 @@
+{
+  "started_at": "2026-11-13T07:17:51.943244+00:00",
+  "boundary": "direct_grounded_provider_component_not_end_to_end",
+  "new_max_generation_requests": 3,
+  "max_attempts_per_model": 1,
+  "automatic_retries": 0,
+  "timeout_seconds": 30,
+  "question": "What is your return policy?",
+  "evidence": [
+    {
+      "document_id": "POL-RET-001",
+      "version": "2.0",
+      "title": "Tiki Standard Product Return and Exchange Policy and Conditions",
+      "excerpt": "Tiki Standard Product Return and Exchange Policy and Conditions\nCustomers may request an exchange or return within 30 days (for products directly distributed by Tiki Trading) or within 7 days (for products from marketplace partner sellers on Tiki) from the date of successful delivery. Returned products must have intact security seals, complete original packaging, accessories, invoices, and included promotional gifts, and show no signs of usage or laundering."
+    },
+    {
+      "document_id": "POL-RET-003",
+      "version": "2.0",
+      "title": "Restricted Return Categories and Non-Returnable Change-of-Mind Items on Tiki",
+      "excerpt": "Restricted Return Categories and Non-Returnable Change-of-Mind Items on Tiki\nProduct categories that do not support returns due to change of mind or personal preference include: Underwear, swimwear, cosmetics and chemicals with unsealed protective packaging, Tiki Ngon fresh groceries, dietary supplements, mobile top-up scratch cards, electronic service vouchers, and clearance outlet items marked as non-returnable. These items are only eligible for return or exchange if Tiki delivered an incorrect item or if there is a verified manufacturer defect."
+    },
+    {
+      "document_id": "POL-REFUND-001",
+      "version": "1.0",
+      "title": "Safe Refund Reconciliation Rules and Principles on Tiki",
+      "excerpt": "Safe Refund Reconciliation Rules and Principles on Tiki\nRefund requests are only processed once an order has been successfully canceled prior to dispatch, or after the Tiki warehouse receives and inspects the returned product to standard. All refund decisions must undergo reconciliation by authorized customer service personnel; AI is prohibited from autonomously approving monetary transactions. Original shipping fees are non-refundable if the return reason is based on personal preference."
+    }
+  ],
+  "pricing_source": "https://aistudio.google.com/docs/pricing",
+  "pricing_verified_date": "2026-11-13",
+  "rate_basis": "standard_paid_text_per_million_tokens_conditional_not_invoice",
+  "results": [
+    {
+      "model": "gemini-2.5-flash-lite",
+      "http_requests": 1,
+      "http_statuses": [
+        404
+      ],
+      "input_usd_per_million": 0.1,
+      "output_usd_per_million_including_thinking": 0.4,
+      "status": "failed_closed",
+      "failure_code": "llm_model_unavailable",
+      "stage": "http_response",
+      "exception_category": "http_status",
+      "complete_billed_cost_usd": null,
+      "wall_seconds": 0.5078
+    },
+    {
+      "model": "gemini-3.1-flash-lite",
+      "http_requests": 1,
+      "http_statuses": [
+        200
+      ],
+      "input_usd_per_million": 0.25,
+      "output_usd_per_million_including_thinking": 1.5,
+      "status": "draft_generated_and_citations_validated",
+      "body": "You may request an exchange or return within 30 days of delivery for products distributed by Tiki Trading, or within 7 days for products from marketplace partner sellers [S1]. Returned items must have intact security seals, original packaging, accessories, invoices, and promotional gifts, and must show no signs of usage or laundering [S1]. Please note that returns due to change of mind are not supported for underwear, swimwear, cosmetics and chemicals with unsealed packaging, Tiki Ngon fresh groceries, dietary supplements, mobile top-up cards, electronic service vouchers, and clearance items marked as non-returnable [S2]. These specific items are only eligible for return or exchange if an incorrect item was delivered or if there is a verified manufacturer defect [S2]. Refunds are processed after the warehouse inspects the returned product, and original shipping fees are non-refundable if the return is based on personal preference [S3].",
+      "citations": [
+        {
+          "source_id": "S1",
+          "source_type": "policy",
+          "document_id": "POL-RET-001",
+          "version": "2.0"
+        },
+        {
+          "source_id": "S2",
+          "source_type": "policy",
+          "document_id": "POL-RET-003",
+          "version": "2.0"
+        },
+        {
+          "source_id": "S3",
+          "source_type": "policy",
+          "document_id": "POL-REFUND-001",
+          "version": "1.0"
+        }
+      ],
+      "usage": {
+        "promptTokenCount": 1509,
+        "candidatesTokenCount": 229,
+        "totalTokenCount": 1738
+      },
+      "reported_model_version": "gemini-3.1-flash-lite",
+      "conditional_observed_cost_usd": 0.00072075,
+      "omitted_thoughts_not_proof_of_zero": true,
+      "complete_billed_cost_usd": null,
+      "wall_seconds": 1.6634
+    },
+    {
+      "model": "gemini-3.5-flash-lite",
+      "http_requests": 1,
+      "http_statuses": [
+        200
+      ],
+      "input_usd_per_million": 0.3,
+      "output_usd_per_million_including_thinking": 2.5,
+      "status": "draft_generated_and_citations_validated",
+      "body": "Customers may request an exchange or return within 30 days for products directly distributed by Tiki Trading, or within 7 days for products from marketplace partner sellers on Tiki, from the date of successful delivery [S1]. Returned products must have intact security seals, complete original packaging, accessories, invoices, and included promotional gifts, and show no signs of usage or laundering [S1]. Certain categories do not support returns due to change of mind or personal preference, including underwear, swimwear, cosmetics and chemicals with unsealed protective packaging, Tiki Ngon fresh groceries, dietary supplements, mobile top-up scratch cards, electronic service vouchers, and clearance outlet items marked as non-returnable; these items are only eligible for return or exchange if Tiki delivered an incorrect item or if there is a verified manufacturer defect [S2].",
+      "citations": [
+        {
+          "source_id": "S1",
+          "source_type": "policy",
+          "document_id": "POL-RET-001",
+          "version": "2.0"
+        },
+        {
+          "source_id": "S2",
+          "source_type": "policy",
+          "document_id": "POL-RET-003",
+          "version": "2.0"
+        }
+      ],
+      "usage": {
+        "promptTokenCount": 1509,
+        "candidatesTokenCount": 213,
+        "totalTokenCount": 1722
+      },
+      "reported_model_version": "gemini-3.5-flash-lite",
+      "conditional_observed_cost_usd": 0.0009852,
+      "omitted_thoughts_not_proof_of_zero": true,
+      "complete_billed_cost_usd": null,
+      "wall_seconds": 2.0297
+    }
+  ],
+  "finished_at": "2026-11-13T07:17:56.153969+00:00",
+  "actual_generation_requests": 3
+}

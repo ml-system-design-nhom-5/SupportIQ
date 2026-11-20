@@ -1,0 +1,235 @@
+{
+  "manifest_type": "derived_historical_browser_assets",
+  "preservation_copied_at": "2026-11-12T16:20:07Z",
+  "origin_directory": ".impeccable/review/",
+  "spec_file": "apps/frontend/e2e/application.spec.ts",
+  "config_file": "apps/frontend/playwright.config.ts",
+  "committed_config_defaults": {
+    "baseURL": "process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:8080'",
+    "channel": "msedge",
+    "headless": true,
+    "configured_projects": ["desktop", "tablet", "mobile", "small-phone"]
+  },
+  "runtime_execution_fields": {
+    "backend_url": null,
+    "frontend_url": null,
+    "browser_channel": null,
+    "runtime_timestamp": null,
+    "raw_test_results_log_attached": false,
+    "note": "Unknown/origin execution fields are unverified and explicitly set to null. No machine-generated Playwright test result JSON/log was captured or exists on disk."
+  },
+  "execution_metrics": {
+    "status": "worker_reported_unverified",
+    "worker_reported_tests_passed": 6,
+    "worker_reported_duration_seconds": 21.2,
+    "note": "Execution pass count and duration are worker-reported historical assertions and are not verified by an attached test-runner machine artifact."
+  },
+  "spec_routes_actual": {
+    "sign-in": "/sign-in",
+    "products": "/shop",
+    "orders": "/shop/orders",
+    "order-received": "/shop/orders/{id} -> submit support request",
+    "console": "/console/tickets/{id}",
+    "order-replied": "/shop/support/{id}",
+    "accounts": "/console/accounts",
+    "account-confirmation": "/console/accounts (Make manager modal dialog)",
+    "versions": "/console/versions",
+    "reports": "/console/reports",
+    "general-support": "/shop/support",
+    "general-request": "/shop/support -> submit request"
+  },
+  "assets": [
+    {
+      "filename": "account-confirmation-desktop.png",
+      "source_path": ".impeccable/review/account-confirmation-desktop.png",
+      "sha256": "6fb194db27feb8744d7ff98bae23e45190e1b2644ede14f8f82b1feeec5e0cb1",
+      "size_bytes": 78980,
+      "viewport": "desktop (1440x900)",
+      "derived_copied_at": "2026-11-12T16:20:07Z"
+    },
+    {
+      "filename": "account-confirmation-mobile.png",
+      "source_path": ".impeccable/review/account-confirmation-mobile.png",
+      "sha256": "a29b5a9e5ac3f1e02c2c5494756475c36ef96bf31357a9e1a730fab9cae34143",
+      "size_bytes": 61938,
+      "viewport": "mobile (390x844)",
+      "derived_copied_at": "2026-11-12T16:20:07Z"
+    },
+    {
+      "filename": "accounts-desktop.png",
+      "source_path": ".impeccable/review/accounts-desktop.png",
+      "sha256": "ceb0b06b68f58d540936ea754d7c0c2159eef9bb8020cc7f5a7545f96159dbd5",
+      "size_bytes": 60382,
+      "viewport": "desktop (1440x900)",
+      "derived_copied_at": "2026-11-12T16:20:07Z"
+    },
+    {
+      "filename": "accounts-mobile.png",
+      "source_path": ".impeccable/review/accounts-mobile.png",
+      "sha256": "d5f27fb5671507a4a054561975a1cdadbe873de325465fd40f1cc86a52d7fa7e",
+      "size_bytes": 51956,
+      "viewport": "mobile (390x844)",
+      "derived_copied_at": "2026-11-12T16:20:07Z"
+    },
+    {
+      "filename": "console-desktop.png",
+      "source_path": ".impeccable/review/console-desktop.png",
+      "sha256": "9a20554e58708ab68e53238b263e3176ae9e46e7fe8e64e7c1651840b46a1950",
+      "size_bytes": 112088,
+      "viewport": "desktop (1440x900)",
+      "derived_copied_at": "2026-11-12T16:20:07Z"
+    },
+    {
+      "filename": "console-mobile.png",
+      "source_path": ".impeccable/review/console-mobile.png",
+      "sha256": "c5893fccccc3aa696241682cb4c33cd9d5407d4a5911ffc31791373dc921a3f1",
+      "size_bytes": 65259,
+      "viewport": "mobile (390x844)",
+      "derived_copied_at": "2026-11-12T16:20:07Z"
+    },
+    {
+      "filename": "general-request-desktop.png",
+      "source_path": ".impeccable/review/general-request-desktop.png",
+      "sha256": "8b43655384f3531cfbcca4ee74c5d52aceb51b2921d52e10a1fa9d75906f182a",
+      "size_bytes": 48512,
+      "viewport": "desktop (1440x900)",
+      "derived_copied_at": "2026-11-12T16:20:07Z"
+    },
+    {
+      "filename": "general-request-mobile.png",
+      "source_path": ".impeccable/review/general-request-mobile.png",
+      "sha256": "246fbbf50320bc417e6da53a95ca63de724bce3e2423bada7a9ebc50748efe6d",
+      "size_bytes": 40461,
+      "viewport": "mobile (390x844)",
+      "derived_copied_at": "2026-11-12T16:20:07Z"
+    },
+    {
+      "filename": "general-support-desktop.png",
+      "source_path": ".impeccable/review/general-support-desktop.png",
+      "sha256": "ffb7470ad7ce8c6c6878f53192f32115748de0949300cc135be68f57d98f44e8",
+      "size_bytes": 51375,
+      "viewport": "desktop (1440x900)",
+      "derived_copied_at": "2026-11-12T16:20:07Z"
+    },
+    {
+      "filename": "general-support-mobile.png",
+      "source_path": ".impeccable/review/general-support-mobile.png",
+      "sha256": "5762e0b74040b64c6509f13dfb5e31c83cb5bff207e8edd5b5bb063e979cf098",
+      "size_bytes": 44329,
+      "viewport": "mobile (390x844)",
+      "derived_copied_at": "2026-11-12T16:20:07Z"
+    },
+    {
+      "filename": "order-received-desktop.png",
+      "source_path": ".impeccable/review/order-received-desktop.png",
+      "sha256": "d6e7dd4aca1c179c83e37dad20faeccfadee685356740ca3ab30731539bc0c88",
+      "size_bytes": 52640,
+      "viewport": "desktop (1440x900)",
+      "derived_copied_at": "2026-11-12T16:20:07Z"
+    },
+    {
+      "filename": "order-received-mobile.png",
+      "source_path": ".impeccable/review/order-received-mobile.png",
+      "sha256": "79a48d0c72da2b0aa25d286e06ae3006870da25d86a2d878eba08a1a7d2638f5",
+      "size_bytes": 44538,
+      "viewport": "mobile (390x844)",
+      "derived_copied_at": "2026-11-12T16:20:07Z"
+    },
+    {
+      "filename": "order-replied-desktop.png",
+      "source_path": ".impeccable/review/order-replied-desktop.png",
+      "sha256": "be1356bd9e8bf00a40cd75193a7b7af8a9795fef9fa4d69cfbe1e84b3c84d733",
+      "size_bytes": 59819,
+      "viewport": "desktop (1440x900)",
+      "derived_copied_at": "2026-11-12T16:20:07Z"
+    },
+    {
+      "filename": "order-replied-mobile.png",
+      "source_path": ".impeccable/review/order-replied-mobile.png",
+      "sha256": "c76790db5bc8e517b2924f92eeaab0b04b69d53e59f3e47d235d4a2d88a97572",
+      "size_bytes": 50191,
+      "viewport": "mobile (390x844)",
+      "derived_copied_at": "2026-11-12T16:20:07Z"
+    },
+    {
+      "filename": "orders-desktop.png",
+      "source_path": ".impeccable/review/orders-desktop.png",
+      "sha256": "a8067afa72ad0918c8e420f7522dab648ca3a64053ea7a79c2b21123490621ba",
+      "size_bytes": 30688,
+      "viewport": "desktop (1440x900)",
+      "derived_copied_at": "2026-11-12T16:20:07Z"
+    },
+    {
+      "filename": "orders-mobile.png",
+      "source_path": ".impeccable/review/orders-mobile.png",
+      "sha256": "ba41b8f67cdbc868e8305c5c93c595552cecd317a6fd126bf185e638ec3152b4",
+      "size_bytes": 64293,
+      "viewport": "mobile (390x844)",
+      "derived_copied_at": "2026-11-12T16:20:07Z"
+    },
+    {
+      "filename": "products-desktop.png",
+      "source_path": ".impeccable/review/products-desktop.png",
+      "sha256": "6caa062034142e3ce10e2348f3f8ca3d4dcfa3f40e568334bbd28da8fe7902de",
+      "size_bytes": 520023,
+      "viewport": "desktop (1440x900)",
+      "derived_copied_at": "2026-11-12T16:20:07Z"
+    },
+    {
+      "filename": "products-mobile.png",
+      "source_path": ".impeccable/review/products-mobile.png",
+      "sha256": "bc2c247b7ed535f4f089a1510c2d3c8fe5433e23148ca62eb4f44afca2a86267",
+      "size_bytes": 228748,
+      "viewport": "mobile (390x844)",
+      "derived_copied_at": "2026-11-12T16:20:07Z"
+    },
+    {
+      "filename": "reports-desktop.png",
+      "source_path": ".impeccable/review/reports-desktop.png",
+      "sha256": "3fb67602a413e7dccf0c3551f0a72c06880d6486cb4d7f8ae0cdc9c6da34b718",
+      "size_bytes": 83823,
+      "viewport": "desktop (1440x900)",
+      "derived_copied_at": "2026-11-12T16:20:07Z"
+    },
+    {
+      "filename": "reports-mobile.png",
+      "source_path": ".impeccable/review/reports-mobile.png",
+      "sha256": "268b3ca527de65848e605a19e1e5e5f3e62810c276d72c88a535256a6793fb50",
+      "size_bytes": 51053,
+      "viewport": "mobile (390x844)",
+      "derived_copied_at": "2026-11-12T16:20:07Z"
+    },
+    {
+      "filename": "sign-in-desktop.png",
+      "source_path": ".impeccable/review/sign-in-desktop.png",
+      "sha256": "d1c7c336dc8c368249afd854ea89abab36592c59da81924417bdfa43474d7121",
+      "size_bytes": 48347,
+      "viewport": "desktop (1440x900)",
+      "derived_copied_at": "2026-11-12T16:20:07Z"
+    },
+    {
+      "filename": "sign-in-mobile.png",
+      "source_path": ".impeccable/review/sign-in-mobile.png",
+      "sha256": "5852efda2c4d9658d6d276dd6a88af856300694de2e5fe0a734e0e390a78ab09",
+      "size_bytes": 27071,
+      "viewport": "mobile (390x844)",
+      "derived_copied_at": "2026-11-12T16:20:07Z"
+    },
+    {
+      "filename": "versions-desktop.png",
+      "source_path": ".impeccable/review/versions-desktop.png",
+      "sha256": "1db404ef8c2a2f2ecd4cbab7bdb5db452efaa114175b43c7c2dc810fcb0faf5a",
+      "size_bytes": 70389,
+      "viewport": "desktop (1440x900)",
+      "derived_copied_at": "2026-11-12T16:20:07Z"
+    },
+    {
+      "filename": "versions-mobile.png",
+      "source_path": ".impeccable/review/versions-mobile.png",
+      "sha256": "c8a0f2a9bb0dd0c2d8f6b941965da9ae0dd8152ea27b93006e60bc592c473856",
+      "size_bytes": 64925,
+      "viewport": "mobile (390x844)",
+      "derived_copied_at": "2026-11-12T16:20:07Z"
+    }
+  ]
+}

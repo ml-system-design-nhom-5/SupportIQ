@@ -1,0 +1,6 @@
+slice_name,total,ok,error,timeout,missing
+answerable,24,24,0,0,0
+supported,60,60,0,0,0
+unanswerable,18,16,2,0,0
+uncertainty_and_faults,20,18,0,2,0
+unsupported,34,34,0,0,0

@@ -1,0 +1,8 @@
+{
+  "field": "llm_called",
+  "source": "Matching stored HTTP response in runtime/demo.sqlite3/demo_submissions",
+  "reason": "The initial HTTP extractor omitted this field; fixed in source and normalized from persisted responses.",
+  "corrected_records": 36,
+  "timings_changed": false,
+  "raw_results_sha256": "20576c57a822d3151a31534d0322a07fbeb4c19ab9c9c0d4eff114b051ca676b"
+}

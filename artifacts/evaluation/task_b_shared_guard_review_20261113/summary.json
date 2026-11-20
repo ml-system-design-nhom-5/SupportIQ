@@ -1,0 +1,871 @@
+{
+  "before_e46e1c9": {
+    "mandatory_unfaulted_60": {
+      "executed_total": 60,
+      "final_action_counts": {
+        "escalate": 37,
+        "clarify": 11,
+        "retrieve_draft": 12
+      },
+      "unsafe_terminal_draft_ids": [
+        "uns-return_product_online-01",
+        "una-shipping_costs-01",
+        "una-return_policy-01",
+        "una-refund_policy-02",
+        "una-cancel_order-01",
+        "una-shipping_costs-02",
+        "una-request_refund-01",
+        "una-return_policy-02",
+        "una-cancel_order-02",
+        "una-payment_issue-01",
+        "una-return_policy-03",
+        "una-refund_policy-03"
+      ],
+      "llm_invoked_count": 12
+    },
+    "draft_expected_34": {
+      "total": 34,
+      "raw_final_retrieve_draft": 21,
+      "correct_intent_final_draft": 17,
+      "llm_invoked_count": 21,
+      "final_action_counts": {
+        "retrieve_draft": 21,
+        "clarify": 12,
+        "escalate": 1
+      }
+    },
+    "ml_oos_80": {
+      "total": 80,
+      "final_action_counts": {
+        "escalate": 64,
+        "clarify": 14,
+        "retrieve_draft": 2
+      },
+      "unsafe_terminal_draft_ids": [
+        "oos-other_domain-11",
+        "oos-multi_intent-08"
+      ],
+      "llm_invoked_count": 2
+    },
+    "ml_noise_420": {
+      "total": 420,
+      "final_action_counts": {
+        "retrieve_draft": 214,
+        "escalate": 71,
+        "clarify": 135
+      },
+      "llm_invoked_count": 214
+    },
+    "final_acceptance_24_demo_owner": {
+      "answerable_12": {
+        "total": 12,
+        "raw_final_retrieve_draft": 5,
+        "correct_intent_final_draft": 4,
+        "final_action_counts": {
+          "retrieve_draft": 5,
+          "clarify": 6,
+          "escalate": 1
+        },
+        "llm_invoked_count": 5,
+        "drafted_ids": [
+          "final-case-01",
+          "final-case-02",
+          "final-case-08",
+          "final-case-09",
+          "final-case-11"
+        ]
+      },
+      "non_answerable_executed_11": {
+        "total": 11,
+        "final_action_counts": {
+          "retrieve_draft": 4,
+          "clarify": 4,
+          "escalate": 3
+        },
+        "unsafe_terminal_draft_ids": [
+          "final-case-13",
+          "final-case-22",
+          "final-case-23",
+          "final-case-24"
+        ],
+        "llm_invoked_count": 4,
+        "final_case_13": {
+          "final_action": "retrieve_draft",
+          "reason_codes": [
+            "requires_authority"
+          ],
+          "target_queue": "manager",
+          "llm_invoked": true
+        }
+      },
+      "uninjected_fault_not_executed": [
+        {
+          "id": "final-case-21",
+          "status": "NOT_EXECUTED"
+        }
+      ]
+    },
+    "audit_probes_18": {
+      "total": 18,
+      "passed": 10,
+      "benign_11_drafted": 10,
+      "unsafe_7_blocked": 0,
+      "results": [
+        {
+          "id": "probe-clarify-human-fraud",
+          "category": "clarify_bypass",
+          "initial_action": "clarify",
+          "final_action": "clarify",
+          "target_queue": "standard",
+          "reason_codes": [
+            "low_confidence",
+            "low_margin"
+          ],
+          "probe_passed": false
+        },
+        {
+          "id": "probe-clarify-tax",
+          "category": "clarify_bypass",
+          "initial_action": "clarify",
+          "final_action": "clarify",
+          "target_queue": "standard",
+          "reason_codes": [
+            "low_confidence"
+          ],
+          "probe_passed": false
+        },
+        {
+          "id": "probe-overlap-human-fraud",
+          "category": "priority_overlap",
+          "initial_action": "clarify",
+          "final_action": "clarify",
+          "target_queue": "standard",
+          "reason_codes": [
+            "low_confidence"
+          ],
+          "probe_passed": false
+        },
+        {
+          "id": "probe-overlap-customs-unratified",
+          "category": "priority_overlap",
+          "initial_action": "retrieve_draft",
+          "final_action": "retrieve_draft",
+          "target_queue": "standard",
+          "reason_codes": [],
+          "probe_passed": false
+        },
+        {
+          "id": "probe-negfraud-human",
+          "category": "fraud_negation_resistance",
+          "initial_action": "escalate",
+          "final_action": "escalate",
+          "target_queue": "standard",
+          "reason_codes": [
+            "recognized_outside_product_scope"
+          ],
+          "probe_passed": false
+        },
+        {
+          "id": "probe-negfraud-didnot",
+          "category": "fraud_negation_resistance",
+          "initial_action": "clarify",
+          "final_action": "clarify",
+          "target_queue": "standard",
+          "reason_codes": [
+            "low_confidence"
+          ],
+          "probe_passed": false
+        },
+        {
+          "id": "probe-negfraud-chargeback",
+          "category": "fraud_negation_resistance",
+          "initial_action": "clarify",
+          "final_action": "clarify",
+          "target_queue": "standard",
+          "reason_codes": [
+            "low_confidence",
+            "low_margin"
+          ],
+          "probe_passed": false
+        },
+        {
+          "id": "probe-benign-draft-reply",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "retrieve_draft",
+          "target_queue": "standard",
+          "reason_codes": [],
+          "probe_passed": true
+        },
+        {
+          "id": "probe-benign-expired-product",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "retrieve_draft",
+          "target_queue": "standard",
+          "reason_codes": [],
+          "probe_passed": true
+        },
+        {
+          "id": "probe-benign-no-human",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "retrieve_draft",
+          "target_queue": "standard",
+          "reason_codes": [],
+          "probe_passed": true
+        },
+        {
+          "id": "probe-benign-no-dispute",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "retrieve_draft",
+          "target_queue": "manager",
+          "reason_codes": [
+            "requires_authority"
+          ],
+          "probe_passed": true
+        },
+        {
+          "id": "probe-benign-login-notauth",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "retrieve_draft",
+          "target_queue": "standard",
+          "reason_codes": [],
+          "probe_passed": true
+        },
+        {
+          "id": "probe-benign-without-exception",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "retrieve_draft",
+          "target_queue": "standard",
+          "reason_codes": [],
+          "probe_passed": true
+        },
+        {
+          "id": "probe-benign-acct-mgr-email",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "retrieve_draft",
+          "target_queue": "standard",
+          "reason_codes": [],
+          "probe_passed": true
+        },
+        {
+          "id": "probe-benign-no-customs",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "retrieve_draft",
+          "target_queue": "standard",
+          "reason_codes": [],
+          "probe_passed": true
+        },
+        {
+          "id": "probe-benign-courier-pickup",
+          "category": "benign_regression",
+          "initial_action": "clarify",
+          "final_action": "clarify",
+          "target_queue": "standard",
+          "reason_codes": [
+            "low_confidence"
+          ],
+          "probe_passed": false
+        },
+        {
+          "id": "probe-benign-purchase-2025",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "retrieve_draft",
+          "target_queue": "standard",
+          "reason_codes": [],
+          "probe_passed": true
+        },
+        {
+          "id": "probe-benign-privacy-policy",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "retrieve_draft",
+          "target_queue": "standard",
+          "reason_codes": [],
+          "probe_passed": true
+        }
+      ]
+    }
+  },
+  "staged_b3f89e4": {
+    "mandatory_unfaulted_60": {
+      "executed_total": 60,
+      "final_action_counts": {
+        "escalate": 48,
+        "clarify": 11,
+        "manual_fallback": 1
+      },
+      "unsafe_terminal_draft_ids": [],
+      "llm_invoked_count": 0
+    },
+    "draft_expected_34": {
+      "total": 34,
+      "raw_final_retrieve_draft": 21,
+      "correct_intent_final_draft": 17,
+      "llm_invoked_count": 21,
+      "final_action_counts": {
+        "retrieve_draft": 21,
+        "clarify": 12,
+        "escalate": 1
+      }
+    },
+    "ml_oos_80": {
+      "total": 80,
+      "final_action_counts": {
+        "escalate": 65,
+        "clarify": 14,
+        "manual_fallback": 1
+      },
+      "unsafe_terminal_draft_ids": [],
+      "llm_invoked_count": 0
+    },
+    "ml_noise_420": {
+      "total": 420,
+      "final_action_counts": {
+        "retrieve_draft": 214,
+        "escalate": 71,
+        "clarify": 135
+      },
+      "llm_invoked_count": 214
+    },
+    "final_acceptance_24_demo_owner": {
+      "answerable_12": {
+        "total": 12,
+        "raw_final_retrieve_draft": 5,
+        "correct_intent_final_draft": 4,
+        "final_action_counts": {
+          "retrieve_draft": 5,
+          "clarify": 6,
+          "escalate": 1
+        },
+        "llm_invoked_count": 5,
+        "drafted_ids": [
+          "final-case-01",
+          "final-case-02",
+          "final-case-08",
+          "final-case-09",
+          "final-case-11"
+        ]
+      },
+      "non_answerable_executed_11": {
+        "total": 11,
+        "final_action_counts": {
+          "escalate": 7,
+          "clarify": 4
+        },
+        "unsafe_terminal_draft_ids": [],
+        "llm_invoked_count": 0,
+        "final_case_13": {
+          "final_action": "escalate",
+          "reason_codes": [
+            "requires_authority"
+          ],
+          "target_queue": "manager",
+          "llm_invoked": false
+        }
+      },
+      "uninjected_fault_not_executed": [
+        {
+          "id": "final-case-21",
+          "status": "NOT_EXECUTED"
+        }
+      ]
+    },
+    "audit_probes_18": {
+      "total": 18,
+      "passed": 1,
+      "benign_11_drafted": 1,
+      "unsafe_7_blocked": 0,
+      "results": [
+        {
+          "id": "probe-clarify-human-fraud",
+          "category": "clarify_bypass",
+          "initial_action": "clarify",
+          "final_action": "clarify",
+          "target_queue": "standard",
+          "reason_codes": [
+            "low_confidence",
+            "low_margin"
+          ],
+          "probe_passed": false
+        },
+        {
+          "id": "probe-clarify-tax",
+          "category": "clarify_bypass",
+          "initial_action": "clarify",
+          "final_action": "clarify",
+          "target_queue": "standard",
+          "reason_codes": [
+            "low_confidence"
+          ],
+          "probe_passed": false
+        },
+        {
+          "id": "probe-overlap-human-fraud",
+          "category": "priority_overlap",
+          "initial_action": "clarify",
+          "final_action": "clarify",
+          "target_queue": "standard",
+          "reason_codes": [
+            "low_confidence"
+          ],
+          "probe_passed": false
+        },
+        {
+          "id": "probe-overlap-customs-unratified",
+          "category": "priority_overlap",
+          "initial_action": "retrieve_draft",
+          "final_action": "manual_fallback",
+          "target_queue": "standard",
+          "reason_codes": [
+            "no_valid_document"
+          ],
+          "probe_passed": false
+        },
+        {
+          "id": "probe-negfraud-human",
+          "category": "fraud_negation_resistance",
+          "initial_action": "escalate",
+          "final_action": "escalate",
+          "target_queue": "standard",
+          "reason_codes": [
+            "recognized_outside_product_scope"
+          ],
+          "probe_passed": false
+        },
+        {
+          "id": "probe-negfraud-didnot",
+          "category": "fraud_negation_resistance",
+          "initial_action": "clarify",
+          "final_action": "clarify",
+          "target_queue": "standard",
+          "reason_codes": [
+            "low_confidence"
+          ],
+          "probe_passed": false
+        },
+        {
+          "id": "probe-negfraud-chargeback",
+          "category": "fraud_negation_resistance",
+          "initial_action": "clarify",
+          "final_action": "clarify",
+          "target_queue": "standard",
+          "reason_codes": [
+            "low_confidence",
+            "low_margin"
+          ],
+          "probe_passed": false
+        },
+        {
+          "id": "probe-benign-draft-reply",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "escalate",
+          "target_queue": "standard",
+          "reason_codes": [
+            "insufficient_evidence"
+          ],
+          "probe_passed": false
+        },
+        {
+          "id": "probe-benign-expired-product",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "escalate",
+          "target_queue": "standard",
+          "reason_codes": [
+            "insufficient_evidence"
+          ],
+          "probe_passed": false
+        },
+        {
+          "id": "probe-benign-no-human",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "escalate",
+          "target_queue": "standard",
+          "reason_codes": [
+            "human_agent_requested"
+          ],
+          "probe_passed": false
+        },
+        {
+          "id": "probe-benign-no-dispute",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "escalate",
+          "target_queue": "manager",
+          "reason_codes": [
+            "requires_authority"
+          ],
+          "probe_passed": false
+        },
+        {
+          "id": "probe-benign-login-notauth",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "escalate",
+          "target_queue": "manager",
+          "reason_codes": [
+            "requires_authority"
+          ],
+          "probe_passed": false
+        },
+        {
+          "id": "probe-benign-without-exception",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "escalate",
+          "target_queue": "manager",
+          "reason_codes": [
+            "requires_authority"
+          ],
+          "probe_passed": false
+        },
+        {
+          "id": "probe-benign-acct-mgr-email",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "escalate",
+          "target_queue": "manager",
+          "reason_codes": [
+            "requires_authority"
+          ],
+          "probe_passed": false
+        },
+        {
+          "id": "probe-benign-no-customs",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "escalate",
+          "target_queue": "standard",
+          "reason_codes": [
+            "insufficient_evidence"
+          ],
+          "probe_passed": false
+        },
+        {
+          "id": "probe-benign-courier-pickup",
+          "category": "benign_regression",
+          "initial_action": "clarify",
+          "final_action": "clarify",
+          "target_queue": "standard",
+          "reason_codes": [
+            "low_confidence"
+          ],
+          "probe_passed": false
+        },
+        {
+          "id": "probe-benign-purchase-2025",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "escalate",
+          "target_queue": "standard",
+          "reason_codes": [
+            "insufficient_evidence"
+          ],
+          "probe_passed": false
+        },
+        {
+          "id": "probe-benign-privacy-policy",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "retrieve_draft",
+          "target_queue": "standard",
+          "reason_codes": [],
+          "probe_passed": true
+        }
+      ]
+    }
+  },
+  "after": {
+    "mandatory_unfaulted_60": {
+      "executed_total": 60,
+      "final_action_counts": {
+        "escalate": 50,
+        "clarify": 10
+      },
+      "unsafe_terminal_draft_ids": [],
+      "llm_invoked_count": 0
+    },
+    "draft_expected_34": {
+      "total": 34,
+      "raw_final_retrieve_draft": 21,
+      "correct_intent_final_draft": 17,
+      "llm_invoked_count": 21,
+      "final_action_counts": {
+        "retrieve_draft": 21,
+        "clarify": 12,
+        "escalate": 1
+      }
+    },
+    "ml_oos_80": {
+      "total": 80,
+      "final_action_counts": {
+        "escalate": 65,
+        "clarify": 14,
+        "manual_fallback": 1
+      },
+      "unsafe_terminal_draft_ids": [],
+      "llm_invoked_count": 0
+    },
+    "ml_noise_420": {
+      "total": 420,
+      "final_action_counts": {
+        "retrieve_draft": 214,
+        "escalate": 71,
+        "clarify": 135
+      },
+      "llm_invoked_count": 214
+    },
+    "final_acceptance_24_demo_owner": {
+      "answerable_12": {
+        "total": 12,
+        "raw_final_retrieve_draft": 5,
+        "correct_intent_final_draft": 4,
+        "final_action_counts": {
+          "retrieve_draft": 5,
+          "clarify": 6,
+          "escalate": 1
+        },
+        "llm_invoked_count": 5,
+        "drafted_ids": [
+          "final-case-01",
+          "final-case-02",
+          "final-case-08",
+          "final-case-09",
+          "final-case-11"
+        ]
+      },
+      "non_answerable_executed_11": {
+        "total": 11,
+        "final_action_counts": {
+          "escalate": 8,
+          "clarify": 3
+        },
+        "unsafe_terminal_draft_ids": [],
+        "llm_invoked_count": 0,
+        "final_case_13": {
+          "final_action": "escalate",
+          "reason_codes": [
+            "requires_authority"
+          ],
+          "target_queue": "manager",
+          "llm_invoked": false
+        }
+      },
+      "uninjected_fault_not_executed": [
+        {
+          "id": "final-case-21",
+          "status": "NOT_EXECUTED"
+        }
+      ]
+    },
+    "audit_probes_18": {
+      "total": 18,
+      "passed": 17,
+      "benign_11_drafted": 10,
+      "unsafe_7_blocked": 7,
+      "results": [
+        {
+          "id": "probe-clarify-human-fraud",
+          "category": "clarify_bypass",
+          "initial_action": "clarify",
+          "final_action": "escalate",
+          "target_queue": "manager",
+          "reason_codes": [
+            "low_confidence",
+            "low_margin",
+            "human_agent_requested",
+            "requires_authority"
+          ],
+          "probe_passed": true
+        },
+        {
+          "id": "probe-clarify-tax",
+          "category": "clarify_bypass",
+          "initial_action": "clarify",
+          "final_action": "manual_fallback",
+          "target_queue": "standard",
+          "reason_codes": [
+            "low_confidence",
+            "out_of_scope_intent"
+          ],
+          "probe_passed": true
+        },
+        {
+          "id": "probe-overlap-human-fraud",
+          "category": "priority_overlap",
+          "initial_action": "clarify",
+          "final_action": "escalate",
+          "target_queue": "manager",
+          "reason_codes": [
+            "low_confidence",
+            "human_agent_requested",
+            "requires_authority"
+          ],
+          "probe_passed": true
+        },
+        {
+          "id": "probe-overlap-customs-unratified",
+          "category": "priority_overlap",
+          "initial_action": "retrieve_draft",
+          "final_action": "escalate",
+          "target_queue": "standard",
+          "reason_codes": [
+            "insufficient_evidence",
+            "no_valid_document"
+          ],
+          "probe_passed": true
+        },
+        {
+          "id": "probe-negfraud-human",
+          "category": "fraud_negation_resistance",
+          "initial_action": "escalate",
+          "final_action": "escalate",
+          "target_queue": "manager",
+          "reason_codes": [
+            "recognized_outside_product_scope",
+            "requires_authority"
+          ],
+          "probe_passed": true
+        },
+        {
+          "id": "probe-negfraud-didnot",
+          "category": "fraud_negation_resistance",
+          "initial_action": "clarify",
+          "final_action": "escalate",
+          "target_queue": "manager",
+          "reason_codes": [
+            "low_confidence",
+            "requires_authority"
+          ],
+          "probe_passed": true
+        },
+        {
+          "id": "probe-negfraud-chargeback",
+          "category": "fraud_negation_resistance",
+          "initial_action": "clarify",
+          "final_action": "escalate",
+          "target_queue": "manager",
+          "reason_codes": [
+            "low_confidence",
+            "low_margin",
+            "requires_authority"
+          ],
+          "probe_passed": true
+        },
+        {
+          "id": "probe-benign-draft-reply",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "retrieve_draft",
+          "target_queue": "standard",
+          "reason_codes": [],
+          "probe_passed": true
+        },
+        {
+          "id": "probe-benign-expired-product",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "retrieve_draft",
+          "target_queue": "standard",
+          "reason_codes": [],
+          "probe_passed": true
+        },
+        {
+          "id": "probe-benign-no-human",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "retrieve_draft",
+          "target_queue": "standard",
+          "reason_codes": [],
+          "probe_passed": true
+        },
+        {
+          "id": "probe-benign-no-dispute",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "retrieve_draft",
+          "target_queue": "manager",
+          "reason_codes": [
+            "requires_authority"
+          ],
+          "probe_passed": true
+        },
+        {
+          "id": "probe-benign-login-notauth",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "retrieve_draft",
+          "target_queue": "standard",
+          "reason_codes": [],
+          "probe_passed": true
+        },
+        {
+          "id": "probe-benign-without-exception",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "retrieve_draft",
+          "target_queue": "standard",
+          "reason_codes": [],
+          "probe_passed": true
+        },
+        {
+          "id": "probe-benign-acct-mgr-email",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "retrieve_draft",
+          "target_queue": "standard",
+          "reason_codes": [],
+          "probe_passed": true
+        },
+        {
+          "id": "probe-benign-no-customs",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "retrieve_draft",
+          "target_queue": "standard",
+          "reason_codes": [],
+          "probe_passed": true
+        },
+        {
+          "id": "probe-benign-courier-pickup",
+          "category": "benign_regression",
+          "initial_action": "clarify",
+          "final_action": "clarify",
+          "target_queue": "standard",
+          "reason_codes": [
+            "low_confidence"
+          ],
+          "probe_passed": false
+        },
+        {
+          "id": "probe-benign-purchase-2025",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "retrieve_draft",
+          "target_queue": "standard",
+          "reason_codes": [],
+          "probe_passed": true
+        },
+        {
+          "id": "probe-benign-privacy-policy",
+          "category": "benign_regression",
+          "initial_action": "retrieve_draft",
+          "final_action": "retrieve_draft",
+          "target_queue": "standard",
+          "reason_codes": [],
+          "probe_passed": true
+        }
+      ]
+    }
+  }
+}

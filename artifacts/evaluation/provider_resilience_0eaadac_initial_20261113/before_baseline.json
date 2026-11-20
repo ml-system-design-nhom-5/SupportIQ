@@ -1,0 +1,1404 @@
+{
+  "report_type": "controlled_provider_resilience_evaluation",
+  "label": "before_baseline",
+  "generated_at": "2026-11-13T01:59:39.367017+00:00",
+  "source_commit": "c58d83825615338963a706b730dbc0240d962aaa",
+  "controlled_transport_boundary": "Executed via deterministic httpx.MockTransport + ControlledSimClock with 0 external provider calls. Controlled recovery does NOT establish live provider uptime or real API availability.",
+  "external_provider_calls": 0,
+  "trust_env_audit": {
+    "owned_client_created": true,
+    "trust_env": true,
+    "unconditional_trust_env_false": false
+  },
+  "summary": {
+    "total_schedules": 18,
+    "draft_ready_count": 6,
+    "fallback_count": 12,
+    "transient_recoverable_schedules": 9,
+    "transient_recovered_count": 4,
+    "transient_recovery_rate": 0.4444,
+    "unconditional_trust_env_false": false,
+    "latency_includes_retry_waits_all": true,
+    "quota_429_non_retryable_fail_fast": true,
+    "fast_storm_max_attempts_observed": 2,
+    "budget_respected_all": true,
+    "attempt_cap_respected_all": true,
+    "no_auto_send_all": true,
+    "zero_fabricated_totals": true,
+    "all_attempts_persisted": true,
+    "simulated_latency_p50_seconds": 0.8,
+    "simulated_latency_p95_seconds": 9.5,
+    "simulated_latency_max_seconds": 10.0
+  },
+  "schedules": [
+    {
+      "schedule_id": "S01_clean_success",
+      "category": "control_success",
+      "description": "Clean first-attempt 200 OK response within budget.",
+      "expected_if_recovered": "draft_ready",
+      "terminal_status": "draft_ready",
+      "failure_code": null,
+      "reason_codes": [],
+      "fallback_triggered": false,
+      "draft_recovered": true,
+      "no_auto_send_verified": true,
+      "simulated_elapsed_seconds": 0.75,
+      "reported_llm_latency_seconds": 0.75,
+      "sum_attempt_latency_seconds": 0.75,
+      "total_sleep_seconds": 0,
+      "latency_includes_retry_waits": true,
+      "budget_respected_10s": true,
+      "max_requested_attempt_timeout_seconds": 5.0,
+      "attempt_cap_respected_5s": true,
+      "sleep_delays_seconds": [],
+      "attempt_count": 1,
+      "transport_call_count": 1,
+      "attempts": [
+        {
+          "attempt_index": 0,
+          "status": "success",
+          "latency_seconds": 0.75,
+          "stage": "complete",
+          "http_status": 200,
+          "exception_category": null,
+          "usage": {
+            "promptTokenCount": 1420,
+            "candidatesTokenCount": 68,
+            "totalTokenCount": 1488
+          },
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "model_version": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        }
+      ],
+      "transport_requests": [
+        {
+          "transport_call_index": 0,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "success",
+          "simulated_step_duration_seconds": 0.75
+        }
+      ],
+      "llm_usage_mapped": {
+        "input_tokens": 1420,
+        "output_tokens": 68,
+        "total_tokens": 1488
+      },
+      "raw_usage_combined": {
+        "promptTokenCount": 1420,
+        "candidatesTokenCount": 68,
+        "totalTokenCount": 1488
+      },
+      "usage_status": "complete",
+      "total_tokens_fabricated": false,
+      "http_clients_injected": 1
+    },
+    {
+      "schedule_id": "S02_single_503_then_success",
+      "category": "transient_503",
+      "description": "Transient HTTP 503 (no usage) followed by 200 OK on retry.",
+      "expected_if_recovered": "draft_ready",
+      "terminal_status": "draft_ready",
+      "failure_code": null,
+      "reason_codes": [],
+      "fallback_triggered": false,
+      "draft_recovered": true,
+      "no_auto_send_verified": true,
+      "simulated_elapsed_seconds": 1.3,
+      "reported_llm_latency_seconds": 1.3,
+      "sum_attempt_latency_seconds": 1.3,
+      "total_sleep_seconds": 0,
+      "latency_includes_retry_waits": true,
+      "budget_respected_10s": true,
+      "max_requested_attempt_timeout_seconds": 5.0,
+      "attempt_cap_respected_5s": true,
+      "sleep_delays_seconds": [],
+      "attempt_count": 2,
+      "transport_call_count": 2,
+      "attempts": [
+        {
+          "attempt_index": 0,
+          "status": "llm_unavailable",
+          "latency_seconds": 0.4,
+          "stage": "http_response",
+          "http_status": 503,
+          "exception_category": "http_status",
+          "usage": {},
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        },
+        {
+          "attempt_index": 1,
+          "status": "success",
+          "latency_seconds": 0.9,
+          "stage": "complete",
+          "http_status": 200,
+          "exception_category": null,
+          "usage": {
+            "promptTokenCount": 1420,
+            "candidatesTokenCount": 70,
+            "totalTokenCount": 1490
+          },
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "model_version": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        }
+      ],
+      "transport_requests": [
+        {
+          "transport_call_index": 0,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "http_error",
+          "simulated_step_duration_seconds": 0.4
+        },
+        {
+          "transport_call_index": 1,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "success",
+          "simulated_step_duration_seconds": 0.9
+        }
+      ],
+      "llm_usage_mapped": {
+        "input_tokens": 1420,
+        "output_tokens": 70,
+        "total_tokens_partial": 1490
+      },
+      "raw_usage_combined": {
+        "promptTokenCount": 1420,
+        "candidatesTokenCount": 70,
+        "incomplete": true
+      },
+      "usage_status": "incomplete_mixed_attempts",
+      "total_tokens_fabricated": false,
+      "http_clients_injected": 1
+    },
+    {
+      "schedule_id": "S03_double_503_then_success",
+      "category": "transient_503_multi",
+      "description": "Two consecutive transient 503 responses followed by 200 OK well inside 10s budget.",
+      "expected_if_recovered": "draft_ready",
+      "terminal_status": "llm_unavailable",
+      "failure_code": "llm_unavailable",
+      "reason_codes": [
+        "llm_unavailable"
+      ],
+      "fallback_triggered": true,
+      "draft_recovered": false,
+      "no_auto_send_verified": true,
+      "simulated_elapsed_seconds": 0.7,
+      "reported_llm_latency_seconds": 0.7,
+      "sum_attempt_latency_seconds": 0.7,
+      "total_sleep_seconds": 0,
+      "latency_includes_retry_waits": true,
+      "budget_respected_10s": true,
+      "max_requested_attempt_timeout_seconds": 5.0,
+      "attempt_cap_respected_5s": true,
+      "sleep_delays_seconds": [],
+      "attempt_count": 2,
+      "transport_call_count": 2,
+      "attempts": [
+        {
+          "attempt_index": 0,
+          "status": "llm_unavailable",
+          "latency_seconds": 0.35,
+          "stage": "http_response",
+          "http_status": 503,
+          "exception_category": "http_status",
+          "usage": {},
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        },
+        {
+          "attempt_index": 1,
+          "status": "llm_unavailable",
+          "latency_seconds": 0.35,
+          "stage": "http_response",
+          "http_status": 503,
+          "exception_category": "http_status",
+          "usage": {},
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        }
+      ],
+      "transport_requests": [
+        {
+          "transport_call_index": 0,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "http_error",
+          "simulated_step_duration_seconds": 0.35
+        },
+        {
+          "transport_call_index": 1,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "http_error",
+          "simulated_step_duration_seconds": 0.35
+        }
+      ],
+      "llm_usage_mapped": {},
+      "raw_usage_combined": {
+        "incomplete": true
+      },
+      "usage_status": "unknown_no_response",
+      "total_tokens_fabricated": false,
+      "http_clients_injected": 1
+    },
+    {
+      "schedule_id": "S04_503_short_retry_after_then_success",
+      "category": "retry_after_bounded",
+      "description": "HTTP 503 with Retry-After: 1 header followed by 200 OK.",
+      "expected_if_recovered": "draft_ready",
+      "terminal_status": "draft_ready",
+      "failure_code": null,
+      "reason_codes": [],
+      "fallback_triggered": false,
+      "draft_recovered": true,
+      "no_auto_send_verified": true,
+      "simulated_elapsed_seconds": 1.1,
+      "reported_llm_latency_seconds": 1.1,
+      "sum_attempt_latency_seconds": 1.1,
+      "total_sleep_seconds": 0,
+      "latency_includes_retry_waits": true,
+      "budget_respected_10s": true,
+      "max_requested_attempt_timeout_seconds": 5.0,
+      "attempt_cap_respected_5s": true,
+      "sleep_delays_seconds": [],
+      "attempt_count": 2,
+      "transport_call_count": 2,
+      "attempts": [
+        {
+          "attempt_index": 0,
+          "status": "llm_unavailable",
+          "latency_seconds": 0.3,
+          "stage": "http_response",
+          "http_status": 503,
+          "exception_category": "http_status",
+          "usage": {},
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        },
+        {
+          "attempt_index": 1,
+          "status": "success",
+          "latency_seconds": 0.8,
+          "stage": "complete",
+          "http_status": 200,
+          "exception_category": null,
+          "usage": {
+            "promptTokenCount": 1420,
+            "candidatesTokenCount": 65,
+            "totalTokenCount": 1485
+          },
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "model_version": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        }
+      ],
+      "transport_requests": [
+        {
+          "transport_call_index": 0,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "http_error",
+          "simulated_step_duration_seconds": 0.3
+        },
+        {
+          "transport_call_index": 1,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "success",
+          "simulated_step_duration_seconds": 0.8
+        }
+      ],
+      "llm_usage_mapped": {
+        "input_tokens": 1420,
+        "output_tokens": 65,
+        "total_tokens_partial": 1485
+      },
+      "raw_usage_combined": {
+        "promptTokenCount": 1420,
+        "candidatesTokenCount": 65,
+        "incomplete": true
+      },
+      "usage_status": "incomplete_mixed_attempts",
+      "total_tokens_fabricated": false,
+      "http_clients_injected": 1
+    },
+    {
+      "schedule_id": "S05_503_retry_after_beyond_budget",
+      "category": "retry_after_excessive",
+      "description": "HTTP 503 with Retry-After: 15 exceeding remaining 10s budget; must fail closed without sleeping past budget.",
+      "expected_if_recovered": "fallback",
+      "terminal_status": "draft_ready",
+      "failure_code": null,
+      "reason_codes": [],
+      "fallback_triggered": false,
+      "draft_recovered": true,
+      "no_auto_send_verified": true,
+      "simulated_elapsed_seconds": 1.0,
+      "reported_llm_latency_seconds": 1.0,
+      "sum_attempt_latency_seconds": 1.0,
+      "total_sleep_seconds": 0,
+      "latency_includes_retry_waits": true,
+      "budget_respected_10s": true,
+      "max_requested_attempt_timeout_seconds": 5.0,
+      "attempt_cap_respected_5s": true,
+      "sleep_delays_seconds": [],
+      "attempt_count": 2,
+      "transport_call_count": 2,
+      "attempts": [
+        {
+          "attempt_index": 0,
+          "status": "llm_unavailable",
+          "latency_seconds": 0.5,
+          "stage": "http_response",
+          "http_status": 503,
+          "exception_category": "http_status",
+          "usage": {},
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        },
+        {
+          "attempt_index": 1,
+          "status": "success",
+          "latency_seconds": 0.5,
+          "stage": "complete",
+          "http_status": 200,
+          "exception_category": null,
+          "usage": {
+            "promptTokenCount": 1420,
+            "candidatesTokenCount": 65,
+            "totalTokenCount": 1485
+          },
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "model_version": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        }
+      ],
+      "transport_requests": [
+        {
+          "transport_call_index": 0,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "http_error",
+          "simulated_step_duration_seconds": 0.5
+        },
+        {
+          "transport_call_index": 1,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "success",
+          "simulated_step_duration_seconds": 0.5
+        }
+      ],
+      "llm_usage_mapped": {
+        "input_tokens": 1420,
+        "output_tokens": 65,
+        "total_tokens_partial": 1485
+      },
+      "raw_usage_combined": {
+        "promptTokenCount": 1420,
+        "candidatesTokenCount": 65,
+        "incomplete": true
+      },
+      "usage_status": "incomplete_mixed_attempts",
+      "total_tokens_fabricated": false,
+      "http_clients_injected": 1
+    },
+    {
+      "schedule_id": "S06_429_short_retry_after_then_success",
+      "category": "transient_429",
+      "description": "HTTP 429 rate limit with Retry-After: 1 followed by 200 OK.",
+      "expected_if_recovered": "draft_ready",
+      "terminal_status": "llm_unavailable",
+      "failure_code": "llm_rate_limited",
+      "reason_codes": [
+        "llm_unavailable"
+      ],
+      "fallback_triggered": true,
+      "draft_recovered": false,
+      "no_auto_send_verified": true,
+      "simulated_elapsed_seconds": 0.3,
+      "reported_llm_latency_seconds": 0.3,
+      "sum_attempt_latency_seconds": 0.3,
+      "total_sleep_seconds": 0,
+      "latency_includes_retry_waits": true,
+      "budget_respected_10s": true,
+      "max_requested_attempt_timeout_seconds": 5.0,
+      "attempt_cap_respected_5s": true,
+      "sleep_delays_seconds": [],
+      "attempt_count": 1,
+      "transport_call_count": 1,
+      "attempts": [
+        {
+          "attempt_index": 0,
+          "status": "llm_rate_limited",
+          "latency_seconds": 0.3,
+          "stage": "http_response",
+          "http_status": 429,
+          "exception_category": "http_status",
+          "usage": {},
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        }
+      ],
+      "transport_requests": [
+        {
+          "transport_call_index": 0,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "http_error",
+          "simulated_step_duration_seconds": 0.3
+        }
+      ],
+      "llm_usage_mapped": {},
+      "raw_usage_combined": {
+        "incomplete": true
+      },
+      "usage_status": "unknown_no_response",
+      "total_tokens_fabricated": false,
+      "http_clients_injected": 1
+    },
+    {
+      "schedule_id": "S07_timeout_then_success",
+      "category": "transient_timeout",
+      "description": "First attempt ReadTimeout (no usage) followed by 200 OK recovery within 10s.",
+      "expected_if_recovered": "draft_ready",
+      "terminal_status": "draft_ready",
+      "failure_code": null,
+      "reason_codes": [],
+      "fallback_triggered": false,
+      "draft_recovered": true,
+      "no_auto_send_verified": true,
+      "simulated_elapsed_seconds": 6.2,
+      "reported_llm_latency_seconds": 6.2,
+      "sum_attempt_latency_seconds": 6.2,
+      "total_sleep_seconds": 0,
+      "latency_includes_retry_waits": true,
+      "budget_respected_10s": true,
+      "max_requested_attempt_timeout_seconds": 5.0,
+      "attempt_cap_respected_5s": true,
+      "sleep_delays_seconds": [],
+      "attempt_count": 2,
+      "transport_call_count": 2,
+      "attempts": [
+        {
+          "attempt_index": 0,
+          "status": "llm_timeout",
+          "latency_seconds": 5.0,
+          "stage": "transport",
+          "http_status": null,
+          "exception_category": "timeout",
+          "usage": {},
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        },
+        {
+          "attempt_index": 1,
+          "status": "success",
+          "latency_seconds": 1.2,
+          "stage": "complete",
+          "http_status": 200,
+          "exception_category": null,
+          "usage": {
+            "promptTokenCount": 1420,
+            "candidatesTokenCount": 69,
+            "totalTokenCount": 1489
+          },
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "model_version": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        }
+      ],
+      "transport_requests": [
+        {
+          "transport_call_index": 0,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "timeout",
+          "simulated_step_duration_seconds": 5.0
+        },
+        {
+          "transport_call_index": 1,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "success",
+          "simulated_step_duration_seconds": 1.2
+        }
+      ],
+      "llm_usage_mapped": {
+        "input_tokens": 1420,
+        "output_tokens": 69,
+        "total_tokens_partial": 1489
+      },
+      "raw_usage_combined": {
+        "promptTokenCount": 1420,
+        "candidatesTokenCount": 69,
+        "incomplete": true
+      },
+      "usage_status": "incomplete_mixed_attempts",
+      "total_tokens_fabricated": false,
+      "http_clients_injected": 1
+    },
+    {
+      "schedule_id": "S08_repeated_timeouts_exhaust_budget",
+      "category": "timeout_exhaustion",
+      "description": "Consecutive ReadTimeouts exhausting the 10s deadline; must fall back cleanly with unknown usage.",
+      "expected_if_recovered": "fallback",
+      "terminal_status": "llm_unavailable",
+      "failure_code": "llm_timeout",
+      "reason_codes": [
+        "llm_unavailable"
+      ],
+      "fallback_triggered": true,
+      "draft_recovered": false,
+      "no_auto_send_verified": true,
+      "simulated_elapsed_seconds": 10.0,
+      "reported_llm_latency_seconds": 10.0,
+      "sum_attempt_latency_seconds": 10.0,
+      "total_sleep_seconds": 0,
+      "latency_includes_retry_waits": true,
+      "budget_respected_10s": true,
+      "max_requested_attempt_timeout_seconds": 5.0,
+      "attempt_cap_respected_5s": true,
+      "sleep_delays_seconds": [],
+      "attempt_count": 2,
+      "transport_call_count": 2,
+      "attempts": [
+        {
+          "attempt_index": 0,
+          "status": "llm_timeout",
+          "latency_seconds": 5.0,
+          "stage": "transport",
+          "http_status": null,
+          "exception_category": "timeout",
+          "usage": {},
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        },
+        {
+          "attempt_index": 1,
+          "status": "llm_timeout",
+          "latency_seconds": 5.0,
+          "stage": "transport",
+          "http_status": null,
+          "exception_category": "timeout",
+          "usage": {},
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        }
+      ],
+      "transport_requests": [
+        {
+          "transport_call_index": 0,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "timeout",
+          "simulated_step_duration_seconds": 5.0
+        },
+        {
+          "transport_call_index": 1,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "timeout",
+          "simulated_step_duration_seconds": 5.0
+        }
+      ],
+      "llm_usage_mapped": {},
+      "raw_usage_combined": {
+        "incomplete": true
+      },
+      "usage_status": "unknown_no_response",
+      "total_tokens_fabricated": false,
+      "http_clients_injected": 1
+    },
+    {
+      "schedule_id": "S09_slow_503_then_clamped_timeout",
+      "category": "budget_clamping",
+      "description": "Slow 4.5s HTTP 503 followed by ReadTimeout clamped to remaining budget (~5.0-5.5s); must respect 10s deadline.",
+      "expected_if_recovered": "fallback",
+      "terminal_status": "llm_unavailable",
+      "failure_code": "llm_timeout",
+      "reason_codes": [
+        "llm_unavailable"
+      ],
+      "fallback_triggered": true,
+      "draft_recovered": false,
+      "no_auto_send_verified": true,
+      "simulated_elapsed_seconds": 9.5,
+      "reported_llm_latency_seconds": 9.5,
+      "sum_attempt_latency_seconds": 9.5,
+      "total_sleep_seconds": 0,
+      "latency_includes_retry_waits": true,
+      "budget_respected_10s": true,
+      "max_requested_attempt_timeout_seconds": 5.0,
+      "attempt_cap_respected_5s": true,
+      "sleep_delays_seconds": [],
+      "attempt_count": 2,
+      "transport_call_count": 2,
+      "attempts": [
+        {
+          "attempt_index": 0,
+          "status": "llm_unavailable",
+          "latency_seconds": 4.5,
+          "stage": "http_response",
+          "http_status": 503,
+          "exception_category": "http_status",
+          "usage": {},
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        },
+        {
+          "attempt_index": 1,
+          "status": "llm_timeout",
+          "latency_seconds": 5.0,
+          "stage": "transport",
+          "http_status": null,
+          "exception_category": "timeout",
+          "usage": {},
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        }
+      ],
+      "transport_requests": [
+        {
+          "transport_call_index": 0,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "http_error",
+          "simulated_step_duration_seconds": 4.5
+        },
+        {
+          "transport_call_index": 1,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "timeout",
+          "simulated_step_duration_seconds": 5.0
+        }
+      ],
+      "llm_usage_mapped": {},
+      "raw_usage_combined": {
+        "incomplete": true
+      },
+      "usage_status": "unknown_no_response",
+      "total_tokens_fabricated": false,
+      "http_clients_injected": 1
+    },
+    {
+      "schedule_id": "S10_permanent_503_exhaustion",
+      "category": "permanent_503",
+      "description": "Permanent HTTP 503 across all retries; must fall back cleanly with every attempt recorded.",
+      "expected_if_recovered": "fallback",
+      "terminal_status": "llm_unavailable",
+      "failure_code": "llm_unavailable",
+      "reason_codes": [
+        "llm_unavailable"
+      ],
+      "fallback_triggered": true,
+      "draft_recovered": false,
+      "no_auto_send_verified": true,
+      "simulated_elapsed_seconds": 0.8,
+      "reported_llm_latency_seconds": 0.8,
+      "sum_attempt_latency_seconds": 0.8,
+      "total_sleep_seconds": 0,
+      "latency_includes_retry_waits": true,
+      "budget_respected_10s": true,
+      "max_requested_attempt_timeout_seconds": 5.0,
+      "attempt_cap_respected_5s": true,
+      "sleep_delays_seconds": [],
+      "attempt_count": 2,
+      "transport_call_count": 2,
+      "attempts": [
+        {
+          "attempt_index": 0,
+          "status": "llm_unavailable",
+          "latency_seconds": 0.4,
+          "stage": "http_response",
+          "http_status": 503,
+          "exception_category": "http_status",
+          "usage": {},
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        },
+        {
+          "attempt_index": 1,
+          "status": "llm_unavailable",
+          "latency_seconds": 0.4,
+          "stage": "http_response",
+          "http_status": 503,
+          "exception_category": "http_status",
+          "usage": {},
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        }
+      ],
+      "transport_requests": [
+        {
+          "transport_call_index": 0,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "http_error",
+          "simulated_step_duration_seconds": 0.4
+        },
+        {
+          "transport_call_index": 1,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "http_error",
+          "simulated_step_duration_seconds": 0.4
+        }
+      ],
+      "llm_usage_mapped": {},
+      "raw_usage_combined": {
+        "incomplete": true
+      },
+      "usage_status": "unknown_no_response",
+      "total_tokens_fabricated": false,
+      "http_clients_injected": 1
+    },
+    {
+      "schedule_id": "S11_non_retryable_400_fast_fail",
+      "category": "non_retryable_400",
+      "description": "Non-retryable HTTP 400 request error; must fail fast in 1 attempt and preserve any error usageMetadata.",
+      "expected_if_recovered": "fallback",
+      "terminal_status": "llm_unavailable",
+      "failure_code": "llm_request_rejected",
+      "reason_codes": [
+        "llm_unavailable"
+      ],
+      "fallback_triggered": true,
+      "draft_recovered": false,
+      "no_auto_send_verified": true,
+      "simulated_elapsed_seconds": 0.25,
+      "reported_llm_latency_seconds": 0.25,
+      "sum_attempt_latency_seconds": 0.25,
+      "total_sleep_seconds": 0,
+      "latency_includes_retry_waits": true,
+      "budget_respected_10s": true,
+      "max_requested_attempt_timeout_seconds": 5.0,
+      "attempt_cap_respected_5s": true,
+      "sleep_delays_seconds": [],
+      "attempt_count": 1,
+      "transport_call_count": 1,
+      "attempts": [
+        {
+          "attempt_index": 0,
+          "status": "llm_request_rejected",
+          "latency_seconds": 0.25,
+          "stage": "http_response",
+          "http_status": 400,
+          "exception_category": "http_status",
+          "usage": {
+            "promptTokenCount": 310,
+            "totalTokenCount": 310
+          },
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        }
+      ],
+      "transport_requests": [
+        {
+          "transport_call_index": 0,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "http_error",
+          "simulated_step_duration_seconds": 0.25
+        }
+      ],
+      "llm_usage_mapped": {
+        "input_tokens": 310,
+        "total_tokens": 310
+      },
+      "raw_usage_combined": {
+        "promptTokenCount": 310,
+        "totalTokenCount": 310
+      },
+      "usage_status": "complete",
+      "total_tokens_fabricated": false,
+      "http_clients_injected": 1
+    },
+    {
+      "schedule_id": "S12_connect_error_then_success",
+      "category": "transient_connect_error",
+      "description": "Transient ConnectError on first attempt followed by 200 OK.",
+      "expected_if_recovered": "draft_ready",
+      "terminal_status": "draft_ready",
+      "failure_code": null,
+      "reason_codes": [],
+      "fallback_triggered": false,
+      "draft_recovered": true,
+      "no_auto_send_verified": true,
+      "simulated_elapsed_seconds": 1.2,
+      "reported_llm_latency_seconds": 1.2,
+      "sum_attempt_latency_seconds": 1.2,
+      "total_sleep_seconds": 0,
+      "latency_includes_retry_waits": true,
+      "budget_respected_10s": true,
+      "max_requested_attempt_timeout_seconds": 5.0,
+      "attempt_cap_respected_5s": true,
+      "sleep_delays_seconds": [],
+      "attempt_count": 2,
+      "transport_call_count": 2,
+      "attempts": [
+        {
+          "attempt_index": 0,
+          "status": "llm_unavailable",
+          "latency_seconds": 0.35,
+          "stage": "connect",
+          "http_status": null,
+          "exception_category": "network_error",
+          "usage": {},
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        },
+        {
+          "attempt_index": 1,
+          "status": "success",
+          "latency_seconds": 0.85,
+          "stage": "complete",
+          "http_status": 200,
+          "exception_category": null,
+          "usage": {
+            "promptTokenCount": 1420,
+            "candidatesTokenCount": 67,
+            "totalTokenCount": 1487
+          },
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "model_version": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        }
+      ],
+      "transport_requests": [
+        {
+          "transport_call_index": 0,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "connect_error",
+          "simulated_step_duration_seconds": 0.35
+        },
+        {
+          "transport_call_index": 1,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "success",
+          "simulated_step_duration_seconds": 0.85
+        }
+      ],
+      "llm_usage_mapped": {
+        "input_tokens": 1420,
+        "output_tokens": 67,
+        "total_tokens_partial": 1487
+      },
+      "raw_usage_combined": {
+        "promptTokenCount": 1420,
+        "candidatesTokenCount": 67,
+        "incomplete": true
+      },
+      "usage_status": "incomplete_mixed_attempts",
+      "total_tokens_fabricated": false,
+      "http_clients_injected": 1
+    },
+    {
+      "schedule_id": "S13_remaining_budget_clamped_timeout",
+      "category": "remaining_budget_clamp",
+      "description": "Slow 503 (4.2s) + slow 503 (3.5s) leaving 2.3s; verifies timeout clamping below 5s and budget <= 10s.",
+      "expected_if_recovered": "fallback",
+      "terminal_status": "llm_unavailable",
+      "failure_code": "llm_unavailable",
+      "reason_codes": [
+        "llm_unavailable"
+      ],
+      "fallback_triggered": true,
+      "draft_recovered": false,
+      "no_auto_send_verified": true,
+      "simulated_elapsed_seconds": 7.7,
+      "reported_llm_latency_seconds": 7.7,
+      "sum_attempt_latency_seconds": 7.7,
+      "total_sleep_seconds": 0,
+      "latency_includes_retry_waits": true,
+      "budget_respected_10s": true,
+      "max_requested_attempt_timeout_seconds": 5.0,
+      "attempt_cap_respected_5s": true,
+      "sleep_delays_seconds": [],
+      "attempt_count": 2,
+      "transport_call_count": 2,
+      "attempts": [
+        {
+          "attempt_index": 0,
+          "status": "llm_unavailable",
+          "latency_seconds": 4.2,
+          "stage": "http_response",
+          "http_status": 503,
+          "exception_category": "http_status",
+          "usage": {},
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        },
+        {
+          "attempt_index": 1,
+          "status": "llm_unavailable",
+          "latency_seconds": 3.5,
+          "stage": "http_response",
+          "http_status": 503,
+          "exception_category": "http_status",
+          "usage": {},
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        }
+      ],
+      "transport_requests": [
+        {
+          "transport_call_index": 0,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "http_error",
+          "simulated_step_duration_seconds": 4.2
+        },
+        {
+          "transport_call_index": 1,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "http_error",
+          "simulated_step_duration_seconds": 3.5
+        }
+      ],
+      "llm_usage_mapped": {},
+      "raw_usage_combined": {
+        "incomplete": true
+      },
+      "usage_status": "unknown_no_response",
+      "total_tokens_fabricated": false,
+      "http_clients_injected": 1
+    },
+    {
+      "schedule_id": "S14_503_malformed_retry_after_header",
+      "category": "retry_after_malformed",
+      "description": "HTTP 503 with malformed/negative Retry-After values; must never crash or sleep negative, recovering cleanly.",
+      "expected_if_recovered": "draft_ready",
+      "terminal_status": "llm_unavailable",
+      "failure_code": "llm_unavailable",
+      "reason_codes": [
+        "llm_unavailable"
+      ],
+      "fallback_triggered": true,
+      "draft_recovered": false,
+      "no_auto_send_verified": true,
+      "simulated_elapsed_seconds": 0.6,
+      "reported_llm_latency_seconds": 0.6,
+      "sum_attempt_latency_seconds": 0.6,
+      "total_sleep_seconds": 0,
+      "latency_includes_retry_waits": true,
+      "budget_respected_10s": true,
+      "max_requested_attempt_timeout_seconds": 5.0,
+      "attempt_cap_respected_5s": true,
+      "sleep_delays_seconds": [],
+      "attempt_count": 2,
+      "transport_call_count": 2,
+      "attempts": [
+        {
+          "attempt_index": 0,
+          "status": "llm_unavailable",
+          "latency_seconds": 0.3,
+          "stage": "http_response",
+          "http_status": 503,
+          "exception_category": "http_status",
+          "usage": {},
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        },
+        {
+          "attempt_index": 1,
+          "status": "llm_unavailable",
+          "latency_seconds": 0.3,
+          "stage": "http_response",
+          "http_status": 503,
+          "exception_category": "http_status",
+          "usage": {},
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        }
+      ],
+      "transport_requests": [
+        {
+          "transport_call_index": 0,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "http_error",
+          "simulated_step_duration_seconds": 0.3
+        },
+        {
+          "transport_call_index": 1,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "http_error",
+          "simulated_step_duration_seconds": 0.3
+        }
+      ],
+      "llm_usage_mapped": {},
+      "raw_usage_combined": {
+        "incomplete": true
+      },
+      "usage_status": "unknown_no_response",
+      "total_tokens_fabricated": false,
+      "http_clients_injected": 1
+    },
+    {
+      "schedule_id": "S15_429_invalid_retry_info_typing",
+      "category": "retry_info_invalid",
+      "description": "HTTP 429 carrying malformed Google RPC RetryInfo retryDelay types/values (int, NaNs, negative) before 200 OK.",
+      "expected_if_recovered": "draft_ready",
+      "terminal_status": "llm_unavailable",
+      "failure_code": "llm_rate_limited",
+      "reason_codes": [
+        "llm_unavailable"
+      ],
+      "fallback_triggered": true,
+      "draft_recovered": false,
+      "no_auto_send_verified": true,
+      "simulated_elapsed_seconds": 0.3,
+      "reported_llm_latency_seconds": 0.3,
+      "sum_attempt_latency_seconds": 0.3,
+      "total_sleep_seconds": 0,
+      "latency_includes_retry_waits": true,
+      "budget_respected_10s": true,
+      "max_requested_attempt_timeout_seconds": 5.0,
+      "attempt_cap_respected_5s": true,
+      "sleep_delays_seconds": [],
+      "attempt_count": 1,
+      "transport_call_count": 1,
+      "attempts": [
+        {
+          "attempt_index": 0,
+          "status": "llm_rate_limited",
+          "latency_seconds": 0.3,
+          "stage": "http_response",
+          "http_status": 429,
+          "exception_category": "http_status",
+          "usage": {},
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        }
+      ],
+      "transport_requests": [
+        {
+          "transport_call_index": 0,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "http_error",
+          "simulated_step_duration_seconds": 0.3
+        }
+      ],
+      "llm_usage_mapped": {},
+      "raw_usage_combined": {
+        "incomplete": true
+      },
+      "usage_status": "unknown_no_response",
+      "total_tokens_fabricated": false,
+      "http_clients_injected": 1
+    },
+    {
+      "schedule_id": "S16_429_valid_retry_info_json",
+      "category": "retry_info_valid",
+      "description": "HTTP 429 carrying valid Google RPC RetryInfo retryDelay '1s' followed by 200 OK.",
+      "expected_if_recovered": "draft_ready",
+      "terminal_status": "llm_unavailable",
+      "failure_code": "llm_rate_limited",
+      "reason_codes": [
+        "llm_unavailable"
+      ],
+      "fallback_triggered": true,
+      "draft_recovered": false,
+      "no_auto_send_verified": true,
+      "simulated_elapsed_seconds": 0.3,
+      "reported_llm_latency_seconds": 0.3,
+      "sum_attempt_latency_seconds": 0.3,
+      "total_sleep_seconds": 0,
+      "latency_includes_retry_waits": true,
+      "budget_respected_10s": true,
+      "max_requested_attempt_timeout_seconds": 5.0,
+      "attempt_cap_respected_5s": true,
+      "sleep_delays_seconds": [],
+      "attempt_count": 1,
+      "transport_call_count": 1,
+      "attempts": [
+        {
+          "attempt_index": 0,
+          "status": "llm_rate_limited",
+          "latency_seconds": 0.3,
+          "stage": "http_response",
+          "http_status": 429,
+          "exception_category": "http_status",
+          "usage": {},
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        }
+      ],
+      "transport_requests": [
+        {
+          "transport_call_index": 0,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "http_error",
+          "simulated_step_duration_seconds": 0.3
+        }
+      ],
+      "llm_usage_mapped": {},
+      "raw_usage_combined": {
+        "incomplete": true
+      },
+      "usage_status": "unknown_no_response",
+      "total_tokens_fabricated": false,
+      "http_clients_injected": 1
+    },
+    {
+      "schedule_id": "S17_429_daily_quota_exhausted_non_retryable",
+      "category": "quota_classification",
+      "description": "HTTP 429 with QuotaFailure / GenerateRequestsPerDay hard quota exhausted; should fail fast without futile retries.",
+      "expected_if_recovered": "fallback",
+      "terminal_status": "llm_unavailable",
+      "failure_code": "llm_rate_limited",
+      "reason_codes": [
+        "llm_unavailable"
+      ],
+      "fallback_triggered": true,
+      "draft_recovered": false,
+      "no_auto_send_verified": true,
+      "simulated_elapsed_seconds": 0.3,
+      "reported_llm_latency_seconds": 0.3,
+      "sum_attempt_latency_seconds": 0.3,
+      "total_sleep_seconds": 0,
+      "latency_includes_retry_waits": true,
+      "budget_respected_10s": true,
+      "max_requested_attempt_timeout_seconds": 5.0,
+      "attempt_cap_respected_5s": true,
+      "sleep_delays_seconds": [],
+      "attempt_count": 1,
+      "transport_call_count": 1,
+      "attempts": [
+        {
+          "attempt_index": 0,
+          "status": "llm_rate_limited",
+          "latency_seconds": 0.3,
+          "stage": "http_response",
+          "http_status": 429,
+          "exception_category": "http_status",
+          "usage": {},
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        }
+      ],
+      "transport_requests": [
+        {
+          "transport_call_index": 0,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "http_error",
+          "simulated_step_duration_seconds": 0.3
+        }
+      ],
+      "llm_usage_mapped": {},
+      "raw_usage_combined": {
+        "incomplete": true
+      },
+      "usage_status": "unknown_no_response",
+      "total_tokens_fabricated": false,
+      "http_clients_injected": 1
+    },
+    {
+      "schedule_id": "S18_fast_503_storm_max_attempts_bound",
+      "category": "max_attempts_bound",
+      "description": "Fast 0.05s HTTP 503 storm verifying bounded max attempt count and clean fallback.",
+      "expected_if_recovered": "fallback",
+      "terminal_status": "llm_unavailable",
+      "failure_code": "llm_unavailable",
+      "reason_codes": [
+        "llm_unavailable"
+      ],
+      "fallback_triggered": true,
+      "draft_recovered": false,
+      "no_auto_send_verified": true,
+      "simulated_elapsed_seconds": 0.1,
+      "reported_llm_latency_seconds": 0.1,
+      "sum_attempt_latency_seconds": 0.1,
+      "total_sleep_seconds": 0,
+      "latency_includes_retry_waits": true,
+      "budget_respected_10s": true,
+      "max_requested_attempt_timeout_seconds": 5.0,
+      "attempt_cap_respected_5s": true,
+      "sleep_delays_seconds": [],
+      "attempt_count": 2,
+      "transport_call_count": 2,
+      "attempts": [
+        {
+          "attempt_index": 0,
+          "status": "llm_unavailable",
+          "latency_seconds": 0.05,
+          "stage": "http_response",
+          "http_status": 503,
+          "exception_category": "http_status",
+          "usage": {},
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        },
+        {
+          "attempt_index": 1,
+          "status": "llm_unavailable",
+          "latency_seconds": 0.05,
+          "stage": "http_response",
+          "http_status": 503,
+          "exception_category": "http_status",
+          "usage": {},
+          "metadata": {
+            "provider": "google_ai_studio",
+            "model": "gemini-3.1-flash-lite",
+            "prompt_version": "grounded-v3"
+          }
+        }
+      ],
+      "transport_requests": [
+        {
+          "transport_call_index": 0,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "http_error",
+          "simulated_step_duration_seconds": 0.05
+        },
+        {
+          "transport_call_index": 1,
+          "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
+          "requested_read_timeout": 5.0,
+          "requested_connect_timeout": 3.0,
+          "simulated_step_outcome": "http_error",
+          "simulated_step_duration_seconds": 0.05
+        }
+      ],
+      "llm_usage_mapped": {},
+      "raw_usage_combined": {
+        "incomplete": true
+      },
+      "usage_status": "unknown_no_response",
+      "total_tokens_fabricated": false,
+      "http_clients_injected": 1
+    }
+  ]
+}

@@ -1,0 +1,205 @@
+======================================================================
+SupportIQ DistilBERT robust training | protocol=cv | device=cuda:0
+Development samples: 37911 | hold-out test samples isolated (never loaded): 6690
+Label smoothing 0.0 | min temperature 1.0 | epochs 2 | lr 3e-05
+Extra training rows: 506 (+4 noisy variants each) | dev set: 181 | out-of-domain train 95 (+2 variants, weight 0.5), dev 39
+======================================================================
+
+>>> Fold 0: train 71053 (incl. augmentation) | val 3792 clean + 3792 noisy
+  Fold 0 | 285 out-of-domain rows trained towards uniform (weight 0.5)
+Loading weights:   0%|          | 0/100 [00:00<?, ?it/s]Loading weights: 100%|██████████| 100/100 [00:00<00:00, 1924.78it/s]
+[transformers] [1mDistilBertForSequenceClassification LOAD REPORT[0m from: artifacts\models\pretrained\distilbert-base-uncased
+Key                   | Status  | 
+----------------------+---------+-
+classifier.weight     | MISSING | 
+classifier.bias       | MISSING | 
+pre_classifier.weight | MISSING | 
+pre_classifier.bias   | MISSING | 
+
+Notes:
+- MISSING:	those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.
+C:\Users\vulin\Documents\GitHub\SupportIQ\.venv-rocm\Lib\site-packages\transformers\integrations\sdpa_attention.py:174: UserWarning: Mem Efficient attention on Current AMD GPU is still experimental. Enable it with TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1. (Triggered internally at C:\b\pytorch\aten\src\ATen\native\transformers\hip\sdp_utils.cpp:361.)
+  attn_output = torch.nn.functional.scaled_dot_product_attention(
+  Fold 0 | Epoch 1/2 loss 0.9513 (96.9s)
+  Fold 0 | Epoch 2/2 loss 0.2743 (93.8s)
+  Fold 0 macro-F1 clean 0.9982 | noisy 0.9924
+
+>>> Fold 1: train 71055 (incl. augmentation) | val 3791 clean + 3791 noisy
+  Fold 1 | 285 out-of-domain rows trained towards uniform (weight 0.5)
+Loading weights:   0%|          | 0/100 [00:00<?, ?it/s]Loading weights: 100%|██████████| 100/100 [00:00<00:00, 1121.78it/s]
+[transformers] [1mDistilBertForSequenceClassification LOAD REPORT[0m from: artifacts\models\pretrained\distilbert-base-uncased
+Key                   | Status  | 
+----------------------+---------+-
+classifier.weight     | MISSING | 
+classifier.bias       | MISSING | 
+pre_classifier.weight | MISSING | 
+pre_classifier.bias   | MISSING | 
+
+Notes:
+- MISSING:	those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.
+  Fold 1 | Epoch 1/2 loss 0.9496 (91.0s)
+  Fold 1 | Epoch 2/2 loss 0.2738 (90.4s)
+  Fold 1 macro-F1 clean 0.9961 | noisy 0.9872
+
+>>> Fold 2: train 71055 (incl. augmentation) | val 3791 clean + 3791 noisy
+  Fold 2 | 285 out-of-domain rows trained towards uniform (weight 0.5)
+Loading weights:   0%|          | 0/100 [00:00<?, ?it/s]Loading weights: 100%|██████████| 100/100 [00:00<00:00, 1769.40it/s]
+[transformers] [1mDistilBertForSequenceClassification LOAD REPORT[0m from: artifacts\models\pretrained\distilbert-base-uncased
+Key                   | Status  | 
+----------------------+---------+-
+classifier.weight     | MISSING | 
+classifier.bias       | MISSING | 
+pre_classifier.weight | MISSING | 
+pre_classifier.bias   | MISSING | 
+
+Notes:
+- MISSING:	those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.
+  Fold 2 | Epoch 1/2 loss 0.9487 (94.7s)
+  Fold 2 | Epoch 2/2 loss 0.2783 (91.4s)
+  Fold 2 macro-F1 clean 0.9966 | noisy 0.9908
+
+>>> Fold 3: train 71055 (incl. augmentation) | val 3791 clean + 3791 noisy
+  Fold 3 | 285 out-of-domain rows trained towards uniform (weight 0.5)
+Loading weights:   0%|          | 0/100 [00:00<?, ?it/s]Loading weights: 100%|██████████| 100/100 [00:00<00:00, 1403.75it/s]
+[transformers] [1mDistilBertForSequenceClassification LOAD REPORT[0m from: artifacts\models\pretrained\distilbert-base-uncased
+Key                   | Status  | 
+----------------------+---------+-
+classifier.weight     | MISSING | 
+classifier.bias       | MISSING | 
+pre_classifier.weight | MISSING | 
+pre_classifier.bias   | MISSING | 
+
+Notes:
+- MISSING:	those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.
+  Fold 3 | Epoch 1/2 loss 0.9643 (96.5s)
+  Fold 3 | Epoch 2/2 loss 0.2767 (108.1s)
+  Fold 3 macro-F1 clean 0.9958 | noisy 0.9869
+
+>>> Fold 4: train 71055 (incl. augmentation) | val 3791 clean + 3791 noisy
+  Fold 4 | 285 out-of-domain rows trained towards uniform (weight 0.5)
+Loading weights:   0%|          | 0/100 [00:00<?, ?it/s]Loading weights: 100%|██████████| 100/100 [00:00<00:00, 1339.19it/s]
+[transformers] [1mDistilBertForSequenceClassification LOAD REPORT[0m from: artifacts\models\pretrained\distilbert-base-uncased
+Key                   | Status  | 
+----------------------+---------+-
+classifier.weight     | MISSING | 
+classifier.bias       | MISSING | 
+pre_classifier.weight | MISSING | 
+pre_classifier.bias   | MISSING | 
+
+Notes:
+- MISSING:	those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.
+  Fold 4 | Epoch 1/2 loss 0.9533 (103.8s)
+  Fold 4 | Epoch 2/2 loss 0.2697 (112.0s)
+  Fold 4 macro-F1 clean 0.9963 | noisy 0.9903
+
+>>> Fold 5: train 71055 (incl. augmentation) | val 3791 clean + 3791 noisy
+  Fold 5 | 285 out-of-domain rows trained towards uniform (weight 0.5)
+Loading weights:   0%|          | 0/100 [00:00<?, ?it/s]Loading weights: 100%|██████████| 100/100 [00:00<00:00, 1363.87it/s]
+[transformers] [1mDistilBertForSequenceClassification LOAD REPORT[0m from: artifacts\models\pretrained\distilbert-base-uncased
+Key                   | Status  | 
+----------------------+---------+-
+classifier.weight     | MISSING | 
+classifier.bias       | MISSING | 
+pre_classifier.weight | MISSING | 
+pre_classifier.bias   | MISSING | 
+
+Notes:
+- MISSING:	those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.
+  Fold 5 | Epoch 1/2 loss 0.9538 (109.7s)
+  Fold 5 | Epoch 2/2 loss 0.2795 (108.6s)
+  Fold 5 macro-F1 clean 0.9961 | noisy 0.9838
+
+>>> Fold 6: train 71055 (incl. augmentation) | val 3791 clean + 3791 noisy
+  Fold 6 | 285 out-of-domain rows trained towards uniform (weight 0.5)
+Loading weights:   0%|          | 0/100 [00:00<?, ?it/s]Loading weights: 100%|██████████| 100/100 [00:00<00:00, 1167.37it/s]
+[transformers] [1mDistilBertForSequenceClassification LOAD REPORT[0m from: artifacts\models\pretrained\distilbert-base-uncased
+Key                   | Status  | 
+----------------------+---------+-
+classifier.weight     | MISSING | 
+classifier.bias       | MISSING | 
+pre_classifier.weight | MISSING | 
+pre_classifier.bias   | MISSING | 
+
+Notes:
+- MISSING:	those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.
+  Fold 6 | Epoch 1/2 loss 0.9618 (106.2s)
+  Fold 6 | Epoch 2/2 loss 0.2805 (112.7s)
+  Fold 6 macro-F1 clean 0.9961 | noisy 0.9881
+
+>>> Fold 7: train 71055 (incl. augmentation) | val 3791 clean + 3791 noisy
+  Fold 7 | 285 out-of-domain rows trained towards uniform (weight 0.5)
+Loading weights:   0%|          | 0/100 [00:00<?, ?it/s]Loading weights: 100%|██████████| 100/100 [00:00<00:00, 1758.74it/s]
+[transformers] [1mDistilBertForSequenceClassification LOAD REPORT[0m from: artifacts\models\pretrained\distilbert-base-uncased
+Key                   | Status  | 
+----------------------+---------+-
+classifier.weight     | MISSING | 
+classifier.bias       | MISSING | 
+pre_classifier.weight | MISSING | 
+pre_classifier.bias   | MISSING | 
+
+Notes:
+- MISSING:	those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.
+  Fold 7 | Epoch 1/2 loss 0.9515 (109.4s)
+  Fold 7 | Epoch 2/2 loss 0.2787 (109.1s)
+  Fold 7 macro-F1 clean 0.9974 | noisy 0.9900
+
+>>> Fold 8: train 71055 (incl. augmentation) | val 3791 clean + 3791 noisy
+  Fold 8 | 285 out-of-domain rows trained towards uniform (weight 0.5)
+Loading weights:   0%|          | 0/100 [00:00<?, ?it/s]Loading weights: 100%|██████████| 100/100 [00:00<00:00, 1425.47it/s]
+[transformers] [1mDistilBertForSequenceClassification LOAD REPORT[0m from: artifacts\models\pretrained\distilbert-base-uncased
+Key                   | Status  | 
+----------------------+---------+-
+classifier.weight     | MISSING | 
+classifier.bias       | MISSING | 
+pre_classifier.weight | MISSING | 
+pre_classifier.bias   | MISSING | 
+
+Notes:
+- MISSING:	those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.
+  Fold 8 | Epoch 1/2 loss 0.9554 (109.6s)
+  Fold 8 | Epoch 2/2 loss 0.2741 (109.1s)
+  Fold 8 macro-F1 clean 0.9964 | noisy 0.9861
+
+>>> Fold 9: train 71055 (incl. augmentation) | val 3791 clean + 3791 noisy
+  Fold 9 | 285 out-of-domain rows trained towards uniform (weight 0.5)
+Loading weights:   0%|          | 0/100 [00:00<?, ?it/s]Loading weights:   7%|▋         | 7/100 [00:00<00:01, 69.07it/s]Loading weights: 100%|██████████| 100/100 [00:00<00:00, 944.39it/s]
+[transformers] [1mDistilBertForSequenceClassification LOAD REPORT[0m from: artifacts\models\pretrained\distilbert-base-uncased
+Key                   | Status  | 
+----------------------+---------+-
+classifier.weight     | MISSING | 
+classifier.bias       | MISSING | 
+pre_classifier.weight | MISSING | 
+pre_classifier.bias   | MISSING | 
+
+Notes:
+- MISSING:	those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.
+  Fold 9 | Epoch 1/2 loss 0.9609 (111.8s)
+  Fold 9 | Epoch 2/2 loss 0.2783 (112.2s)
+  Fold 9 macro-F1 clean 0.9977 | noisy 0.9903
+
+============================================================
+Validation macro-F1 clean 0.9967 ± 0.0008 | noisy 0.9886 ± 0.0026
+Temperature T=1.000 (fitted 0.800) | ECE 0.0041 -> 0.0041
+============================================================
+
+>>> Final fit: 37911 Bitext rows, 78637 rows incl. augmentation and extra data
+  Final | 285 out-of-domain rows trained towards uniform (weight 0.5)
+Loading weights:   0%|          | 0/100 [00:00<?, ?it/s]Loading weights: 100%|██████████| 100/100 [00:00<00:00, 3783.46it/s]
+[transformers] [1mDistilBertForSequenceClassification LOAD REPORT[0m from: artifacts\models\pretrained\distilbert-base-uncased
+Key                   | Status  | 
+----------------------+---------+-
+classifier.weight     | MISSING | 
+classifier.bias       | MISSING | 
+pre_classifier.weight | MISSING | 
+pre_classifier.bias   | MISSING | 
+
+Notes:
+- MISSING:	those params were newly initialized because missing from the checkpoint. Consider training on your downstream task.
+  Final | Epoch 1/2 loss 0.8857 (114.1s)
+  Final | Epoch 2/2 loss 0.2473 (109.3s)
+Temperature from dev set: T=1.000 (fitted 0.907)
+Dev set (181): macro-F1 0.8788 | supported acc 0.9231 | scope acc 0.9503 | ECE@T 0.0495 | T fitted on dev would be 0.907
+Dev out-of-domain (39): low-confidence rate 0.974 | median conf 0.042 | AUROC 0.975 | in-domain low-conf 0.138
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]Writing model shards: 100%|██████████| 1/1 [00:00<00:00,  2.71it/s]Writing model shards: 100%|██████████| 1/1 [00:00<00:00,  2.71it/s]
+Saved model, tokenizer and report to artifacts\models\trained\distilbert-supportiq-v1.1.0
+Run record: artifacts\training\intent-v1.1.0\run.json

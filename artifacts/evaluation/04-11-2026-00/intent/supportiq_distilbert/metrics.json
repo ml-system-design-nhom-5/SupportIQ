@@ -1,0 +1,104 @@
+{
+  "macro_f1": 0.980526342699629,
+  "weighted_f1": 0.9802656266982948,
+  "accuracy": 0.9802690582959641,
+  "core_metrics": {
+    "core_intents": [
+      "request_refund",
+      "shipping_costs",
+      "delivery_issue",
+      "refund_status",
+      "return_product",
+      "refund_policy",
+      "delivery_time",
+      "human_agent",
+      "track_order",
+      "payment_issue",
+      "cancel_order",
+      "return_policy"
+    ],
+    "n_core_intents": 12,
+    "per_intent": {
+      "request_refund": {
+        "precision": 0.9724137931034482,
+        "recall": 0.9929577464788732,
+        "f1": 0.9825783972125436,
+        "support": 142
+      },
+      "shipping_costs": {
+        "precision": 1.0,
+        "recall": 0.9655172413793104,
+        "f1": 0.9824561403508771,
+        "support": 145
+      },
+      "delivery_issue": {
+        "precision": 0.9738562091503268,
+        "recall": 1.0,
+        "f1": 0.9867549668874173,
+        "support": 149
+      },
+      "refund_status": {
+        "precision": 1.0,
+        "recall": 0.9463087248322147,
+        "f1": 0.9724137931034482,
+        "support": 149
+      },
+      "return_product": {
+        "precision": 0.9119496855345912,
+        "recall": 0.9731543624161074,
+        "f1": 0.9415584415584416,
+        "support": 149
+      },
+      "refund_policy": {
+        "precision": 0.9865771812080537,
+        "recall": 0.9932432432432432,
+        "f1": 0.98989898989899,
+        "support": 148
+      },
+      "delivery_time": {
+        "precision": 0.9854014598540146,
+        "recall": 0.9782608695652174,
+        "f1": 0.9818181818181818,
+        "support": 138
+      },
+      "human_agent": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 149
+      },
+      "track_order": {
+        "precision": 0.9583333333333334,
+        "recall": 0.9324324324324325,
+        "f1": 0.9452054794520548,
+        "support": 148
+      },
+      "payment_issue": {
+        "precision": 1.0,
+        "recall": 0.9664429530201343,
+        "f1": 0.9829351535836177,
+        "support": 149
+      },
+      "cancel_order": {
+        "precision": 0.9859154929577465,
+        "recall": 0.9459459459459459,
+        "f1": 0.9655172413793104,
+        "support": 148
+      },
+      "return_policy": {
+        "precision": 0.9844961240310077,
+        "recall": 0.8581081081081081,
+        "f1": 0.9169675090252708,
+        "support": 148
+      }
+    },
+    "macro_precision": 0.9799119399310435,
+    "macro_recall": 0.9626976356184657,
+    "macro_f1": 0.9706753578558461
+  },
+  "source_mode": {
+    "predictions": "evaluated_on_test",
+    "metrics": "computed_on_test",
+    "latency": "measured"
+  }
+}

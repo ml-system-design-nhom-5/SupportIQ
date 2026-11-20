@@ -1,0 +1,16 @@
+{
+  "run_id": "03-11-2026-01",
+  "dataset_version": "03-11-2026-01",
+  "input_file": "F:\\Năm 3\\SD\\project\\SupportIQ\\data\\datasets\\bitext-retail-ecommerce-llm-chatbot-training-dataset.csv",
+  "raw_sha256": "13A988266FED4E2B2C1FF947A89EF220CE09B5B13AC83C4A1496C0D7B81E8127",
+  "cleaned_sha256": "2BAB239B6458F264E5C312CE88FBB83A53C4E3DC2DBBF3F4050F682C0D51D367",
+  "total_raw_samples": 44884,
+  "quarantined_samples": 0,
+  "quarantine_reasons": {},
+  "exact_duplicates_removed": 279,
+  "final_clean_samples": 44605,
+  "artifacts": {
+    "cleaned_csv": "F:\\Năm 3\\SD\\project\\SupportIQ\\data\\datasets\\processed\\03-11-2026-01\\cleaned.csv",
+    "quarantined_csv": "F:\\Năm 3\\SD\\project\\SupportIQ\\data\\datasets\\processed\\03-11-2026-01\\quarantined.csv"
+  }
+}

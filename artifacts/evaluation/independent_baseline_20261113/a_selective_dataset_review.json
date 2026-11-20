@@ -1,0 +1,192 @@
+{
+  "dataset_dir": "C:\\Users\\PC\\orca\\workspaces\\SupportIQ\\supportiq-final-routing\\artifacts\\evaluation\\task_a_selective_20261113\\datasets",
+  "manifest_sha256": "c834e3f6f29f3acf7a9a8e54b2add7e2bccbb93d768120c22d73a95cd17b5993",
+  "all_11_file_hashes_matched": true,
+  "file_hash_checks": {
+    "positive_train.jsonl": {
+      "expected": "186cd6d38d045bab471c7d36fe7534780ea3a8d804f29f0bfb460c7e2794b22c",
+      "actual": "186cd6d38d045bab471c7d36fe7534780ea3a8d804f29f0bfb460c7e2794b22c",
+      "matched": true,
+      "count": 108
+    },
+    "negative_train.jsonl": {
+      "expected": "b0f2bc081f1d30225d2eee44775e39c6e3c1cb1c76399ef154ef564210066b9e",
+      "actual": "b0f2bc081f1d30225d2eee44775e39c6e3c1cb1c76399ef154ef564210066b9e",
+      "matched": true,
+      "count": 42
+    },
+    "combined_train.jsonl": {
+      "expected": "67f7d4e5b6d157457e029653221572659ac32c3923cec7c9206058d1e2cf3a83",
+      "actual": "67f7d4e5b6d157457e029653221572659ac32c3923cec7c9206058d1e2cf3a83",
+      "matched": true,
+      "count": 150
+    },
+    "positive_calibration.jsonl": {
+      "expected": "22cdb336395759e06be762bedc208a296d40d10a702b16bc758b9ce5aa22a682",
+      "actual": "22cdb336395759e06be762bedc208a296d40d10a702b16bc758b9ce5aa22a682",
+      "matched": true,
+      "count": 36
+    },
+    "negative_calibration.jsonl": {
+      "expected": "cb9f7539006d5891efcf5e983a6a14495c219b9d5bbc10780cc138d8f7b211d8",
+      "actual": "cb9f7539006d5891efcf5e983a6a14495c219b9d5bbc10780cc138d8f7b211d8",
+      "matched": true,
+      "count": 27
+    },
+    "combined_calibration.jsonl": {
+      "expected": "584371e10fe132902fec4e8f31dd85c9e2bc2e88a13a02b784cdf0a145a666d1",
+      "actual": "584371e10fe132902fec4e8f31dd85c9e2bc2e88a13a02b784cdf0a145a666d1",
+      "matched": true,
+      "count": 63
+    },
+    "positive_evaluation.jsonl": {
+      "expected": "bed9c5e5656314e31728246d91f7d1b22b6cf7afe79ef2abb606f07809231d40",
+      "actual": "bed9c5e5656314e31728246d91f7d1b22b6cf7afe79ef2abb606f07809231d40",
+      "matched": true,
+      "count": 72
+    },
+    "negative_evaluation.jsonl": {
+      "expected": "e38932efaffff75b40c3c5003359137c2dcb796c9e495bc6f3b363546f51a217",
+      "actual": "e38932efaffff75b40c3c5003359137c2dcb796c9e495bc6f3b363546f51a217",
+      "matched": true,
+      "count": 27
+    },
+    "combined_evaluation.jsonl": {
+      "expected": "e428dcd053e7884f326b204c0384c9b8ae900f170586c3996d66a8914f14983e",
+      "actual": "e428dcd053e7884f326b204c0384c9b8ae900f170586c3996d66a8914f14983e",
+      "matched": true,
+      "count": 99
+    },
+    "selective_positives_all.jsonl": {
+      "expected": "e6e278100139ead7c84014e62a0bf31e77e8e02d4c56e6234a723e9dce9b30e6",
+      "actual": "e6e278100139ead7c84014e62a0bf31e77e8e02d4c56e6234a723e9dce9b30e6",
+      "matched": true,
+      "count": 216
+    },
+    "selective_negatives_all.jsonl": {
+      "expected": "92b1edb61979324728b83cd09625e82a6f394ff4b25bd87d71e3b285efa54216",
+      "actual": "92b1edb61979324728b83cd09625e82a6f394ff4b25bd87d71e3b285efa54216",
+      "matched": true,
+      "count": 96
+    }
+  },
+  "positive_split_isolation_and_overlap": {
+    "passed": true,
+    "failure_reasons": [],
+    "counts": {
+      "train": 108,
+      "calibration": 36,
+      "eval": 72
+    },
+    "group_counts": {
+      "train": 36,
+      "calibration": 12,
+      "eval": 24
+    },
+    "group_overlaps": {
+      "train_vs_calibration": [],
+      "train_vs_eval": [],
+      "calibration_vs_eval": []
+    },
+    "text_overlaps": {
+      "train_vs_calibration": 0,
+      "train_vs_eval": 0,
+      "calibration_vs_eval": 0
+    },
+    "gold_exact_matches": [],
+    "gold_high_jaccard_matches": []
+  },
+  "negative_split_isolation_and_overlap": {
+    "passed": true,
+    "failure_reasons": [],
+    "counts": {
+      "train": 42,
+      "calibration": 27,
+      "eval": 27
+    },
+    "group_counts": {
+      "train": 14,
+      "calibration": 9,
+      "eval": 9
+    },
+    "group_overlaps": {
+      "train_vs_calibration": [],
+      "train_vs_eval": [],
+      "calibration_vs_eval": []
+    },
+    "text_overlaps": {
+      "train_vs_calibration": 0,
+      "train_vs_eval": 0,
+      "calibration_vs_eval": 0
+    },
+    "gold_exact_matches": [],
+    "gold_high_jaccard_matches": []
+  },
+  "positive_intents_per_split": {
+    "train": {
+      "track_order": 9,
+      "cancel_order": 9,
+      "delivery_time": 9,
+      "delivery_issue": 9,
+      "shipping_costs": 9,
+      "return_policy": 9,
+      "return_product": 9,
+      "refund_policy": 9,
+      "request_refund": 9,
+      "refund_status": 9,
+      "payment_issue": 9,
+      "human_agent": 9
+    },
+    "calibration": {
+      "track_order": 3,
+      "cancel_order": 3,
+      "delivery_time": 3,
+      "delivery_issue": 3,
+      "shipping_costs": 3,
+      "return_policy": 3,
+      "return_product": 3,
+      "refund_policy": 3,
+      "request_refund": 3,
+      "refund_status": 3,
+      "payment_issue": 3,
+      "human_agent": 3
+    },
+    "evaluation": {
+      "track_order": 6,
+      "cancel_order": 6,
+      "delivery_time": 6,
+      "delivery_issue": 6,
+      "shipping_costs": 6,
+      "return_policy": 6,
+      "return_product": 6,
+      "refund_policy": 6,
+      "request_refund": 6,
+      "refund_status": 6,
+      "payment_issue": 6,
+      "human_agent": 6
+    }
+  },
+  "negative_kinds_per_split": {
+    "train": {
+      "off_domain_unrelated": 18,
+      "underspecified_ambiguous": 12,
+      "unsupported_retail_policy": 12
+    },
+    "calibration": {
+      "off_domain_unrelated": 9,
+      "underspecified_ambiguous": 9,
+      "unsupported_retail_policy": 9
+    },
+    "evaluation": {
+      "off_domain_unrelated": 9,
+      "underspecified_ambiguous": 9,
+      "unsupported_retail_policy": 9
+    }
+  },
+  "prior_holdouts_demoted_to_dev": [
+    "task_a_20261113/domain_templates (216)",
+    "task_a_followup_20261113/domain_negatives (90)"
+  ],
+  "coverage_scope_note": "positive_evaluation (n=72) covers the 12 supported intents uniformly (6 per intent); 34-label escalation retention must be verified on Bitext 46-label holdout and system_acceptance_156.",
+  "review_passed": true
+}

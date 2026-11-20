@@ -1,0 +1,10 @@
+{
+  "budget_exhausted": false,
+  "total_cost_usd": 0.000135,
+  "actual_calls": 50,
+  "reserved_calls": 5,
+  "completed_calls": 5,
+  "max_llm_calls": 50,
+  "remaining_calls": 45,
+  "has_unknown_cost": false
+}

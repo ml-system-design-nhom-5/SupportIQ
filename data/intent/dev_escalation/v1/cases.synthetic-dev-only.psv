@@ -1,0 +1,53 @@
+intent|text
+product_issue|The blender stopped working after two days
+product_issue|My new headphones only play sound on one side
+product_issue|The phone charger gets really hot when I plug it in
+product_issue|The zipper on the backpack broke the first time I used it
+product_issue|The rice cooker shows an error code and won't heat up
+product_issue|The screen of the tablet keeps flickering
+product_issue|The watch strap snapped after a week of normal wear
+product_issue|My vacuum cleaner makes a loud grinding noise now
+product_issue|The kettle leaks water from the bottom
+product_issue|The shoes started peeling at the sole already
+product_issue|The printer won't connect to wifi even after a reset
+product_issue|The paint on the mug came off in the dishwasher
+product_issue|The fan remote does nothing, I already changed the batteries
+product_issue|The jacket's stitching is coming apart at the shoulder
+product_issue|The air fryer smells like burning plastic every time
+product_issue|My speaker turns itself off after a few minutes
+product_issue|The lamp flickers and buzzes when it's switched on
+product_issue|There's a dead pixel right in the middle of the monitor
+product_issue|The kids' toy stopped moving after one afternoon
+product_issue|The water bottle lid doesn't seal and leaks in my bag
+return_product_in_store|Can I bring the jeans back to your shop in District 1?
+return_product_in_store|I'd rather hand the return in at a branch near me
+return_product_in_store|Is it okay to return the toaster at the store counter?
+return_product_in_store|I want to take the dress back to the mall store
+return_product_in_store|Could I walk into a store and return the shoes I bought on the app?
+return_product_in_store|I'll drop my return at your nearest outlet, is that fine?
+return_product_in_store|Can the branch staff take back a product bought online?
+return_product_in_store|I want to return this in person at a shop
+return_product_in_store|Can I go to the store to give back the headphones?
+return_product_in_store|Please let me return the item at your Hanoi branch
+return_product_online|Can a courier come pick up the item I'm returning?
+return_product_online|I want to send the jacket back by mail
+return_product_online|How do I ship my return to you?
+return_product_online|Can I arrange a pickup at home for my return?
+return_product_online|I'd like to return it through the post office
+return_product_online|Please book a courier to collect the parcel I'm sending back
+return_product_online|I'll mail the shoes back, where do I send them?
+return_product_online|Can I return the item using the website return form?
+return_product_online|Can the delivery guy take my return when he comes next time?
+return_product_online|I want to post the broken lamp back to your warehouse
+return_product|I want to return the sweater I got last week
+return_product|How do I start a return for [ORDER_ID]?
+return_product|Please help me send back the speaker
+return_product|I'd like to return these trousers, they don't fit
+return_product|What are the steps to return the coffee machine?
+return_policy|Is there a fee if I return something by post?
+return_policy|Do in-store returns have the same time limit as app returns?
+return_policy|Can opened items still be returned?
+request_refund|The blender broke after two days and I want my money back
+request_refund|Please refund me for the headphones that only work on one side
+delivery_issue|My parcel has been stuck at the sorting center for five days
+delivery_issue|The courier says delivered but nothing came to my door

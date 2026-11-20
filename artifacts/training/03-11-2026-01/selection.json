@@ -1,0 +1,56 @@
+{
+  "selection_metric": "macro_f1_mean",
+  "tie_break": [
+    "macro_f1_mean_desc",
+    "macro_f1_std_asc",
+    "config_order"
+  ],
+  "cv_target_macro_f1": 0.85,
+  "meets_cv_target": true,
+  "best_per_model": {
+    "multinomial_nb": {
+      "candidate_id": "multinomial_nb__alpha=0.03",
+      "model_id": "multinomial_nb",
+      "params": {
+        "alpha": 0.03
+      },
+      "macro_f1_mean": 0.9842034768978023,
+      "macro_f1_std": 0.001231515610333533,
+      "accuracy_mean": 0.9840943239985442,
+      "weighted_f1_mean": 0.9840672595710055
+    },
+    "logistic_regression": {
+      "candidate_id": "logistic_regression__C=20.0",
+      "model_id": "logistic_regression",
+      "params": {
+        "C": 20.0
+      },
+      "macro_f1_mean": 0.9892201150363482,
+      "macro_f1_std": 0.0014374825743039214,
+      "accuracy_mean": 0.9891059855286839,
+      "weighted_f1_mean": 0.9890981791839195
+    },
+    "linear_svm": {
+      "candidate_id": "linear_svm__C=1.5",
+      "model_id": "linear_svm",
+      "params": {
+        "C": 1.5
+      },
+      "macro_f1_mean": 0.9902582601407695,
+      "macro_f1_std": 0.0008831302426846849,
+      "accuracy_mean": 0.9901611230573856,
+      "weighted_f1_mean": 0.9901529421720529
+    }
+  },
+  "winner": {
+    "candidate_id": "linear_svm__C=1.5",
+    "model_id": "linear_svm",
+    "params": {
+      "C": 1.5
+    },
+    "macro_f1_mean": 0.9902582601407695,
+    "macro_f1_std": 0.0008831302426846849,
+    "accuracy_mean": 0.9901611230573856,
+    "weighted_f1_mean": 0.9901529421720529
+  }
+}

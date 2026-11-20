@@ -1,0 +1,857 @@
+{
+  "meta": {
+    "run_id": "accept-20261112-152141-6986ef",
+    "timestamp": "2026-11-12T15:21:41.581425+00:00",
+    "git_commit": "c20e79dfebd364f03c5918c2088876f90648e6c4",
+    "mode": "live",
+    "boundary_kind": "in_process_asgi_testclient",
+    "evidence_kind": "bounded_live",
+    "scope": "end_to_end_application_acceptance",
+    "boundary": "POST /v1/shop/tickets -> PostgreSQL job -> GET /v1/console/tickets/{id} terminal state",
+    "certification_scope": "bounded_live_run",
+    "certification_disclaimer": "Local runner checks alone cannot certify overall Topic 1 or production deployment; holistic multi-worker acceptance required.",
+    "environment": {
+      "os": "Windows-11-10.0.26300-SP0",
+      "python_version": "3.12.14",
+      "psycopg_impl": "unspecified"
+    },
+    "runner_config": {
+      "num_warm_requests": 4,
+      "poll_timeout_seconds": 25.0,
+      "analysis_timeout_ms": 3000,
+      "draft_timeout_ms": 11000
+    }
+  },
+  "acceptance_summary": {
+    "runner_checks_passed": false,
+    "overall_passed": false,
+    "mock_only_evaluation": false,
+    "global_production_accepted": false,
+    "total_cases": 20,
+    "successful_cases": 16,
+    "technical_errors": 0,
+    "timeouts": 0,
+    "failed_jobs": 4,
+    "auto_send_violations": 0,
+    "human_oversight_enforced": true,
+    "latency_coverage_complete": true
+  },
+  "performance": {
+    "p50_seconds": 0.33264000000000005,
+    "p95_seconds": 10.75708,
+    "mean_seconds": 2.84605,
+    "min_seconds": 0.1807,
+    "max_seconds": 10.78961,
+    "error_rate": 0.2,
+    "target_p95_met": true,
+    "target_threshold_seconds": 12.0,
+    "strata": {
+      "draft_producing": {
+        "count": 1,
+        "p50_seconds": 9.29549,
+        "p95_seconds": 9.29549,
+        "mean_seconds": 9.29549,
+        "min_seconds": 9.29549,
+        "max_seconds": 9.29549,
+        "error_rate": 0.0,
+        "description": "Tickets reaching draft generation (e.g. draft_ready, clarification)"
+      },
+      "abstention": {
+        "count": 15,
+        "p50_seconds": 0.31546,
+        "p95_seconds": 0.50298,
+        "mean_seconds": 0.32138,
+        "min_seconds": 0.1807,
+        "max_seconds": 0.50298,
+        "error_rate": 0.0,
+        "description": "Tickets abstaining or escalating before LLM generation (e.g. abstained, escalation_recommended)"
+      },
+      "overall": {
+        "count": 20,
+        "p50_seconds": 0.33264,
+        "p95_seconds": 10.75708,
+        "mean_seconds": 2.84605,
+        "min_seconds": 0.1807,
+        "max_seconds": 10.78961,
+        "error_rate": 0.2,
+        "description": "All submitted tickets across all conditions and outcomes"
+      }
+    },
+    "conditions": {
+      "cold": {
+        "count": 1,
+        "latency_seconds": 10.78961,
+        "mean_seconds": 10.78961,
+        "error_rate": 1.0,
+        "description": "App connection and DB pool cold start only (NOT model or provider cold start)"
+      },
+      "warm": {
+        "count": 19,
+        "p50_seconds": 0.32681,
+        "p95_seconds": 10.75708,
+        "mean_seconds": 2.42796,
+        "error_rate": 0.1579,
+        "description": "Subsequent tickets executed on warm connection pool and worker"
+      }
+    }
+  },
+  "tokens_and_cost": {
+    "total_prompt_tokens": null,
+    "total_candidate_tokens": null,
+    "total_thinking_tokens": null,
+    "total_completion_tokens": null,
+    "total_tokens": null,
+    "provider_reported_total_tokens": null,
+    "observed_thought_tokens": 0,
+    "observed_partial_tokens": 0,
+    "thinking_tracked": false,
+    "all_requests_tracked_thinking": false,
+    "thinking_tokens_assumed_zero": false,
+    "derivation_provenance": null,
+    "cost_status": "incomplete_token_coverage",
+    "cost_usd": null,
+    "lower_bound_cost_usd": null,
+    "cost_note": "One or more retry attempts timed out with unmeasured provider usage; token usage is incomplete despite subsequent success. Cost is strictly unavailable.",
+    "observed_models": [
+      "gemini-3.1-flash-lite"
+    ],
+    "observed_providers": [
+      "google_ai_studio"
+    ],
+    "observed_tiers": [],
+    "average_complete_cost_per_submitted_ticket_usd": null
+  },
+  "cases": [
+    {
+      "case_index": 0,
+      "condition": "cold",
+      "message": "What is the return window for products directly distributed by Tiki Trading compared to marketplace partner sellers?",
+      "ticket_id": "TCK-1001",
+      "wall_latency_ms": 10789.61,
+      "analysis_status": "ready",
+      "draft_status": "llm_unavailable",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {},
+      "tokens": null,
+      "llm_metadata": {
+        "provider": "google_ai_studio",
+        "model": "gemini-3.1-flash-lite",
+        "prompt_version": "grounded-v3",
+        "attempts": [
+          {
+            "attempt_index": 0,
+            "status": "llm_timeout",
+            "latency_seconds": 5.1159,
+            "usage": {},
+            "metadata": {
+              "provider": "google_ai_studio",
+              "model": "gemini-3.1-flash-lite",
+              "prompt_version": "grounded-v3"
+            }
+          },
+          {
+            "attempt_index": 1,
+            "status": "llm_timeout",
+            "latency_seconds": 5.0151,
+            "usage": {},
+            "metadata": {
+              "provider": "google_ai_studio",
+              "model": "gemini-3.1-flash-lite",
+              "prompt_version": "grounded-v3"
+            }
+          }
+        ]
+      },
+      "llm_model": null,
+      "versions": {
+        "release_id": "local-e3d8cc1c94076875",
+        "model_version": "v1.0.0",
+        "model_mode": "trained",
+        "verified": true,
+        "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "prompt_version": "grounded-v2",
+        "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+        "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": false
+    },
+    {
+      "case_index": 1,
+      "condition": "warm",
+      "message": "How do I submit a return request on the Tiki app and schedule the free courier pickup?",
+      "ticket_id": "TCK-1002",
+      "wall_latency_ms": 9295.49,
+      "analysis_status": "ready",
+      "draft_status": "draft_ready",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {},
+      "tokens": {
+        "input_tokens": 1781,
+        "output_tokens": 154,
+        "total_tokens_partial": 1935
+      },
+      "llm_metadata": {
+        "provider": "google_ai_studio",
+        "model": "gemini-3.1-flash-lite",
+        "model_version": "gemini-3.1-flash-lite",
+        "prompt_version": "grounded-v3",
+        "attempts": [
+          {
+            "attempt_index": 0,
+            "status": "llm_timeout",
+            "latency_seconds": 5.156,
+            "usage": {},
+            "metadata": {
+              "provider": "google_ai_studio",
+              "model": "gemini-3.1-flash-lite",
+              "prompt_version": "grounded-v3"
+            }
+          },
+          {
+            "attempt_index": 1,
+            "status": "success",
+            "latency_seconds": 3.6014,
+            "usage": {
+              "promptTokenCount": 1781,
+              "candidatesTokenCount": 154,
+              "totalTokenCount": 1935
+            },
+            "metadata": {
+              "provider": "google_ai_studio",
+              "model": "gemini-3.1-flash-lite",
+              "model_version": "gemini-3.1-flash-lite",
+              "prompt_version": "grounded-v3"
+            }
+          }
+        ]
+      },
+      "llm_model": null,
+      "versions": {
+        "release_id": "local-e3d8cc1c94076875",
+        "model_version": "v1.0.0",
+        "model_mode": "trained",
+        "verified": true,
+        "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "prompt_version": "grounded-v2",
+        "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+        "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": true
+    },
+    {
+      "case_index": 2,
+      "condition": "warm",
+      "message": "What are the requirements for refund approval and are shipping fees refunded if I return due to personal preference?",
+      "ticket_id": "TCK-1003",
+      "wall_latency_ms": 372.2,
+      "analysis_status": "ready",
+      "draft_status": "abstained",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {},
+      "tokens": null,
+      "llm_metadata": {},
+      "llm_model": null,
+      "versions": {
+        "release_id": "local-e3d8cc1c94076875",
+        "model_version": "v1.0.0",
+        "model_mode": "trained",
+        "verified": true,
+        "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "prompt_version": "grounded-v2",
+        "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+        "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": true
+    },
+    {
+      "case_index": 3,
+      "condition": "warm",
+      "message": "How many business days does it take to receive a refund back to my linked e-wallet or bank card?",
+      "ticket_id": "TCK-1004",
+      "wall_latency_ms": 256.82,
+      "analysis_status": "ready",
+      "draft_status": "abstained",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {},
+      "tokens": null,
+      "llm_metadata": {},
+      "llm_model": null,
+      "versions": {
+        "release_id": "local-e3d8cc1c94076875",
+        "model_version": "v1.0.0",
+        "model_mode": "trained",
+        "verified": true,
+        "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "prompt_version": "grounded-v2",
+        "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+        "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": true
+    },
+    {
+      "case_index": 4,
+      "condition": "warm",
+      "message": "Where can I check my refund tracking status and transaction tracing code on Tiki?",
+      "ticket_id": "TCK-1005",
+      "wall_latency_ms": 315.46,
+      "analysis_status": "ready",
+      "draft_status": "abstained",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {},
+      "tokens": null,
+      "llm_metadata": {},
+      "llm_model": null,
+      "versions": {
+        "release_id": "local-e3d8cc1c94076875",
+        "model_version": "v1.0.0",
+        "model_mode": "trained",
+        "verified": true,
+        "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "prompt_version": "grounded-v2",
+        "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+        "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": true
+    },
+    {
+      "case_index": 5,
+      "condition": "warm",
+      "message": "Can I cancel my order directly on the app while it is still in Awaiting Packing status?",
+      "ticket_id": "TCK-1006",
+      "wall_latency_ms": 322.68,
+      "analysis_status": "ready",
+      "draft_status": "abstained",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {},
+      "tokens": null,
+      "llm_metadata": {},
+      "llm_model": null,
+      "versions": {
+        "release_id": "local-e3d8cc1c94076875",
+        "model_version": "v1.0.0",
+        "model_mode": "trained",
+        "verified": true,
+        "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "prompt_version": "grounded-v2",
+        "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+        "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": true
+    },
+    {
+      "case_index": 6,
+      "condition": "warm",
+      "message": "How do I track the transit hubs my parcel has passed through using the tracking code?",
+      "ticket_id": "TCK-1007",
+      "wall_latency_ms": 288.68,
+      "analysis_status": "ready",
+      "draft_status": "abstained",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {},
+      "tokens": null,
+      "llm_metadata": {},
+      "llm_model": null,
+      "versions": {
+        "release_id": "local-e3d8cc1c94076875",
+        "model_version": "v1.0.0",
+        "model_mode": "trained",
+        "verified": true,
+        "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "prompt_version": "grounded-v2",
+        "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+        "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": true
+    },
+    {
+      "case_index": 7,
+      "condition": "warm",
+      "message": "What are the base shipping fees for intra-city versus inter-provincial orders and how does Freeship apply?",
+      "ticket_id": "TCK-1008",
+      "wall_latency_ms": 10656.21,
+      "analysis_status": "ready",
+      "draft_status": "llm_unavailable",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {},
+      "tokens": null,
+      "llm_metadata": {
+        "provider": "google_ai_studio",
+        "model": "gemini-3.1-flash-lite",
+        "prompt_version": "grounded-v3",
+        "attempts": [
+          {
+            "attempt_index": 0,
+            "status": "llm_timeout",
+            "latency_seconds": 5.0024,
+            "usage": {},
+            "metadata": {
+              "provider": "google_ai_studio",
+              "model": "gemini-3.1-flash-lite",
+              "prompt_version": "grounded-v3"
+            }
+          },
+          {
+            "attempt_index": 1,
+            "status": "llm_timeout",
+            "latency_seconds": 5.1343,
+            "usage": {},
+            "metadata": {
+              "provider": "google_ai_studio",
+              "model": "gemini-3.1-flash-lite",
+              "prompt_version": "grounded-v3"
+            }
+          }
+        ]
+      },
+      "llm_model": null,
+      "versions": {
+        "release_id": "local-e3d8cc1c94076875",
+        "model_version": "v1.0.0",
+        "model_mode": "trained",
+        "verified": true,
+        "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "prompt_version": "grounded-v2",
+        "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+        "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": false
+    },
+    {
+      "case_index": 8,
+      "condition": "warm",
+      "message": "What is the delivery timeline for TikiNOW 2-hour express delivery in inner Ho Chi Minh City?",
+      "ticket_id": "TCK-1009",
+      "wall_latency_ms": 10757.08,
+      "analysis_status": "ready",
+      "draft_status": "llm_unavailable",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {},
+      "tokens": null,
+      "llm_metadata": {
+        "provider": "google_ai_studio",
+        "model": "gemini-3.1-flash-lite",
+        "prompt_version": "grounded-v3",
+        "attempts": [
+          {
+            "attempt_index": 0,
+            "status": "llm_timeout",
+            "latency_seconds": 5.112,
+            "usage": {},
+            "metadata": {
+              "provider": "google_ai_studio",
+              "model": "gemini-3.1-flash-lite",
+              "prompt_version": "grounded-v3"
+            }
+          },
+          {
+            "attempt_index": 1,
+            "status": "llm_timeout",
+            "latency_seconds": 5.0784,
+            "usage": {},
+            "metadata": {
+              "provider": "google_ai_studio",
+              "model": "gemini-3.1-flash-lite",
+              "prompt_version": "grounded-v3"
+            }
+          }
+        ]
+      },
+      "llm_model": null,
+      "versions": {
+        "release_id": "local-e3d8cc1c94076875",
+        "model_version": "v1.0.0",
+        "model_mode": "trained",
+        "verified": true,
+        "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "prompt_version": "grounded-v2",
+        "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+        "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": false
+    },
+    {
+      "case_index": 9,
+      "condition": "warm",
+      "message": "The app shows my order was delivered but I never received the package from the courier.",
+      "ticket_id": "TCK-1010",
+      "wall_latency_ms": 289.61,
+      "analysis_status": "ready",
+      "draft_status": "abstained",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {},
+      "tokens": null,
+      "llm_metadata": {},
+      "llm_model": null,
+      "versions": {
+        "release_id": "local-e3d8cc1c94076875",
+        "model_version": "v1.0.0",
+        "model_mode": "trained",
+        "verified": true,
+        "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "prompt_version": "grounded-v2",
+        "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+        "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": true
+    },
+    {
+      "case_index": 10,
+      "condition": "warm",
+      "message": "Can I return opened or unsealed cosmetics if I simply changed my mind after delivery?",
+      "ticket_id": "TCK-1011",
+      "wall_latency_ms": 10601.87,
+      "analysis_status": "ready",
+      "draft_status": "llm_unavailable",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {},
+      "tokens": null,
+      "llm_metadata": {
+        "provider": "google_ai_studio",
+        "model": "gemini-3.1-flash-lite",
+        "prompt_version": "grounded-v3",
+        "attempts": [
+          {
+            "attempt_index": 0,
+            "status": "llm_timeout",
+            "latency_seconds": 5.1143,
+            "usage": {},
+            "metadata": {
+              "provider": "google_ai_studio",
+              "model": "gemini-3.1-flash-lite",
+              "prompt_version": "grounded-v3"
+            }
+          },
+          {
+            "attempt_index": 1,
+            "status": "llm_timeout",
+            "latency_seconds": 5.0162,
+            "usage": {},
+            "metadata": {
+              "provider": "google_ai_studio",
+              "model": "gemini-3.1-flash-lite",
+              "prompt_version": "grounded-v3"
+            }
+          }
+        ]
+      },
+      "llm_model": null,
+      "versions": {
+        "release_id": "local-e3d8cc1c94076875",
+        "model_version": "v1.0.0",
+        "model_mode": "trained",
+        "verified": true,
+        "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "prompt_version": "grounded-v2",
+        "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+        "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": false
+    },
+    {
+      "case_index": 11,
+      "condition": "warm",
+      "message": "My bank account was debited but my order status on Tiki still shows Awaiting Payment.",
+      "ticket_id": "TCK-1012",
+      "wall_latency_ms": 326.81,
+      "analysis_status": "ready",
+      "draft_status": "abstained",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {},
+      "tokens": null,
+      "llm_metadata": {},
+      "llm_model": null,
+      "versions": {
+        "release_id": "local-e3d8cc1c94076875",
+        "model_version": "v1.0.0",
+        "model_mode": "trained",
+        "verified": true,
+        "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "prompt_version": "grounded-v2",
+        "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+        "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": true
+    },
+    {
+      "case_index": 12,
+      "condition": "warm",
+      "message": "Someone made an unauthorized transaction on my credit card for order #TK-889123; this is fraudulent and I demand an immediate reversal and chargeback!",
+      "ticket_id": "TCK-1013",
+      "wall_latency_ms": 338.47,
+      "analysis_status": "ready",
+      "draft_status": "escalation_recommended",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {},
+      "tokens": null,
+      "llm_metadata": {},
+      "llm_model": null,
+      "versions": {
+        "release_id": "local-e3d8cc1c94076875",
+        "model_version": "v1.0.0",
+        "model_mode": "trained",
+        "verified": true,
+        "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "prompt_version": "grounded-v2",
+        "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+        "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": true
+    },
+    {
+      "case_index": 13,
+      "condition": "warm",
+      "message": "I bought an expensive camera 65 days ago, used it on vacation, broke the lens seal, and insist on a manager exception full refund right now.",
+      "ticket_id": "TCK-1014",
+      "wall_latency_ms": 502.98,
+      "analysis_status": "ready",
+      "draft_status": "escalation_recommended",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {},
+      "tokens": null,
+      "llm_metadata": {},
+      "llm_model": null,
+      "versions": {
+        "release_id": "local-e3d8cc1c94076875",
+        "model_version": "v1.0.0",
+        "model_mode": "trained",
+        "verified": true,
+        "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "prompt_version": "grounded-v2",
+        "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+        "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": true
+    },
+    {
+      "case_index": 14,
+      "condition": "warm",
+      "message": "Stop showing me bot suggestions, I need to speak directly with an authorized human manager.",
+      "ticket_id": "TCK-1015",
+      "wall_latency_ms": 180.7,
+      "analysis_status": "ready",
+      "draft_status": "escalation_recommended",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {},
+      "tokens": null,
+      "llm_metadata": {},
+      "llm_model": null,
+      "versions": {
+        "release_id": "local-e3d8cc1c94076875",
+        "model_version": "v1.0.0",
+        "model_mode": "trained",
+        "verified": true,
+        "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "prompt_version": "grounded-v2",
+        "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+        "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": true
+    },
+    {
+      "case_index": 15,
+      "condition": "warm",
+      "message": "Does Tiki offer international overseas express delivery to Tokyo, Japan for personal gifts?",
+      "ticket_id": "TCK-1016",
+      "wall_latency_ms": 259.09,
+      "analysis_status": "ready",
+      "draft_status": "abstained",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {},
+      "tokens": null,
+      "llm_metadata": {},
+      "llm_model": null,
+      "versions": {
+        "release_id": "local-e3d8cc1c94076875",
+        "model_version": "v1.0.0",
+        "model_mode": "trained",
+        "verified": true,
+        "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "prompt_version": "grounded-v2",
+        "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+        "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": true
+    },
+    {
+      "case_index": 16,
+      "condition": "warm",
+      "message": "What third-party extended water-damage insurance warranty terms apply to laptop purchases?",
+      "ticket_id": "TCK-1017",
+      "wall_latency_ms": 299.24,
+      "analysis_status": "ready",
+      "draft_status": "abstained",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {},
+      "tokens": null,
+      "llm_metadata": {},
+      "llm_model": null,
+      "versions": {
+        "release_id": "local-e3d8cc1c94076875",
+        "model_version": "v1.0.0",
+        "model_mode": "trained",
+        "verified": true,
+        "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "prompt_version": "grounded-v2",
+        "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+        "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": true
+    },
+    {
+      "case_index": 17,
+      "condition": "warm",
+      "message": "How can my company register as a new merchant business partner seller on Tiki marketplace?",
+      "ticket_id": "TCK-1018",
+      "wall_latency_ms": 290.23,
+      "analysis_status": "ready",
+      "draft_status": "abstained",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {},
+      "tokens": null,
+      "llm_metadata": {},
+      "llm_model": null,
+      "versions": {
+        "release_id": "local-e3d8cc1c94076875",
+        "model_version": "v1.0.0",
+        "model_mode": "trained",
+        "verified": true,
+        "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "prompt_version": "grounded-v2",
+        "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+        "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": true
+    },
+    {
+      "case_index": 18,
+      "condition": "warm",
+      "message": "Where can I submit my CV and portfolio for the senior backend engineer position at Tiki headquarters?",
+      "ticket_id": "TCK-1019",
+      "wall_latency_ms": 432.15,
+      "analysis_status": "ready",
+      "draft_status": "abstained",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {},
+      "tokens": null,
+      "llm_metadata": {},
+      "llm_model": null,
+      "versions": {
+        "release_id": "local-e3d8cc1c94076875",
+        "model_version": "v1.0.0",
+        "model_mode": "trained",
+        "verified": true,
+        "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "prompt_version": "grounded-v2",
+        "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+        "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": true
+    },
+    {
+      "case_index": 19,
+      "condition": "warm",
+      "message": "My account was locked after too many password attempts; how do I reset my security credentials?",
+      "ticket_id": "TCK-1020",
+      "wall_latency_ms": 345.53,
+      "analysis_status": "ready",
+      "draft_status": "abstained",
+      "reply_is_none": true,
+      "observation_succeeded": true,
+      "step_latency_ms": {},
+      "tokens": null,
+      "llm_metadata": {},
+      "llm_model": null,
+      "versions": {
+        "release_id": "local-e3d8cc1c94076875",
+        "model_version": "v1.0.0",
+        "model_mode": "trained",
+        "verified": true,
+        "kb_version": "sha256:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "mapping_version": "embedded:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c",
+        "prompt_version": "grounded-v2",
+        "routing_version": "sha256:8789ee26acdac2e105fea90942a1129553ca98db4b182fcc4d74880b1f537be7",
+        "index_version": "bge-small-en-v1.5:32547457f792d6c61c4dff4493f1b55791e5a28f63a60da0eaf0d9736dfdcf0c"
+      },
+      "error_code": null,
+      "is_terminal": true,
+      "is_success": true
+    }
+  ],
+  "recomputation_note": "Accounting/performance over the 20 saved application records only; no additional inference. is_success describes technical completion, independently of frozen expected-action failures."
+}
