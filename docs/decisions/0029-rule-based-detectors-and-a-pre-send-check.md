@@ -1,6 +1,6 @@
 # ADR-0029: Rule-based detectors and a pre-send check in pseudonymization
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-20
 - **Deciders:** Project lead
 - **Related:** [Requirements](../product/requirements.md) (FR-09, NFR-06), [ADR-0010](0010-pseudonymization-and-egress-control.md), [ADR-0017](0017-named-entity-model-from-its-release-url.md), [ADR-0020](0020-storage-errors-of-the-pseudonym-map.md), [personal-data leak fixes design](../design/personal-data-leak-fixes.md), [backend ticket workflow design](../design/backend-ticket-workflow.md#pseudonymization), [SEC-36](../rules/security-and-privacy.md#pseudonymization)

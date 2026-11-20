@@ -1,6 +1,6 @@
 # ADR-0028: Repository layout for the pull request into `main`
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-20
 - **Deciders:** Project lead
 - **Related:** [ADR-0001](0001-system-architecture.md), [ADR-0003](0003-tech-stack.md), [ADR-0018](0018-hosting-of-ai-service-on-modal.md), [ADR-0021](0021-repository-layout-and-ai-ml-migration.md), [ADR-0025](0025-routing-configuration-of-the-first-release.md), [ADR-0026](0026-frozen-intent-scenario-set.md), [architecture rules](../rules/architecture.md) (ARCH-07, ARCH-08), [Python rules](../rules/python.md) (PY-06, PY-07), [data and ML rules](../rules/data-and-ml.md) (DATA-06, DATA-08, DATA-30, DATA-59), [security and privacy rules](../rules/security-and-privacy.md) (SEC-02, SEC-04, SEC-07, SEC-08), [workflow rules](../rules/workflow.md) (WF-19, WF-22 to WF-24), [engineering rules](../rules/README.md#enforcement) (RULE-03), [repository checks](../guides/repository-checks.md)

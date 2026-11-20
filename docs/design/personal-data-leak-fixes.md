@@ -1,6 +1,6 @@
 # Design: Fixes for the personal data that pseudonymization leaves
 
-- **Status:** Draft
+- **Status:** Approved
 - **Owner:** backend engineer
 - **Reviewers:** project lead, ML engineer
 - **Last reviewed:** 2026-11-20
