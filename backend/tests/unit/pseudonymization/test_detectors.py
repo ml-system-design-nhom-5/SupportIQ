@@ -288,6 +288,26 @@ def test_a_named_entity_that_holds_a_product_name_inside_a_longer_word_is_kept()
     assert drop_product_names((detection,), message, ("Lamp",)) == (detection,)
 
 
+def rule_name(message: str, phrase: str) -> Detection:
+    start = message.index(phrase)
+    return Detection(start, start + len(phrase), PseudonymType.NAME, DetectionSource.RULE)
+
+
+def test_a_rule_detection_on_a_product_name_is_dropped_whatever_its_case_and_diacritics() -> None:
+    message = "My JORDAN RÚNNER shoes are torn."
+
+    kept = drop_product_names((rule_name(message, "JORDAN RÚNNER"),), message, ("Jordan Runner",))
+
+    assert kept == ()
+
+
+def test_a_rule_detection_away_from_every_product_name_is_kept() -> None:
+    message = "Nguyễn Văn An bought the Jordan Runner."
+    detection = rule_name(message, "Nguyễn Văn An")
+
+    assert drop_product_names((detection,), message, ("Jordan Runner",)) == (detection,)
+
+
 def test_overlap_keeps_the_longer_span() -> None:
     message = "TRK-0000020902"
 
@@ -315,6 +335,30 @@ def test_overlap_prefers_a_pattern_over_the_named_entity_detector() -> None:
     kept = resolve_overlaps((named, pattern))
 
     assert kept == (pattern,)
+
+
+def test_overlap_prefers_the_named_entity_detector_over_a_rule_of_equal_length() -> None:
+    # A choice of the code, not of the design: the model reads the context, and a rule is the
+    # fallback (detection.py, the comment on _SOURCE_PRECEDENCE). ADDRESS comes before NAME
+    # among the types, so only the source can decide for the model.
+    named = Detection(0, 12, PseudonymType.NAME, DetectionSource.NAMED_ENTITY)
+    rule = Detection(0, 12, PseudonymType.ADDRESS, DetectionSource.RULE)
+
+    kept = resolve_overlaps((rule, named))
+
+    assert kept == (named,)
+
+
+def test_overlap_lets_a_longer_rule_address_replace_the_names_inside_it() -> None:
+    address = Detection(0, 30, PseudonymType.ADDRESS, DetectionSource.RULE)
+    names = (
+        Detection(3, 10, PseudonymType.NAME, DetectionSource.NAMED_ENTITY),
+        Detection(12, 20, PseudonymType.NAME, DetectionSource.NAMED_ENTITY),
+    )
+
+    kept = resolve_overlaps((*names, address))
+
+    assert kept == (address,)
 
 
 def test_map_numbers_each_type_in_order_of_first_appearance() -> None:

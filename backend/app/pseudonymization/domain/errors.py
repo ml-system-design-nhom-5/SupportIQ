@@ -7,6 +7,7 @@ from enum import StrEnum
 from typing import ClassVar
 
 from app.platform import BackendError
+from app.pseudonymization.domain.placeholders import PseudonymType
 
 
 class PseudonymizationFailureReason(StrEnum):
@@ -16,6 +17,7 @@ class PseudonymizationFailureReason(StrEnum):
     TEXT_TOO_LONG = "text_too_long"
     PSEUDONYM_LIMIT_EXCEEDED = "pseudonym_limit_exceeded"
     STORED_MAP_DIFFERS = "stored_map_differs"
+    PERSONAL_DATA_LEFT = "personal_data_left"
 
 
 class PseudonymizationError(BackendError):
@@ -70,3 +72,25 @@ class StoredMapDiffersError(PseudonymizationError):
     reason: ClassVar[PseudonymizationFailureReason] = (
         PseudonymizationFailureReason.STORED_MAP_DIFFERS
     )
+
+
+class PersonalDataLeftError(PseudonymizationError):
+    """The pre-send check found personal data in the built text: a detector missed a part.
+
+    It is a defect of a detector (ADR-0029, statements 4 and 5). For the event, it keeps the
+    type of what the check found: the type of the value, or of the placeholder beside a residue.
+    It never keeps the value.
+    """
+
+    reason: ClassVar[PseudonymizationFailureReason] = (
+        PseudonymizationFailureReason.PERSONAL_DATA_LEFT
+    )
+
+    def __init__(self, pseudonym_type: PseudonymType) -> None:
+        """Build the error with its fixed detail.
+
+        Args:
+            pseudonym_type: The type of what the check found.
+        """
+        super().__init__()
+        self.pseudonym_type = pseudonym_type

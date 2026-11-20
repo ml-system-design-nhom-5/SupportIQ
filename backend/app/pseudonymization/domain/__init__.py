@@ -17,6 +17,7 @@ from app.pseudonymization.domain.detectors import (
 from app.pseudonymization.domain.errors import (
     DetectorError,
     NamedEntityModelMissingError,
+    PersonalDataLeftError,
     PseudonymizationError,
     PseudonymizationFailureReason,
     PseudonymizedTextTooLongError,
@@ -51,6 +52,7 @@ __all__ = [
     "MapTicketId",
     "NamedEntityModelMissingError",
     "PatternDetector",
+    "PersonalDataLeftError",
     "PseudonymEntry",
     "PseudonymLimitExceededError",
     "PseudonymMapStore",

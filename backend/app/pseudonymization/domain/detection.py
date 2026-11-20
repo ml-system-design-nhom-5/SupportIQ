@@ -2,8 +2,8 @@
 
 Every detector returns spans of the raw message. The overlap rule then keeps, for every
 character, at most one detection: the longer span wins; for spans of equal length, a literal
-placeholder wins over a known value, a known value over a pattern, and a pattern over the
-named-entity detector (ADR-0010, step 5).
+placeholder wins over a known value, a known value over a pattern, a pattern over the
+named-entity detector, and the named-entity detector over a rule detector (ADR-0010, step 5).
 """
 
 import re
@@ -21,15 +21,26 @@ _LETTER_FOLDS = str.maketrans({"đ": "d", "Đ": "D"})
 
 
 class DetectionSource(StrEnum):
-    """Which step of ADR-0010 found a span, in the order of precedence of the overlap rule."""
+    """Which step of ADR-0010 found a span, in the order of precedence of the overlap rule.
+
+    Step 4 has two sources: the named-entity model and the rule detectors of ADR-0029,
+    statements 2 and 3.
+    """
 
     LITERAL = "literal"
     KNOWN_VALUE = "known_value"
     PATTERN = "pattern"
     NAMED_ENTITY = "named_entity"
+    RULE = "rule"
 
 
+# Within step 4, the model wins over a rule detector of equal length. The design leaves this
+# open, and ADR-0010, item 5, only asks for a deterministic rule; the model reads the context,
+# and a rule is the fallback for what it misses.
 _SOURCE_PRECEDENCE = tuple(DetectionSource)
+# Product names are excluded from what step 4 finds, for the rule detectors too (personal-data
+# leak fixes design, Layer 1, names, item 4).
+_STEP_4_SOURCES = frozenset({DetectionSource.NAMED_ENTITY, DetectionSource.RULE})
 # Between two patterns of equal length, the more specific one wins: a commerce identifier over
 # a card number, which passes the Luhn check, over an email, over a phone number. The rule
 # only has to be deterministic (ADR-0010, item 5).
@@ -193,7 +204,7 @@ def find_whole_words(pattern: str, text: str) -> Iterator[re.Match[str]]:
 def drop_product_names(
     detections: Iterable[Detection], message: str, product_names: Iterable[str]
 ) -> tuple[Detection, ...]:
-    """Drop the named-entity detections that overlap a product name of the catalog.
+    """Drop the detections of step 4 that overlap a product name of the catalog.
 
     Product names are no personal data, so "Apple Watch" stays as written; the detections of
     the earlier steps are all kept (ADR-0010, Detection, step 4).
@@ -204,7 +215,7 @@ def drop_product_names(
         product_names: The names of the catalog, compared without case and diacritics.
 
     Returns:
-        The detections without those of the named-entity step on a product name.
+        The detections without those of step 4 on a product name.
     """
     folded = fold_text(message)
     products = [
@@ -216,7 +227,7 @@ def drop_product_names(
     return tuple(
         detection
         for detection in detections
-        if detection.source is not DetectionSource.NAMED_ENTITY
+        if detection.source not in _STEP_4_SOURCES
         or not any(detection.start < end and start < detection.end for start, end in products)
     )
 
