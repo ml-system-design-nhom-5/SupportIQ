@@ -4,6 +4,8 @@ Each detector has at least five positive and five negative examples, with the bo
 formats of ADR-0010 (ADR-0010, Detection). Every value is synthetic (TEST-18).
 """
 
+import re
+
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
@@ -183,6 +185,148 @@ def test_phone_pattern_finds_9_to_15_digits_in_whole_groups(message: str, expect
 )
 def test_phone_pattern_ignores_other_numbers(message: str) -> None:
     assert PseudonymType.PHONE not in detected_types(message)
+
+
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ("call (00)504-5188 now", "(00)504-5188"),
+        ("call +1 (393) 722-1568", "+1 (393) 722-1568"),
+        ("call (02838) 291-234", "(02838) 291-234"),
+        ("(1) 090-111-0004", "090-111-0004"),
+        ("call 590-224-0978x548", "590-224-0978x548"),
+        ("call 810.651.1446x46429.", "810.651.1446x46429"),
+        ("call +1-393-722-1568x72928", "+1-393-722-1568x72928"),
+        ("call 0901110001ext.12", "0901110001ext.12"),
+        ("call 0901110001ext123456", "0901110001ext123456"),
+    ],
+    ids=[
+        "2-digit-parenthesis",
+        "plus-country-and-parenthesis",
+        "5-digit-parenthesis",
+        "after-a-list-number",
+        "x-extension",
+        "x-extension-before-a-dot",
+        "plus-and-x-extension",
+        "ext-dot-extension",
+        "6-digit-extension",
+    ],
+)
+def test_phone_pattern_finds_a_first_group_in_parentheses_and_an_extension(
+    message: str, expected: str
+) -> None:
+    assert pattern_detections(message) == [(PseudonymType.PHONE, expected)]
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "see (1) 2026-11-18",
+        "call (123456) 789-0123",
+        "meet at 2pm",
+        "total 1.250.000 VND",
+        "call 0901110001x1234567",
+        "call 0901110001x",
+        "call 0901110001ext12a",
+    ],
+    ids=[
+        "list-number-and-date",
+        "6-digit-parenthesis",
+        "time",
+        "order-total",
+        "7-digit-extension",
+        "extension-without-digits",
+        "letter-after-the-extension",
+    ],
+)
+def test_phone_pattern_ignores_a_number_with_an_unfit_parenthesis_or_extension(
+    message: str,
+) -> None:
+    assert PseudonymType.PHONE not in detected_types(message)
+
+
+def test_an_extension_after_a_space_is_not_part_of_the_value_a_known_limit() -> None:
+    # The extension must come right after the last group (personal-data leak fixes design,
+    # Layer 1, phone): a known limit, stated as it is.
+    message = "call 0901 110 001 ext. 12"
+
+    assert pattern_detections(message) == [(PseudonymType.PHONE, "0901 110 001")]
+
+
+# The digit counts of ADR-0029, statement 1: the number, its first group in parentheses, and its
+# extension.
+PHONE_DIGITS = range(9, 16)
+PARENTHESIZED_DIGITS = range(2, 6)
+EXTENSION_DIGITS = range(1, 7)
+DIGITS = "0123456789"
+PHONE_EXTENSION = re.compile(r"(?:x|ext\.?)[0-9]{1,6}")
+GROUP_SEPARATORS = st.sampled_from([" ", ".", "-"])
+
+
+def digit_text(counts: range) -> st.SearchStrategy[str]:
+    return st.text(DIGITS, min_size=counts.start, max_size=counts.stop - 1)
+
+
+@st.composite
+def phone_numbers(draw: st.DrawFn) -> str:
+    """A phone number of the forms of ADR-0029, statement 1, with or without an extension."""
+    digits = draw(digit_text(PHONE_DIGITS))
+    cuts = sorted(draw(st.sets(st.integers(1, len(digits) - 1), max_size=4)))
+    groups = [
+        digits[start:end] for start, end in zip([0, *cuts], [*cuts, len(digits)], strict=True)
+    ]
+    in_parentheses = len(groups) > 1 and len(groups[0]) in PARENTHESIZED_DIGITS
+    if in_parentheses and draw(st.booleans()):
+        after = draw(st.sampled_from(["", " ", ".", "-"]))
+        number = f"({groups[0]}){after}" + draw(GROUP_SEPARATORS).join(groups[1:])
+    else:
+        number = draw(st.sampled_from(["", "+"])) + draw(GROUP_SEPARATORS).join(groups)
+    extension = draw(st.sampled_from(["", "x", "ext", "ext."]))
+    if extension:
+        extension += draw(digit_text(EXTENSION_DIGITS))
+    return number + extension
+
+
+def phone_detections(text: str) -> list[Detection]:
+    # Before the overlap rule, where a card number of equal length would win.
+    return [
+        detection
+        for detection in PatternDetector().detect(text, ())
+        if detection.pseudonym_type is PseudonymType.PHONE
+    ]
+
+
+def phone_value_faults(text: str) -> list[str]:
+    """Name each rule of ADR-0029, statement 1, that a phone value found in the text breaks."""
+    faults: list[str] = []
+    for detection in phone_detections(text):
+        value = text[detection.start : detection.end]
+        extension = PHONE_EXTENSION.search(value)
+        number = value[: extension.start()] if extension else value
+        if extension is not None and extension.end() != len(value):
+            faults.append(f"{value!r}: the extension is not at the end")
+        if sum(character.isdigit() for character in number) not in PHONE_DIGITS:
+            faults.append(f"{value!r}: not 9 to 15 digits besides the extension")
+        groups = re.findall(r"\(([0-9]*)\)", number)
+        if any(len(group) not in PARENTHESIZED_DIGITS for group in groups):
+            faults.append(f"{value!r}: a group in parentheses without 2 to 5 digits")
+        if detection.end < len(text) and text[detection.end].isalnum():
+            faults.append(f"{value!r}: a letter or digit right after the value")
+    return faults
+
+
+@given(phone_numbers())
+def test_a_phone_number_of_the_statement_is_found_whole(number: str) -> None:
+    message = f"call {number} now"
+
+    longest = max(phone_detections(message), key=lambda detection: detection.length)
+
+    assert message[longest.start : longest.end] == number
+
+
+@given(st.text("0123456789 .-()+xet", max_size=60))
+def test_every_phone_value_holds_9_to_15_digits_besides_its_extension(text: str) -> None:
+    assert phone_value_faults(text) == []
 
 
 @pytest.mark.parametrize(
