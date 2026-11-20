@@ -1,5 +1,0 @@
-# Dependencies for local Transformer inference and evaluation
-torch>=2.0.0
-transformers>=4.30.0
-tokenizers>=0.13.0
-safetensors>=0.3.0

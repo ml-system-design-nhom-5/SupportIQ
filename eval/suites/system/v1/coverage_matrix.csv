@@ -1,6 +1,0 @@
-slice,target_quota,actual_count,intent_distribution
-supported,60,60,ok
-unsupported,34,34,ok
-answerable,24,24,ok
-unanswerable,18,18,ok
-uncertainty_and_faults,20,20,ok
