@@ -323,11 +323,11 @@ One issue labeled `tech-debt` is opened with the PR into `main` ([WF-22 to WF-24
 
 ```mermaid
 flowchart TD
-    S1["1: export the files to restore from f6c1473;<br/>scan them with gitleaks dir"] --> C1{"Every finding known<br/>and fingerprinted?"}
+    S1["1: export the files to restore from f6c1473;<br/>scan them with gitleaks dir; fingerprints,<br/>hook exclusions, the hook kept-apps-imports,<br/>.gitattributes"] --> C1{"Every finding known<br/>and fingerprinted?"}
     C1 -.->|"no"| STOP["Stop: fix the configuration, never the scan"]
     C1 -->|"yes"| S2["2: the project lead restores the kept parts<br/>with git checkout f6c1473 -- paths"]
     S2 --> S3["3: the project lead deletes the copies with git rm<br/>and moves interim-v1 with git mv"]
-    S3 --> S4["4: hook exclusions, the two hooks<br/>of the temporary rules, .gitattributes,<br/>gate paths, READMEs, links"]
+    S3 --> S4["4: the hook kept-apps-frozen with its value,<br/>gate paths, READMEs, links"]
     S4 --> S5["5: package rename and PY-06"]
     S5 --> CHK{"Kept parts identical to f6c1473,<br/>every check green?"}
     CHK -.->|"no"| S4
@@ -338,6 +338,7 @@ flowchart TD
 2. The project lead runs every git command that changes the tree or the index: `git checkout f6c1473 -- <path>` for each kept part, which restores its bytes and modes, `git rm`, and `git mv`. The agent writes the exact commands, and afterwards verifies the result with read-only commands only ([WF-34](../rules/workflow.md#ai-agents)).
 3. No agent restores a file from a git revision in any other way, such as writing the output of `git show` into the file.
 4. After step 2, `git log` shows the commits of `main` for each restored file.
+5. The checks are configured in step 1, before any file is restored, except `kept-apps-frozen`, whose value is taken right after step 2. Otherwise the commit of step 2 would run the hooks on the restored files without their exclusions: the hooks that fix files would rewrite kept files of `main`, and `check-added-large-files` would refuse 12 of them ([Checks and CI](#checks-and-ci)). This order is a correction of 2026-11-20, made before any step ran, and it changes no decision.
 
 ## Consequences
 

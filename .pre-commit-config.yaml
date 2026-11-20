@@ -21,24 +21,48 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # frozen: v6.0.0
     hooks:
+      # The kept parts of main keep every byte, mode, and path, so no hook that can reach them
+      # checks them, except gitleaks and the hooks of the temporary rules (ADR-0028, Checks,
+      # statements 1 to 4). It is a files pattern because a hook takes one exclude, and three of
+      # these hooks already exclude the frozen data.
       - id: check-added-large-files
         args: [--enforce-all, --maxkb=500]
+        files: &outside-kept-parts |
+          (?x)^(?!
+            (apps|artifacts|pipeline|scripts|tests)/
+            | pytest\.ini$
+            | data/(benchmarks/(?!escalation/)|business/|datasets/|intent/|knowledge/)
+            | docs/(
+                ARCHITECTURE\.md | images/image1\.png | images/image2\.png | CHỦ\ ĐỀ\ 1\.md
+                | AI_PIPELINE_METRIC_IMPROVEMENTS\.md | autoeval\.md | data-quality\.md
+                | guides/evaluation-evidence\.md | design/documentation-pruning\.md
+              )$
+          )
       - id: check-case-conflict
+        files: *outside-kept-parts
       - id: check-executables-have-shebangs
+        files: *outside-kept-parts
       - id: check-json
+        files: *outside-kept-parts
       - id: check-merge-conflict
+        files: *outside-kept-parts
       - id: check-yaml
         # pnpm writes pnpm-lock.yaml as two YAML documents.
         args: [--allow-multiple-documents]
+        files: *outside-kept-parts
       # The hooks that fix files never touch the frozen data: every file of data/raw/ and every
-      # data file of eval/suites/ keeps its bytes, CRLF line ends included. The READMEs of the
-      # suites are still checked (ADR-0021, Large files and data, statement 3; .gitattributes).
+      # data file of eval/suites/ and data/benchmarks/escalation/ keeps its bytes, CRLF line ends
+      # included. The READMEs of the suites are still checked (ADR-0021, Large files and data,
+      # statement 3; ADR-0028, Checks, statement 2; .gitattributes).
       - id: end-of-file-fixer
-        exclude: &frozen-data '^(data/raw/|eval/suites/(?!.*README\.md$))'
+        files: *outside-kept-parts
+        exclude: &frozen-data '^(data/raw/|(eval/suites|data/benchmarks/escalation)/(?!.*README\.md$))'
       - id: mixed-line-ending
         args: [--fix=lf]
+        files: *outside-kept-parts
         exclude: *frozen-data
       - id: trailing-whitespace
+        files: *outside-kept-parts
         exclude: *frozen-data
   - repo: https://github.com/gitleaks/gitleaks
     rev: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e  # frozen: v8.30.1
@@ -57,6 +81,7 @@ repos:
     hooks:
       # Markdown style, and every relative link and #fragment (.markdownlint-cli2.yaml).
       - id: markdownlint-cli2
+        files: *outside-kept-parts
         additional_dependencies:
           - markdownlint-rule-relative-links@5.1.4
   - repo: https://github.com/rhysd/actionlint
@@ -81,24 +106,26 @@ repos:
   # added. The guide lists the items that stay with the reviewers.
   - repo: local
     hooks:
+      # Until issue #34 rewrites it, autoeval.yml of main fails 9 of these hooks, so those 9 skip
+      # it. Every other hook still checks it (ADR-0028, Checks, statement 7).
       - id: workflow-triggers
         name: "Workflow convention 2: exactly the push and pull_request triggers"
         language: pygrep
         entry: '^on:\n  push:\n    branches:\n      - main\n      - "build/\*\*"\n  pull_request:\n    branches:\n      - main\n\n+(?=[^\s#])'
         args: [--multiline, --negate]
-        files: ^\.github/workflows/
+        files: &workflows-except-autoeval '^\.github/workflows/(?!autoeval\.yml$)'
         # deploy.yml has its own trigger, pinned by deploy-workflow-trigger.
         exclude: ^\.github/workflows/deploy\.yml$
       - id: workflow-no-path-filters
         name: "Workflow convention 3: no paths or paths-ignore"
         language: pygrep
         entry: '^\s*paths(-ignore)?:'
-        files: ^\.github/workflows/
+        files: *workflows-except-autoeval
       - id: workflow-no-if
         name: "Workflow convention 3: no job-level or step-level if"
         language: pygrep
         entry: '^\s+(-\s+)?if:'
-        files: ^\.github/workflows/
+        files: *workflows-except-autoeval
       - id: workflow-permissions-read
         name: "Workflow convention 4: permissions contents read at the top"
         language: pygrep
@@ -119,24 +146,24 @@ repos:
         name: "Workflow convention 5: every uses names a commit SHA and a version comment"
         language: pygrep
         entry: '^\s*(-\s+)?uses:(?!\s+[^@\s]+@[0-9a-f]{40}\s+#\s*v\d)'
-        files: ^\.github/workflows/
+        files: *workflows-except-autoeval
       - id: workflow-checkout-credentials
         name: "Workflow convention 5: actions/checkout sets persist-credentials false"
         language: pygrep
         entry: '^[ \t]*(-[ \t]+)?uses:[ \t]+actions/checkout@[^\n]*\n((?![ \t]*-[ \t])(?![ \t]*persist-credentials:[ \t]*false[ \t]*\n)[^\n]*\n)*([ \t]*-[ \t]|\Z)'
         args: [--multiline]
-        files: ^\.github/workflows/
+        files: *workflows-except-autoeval
       - id: workflow-pinned-runner
         name: "Workflow convention 6: jobs run on ubuntu-24.04"
         language: pygrep
         entry: '^\s*runs-on:(?!\s*ubuntu-24\.04\s*$)'
-        files: ^\.github/workflows/
+        files: *workflows-except-autoeval
       - id: workflow-concurrency
         name: "Workflow convention 7: the concurrency group"
         language: pygrep
         entry: '^concurrency:\n  group: \$\{\{ github\.workflow \}\}-\$\{\{ github\.ref \}\}\n  cancel-in-progress: true\n'
         args: [--multiline, --negate]
-        files: ^\.github/workflows/
+        files: *workflows-except-autoeval
         # deploy.yml has its own concurrency, pinned by deploy-workflow-concurrency.
         exclude: ^\.github/workflows/deploy\.yml$
       - id: workflow-has-timeout
@@ -155,7 +182,7 @@ repos:
         name: "Workflow convention 9: frozen installs and the pinned pre-commit"
         language: pygrep
         entry: '\bpnpm (install|i)\b(?!.*--frozen-lockfile)|\buv sync\b(?!.*--locked)|\bpip3? install\b|\bnpm (install|i)\b|\binstall\b.*\bpre-commit(?!==4\.7\.0\b)'
-        files: ^\.github/workflows/
+        files: *workflows-except-autoeval
       - id: workflow-no-continue-on-error
         name: "Workflow convention 10: no continue-on-error"
         language: pygrep
@@ -176,7 +203,7 @@ repos:
         name: "Workflow convention 13: no workflow but deploy.yml reads a secret"
         language: pygrep
         entry: 'secrets\.[A-Za-z_]'
-        files: ^\.github/workflows/
+        files: *workflows-except-autoeval
         exclude: ^\.github/workflows/deploy\.yml$
       - id: workflow-no-inherited-secrets
         name: "Workflow convention 13: no secrets: inherit and no environment"
@@ -228,6 +255,37 @@ repos:
           | sed "\$d")'
         files: ^\.github/workflows/(backend|deploy)\.yml$
         pass_filenames: false
+
+  # The temporary rules of ADR-0028: apps/backend/ and apps/demo/ of main stay frozen, and only
+  # the 28 files that import them at f6c1473 may import them (Temporary rules, statements 1 and
+  # 2; RULE-03). The hooks of this section exist to check the kept parts, so they do not skip them.
+  - repo: local
+    hooks:
+      - id: kept-apps-imports
+        name: "ADR-0028, temporary rule 1: no new import of apps.backend or apps.demo"
+        language: pygrep
+        entry: 'apps[./](backend|demo)\b|\bfrom\s+apps\s+import\s.*\b(backend|demo)\b'
+        types: [python]
+        exclude: |
+          (?x)^(
+            apps/(backend|demo)/
+            | (
+                pipeline/evaluation/(
+                  application_acceptance | fault_boundary_runner | flash_lite_acceptance
+                  | system_execution | system_performance | system_server)
+                | scripts/(collect_final_acceptance_evidence | run_intent_correction_diagnostic)
+                | tests/application/(
+                  test_ai_boundary | test_application | test_backend_safety_closure
+                  | test_intent_correction_diagnostic | test_workflow_privacy)
+                | tests/e2e/test_full_pipeline
+                | tests/integration/(test_completion_oversight | test_demo_flow | test_system_oversight)
+                | tests/unit/(
+                  test_demo_api | test_demo_lifespan | test_mandatory_routing_b
+                  | test_model_runtime_parity_b | test_observability | test_pagination_pushdown
+                  | test_privacy_pii | test_retrieval_grounding_b2 | test_retry_draft
+                  | test_schema_constraints | test_typed_fault_propagation_a)
+              )\.py$
+          )
 
   # ===== Contract checks (owner: contracts gatekeeper) =====
   # The tool versions are pinned in contracts/pnpm-lock.yaml, so the hook calls the
