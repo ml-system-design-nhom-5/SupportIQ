@@ -2,8 +2,8 @@
 
 import pytest
 
-from supportiq_ai_service.suggestions.domain import MaskCounts
-from supportiq_ai_service.suggestions.domain.masking import mask_personal_data, placeholders_in
+from app.suggestions.domain import MaskCounts
+from app.suggestions.domain.masking import mask_personal_data, placeholders_in
 
 
 @pytest.mark.parametrize(

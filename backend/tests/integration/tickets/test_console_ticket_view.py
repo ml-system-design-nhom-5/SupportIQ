@@ -10,7 +10,7 @@ from http import HTTPStatus
 
 import pytest
 
-from supportiq_backend.platform import EventName
+from app.platform import EventName
 from tests.integration.ai_service_doubles import FakeAiService, refuse_connection
 from tests.integration.application import (
     ORIGIN_HEADERS,

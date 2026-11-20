@@ -114,7 +114,7 @@ The `backend` and `frontend` work streams build against these files in parallel.
 | Side | Generator ([ADR-0003](../docs/decisions/0003-tech-stack.md)) | Output | Input |
 |---|---|---|---|
 | `frontend` | `openapi-typescript` for the types and `openapi-fetch` for the client | `frontend/src/api/generated/` ([TS-05](../docs/rules/typescript.md#project-layout), [TS-27](../docs/rules/typescript.md#api-access)) | `contracts/backend.openapi.yaml` |
-| `backend` | `datamodel-code-generator` for the Pydantic request and response models | `backend/src/supportiq_backend/generated/__init__.py` ([PY-35](../docs/rules/python.md#fastapi)) | `contracts/backend.openapi.yaml` |
+| `backend` | `datamodel-code-generator` for the Pydantic request and response models | `backend/app/generated/__init__.py` ([PY-35](../docs/rules/python.md#fastapi)) | `contracts/backend.openapi.yaml` |
 
 - Each component pins its generator in its own lockfile and documents the generation command in its README.
 - Both generators read the contract directly and follow its relative `$ref`s. On 2026-11-05, `openapi-typescript` 7.10.1 and `datamodel-code-generator` 0.35.0 both generated code from `backend.openapi.yaml` and from the output of `pnpm run bundle`. From the source file, `openapi-typescript` warns that example names repeat across operations; the warnings do not change the generated types, and the bundle gives none. A tool that cannot follow relative `$ref`s reads the bundle. `backend` now pins `datamodel-code-generator` 0.90.0 in its lockfile.

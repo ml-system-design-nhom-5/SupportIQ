@@ -13,28 +13,28 @@ import pytest
 from sqlalchemy import insert, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
-from supportiq_backend.platform import UnexpectedFailureError
-from supportiq_backend.platform.adapters.database import create_session_factory
-from supportiq_backend.pseudonymization.adapters.pseudonym_map_store import (
+from app.platform import UnexpectedFailureError
+from app.platform.adapters.database import create_session_factory
+from app.pseudonymization.adapters.pseudonym_map_store import (
     PostgresPseudonymMapStore,
 )
-from supportiq_backend.pseudonymization.adapters.tables import PseudonymMapEntryRow
-from supportiq_backend.pseudonymization.domain import MapTicketId
-from supportiq_backend.suggestions import SuggestionId, SuggestionTicketId, TicketForSuggestion
-from supportiq_backend.suggestions.adapters.suggestion_store import (
+from app.pseudonymization.adapters.tables import PseudonymMapEntryRow
+from app.pseudonymization.domain import MapTicketId
+from app.suggestions import SuggestionId, SuggestionTicketId, TicketForSuggestion
+from app.suggestions.adapters.suggestion_store import (
     PostgresSuggestionJobStore,
     PostgresSuggestionStore,
 )
-from supportiq_backend.suggestions.adapters.tables import SuggestionJobRow
-from supportiq_backend.tickets import ConsoleTicket, TicketId, TicketStatus
-from supportiq_backend.tickets.adapters.console_store import (
+from app.suggestions.adapters.tables import SuggestionJobRow
+from app.tickets import ConsoleTicket, TicketId, TicketStatus
+from app.tickets.adapters.console_store import (
     PostgresConsoleTicketStore,
     PostgresTicketLinks,
 )
-from supportiq_backend.tickets.adapters.escalation_store import PostgresEscalationStore
-from supportiq_backend.tickets.adapters.proposal_store import PostgresReplyProposalStore
-from supportiq_backend.tickets.adapters.reply_store import PostgresReplyStore
-from supportiq_backend.tickets.adapters.tables import (
+from app.tickets.adapters.escalation_store import PostgresEscalationStore
+from app.tickets.adapters.proposal_store import PostgresReplyProposalStore
+from app.tickets.adapters.reply_store import PostgresReplyStore
+from app.tickets.adapters.tables import (
     EscalationRow,
     ReplyProposalRow,
     ReplyRow,

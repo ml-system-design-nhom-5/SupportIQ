@@ -13,8 +13,8 @@ from uuid import UUID
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from supportiq_backend.platform.adapters.database import create_session_factory
-from supportiq_backend.suggestions.adapters.suggestion_store import PostgresSuggestionJobStore
+from app.platform.adapters.database import create_session_factory
+from app.suggestions.adapters.suggestion_store import PostgresSuggestionJobStore
 from tests.integration.builders import DatabaseBuilder, TicketSpec
 from tests.integration.database import (
     WorkerDatabase,

@@ -2,8 +2,8 @@
 
 from dataclasses import dataclass, field
 
-from supportiq_backend.accounts import CustomerId
-from supportiq_backend.commerce import (
+from app.accounts import CustomerId
+from app.commerce import (
     Money,
     Order,
     OrderId,
@@ -15,7 +15,7 @@ from supportiq_backend.commerce import (
     Shipment,
     ShipmentStatus,
 )
-from supportiq_backend.platform import BackendError
+from app.platform import BackendError
 from tests.unit.platform.fakes import FAKE_CLOCK_START
 
 USD_ONE = Money(100, "USD")

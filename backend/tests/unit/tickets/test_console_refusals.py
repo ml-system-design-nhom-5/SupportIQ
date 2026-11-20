@@ -9,10 +9,10 @@ from collections.abc import Callable
 
 import pytest
 
-from supportiq_backend.accounts import ForbiddenRoleError, Principal
-from supportiq_backend.idempotency import IdempotencyKeyReusedError
-from supportiq_backend.platform import DatabaseUnavailableError, EventName
-from supportiq_backend.tickets import (
+from app.accounts import ForbiddenRoleError, Principal
+from app.idempotency import IdempotencyKeyReusedError
+from app.platform import DatabaseUnavailableError, EventName
+from app.tickets import (
     EscalationRequest,
     NoAiDraftReply,
     ProposalReply,

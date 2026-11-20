@@ -9,8 +9,8 @@ from uuid import UUID
 
 import pytest
 
-from supportiq_backend.idempotency import IdempotencyKey
-from supportiq_backend.tickets import (
+from app.idempotency import IdempotencyKey
+from app.tickets import (
     EscalationRecord,
     EscalationRequest,
     NoAiDraftReply,

@@ -10,7 +10,7 @@ from uuid import UUID
 
 import pytest
 
-from supportiq_backend.platform.web import encode_cursor
+from app.platform.web import encode_cursor
 from tests.integration.application import (
     RunningBackend,
 )

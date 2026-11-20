@@ -9,14 +9,14 @@ from pydantic import MISSING
 from starlette.requests import Request
 from starlette.types import Message
 
-from supportiq_backend.generated import (
+from app.generated import (
     ChangeAccountStatusRequest,
     CreateAdminAccountRequest,
     ShipmentStatus,
     ShopShipmentView,
 )
-from supportiq_backend.platform import RequestContractError
-from supportiq_backend.platform.web import (
+from app.platform import RequestContractError
+from app.platform.web import (
     NonUtcTimestampError,
     format_timestamp,
     locations_of,

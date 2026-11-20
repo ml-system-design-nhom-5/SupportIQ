@@ -8,21 +8,21 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from supportiq_backend.accounts import AccountId, Authorizer, CustomerId, CustomerPrincipal
-from supportiq_backend.commerce import OrderId
-from supportiq_backend.composition_root.tickets_wiring import build_shop_ticket_stores
-from supportiq_backend.idempotency import (
+from app.accounts import AccountId, Authorizer, CustomerId, CustomerPrincipal
+from app.commerce import OrderId
+from app.composition_root.tickets_wiring import build_shop_ticket_stores
+from app.idempotency import (
     IdempotencyGuard,
     IdempotencyKey,
     StoredResponse,
 )
-from supportiq_backend.platform import EventName, UnexpectedFailureError
-from supportiq_backend.platform.adapters.database import (
+from app.platform import EventName, UnexpectedFailureError
+from app.platform.adapters.database import (
     SqlAlchemyTransactionRunner,
     create_session_factory,
 )
-from supportiq_backend.suggestions import SuggestionStarter, SuggestionStarterPorts
-from supportiq_backend.tickets import (
+from app.suggestions import SuggestionStarter, SuggestionStarterPorts
+from app.tickets import (
     CreateShopTicket,
     CreateShopTicketPorts,
     HandlingMode,

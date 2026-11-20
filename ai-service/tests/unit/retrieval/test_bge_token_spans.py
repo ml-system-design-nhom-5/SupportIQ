@@ -12,9 +12,9 @@ from typing import NoReturn, Protocol, cast
 
 from transformers import AutoTokenizer
 
-from supportiq_ai_service.retrieval.adapters.bge_encoder import BgeEncoder
-from supportiq_ai_service.retrieval.adapters.chunking import chunk_document
-from supportiq_ai_service.retrieval.adapters.index_file import IndexConfiguration
+from app.retrieval.adapters.bge_encoder import BgeEncoder
+from app.retrieval.adapters.chunking import chunk_document
+from app.retrieval.adapters.index_file import IndexConfiguration
 from tests.unit.retrieval.fakes import EXAMPLE_DOCUMENT
 from tests.unit.tiny_models import write_tokenizer
 

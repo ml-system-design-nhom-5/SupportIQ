@@ -4,7 +4,7 @@ from http import HTTPStatus
 
 import pytest
 
-from supportiq_backend.platform.web import encode_cursor
+from app.platform.web import encode_cursor
 from tests.integration.accounts.admin_requests import (
     UNKNOWN_ACCOUNT,
 )

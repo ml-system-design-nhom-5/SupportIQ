@@ -5,7 +5,7 @@ from uuid import UUID
 
 import pytest
 
-from supportiq_backend.accounts import (
+from app.accounts import (
     AccountId,
     Authorizer,
     CustomerId,
@@ -14,25 +14,25 @@ from supportiq_backend.accounts import (
     InternalPrincipal,
     InternalRole,
 )
-from supportiq_backend.commerce import OrderId, OrderNotFoundError
-from supportiq_backend.idempotency import (
+from app.commerce import OrderId, OrderNotFoundError
+from app.idempotency import (
     IdempotencyGuard,
     IdempotencyKey,
     IdempotencyKeyReusedError,
     StoredResponse,
 )
-from supportiq_backend.platform import (
+from app.platform import (
     DatabaseUnavailableError,
     EventName,
     RequestContractError,
     SpanName,
 )
-from supportiq_backend.suggestions import (
+from app.suggestions import (
     SuggestionStarter,
     SuggestionStarterPorts,
     SuggestionTrigger,
 )
-from supportiq_backend.tickets import (
+from app.tickets import (
     CreateShopTicket,
     CreateShopTicketPorts,
     GetShopTicket,

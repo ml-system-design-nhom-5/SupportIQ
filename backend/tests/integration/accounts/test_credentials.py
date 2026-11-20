@@ -2,8 +2,8 @@
 
 import pytest
 
-from supportiq_backend.accounts import Password, PasswordHash
-from supportiq_backend.accounts.adapters.credentials import (
+from app.accounts import Password, PasswordHash
+from app.accounts.adapters.credentials import (
     Argon2Passwords,
     RandomSessionTokens,
     create_dummy_password_hash,

@@ -1,6 +1,6 @@
 # Architecture rules
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-12
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-20
 
 Rules for where code lives, how parts depend on each other, and how the system grows without rewrites. The component map and its reasons are in [ADR-0001](../decisions/0001-system-architecture.md).
 
@@ -28,7 +28,7 @@ Rules for where code lives, how parts depend on each other, and how the system g
 
 **ARCH-07.** LLM API keys and prompt templates exist only in `ai-service`.
 
-**ARCH-08.** `ml/` and `eval/` are not on the serving path. `ml/` produces versioned artifacts; `ai-service` only loads them.
+**ARCH-08.** `ml/`, `pipeline/`, and `eval/` are not on the serving path. `ml/` and `pipeline/` produce versioned artifacts; `ai-service` only loads them.
 
 **ARCH-09.** `ai-service` keeps no per-ticket state between requests. Every request carries what it needs.
 
@@ -73,7 +73,7 @@ flowchart TB
 **ARCH-16.** Code is organized by feature first, then by layer inside each feature.
 
 ```text
-backend/src/supportiq_backend/
+backend/app/
 ├── tickets/
 │   ├── domain/
 │   ├── application/

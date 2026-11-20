@@ -15,12 +15,12 @@ from opentelemetry.sdk.trace.export import SpanExporter
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from pydantic import HttpUrl
 
-from supportiq_backend.composition_root.runtime import build_runtime
-from supportiq_backend.platform.settings import Settings, TraceExporter
+from app.composition_root.runtime import build_runtime
+from app.platform.settings import Settings, TraceExporter
 from tests.unit.platform.fakes import FakeClock, RecordingEventRecorder
 from tests.unit.platform.settings_builders import build_test_settings
 
-SOURCE_ROOT = Path(__file__).parents[3] / "src" / "supportiq_backend"
+SOURCE_ROOT = Path(__file__).parents[3] / "app"
 DESTINATION_SETTINGS = {
     "database_url_app",
     "database_url_owner",
@@ -120,9 +120,7 @@ async def test_each_outbound_client_takes_its_destination_from_the_settings(
         endpoints.append(endpoint)
         return InMemorySpanExporter()
 
-    monkeypatch.setattr(
-        "supportiq_backend.composition_root.runtime.create_otlp_span_exporter", record_exporter
-    )
+    monkeypatch.setattr("app.composition_root.runtime.create_otlp_span_exporter", record_exporter)
     settings = build_test_settings(
         database_url_app=DATABASE_URL,
         ai_service_base_url=AI_SERVICE_URL,

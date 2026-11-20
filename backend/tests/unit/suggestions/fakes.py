@@ -9,9 +9,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 
-from supportiq_backend.platform import BackendError
-from supportiq_backend.pseudonymization import MapTicketId, MessageToPseudonymize
-from supportiq_backend.suggestions import (
+from app.platform import BackendError
+from app.pseudonymization import MapTicketId, MessageToPseudonymize
+from app.suggestions import (
     AiServiceUnavailableError,
     AnalysisState,
     AssetVersions,

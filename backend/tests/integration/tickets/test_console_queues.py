@@ -5,9 +5,9 @@ from http import HTTPStatus
 
 import pytest
 
-from supportiq_backend.platform import OperationId
-from supportiq_backend.platform.web import encode_cursor
-from supportiq_backend.tickets import MESSAGE_EXCERPT_LENGTH
+from app.platform import OperationId
+from app.platform.web import encode_cursor
+from app.tickets import MESSAGE_EXCERPT_LENGTH
 from tests.integration.application import ORIGIN_HEADERS, RunningBackend
 from tests.integration.builders import DatabaseBuilder, TicketSpec
 from tests.integration.tickets.console_requests import (

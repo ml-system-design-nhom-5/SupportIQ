@@ -4,8 +4,8 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from supportiq_backend.platform.web import render_json
-from supportiq_backend.reports import (
+from app.platform.web import render_json
+from app.reports import (
     AiErrorRate,
     AiOutcomes,
     ConsoleReport,
@@ -19,7 +19,7 @@ from supportiq_backend.reports import (
     TicketCounts,
     build_report_period,
 )
-from supportiq_backend.reports.api.report_views import to_console_report
+from app.reports.api.report_views import to_console_report
 from tests.unit.reports.fakes import (
     AI_OUTCOMES,
     CLOSED,

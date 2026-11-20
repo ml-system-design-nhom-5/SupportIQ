@@ -5,8 +5,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from supportiq_backend.platform import InvalidCursorError, InvalidLimitError
-from supportiq_backend.platform.web import (
+from app.platform import InvalidCursorError, InvalidLimitError
+from app.platform.web import (
     CURSOR_MAX_LENGTH,
     CursorTooLongError,
     decode_cursor,

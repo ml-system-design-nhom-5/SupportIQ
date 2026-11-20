@@ -7,7 +7,7 @@ from dataclasses import dataclass, replace
 
 import pytest
 
-from supportiq_backend.accounts import (
+from app.accounts import (
     AccountId,
     Authorizer,
     CustomerId,
@@ -17,8 +17,8 @@ from supportiq_backend.accounts import (
     InternalRole,
     Principal,
 )
-from supportiq_backend.platform import DatabaseUnavailableError, EventName, ResourceNotFoundError
-from supportiq_backend.suggestions import (
+from app.platform import DatabaseUnavailableError, EventName, ResourceNotFoundError
+from app.suggestions import (
     AiReasonCode,
     CancelledPart,
     PartStatus,
@@ -32,7 +32,7 @@ from supportiq_backend.suggestions import (
     WatchProgressPorts,
     WatchSuggestionProgress,
 )
-from supportiq_backend.suggestions.api.suggestion_events import to_event_frame
+from app.suggestions.api.suggestion_events import to_event_frame
 from tests.unit.platform.fakes import FakeClock, FakeTransactionRunner, RecordingEventRecorder
 from tests.unit.suggestions.builders import (
     STAFF_ACCOUNT_ID,

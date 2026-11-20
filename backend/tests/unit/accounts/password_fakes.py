@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 
-from supportiq_backend.accounts import (
+from app.accounts import (
     AccountId,
     LoginName,
     LoginNameTakenError,

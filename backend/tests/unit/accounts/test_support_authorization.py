@@ -7,7 +7,7 @@ is one `permission.denied` event.
 
 import pytest
 
-from supportiq_backend.accounts import (
+from app.accounts import (
     AccountId,
     Authorizer,
     CustomerPrincipal,
@@ -19,7 +19,7 @@ from supportiq_backend.accounts import (
     SupportPrincipal,
     SupportRole,
 )
-from supportiq_backend.platform import EventName
+from app.platform import EventName
 from tests.unit.accounts.fakes import CUSTOMER_ACCOUNT_ID, CUSTOMER_ID, STAFF_ACCOUNT_ID
 from tests.unit.platform.fakes import RecordingEventRecorder
 

@@ -6,7 +6,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from supportiq_backend.reports import (
+from app.reports import (
     AiErrorRate,
     AiOutcomes,
     CodeCount,
@@ -20,8 +20,8 @@ from supportiq_backend.reports import (
     compute_share,
     order_code_counts,
 )
-from supportiq_backend.suggestions import AiReasonCode, PartStatus
-from supportiq_backend.tickets import StaffReasonCode
+from app.suggestions import AiReasonCode, PartStatus
+from app.tickets import StaffReasonCode
 from tests.unit.reports.fakes import END_AT, START_AT
 
 PERIOD_DETAIL = "The parameter start_at must be earlier than end_at."

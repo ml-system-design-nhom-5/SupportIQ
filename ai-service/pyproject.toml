@@ -22,7 +22,7 @@ dependencies = [
 ]
 
 [project.scripts]
-ai-service = "supportiq_ai_service.composition_root:main"
+ai-service = "app.composition_root:main"
 
 [dependency-groups]
 # Development dependencies, separate from the runtime ones (PY-46).
@@ -59,13 +59,18 @@ explicit = true
 requires = ["uv_build>=0.11.11,<0.12"]
 build-backend = "uv_build"
 
+# The package is app/ at the root of the project, without src/ (PY-06, ADR-0028).
+[tool.uv.build-backend]
+module-name = "app"
+module-root = ""
+
 # ----- Code generation (CON-25, CON-26) -----
 # `uv run datamodel-codegen` reads these options. The output is never edited by hand, and CI
 # regenerates it and fails when the committed file differs. The options are those of backend.
 [tool.datamodel-codegen]
 input = "../contracts/ai-service.openapi.yaml"
 input-file-type = "openapi"
-output = "src/supportiq_ai_service/generated/__init__.py"
+output = "app/generated/__init__.py"
 output-model-type = "pydantic_v2.BaseModel"
 target-python-version = "3.14"
 use-annotated = true
@@ -89,9 +94,9 @@ type-overrides = { Timestamp = "builtins.str" }
 [tool.ruff]
 line-length = 100
 target-version = "py314"
-src = ["src", "tests"]
+src = [".", "tests"]
 # Generated code is never linted (CON-26).
-extend-exclude = ["src/supportiq_ai_service/generated"]
+extend-exclude = ["app/generated"]
 
 [tool.ruff.lint]
 select = [
@@ -122,13 +127,13 @@ max-nested-blocks = 3
 ban-relative-imports = "all"
 
 [tool.ruff.lint.isort]
-known-first-party = ["supportiq_ai_service", "tests"]
+known-first-party = ["app", "tests"]
 
 # ----- Type checking (PY-03, CODE-26) -----
 [tool.pyright]
-include = ["src", "tests"]
-exclude = ["src/supportiq_ai_service/generated", "**/__pycache__", ".venv"]
-ignore = ["src/supportiq_ai_service/generated"]
+include = ["app", "tests"]
+exclude = ["app/generated", "**/__pycache__", ".venv"]
+ignore = ["app/generated"]
 typeCheckingMode = "strict"
 pythonVersion = "3.14"
 venvPath = "."
@@ -165,9 +170,9 @@ filterwarnings = ["error"]
 
 [tool.coverage.run]
 branch = true
-source = ["supportiq_ai_service"]
+source = ["app"]
 # Generated code is excluded from coverage (CON-26, TEST-22).
-omit = ["*/supportiq_ai_service/generated/*"]
+omit = ["*/app/generated/*"]
 
 [tool.coverage.report]
 # The overall floor of TEST-21. The floor for the domain and application layers is checked by
@@ -188,64 +193,66 @@ exclude_also = [
 # because a public API of a feature may be imported from any layer. The contracts follow
 # those of backend.
 [tool.importlinter]
-root_package = "supportiq_ai_service"
+root_package = "app"
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
 name = "Layers inside each feature: api, then application, then domain (ARCH-11)"
 type = "layers"
 containers = [
-    "supportiq_ai_service.suggestions",
-    "supportiq_ai_service.intent",
-    "supportiq_ai_service.retrieval",
-    "supportiq_ai_service.drafting",
-    "supportiq_ai_service.release",
+    "app.suggestions",
+    "app.intent",
+    "app.retrieval",
+    "app.drafting",
+    "app.release",
 ]
 layers = ["(api)", "(application)", "domain"]
 
 [[tool.importlinter.contracts]]
 name = "Layers inside platform: web, then application, then domain (ARCH-11, ARCH-19)"
 type = "layers"
-containers = ["supportiq_ai_service.platform"]
+containers = ["app.platform"]
 layers = ["web", "application", "domain"]
 
 [[tool.importlinter.contracts]]
 name = "Features depend on each other without cycles, and platform on no feature (ARCH-18)"
 type = "layers"
 layers = [
-    "supportiq_ai_service.composition_root",
-    "supportiq_ai_service.suggestions",
-    "supportiq_ai_service.intent | supportiq_ai_service.retrieval | supportiq_ai_service.drafting",
-    "supportiq_ai_service.release",
-    "supportiq_ai_service.platform",
+    "app.composition_root",
+    "app.suggestions",
+    "app.intent | app.retrieval | app.drafting",
+    "app.release",
+    "app.platform",
 ]
 
 [[tool.importlinter.contracts]]
-name = "ai-service imports no other component and no code of main (core rule 3, ADR-0021)"
+name = "ai-service imports no code of main (core rule 3, ADR-0021)"
 type = "forbidden"
-source_modules = ["supportiq_ai_service"]
-forbidden_modules = ["apps", "pipeline", "supportiq_backend", "supportiq_eval", "supportiq_ml"]
+source_modules = ["app"]
+# backend cannot be listed: its package is also app, and its own environment keeps it out
+# (ARCH-10, ADR-0028).
+forbidden_modules = ["apps", "pipeline"]
 
 [[tool.importlinter.contracts]]
 name = "Domain and application code use no framework, model library, or SDK (ARCH-11, ARCH-12)"
 type = "forbidden"
 source_modules = [
-    "supportiq_ai_service.suggestions.domain",
-    "supportiq_ai_service.suggestions.application",
-    "supportiq_ai_service.intent.domain",
-    "supportiq_ai_service.drafting.domain",
-    "supportiq_ai_service.retrieval.domain",
-    "supportiq_ai_service.retrieval.application",
-    "supportiq_ai_service.release.domain",
-    "supportiq_ai_service.release.application",
-    "supportiq_ai_service.platform.domain",
-    "supportiq_ai_service.platform.application",
+    "app.suggestions.domain",
+    "app.suggestions.application",
+    "app.intent.domain",
+    "app.drafting.domain",
+    "app.retrieval.domain",
+    "app.retrieval.application",
+    "app.release.domain",
+    "app.release.application",
+    "app.platform.domain",
+    "app.platform.application",
 ]
 forbidden_modules = [
     "fastapi", "httpx", "numpy", "opentelemetry", "pydantic", "pydantic_core",
     "pydantic_settings", "starlette", "transformers", "uvicorn",
-    "supportiq_ai_service.generated",
-    "supportiq_ai_service.platform.settings",
+    "app.generated",
+    "app.platform.settings",
 ]
 
 [[tool.importlinter.contracts]]
@@ -253,67 +260,67 @@ name = "Domain and application code import no adapter and no interface code (ARC
 type = "forbidden"
 allow_indirect_imports = true
 source_modules = [
-    "supportiq_ai_service.suggestions.domain",
-    "supportiq_ai_service.suggestions.application",
-    "supportiq_ai_service.intent.domain",
-    "supportiq_ai_service.drafting.domain",
-    "supportiq_ai_service.retrieval.domain",
-    "supportiq_ai_service.retrieval.application",
-    "supportiq_ai_service.release.domain",
-    "supportiq_ai_service.release.application",
-    "supportiq_ai_service.platform.domain",
-    "supportiq_ai_service.platform.application",
+    "app.suggestions.domain",
+    "app.suggestions.application",
+    "app.intent.domain",
+    "app.drafting.domain",
+    "app.retrieval.domain",
+    "app.retrieval.application",
+    "app.release.domain",
+    "app.release.application",
+    "app.platform.domain",
+    "app.platform.application",
 ]
 forbidden_modules = [
-    "supportiq_ai_service.suggestions.adapters",
-    "supportiq_ai_service.suggestions.api",
-    "supportiq_ai_service.intent.adapters",
-    "supportiq_ai_service.retrieval.adapters",
-    "supportiq_ai_service.retrieval.api",
-    "supportiq_ai_service.drafting.adapters",
-    "supportiq_ai_service.release.adapters",
-    "supportiq_ai_service.release.api",
-    "supportiq_ai_service.release.assets",
-    "supportiq_ai_service.release.manifest",
-    "supportiq_ai_service.platform.adapters",
-    "supportiq_ai_service.platform.egress",
-    "supportiq_ai_service.platform.web",
+    "app.suggestions.adapters",
+    "app.suggestions.api",
+    "app.intent.adapters",
+    "app.retrieval.adapters",
+    "app.retrieval.api",
+    "app.drafting.adapters",
+    "app.release.adapters",
+    "app.release.api",
+    "app.release.assets",
+    "app.release.manifest",
+    "app.platform.adapters",
+    "app.platform.egress",
+    "app.platform.web",
 ]
 
 [[tool.importlinter.contracts]]
 name = "Adapters use no contract model and no settings (ARCH-11, ARCH-15, ARCH-33)"
 type = "forbidden"
 source_modules = [
-    "supportiq_ai_service.suggestions.adapters",
-    "supportiq_ai_service.intent.adapters",
-    "supportiq_ai_service.retrieval.adapters",
-    "supportiq_ai_service.drafting.adapters",
-    "supportiq_ai_service.release.adapters",
-    "supportiq_ai_service.platform.adapters",
+    "app.suggestions.adapters",
+    "app.intent.adapters",
+    "app.retrieval.adapters",
+    "app.drafting.adapters",
+    "app.release.adapters",
+    "app.platform.adapters",
 ]
-forbidden_modules = ["supportiq_ai_service.generated", "supportiq_ai_service.platform.settings"]
+forbidden_modules = ["app.generated", "app.platform.settings"]
 
 [[tool.importlinter.contracts]]
 name = "Interface code uses no settings and imports no adapter (ARCH-11)"
 type = "forbidden"
 allow_indirect_imports = true
 source_modules = [
-    "supportiq_ai_service.suggestions.api",
-    "supportiq_ai_service.retrieval.api",
-    "supportiq_ai_service.release.api",
-    "supportiq_ai_service.platform.web",
+    "app.suggestions.api",
+    "app.retrieval.api",
+    "app.release.api",
+    "app.platform.web",
 ]
 forbidden_modules = [
-    "supportiq_ai_service.platform.settings",
-    "supportiq_ai_service.suggestions.adapters",
-    "supportiq_ai_service.intent.adapters",
-    "supportiq_ai_service.retrieval.adapters",
-    "supportiq_ai_service.drafting.adapters",
-    "supportiq_ai_service.release.adapters",
-    "supportiq_ai_service.release.assets",
-    "supportiq_ai_service.release.manifest",
-    "supportiq_ai_service.platform.adapters",
-    "supportiq_ai_service.platform.egress",
+    "app.platform.settings",
+    "app.suggestions.adapters",
+    "app.intent.adapters",
+    "app.retrieval.adapters",
+    "app.drafting.adapters",
+    "app.release.adapters",
+    "app.release.assets",
+    "app.release.manifest",
+    "app.platform.adapters",
+    "app.platform.egress",
 ]
 
 [[tool.importlinter.contracts]]
@@ -321,18 +328,18 @@ name = "Features reach other features only through their public API, release.api
 type = "forbidden"
 allow_indirect_imports = true
 source_modules = [
-    "supportiq_ai_service.suggestions",
-    "supportiq_ai_service.intent",
-    "supportiq_ai_service.retrieval",
-    "supportiq_ai_service.drafting",
+    "app.suggestions",
+    "app.intent",
+    "app.retrieval",
+    "app.drafting",
 ]
 forbidden_modules = [
-    "supportiq_ai_service.release.domain",
-    "supportiq_ai_service.release.application",
-    "supportiq_ai_service.release.adapters",
-    "supportiq_ai_service.release.manifest",
-    "supportiq_ai_service.platform.domain",
-    "supportiq_ai_service.platform.application",
-    "supportiq_ai_service.platform.adapters",
-    "supportiq_ai_service.platform.settings",
+    "app.release.domain",
+    "app.release.application",
+    "app.release.adapters",
+    "app.release.manifest",
+    "app.platform.domain",
+    "app.platform.application",
+    "app.platform.adapters",
+    "app.platform.settings",
 ]

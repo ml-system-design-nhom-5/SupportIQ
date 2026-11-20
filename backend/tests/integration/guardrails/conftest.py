@@ -8,7 +8,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SpanExporter
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-from supportiq_backend.platform.adapters.telemetry import create_tracer_provider
+from app.platform.adapters.telemetry import create_tracer_provider
 
 
 @pytest.fixture
@@ -42,7 +42,7 @@ def exported_spans(monkeypatch: pytest.MonkeyPatch) -> InMemorySpanExporter:
         return create_tracer_provider(exporter)
 
     monkeypatch.setattr(
-        "supportiq_backend.composition_root.runtime.create_tracer_provider",
+        "app.composition_root.runtime.create_tracer_provider",
         provider_with_exporter,
     )
     return exporter

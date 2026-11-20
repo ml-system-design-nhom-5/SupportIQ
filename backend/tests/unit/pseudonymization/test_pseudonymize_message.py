@@ -4,10 +4,10 @@ from dataclasses import dataclass
 
 import pytest
 
-from supportiq_backend.audit import AuditEventType
-from supportiq_backend.commerce import OrderId
-from supportiq_backend.platform import DatabaseUnavailableError, EventName
-from supportiq_backend.pseudonymization import (
+from app.audit import AuditEventType
+from app.commerce import OrderId
+from app.platform import DatabaseUnavailableError, EventName
+from app.pseudonymization import (
     Detector,
     DetectorError,
     KnownValueDetector,
@@ -21,7 +21,7 @@ from supportiq_backend.pseudonymization import (
     PseudonymizeMessage,
     RestorePseudonyms,
 )
-from supportiq_backend.pseudonymization.domain import (
+from app.pseudonymization.domain import (
     Detection,
     DetectionSource,
     KnownValue,

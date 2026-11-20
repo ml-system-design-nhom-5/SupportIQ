@@ -29,7 +29,7 @@ WORKDIR /build/ai-service
 COPY ai-service/pyproject.toml ai-service/uv.lock ./
 RUN uv sync --locked --group torch --group dev --no-install-project
 COPY ai-service/README.md ./
-COPY ai-service/src ./src
+COPY ai-service/app ./app
 RUN uv sync --locked --group torch --group dev --no-editable
 # 2. The runtime dependencies of eval/release from its lock, with their hashes and without
 #    resolving. A package that both locks pin at different versions stops the build with its
@@ -89,7 +89,7 @@ WORKDIR /srv/backend
 COPY backend/pyproject.toml backend/uv.lock ./
 RUN uv sync --locked --no-install-project
 COPY backend/README.md ./
-COPY backend/src ./src
+COPY backend/app ./app
 RUN uv sync --locked
 # The tests read the source of backend (the outbound guardrail), and the default TLS of a
 # replica reads the authority in certs/ (backend README, TLS to the database).

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from supportiq_ai_service.release.assets import (
+from app.release.assets import (
     AssetFile,
     StrictDocument,
     UtcTimestamp,

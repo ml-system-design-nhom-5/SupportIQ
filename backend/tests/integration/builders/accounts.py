@@ -6,8 +6,8 @@ from uuid import UUID
 
 from sqlalchemy import insert
 
-from supportiq_backend.accounts import SessionToken, hash_session_token
-from supportiq_backend.accounts.adapters.tables import AccountRow, SessionRow
+from app.accounts import SessionToken, hash_session_token
+from app.accounts.adapters.tables import AccountRow, SessionRow
 from tests.integration.builders.rows import RowWriter
 from tests.unit.platform.fakes import FAKE_CLOCK_START
 

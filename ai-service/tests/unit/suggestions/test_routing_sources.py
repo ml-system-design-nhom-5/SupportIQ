@@ -10,9 +10,9 @@ from pathlib import Path
 
 import pytest
 
-from supportiq_ai_service.release.manifest import verify_release
-from supportiq_ai_service.suggestions.adapters.routing_file import read_routing_configuration
-from supportiq_ai_service.suggestions.domain import (
+from app.release.manifest import verify_release
+from app.suggestions.adapters.routing_file import read_routing_configuration
+from app.suggestions.domain import (
     AuthorityCategory,
     IntentName,
     RoutingConfiguration,

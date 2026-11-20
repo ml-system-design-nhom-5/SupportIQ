@@ -2,7 +2,7 @@
 
 import pytest
 
-from supportiq_backend.platform import CheckReadiness, DatabaseUnavailableError
+from app.platform import CheckReadiness, DatabaseUnavailableError
 from tests.unit.platform.fakes import FakeReadinessProbe
 
 pytestmark = pytest.mark.anyio

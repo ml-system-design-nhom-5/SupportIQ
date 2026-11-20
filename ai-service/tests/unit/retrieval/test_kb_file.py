@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from supportiq_ai_service.retrieval import KbDocument
-from supportiq_ai_service.retrieval.adapters.kb_file import read_kb_documents
+from app.retrieval import KbDocument
+from app.retrieval.adapters.kb_file import read_kb_documents
 from tests.unit.release.release_folder import (
     KB_DOCUMENT,
     KB_ENTRY,

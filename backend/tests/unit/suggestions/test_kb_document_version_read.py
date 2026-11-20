@@ -8,7 +8,7 @@ handler to log nothing more (ERR-05, LOG-15). The call runs in its own span (LOG
 
 import pytest
 
-from supportiq_backend.accounts import (
+from app.accounts import (
     AccountId,
     Authorizer,
     CustomerId,
@@ -20,14 +20,14 @@ from supportiq_backend.accounts import (
     SupportPrincipal,
     SupportRole,
 )
-from supportiq_backend.platform import (
+from app.platform import (
     EVENT_DESCRIPTIONS,
     ErrorCode,
     EventLevel,
     EventName,
     SpanName,
 )
-from supportiq_backend.suggestions import (
+from app.suggestions import (
     AiServiceContractError,
     AiServiceReadContractError,
     AiServiceReadPorts,

@@ -5,16 +5,16 @@ from pathlib import Path
 
 import pytest
 
-from supportiq_ai_service.platform import (
+from app.platform import (
     AiServiceError,
     ResourceNotFoundError,
     ServiceTokenRejectedError,
     TraceId,
     UnexpectedFailureError,
 )
-from supportiq_ai_service.platform.web import build_problem_response
-from supportiq_ai_service.release import ReleaseNotLoadedError
-from supportiq_ai_service.suggestions import UnknownKbVersionError
+from app.platform.web import build_problem_response
+from app.release import ReleaseNotLoadedError
+from app.suggestions import UnknownKbVersionError
 
 PROBLEM_EXAMPLES = Path(__file__).parents[3] / "contracts/examples/problems"
 

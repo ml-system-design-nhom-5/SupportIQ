@@ -5,7 +5,7 @@ from uuid import UUID
 
 import pytest
 
-from supportiq_backend.accounts import (
+from app.accounts import (
     AccountChange,
     AccountChangePorts,
     AccountChangeRefusedError,
@@ -27,14 +27,14 @@ from supportiq_backend.accounts import (
     SessionRequiredError,
     StatusChange,
 )
-from supportiq_backend.audit import AuditEventType
-from supportiq_backend.idempotency import (
+from app.audit import AuditEventType
+from app.idempotency import (
     IdempotencyGuard,
     IdempotencyKey,
     IdempotencyKeyReusedError,
     StoredResponse,
 )
-from supportiq_backend.platform import (
+from app.platform import (
     BackendError,
     DatabaseUnavailableError,
     EventName,

@@ -2,7 +2,7 @@
 
 import pytest
 
-from supportiq_backend.accounts import (
+from app.accounts import (
     AccountId,
     Authorizer,
     CustomerId,
@@ -11,7 +11,7 @@ from supportiq_backend.accounts import (
     InternalPrincipal,
     InternalRole,
 )
-from supportiq_backend.commerce import (
+from app.commerce import (
     GetShopOrder,
     GetShopProduct,
     ListShopOrders,
@@ -22,7 +22,7 @@ from supportiq_backend.commerce import (
     ProductNotFoundError,
     ProductPosition,
 )
-from supportiq_backend.platform import DatabaseUnavailableError
+from app.platform import DatabaseUnavailableError
 from tests.unit.commerce.fakes import FakeCommerceGateway, build_order, build_product
 from tests.unit.platform.fakes import FakeTransactionRunner, RecordingEventRecorder
 

@@ -4,15 +4,15 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from supportiq_backend.accounts import CustomerId
-from supportiq_backend.commerce import (
+from app.accounts import CustomerId
+from app.commerce import (
     AddressedOrder,
     CustomerContact,
     OrderId,
     OrderReferences,
 )
-from supportiq_backend.platform import BackendError
-from supportiq_backend.pseudonymization.domain import MapTicketId, PseudonymEntry
+from app.platform import BackendError
+from app.pseudonymization.domain import MapTicketId, PseudonymEntry
 
 CUSTOMER_ID = CustomerId("00000000-0000-4000-8000-0000000000c1")
 CONTACT = CustomerContact("Lan Tran", "lan.tran@example.test", "+84 90 111 0001")

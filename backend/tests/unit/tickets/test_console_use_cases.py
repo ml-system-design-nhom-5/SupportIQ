@@ -9,11 +9,11 @@ from dataclasses import replace
 
 import pytest
 
-from supportiq_backend.accounts import ForbiddenRoleError, Principal
-from supportiq_backend.audit import AuditEventType
-from supportiq_backend.commerce import AddressedOrder
-from supportiq_backend.platform import EventName, SpanName
-from supportiq_backend.suggestions import (
+from app.accounts import ForbiddenRoleError, Principal
+from app.audit import AuditEventType
+from app.commerce import AddressedOrder
+from app.platform import EventName, SpanName
+from app.suggestions import (
     AiReasonCode,
     AiServiceContractError,
     AiServiceUnavailableError,
@@ -21,7 +21,7 @@ from supportiq_backend.suggestions import (
     SuggestionPendingError,
     SuggestionTrigger,
 )
-from supportiq_backend.tickets import (
+from app.tickets import (
     AiDraftReply,
     AuthorityRequiredError,
     DecisionType,
@@ -33,7 +33,7 @@ from supportiq_backend.tickets import (
     TicketAction,
     TicketStatus,
 )
-from supportiq_backend.tickets.domain import OTHER_ORDERS_LIMIT
+from app.tickets.domain import OTHER_ORDERS_LIMIT
 from tests.unit.commerce.fakes import build_order
 from tests.unit.platform.fakes import FAKE_CLOCK_START, RecordingStepTracer
 from tests.unit.pseudonymization.fakes import REFERENCES

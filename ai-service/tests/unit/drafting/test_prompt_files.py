@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from supportiq_ai_service.drafting.adapters.prompt_files import (
+from app.drafting.adapters.prompt_files import (
     DraftingPrompts,
     read_drafting_prompts,
 )

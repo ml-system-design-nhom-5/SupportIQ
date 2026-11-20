@@ -3,9 +3,9 @@
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from supportiq_backend.accounts import Authorizer
-from supportiq_backend.platform import BackendError
-from supportiq_backend.reports import (
+from app.accounts import Authorizer
+from app.platform import BackendError
+from app.reports import (
     AiErrorRate,
     AiOutcomes,
     DecisionRecord,
@@ -26,8 +26,8 @@ from supportiq_backend.reports import (
     TicketCounts,
     build_report_period,
 )
-from supportiq_backend.suggestions import AiReasonCode, PartStatus
-from supportiq_backend.tickets import HandlingMode, StaffReasonCode, TicketId
+from app.suggestions import AiReasonCode, PartStatus
+from app.tickets import HandlingMode, StaffReasonCode, TicketId
 from tests.unit.platform.fakes import (
     FakeTransactionRunner,
     RecordingEventRecorder,

@@ -10,9 +10,9 @@ from uuid import UUID
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from supportiq_backend.accounts import AccountId, DisplayName
-from supportiq_backend.accounts.adapters.staff_directory import PostgresStaffDirectory
-from supportiq_backend.platform.adapters.database import create_session_factory
+from app.accounts import AccountId, DisplayName
+from app.accounts.adapters.staff_directory import PostgresStaffDirectory
+from app.platform.adapters.database import create_session_factory
 from tests.integration.builders import AccountSpec, DatabaseBuilder
 
 pytestmark = pytest.mark.anyio

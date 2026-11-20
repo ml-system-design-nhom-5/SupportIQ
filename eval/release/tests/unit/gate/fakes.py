@@ -13,14 +13,14 @@ from collections.abc import Mapping, MutableMapping, Sequence
 from pathlib import Path
 from typing import TextIO
 
+from app.composition_root import CandidatePorts
+from app.drafting import DraftRequest, LlmCallError
+from app.intent import IntentDistribution, IntentModelError, IntentProbability
+from app.retrieval import DocumentMatch, RetrievalError
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
-from supportiq_ai_service.composition_root import CandidatePorts
-from supportiq_ai_service.drafting import DraftRequest, LlmCallError
-from supportiq_ai_service.intent import IntentDistribution, IntentModelError, IntentProbability
-from supportiq_ai_service.retrieval import DocumentMatch, RetrievalError
 
 from supportiq_release.composition_root import cli
 from supportiq_release.gate.adapters import ApplicationFactory

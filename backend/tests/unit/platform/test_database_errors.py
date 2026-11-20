@@ -2,7 +2,7 @@
 
 import pytest
 
-from supportiq_backend.platform.adapters.database import is_database_unavailable
+from app.platform.adapters.database import is_database_unavailable
 
 
 class DriverError(Exception):

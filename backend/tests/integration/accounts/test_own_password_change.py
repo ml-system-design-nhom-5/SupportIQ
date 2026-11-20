@@ -5,7 +5,7 @@ from uuid import UUID
 
 import pytest
 
-from supportiq_backend.accounts import PasswordHash
+from app.accounts import PasswordHash
 from tests.integration.accounts.admin_requests import KEY, OTHER_KEY
 from tests.integration.accounts.password_requests import (
     CURRENT_SESSION,

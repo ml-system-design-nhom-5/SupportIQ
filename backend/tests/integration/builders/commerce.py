@@ -6,7 +6,7 @@ from uuid import UUID
 
 from sqlalchemy import insert
 
-from supportiq_backend.commerce.adapters.tables import (
+from app.commerce.adapters.tables import (
     CustomerRow,
     OrderLineRow,
     OrderRow,

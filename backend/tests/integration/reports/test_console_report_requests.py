@@ -8,7 +8,7 @@ from uuid import UUID
 
 import pytest
 
-from supportiq_backend.platform import EventName
+from app.platform import EventName
 from tests.integration.application import RunningBackend, session_headers
 from tests.integration.builders import AccountSpec, DatabaseBuilder
 from tests.integration.reports.report_rows import CONSOLE_REPORTS, END_TEXT, PERIOD, START_TEXT

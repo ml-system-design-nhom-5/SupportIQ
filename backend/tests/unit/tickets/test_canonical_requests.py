@@ -8,14 +8,14 @@ from collections.abc import Callable
 
 import pytest
 
-from supportiq_backend.tickets import (
+from app.tickets import (
     AiDraftReply,
     EscalationRequest,
     RejectedAiDraftReply,
     ReplyRequest,
     StaffReasonCode,
 )
-from supportiq_backend.tickets.application.canonical_requests import (
+from app.tickets.application.canonical_requests import (
     to_canonical_escalation,
     to_canonical_reply,
 )

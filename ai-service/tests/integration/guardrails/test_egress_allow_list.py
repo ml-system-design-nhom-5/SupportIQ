@@ -16,9 +16,9 @@ from pathlib import Path
 import httpx
 import pytest
 
-import supportiq_ai_service
-from supportiq_ai_service.composition_root import cli
-from supportiq_ai_service.platform.adapters.egress import (
+import app
+from app.composition_root import cli
+from app.platform.adapters.egress import (
     EgressAllowList,
     EgressRefusedError,
     packaged_egress_allow_list,
@@ -37,7 +37,7 @@ OTHER_HOST_URLS = (
     "https://203.0.113.10:8443/v1beta/models",
     "https://[2001:db8::10]/v1beta/models",
 )
-SOURCE_ROOT = Path(supportiq_ai_service.__file__).parent
+SOURCE_ROOT = Path(app.__file__).parent
 EGRESS_MODULE = SOURCE_ROOT / "platform" / "adapters" / "egress.py"
 # The calls that create an HTTP client or a transport, or open a connection, by module. Only a
 # call counts, so a type annotation such as `httpx.Client` does not.

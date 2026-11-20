@@ -2,9 +2,9 @@
 
 import pytest
 
-from supportiq_backend.composition_root.database_commands import create_app_role, migrate
-from supportiq_backend.composition_root.settings_loading import SettingRequiredError
-from supportiq_backend.platform import EventName
+from app.composition_root.database_commands import create_app_role, migrate
+from app.composition_root.settings_loading import SettingRequiredError
+from app.platform import EventName
 from tests.integration.application import build_settings
 from tests.integration.database import WorkerDatabase
 from tests.integration.schema.test_migration import HEAD_REVISION

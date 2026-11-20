@@ -20,18 +20,18 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
-from supportiq_ai_service.composition_root import cli
-from supportiq_ai_service.composition_root.release_assets import ReleaseModels
-from supportiq_ai_service.intent.adapters.model_artifact import ModelArtifact
-from supportiq_ai_service.platform.adapters.egress import (
+from app.composition_root import cli
+from app.composition_root.release_assets import ReleaseModels
+from app.intent.adapters.model_artifact import ModelArtifact
+from app.platform.adapters.egress import (
     ALLOW_LIST_FILE_NAME,
     EgressAllowList,
     EgressAllowListInvalidError,
     create_egress_client,
     packaged_egress_allow_list,
 )
-from supportiq_ai_service.platform.adapters.system_clock import SystemClock
-from supportiq_ai_service.retrieval.adapters.index_file import IndexConfiguration
+from app.platform.adapters.system_clock import SystemClock
+from app.retrieval.adapters.index_file import IndexConfiguration
 from tests.unit.composition_root.fakes import (
     KB_RELEASE_CHANGES,
     LONG_DOCUMENT,
@@ -51,7 +51,7 @@ from tests.unit.release.release_folder import (
 
 SERVE_ARGUMENTS = ["serve", "--host", "127.0.0.1", "--port", "8000"]
 SERVICE_TOKEN = "service-token-for-unit-tests"
-MODELS_MODULE = "supportiq_ai_service.composition_root.release_models"
+MODELS_MODULE = "app.composition_root.release_models"
 # What keeps the model library offline and silent (ADR-0018, Egress).
 OFFLINE_VARIABLES = ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_HUB_DISABLE_TELEMETRY")
 # The real loader, kept before the fixture `fake_models` replaces it in every test.
@@ -447,7 +447,7 @@ class _ModelsModuleFinder(importlib.abc.MetaPathFinder, importlib.abc.Loader):
 def models_module_not_imported(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # The import must run in the test, so neither the module nor the attribute of its package
     # may exist before it; both are put back afterwards.
-    package = sys.modules["supportiq_ai_service.composition_root"]
+    package = sys.modules["app.composition_root"]
     monkeypatch.delattr(package, "release_models", raising=False)
     previous = sys.modules.pop(MODELS_MODULE, None)
     yield
@@ -480,7 +480,7 @@ def test_hugging_face_is_set_offline_before_the_models_module_is_imported(
 
 def test_the_command_imports_neither_the_models_module_nor_the_model_library() -> None:
     probe = (
-        "import sys, supportiq_ai_service.composition_root.cli\n"
+        "import sys, app.composition_root.cli\n"
         f"print({MODELS_MODULE!r} in sys.modules, 'transformers' in sys.modules)"
     )
 

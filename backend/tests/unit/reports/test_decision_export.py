@@ -2,8 +2,8 @@
 
 import pytest
 
-from supportiq_backend.platform import DatabaseUnavailableError, EventName
-from supportiq_backend.reports import ExportWriteFailedError
+from app.platform import DatabaseUnavailableError, EventName
+from app.reports import ExportWriteFailedError
 from tests.unit.reports.fakes import (
     PERIOD,
     RECORD,

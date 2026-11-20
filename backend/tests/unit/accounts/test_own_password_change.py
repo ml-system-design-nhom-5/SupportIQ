@@ -6,7 +6,7 @@ from uuid import UUID
 
 import pytest
 
-from supportiq_backend.accounts import (
+from app.accounts import (
     AccountChangeRefusedError,
     AccountChangeRule,
     AccountId,
@@ -26,9 +26,9 @@ from supportiq_backend.accounts import (
     ThrottlePolicy,
     hash_login_name,
 )
-from supportiq_backend.audit import AuditEventType
-from supportiq_backend.idempotency import IdempotencyGuard, IdempotencyKey, StoredResponse
-from supportiq_backend.platform import EventName
+from app.audit import AuditEventType
+from app.idempotency import IdempotencyGuard, IdempotencyKey, StoredResponse
+from app.platform import EventName
 from tests.unit.accounts.fakes import (
     HASH_OF_KNOWN_PASSWORD,
     KNOWN_PASSWORD,

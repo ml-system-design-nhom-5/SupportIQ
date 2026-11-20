@@ -14,19 +14,19 @@ from typing import Any
 
 import pytest
 
-from supportiq_ai_service.intent import INTENT_LABELS
-from supportiq_ai_service.intent.adapters.model_artifact import MODEL_ARTIFACT_FORMAT
-from supportiq_ai_service.release.manifest import (
+from app.intent import INTENT_LABELS
+from app.intent.adapters.model_artifact import MODEL_ARTIFACT_FORMAT
+from app.release.manifest import (
     MANIFEST_FORMAT,
     ReleaseInvalidError,
     ReleaseInvalidReason,
     VerifiedReleaseSource,
     verify_release,
 )
-from supportiq_ai_service.retrieval.adapters.index_file import INDEX_FORMAT
-from supportiq_ai_service.retrieval.adapters.kb_file import KB_FORMAT
-from supportiq_ai_service.suggestions.adapters.mapping_file import MAPPING_FORMAT
-from supportiq_ai_service.suggestions.adapters.routing_file import ROUTING_FORMAT
+from app.retrieval.adapters.index_file import INDEX_FORMAT
+from app.retrieval.adapters.kb_file import KB_FORMAT
+from app.suggestions.adapters.mapping_file import MAPPING_FORMAT
+from app.suggestions.adapters.routing_file import ROUTING_FORMAT
 from tests.unit.release.fakes import EXAMPLE_VERSIONS
 
 type JsonDocument = dict[str, Any]

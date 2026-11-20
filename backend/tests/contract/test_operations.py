@@ -15,7 +15,7 @@ from fastapi import FastAPI
 from fastapi.routing import iter_route_contexts
 from schemathesis import BaseSchema
 
-from supportiq_backend.composition_root import BackgroundWork, create_app
+from app.composition_root import BackgroundWork, create_app
 from tests.contract.documented import list_operations
 from tests.integration.ai_service_doubles import FakeAiService, serve_examples
 from tests.integration.application import RunningBackend, build_settings
@@ -59,7 +59,7 @@ EVERY_READ_OF_THE_CONTRACT = {
 EVERY_OPERATION = sorted(EVERY_READ_OF_THE_CONTRACT | EVERY_WRITE_OF_THE_CONTRACT)
 COMMERCE_PATHS = ("/v1/shop/products", "/v1/shop/orders")
 REPLY_ROUTE = ("POST", "/v1/console/tickets/{ticket_id}/replies")
-SOURCE_ROOT = Path(__file__).parents[2] / "src" / "supportiq_backend"
+SOURCE_ROOT = Path(__file__).parents[2] / "app"
 PATH_PARAMETER = re.compile(r"\{[^}]+\}")
 ANY_IDENTIFIER = "1"
 

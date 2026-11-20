@@ -10,10 +10,10 @@ from pathlib import Path
 
 import pytest
 
-from supportiq_ai_service.intent import INTENT_LABELS
-from supportiq_ai_service.intent.adapters.distilbert_model import load_distilbert_classifier
-from supportiq_ai_service.intent.adapters.model_artifact import ModelArtifact, read_model_artifact
-from supportiq_ai_service.release.manifest import ReleaseInvalidReason
+from app.intent import INTENT_LABELS
+from app.intent.adapters.distilbert_model import load_distilbert_classifier
+from app.intent.adapters.model_artifact import ModelArtifact, read_model_artifact
+from app.release.manifest import ReleaseInvalidReason
 from tests.unit.release.release_folder import asset_refusal, verified_release
 from tests.unit.tiny_models import folder_files, write_classifier
 

@@ -11,7 +11,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from supportiq_ai_service.platform.adapters.egress import (
+from app.platform.adapters.egress import (
     ALLOW_LIST_FILE_NAME,
     EgressAllowList,
     EgressAllowListInvalidError,

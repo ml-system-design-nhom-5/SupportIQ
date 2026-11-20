@@ -15,16 +15,16 @@ The runner sets the case before it sends the requests of that case, so the two m
 
 from collections.abc import Sequence
 
-from supportiq_ai_service.composition_root import CandidatePorts
-from supportiq_ai_service.drafting import DraftReply, DraftRequest, LlmCallError, LlmFailure
-from supportiq_ai_service.intent import (
+from app.composition_root import CandidatePorts
+from app.drafting import DraftReply, DraftRequest, LlmCallError, LlmFailure
+from app.intent import (
     INTENT_LABELS,
     IntentClassifier,
     IntentDistribution,
     IntentModelError,
     IntentProbability,
 )
-from supportiq_ai_service.retrieval import DocumentMatch, DocumentSearch, RetrievalError
+from app.retrieval import DocumentMatch, DocumentSearch, RetrievalError
 
 from supportiq_release.gate.domain import Failure, Injection
 

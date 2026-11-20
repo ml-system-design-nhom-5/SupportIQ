@@ -8,12 +8,12 @@ from pathlib import Path
 
 import pytest
 
-from supportiq_backend.composition_root.report_commands import (
+from app.composition_root.report_commands import (
     ExportDecisionsArguments,
     export_decisions,
 )
-from supportiq_backend.reports import ExportPathRefusedError
-from supportiq_backend.reports.adapters.export_file import resolve_export_path
+from app.reports import ExportPathRefusedError
+from app.reports.adapters.export_file import resolve_export_path
 from tests.integration.application import build_settings
 from tests.integration.database import WorkerDatabase
 from tests.integration.reports.export_scenario import insert_export_scenario

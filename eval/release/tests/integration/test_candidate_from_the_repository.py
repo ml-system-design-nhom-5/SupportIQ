@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 
 import pytest
-from supportiq_ai_service.release.manifest import verify_candidate
+from app.release.manifest import verify_candidate
 
 from supportiq_release.composition_root import cli
 from tests.unit.candidate.fakes import spec_document, write_sources

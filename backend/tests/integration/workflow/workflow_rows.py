@@ -16,8 +16,8 @@ from uuid import UUID
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from supportiq_backend.platform.adapters.database import create_session_factory
-from supportiq_backend.suggestions import (
+from app.platform.adapters.database import create_session_factory
+from app.suggestions import (
     AiReasonCode,
     ClaimedJob,
     NewSuggestion,
@@ -35,15 +35,15 @@ from supportiq_backend.suggestions import (
     SuggestionTrigger,
     build_unavailable_completion,
 )
-from supportiq_backend.suggestions.adapters.ai_service_payloads import (
+from app.suggestions.adapters.ai_service_payloads import (
     parse_analysis_response,
     parse_draft_response,
 )
-from supportiq_backend.suggestions.adapters.suggestion_store import (
+from app.suggestions.adapters.suggestion_store import (
     PostgresSuggestionJobStore,
     PostgresSuggestionStore,
 )
-from supportiq_backend.tickets.adapters.console_store import PostgresTicketLinks
+from app.tickets.adapters.console_store import PostgresTicketLinks
 from tests.integration.accounts.lock_waits import ROW_LOCK_WAITS
 from tests.integration.builders import (
     DatabaseBuilder,

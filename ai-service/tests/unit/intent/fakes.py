@@ -1,6 +1,6 @@
 """Intent distributions for tests that need no model weights."""
 
-from supportiq_ai_service.intent import INTENT_LABELS, IntentDistribution, IntentProbability
+from app.intent import INTENT_LABELS, IntentDistribution, IntentProbability
 
 
 def distribution(*entries: tuple[str, float]) -> IntentDistribution:

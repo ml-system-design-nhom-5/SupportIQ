@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from supportiq_ai_service.retrieval.adapters.kb_file import read_kb_documents
-from supportiq_ai_service.suggestions.adapters.mapping_file import read_document_intents
-from supportiq_ai_service.suggestions.domain import IntentName
+from app.retrieval.adapters.kb_file import read_kb_documents
+from app.suggestions.adapters.mapping_file import read_document_intents
+from app.suggestions.domain import IntentName
 from tests.unit.release.fakes import EXAMPLE_VERSIONS
 from tests.unit.release.release_folder import (
     KB_DOCUMENT,

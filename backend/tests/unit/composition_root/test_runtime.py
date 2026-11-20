@@ -2,8 +2,8 @@
 
 from pathlib import Path
 
-from supportiq_backend.composition_root.runtime import database_ca_file
-from supportiq_backend.platform.settings import DatabaseTls
+from app.composition_root.runtime import database_ca_file
+from app.platform.settings import DatabaseTls
 from tests.unit.platform.settings_builders import build_test_settings
 
 CA_FILE = Path("certs/another-root-ca.crt")

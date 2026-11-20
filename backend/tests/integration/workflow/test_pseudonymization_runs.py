@@ -15,16 +15,16 @@ from datetime import datetime
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
-from supportiq_backend.accounts import CustomerId
-from supportiq_backend.audit.adapters.audit_log import PostgresAuditLog
-from supportiq_backend.commerce import OrderId
-from supportiq_backend.commerce.adapters.customer_records import PostgresCustomerRecords
-from supportiq_backend.platform import DatabaseUnavailableError
-from supportiq_backend.platform.adapters.database import (
+from app.accounts import CustomerId
+from app.audit.adapters.audit_log import PostgresAuditLog
+from app.commerce import OrderId
+from app.commerce.adapters.customer_records import PostgresCustomerRecords
+from app.platform import DatabaseUnavailableError
+from app.platform.adapters.database import (
     SqlAlchemyTransactionRunner,
     create_session_factory,
 )
-from supportiq_backend.pseudonymization import (
+from app.pseudonymization import (
     Detector,
     DetectorError,
     KnownValueDetector,
@@ -36,10 +36,10 @@ from supportiq_backend.pseudonymization import (
     PseudonymizationStores,
     PseudonymizeMessage,
 )
-from supportiq_backend.pseudonymization.adapters.pseudonym_map_store import (
+from app.pseudonymization.adapters.pseudonym_map_store import (
     PostgresPseudonymMapStore,
 )
-from supportiq_backend.pseudonymization.domain import (
+from app.pseudonymization.domain import (
     Detection,
     KnownValue,
     PseudonymEntry,

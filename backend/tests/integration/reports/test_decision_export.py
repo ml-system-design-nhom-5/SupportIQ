@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from supportiq_backend.platform import EventName
+from app.platform import EventName
 from tests.integration.database import WorkerDatabase
 from tests.integration.reports.export_scenario import (
     OUTPUT,

@@ -6,7 +6,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from supportiq_backend.accounts import (
+from app.accounts import (
     AccountChange,
     AccountChangeRefusedError,
     AccountChangeRule,

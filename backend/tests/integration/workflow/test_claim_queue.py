@@ -15,15 +15,15 @@ from datetime import datetime, timedelta
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from supportiq_backend.composition_root.suggestions_wiring import build_claim_stores
-from supportiq_backend.platform import MILLISECONDS_PER_SECOND
-from supportiq_backend.platform.adapters.database import (
+from app.composition_root.suggestions_wiring import build_claim_stores
+from app.platform import MILLISECONDS_PER_SECOND
+from app.platform.adapters.database import (
     SqlAlchemyTransactionRunner,
     create_database_engine,
     create_session_factory,
 )
-from supportiq_backend.suggestions import ClaimedJob, ClaimLoop, QueueSettings
-from supportiq_backend.suggestions.adapters.suggestion_store import PostgresSuggestionJobStore
+from app.suggestions import ClaimedJob, ClaimLoop, QueueSettings
+from app.suggestions.adapters.suggestion_store import PostgresSuggestionJobStore
 from tests.integration.builders import DatabaseBuilder
 from tests.integration.database import DESIGN_TIMEOUTS, WorkerDatabase
 from tests.integration.workflow.workflow_rows import (

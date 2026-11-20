@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from supportiq_ai_service.release.manifest import verify_release
-from supportiq_ai_service.retrieval.adapters.index_file import (
+from app.release.manifest import verify_release
+from app.retrieval.adapters.index_file import (
     IndexConfiguration,
     read_index_configuration,
 )

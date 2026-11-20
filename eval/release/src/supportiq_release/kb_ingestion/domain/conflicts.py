@@ -2,7 +2,7 @@
 
 This is a copy of that rule, not an import of it, because the release command never imports
 the internals of `ai-service` (ADR-0021, Where the code of `main` goes, statement 1). In
-`ai-service/src/supportiq_ai_service/suggestions/domain/evidence.py` (`_in_effect` and
+`ai-service/app/suggestions/domain/evidence.py` (`_in_effect` and
 `_validity`), a version is in effect from `effective_start_at`, included, until
 `effective_end_at`, excluded, and two versions in effect at `as_of` with one `policy_key` are
 both `conflicting`. So two versions conflict at some `as_of` exactly when they share a

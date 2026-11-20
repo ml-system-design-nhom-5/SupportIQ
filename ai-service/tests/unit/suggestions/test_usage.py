@@ -2,9 +2,9 @@
 
 import pytest
 
-from supportiq_ai_service.drafting import TokenPrices, TokenUsage
-from supportiq_ai_service.suggestions.domain import LlmUsage
-from supportiq_ai_service.suggestions.domain.usage import (
+from app.drafting import TokenPrices, TokenUsage
+from app.suggestions.domain import LlmUsage
+from app.suggestions.domain.usage import (
     MAX_COST_MICRO_USD,
     MAX_TOKEN_COUNT,
     UsageOutOfRangeError,

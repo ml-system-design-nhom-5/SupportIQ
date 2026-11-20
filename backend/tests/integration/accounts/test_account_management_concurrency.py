@@ -13,8 +13,8 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from supportiq_backend.accounts import PasswordHash, SessionToken, hash_session_token
-from supportiq_backend.accounts.adapters.internal_accounts import ACCOUNT_CHANGES_LOCK_KEY
+from app.accounts import PasswordHash, SessionToken, hash_session_token
+from app.accounts.adapters.internal_accounts import ACCOUNT_CHANGES_LOCK_KEY
 from tests.integration.accounts.admin_requests import SHORT_LOCK_MS, sign_in_as_new_admin
 from tests.integration.accounts.lock_waits import (
     ADVISORY_LOCK_WAITS,

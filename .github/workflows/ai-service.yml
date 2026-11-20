@@ -188,7 +188,7 @@ jobs:
         working-directory: ai-service
         run: >-
           uv run --locked --group torch coverage report --fail-under=90
-          --include="*/supportiq_ai_service/*/domain/*,*/supportiq_ai_service/*/application/*"
+          --include="*/app/*/domain/*,*/app/*/application/*"
 
   # Until eval.yml exists, the release command in eval/release/ is checked here, at the rule
   # level of ai-service (ADR-0021, CI, statement 7). It installs ai-service from the checkout,

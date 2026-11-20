@@ -13,11 +13,11 @@ from uuid import UUID
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from supportiq_backend.accounts import CustomerId
-from supportiq_backend.commerce import AddressedOrder, CustomerContact, OrderId, OrderReferences
-from supportiq_backend.commerce.adapters.customer_records import PostgresCustomerRecords
-from supportiq_backend.platform.adapters.database import create_session_factory
-from supportiq_backend.tickets.domain import OTHER_ORDERS_LIMIT
+from app.accounts import CustomerId
+from app.commerce import AddressedOrder, CustomerContact, OrderId, OrderReferences
+from app.commerce.adapters.customer_records import PostgresCustomerRecords
+from app.platform.adapters.database import create_session_factory
+from app.tickets.domain import OTHER_ORDERS_LIMIT
 from tests.integration.builders import DatabaseBuilder, LineSpec, OrderSpec, ShipmentSpec
 from tests.integration.workflow.workflow_rows import insert_orders
 from tests.unit.platform.fakes import FAKE_CLOCK_START

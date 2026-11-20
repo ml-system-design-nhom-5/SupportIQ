@@ -4,9 +4,9 @@ import dataclasses
 from datetime import UTC, datetime
 from types import MappingProxyType
 
-from supportiq_ai_service.retrieval import DocumentMatch
-from supportiq_ai_service.suggestions.domain import DocumentIntents, DocumentValidity, IntentName
-from supportiq_ai_service.suggestions.domain.evidence import (
+from app.retrieval import DocumentMatch
+from app.suggestions.domain import DocumentIntents, DocumentValidity, IntentName
+from app.suggestions.domain.evidence import (
     CONFLICTING_SOURCES,
     NO_VALID_DOCUMENT,
     ONLY_EXPIRED_DOCUMENTS,

@@ -13,10 +13,10 @@ from typing import Any
 import httpx
 from pydantic import SecretStr
 
-from supportiq_ai_service.drafting import DraftRequest, OrderFact, PolicySource
-from supportiq_ai_service.drafting.adapters.gemini import GeminiClient, GeminiOptions
-from supportiq_ai_service.drafting.adapters.prompt_files import DraftingPrompts
-from supportiq_ai_service.platform.egress import create_egress_client, packaged_egress_allow_list
+from app.drafting import DraftRequest, OrderFact, PolicySource
+from app.drafting.adapters.gemini import GeminiClient, GeminiOptions
+from app.drafting.adapters.prompt_files import DraftingPrompts
+from app.platform.egress import create_egress_client, packaged_egress_allow_list
 from tests.unit.platform.fakes import FakeClock
 
 API_KEY = "gemini-key-for-unit-tests"

@@ -2,7 +2,7 @@
 
 import pytest
 
-from supportiq_backend.accounts import (
+from app.accounts import (
     AssignableRole,
     LoginName,
     compose_login_name,

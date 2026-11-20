@@ -9,7 +9,7 @@ import json
 import re
 from pathlib import Path
 
-from supportiq_ai_service.generated import (
+from app.generated import (
     AiServiceReasonCode,
     RoutingRecommendation,
     Status,

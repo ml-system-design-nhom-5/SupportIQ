@@ -6,7 +6,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-from supportiq_ai_service.release.manifest import verify_release
+from app.release.manifest import verify_release
 
 from supportiq_release.files import JsonFileInvalidError
 from supportiq_release.gate.adapters import (

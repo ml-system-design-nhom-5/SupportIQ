@@ -15,19 +15,19 @@ from sqlalchemy import insert, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Executable
 
-from supportiq_backend.accounts.adapters.account_store import PostgresAccountStore
-from supportiq_backend.accounts.adapters.internal_accounts import PostgresInternalAccountStore
-from supportiq_backend.accounts.adapters.password_store import PostgresPasswordStore
-from supportiq_backend.accounts.adapters.session_store import PostgresSessionStore
-from supportiq_backend.accounts.adapters.tables import AccountRow, SessionRow
-from supportiq_backend.accounts.domain import (
+from app.accounts.adapters.account_store import PostgresAccountStore
+from app.accounts.adapters.internal_accounts import PostgresInternalAccountStore
+from app.accounts.adapters.password_store import PostgresPasswordStore
+from app.accounts.adapters.session_store import PostgresSessionStore
+from app.accounts.adapters.tables import AccountRow, SessionRow
+from app.accounts.domain import (
     AccountId,
     LoginName,
     OwnAccount,
     SessionIdHash,
     SignInAccount,
 )
-from supportiq_backend.platform import UnexpectedFailureError
+from app.platform import UnexpectedFailureError
 from tests.integration.builders import UNUSABLE_PASSWORD_HASH, AccountSpec, DatabaseBuilder
 from tests.integration.database import WorkerDatabase
 from tests.integration.stored_values import UNKNOWN_VALUE, session_without_check

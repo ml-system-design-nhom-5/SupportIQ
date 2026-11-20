@@ -7,8 +7,8 @@ from uuid import UUID
 import httpx
 import pytest
 
-from supportiq_backend.accounts import PasswordHash
-from supportiq_backend.platform import EventName
+from app.accounts import PasswordHash
+from app.platform import EventName
 from tests.integration.application import (
     ALLOWED_ORIGIN,
     ORIGIN_HEADERS,

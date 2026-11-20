@@ -28,7 +28,7 @@ dependencies = [
 ]
 
 [project.scripts]
-backend = "supportiq_backend.composition_root:main"
+backend = "app.composition_root:main"
 
 [dependency-groups]
 # Development dependencies, separate from the runtime ones (PY-46).
@@ -53,6 +53,11 @@ dev = [
 requires = ["uv_build>=0.11.11,<0.12"]
 build-backend = "uv_build"
 
+# The package is app/ at the root of the project, without src/ (PY-06, ADR-0028).
+[tool.uv.build-backend]
+module-name = "app"
+module-root = ""
+
 # The named-entity model is not on PyPI. ADR-0017 allows this one release URL; uv.lock pins its
 # checksum, and `uv sync --locked` refuses a wheel that differs (SEC-30, SEC-31).
 [tool.uv.sources]
@@ -64,7 +69,7 @@ en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/dow
 [tool.datamodel-codegen]
 input = "../contracts/backend.openapi.yaml"
 input-file-type = "openapi"
-output = "src/supportiq_backend/generated/__init__.py"
+output = "app/generated/__init__.py"
 output-model-type = "pydantic_v2.BaseModel"
 target-python-version = "3.14"
 use-annotated = true
@@ -92,17 +97,17 @@ type-overrides = { Timestamp = "builtins.str" }
 # input and the output.
 [tool.datamodel-codegen.profiles.ai-service]
 input = "../contracts/ai-service.openapi.yaml"
-output = "src/supportiq_backend/suggestions/adapters/generated/__init__.py"
+output = "app/suggestions/adapters/generated/__init__.py"
 
 # ----- Formatting and linting (PY-03, PY-04, PY-05) -----
 [tool.ruff]
 line-length = 100
 target-version = "py314"
-src = ["src", "tests"]
+src = [".", "tests"]
 # Generated code is never linted (CON-26).
 extend-exclude = [
-    "src/supportiq_backend/generated",
-    "src/supportiq_backend/suggestions/adapters/generated",
+    "app/generated",
+    "app/suggestions/adapters/generated",
 ]
 
 [tool.ruff.lint]
@@ -134,20 +139,20 @@ max-nested-blocks = 3
 ban-relative-imports = "all"
 
 [tool.ruff.lint.isort]
-known-first-party = ["supportiq_backend", "tests"]
+known-first-party = ["app", "tests"]
 
 # ----- Type checking (PY-03, CODE-26) -----
 [tool.pyright]
-include = ["src", "tests"]
+include = ["app", "tests"]
 exclude = [
-    "src/supportiq_backend/generated",
-    "src/supportiq_backend/suggestions/adapters/generated",
+    "app/generated",
+    "app/suggestions/adapters/generated",
     "**/__pycache__",
     ".venv",
 ]
 ignore = [
-    "src/supportiq_backend/generated",
-    "src/supportiq_backend/suggestions/adapters/generated",
+    "app/generated",
+    "app/suggestions/adapters/generated",
 ]
 typeCheckingMode = "strict"
 pythonVersion = "3.14"
@@ -180,11 +185,11 @@ filterwarnings = ["error"]
 
 [tool.coverage.run]
 branch = true
-source = ["supportiq_backend"]
+source = ["app"]
 # Generated code is excluded from coverage (CON-26, TEST-22).
 omit = [
-    "*/supportiq_backend/generated/*",
-    "*/supportiq_backend/suggestions/adapters/generated/*",
+    "*/app/generated/*",
+    "*/app/suggestions/adapters/generated/*",
 ]
 
 [tool.coverage.report]
@@ -205,73 +210,73 @@ exclude_also = [
 # through another module. Contracts between modules of backend check direct imports, because
 # a public API of a feature may be imported from any layer.
 [tool.importlinter]
-root_package = "supportiq_backend"
+root_package = "app"
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
 name = "Layers inside each feature: api, then application, then domain (ARCH-11)"
 type = "layers"
 containers = [
-    "supportiq_backend.accounts",
-    "supportiq_backend.commerce",
-    "supportiq_backend.tickets",
-    "supportiq_backend.reports",
-    "supportiq_backend.suggestions",
-    "supportiq_backend.pseudonymization",
-    "supportiq_backend.audit",
-    "supportiq_backend.idempotency",
+    "app.accounts",
+    "app.commerce",
+    "app.tickets",
+    "app.reports",
+    "app.suggestions",
+    "app.pseudonymization",
+    "app.audit",
+    "app.idempotency",
 ]
 layers = ["(api)", "(application)", "domain"]
 
 [[tool.importlinter.contracts]]
 name = "Layers inside platform: web, then application, then domain (ARCH-11, ARCH-19)"
 type = "layers"
-containers = ["supportiq_backend.platform"]
+containers = ["app.platform"]
 layers = ["web", "application", "domain"]
 
 [[tool.importlinter.contracts]]
 name = "Features depend on each other without cycles, and platform on no feature (ARCH-18)"
 type = "layers"
 layers = [
-    "supportiq_backend.composition_root",
-    "supportiq_backend.reports",
-    "supportiq_backend.tickets",
-    "supportiq_backend.suggestions",
-    "supportiq_backend.pseudonymization",
-    "supportiq_backend.commerce",
-    "supportiq_backend.accounts",
-    "supportiq_backend.audit | supportiq_backend.idempotency",
-    "supportiq_backend.platform",
+    "app.composition_root",
+    "app.reports",
+    "app.tickets",
+    "app.suggestions",
+    "app.pseudonymization",
+    "app.commerce",
+    "app.accounts",
+    "app.audit | app.idempotency",
+    "app.platform",
 ]
 
 [[tool.importlinter.contracts]]
 name = "Domain and application code use no framework, driver, or SDK (ARCH-11, ARCH-12)"
 type = "forbidden"
 source_modules = [
-    "supportiq_backend.accounts.domain",
-    "supportiq_backend.accounts.application",
-    "supportiq_backend.commerce.domain",
-    "supportiq_backend.commerce.application",
-    "supportiq_backend.tickets.domain",
-    "supportiq_backend.tickets.application",
-    "supportiq_backend.reports.domain",
-    "supportiq_backend.reports.application",
-    "supportiq_backend.suggestions.domain",
-    "supportiq_backend.suggestions.application",
-    "supportiq_backend.pseudonymization.domain",
-    "supportiq_backend.pseudonymization.application",
-    "supportiq_backend.audit.domain",
-    "supportiq_backend.idempotency.domain",
-    "supportiq_backend.idempotency.application",
-    "supportiq_backend.platform.domain",
-    "supportiq_backend.platform.application",
+    "app.accounts.domain",
+    "app.accounts.application",
+    "app.commerce.domain",
+    "app.commerce.application",
+    "app.tickets.domain",
+    "app.tickets.application",
+    "app.reports.domain",
+    "app.reports.application",
+    "app.suggestions.domain",
+    "app.suggestions.application",
+    "app.pseudonymization.domain",
+    "app.pseudonymization.application",
+    "app.audit.domain",
+    "app.idempotency.domain",
+    "app.idempotency.application",
+    "app.platform.domain",
+    "app.platform.application",
 ]
 forbidden_modules = [
     "alembic", "argon2", "asyncpg", "en_core_web_sm", "fastapi", "httpx", "opentelemetry",
     "pydantic", "pydantic_settings", "spacy", "sqlalchemy", "starlette", "uvicorn",
-    "supportiq_backend.generated",
-    "supportiq_backend.migrations",
-    "supportiq_backend.platform.settings",
+    "app.generated",
+    "app.migrations",
+    "app.platform.settings",
 ]
 
 [[tool.importlinter.contracts]]
@@ -279,106 +284,106 @@ name = "Domain and application code import no adapter and no interface code (ARC
 type = "forbidden"
 allow_indirect_imports = true
 source_modules = [
-    "supportiq_backend.accounts.domain",
-    "supportiq_backend.accounts.application",
-    "supportiq_backend.commerce.domain",
-    "supportiq_backend.commerce.application",
-    "supportiq_backend.tickets.domain",
-    "supportiq_backend.tickets.application",
-    "supportiq_backend.reports.domain",
-    "supportiq_backend.reports.application",
-    "supportiq_backend.suggestions.domain",
-    "supportiq_backend.suggestions.application",
-    "supportiq_backend.pseudonymization.domain",
-    "supportiq_backend.pseudonymization.application",
-    "supportiq_backend.audit.domain",
-    "supportiq_backend.idempotency.domain",
-    "supportiq_backend.idempotency.application",
-    "supportiq_backend.platform.domain",
-    "supportiq_backend.platform.application",
+    "app.accounts.domain",
+    "app.accounts.application",
+    "app.commerce.domain",
+    "app.commerce.application",
+    "app.tickets.domain",
+    "app.tickets.application",
+    "app.reports.domain",
+    "app.reports.application",
+    "app.suggestions.domain",
+    "app.suggestions.application",
+    "app.pseudonymization.domain",
+    "app.pseudonymization.application",
+    "app.audit.domain",
+    "app.idempotency.domain",
+    "app.idempotency.application",
+    "app.platform.domain",
+    "app.platform.application",
 ]
 forbidden_modules = [
-    "supportiq_backend.accounts.adapters",
-    "supportiq_backend.accounts.api",
-    "supportiq_backend.commerce.adapters",
-    "supportiq_backend.commerce.api",
-    "supportiq_backend.tickets.adapters",
-    "supportiq_backend.tickets.api",
-    "supportiq_backend.reports.adapters",
-    "supportiq_backend.reports.api",
-    "supportiq_backend.suggestions.api",
-    "supportiq_backend.suggestions.adapters",
-    "supportiq_backend.pseudonymization.adapters",
-    "supportiq_backend.audit.adapters",
-    "supportiq_backend.idempotency.adapters",
-    "supportiq_backend.platform.adapters",
-    "supportiq_backend.platform.web",
+    "app.accounts.adapters",
+    "app.accounts.api",
+    "app.commerce.adapters",
+    "app.commerce.api",
+    "app.tickets.adapters",
+    "app.tickets.api",
+    "app.reports.adapters",
+    "app.reports.api",
+    "app.suggestions.api",
+    "app.suggestions.adapters",
+    "app.pseudonymization.adapters",
+    "app.audit.adapters",
+    "app.idempotency.adapters",
+    "app.platform.adapters",
+    "app.platform.web",
 ]
 
 [[tool.importlinter.contracts]]
 name = "Adapters use no contract model and no settings (ARCH-11, ARCH-15, ARCH-33)"
 type = "forbidden"
 source_modules = [
-    "supportiq_backend.accounts.adapters",
-    "supportiq_backend.commerce.adapters",
-    "supportiq_backend.tickets.adapters",
-    "supportiq_backend.reports.adapters",
-    "supportiq_backend.suggestions.adapters",
-    "supportiq_backend.pseudonymization.adapters",
-    "supportiq_backend.audit.adapters",
-    "supportiq_backend.idempotency.adapters",
-    "supportiq_backend.platform.adapters",
+    "app.accounts.adapters",
+    "app.commerce.adapters",
+    "app.tickets.adapters",
+    "app.reports.adapters",
+    "app.suggestions.adapters",
+    "app.pseudonymization.adapters",
+    "app.audit.adapters",
+    "app.idempotency.adapters",
+    "app.platform.adapters",
 ]
-forbidden_modules = ["supportiq_backend.generated", "supportiq_backend.platform.settings"]
+forbidden_modules = ["app.generated", "app.platform.settings"]
 
 [[tool.importlinter.contracts]]
 name = "Adapters import no application code, interface code, or other adapter (ARCH-11)"
 type = "forbidden"
 allow_indirect_imports = true
 source_modules = [
-    "supportiq_backend.accounts.adapters",
-    "supportiq_backend.commerce.adapters",
-    "supportiq_backend.tickets.adapters",
-    "supportiq_backend.reports.adapters",
-    "supportiq_backend.suggestions.adapters",
-    "supportiq_backend.pseudonymization.adapters",
-    "supportiq_backend.audit.adapters",
-    "supportiq_backend.idempotency.adapters",
+    "app.accounts.adapters",
+    "app.commerce.adapters",
+    "app.tickets.adapters",
+    "app.reports.adapters",
+    "app.suggestions.adapters",
+    "app.pseudonymization.adapters",
+    "app.audit.adapters",
+    "app.idempotency.adapters",
 ]
 forbidden_modules = [
     "fastapi",
     "starlette",
-    "supportiq_backend.accounts.application",
-    "supportiq_backend.accounts.api",
-    "supportiq_backend.commerce.application",
-    "supportiq_backend.commerce.api",
-    "supportiq_backend.tickets.application",
-    "supportiq_backend.tickets.api",
-    "supportiq_backend.reports.application",
-    "supportiq_backend.reports.api",
-    "supportiq_backend.suggestions.api",
-    "supportiq_backend.suggestions.application",
-    "supportiq_backend.pseudonymization.application",
-    "supportiq_backend.idempotency.application",
-    "supportiq_backend.platform.adapters",
-    "supportiq_backend.platform.web",
+    "app.accounts.application",
+    "app.accounts.api",
+    "app.commerce.application",
+    "app.commerce.api",
+    "app.tickets.application",
+    "app.tickets.api",
+    "app.reports.application",
+    "app.reports.api",
+    "app.suggestions.api",
+    "app.suggestions.application",
+    "app.pseudonymization.application",
+    "app.idempotency.application",
+    "app.platform.adapters",
+    "app.platform.web",
 ]
 
 [[tool.importlinter.contracts]]
 name = "Interface code uses no driver and no settings (ARCH-11)"
 type = "forbidden"
 source_modules = [
-    "supportiq_backend.accounts.api",
-    "supportiq_backend.commerce.api",
-    "supportiq_backend.tickets.api",
-    "supportiq_backend.reports.api",
-    "supportiq_backend.suggestions.api",
-    "supportiq_backend.platform.web",
+    "app.accounts.api",
+    "app.commerce.api",
+    "app.tickets.api",
+    "app.reports.api",
+    "app.suggestions.api",
+    "app.platform.web",
 ]
 forbidden_modules = [
     "alembic", "argon2", "asyncpg", "sqlalchemy", "uvicorn",
-    "supportiq_backend.migrations",
-    "supportiq_backend.platform.settings",
+    "app.migrations",
+    "app.platform.settings",
 ]
 
 [[tool.importlinter.contracts]]
@@ -386,161 +391,161 @@ name = "Interface code imports no adapter (ARCH-11)"
 type = "forbidden"
 allow_indirect_imports = true
 source_modules = [
-    "supportiq_backend.accounts.api",
-    "supportiq_backend.commerce.api",
-    "supportiq_backend.tickets.api",
-    "supportiq_backend.reports.api",
-    "supportiq_backend.suggestions.api",
-    "supportiq_backend.platform.web",
+    "app.accounts.api",
+    "app.commerce.api",
+    "app.tickets.api",
+    "app.reports.api",
+    "app.suggestions.api",
+    "app.platform.web",
 ]
 forbidden_modules = [
-    "supportiq_backend.suggestions.adapters",
-    "supportiq_backend.pseudonymization.adapters",
-    "supportiq_backend.accounts.adapters",
-    "supportiq_backend.commerce.adapters",
-    "supportiq_backend.tickets.adapters",
-    "supportiq_backend.reports.adapters",
-    "supportiq_backend.audit.adapters",
-    "supportiq_backend.idempotency.adapters",
-    "supportiq_backend.platform.adapters",
+    "app.suggestions.adapters",
+    "app.pseudonymization.adapters",
+    "app.accounts.adapters",
+    "app.commerce.adapters",
+    "app.tickets.adapters",
+    "app.reports.adapters",
+    "app.audit.adapters",
+    "app.idempotency.adapters",
+    "app.platform.adapters",
 ]
 
 [[tool.importlinter.contracts]]
 name = "tickets reaches other features only through their public API (ARCH-17)"
 type = "forbidden"
 allow_indirect_imports = true
-source_modules = ["supportiq_backend.tickets"]
+source_modules = ["app.tickets"]
 forbidden_modules = [
-    "supportiq_backend.suggestions.domain",
-    "supportiq_backend.suggestions.application",
-    "supportiq_backend.suggestions.adapters",
-    "supportiq_backend.suggestions.api",
-    "supportiq_backend.pseudonymization.domain",
-    "supportiq_backend.pseudonymization.application",
-    "supportiq_backend.pseudonymization.adapters",
-    "supportiq_backend.commerce.domain",
-    "supportiq_backend.commerce.application",
-    "supportiq_backend.commerce.adapters",
-    "supportiq_backend.commerce.api",
-    "supportiq_backend.accounts.domain",
-    "supportiq_backend.accounts.application",
-    "supportiq_backend.accounts.adapters",
-    "supportiq_backend.accounts.api",
-    "supportiq_backend.idempotency.domain",
-    "supportiq_backend.idempotency.application",
-    "supportiq_backend.idempotency.adapters",
-    "supportiq_backend.platform.domain",
-    "supportiq_backend.platform.application",
-    "supportiq_backend.platform.adapters",
-    "supportiq_backend.platform.settings",
+    "app.suggestions.domain",
+    "app.suggestions.application",
+    "app.suggestions.adapters",
+    "app.suggestions.api",
+    "app.pseudonymization.domain",
+    "app.pseudonymization.application",
+    "app.pseudonymization.adapters",
+    "app.commerce.domain",
+    "app.commerce.application",
+    "app.commerce.adapters",
+    "app.commerce.api",
+    "app.accounts.domain",
+    "app.accounts.application",
+    "app.accounts.adapters",
+    "app.accounts.api",
+    "app.idempotency.domain",
+    "app.idempotency.application",
+    "app.idempotency.adapters",
+    "app.platform.domain",
+    "app.platform.application",
+    "app.platform.adapters",
+    "app.platform.settings",
 ]
 
 [[tool.importlinter.contracts]]
 name = "reports reaches other features only through their public API, never their adapters, and never pseudonymization (ARCH-17, SEC-37)"
 type = "forbidden"
 allow_indirect_imports = true
-source_modules = ["supportiq_backend.reports"]
+source_modules = ["app.reports"]
 forbidden_modules = [
     # Not even its public API: the export must never restore a pseudonym (SEC-33).
-    "supportiq_backend.pseudonymization",
-    "supportiq_backend.tickets.domain",
-    "supportiq_backend.tickets.application",
-    "supportiq_backend.tickets.adapters",
-    "supportiq_backend.tickets.api",
-    "supportiq_backend.suggestions.domain",
-    "supportiq_backend.suggestions.application",
-    "supportiq_backend.suggestions.adapters",
-    "supportiq_backend.suggestions.api",
-    "supportiq_backend.commerce.domain",
-    "supportiq_backend.commerce.application",
-    "supportiq_backend.commerce.adapters",
-    "supportiq_backend.commerce.api",
-    "supportiq_backend.accounts.domain",
-    "supportiq_backend.accounts.application",
-    "supportiq_backend.accounts.adapters",
-    "supportiq_backend.accounts.api",
-    "supportiq_backend.audit.domain",
-    "supportiq_backend.audit.adapters",
-    "supportiq_backend.idempotency.domain",
-    "supportiq_backend.idempotency.application",
-    "supportiq_backend.idempotency.adapters",
-    "supportiq_backend.platform.domain",
-    "supportiq_backend.platform.application",
-    "supportiq_backend.platform.adapters",
-    "supportiq_backend.platform.settings",
+    "app.pseudonymization",
+    "app.tickets.domain",
+    "app.tickets.application",
+    "app.tickets.adapters",
+    "app.tickets.api",
+    "app.suggestions.domain",
+    "app.suggestions.application",
+    "app.suggestions.adapters",
+    "app.suggestions.api",
+    "app.commerce.domain",
+    "app.commerce.application",
+    "app.commerce.adapters",
+    "app.commerce.api",
+    "app.accounts.domain",
+    "app.accounts.application",
+    "app.accounts.adapters",
+    "app.accounts.api",
+    "app.audit.domain",
+    "app.audit.adapters",
+    "app.idempotency.domain",
+    "app.idempotency.application",
+    "app.idempotency.adapters",
+    "app.platform.domain",
+    "app.platform.application",
+    "app.platform.adapters",
+    "app.platform.settings",
 ]
 
 [[tool.importlinter.contracts]]
 name = "commerce reaches other features only through their public API (ARCH-17)"
 type = "forbidden"
 allow_indirect_imports = true
-source_modules = ["supportiq_backend.commerce"]
+source_modules = ["app.commerce"]
 forbidden_modules = [
-    "supportiq_backend.accounts.domain",
-    "supportiq_backend.accounts.application",
-    "supportiq_backend.accounts.adapters",
-    "supportiq_backend.accounts.api",
-    "supportiq_backend.platform.domain",
-    "supportiq_backend.platform.application",
-    "supportiq_backend.platform.adapters",
-    "supportiq_backend.platform.settings",
+    "app.accounts.domain",
+    "app.accounts.application",
+    "app.accounts.adapters",
+    "app.accounts.api",
+    "app.platform.domain",
+    "app.platform.application",
+    "app.platform.adapters",
+    "app.platform.settings",
 ]
 
 [[tool.importlinter.contracts]]
 name = "accounts reaches other features only through their public API (ARCH-17)"
 type = "forbidden"
 allow_indirect_imports = true
-source_modules = ["supportiq_backend.accounts"]
+source_modules = ["app.accounts"]
 forbidden_modules = [
-    "supportiq_backend.audit.domain",
-    "supportiq_backend.audit.adapters",
-    "supportiq_backend.idempotency.domain",
-    "supportiq_backend.idempotency.application",
-    "supportiq_backend.idempotency.adapters",
-    "supportiq_backend.platform.domain",
-    "supportiq_backend.platform.application",
-    "supportiq_backend.platform.adapters",
-    "supportiq_backend.platform.settings",
+    "app.audit.domain",
+    "app.audit.adapters",
+    "app.idempotency.domain",
+    "app.idempotency.application",
+    "app.idempotency.adapters",
+    "app.platform.domain",
+    "app.platform.application",
+    "app.platform.adapters",
+    "app.platform.settings",
 ]
 
 [[tool.importlinter.contracts]]
 name = "audit and idempotency reach platform only through its public API (ARCH-17)"
 type = "forbidden"
 allow_indirect_imports = true
-source_modules = ["supportiq_backend.audit", "supportiq_backend.idempotency"]
+source_modules = ["app.audit", "app.idempotency"]
 forbidden_modules = [
-    "supportiq_backend.platform.domain",
-    "supportiq_backend.platform.application",
-    "supportiq_backend.platform.adapters",
-    "supportiq_backend.platform.settings",
+    "app.platform.domain",
+    "app.platform.application",
+    "app.platform.adapters",
+    "app.platform.settings",
 ]
 
 [[tool.importlinter.contracts]]
 name = "suggestions reaches other features only through their public API (ARCH-17)"
 type = "forbidden"
 allow_indirect_imports = true
-source_modules = ["supportiq_backend.suggestions"]
+source_modules = ["app.suggestions"]
 forbidden_modules = [
-    "supportiq_backend.pseudonymization.domain",
-    "supportiq_backend.pseudonymization.application",
-    "supportiq_backend.pseudonymization.adapters",
-    "supportiq_backend.commerce.domain",
-    "supportiq_backend.commerce.application",
-    "supportiq_backend.commerce.adapters",
-    "supportiq_backend.commerce.api",
-    "supportiq_backend.accounts.domain",
-    "supportiq_backend.accounts.application",
-    "supportiq_backend.accounts.adapters",
-    "supportiq_backend.accounts.api",
-    "supportiq_backend.audit.domain",
-    "supportiq_backend.audit.adapters",
-    "supportiq_backend.idempotency.domain",
-    "supportiq_backend.idempotency.application",
-    "supportiq_backend.idempotency.adapters",
-    "supportiq_backend.platform.domain",
-    "supportiq_backend.platform.application",
-    "supportiq_backend.platform.adapters",
-    "supportiq_backend.platform.settings",
+    "app.pseudonymization.domain",
+    "app.pseudonymization.application",
+    "app.pseudonymization.adapters",
+    "app.commerce.domain",
+    "app.commerce.application",
+    "app.commerce.adapters",
+    "app.commerce.api",
+    "app.accounts.domain",
+    "app.accounts.application",
+    "app.accounts.adapters",
+    "app.accounts.api",
+    "app.audit.domain",
+    "app.audit.adapters",
+    "app.idempotency.domain",
+    "app.idempotency.application",
+    "app.idempotency.adapters",
+    "app.platform.domain",
+    "app.platform.application",
+    "app.platform.adapters",
+    "app.platform.settings",
 ]
 
 [[tool.importlinter.contracts]]
@@ -548,39 +553,39 @@ name = "Only pseudonymization reads its internals and the pseudonym map (SEC-37)
 type = "forbidden"
 allow_indirect_imports = true
 source_modules = [
-    "supportiq_backend.accounts",
-    "supportiq_backend.audit",
-    "supportiq_backend.commerce",
-    "supportiq_backend.idempotency",
-    "supportiq_backend.platform",
-    "supportiq_backend.reports",
-    "supportiq_backend.suggestions",
-    "supportiq_backend.tickets",
+    "app.accounts",
+    "app.audit",
+    "app.commerce",
+    "app.idempotency",
+    "app.platform",
+    "app.reports",
+    "app.suggestions",
+    "app.tickets",
 ]
 forbidden_modules = [
-    "supportiq_backend.pseudonymization.domain",
-    "supportiq_backend.pseudonymization.application",
-    "supportiq_backend.pseudonymization.adapters",
+    "app.pseudonymization.domain",
+    "app.pseudonymization.application",
+    "app.pseudonymization.adapters",
 ]
 
 [[tool.importlinter.contracts]]
 name = "pseudonymization reaches other features only through their public API (ARCH-17)"
 type = "forbidden"
 allow_indirect_imports = true
-source_modules = ["supportiq_backend.pseudonymization"]
+source_modules = ["app.pseudonymization"]
 forbidden_modules = [
-    "supportiq_backend.commerce.domain",
-    "supportiq_backend.commerce.application",
-    "supportiq_backend.commerce.adapters",
-    "supportiq_backend.commerce.api",
-    "supportiq_backend.accounts.domain",
-    "supportiq_backend.accounts.application",
-    "supportiq_backend.accounts.adapters",
-    "supportiq_backend.accounts.api",
-    "supportiq_backend.audit.domain",
-    "supportiq_backend.audit.adapters",
-    "supportiq_backend.platform.domain",
-    "supportiq_backend.platform.application",
-    "supportiq_backend.platform.adapters",
-    "supportiq_backend.platform.settings",
+    "app.commerce.domain",
+    "app.commerce.application",
+    "app.commerce.adapters",
+    "app.commerce.api",
+    "app.accounts.domain",
+    "app.accounts.application",
+    "app.accounts.adapters",
+    "app.accounts.api",
+    "app.audit.domain",
+    "app.audit.adapters",
+    "app.platform.domain",
+    "app.platform.application",
+    "app.platform.adapters",
+    "app.platform.settings",
 ]

@@ -15,7 +15,7 @@ Each value comes from `main` at commit `19ece5d81fbd74c00602eb1b34bb53ead06c9668
 | `chunking.overlap_tokens` | 40 | `apps/core_backend/retrieval/encoder.py`, line 21, the default of `chunk_policy` |
 | `relevance_min_score` | 0.55 | `apps/core_backend/retrieval/adapter.py`, line 50, the default of `RetrievalAdapter`, which `apps/ai_service/main.py`, line 133, builds without another value |
 
-`version` names the encoder, the values of `main`, and the KB version together, because the index of a release is built from its KB ([`index_file.py`](../../src/supportiq_ai_service/retrieval/adapters/index_file.py)). `kb_version` is `v2`, the KB of the first release. `encoder.directory` is the folder of the encoder in the release, `index/encoder`.
+`version` names the encoder, the values of `main`, and the KB version together, because the index of a release is built from its KB ([`index_file.py`](../../app/retrieval/adapters/index_file.py)). `kb_version` is `v2`, the KB of the first release. `encoder.directory` is the folder of the encoder in the release, `index/encoder`.
 
 ## The files of the encoder
 

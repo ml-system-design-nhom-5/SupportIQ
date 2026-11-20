@@ -16,8 +16,8 @@ It is a project of its own, apart from the evaluation code that `eval/` took ove
 
 It imports only public modules of `ai-service`, never their internals (ADR-0021, Where the code of `main` goes, statement 1), and a contract of import-linter checks this:
 
-- `supportiq_ai_service.release.manifest`, to check a candidate and a published release;
-- in the gate only, `supportiq_ai_service.composition_root`, `intent`, `retrieval`, and `drafting`, to build the application of a candidate with the ports of the gate.
+- `app.release.manifest`, to check a candidate and a published release;
+- in the gate only, `app.composition_root`, `intent`, `retrieval`, and `drafting`, to build the application of a candidate with the ports of the gate.
 
 ## Run and test
 
@@ -190,7 +190,7 @@ Issue [#13](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/13) revi
 
 ## Candidate release
 
-`build-candidate` reads a spec, copies the six assets that it names into a new or empty folder, writes the manifest of a candidate, and checks the candidate with `verify_candidate` of `supportiq_ai_service.release.manifest`, the one module of `ai-service` that it imports ([`ai-service/README.md`, Release manifest](../../ai-service/README.md#release-manifest)). The candidate has `"gate_run": null`, so `ai-service serve` refuses it, and only the offline evaluation gate may link a passing run ([DATA-57](../../docs/rules/data-and-ml.md#models-and-artifacts)).
+`build-candidate` reads a spec, copies the six assets that it names into a new or empty folder, writes the manifest of a candidate, and checks the candidate with `verify_candidate` of `app.release.manifest`, the one module of `ai-service` that it imports ([`ai-service/README.md`, Release manifest](../../ai-service/README.md#release-manifest)). The candidate has `"gate_run": null`, so `ai-service serve` refuses it, and only the offline evaluation gate may link a passing run ([DATA-57](../../docs/rules/data-and-ml.md#models-and-artifacts)).
 
 ### The spec
 

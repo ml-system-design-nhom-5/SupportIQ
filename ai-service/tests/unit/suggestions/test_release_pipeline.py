@@ -11,7 +11,7 @@ from types import MappingProxyType
 
 import pytest
 
-from supportiq_ai_service.drafting import (
+from app.drafting import (
     DraftReply,
     DraftRequest,
     LlmCallError,
@@ -21,15 +21,15 @@ from supportiq_ai_service.drafting import (
     UnanswerableRequest,
     WrittenDraft,
 )
-from supportiq_ai_service.intent import IntentDistribution
-from supportiq_ai_service.platform import EventAttributeValue, EventName
-from supportiq_ai_service.retrieval import DocumentMatch
-from supportiq_ai_service.suggestions.application.release_pipeline import (
+from app.intent import IntentDistribution
+from app.platform import EventAttributeValue, EventName
+from app.retrieval import DocumentMatch
+from app.suggestions.application.release_pipeline import (
     PipelinePorts,
     PipelineValues,
     ReleasePipeline,
 )
-from supportiq_ai_service.suggestions.domain import (
+from app.suggestions.domain import (
     AnalysisWarning,
     AuthorityCategory,
     ConfidenceBand,

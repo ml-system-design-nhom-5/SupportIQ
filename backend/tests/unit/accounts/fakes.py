@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
-from supportiq_backend.accounts import (
+from app.accounts import (
     AccountId,
     AuthenticatedSession,
     CustomerId,
@@ -23,7 +23,7 @@ from supportiq_backend.accounts import (
     SignInAccount,
     StoredSession,
 )
-from supportiq_backend.platform import BackendError
+from app.platform import BackendError
 from tests.unit.platform.fakes import FAKE_CLOCK_START
 
 STAFF_ACCOUNT_ID = AccountId("00000000-0000-0000-0000-00000000000a")

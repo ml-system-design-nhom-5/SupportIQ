@@ -4,8 +4,8 @@ from enum import StrEnum
 
 import pytest
 
-from supportiq_backend.platform import UnexpectedFailureError
-from supportiq_backend.platform.persistence import parse_optional_stored_enum, parse_stored_enum
+from app.platform import UnexpectedFailureError
+from app.platform.persistence import parse_optional_stored_enum, parse_stored_enum
 
 
 class StoredState(StrEnum):

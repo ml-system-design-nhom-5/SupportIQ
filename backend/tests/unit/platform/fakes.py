@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from supportiq_backend.platform import (
+from app.platform import (
     BackendError,
     EventAttributeValue,
     EventName,

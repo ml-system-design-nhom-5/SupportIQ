@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from supportiq_ai_service.drafting import (
+from app.drafting import (
     DraftReply,
     DraftRequest,
     LlmCallError,
@@ -14,11 +14,11 @@ from supportiq_ai_service.drafting import (
     UnanswerableRequest,
     WrittenDraft,
 )
-from supportiq_ai_service.drafting.adapters.budgeted_draft_client import (
+from app.drafting.adapters.budgeted_draft_client import (
     BudgetedDraftWriter,
     RetryPolicy,
 )
-from supportiq_ai_service.drafting.adapters.gemini import GeminiCallError, GeminiFailure
+from app.drafting.adapters.gemini import GeminiCallError, GeminiFailure
 from tests.unit.drafting.fakes import REQUEST
 
 POLICY = RetryPolicy(

@@ -8,15 +8,15 @@ from datetime import UTC, datetime
 
 import pytest
 
-from supportiq_backend.commerce import Money, OrderStatus, RefundStatus, ShipmentStatus
-from supportiq_backend.commerce.api.shop import to_money, to_order_view
-from supportiq_backend.platform import RequestContractError, UnexpectedFailureError
-from supportiq_backend.platform.web import render_json
-from supportiq_backend.suggestions import OrderContext, OrderContextCitation, OrderContextField
-from supportiq_backend.tickets.api.console_citation_views import to_citation_view
-from supportiq_backend.tickets.api.console_request_fields import parse_unique_items
-from supportiq_backend.tickets.api.console_suggestion_views import to_pending_suggestion_view
-from supportiq_backend.tickets.api.order_views import OrderViewMappers
+from app.commerce import Money, OrderStatus, RefundStatus, ShipmentStatus
+from app.commerce.api.shop import to_money, to_order_view
+from app.platform import RequestContractError, UnexpectedFailureError
+from app.platform.web import render_json
+from app.suggestions import OrderContext, OrderContextCitation, OrderContextField
+from app.tickets.api.console_citation_views import to_citation_view
+from app.tickets.api.console_request_fields import parse_unique_items
+from app.tickets.api.console_suggestion_views import to_pending_suggestion_view
+from app.tickets.api.order_views import OrderViewMappers
 from tests.unit.suggestions.builders import build_analysis, build_suggestion
 
 ORDER_VIEWS = OrderViewMappers(to_order_view=to_order_view, to_money=to_money)

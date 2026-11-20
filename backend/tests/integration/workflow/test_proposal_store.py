@@ -12,11 +12,11 @@ import pytest
 from sqlalchemy import insert
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from supportiq_backend.accounts import AccountId
-from supportiq_backend.platform import UnexpectedFailureError
-from supportiq_backend.platform.adapters.database import create_session_factory
-from supportiq_backend.suggestions import SuggestionId
-from supportiq_backend.tickets import (
+from app.accounts import AccountId
+from app.platform import UnexpectedFailureError
+from app.platform.adapters.database import create_session_factory
+from app.suggestions import SuggestionId
+from app.tickets import (
     AiDraftReply,
     NoAiDraftReply,
     ProposalId,
@@ -26,8 +26,8 @@ from supportiq_backend.tickets import (
     StaffReasonCode,
     TicketId,
 )
-from supportiq_backend.tickets.adapters.proposal_store import PostgresReplyProposalStore
-from supportiq_backend.tickets.adapters.tables import ReplyProposalRow
+from app.tickets.adapters.proposal_store import PostgresReplyProposalStore
+from app.tickets.adapters.tables import ReplyProposalRow
 from tests.integration.builders import AccountSpec, DatabaseBuilder
 from tests.integration.database import WorkerDatabase, create_owner_engine
 from tests.integration.workflow.workflow_rows import insert_ticket, start_suggestion, ticket_created

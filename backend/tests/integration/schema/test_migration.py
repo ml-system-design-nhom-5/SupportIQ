@@ -14,22 +14,22 @@ from sqlalchemy.engine import Connection, make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
-from supportiq_backend.accounts.adapters.tables import AccountsTables
-from supportiq_backend.audit.adapters.tables import AuditTables
-from supportiq_backend.commerce.adapters.tables import CommerceTables
-from supportiq_backend.idempotency.adapters.tables import IdempotencyTables
-from supportiq_backend.migrations.tables import TRUNCATE_EVERY_TABLE
-from supportiq_backend.platform import BackendError
-from supportiq_backend.platform.adapters.migrations import (
+from app.accounts.adapters.tables import AccountsTables
+from app.audit.adapters.tables import AuditTables
+from app.commerce.adapters.tables import CommerceTables
+from app.idempotency.adapters.tables import IdempotencyTables
+from app.migrations.tables import TRUNCATE_EVERY_TABLE
+from app.platform import BackendError
+from app.platform.adapters.migrations import (
     HEAD,
     SCRIPT_LOCATION,
     downgrade_database,
     head_revision,
     upgrade_database,
 )
-from supportiq_backend.pseudonymization.adapters.tables import PseudonymizationTables
-from supportiq_backend.suggestions.adapters.tables import SuggestionsTables
-from supportiq_backend.tickets.adapters.tables import TicketsTables
+from app.pseudonymization.adapters.tables import PseudonymizationTables
+from app.suggestions.adapters.tables import SuggestionsTables
+from app.tickets.adapters.tables import TicketsTables
 from tests.integration.database import (
     BACKEND_TABLE_NAMES,
     WorkerDatabase,

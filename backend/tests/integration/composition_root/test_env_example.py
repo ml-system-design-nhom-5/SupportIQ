@@ -3,7 +3,7 @@
 import re
 from pathlib import Path
 
-from supportiq_backend.platform.settings import Settings
+from app.platform.settings import Settings
 from tests.unit.platform.settings_builders import SettingsWithoutEnvironment
 
 ENV_EXAMPLE = Path(__file__).parents[3] / ".env.example"

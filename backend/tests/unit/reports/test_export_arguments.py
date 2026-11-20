@@ -5,15 +5,15 @@ from pathlib import Path
 
 import pytest
 
-from supportiq_backend.composition_root.cli import (
+from app.composition_root.cli import (
     EXIT_FAILURE,
     EXIT_SETTINGS_INVALID,
     parse_arguments,
     report_failure,
 )
-from supportiq_backend.composition_root.report_commands import ExportDecisionsArguments
-from supportiq_backend.platform import EventName
-from supportiq_backend.reports import ExportPathRefusedError, build_report_period
+from app.composition_root.report_commands import ExportDecisionsArguments
+from app.platform import EventName
+from app.reports import ExportPathRefusedError, build_report_period
 from tests.unit.platform.fakes import RecordingEventRecorder
 
 START_TEXT = "2026-11-02T00:00:00Z"

@@ -5,7 +5,7 @@ from uuid import UUID
 
 import pytest
 
-from supportiq_backend.idempotency import (
+from app.idempotency import (
     IdempotencyGuard,
     IdempotencyKey,
     IdempotencyKeyReusedError,
@@ -15,7 +15,7 @@ from supportiq_backend.idempotency import (
     StoredResponse,
     build_idempotent_request,
 )
-from supportiq_backend.platform import OperationId
+from app.platform import OperationId
 from tests.unit.idempotency.fakes import FakeIdempotencyStore
 from tests.unit.platform.fakes import FakeClock
 

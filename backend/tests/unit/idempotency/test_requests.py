@@ -4,7 +4,7 @@ from uuid import UUID
 
 import pytest
 
-from supportiq_backend.idempotency import (
+from app.idempotency import (
     ExistingRecord,
     IdempotencyKey,
     IdempotencyKeyReusedError,
@@ -18,7 +18,7 @@ from supportiq_backend.idempotency import (
     parse_idempotency_key,
     resolve_existing_record,
 )
-from supportiq_backend.platform import OperationId
+from app.platform import OperationId
 
 KEY_TEXT = "00000000-0000-4000-8000-000000000001"
 REQUESTER = RequesterId("5f0c2a8e-3b1d-4c7a-9e2f-1a6b8d4c0e31")

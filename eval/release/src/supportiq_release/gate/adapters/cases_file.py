@@ -17,7 +17,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import cast
 
-from supportiq_ai_service.intent import INTENT_LABELS
+from app.intent import INTENT_LABELS
 
 from supportiq_release.errors import ReleaseCommandError
 from supportiq_release.files import read_json_file

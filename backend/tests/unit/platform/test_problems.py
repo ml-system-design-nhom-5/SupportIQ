@@ -7,15 +7,15 @@ from typing import ClassVar
 
 import pytest
 
-from supportiq_backend.platform import (
+from app.platform import (
     BackendError,
     DatabaseUnavailableError,
     ErrorCode,
     ResourceNotFoundError,
     TraceId,
 )
-from supportiq_backend.platform.web import PROBLEM_MEDIA_TYPE, build_problem_response
-from supportiq_backend.platform.web.problems import PROBLEM_DESCRIPTIONS
+from app.platform.web import PROBLEM_MEDIA_TYPE, build_problem_response
+from app.platform.web.problems import PROBLEM_DESCRIPTIONS
 
 TRACE_ID = TraceId("4bf92f3577b34da6a3ce929d0e0e4736")
 

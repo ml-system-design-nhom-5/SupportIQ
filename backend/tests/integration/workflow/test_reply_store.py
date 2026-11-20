@@ -11,11 +11,11 @@ from uuid import UUID
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from supportiq_backend.accounts import AccountId
-from supportiq_backend.platform import DatabaseOperationError
-from supportiq_backend.platform.adapters.database import create_session_factory
-from supportiq_backend.suggestions import IntentLabel
-from supportiq_backend.tickets import (
+from app.accounts import AccountId
+from app.platform import DatabaseOperationError
+from app.platform.adapters.database import create_session_factory
+from app.suggestions import IntentLabel
+from app.tickets import (
     DecisionId,
     DecisionType,
     RecordedDecision,
@@ -26,7 +26,7 @@ from supportiq_backend.tickets import (
     StaffReasonCode,
     TicketId,
 )
-from supportiq_backend.tickets.adapters.reply_store import PostgresReplyStore
+from app.tickets.adapters.reply_store import PostgresReplyStore
 from tests.integration.builders import AccountSpec, DatabaseBuilder
 from tests.integration.workflow.workflow_rows import insert_ticket, start_suggestion, ticket_created
 from tests.unit.platform.fakes import FAKE_CLOCK_START

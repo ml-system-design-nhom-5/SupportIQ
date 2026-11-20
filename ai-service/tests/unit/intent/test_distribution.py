@@ -4,8 +4,8 @@ import math
 
 import pytest
 
-from supportiq_ai_service.intent import IntentModelError
-from supportiq_ai_service.intent.domain import distribution_from_logits
+from app.intent import IntentModelError
+from app.intent.domain import distribution_from_logits
 
 LABELS = ("track_order", "request_refund", "human_agent")
 

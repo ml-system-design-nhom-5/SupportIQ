@@ -4,7 +4,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from supportiq_backend.idempotency import (
+from app.idempotency import (
     ExistingRecord,
     IdempotencyKey,
     IdempotentRequest,
@@ -13,7 +13,7 @@ from supportiq_backend.idempotency import (
     RequestHash,
     StoredResponse,
 )
-from supportiq_backend.platform import OperationId
+from app.platform import OperationId
 
 type RecordKey = tuple[RequesterId, OperationId, IdempotencyKey]
 

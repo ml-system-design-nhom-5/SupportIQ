@@ -10,14 +10,14 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from supportiq_ai_service.release.manifest import ReleaseInvalidReason
-from supportiq_ai_service.retrieval.adapters.bge_encoder import load_bge_encoder
-from supportiq_ai_service.retrieval.adapters.in_memory_index import build_index
-from supportiq_ai_service.retrieval.adapters.index_file import (
+from app.release.manifest import ReleaseInvalidReason
+from app.retrieval.adapters.bge_encoder import load_bge_encoder
+from app.retrieval.adapters.in_memory_index import build_index
+from app.retrieval.adapters.index_file import (
     IndexConfiguration,
     read_index_configuration,
 )
-from supportiq_ai_service.retrieval.adapters.semantic_retriever import SemanticRetriever
+from app.retrieval.adapters.semantic_retriever import SemanticRetriever
 from tests.unit.release.fakes import EXAMPLE_VERSIONS
 from tests.unit.release.release_folder import asset_refusal, verified_release
 from tests.unit.retrieval.fakes import EXAMPLE_DOCUMENT

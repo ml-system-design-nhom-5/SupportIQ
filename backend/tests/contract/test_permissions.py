@@ -6,8 +6,8 @@ from http import HTTPStatus
 import pytest
 from schemathesis import BaseSchema
 
-from supportiq_backend.accounts import PasswordHash
-from supportiq_backend.platform import EventName
+from app.accounts import PasswordHash
+from app.platform import EventName
 from tests.contract.calls import ROLES, World, build_world, send, valid_calls
 from tests.contract.documented import list_operations
 from tests.integration.application import RunningBackend

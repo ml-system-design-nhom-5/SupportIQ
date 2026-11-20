@@ -1,7 +1,7 @@
 """Write the manifest of a candidate release, and check it as `ai-service` checks a release.
 
 The manifest follows `supportiq-release-manifest/interim-1`, the interim format that
-`supportiq_ai_service.release.manifest` defines and checks (`ai-service/README.md`, Release
+`app.release.manifest` defines and checks (`ai-service/README.md`, Release
 manifest). This module imports that module and no other module of `ai-service` (ADR-0021,
 Where the code of `main` goes, statement 1). The candidate has `"gate_run": null`: only the
 offline evaluation gate links a passing run (DATA-57).
@@ -9,7 +9,7 @@ offline evaluation gate links a passing run (DATA-57).
 
 from pathlib import Path
 
-from supportiq_ai_service.release.manifest import MANIFEST_FORMAT, verify_candidate
+from app.release.manifest import MANIFEST_FORMAT, verify_candidate
 
 from supportiq_release.candidate.adapters.asset_sources import CopiedFile
 from supportiq_release.candidate.domain import MANIFEST_FILE_NAME, AssetSpec, ReleaseSpec

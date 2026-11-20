@@ -2,9 +2,9 @@
 
 import pytest
 
-from supportiq_backend.accounts import ForbiddenRoleError, Principal
-from supportiq_backend.platform import BackendError, DatabaseUnavailableError, EventName, SpanName
-from supportiq_backend.reports import ConsoleReport, TicketCounts
+from app.accounts import ForbiddenRoleError, Principal
+from app.platform import BackendError, DatabaseUnavailableError, EventName, SpanName
+from app.reports import ConsoleReport, TicketCounts
 from tests.unit.reports.fakes import (
     AI_OUTCOMES,
     CLOSED,

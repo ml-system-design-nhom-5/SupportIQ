@@ -12,8 +12,8 @@ import asyncio
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from supportiq_backend.composition_root import BackgroundWork, create_app
-from supportiq_backend.platform import MILLISECONDS_PER_SECOND, EventName
+from app.composition_root import BackgroundWork, create_app
+from app.platform import MILLISECONDS_PER_SECOND, EventName
 from tests.integration.ai_service_doubles import FakeAiService, serve_examples
 from tests.integration.application import build_settings, running_app
 from tests.integration.builders import DatabaseBuilder, TicketSpec

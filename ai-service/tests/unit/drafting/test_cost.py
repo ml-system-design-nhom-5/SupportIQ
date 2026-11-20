@@ -2,7 +2,7 @@
 
 import pytest
 
-from supportiq_ai_service.drafting import TokenPrices, TokenUsage, cost_micro_usd
+from app.drafting import TokenPrices, TokenUsage, cost_micro_usd
 
 # Fixture prices, never the prices of the provider.
 PRICES = TokenPrices(

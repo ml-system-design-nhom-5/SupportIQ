@@ -19,9 +19,9 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
-from supportiq_backend.migrations.tables import TRUNCATE_EVERY_TABLE
-from supportiq_backend.platform.adapters.database import DatabaseTimeouts
-from supportiq_backend.platform.adapters.migrations import upgrade_database
+from app.migrations.tables import TRUNCATE_EVERY_TABLE
+from app.platform.adapters.database import DatabaseTimeouts
+from app.platform.adapters.migrations import upgrade_database
 
 MAINTENANCE_DATABASE = "postgres"
 TEST_DATABASE_PREFIX = "supportiq_test_"

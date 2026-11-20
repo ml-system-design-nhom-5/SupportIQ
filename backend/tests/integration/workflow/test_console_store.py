@@ -17,11 +17,11 @@ from uuid import UUID
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from supportiq_backend.accounts import CustomerId
-from supportiq_backend.commerce import OrderId
-from supportiq_backend.platform import DatabaseOperationError
-from supportiq_backend.platform.adapters.database import create_session_factory
-from supportiq_backend.tickets import (
+from app.accounts import CustomerId
+from app.commerce import OrderId
+from app.platform import DatabaseOperationError
+from app.platform.adapters.database import create_session_factory
+from app.tickets import (
     ConsoleTicket,
     ConsoleTicketPosition,
     HandlingMode,
@@ -29,8 +29,8 @@ from supportiq_backend.tickets import (
     TicketId,
     TicketStatus,
 )
-from supportiq_backend.tickets.adapters.console_store import PostgresConsoleTicketStore
-from supportiq_backend.tickets.adapters.ticket_state_store import PostgresTicketStateStore
+from app.tickets.adapters.console_store import PostgresConsoleTicketStore
+from app.tickets.adapters.ticket_state_store import PostgresTicketStateStore
 from tests.integration.builders import DatabaseBuilder, TicketSpec
 from tests.integration.database import WorkerDatabase, create_owner_engine
 from tests.integration.workflow.workflow_rows import set_ticket_status, wait_until_row_lock_waits

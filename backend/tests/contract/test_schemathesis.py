@@ -21,8 +21,8 @@ from schemathesis import APIOperation, BaseSchema, Case
 from schemathesis.core.adapter import OperationParameter, ResponsesContainer
 from schemathesis.python.asgi import shutdown_lifespans
 
-from supportiq_backend.composition_root import BackgroundWork, create_app
-from supportiq_backend.composition_root.seed_commands import seed
+from app.composition_root import BackgroundWork, create_app
+from app.composition_root.seed_commands import seed
 from tests.contract.conftest import CONTRACT_FILE
 from tests.contract.test_permissions import OPERATIONS_WITH_ROLES
 from tests.integration.ai_service_doubles import FakeAiService, serve_examples

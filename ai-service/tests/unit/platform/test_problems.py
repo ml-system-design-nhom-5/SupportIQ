@@ -5,15 +5,15 @@ from http import HTTPStatus
 
 import pytest
 
-from supportiq_ai_service.platform import (
+from app.platform import (
     AiServiceError,
     RequestContractError,
     ResourceNotFoundError,
     ServiceTokenRejectedError,
     UnexpectedFailureError,
 )
-from supportiq_ai_service.platform.web import PROBLEM_MEDIA_TYPE, build_problem_response
-from supportiq_ai_service.release import ReleaseNotLoadedError
+from app.platform.web import PROBLEM_MEDIA_TYPE, build_problem_response
+from app.release import ReleaseNotLoadedError
 from tests.unit.platform.fakes import FAKE_TRACE_ID
 
 

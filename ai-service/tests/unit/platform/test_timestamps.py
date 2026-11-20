@@ -4,8 +4,8 @@ from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 
-from supportiq_ai_service.platform import RequestContractError
-from supportiq_ai_service.platform.web import (
+from app.platform import RequestContractError
+from app.platform.web import (
     NonUtcTimestampError,
     format_timestamp,
     parse_timestamp,

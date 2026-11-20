@@ -23,11 +23,11 @@ import httpx
 import pytest
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-from supportiq_backend.accounts import PasswordHash
-from supportiq_backend.composition_root import BackgroundWork, create_app
-from supportiq_backend.composition_root.process_logging import build_redactor
-from supportiq_backend.platform import MILLISECONDS_PER_SECOND, EventName
-from supportiq_backend.platform.adapters.logging_setup import (
+from app.accounts import PasswordHash
+from app.composition_root import BackgroundWork, create_app
+from app.composition_root.process_logging import build_redactor
+from app.platform import MILLISECONDS_PER_SECOND, EventName
+from app.platform.adapters.logging_setup import (
     StandardLibraryEventRecorder,
     configure_logging,
 )

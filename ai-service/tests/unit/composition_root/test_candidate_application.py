@@ -18,16 +18,16 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
-from supportiq_ai_service.composition_root import (
+from app.composition_root import (
     CandidatePorts,
     SettingsInvalidError,
     build_candidate_application,
     cli,
 )
-from supportiq_ai_service.drafting import DraftReply, DraftRequest, LlmCallError, LlmFailure
-from supportiq_ai_service.intent import IntentClassifier, IntentDistribution
-from supportiq_ai_service.release.manifest import ReleaseInvalidError, ReleaseInvalidReason
-from supportiq_ai_service.retrieval import DocumentMatch, DocumentSearch, RetrievalError
+from app.drafting import DraftReply, DraftRequest, LlmCallError, LlmFailure
+from app.intent import IntentClassifier, IntentDistribution
+from app.release.manifest import ReleaseInvalidError, ReleaseInvalidReason
+from app.retrieval import DocumentMatch, DocumentSearch, RetrievalError
 from tests.unit.composition_root.fakes import (
     KB_RELEASE_CHANGES,
     FakeClassifier,

@@ -7,10 +7,10 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from supportiq_backend.accounts import AccountId, LoginName, NewSession, Role, SessionIdHash
-from supportiq_backend.accounts.adapters.internal_accounts import ACCOUNT_CHANGES_LOCK_KEY
-from supportiq_backend.composition_root.accounts_stores import build_sign_in_stores
-from supportiq_backend.platform.adapters.database import (
+from app.accounts import AccountId, LoginName, NewSession, Role, SessionIdHash
+from app.accounts.adapters.internal_accounts import ACCOUNT_CHANGES_LOCK_KEY
+from app.composition_root.accounts_stores import build_sign_in_stores
+from app.platform.adapters.database import (
     SqlAlchemyTransactionRunner,
     create_session_factory,
 )

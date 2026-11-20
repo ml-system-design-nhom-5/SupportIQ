@@ -6,7 +6,7 @@ from uuid import UUID
 
 import httpx
 
-from supportiq_backend.accounts import PasswordHash
+from app.accounts import PasswordHash
 from tests.integration.application import ALLOWED_ORIGIN
 from tests.integration.builders import FAILED_SUGGESTION, AccountSpec, DatabaseBuilder, TicketSpec
 from tests.unit.accounts.fakes import KNOWN_PASSWORD

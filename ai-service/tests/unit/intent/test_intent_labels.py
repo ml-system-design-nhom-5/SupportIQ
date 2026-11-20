@@ -1,7 +1,7 @@
 """The intent labels of the domain are the 46 labels of the contract, in its order."""
 
-from supportiq_ai_service.generated import IntentLabel
-from supportiq_ai_service.intent import INTENT_LABELS
+from app.generated import IntentLabel
+from app.intent import INTENT_LABELS
 
 # The number of Bitext intents (glossary: Intent).
 BITEXT_INTENT_COUNT = 46

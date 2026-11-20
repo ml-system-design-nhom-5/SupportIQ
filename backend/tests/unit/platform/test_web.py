@@ -18,7 +18,7 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from starlette.types import Message, Scope
 
-from supportiq_backend.platform import (
+from app.platform import (
     BackendError,
     CheckReadiness,
     DatabaseOperationError,
@@ -27,12 +27,12 @@ from supportiq_backend.platform import (
     EventName,
     ResourceNotFoundError,
 )
-from supportiq_backend.platform.adapters.telemetry import (
+from app.platform.adapters.telemetry import (
     OpenTelemetryTraceContext,
     RedactingSpanProcessor,
     instrument_application,
 )
-from supportiq_backend.platform.web import (
+from app.platform.web import (
     PROBLEM_MEDIA_TYPE,
     RequestLoggingMiddleware,
     build_health_router,

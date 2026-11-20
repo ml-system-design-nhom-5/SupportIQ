@@ -4,9 +4,9 @@ import dataclasses
 
 import pytest
 
-from supportiq_ai_service.intent import INTENT_LABELS
-from supportiq_ai_service.release.manifest import ReleaseInvalidError
-from supportiq_ai_service.suggestions.domain import (
+from app.intent import INTENT_LABELS
+from app.release.manifest import ReleaseInvalidError
+from app.suggestions.domain import (
     AuthorityCategory,
     ConfidenceBand,
     IntentName,
@@ -17,7 +17,7 @@ from supportiq_ai_service.suggestions.domain import (
     SensitiveTerm,
     StaffIntent,
 )
-from supportiq_ai_service.suggestions.domain.routing_rules import (
+from app.suggestions.domain.routing_rules import (
     IN_SCOPE_INTENTS,
     IntentAssessment,
     assess_intent,

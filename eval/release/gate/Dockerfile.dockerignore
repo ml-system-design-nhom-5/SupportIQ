@@ -5,7 +5,7 @@
 !ai-service/pyproject.toml
 !ai-service/uv.lock
 !ai-service/README.md
-!ai-service/src
+!ai-service/app
 !ai-service/tests
 !eval/release/pyproject.toml
 !eval/release/uv.lock
@@ -15,7 +15,7 @@
 !backend/pyproject.toml
 !backend/uv.lock
 !backend/README.md
-!backend/src
+!backend/app
 !backend/tests
 !backend/seed
 !backend/certs

@@ -5,12 +5,12 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from supportiq_backend.platform import (
+from app.platform import (
     MILLISECONDS_PER_SECOND,
     DatabaseUnavailableError,
     EventName,
 )
-from supportiq_backend.suggestions import (
+from app.suggestions import (
     ClaimedJob,
     ClaimLoop,
     ClaimStores,

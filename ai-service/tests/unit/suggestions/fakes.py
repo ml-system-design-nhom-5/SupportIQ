@@ -9,8 +9,8 @@
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 
-from supportiq_ai_service.release import LoadedRelease
-from supportiq_ai_service.suggestions.domain import (
+from app.release import LoadedRelease
+from app.suggestions.domain import (
     Analysis,
     ConfidenceBand,
     DocumentValidity,

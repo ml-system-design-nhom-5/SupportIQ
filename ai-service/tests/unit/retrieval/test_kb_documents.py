@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from supportiq_ai_service.platform import ResourceNotFoundError
-from supportiq_ai_service.platform.web import render_json
-from supportiq_ai_service.release import ReleaseNotLoadedError
-from supportiq_ai_service.retrieval import GetKbDocumentVersion
-from supportiq_ai_service.retrieval.api import kb_document_body
+from app.platform import ResourceNotFoundError
+from app.platform.web import render_json
+from app.release import ReleaseNotLoadedError
+from app.retrieval import GetKbDocumentVersion
+from app.retrieval.api import kb_document_body
 from tests.unit.release.fakes import StaticReleaseSource
 from tests.unit.retrieval.fakes import EXAMPLE_DOCUMENT, StaticKbDocuments
 

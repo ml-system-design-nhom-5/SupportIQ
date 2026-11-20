@@ -2,7 +2,7 @@
 
 import pytest
 
-from supportiq_backend.platform.adapters.database_roles import AppRoleUrlError, app_role_password
+from app.platform.adapters.database_roles import AppRoleUrlError, app_role_password
 
 
 def test_app_role_password_is_the_password_of_the_app_url() -> None:

@@ -8,8 +8,8 @@ from http import HTTPStatus
 
 import pytest
 
-from supportiq_ai_service.platform import EventName
-from supportiq_ai_service.platform.adapters.logging_setup import (
+from app.platform import EventName
+from app.platform.adapters.logging_setup import (
     GENERIC_REDACTION_PATTERNS,
     REDACTED,
     Redactor,

@@ -5,13 +5,13 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from supportiq_backend.composition_root.settings_loading import (
+from app.composition_root.settings_loading import (
     SettingsInvalidError,
     invalid_setting_names,
     load_settings,
 )
-from supportiq_backend.platform import EventName
-from supportiq_backend.platform.settings import (
+from app.platform import EventName
+from app.platform.settings import (
     DatabaseTls,
     HandlingModeSetting,
     Settings,

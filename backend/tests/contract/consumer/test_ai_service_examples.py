@@ -15,7 +15,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from supportiq_backend.suggestions import (
+from app.suggestions import (
     AiReasonCode,
     AiServiceContractError,
     AiServiceUnavailableError,
@@ -26,7 +26,7 @@ from supportiq_backend.suggestions import (
     StaffIntent,
     SuggestionRequest,
 )
-from supportiq_backend.suggestions.adapters.ai_service_client import (
+from app.suggestions.adapters.ai_service_client import (
     AiServiceTimeouts,
     HttpAiService,
     create_ai_service_client,

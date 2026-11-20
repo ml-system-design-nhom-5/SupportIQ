@@ -12,11 +12,11 @@ from datetime import timedelta
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from supportiq_backend.accounts import AccountId
-from supportiq_backend.commerce import Money, OrderStatus, ShipmentStatus
-from supportiq_backend.platform import UnexpectedFailureError
-from supportiq_backend.platform.adapters.database import create_session_factory
-from supportiq_backend.suggestions import (
+from app.accounts import AccountId
+from app.commerce import Money, OrderStatus, ShipmentStatus
+from app.platform import UnexpectedFailureError
+from app.platform.adapters.database import create_session_factory
+from app.suggestions import (
     AiReasonCode,
     AiServiceContractError,
     CancelledPart,
@@ -34,7 +34,7 @@ from supportiq_backend.suggestions import (
     build_analysis_completion,
     build_draft_completion,
 )
-from supportiq_backend.suggestions.adapters.suggestion_store import PostgresSuggestionStore
+from app.suggestions.adapters.suggestion_store import PostgresSuggestionStore
 from tests.integration.builders import AccountSpec, DatabaseBuilder, SuggestionSpec
 from tests.integration.tickets.console_requests import (
     draft_ready_outcome,

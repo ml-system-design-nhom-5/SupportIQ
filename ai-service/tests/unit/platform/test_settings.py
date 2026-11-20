@@ -4,11 +4,11 @@ from pathlib import Path
 
 import pytest
 
-from supportiq_ai_service.composition_root.settings_loading import (
+from app.composition_root.settings_loading import (
     SettingsInvalidError,
     load_settings,
 )
-from supportiq_ai_service.platform import EventName
+from app.platform import EventName
 from tests.unit.platform.fakes import LLM_ENVIRONMENT, RecordingEventRecorder
 
 SERVICE_TOKEN_VARIABLE = "SERVICE_TOKEN"

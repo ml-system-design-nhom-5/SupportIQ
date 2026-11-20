@@ -5,7 +5,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from uuid import UUID
 
-from supportiq_backend.accounts import (
+from app.accounts import (
     AccountId,
     Authorizer,
     CustomerPrincipal,
@@ -14,15 +14,15 @@ from supportiq_backend.accounts import (
     SupportPrincipal,
     SupportRole,
 )
-from supportiq_backend.idempotency import IdempotencyGuard, IdempotencyKey, StoredResponse
-from supportiq_backend.suggestions import (
+from app.idempotency import IdempotencyGuard, IdempotencyKey, StoredResponse
+from app.suggestions import (
     Suggestion,
     SuggestionStarter,
     SuggestionStarterPorts,
     SuggestionTicketId,
     TicketForSuggestion,
 )
-from supportiq_backend.tickets import (
+from app.tickets import (
     ConsolePorts,
     ConsoleStores,
     ConsoleTicket,

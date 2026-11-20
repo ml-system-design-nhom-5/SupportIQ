@@ -5,14 +5,14 @@ from uuid import UUID
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
-from supportiq_backend.audit import (
+from app.audit import (
     ActorAccountId,
     AuditEntry,
     AuditEntryId,
     AuditEventType,
 )
-from supportiq_backend.audit.adapters.audit_log import PostgresAuditLog
-from supportiq_backend.platform.adapters.database import (
+from app.audit.adapters.audit_log import PostgresAuditLog
+from app.platform.adapters.database import (
     SqlAlchemyTransactionRunner,
     create_session_factory,
 )

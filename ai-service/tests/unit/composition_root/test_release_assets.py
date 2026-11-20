@@ -12,30 +12,30 @@ from pathlib import Path
 
 import pytest
 
-from supportiq_ai_service.composition_root.cli import release_refusal_attributes
-from supportiq_ai_service.composition_root.release_assets import (
+from app.composition_root.cli import release_refusal_attributes
+from app.composition_root.release_assets import (
     ReleaseModels,
     ReleaseServices,
     Timing,
     build_release_services,
     read_release_assets,
 )
-from supportiq_ai_service.intent.adapters.model_artifact import ModelArtifact
-from supportiq_ai_service.platform import EventName
-from supportiq_ai_service.platform.adapters.egress import (
+from app.intent.adapters.model_artifact import ModelArtifact
+from app.platform import EventName
+from app.platform.adapters.egress import (
     create_egress_client,
     packaged_egress_allow_list,
 )
-from supportiq_ai_service.platform.settings import Settings
-from supportiq_ai_service.release.manifest import (
+from app.platform.settings import Settings
+from app.release.manifest import (
     ReleaseInvalidError,
     ReleaseInvalidReason,
     VerifiedReleaseSource,
 )
-from supportiq_ai_service.retrieval import RetrievalError
-from supportiq_ai_service.retrieval.adapters.in_memory_index import Vectors
-from supportiq_ai_service.retrieval.adapters.index_file import IndexConfiguration
-from supportiq_ai_service.suggestions.domain import (
+from app.retrieval import RetrievalError
+from app.retrieval.adapters.in_memory_index import Vectors
+from app.retrieval.adapters.index_file import IndexConfiguration
+from app.suggestions.domain import (
     DraftReady,
     LlmUsage,
     NoDraft,

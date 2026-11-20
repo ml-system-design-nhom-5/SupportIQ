@@ -6,13 +6,13 @@ from http import HTTPStatus
 import httpx
 import pytest
 
-from supportiq_ai_service.drafting import LlmFailure, TokenUsage, UnanswerableRequest, WrittenDraft
-from supportiq_ai_service.drafting.adapters.gemini import (
+from app.drafting import LlmFailure, TokenUsage, UnanswerableRequest, WrittenDraft
+from app.drafting.adapters.gemini import (
     GeminiCallError,
     GeminiClient,
     GeminiFailure,
 )
-from supportiq_ai_service.platform.egress import EgressAllowList, create_egress_client
+from app.platform.egress import EgressAllowList, create_egress_client
 from tests.unit.drafting.fakes import (
     API_KEY,
     AUTHORITY_INSTRUCTIONS,

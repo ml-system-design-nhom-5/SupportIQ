@@ -8,8 +8,8 @@ from types import MappingProxyType
 
 import httpx
 
-from supportiq_ai_service.platform import EventAttributeValue, EventName, TraceId
-from supportiq_ai_service.platform.adapters.egress import EgressAllowList, create_egress_client
+from app.platform import EventAttributeValue, EventName, TraceId
+from app.platform.adapters.egress import EgressAllowList, create_egress_client
 
 FAKE_CLOCK_START = datetime(2026, 11, 13, 9, 0, tzinfo=UTC)
 FAKE_TRACE_ID = TraceId("4bf92f3577b34da6a3ce929d0e0e4736")

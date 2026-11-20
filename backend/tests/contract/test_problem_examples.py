@@ -5,14 +5,14 @@ from pathlib import Path
 
 import pytest
 
-from supportiq_backend.accounts import (
+from app.accounts import (
     AccountChangeRefusedError,
     AccountChangeRule,
     LoginNameTakenError,
 )
-from supportiq_backend.idempotency import IdempotencyKeyReusedError
-from supportiq_backend.platform import BackendError, TraceId
-from supportiq_backend.platform.web import build_problem_response
+from app.idempotency import IdempotencyKeyReusedError
+from app.platform import BackendError, TraceId
+from app.platform.web import build_problem_response
 
 PROBLEM_EXAMPLES = Path(__file__).parents[3] / "contracts/examples/problems"
 EXAMPLE_FILE = PROBLEM_EXAMPLES / "idempotency-key-reused.json"

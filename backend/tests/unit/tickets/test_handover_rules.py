@@ -10,14 +10,14 @@ from uuid import UUID
 
 import pytest
 
-from supportiq_backend.accounts import SupportRole
-from supportiq_backend.suggestions import (
+from app.accounts import SupportRole
+from app.suggestions import (
     IntentLabel,
     InvalidTicketStateError,
     Suggestion,
     SuggestionPendingError,
 )
-from supportiq_backend.tickets import (
+from app.tickets import (
     AiDraftReply,
     ConsoleTicket,
     DecisionType,

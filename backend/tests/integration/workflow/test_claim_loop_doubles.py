@@ -12,8 +12,8 @@ from datetime import datetime
 
 import pytest
 
-from supportiq_backend.platform import MILLISECONDS_PER_SECOND, DatabaseUnavailableError
-from supportiq_backend.suggestions import ClaimedJob, ClaimLoop, ClaimStores, QueueSettings
+from app.platform import MILLISECONDS_PER_SECOND, DatabaseUnavailableError
+from app.suggestions import ClaimedJob, ClaimLoop, ClaimStores, QueueSettings
 from tests.integration.claim_loop_doubles import SignallingEventRecorder, WakeUpOnlyClock
 from tests.unit.platform.fakes import (
     FAKE_CLOCK_START,

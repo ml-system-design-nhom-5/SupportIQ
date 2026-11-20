@@ -12,13 +12,13 @@ import pytest
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from supportiq_backend.platform import UnexpectedFailureError
-from supportiq_backend.platform.adapters.database import create_session_factory
-from supportiq_backend.reports.adapters.ai_figures import PostgresAiFigures
-from supportiq_backend.reports.adapters.decision_records import PostgresDecisionRecordSource
-from supportiq_backend.reports.adapters.ticket_figures import PostgresTicketFigures
-from supportiq_backend.reports.domain import HandlingTime, TicketCounts
-from supportiq_backend.tickets.adapters.tables import TicketRow
+from app.platform import UnexpectedFailureError
+from app.platform.adapters.database import create_session_factory
+from app.reports.adapters.ai_figures import PostgresAiFigures
+from app.reports.adapters.decision_records import PostgresDecisionRecordSource
+from app.reports.adapters.ticket_figures import PostgresTicketFigures
+from app.reports.domain import HandlingTime, TicketCounts
+from app.tickets.adapters.tables import TicketRow
 from tests.integration.database import WorkerDatabase
 from tests.integration.reports.report_rows import (
     HOUR,

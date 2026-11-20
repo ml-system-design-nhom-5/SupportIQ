@@ -139,7 +139,7 @@ jobs:
         working-directory: backend
         run: >-
           uv run --locked coverage report --fail-under=90
-          --include="*/supportiq_backend/*/domain/*,*/supportiq_backend/*/application/*"
+          --include="*/app/*/domain/*,*/app/*/application/*"
 
   deploy-image:
     name: deploy-image

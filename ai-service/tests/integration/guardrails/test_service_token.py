@@ -8,7 +8,7 @@ from http import HTTPStatus
 
 import pytest
 
-from supportiq_ai_service.platform import EventName
+from app.platform import EventName
 from tests.contract.documented import list_operations, load_contract
 from tests.integration.application import SERVICE_TOKEN, running_ai_service
 from tests.unit.release.fakes import StaticReleaseSource

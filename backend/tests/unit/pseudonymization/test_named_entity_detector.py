@@ -6,11 +6,11 @@ value is synthetic (TEST-18).
 
 import pytest
 
-from supportiq_backend.pseudonymization.adapters import named_entity_detector
-from supportiq_backend.pseudonymization.adapters.named_entity_detector import (
+from app.pseudonymization.adapters import named_entity_detector
+from app.pseudonymization.adapters.named_entity_detector import (
     SpacyNamedEntityDetector,
 )
-from supportiq_backend.pseudonymization.domain import (
+from app.pseudonymization.domain import (
     DetectionSource,
     DetectorError,
     NamedEntityModelMissingError,

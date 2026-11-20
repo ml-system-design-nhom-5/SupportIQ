@@ -6,7 +6,7 @@ from uuid import UUID
 
 from sqlalchemy import insert
 
-from supportiq_backend.tickets.adapters.tables import CustomerMessageRow, TicketRow
+from app.tickets.adapters.tables import CustomerMessageRow, TicketRow
 from tests.integration.builders.rows import RowWriter
 
 

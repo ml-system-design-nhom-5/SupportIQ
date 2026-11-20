@@ -4,11 +4,11 @@ from uuid import UUID
 
 import pytest
 
-from supportiq_backend.accounts import SupportPrincipal, SupportRole
-from supportiq_backend.audit import AuditEventType
-from supportiq_backend.idempotency import IdempotencyKey
-from supportiq_backend.platform import ResourceNotFoundError
-from supportiq_backend.suggestions import (
+from app.accounts import SupportPrincipal, SupportRole
+from app.audit import AuditEventType
+from app.idempotency import IdempotencyKey
+from app.platform import ResourceNotFoundError
+from app.suggestions import (
     AiReasonCode,
     IntentLabel,
     InvalidTicketStateError,

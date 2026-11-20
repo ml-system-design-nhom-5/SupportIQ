@@ -3,7 +3,7 @@
 - **Status:** Approved
 - **Owner:** project lead
 - **Reviewers:** backend engineer, frontend engineer, ML engineer, RAG engineer
-- **Last reviewed:** 2026-11-18
+- **Last reviewed:** 2026-11-20
 - **Related:** [WF-30](../rules/workflow.md#dependencies), [WF-32, WF-33](../rules/workflow.md#reproducibility), [ADR-0003](../decisions/0003-tech-stack.md), [ADR-0007](../decisions/0007-observability-stack.md), [ADR-0016](../decisions/0016-hosting-on-free-tiers.md), [ADR-0018](../decisions/0018-hosting-of-ai-service-on-modal.md), [ADR-0021](../decisions/0021-repository-layout-and-ai-ml-migration.md), [backend foundation design, Rollout](backend-foundation.md#rollout), [repository checks, Workflow convention](../guides/repository-checks.md#workflow-convention), [#41](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/41), [#4](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/4)
 
 ## Summary
@@ -43,7 +43,7 @@ Today each part of SupportIQ runs on its own, and no command starts the whole sy
 - `backend seed` fails on a seeded database and changes nothing ([backend README, Commands](../../backend/README.md#commands)), so a second start cannot run it again.
 - `backend` exports traces over OTLP when `TRACE_EXPORTER` is `otlp`, to the required `OTLP_TRACES_ENDPOINT`, within `OTLP_EXPORT_TIMEOUT_MS`. It exports no logs or metrics yet, and `ai-service` sends no span out of its process ([backend README, Known limits](../../backend/README.md#known-limits); [ai-service README, Events](../../ai-service/README.md#events)).
 - `ai-service serve` does not start without a verified release on the machine, and it needs torch, which `ai-service/uv.lock` locks for Linux only, with wheels for `x86_64` and `aarch64` ([ADR-0021, Python and dependencies](../decisions/0021-repository-layout-and-ai-ml-migration.md#python-and-dependencies), statement 2). The first release, `release-2026-11-18-02`, serves no KB document, so no request gets a draft and no LLM call happens ([ai-service README, Known limits](../../ai-service/README.md#known-limits)).
-- `ai-service` requires `GEMINI_API_KEY` and the two `LLM_*_PRICE_MICRO_USD_PER_MILLION_TOKENS` settings at startup, without defaults ([`settings.py`](../../ai-service/src/supportiq_ai_service/platform/settings.py)). The code of `ai-service` stays as it is: the offline evaluation gate passed on the code of commit `86f73df` ([`gate-run.json`](../../eval/releases/release-2026-11-18-02/gate-run.json)), and a change would need a new gate run on a new release ID ([ARCH-40](../rules/architecture.md#versioned-assets)).
+- `ai-service` requires `GEMINI_API_KEY` and the two `LLM_*_PRICE_MICRO_USD_PER_MILLION_TOKENS` settings at startup, without defaults ([`settings.py`](../../ai-service/app/platform/settings.py)). The code of `ai-service` stays as it is: the offline evaluation gate passed on the code of commit `86f73df` ([`gate-run.json`](../../eval/releases/release-2026-11-18-02/gate-run.json)), and a change would need a new gate run on a new release ID ([ARCH-40](../rules/architecture.md#versioned-assets)).
 - Neither `backend` nor `ai-service` reads a `.env` file by itself: only `uv run --env-file` loads one.
 
 ## Design

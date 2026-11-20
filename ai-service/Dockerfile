@@ -18,7 +18,7 @@ WORKDIR /build
 # and dependencies, statement 2).
 COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --locked --no-dev --group torch --no-install-project
-COPY src ./src
+COPY app ./app
 RUN uv sync --locked --no-dev --group torch --no-editable
 
 FROM python:3.14.4-slim@sha256:2ca02f32b4d9d893863367ce07ec1972819f476dd38d8612f2a9cb6a41cbb727 AS runtime

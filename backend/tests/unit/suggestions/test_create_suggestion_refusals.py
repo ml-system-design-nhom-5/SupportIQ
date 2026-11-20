@@ -8,7 +8,7 @@ from uuid import UUID
 
 import pytest
 
-from supportiq_backend.accounts import (
+from app.accounts import (
     AccountId,
     CustomerId,
     CustomerPrincipal,
@@ -19,9 +19,9 @@ from supportiq_backend.accounts import (
     SupportPrincipal,
     SupportRole,
 )
-from supportiq_backend.idempotency import IdempotencyKey, IdempotencyKeyReusedError
-from supportiq_backend.platform import DatabaseUnavailableError, EventName, ResourceNotFoundError
-from supportiq_backend.suggestions import (
+from app.idempotency import IdempotencyKey, IdempotencyKeyReusedError
+from app.platform import DatabaseUnavailableError, EventName, ResourceNotFoundError
+from app.suggestions import (
     AiReasonCode,
     IntentLabel,
     SuggestionTicketId,

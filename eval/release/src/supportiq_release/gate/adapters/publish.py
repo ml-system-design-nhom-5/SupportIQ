@@ -21,7 +21,7 @@ from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import cast
 
-from supportiq_ai_service.release.manifest import verify_candidate, verify_release
+from app.release.manifest import verify_candidate, verify_release
 
 from supportiq_release.candidate.adapters import PlannedCopy, copy_files
 from supportiq_release.candidate.domain import MANIFEST_FILE_NAME, AssetName, is_release_path

@@ -6,8 +6,8 @@ from collections.abc import Sequence
 import numpy as np
 import pytest
 
-from supportiq_ai_service.retrieval import RetrievalError
-from supportiq_ai_service.retrieval.adapters.in_memory_index import (
+from app.retrieval import RetrievalError
+from app.retrieval.adapters.in_memory_index import (
     Vectors,
     build_index,
     l2_normalized,

@@ -14,12 +14,12 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
-from supportiq_backend.platform import (
+from app.platform import (
     MILLISECONDS_PER_SECOND,
     DatabaseOperationError,
     DatabaseUnavailableError,
 )
-from supportiq_backend.platform.adapters.database import (
+from app.platform.adapters.database import (
     DatabaseReadinessProbe,
     DatabaseTimeouts,
     SqlAlchemyTransactionRunner,

@@ -4,14 +4,14 @@ import dataclasses
 
 import pytest
 
-from supportiq_ai_service.drafting import DraftRequest, OrderFact, TokenUsage, WrittenDraft
-from supportiq_ai_service.suggestions.domain import (
+from app.drafting import DraftRequest, OrderFact, TokenUsage, WrittenDraft
+from app.suggestions.domain import (
     DraftSegment,
     KbDocumentCitation,
     OrderContextCitation,
     OrderFieldName,
 )
-from supportiq_ai_service.suggestions.domain.grounding import (
+from app.suggestions.domain.grounding import (
     GROUNDING_FAILED,
     LLM_INVALID_OUTPUT,
     MAX_DRAFT_CHARS,

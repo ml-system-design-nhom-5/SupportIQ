@@ -4,10 +4,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 
-from supportiq_backend.accounts import AccountId, CustomerId, DisplayName
-from supportiq_backend.commerce import OrderId
-from supportiq_backend.platform import BackendError
-from supportiq_backend.tickets import (
+from app.accounts import AccountId, CustomerId, DisplayName
+from app.commerce import OrderId
+from app.platform import BackendError
+from app.tickets import (
     ConsoleTicket,
     ConsoleTicketPosition,
     Escalation,

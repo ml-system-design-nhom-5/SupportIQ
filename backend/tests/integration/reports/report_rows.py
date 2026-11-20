@@ -15,8 +15,8 @@ from uuid import UUID
 
 from sqlalchemy import insert, text
 
-from supportiq_backend.reports import build_report_period
-from supportiq_backend.tickets.adapters.tables import EscalationRow, ReplyRow, StaffDecisionRow
+from app.reports import build_report_period
+from app.tickets.adapters.tables import EscalationRow, ReplyRow, StaffDecisionRow
 from tests.integration.application import RunningBackend
 from tests.integration.builders import (
     DatabaseBuilder,

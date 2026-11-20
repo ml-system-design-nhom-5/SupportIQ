@@ -6,12 +6,12 @@ from uuid import UUID
 
 from sqlalchemy import insert, null, update
 
-from supportiq_backend.suggestions.adapters.tables import (
+from app.suggestions.adapters.tables import (
     SuggestionJobRow,
     SuggestionPartRow,
     SuggestionRow,
 )
-from supportiq_backend.tickets.adapters.tables import TicketRow
+from app.tickets.adapters.tables import TicketRow
 from tests.integration.builders.rows import RowWriter
 
 

@@ -10,10 +10,10 @@ from typing import Protocol, cast
 
 import pytest
 
-from supportiq_ai_service.composition_root.release_models import load_release_models
-from supportiq_ai_service.intent import INTENT_LABELS
-from supportiq_ai_service.intent.adapters.model_artifact import read_model_artifact
-from supportiq_ai_service.retrieval.adapters.index_file import read_index_configuration
+from app.composition_root.release_models import load_release_models
+from app.intent import INTENT_LABELS
+from app.intent.adapters.model_artifact import read_model_artifact
+from app.retrieval.adapters.index_file import read_index_configuration
 from tests.unit.release.fakes import EXAMPLE_VERSIONS
 from tests.unit.release.release_folder import verified_release
 from tests.unit.tiny_models import folder_files, write_classifier, write_encoder

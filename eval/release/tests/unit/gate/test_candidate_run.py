@@ -5,13 +5,13 @@ from pathlib import Path
 from typing import TextIO
 
 import pytest
+from app.composition_root import CandidatePorts, SettingsInvalidError
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse
 from starlette.routing import Mount, Route, WebSocketRoute
 from starlette.types import Receive, Scope, Send
 from starlette.websockets import WebSocket
-from supportiq_ai_service.composition_root import CandidatePorts, SettingsInvalidError
 
 from supportiq_release.gate.adapters import (
     CandidateSettingsInvalidError,

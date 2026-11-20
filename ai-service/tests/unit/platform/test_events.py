@@ -4,7 +4,7 @@ import re
 
 import pytest
 
-from supportiq_ai_service.platform import EVENT_DESCRIPTIONS, EventLevel, EventName
+from app.platform import EVENT_DESCRIPTIONS, EventLevel, EventName
 
 EVENT_NAME_PATTERN = re.compile(r"[a-z]+(_[a-z]+)*\.[a-z]+(_[a-z]+)*")
 # The events of LOG-19 for `ai-service` and for both components.

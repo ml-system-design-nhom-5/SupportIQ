@@ -10,7 +10,7 @@ from http import HTTPStatus
 
 import pytest
 
-from supportiq_backend.platform import EventName
+from app.platform import EventName
 from tests.integration.application import RunningBackend
 from tests.integration.builders import DatabaseBuilder
 from tests.integration.suggestions.read_requests import problem_example, problem_of

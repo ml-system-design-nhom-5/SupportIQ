@@ -12,12 +12,12 @@ import pytest
 from sqlalchemy import update
 from sqlalchemy.sql import Executable
 
-from supportiq_backend.accounts import CustomerId
-from supportiq_backend.commerce.adapters.commerce_gateway import PostgresCommerceGateway
-from supportiq_backend.commerce.adapters.customer_records import PostgresCustomerRecords
-from supportiq_backend.commerce.adapters.tables import OrderRow, RefundRow, ShipmentRow
-from supportiq_backend.commerce.domain import OrderId
-from supportiq_backend.platform import UnexpectedFailureError
+from app.accounts import CustomerId
+from app.commerce.adapters.commerce_gateway import PostgresCommerceGateway
+from app.commerce.adapters.customer_records import PostgresCustomerRecords
+from app.commerce.adapters.tables import OrderRow, RefundRow, ShipmentRow
+from app.commerce.domain import OrderId
+from app.platform import UnexpectedFailureError
 from tests.integration.builders import (
     DatabaseBuilder,
     LineSpec,

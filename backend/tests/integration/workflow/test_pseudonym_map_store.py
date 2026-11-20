@@ -12,11 +12,11 @@ from datetime import timedelta
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from supportiq_backend.platform.adapters.database import create_session_factory
-from supportiq_backend.pseudonymization.adapters.pseudonym_map_store import (
+from app.platform.adapters.database import create_session_factory
+from app.pseudonymization.adapters.pseudonym_map_store import (
     PostgresPseudonymMapStore,
 )
-from supportiq_backend.pseudonymization.domain import MapTicketId, PseudonymEntry, PseudonymType
+from app.pseudonymization.domain import MapTicketId, PseudonymEntry, PseudonymType
 from tests.integration.builders import DatabaseBuilder
 from tests.integration.database import WorkerDatabase, create_raw_app_engine
 from tests.integration.schema.statements import INSUFFICIENT_PRIVILEGE, sqlstate_of_refusal

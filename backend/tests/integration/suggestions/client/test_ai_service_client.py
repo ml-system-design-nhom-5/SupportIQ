@@ -12,7 +12,7 @@ import httpx
 import pytest
 from opentelemetry.sdk.trace import TracerProvider
 
-from supportiq_backend.suggestions import (
+from app.suggestions import (
     AiServiceContractError,
     AiServiceUnavailableError,
     KbDocumentId,
@@ -20,7 +20,7 @@ from supportiq_backend.suggestions import (
     KbDocumentVersionTag,
     SuggestionRequest,
 )
-from supportiq_backend.suggestions.adapters.ai_service_client import (
+from app.suggestions.adapters.ai_service_client import (
     AiServiceTimeouts,
     HttpAiService,
     create_ai_service_client,

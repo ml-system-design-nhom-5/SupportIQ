@@ -2,8 +2,8 @@
 
 import pytest
 
-from supportiq_ai_service.platform import CheckReadiness
-from supportiq_ai_service.release import (
+from app.platform import CheckReadiness
+from app.release import (
     GetAssetVersions,
     ReleaseNotLoadedError,
     ReleaseReadinessProbe,

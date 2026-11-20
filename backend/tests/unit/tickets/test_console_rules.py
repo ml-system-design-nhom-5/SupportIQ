@@ -6,8 +6,8 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from supportiq_backend.accounts import ForbiddenRoleError, SupportRole
-from supportiq_backend.suggestions import (
+from app.accounts import ForbiddenRoleError, SupportRole
+from app.suggestions import (
     AiReasonCode,
     InvalidTicketStateError,
     NoDraftStatus,
@@ -15,7 +15,7 @@ from supportiq_backend.suggestions import (
     SuggestionPendingError,
     SuggestionSupersededError,
 )
-from supportiq_backend.tickets import (
+from app.tickets import (
     AiDraftReply,
     AuthorityRequiredError,
     ConsoleTicket,

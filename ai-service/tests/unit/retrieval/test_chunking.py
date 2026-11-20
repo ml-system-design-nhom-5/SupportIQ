@@ -2,7 +2,7 @@
 
 import dataclasses
 
-from supportiq_ai_service.retrieval.adapters.chunking import chunk_document
+from app.retrieval.adapters.chunking import chunk_document
 from tests.unit.retrieval.fakes import EXAMPLE_DOCUMENT, KeywordEncoder
 
 TOKEN_SPANS = KeywordEncoder().token_spans

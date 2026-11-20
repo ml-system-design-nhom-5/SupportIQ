@@ -2,7 +2,7 @@
 
 import dataclasses
 
-from supportiq_ai_service.retrieval.adapters.release_kb import ReleaseKbDocuments
+from app.retrieval.adapters.release_kb import ReleaseKbDocuments
 from tests.unit.release.fakes import EXAMPLE_RELEASE
 from tests.unit.retrieval.fakes import EXAMPLE_DOCUMENT
 

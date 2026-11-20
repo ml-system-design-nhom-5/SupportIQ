@@ -5,7 +5,7 @@ import re
 import pytest
 from opentelemetry import context, trace
 
-from supportiq_ai_service.platform.adapters.trace_context import (
+from app.platform.adapters.trace_context import (
     NO_TRACE_ID,
     OpenTelemetryTraceContext,
     request_context,

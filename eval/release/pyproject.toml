@@ -88,7 +88,7 @@ pythonVersion = "3.14"
 venvPath = "."
 venv = ".venv"
 # ai-service ships no `py.typed`, so pyright reads its source to check the calls of this project.
-extraPaths = ["src", "../../ai-service/src"]
+extraPaths = ["src", "../../ai-service"]
 reportMissingModuleSource = "error"
 reportUnnecessaryTypeIgnoreComment = "error"
 
@@ -134,7 +134,7 @@ exclude_also = [
 # ai-service is a root package too, so a contract can tell its public module
 # `release.manifest` from its internals.
 [tool.importlinter]
-root_packages = ["supportiq_release", "supportiq_ai_service"]
+root_packages = ["supportiq_release", "app"]
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
@@ -157,7 +157,7 @@ source_modules = [
     "supportiq_release.candidate.domain",
     "supportiq_release.gate.domain",
 ]
-forbidden_modules = ["json", "pathlib", "hashlib", "argparse", "supportiq_ai_service"]
+forbidden_modules = ["json", "pathlib", "hashlib", "argparse", "app"]
 
 [[tool.importlinter.contracts]]
 name = "The release command imports only public modules of ai-service (ADR-0021, statement 1)"
@@ -168,17 +168,17 @@ type = "forbidden"
 # `__init__` or a public module; every module inside those packages stays forbidden.
 allow_indirect_imports = true
 source_modules = ["supportiq_release"]
-forbidden_modules = ["supportiq_ai_service"]
+forbidden_modules = ["app"]
 ignore_imports = [
-    "supportiq_release.** -> supportiq_ai_service.release.manifest",
-    "supportiq_release.gate.adapters.** -> supportiq_ai_service.composition_root",
-    "supportiq_release.gate.adapters.** -> supportiq_ai_service.drafting",
-    "supportiq_release.gate.adapters.** -> supportiq_ai_service.intent",
-    "supportiq_release.gate.adapters.** -> supportiq_ai_service.retrieval",
+    "supportiq_release.** -> app.release.manifest",
+    "supportiq_release.gate.adapters.** -> app.composition_root",
+    "supportiq_release.gate.adapters.** -> app.drafting",
+    "supportiq_release.gate.adapters.** -> app.intent",
+    "supportiq_release.gate.adapters.** -> app.retrieval",
 ]
 
 [[tool.importlinter.contracts]]
-name = "The release command uses no code of main, ml, or eval, and no other component (ADR-0021, statement 3)"
+name = "The release command uses no code of main (ADR-0021, statement 3)"
 type = "forbidden"
 source_modules = ["supportiq_release"]
-forbidden_modules = ["apps", "pipeline", "supportiq_backend", "supportiq_eval", "supportiq_ml"]
+forbidden_modules = ["apps", "pipeline"]

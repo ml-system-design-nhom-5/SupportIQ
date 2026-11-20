@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from supportiq_ai_service.release import LoadedRelease
-from supportiq_ai_service.release.manifest import (
+from app.release import LoadedRelease
+from app.release.manifest import (
     ReleaseInvalidError,
     ReleaseInvalidReason,
     read_release_manifest,

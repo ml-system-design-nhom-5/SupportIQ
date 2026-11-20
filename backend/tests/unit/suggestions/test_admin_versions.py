@@ -8,7 +8,7 @@ call runs in its own span (LOG-20).
 
 import pytest
 
-from supportiq_backend.accounts import (
+from app.accounts import (
     AccountId,
     Authorizer,
     CustomerId,
@@ -18,14 +18,14 @@ from supportiq_backend.accounts import (
     InternalRole,
     Principal,
 )
-from supportiq_backend.platform import (
+from app.platform import (
     EVENT_DESCRIPTIONS,
     BackendError,
     EventLevel,
     EventName,
     SpanName,
 )
-from supportiq_backend.suggestions import (
+from app.suggestions import (
     AiServiceContractError,
     AiServiceReadPorts,
     AiServiceUnavailableError,

@@ -13,8 +13,8 @@ from datetime import datetime, timedelta
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from supportiq_backend.platform.adapters.database import create_session_factory
-from supportiq_backend.suggestions import (
+from app.platform.adapters.database import create_session_factory
+from app.suggestions import (
     AiReasonCode,
     ClaimedJob,
     JobState,
@@ -24,8 +24,8 @@ from supportiq_backend.suggestions import (
     build_analysis_completion,
     build_draft_completion,
 )
-from supportiq_backend.suggestions.adapters.ai_service_payloads import to_request_body
-from supportiq_backend.suggestions.adapters.suggestion_store import PostgresSuggestionJobStore
+from app.suggestions.adapters.ai_service_payloads import to_request_body
+from app.suggestions.adapters.suggestion_store import PostgresSuggestionJobStore
 from tests.integration.builders import DatabaseBuilder
 from tests.integration.workflow.workflow_rows import (
     LEASE,

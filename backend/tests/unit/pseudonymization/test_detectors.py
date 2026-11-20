@@ -8,7 +8,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from supportiq_backend.pseudonymization.domain import (
+from app.pseudonymization.domain import (
     PSEUDONYMIZED_TEXT_MAX_LENGTH,
     Detection,
     DetectionSource,

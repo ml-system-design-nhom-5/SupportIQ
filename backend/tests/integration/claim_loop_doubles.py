@@ -9,7 +9,7 @@ instead of polling, so no test waits for real time.
 import asyncio
 from collections.abc import Mapping
 
-from supportiq_backend.platform import EventAttributeValue, EventName, EventRecorder
+from app.platform import EventAttributeValue, EventName, EventRecorder
 from tests.unit.platform.fakes import FakeClock
 
 

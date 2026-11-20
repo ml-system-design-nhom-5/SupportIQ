@@ -24,7 +24,7 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from supportiq_ai_service.release.manifest import ReleaseInvalidError
+from app.release.manifest import ReleaseInvalidError
 
 from supportiq_release.candidate.adapters import (
     check_kb_versions,

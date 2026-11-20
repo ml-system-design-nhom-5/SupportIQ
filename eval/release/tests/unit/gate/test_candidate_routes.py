@@ -14,14 +14,14 @@ from typing import TextIO
 
 import httpx
 import pytest
+from app.composition_root import CandidatePorts, ServicePorts, create_app
+from app.platform import EventAttributeValue, EventName
+from app.platform.settings import Settings
+from app.release import LoadedRelease
+from app.retrieval import KbDocument
+from app.suggestions import Analysis, DraftOutcome, SuggestionInput
 from fastapi import APIRouter, FastAPI, WebSocket
 from starlette.applications import Starlette
-from supportiq_ai_service.composition_root import CandidatePorts, ServicePorts, create_app
-from supportiq_ai_service.platform import EventAttributeValue, EventName
-from supportiq_ai_service.platform.settings import Settings
-from supportiq_ai_service.release import LoadedRelease
-from supportiq_ai_service.retrieval import KbDocument
-from supportiq_ai_service.suggestions import Analysis, DraftOutcome, SuggestionInput
 
 from supportiq_release.gate.adapters import GatePorts, candidate_settings, run_cases
 from supportiq_release.gate.domain import CONTRACT_ROUTES, CandidateCheck, candidate_checks

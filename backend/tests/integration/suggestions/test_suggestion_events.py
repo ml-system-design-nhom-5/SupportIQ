@@ -14,8 +14,8 @@ import httpx
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from supportiq_backend.platform import EventName
-from supportiq_backend.suggestions import (
+from app.platform import EventName
+from app.suggestions import (
     SuggestionId,
     SuggestionTicketId,
     build_analysis_completion,

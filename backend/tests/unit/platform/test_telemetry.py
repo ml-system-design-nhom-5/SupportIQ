@@ -8,8 +8,8 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import Status, StatusCode
 
-from supportiq_backend.platform import SpanName
-from supportiq_backend.platform.adapters.telemetry import (
+from app.platform import SpanName
+from app.platform.adapters.telemetry import (
     OpenTelemetryStepTracer,
     OpenTelemetryTraceContext,
     RedactingSpanProcessor,

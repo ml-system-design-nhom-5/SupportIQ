@@ -11,9 +11,9 @@ from types import MappingProxyType
 
 import numpy as np
 
-from supportiq_ai_service.release import LoadedRelease
-from supportiq_ai_service.retrieval import KbDocument, RetrievalError
-from supportiq_ai_service.retrieval.adapters.in_memory_index import Vectors, l2_normalized
+from app.release import LoadedRelease
+from app.retrieval import KbDocument, RetrievalError
+from app.retrieval.adapters.in_memory_index import Vectors, l2_normalized
 
 EXAMPLE_DOCUMENT = KbDocument(
     document_id="SAMPLE-REFUND-001",

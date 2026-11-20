@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 import pytest
-from supportiq_ai_service.release.manifest import ReleaseInvalidError
+from app.release.manifest import ReleaseInvalidError
 
 from supportiq_release.candidate.adapters import (
     copy_files,

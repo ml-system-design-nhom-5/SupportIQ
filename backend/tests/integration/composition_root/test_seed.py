@@ -11,9 +11,9 @@ import pytest
 from sqlalchemy import Text, literal_column, select, table, text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from supportiq_backend.accounts import Password, PasswordHash
-from supportiq_backend.accounts.adapters.credentials import Argon2Passwords
-from supportiq_backend.commerce import (
+from app.accounts import Password, PasswordHash
+from app.accounts.adapters.credentials import Argon2Passwords
+from app.commerce import (
     ORDER_ID_PATTERN,
     TRACKING_CODE_PATTERN,
     TRANSACTION_ID_PATTERN,
@@ -21,7 +21,7 @@ from supportiq_backend.commerce import (
     RefundStatus,
     ShipmentStatus,
 )
-from supportiq_backend.composition_root.seed_commands import (
+from app.composition_root.seed_commands import (
     SEED_FILE,
     SeedFileInvalidError,
     load_seed_document,
@@ -29,9 +29,9 @@ from supportiq_backend.composition_root.seed_commands import (
     seed,
     seed_if_empty,
 )
-from supportiq_backend.composition_root.settings_loading import SettingRequiredError
-from supportiq_backend.platform import DatabaseOperationError, EventName
-from supportiq_backend.platform.settings import Settings
+from app.composition_root.settings_loading import SettingRequiredError
+from app.platform import DatabaseOperationError, EventName
+from app.platform.settings import Settings
 from tests.integration.application import build_settings
 from tests.integration.builders import DatabaseBuilder
 from tests.integration.database import BACKEND_TABLE_NAMES, WorkerDatabase, create_owner_engine

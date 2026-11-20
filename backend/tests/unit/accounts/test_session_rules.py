@@ -5,7 +5,7 @@ from datetime import timedelta
 
 import pytest
 
-from supportiq_backend.accounts import (
+from app.accounts import (
     CustomerPrincipal,
     ForbiddenOriginError,
     InternalPrincipal,

@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-from supportiq_ai_service.release.manifest import verify_candidate
+from app.release.manifest import verify_candidate
 
 from supportiq_release.candidate.domain import MANIFEST_FILE_NAME
 from supportiq_release.errors import ReleaseCommandError

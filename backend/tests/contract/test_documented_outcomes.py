@@ -18,8 +18,8 @@ from schemathesis import BaseSchema
 from starlette.middleware import Middleware
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from supportiq_backend.accounts import PasswordHash
-from supportiq_backend.composition_root import BackgroundWork, create_app
+from app.accounts import PasswordHash
+from app.composition_root import BackgroundWork, create_app
 from tests.contract.call_changes import OTHER_KEY
 from tests.contract.calls import (
     KEY,

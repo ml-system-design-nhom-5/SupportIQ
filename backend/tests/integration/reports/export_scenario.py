@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from uuid import UUID
 
-from supportiq_backend.composition_root.report_commands import (
+from app.composition_root.report_commands import (
     ExportDecisionsArguments,
     export_decisions,
 )

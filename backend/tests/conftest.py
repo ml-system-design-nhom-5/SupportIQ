@@ -13,9 +13,9 @@ import pytest
 from hypothesis import settings
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from supportiq_backend.accounts import Password, PasswordHash
-from supportiq_backend.accounts.adapters.credentials import Argon2Passwords
-from supportiq_backend.platform.adapters.database import create_database_engine
+from app.accounts import Password, PasswordHash
+from app.accounts.adapters.credentials import Argon2Passwords
+from app.platform.adapters.database import create_database_engine
 from tests.integration.application import RunningBackend, build_settings, running_client
 from tests.integration.builders import DatabaseBuilder
 from tests.integration.database import (

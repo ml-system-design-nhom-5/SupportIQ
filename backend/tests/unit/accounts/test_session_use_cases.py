@@ -4,7 +4,7 @@ from datetime import timedelta
 
 import pytest
 
-from supportiq_backend.accounts import (
+from app.accounts import (
     AdminPrincipal,
     AuthenticatedSession,
     AuthenticateSession,
@@ -21,7 +21,7 @@ from supportiq_backend.accounts import (
     SignOut,
     hash_session_token,
 )
-from supportiq_backend.platform import DatabaseUnavailableError, EventName
+from app.platform import DatabaseUnavailableError, EventName
 from tests.unit.accounts.fakes import (
     CUSTOMER_ACCOUNT_ID,
     CUSTOMER_ID,

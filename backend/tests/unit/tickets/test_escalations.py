@@ -7,16 +7,16 @@ decides. A reason `other` needs a note.
 
 import pytest
 
-from supportiq_backend.accounts import ForbiddenRoleError, Principal
-from supportiq_backend.audit import AuditEventType
-from supportiq_backend.idempotency import IdempotencyKeyReusedError
-from supportiq_backend.platform import EventName
-from supportiq_backend.suggestions import (
+from app.accounts import ForbiddenRoleError, Principal
+from app.audit import AuditEventType
+from app.idempotency import IdempotencyKeyReusedError
+from app.platform import EventName
+from app.suggestions import (
     InvalidTicketStateError,
     SuggestionId,
     SuggestionSupersededError,
 )
-from supportiq_backend.tickets import (
+from app.tickets import (
     DecisionType,
     EscalationRequest,
     HandlingMode,

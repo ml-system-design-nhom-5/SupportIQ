@@ -9,18 +9,18 @@ from datetime import timedelta
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from supportiq_backend.accounts import AccountId
-from supportiq_backend.platform import DatabaseOperationError
-from supportiq_backend.platform.adapters.database import create_session_factory
-from supportiq_backend.suggestions import SuggestionId
-from supportiq_backend.tickets import (
+from app.accounts import AccountId
+from app.platform import DatabaseOperationError
+from app.platform.adapters.database import create_session_factory
+from app.suggestions import SuggestionId
+from app.tickets import (
     Escalation,
     EscalationId,
     EscalationRequest,
     StaffReasonCode,
     TicketId,
 )
-from supportiq_backend.tickets.adapters.escalation_store import PostgresEscalationStore
+from app.tickets.adapters.escalation_store import PostgresEscalationStore
 from tests.integration.builders import AccountSpec, DatabaseBuilder
 from tests.integration.workflow.workflow_rows import insert_ticket, start_suggestion, ticket_created
 from tests.unit.platform.fakes import FAKE_CLOCK_START

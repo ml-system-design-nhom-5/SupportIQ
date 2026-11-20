@@ -10,12 +10,12 @@ from uuid import UUID
 
 import pytest
 
-from supportiq_backend.accounts import ForbiddenRoleError
-from supportiq_backend.audit import AuditEventType
-from supportiq_backend.idempotency import IdempotencyKey, StoredResponse
-from supportiq_backend.platform import EventName
-from supportiq_backend.suggestions import NoDraftStatus
-from supportiq_backend.tickets import (
+from app.accounts import ForbiddenRoleError
+from app.audit import AuditEventType
+from app.idempotency import IdempotencyKey, StoredResponse
+from app.platform import EventName
+from app.suggestions import NoDraftStatus
+from app.tickets import (
     AiDraftReply,
     DecisionType,
     NoAiDraftReply,

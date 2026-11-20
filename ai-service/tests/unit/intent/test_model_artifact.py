@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from supportiq_ai_service.intent import INTENT_LABELS
-from supportiq_ai_service.intent.adapters.model_artifact import read_model_artifact
+from app.intent import INTENT_LABELS
+from app.intent.adapters.model_artifact import read_model_artifact
 from tests.unit.release.fakes import EXAMPLE_VERSIONS
 from tests.unit.release.release_folder import (
     ARTIFACT_DOCUMENT,

@@ -2,9 +2,9 @@
 
 import pytest
 
-from supportiq_backend.composition_root.tickets_wiring import to_handling_mode
-from supportiq_backend.platform.settings import HandlingModeSetting
-from supportiq_backend.tickets import HandlingMode
+from app.composition_root.tickets_wiring import to_handling_mode
+from app.platform.settings import HandlingModeSetting
+from app.tickets import HandlingMode
 
 
 @pytest.mark.parametrize("setting", HandlingModeSetting)

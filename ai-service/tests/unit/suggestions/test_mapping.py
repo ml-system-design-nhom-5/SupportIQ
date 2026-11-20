@@ -8,12 +8,12 @@ from pathlib import Path
 
 import pytest
 
-from supportiq_ai_service.generated import SuggestionRequest
-from supportiq_ai_service.platform import RequestContractError
-from supportiq_ai_service.platform.web import render_json
-from supportiq_ai_service.suggestions.api.requests import suggestion_input
-from supportiq_ai_service.suggestions.api.responses import analysis_body, draft_outcome_body
-from supportiq_ai_service.suggestions.domain import (
+from app.generated import SuggestionRequest
+from app.platform import RequestContractError
+from app.platform.web import render_json
+from app.suggestions.api.requests import suggestion_input
+from app.suggestions.api.responses import analysis_body, draft_outcome_body
+from app.suggestions.domain import (
     DraftOutcome,
     IntentName,
     MoneyAmount,

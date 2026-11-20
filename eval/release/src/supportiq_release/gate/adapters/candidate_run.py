@@ -28,13 +28,13 @@ from pathlib import Path
 from typing import TextIO, cast
 
 import httpx
-from starlette.applications import Starlette
-from starlette.routing import BaseRoute, Route
-from supportiq_ai_service.composition_root import (
+from app.composition_root import (
     CandidatePorts,
     SettingsInvalidError,
     build_candidate_application,
 )
+from starlette.applications import Starlette
+from starlette.routing import BaseRoute, Route
 
 from supportiq_release.errors import ReleaseCommandError
 from supportiq_release.gate.adapters.gate_ports import GatePorts

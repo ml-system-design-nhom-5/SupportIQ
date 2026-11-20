@@ -6,8 +6,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from supportiq_backend.commerce import Money, OrderStatus, RefundStatus, ShipmentStatus
-from supportiq_backend.suggestions import (
+from app.commerce import Money, OrderStatus, RefundStatus, ShipmentStatus
+from app.suggestions import (
     AiServiceContractError,
     Draft,
     DraftReady,

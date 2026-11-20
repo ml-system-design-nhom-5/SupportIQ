@@ -72,7 +72,7 @@ Every subcommand validates the settings first. A missing or invalid setting stop
 | Command | Runs as | What it does |
 |---|---|---|
 | `backend serve --host <host> --port <port>` | `supportiq_app` | Runs one replica |
-| `backend create-app-role` | owner | Creates or updates `supportiq_app` with the password of `DATABASE_URL_APP`, from [`create_app_role.sql`](src/supportiq_backend/migrations/create_app_role.sql). It refuses a role that has `SUPERUSER`, `REPLICATION`, or `BYPASSRLS` |
+| `backend create-app-role` | owner | Creates or updates `supportiq_app` with the password of `DATABASE_URL_APP`, from [`create_app_role.sql`](app/migrations/create_app_role.sql). It refuses a role that has `SUPERUSER`, `REPLICATION`, or `BYPASSRLS` |
 | `backend migrate` | owner | Applies every migration |
 | `backend seed` | owner | Loads [`seed/synthetic-dev-only-v1.json`](seed/synthetic-dev-only-v1.json) into an empty database. It fails on a seeded database and changes nothing |
 | `backend seed --if-empty` | owner | Loads the seed as `backend seed` does when the tables that the seed writes hold no row. When one of them holds a row, it changes nothing, logs `seed.skipped`, and exits with status 0. The check and the inserts share one transaction. The local run calls it at every start ([local run design](../docs/design/local-run.md#data-and-contracts)) |
@@ -95,7 +95,7 @@ Each export record holds the ticket ID, the handling mode, the study pair and ba
 
 ```bash
 uv run coverage report --fail-under=80
-uv run coverage report --fail-under=90 --include="*/supportiq_backend/*/domain/*,*/supportiq_backend/*/application/*"
+uv run coverage report --fail-under=90 --include="*/app/*/domain/*,*/app/*/application/*"
 ```
 
 ## Demo accounts
@@ -117,7 +117,7 @@ All seed data is simulated and labeled `synthetic-dev-only`.
 
 ```text
 backend/
-├── src/supportiq_backend/
+├── app/
 │   ├── platform/           # Clock, errors, events, settings, database, logging, tracing, web
 │   ├── audit/              # The insert-only audit log
 │   ├── idempotency/        # Records of retryable writes and the idempotency guard
@@ -161,8 +161,8 @@ uv run datamodel-codegen --profile ai-service
 ## Database
 
 - `backend serve` connects only as `supportiq_app`, which has `SELECT` on commerce data and no `UPDATE` or `DELETE` on the audit log or on customer messages ([design, Database roles and privileges](../docs/design/backend-foundation.md#database-roles-and-privileges)). It can insert `staff` and `manager` accounts and update password hashes, never delete an account, and a trigger refuses an `admin` account from every role but the owner ([migration `r0002`](../docs/design/account-management.md#migration-r0002)). The tests connect the same way, so they prove the privileges.
-- To add a migration, add one file to [`migrations/versions/`](src/supportiq_backend/migrations/versions/) that follows `r0001_foundation_schema.py`: one schema change, raw SQL, the privileges of every new table, and a working downgrade (PY-40). `tests/integration/schema/test_migration.py` runs upgrade and downgrade.
-- Every table of the backend is listed in [`migrations/tables.py`](src/supportiq_backend/migrations/tables.py), which `reset` empties.
+- To add a migration, add one file to [`migrations/versions/`](app/migrations/versions/) that follows `r0001_foundation_schema.py`: one schema change, raw SQL, the privileges of every new table, and a working downgrade (PY-40). `tests/integration/schema/test_migration.py` runs upgrade and downgrade.
+- Every table of the backend is listed in [`migrations/tables.py`](app/migrations/tables.py), which `reset` empties.
 - Migration `r0003` adds the tables of the ticket workflow ([design, Tables](../docs/design/backend-ticket-workflow.md#tables)). Triggers keep a final suggestion part and a stored request unchanged, and let `tickets.status` change only along the state machine. `supportiq_app` may only select and insert pseudonym maps, replies, proposals, escalations, and staff decisions.
 
 ### TLS to the database
@@ -196,7 +196,7 @@ Each replica runs one claim loop with `SUGGESTION_WORKERS_PER_REPLICA` slots, st
 
 ## Events
 
-Every log line is one JSON object on standard output, with the attributes of an allow-list. The catalog is [`platform/domain/events.py`](src/supportiq_backend/platform/domain/events.py) ([LOG-12](../docs/rules/logging-and-observability.md)).
+Every log line is one JSON object on standard output, with the attributes of an allow-list. The catalog is [`platform/domain/events.py`](app/platform/domain/events.py) ([LOG-12](../docs/rules/logging-and-observability.md)).
 
 | Event | When |
 |---|---|

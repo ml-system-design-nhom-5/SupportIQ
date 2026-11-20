@@ -3,15 +3,15 @@
 import pytest
 from starlette.requests import Request
 
-from supportiq_backend.accounts import (
+from app.accounts import (
     AuthenticatedSession,
     InternalPrincipal,
     InternalRole,
     SessionRequiredError,
     SessionToken,
 )
-from supportiq_backend.accounts.api.dependencies import SESSION_COOKIE_NAME, build_current_session
-from supportiq_backend.platform import DatabaseUnavailableError
+from app.accounts.api.dependencies import SESSION_COOKIE_NAME, build_current_session
+from app.platform import DatabaseUnavailableError
 from tests.unit.accounts.fakes import (
     DEFAULT_SESSION_ID_HASH,
     FakeAuthenticator,

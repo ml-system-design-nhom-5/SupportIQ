@@ -11,7 +11,7 @@ import json
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from supportiq_backend.suggestions import DraftReady, SuggestionTicketId, build_draft_completion
+from app.suggestions import DraftReady, SuggestionTicketId, build_draft_completion
 from tests.integration.application import build_settings, running_client
 from tests.integration.builders import DatabaseBuilder, TicketSpec
 from tests.integration.database import WorkerDatabase

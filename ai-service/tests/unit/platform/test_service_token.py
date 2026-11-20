@@ -3,8 +3,8 @@
 import pytest
 from fastapi import Request
 
-from supportiq_ai_service.platform import ServiceTokenRejectedError
-from supportiq_ai_service.platform.web import build_service_token_guard
+from app.platform import ServiceTokenRejectedError
+from app.platform.web import build_service_token_guard
 
 SERVICE_TOKEN = "service-token-for-unit-tests"
 

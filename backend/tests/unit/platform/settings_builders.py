@@ -2,7 +2,7 @@
 
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource
 
-from supportiq_backend.platform.settings import Settings
+from app.platform.settings import Settings
 
 TEST_APP_URL = "postgresql+asyncpg://supportiq_app:app-test-password@127.0.0.1:5433/supportiq"
 TEST_ORIGIN = "http://shop.test"

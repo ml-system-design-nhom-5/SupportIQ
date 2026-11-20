@@ -4,7 +4,7 @@ import re
 
 import pytest
 
-from supportiq_backend.platform import EVENT_DESCRIPTIONS, EventName
+from app.platform import EVENT_DESCRIPTIONS, EventName
 
 EVENT_NAME_PATTERN = re.compile(r"[a-z]+(_[a-z]+)*\.[a-z]+(_[a-z]+)*")
 DESIGN_EVENTS = (

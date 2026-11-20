@@ -2,7 +2,7 @@
 
 import pytest
 
-from supportiq_backend.platform import is_storable_text
+from app.platform import is_storable_text
 
 
 @pytest.mark.parametrize("text", ["", "plain", "Đèn bàn", "emoji \U0001f600", "tab\tand\nnewline"])

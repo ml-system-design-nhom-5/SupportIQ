@@ -4,10 +4,10 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from supportiq_backend.accounts import Authorizer
-from supportiq_backend.idempotency import IdempotencyGuard, StoredResponse
-from supportiq_backend.platform import BackendError
-from supportiq_backend.suggestions import (
+from app.accounts import Authorizer
+from app.idempotency import IdempotencyGuard, StoredResponse
+from app.platform import BackendError
+from app.suggestions import (
     CreateSuggestion,
     CreateSuggestionPorts,
     CreateSuggestionStores,

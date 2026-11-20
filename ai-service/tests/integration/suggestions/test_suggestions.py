@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from supportiq_ai_service.platform import EventName
+from app.platform import EventName
 from tests.integration.application import SERVICE_TOKEN_HEADERS, running_ai_service
 from tests.unit.release.fakes import StaticReleaseSource
 from tests.unit.suggestions.fakes import EXAMPLE_LLM_UNAVAILABLE, FailingPipeline, FakePipeline

@@ -8,10 +8,10 @@ from dataclasses import dataclass, field, replace
 
 import pytest
 
-from supportiq_backend.audit import AuditEventType
-from supportiq_backend.commerce import OrderId
-from supportiq_backend.platform import EventName
-from supportiq_backend.pseudonymization import (
+from app.audit import AuditEventType
+from app.commerce import OrderId
+from app.platform import EventName
+from app.pseudonymization import (
     DetectorError,
     KnownValueDetector,
     LiteralPlaceholderDetector,
@@ -20,7 +20,7 @@ from supportiq_backend.pseudonymization import (
     PseudonymizationStores,
     PseudonymizeMessage,
 )
-from supportiq_backend.suggestions import (
+from app.suggestions import (
     AiReasonCode,
     AiServiceContractError,
     ClaimedJob,
@@ -42,7 +42,7 @@ from supportiq_backend.suggestions import (
     TicketForSuggestion,
     TicketMessage,
 )
-from supportiq_backend.suggestions.adapters.ai_service_payloads import to_request_body
+from app.suggestions.adapters.ai_service_payloads import to_request_body
 from tests.unit.audit.fakes import FakeAuditLog
 from tests.unit.commerce.fakes import FakeCommerceGateway, build_order
 from tests.unit.platform.fakes import (

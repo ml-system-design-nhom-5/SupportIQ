@@ -357,12 +357,12 @@ repos:
         language: system
         entry: >-
           bash -c 'cd backend && backend_models="$(mktemp)" && client_models="$(mktemp)" &&
-          cp src/supportiq_backend/generated/__init__.py "$backend_models" &&
-          cp src/supportiq_backend/suggestions/adapters/generated/__init__.py "$client_models" &&
+          cp app/generated/__init__.py "$backend_models" &&
+          cp app/suggestions/adapters/generated/__init__.py "$client_models" &&
           uv run --locked datamodel-codegen &&
           uv run --locked datamodel-codegen --profile ai-service &&
-          diff -u "$backend_models" src/supportiq_backend/generated/__init__.py &&
-          diff -u "$client_models" src/supportiq_backend/suggestions/adapters/generated/__init__.py'
+          diff -u "$backend_models" app/generated/__init__.py &&
+          diff -u "$client_models" app/suggestions/adapters/generated/__init__.py'
         files: ^(backend|contracts)/
         pass_filenames: false
         stages: [pre-commit]
@@ -432,9 +432,9 @@ repos:
         language: system
         entry: >-
           bash -c 'cd ai-service && committed="$(mktemp)" &&
-          cp src/supportiq_ai_service/generated/__init__.py "$committed" &&
+          cp app/generated/__init__.py "$committed" &&
           uv run --locked datamodel-codegen &&
-          diff -u "$committed" src/supportiq_ai_service/generated/__init__.py'
+          diff -u "$committed" app/generated/__init__.py'
         files: ^(ai-service/|contracts/ai-service\.openapi\.yaml$|contracts/schemas/)
         pass_filenames: false
         stages: [pre-commit]
@@ -460,14 +460,14 @@ repos:
         name: Type-check the release command in strict mode (pyright)
         language: system
         entry: bash -c 'cd eval/release && uv run --locked pyright'
-        files: ^(eval/release/|ai-service/src/)
+        files: ^(eval/release/|ai-service/app/)
         pass_filenames: false
         stages: [pre-commit]
       - id: eval-release-imports
         name: Check the layer boundaries of the release command (import-linter)
         language: system
         entry: bash -c 'cd eval/release && uv run --locked lint-imports'
-        files: ^(eval/release/|ai-service/src/)
+        files: ^(eval/release/|ai-service/app/)
         pass_filenames: false
         stages: [pre-commit]
   # ===== end of ai-service hooks =====

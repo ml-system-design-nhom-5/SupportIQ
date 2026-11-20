@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from supportiq_ai_service.release import AssetVersions, LoadedRelease
+from app.release import AssetVersions, LoadedRelease
 
 # The versions of `contracts/examples/getAssetVersions/loaded.json`.
 EXAMPLE_VERSIONS = AssetVersions(

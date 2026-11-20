@@ -3,9 +3,9 @@
 from dataclasses import replace
 from datetime import UTC, datetime
 
-from supportiq_backend.accounts import AccountId
-from supportiq_backend.platform import TraceId
-from supportiq_backend.suggestions import (
+from app.accounts import AccountId
+from app.platform import TraceId
+from app.suggestions import (
     AiReasonCode,
     AiWarning,
     Analysis,

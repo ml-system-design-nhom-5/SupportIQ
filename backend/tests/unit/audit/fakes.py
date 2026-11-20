@@ -2,8 +2,8 @@
 
 from dataclasses import dataclass, field
 
-from supportiq_backend.audit import AuditEntry
-from supportiq_backend.platform import BackendError
+from app.audit import AuditEntry
+from app.platform import BackendError
 
 
 @dataclass(slots=True)

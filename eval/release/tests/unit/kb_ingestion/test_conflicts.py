@@ -1,7 +1,7 @@
 """Conflicts follow the rule of `conflicting_sources` in ai-service (DATA-12, DATA-19).
 
 The cases are those of `ai-service/tests/unit/suggestions/test_evidence.py`, which test
-`_in_effect` and `_validity` of `ai-service/src/supportiq_ai_service/suggestions/domain/
+`_in_effect` and `_validity` of `ai-service/app/suggestions/domain/
 evidence.py`: a version is in effect from its start, included, until its end, excluded, and two
 versions in effect with one policy key conflict. When one side changes, the other must too.
 """

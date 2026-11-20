@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from supportiq_backend.platform import InvalidParameterError, TraceId
-from supportiq_backend.platform.web import build_problem_response
-from supportiq_backend.reports import InvalidReportPeriodError, ReportPeriod
-from supportiq_backend.reports.api.report_requests import parse_report_period
+from app.platform import InvalidParameterError, TraceId
+from app.platform.web import build_problem_response
+from app.reports import InvalidReportPeriodError, ReportPeriod
+from app.reports.api.report_requests import parse_report_period
 
 PROBLEM_EXAMPLES = Path(__file__).parents[4] / "contracts/examples/problems"
 START_TEXT = "2026-11-02T00:00:00Z"

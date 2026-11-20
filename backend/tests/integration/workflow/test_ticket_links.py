@@ -10,16 +10,16 @@ from collections.abc import AsyncIterator
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from supportiq_backend.accounts import CustomerId
-from supportiq_backend.commerce import OrderId
-from supportiq_backend.platform.adapters.database import create_session_factory
-from supportiq_backend.suggestions import (
+from app.accounts import CustomerId
+from app.commerce import OrderId
+from app.platform.adapters.database import create_session_factory
+from app.suggestions import (
     SuggestionTicketId,
     TicketForSuggestion,
     TicketMessage,
 )
-from supportiq_backend.tickets import TicketId
-from supportiq_backend.tickets.adapters.console_store import (
+from app.tickets import TicketId
+from app.tickets.adapters.console_store import (
     PostgresConsoleTicketStore,
     PostgresTicketLinks,
 )

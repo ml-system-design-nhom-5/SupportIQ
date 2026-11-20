@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from supportiq_ai_service.drafting.adapters.prompt_files import (
+from app.drafting.adapters.prompt_files import (
     REQUIRES_AUTHORITY_PROMPT_FILE_NAME,
     SYSTEM_PROMPT_FILE_NAME,
     DraftingPrompts,

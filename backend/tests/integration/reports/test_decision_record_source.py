@@ -9,11 +9,11 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from supportiq_backend.platform import UnexpectedFailureError
-from supportiq_backend.platform.adapters.database import create_session_factory
-from supportiq_backend.reports import DecisionRecord
-from supportiq_backend.reports.adapters.decision_records import PostgresDecisionRecordSource
-from supportiq_backend.tickets import StaffReasonCode
+from app.platform import UnexpectedFailureError
+from app.platform.adapters.database import create_session_factory
+from app.reports import DecisionRecord
+from app.reports.adapters.decision_records import PostgresDecisionRecordSource
+from app.tickets import StaffReasonCode
 from tests.integration.builders import DatabaseBuilder, SuggestionSpec
 from tests.integration.reports.report_rows import (
     HOUR,

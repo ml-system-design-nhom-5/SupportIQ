@@ -14,13 +14,13 @@ from pathlib import Path
 import pytest
 from sqlalchemy import event
 
-from supportiq_backend.platform.adapters.database import (
+from app.platform.adapters.database import (
     DatabaseCaFileError,
     DatabaseTimeouts,
     create_database_engine,
     verified_tls_context,
 )
-from supportiq_backend.platform.settings import DEFAULT_DATABASE_CA_FILE
+from app.platform.settings import DEFAULT_DATABASE_CA_FILE
 
 BACKEND_ROOT = Path(__file__).parents[3]
 CA_FILE = BACKEND_ROOT / DEFAULT_DATABASE_CA_FILE

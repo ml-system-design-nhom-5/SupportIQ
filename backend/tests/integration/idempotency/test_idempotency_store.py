@@ -14,7 +14,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
-from supportiq_backend.idempotency import (
+from app.idempotency import (
     ClaimOutcome,
     ExistingRecord,
     IdempotencyGuard,
@@ -27,14 +27,14 @@ from supportiq_backend.idempotency import (
     StoredResponse,
     build_idempotent_request,
 )
-from supportiq_backend.idempotency.adapters.idempotency_store import PostgresIdempotencyStore
-from supportiq_backend.platform import (
+from app.idempotency.adapters.idempotency_store import PostgresIdempotencyStore
+from app.platform import (
     MILLISECONDS_PER_SECOND,
     DatabaseUnavailableError,
     OperationId,
     TransactionRunner,
 )
-from supportiq_backend.platform.adapters.database import (
+from app.platform.adapters.database import (
     DatabaseTimeouts,
     SqlAlchemyTransactionRunner,
     create_database_engine,

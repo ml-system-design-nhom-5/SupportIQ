@@ -12,8 +12,8 @@ from opentelemetry.trace import StatusCode
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from supportiq_backend.platform import DatabaseOperationError
-from supportiq_backend.platform.adapters.telemetry import (
+from app.platform import DatabaseOperationError
+from app.platform.adapters.telemetry import (
     RedactingSpanProcessor,
     instrument_application,
     instrument_engine,

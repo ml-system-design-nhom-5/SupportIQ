@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
-from supportiq_ai_service.release.manifest import (
+from app.release.manifest import (
     ReleaseInvalidError,
     ReleaseInvalidReason,
     verify_candidate,

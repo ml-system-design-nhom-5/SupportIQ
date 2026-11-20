@@ -9,8 +9,8 @@ from collections.abc import Iterator
 import pytest
 from opentelemetry.sdk.trace import TracerProvider
 
-from supportiq_backend.platform import EventName
-from supportiq_backend.platform.adapters.logging_setup import (
+from app.platform import EventName
+from app.platform.adapters.logging_setup import (
     BACKEND_LOGGER_NAME,
     GENERIC_REDACTION_PATTERNS,
     REDACTED,
@@ -41,7 +41,7 @@ class CapturedLog:
     def __init__(self) -> None:
         """Create the logger, its handler, and the event recorder on it."""
         self.stream = io.StringIO()
-        self.logger = logging.Logger("supportiq_backend.test", level=logging.DEBUG)
+        self.logger = logging.Logger("app.test", level=logging.DEBUG)
         handler = logging.StreamHandler(self.stream)
         handler.setFormatter(JsonLogFormatter(REDACTOR))
         self.logger.addHandler(handler)
@@ -204,7 +204,7 @@ def test_library_record_is_forwarded_with_a_redacted_message(captured: CapturedL
 
     assert line["event"] == "log.forwarded"
     assert line["message"] == f"Key (order_id)=({REDACTED}) already exists for {REDACTED}"
-    assert line["logger_name"] == "supportiq_backend.test"
+    assert line["logger_name"] == "app.test"
 
 
 def test_record_with_an_exception_keeps_only_the_error_type(captured: CapturedLog) -> None:

@@ -17,13 +17,13 @@ from uuid import UUID
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from supportiq_backend.accounts import AccountId
-from supportiq_backend.composition_root.suggestions_wiring import build_job_stores
-from supportiq_backend.platform.adapters.database import (
+from app.accounts import AccountId
+from app.composition_root.suggestions_wiring import build_job_stores
+from app.platform.adapters.database import (
     SqlAlchemyTransactionRunner,
     create_session_factory,
 )
-from supportiq_backend.suggestions import (
+from app.suggestions import (
     AiService,
     ClaimedJob,
     JobRunnerPorts,
@@ -35,8 +35,8 @@ from supportiq_backend.suggestions import (
     SuggestionTicketId,
     SuggestionTrigger,
 )
-from supportiq_backend.suggestions.adapters.suggestion_store import PostgresSuggestionJobStore
-from supportiq_backend.tickets.adapters.console_store import PostgresTicketLinks
+from app.suggestions.adapters.suggestion_store import PostgresSuggestionJobStore
+from app.tickets.adapters.console_store import PostgresTicketLinks
 from tests.integration.builders import AccountSpec, DatabaseBuilder
 from tests.integration.database import WorkerDatabase, create_owner_engine
 from tests.integration.schema.statements import sqlstate_of_refusal

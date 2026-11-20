@@ -1,6 +1,6 @@
 # Python rules
 
-> **Status:** Active · **Owner:** backend and ai-service · **Last reviewed:** 2026-11-08
+> **Status:** Active · **Owner:** backend and ai-service · **Last reviewed:** 2026-11-20
 
 Python-specific rules for `backend`, `ai-service`, `ml`, `eval`, and Python scripts. They build on [code.md](code.md); where both apply, both must hold.
 
@@ -47,7 +47,7 @@ Python-specific rules for `backend`, `ai-service`, `ml`, `eval`, and Python scri
 
 ## Project layout
 
-**PY-06.** Each component uses the `src` layout: `src/supportiq_<component>/`. Package and module names are `snake_case`.
+**PY-06.** The package of `backend` and of `ai-service` is `app/` at the root of the component, and its feature modules sit inside it, never directly at the root or under `src/`, where `platform/` would hide the standard module `platform` ([ADR-0028, Package names](../decisions/0028-repository-layout-for-the-pull-request-into-main.md#package-names)). `eval/release/` keeps the `src` layout, `src/supportiq_release/`, because it installs `ai-service`, and a second package named `app` would share its environment. Package and module names are `snake_case`.
 
 **PY-07.** Tests live under `tests/unit/`, `tests/integration/`, and `tests/contract/`, mirroring the source tree.
 

@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
 
-from supportiq_backend.platform.adapters.database_roles import app_role_password, apply_app_role
+from app.platform.adapters.database_roles import app_role_password, apply_app_role
 from tests.integration.database import WorkerDatabase, create_owner_engine
 
 pytestmark = pytest.mark.anyio

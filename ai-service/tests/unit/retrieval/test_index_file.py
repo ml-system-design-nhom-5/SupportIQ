@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from supportiq_ai_service.retrieval.adapters.index_file import (
+from app.retrieval.adapters.index_file import (
     IndexConfiguration,
     read_index_configuration,
 )

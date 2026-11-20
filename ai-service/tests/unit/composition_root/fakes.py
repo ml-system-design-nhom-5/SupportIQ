@@ -4,10 +4,10 @@
 the intent that the fake classifier is sure of.
 """
 
-from supportiq_ai_service.composition_root.release_assets import ReleaseModels
-from supportiq_ai_service.intent import IntentDistribution
-from supportiq_ai_service.intent.adapters.model_artifact import ModelArtifact
-from supportiq_ai_service.retrieval.adapters.index_file import IndexConfiguration
+from app.composition_root.release_assets import ReleaseModels
+from app.intent import IntentDistribution
+from app.intent.adapters.model_artifact import ModelArtifact
+from app.retrieval.adapters.index_file import IndexConfiguration
 from tests.unit.intent.fakes import distribution
 from tests.unit.release.release_folder import (
     KB_DOCUMENT,

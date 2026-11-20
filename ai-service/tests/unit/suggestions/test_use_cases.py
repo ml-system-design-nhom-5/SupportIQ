@@ -4,8 +4,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from supportiq_ai_service.release import ReleaseNotLoadedError
-from supportiq_ai_service.suggestions import (
+from app.release import ReleaseNotLoadedError
+from app.suggestions import (
     CreateAnalysis,
     CreateDraft,
     SuggestionInput,

@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from supportiq_ai_service.retrieval import RetrievalError
-from supportiq_ai_service.retrieval.adapters.index_file import IndexConfiguration
-from supportiq_ai_service.retrieval.adapters.semantic_retriever import build_semantic_retriever
+from app.retrieval import RetrievalError
+from app.retrieval.adapters.index_file import IndexConfiguration
+from app.retrieval.adapters.semantic_retriever import build_semantic_retriever
 from tests.unit.retrieval.fakes import EXAMPLE_DOCUMENT, FailingEncoder, KeywordEncoder
 
 # Titles without a keyword, so only the bodies decide the similarity.

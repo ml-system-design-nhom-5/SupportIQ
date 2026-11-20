@@ -8,15 +8,15 @@ from pathlib import Path
 import httpx
 from fastapi import FastAPI
 
-from supportiq_ai_service.composition_root import ServicePorts, create_app
-from supportiq_ai_service.platform.adapters.egress import (
+from app.composition_root import ServicePorts, create_app
+from app.platform.adapters.egress import (
     create_egress_client,
     packaged_egress_allow_list,
 )
-from supportiq_ai_service.platform.settings import Settings
-from supportiq_ai_service.release import ReleaseSource
-from supportiq_ai_service.retrieval import KbDocumentSource
-from supportiq_ai_service.suggestions import SuggestionPipeline
+from app.platform.settings import Settings
+from app.release import ReleaseSource
+from app.retrieval import KbDocumentSource
+from app.suggestions import SuggestionPipeline
 from tests.unit.platform.fakes import (
     LLM_ENVIRONMENT,
     FakeClock,

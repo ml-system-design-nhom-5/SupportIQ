@@ -11,10 +11,10 @@ from datetime import UTC, datetime
 
 import pytest
 
-from supportiq_backend.platform.web import render_json
-from supportiq_backend.suggestions import KbDocumentVersionNotFoundError, VersionsInUse
-from supportiq_backend.suggestions.api.admin import to_admin_versions_view
-from supportiq_backend.suggestions.api.console import (
+from app.platform.web import render_json
+from app.suggestions import KbDocumentVersionNotFoundError, VersionsInUse
+from app.suggestions.api.admin import to_admin_versions_view
+from app.suggestions.api.console import (
     parse_kb_document_id,
     parse_kb_document_version_tag,
     to_kb_document_version_view,

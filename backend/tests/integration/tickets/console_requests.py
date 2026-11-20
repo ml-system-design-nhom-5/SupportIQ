@@ -13,7 +13,7 @@ from uuid import UUID
 import httpx
 from sqlalchemy import update
 
-from supportiq_backend.suggestions.adapters.tables import SuggestionPartRow
+from app.suggestions.adapters.tables import SuggestionPartRow
 from tests.integration.application import session_headers
 from tests.integration.builders import (
     AccountSpec,

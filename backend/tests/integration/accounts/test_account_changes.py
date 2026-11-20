@@ -5,7 +5,7 @@ from uuid import UUID
 
 import pytest
 
-from supportiq_backend.platform import EventName
+from app.platform import EventName
 from tests.integration.accounts.admin_requests import (
     KEY,
     OTHER_KEY,

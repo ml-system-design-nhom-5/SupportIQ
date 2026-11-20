@@ -11,7 +11,7 @@ from http import HTTPStatus
 import httpx
 import pytest
 
-from supportiq_backend.accounts import PasswordHash
+from app.accounts import PasswordHash
 from tests.integration.accounts.admin_requests import KEY, sign_in_as_new_admin
 from tests.integration.accounts.password_requests import (
     ADMIN_ACCOUNTS,

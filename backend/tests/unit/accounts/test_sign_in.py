@@ -5,7 +5,7 @@ from datetime import timedelta
 
 import pytest
 
-from supportiq_backend.accounts import (
+from app.accounts import (
     Credentials,
     InvalidCredentialsError,
     LoginName,
@@ -20,7 +20,7 @@ from supportiq_backend.accounts import (
     hash_login_name,
     hash_session_token,
 )
-from supportiq_backend.platform import MILLISECONDS_PER_SECOND, DatabaseUnavailableError, EventName
+from app.platform import MILLISECONDS_PER_SECOND, DatabaseUnavailableError, EventName
 from tests.unit.accounts.fakes import (
     DUMMY_HASH,
     HASH_OF_KNOWN_PASSWORD,

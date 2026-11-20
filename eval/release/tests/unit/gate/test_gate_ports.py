@@ -1,14 +1,14 @@
 """The ports of the gate: the real model and search, unless the case injects a part."""
 
 import pytest
-from supportiq_ai_service.drafting import DraftRequest, LlmCallError, LlmFailure
-from supportiq_ai_service.intent import (
+from app.drafting import DraftRequest, LlmCallError, LlmFailure
+from app.intent import (
     IntentClassifier,
     IntentDistribution,
     IntentModelError,
     IntentProbability,
 )
-from supportiq_ai_service.retrieval import DocumentSearch, RetrievalError
+from app.retrieval import DocumentSearch, RetrievalError
 
 from supportiq_release.gate.adapters import GatePorts
 from supportiq_release.gate.domain import Failure, Injection
