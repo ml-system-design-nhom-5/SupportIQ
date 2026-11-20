@@ -1,6 +1,6 @@
 # Architecture decision records
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-17
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-20
 
 An architecture decision record (ADR) captures one significant decision: its context, the options, what we chose, and what it costs. This page lists every ADR and explains the process. Writing rules are in the [documentation handbook](../README.md#adrs).
 
@@ -35,6 +35,8 @@ An architecture decision record (ADR) captures one significant decision: its con
 | [0025](0025-routing-configuration-of-the-first-release.md) | Routing configuration of the first release | Accepted | 2026-11-17 |
 | [0026](0026-frozen-intent-scenario-set.md) | Frozen intent scenario set written independently of training | Proposed | 2026-11-12 |
 | [0027](0027-retrieval-index-configuration-of-the-first-release.md) | Retrieval index configuration of the first release | Proposed | 2026-11-17 |
+| [0028](0028-repository-layout-for-the-pull-request-into-main.md) | Repository layout for the pull request into `main` | Proposed | 2026-11-20 |
+| [0029](0029-rule-based-detectors-and-a-pre-send-check.md) | Rule-based detectors and a pre-send check in pseudonymization | Proposed | 2026-11-20 |
 
 Notes on the index:
 
