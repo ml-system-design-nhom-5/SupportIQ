@@ -1,9 +1,9 @@
 """The interim escalation cases of the offline evaluation gate, as the gate reads them.
 
 The set replaces the mandatory escalation cases of the shared scenario set until that set is in
-`eval/` (ADR-0021, Exception to TEST-26). Each case sends one request to `createAnalysis` and
-to `createDraft`, possibly with a part of `ai-service` replaced, and states the outcome that
-contract 1.0.0 expects (`eval/suites/escalation/interim-v1/README.md`).
+`data/benchmarks/escalation/` (ADR-0021, Exception to TEST-26). Each case sends one request to
+`createAnalysis` and to `createDraft`, possibly with a part of `ai-service` replaced, and states
+the outcome that contract 1.0.0 expects (`data/benchmarks/escalation/interim-v1/README.md`).
 """
 
 from collections.abc import Mapping

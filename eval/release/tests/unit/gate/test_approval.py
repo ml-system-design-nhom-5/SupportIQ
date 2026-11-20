@@ -25,7 +25,7 @@ from supportiq_release.gate.domain import (
 from tests.unit.gate.fakes import SET_NAME, approval_document, write_set
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[5]
-REPOSITORY_SET = REPOSITORY_ROOT / "eval" / "suites" / "escalation" / "interim-v1"
+REPOSITORY_SET = REPOSITORY_ROOT / "data" / "benchmarks" / "escalation" / "interim-v1"
 SHA256 = "a" * 64
 FROZEN = Approval(
     case_set=SET_NAME,

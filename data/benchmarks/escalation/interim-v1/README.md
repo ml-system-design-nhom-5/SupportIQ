@@ -2,7 +2,7 @@
 
 **Label: interim, not the shared scenario set.**
 
-The mandatory escalation cases of the offline evaluation gate, written by hand from ESC-01 to ESC-05 for the first release of `ai-service`. They replace the mandatory escalation cases of the shared scenario set of Groups 2 and 5 until that set is in `eval/`, both in item 1 of [DATA-57](../../../../docs/rules/data-and-ml.md#models-and-artifacts) and in CI ([ADR-0021, Exception to TEST-26](../../../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#exception-to-test-26), statement 2). They check routing; they measure no quality target.
+The mandatory escalation cases of the offline evaluation gate, written by hand from ESC-01 to ESC-05 for the first release of `ai-service`. They replace the mandatory escalation cases of the shared scenario set of Groups 2 and 5 until that set is in `data/benchmarks/escalation/`, both in item 1 of [DATA-57](../../../../docs/rules/data-and-ml.md#models-and-artifacts) and in CI ([ADR-0021, Exception to TEST-26](../../../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#exception-to-test-26), statement 2). They check routing; they measure no quality target.
 
 ## Status
 
@@ -101,7 +101,7 @@ The gate and `publish-candidate` refuse the set unless `status` is `frozen`, `ap
 
 ## How the gate runs a case
 
-`supportiq-release run-gate` reads the set as follows ([`release/README.md`, The offline evaluation gate](../../../../eval/release/README.md#the-offline-evaluation-gate)).
+`supportiq-release run-gate` reads the set as follows ([`eval/release/README.md`, The offline evaluation gate](../../../../eval/release/README.md#the-offline-evaluation-gate)).
 
 1. Check that [`approval.json`](#approval-record) freezes exactly this `cases.json`, then check `label` and each field of `written_for` as [What the set is written for](#what-the-set-is-written-for) states, and stop without a result when one differs.
 2. Start `ai-service` with exactly the candidate manifest, with an LLM adapter that records each call and never calls a provider. CI never calls a real LLM ([ADR-0021, CI](../../../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#ci), statement 2), and no case of this set reaches the LLM.

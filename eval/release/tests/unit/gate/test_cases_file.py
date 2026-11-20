@@ -31,7 +31,7 @@ from tests.unit.gate.fakes import (
 )
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[5]
-INTERIM_CASES = REPOSITORY_ROOT / "eval" / "suites" / "escalation" / "interim-v1" / "cases.json"
+INTERIM_CASES = REPOSITORY_ROOT / "data" / "benchmarks" / "escalation" / "interim-v1" / "cases.json"
 INTERIM_SHA256 = "9f548524194e7b42296fb491ffd818b7aa3cf3c94da331c2cdc17113b143ea75"
 CASE_ID = "fake-case-1"
 

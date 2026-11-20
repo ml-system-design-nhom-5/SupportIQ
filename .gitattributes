@@ -5,6 +5,3 @@
 data/** -text
 artifacts/** -text
 apps/core_backend/config/policies/intent_policy.v2.json -text
-eval/suites/**/*.csv -text
-eval/suites/**/*.json -text
-eval/suites/**/*.jsonl -text

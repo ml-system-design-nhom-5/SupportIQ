@@ -136,7 +136,7 @@ def add_gate_commands(add_parser: AddParser) -> None:
         "run-gate", help="Run the offline evaluation gate on a candidate and record the run."
     )
     gate.add_argument("--candidate", required=True, help="The folder of the candidate.")
-    gate.add_argument("--cases", required=True, help="eval/suites/escalation/<set>/cases.json")
+    gate.add_argument("--cases", required=True, help="data/benchmarks/escalation/<set>/cases.json")
     gate.add_argument(
         "--ai-service-guardrails",
         required=True,

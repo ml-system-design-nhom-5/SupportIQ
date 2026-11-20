@@ -51,12 +51,12 @@ repos:
         args: [--allow-multiple-documents]
         files: *outside-kept-parts
       # The hooks that fix files never touch the frozen data: every file of data/raw/ and every
-      # data file of eval/suites/ and data/benchmarks/escalation/ keeps its bytes, CRLF line ends
-      # included. The READMEs of the suites are still checked (ADR-0021, Large files and data,
-      # statement 3; ADR-0028, Checks, statement 2; .gitattributes).
+      # data file of data/benchmarks/escalation/ keeps its bytes, CRLF line ends included. The
+      # READMEs of the suites are still checked (ADR-0021, Large files and data, statement 3;
+      # ADR-0028, Checks, statement 2; .gitattributes).
       - id: end-of-file-fixer
         files: *outside-kept-parts
-        exclude: &frozen-data '^(data/raw/|(eval/suites|data/benchmarks/escalation)/(?!.*README\.md$))'
+        exclude: &frozen-data '^(data/raw/|data/benchmarks/escalation/(?!.*README\.md$))'
       - id: mixed-line-ending
         args: [--fix=lf]
         files: *outside-kept-parts
@@ -261,6 +261,18 @@ repos:
   # 2; RULE-03). The hooks of this section exist to check the kept parts, so they do not skip them.
   - repo: local
     hooks:
+      # The index must hold the paths, modes, and blobs of apps/backend/ and apps/demo/ that step
+      # 2 restored from f6c1473. The value was taken right after step 2 (d53a86f); recompute it
+      # with `git ls-files --stage -- apps/backend apps/demo | git hash-object --stdin`.
+      - id: kept-apps-frozen
+        name: "ADR-0028, temporary rule 1: apps/backend/ and apps/demo/ stay frozen"
+        language: system
+        entry: >-
+          sh -c 'test "$(git ls-files --stage -- apps/backend apps/demo | git hash-object --stdin)"
+          = d83fb430a6c003ba3d8de6030eb69df65160b610
+          || { echo "apps/backend/ or apps/demo/ differs from f6c1473, and both are frozen"; exit 1; }'
+        always_run: true
+        pass_filenames: false
       - id: kept-apps-imports
         name: "ADR-0028, temporary rule 1: no new import of apps.backend or apps.demo"
         language: pygrep

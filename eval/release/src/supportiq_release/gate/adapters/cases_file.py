@@ -1,6 +1,6 @@
 """Read a set of escalation cases strictly, with the SHA-256 of its file (DATA-12).
 
-The format is the one that `eval/suites/escalation/interim-v1/README.md` (Format) states. A
+The format is the one that `data/benchmarks/escalation/interim-v1/README.md` (Format) states. A
 field that is missing, unknown, or of another type refuses the whole set, so a case is never
 skipped or read in part. A problem type, a recommendation, a draft status, or a reason code
 outside contract 1.0.0 refuses the set too, so a typo never shows as a failed case. An injected
@@ -107,7 +107,7 @@ def read_cases_file(path: Path) -> CasesFile:
     """Read and check a set of escalation cases.
 
     Args:
-        path: The file, such as `eval/suites/escalation/interim-v1/cases.json`.
+        path: The file, such as `data/benchmarks/escalation/interim-v1/cases.json`.
 
     Returns:
         The set, with the checksum of its file.

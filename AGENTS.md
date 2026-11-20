@@ -33,7 +33,7 @@ Before your first edit in an area, read its rule files:
 | You work on | Read |
 |---|---|
 | Python in `backend/` or `ai-service/` | [code](docs/rules/code.md), [python](docs/rules/python.md), [testing](docs/rules/testing.md), [errors](docs/rules/errors-and-reliability.md), [architecture](docs/rules/architecture.md), [contracts](docs/rules/contracts.md) |
-| Python in `ml/` or `eval/`, data, prompts | [code](docs/rules/code.md), [python](docs/rules/python.md), [testing](docs/rules/testing.md), [data and ML](docs/rules/data-and-ml.md) |
+| Python in `pipeline/` or `eval/`, data, prompts | [code](docs/rules/code.md), [python](docs/rules/python.md), [testing](docs/rules/testing.md), [data and ML](docs/rules/data-and-ml.md) |
 | `frontend/` | [code](docs/rules/code.md), [typescript](docs/rules/typescript.md), [UI](docs/rules/ui.md), [testing](docs/rules/testing.md) |
 | `contracts/` | [contracts](docs/rules/contracts.md), [ADR-0001](docs/decisions/0001-system-architecture.md), [ADR-0004](docs/decisions/0004-api-conventions.md), [ADR-0010](docs/decisions/0010-pseudonymization-and-egress-control.md), [ADR-0012](docs/decisions/0012-roles-v1.md), [contracts v1 design](docs/design/contracts-v1.md) |
 | Settings, authentication, permissions, pseudonymization, the audit log, prompts, telemetry | [security and privacy](docs/rules/security-and-privacy.md), [logging and observability](docs/rules/logging-and-observability.md) |

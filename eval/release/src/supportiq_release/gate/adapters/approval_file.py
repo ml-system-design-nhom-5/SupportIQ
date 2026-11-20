@@ -1,7 +1,7 @@
 """Read the approval record next to a set of escalation cases, and check that it covers the set.
 
 The record is `approval.json` in the folder of `cases.json`, in
-`supportiq-case-set-approval/interim-1` (`eval/suites/escalation/interim-v1/README.md`, Approval
+`supportiq-case-set-approval/interim-1` (`data/benchmarks/escalation/interim-v1/README.md`, Approval
 record). It is read strictly, like the set: a field that is missing, unknown, or of another type
 refuses it. `run-gate` and `publish-candidate` both check it before they use the set.
 """

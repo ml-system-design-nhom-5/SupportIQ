@@ -40,13 +40,13 @@ uv run --project eval/release supportiq-release build-candidate \
 ```bash
 eval/release/gate/run-gate.sh \
   --candidate <candidate folder> \
-  --cases eval/suites/escalation/interim-v1/cases.json
+  --cases data/benchmarks/escalation/interim-v1/cases.json
 ```
 
 ```bash
 uv run --project eval/release supportiq-release publish-candidate \
   --candidate <candidate folder> \
-  --cases eval/suites/escalation/interim-v1/cases.json \
+  --cases data/benchmarks/escalation/interim-v1/cases.json \
   --release-records eval/releases \
   --output <new folder>
 ```
@@ -57,7 +57,7 @@ uv run --project eval/release supportiq-release publish-candidate \
 uv run --project eval/release pytest eval/release
 ```
 
-The tests need no network, no `.env`, and no torch: the gate runs on a fake application of a candidate, and the routes of the real application of `ai-service` are read from its `create_app` with fake ports, through the FastAPI that `ai-service` locks. They read `data/raw/kb/v2/`, `contracts/schemas/IntentLabel.yaml`, `eval/kb-ingestion/v2/`, `eval/suites/escalation/interim-v1/`, and `ai-service/prompts/grounded-v4/` without changing them.
+The tests need no network, no `.env`, and no torch: the gate runs on a fake application of a candidate, and the routes of the real application of `ai-service` are read from its `create_app` with fake ports, through the FastAPI that `ai-service` locks. They read `data/raw/kb/v2/`, `contracts/schemas/IntentLabel.yaml`, `eval/kb-ingestion/v2/`, `data/benchmarks/escalation/interim-v1/`, and `ai-service/prompts/grounded-v4/` without changing them.
 
 ## Set up
 
@@ -222,7 +222,7 @@ Each file is then copied byte for byte into a file that did not exist, and the m
 
 ## The offline evaluation gate
 
-`run-gate` runs the gate of the first release, the minimum of [DATA-57](../../docs/rules/data-and-ml.md#models-and-artifacts) that ADR-0021 (Release and the offline evaluation gate, statement 3) sets: every case of a frozen set of escalation cases, three checks on the application of the candidate, and both folders of guardrail tests of [TEST-26](../../docs/rules/testing.md#guardrail-tests). The cases are [`../suites/escalation/interim-v1/`](../suites/escalation/interim-v1/README.md), which replace the shared scenario set ([ADR-0021, Exception to TEST-26](../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#exception-to-test-26)).
+`run-gate` runs the gate of the first release, the minimum of [DATA-57](../../docs/rules/data-and-ml.md#models-and-artifacts) that ADR-0021 (Release and the offline evaluation gate, statement 3) sets: every case of a frozen set of escalation cases, three checks on the application of the candidate, and both folders of guardrail tests of [TEST-26](../../docs/rules/testing.md#guardrail-tests). The cases are [`../../data/benchmarks/escalation/interim-v1/`](../../data/benchmarks/escalation/interim-v1/README.md), which replace the shared scenario set ([ADR-0021, Exception to TEST-26](../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#exception-to-test-26)).
 
 ### Checks before the run
 
@@ -230,7 +230,7 @@ The command stops with exit status 2 and writes no record when any of these fail
 
 1. `verify_candidate` accepts the candidate, and its KB is one file with a list of document versions.
 2. The cases have the format of their README, and no case ID is given twice. Each request holds a message; each recommendation, draft status, and reason code is a value of contract 1.0.0; and each injected distribution lists intent labels once each, most likely first, with probabilities that add up to at most 1 and stay above the equal share of the rest. A refusal names the case when it can.
-3. `approval.json`, next to `cases.json`, has its format, is for the same set, is `frozen` with `approved_by` and `approved_on`, and covers the SHA-256 of `cases.json` as it is ([Approval record](../suites/escalation/interim-v1/README.md#approval-record)).
+3. `approval.json`, next to `cases.json`, has its format, is for the same set, is `frozen` with `approved_by` and `approved_on`, and covers the SHA-256 of `cases.json` as it is ([Approval record](../../data/benchmarks/escalation/interim-v1/README.md#approval-record)).
 4. `label` and each field of `written_for` match the candidate: contract 1.0.0, the model version, the routing version, the KB version, and the number of KB document versions. The message names each field that differs.
 5. Each JUnit XML file of the guardrail tests is the report of its folder: a regular file whose every `testsuite` has the name of the folder (`ai_service_guardrails` or `backend_guardrails`, which `run-gate.sh` sets with `-o junit_suite_name`), holds `tests`, `failures`, `errors`, and `skipped` as integers of at least 0, and holds one `testcase` for each test, each in `tests.integration.guardrails`. A document type, an entity, and an external reference are refused. A report that is missing or cannot be read therefore gives no record; `run-gate.sh` produces both reports or stops before `run-gate`.
 6. `--release-records` names an existing folder that holds no entry named by the release ID. `--git-commit` takes the 40 lowercase hexadecimal characters of a commit.
@@ -239,7 +239,7 @@ The command stops with exit status 2 and writes no record when any of these fail
 
 `run-gate` builds the application of the candidate in its own process with `build_candidate_application` of `ai-service`, and the ports of `gate/adapters/gate_ports.py`:
 
-- the intent model and the search of the candidate, except for a case that injects an intent distribution or a failure ([How the gate runs a case](../suites/escalation/interim-v1/README.md#how-the-gate-runs-a-case));
+- the intent model and the search of the candidate, except for a case that injects an intent distribution or a failure ([How the gate runs a case](../../data/benchmarks/escalation/interim-v1/README.md#how-the-gate-runs-a-case));
 - an LLM step that records each call and fails it with `llm_unavailable`, so the gate never calls a provider ([ADR-0021, CI](../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#ci), statement 2).
 
 The settings come from the environment of the process, as for `serve`. The command line sets the ones of the gate once, before it builds the application: a service token made for the run, and LLM settings that no call reads. The manifest is an argument, not a setting. Each case sends its request to `createAnalysis` and then to `createDraft` through an ASGI transport, inside the lifespan of the application, so no port is opened, and every field of `expected` is compared with both responses. The fields of an outcome are read only from a `200` body, and the problem type only from a Problem Details body, whose `status` is the HTTP status and never the status of a draft.
@@ -372,7 +372,7 @@ The build backend is `uv_build`, from the same release as uv (MIT or Apache-2.0)
 
 - Only some parts of the gate load the candidate. The 27 escalation cases and the checks on the candidate (the routes of contract 1.0.0, no case text in the logs, no LLM call) run on the application of the candidate, with its manifest loaded. The guardrail tests do not load it: those of `ai-service` check the service token and the packaged egress allow-list, those of `backend` serve `ai-service` from fakes, and no asset of the manifest changes what they check. They run at the commit that the record names, those of `ai-service` in the image of the gate. This reads ADR-0021 (Release and the offline evaluation gate, statement 3) as "where a test depends on what the manifest serves", and `candidate_scope` in the record states the same split.
 - No CI job checks a published manifest yet, although ADR-0021 (Release and the offline evaluation gate, statement 2) asks CI to reject a manifest without a passing gate run or with a wrong checksum. `publish-candidate` writes the manifest next to the record for that check.
-- The six cases that rest on the real model were written without a run of model `v1.0.0` ([Limits of the set](../suites/escalation/interim-v1/README.md#limits-of-the-set)). In the first gate run, all six matched.
+- The six cases that rest on the real model were written without a run of model `v1.0.0` ([Limits of the set](../../data/benchmarks/escalation/interim-v1/README.md#limits-of-the-set)). In the first gate run, all six matched.
 - The formats of the spec and of the three outputs of ingestion are interim, and the readers of `ai-service` define the KB and mapping formats. A data contract replaces them ([ADR-0021, Follow-ups](../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#follow-ups); [#21](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/21)).
 - Ingestion neither copies `last_reviewed_at` nor lists the versions without it, as the freshness rule of the [contracts v1 design, KB data contract](../../docs/design/contracts-v1.md#kb-data-contract-contractskb-contractmd) requires. KB v2 provides no `last_reviewed_at`, no policy area has a freshness rule yet, and ingestion admits no version of KB v2, so no output changes yet. The `tech-debt` issue for `source_review_overdue` adds both ([#22](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/22)).
 - `build-candidate` does not reserve the release ID. Until a gate run writes its record in `eval/releases/<release_id>/`, two candidates built with one ID and other sources can both exist; only one of them can then get a gate run.
@@ -381,4 +381,4 @@ The build backend is `uv_build`, from the same release as uv (MIT or Apache-2.0)
 - Release IDs are compared with their case, so on macOS two IDs that differ only in case name one folder of records.
 - The rule of conflicts is a copy of the rule of `ai-service`. Their tests hold the same cases, but a change on one side needs the same change on the other.
 - The intent labels are read from the layout of `contracts/schemas/IntentLabel.yaml` without a YAML library: one `enum:` line, then one line for each label, with two spaces before `- <label>`. A file with any other layout stops the run.
-- `ai-service.yml` runs the checks of this project until `eval.yml` exists ([ADR-0021, CI](../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#ci), statement 7; [#34](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/34)).
+- `ai-service.yml` runs the checks of this project until `eval.yml` exists ([ADR-0021, CI](../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#ci), statement 7).

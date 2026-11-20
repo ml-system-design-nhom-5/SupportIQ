@@ -3,7 +3,7 @@
 - **Status:** Draft
 - **Owner:** ML engineer
 - **Reviewers:** team; Group 2 contact for the shared procedure (CST-02)
-- **Last reviewed:** 2026-11-17
+- **Last reviewed:** 2026-11-20
 - **Related:** NFR-01, NFR-02, FR-05, ESC-01, ESC-02; [DATA-20 to DATA-32](../rules/data-and-ml.md#splits-and-evaluation-protocol), [DATA-34](../rules/data-and-ml.md#models-and-artifacts), [DATA-57 to DATA-59](../rules/data-and-ml.md#models-and-artifacts); [ADR-0026](../decisions/0026-frozen-intent-scenario-set.md); [intent model retraining](intent-model-retraining.md); [autoeval](../../eval/README.md#autoeval)
 
 ## Summary
@@ -130,4 +130,4 @@ All data is synthetic. Evaluation calls no external service except the optional 
 
 On 2026-11-14 the team decided on `main`, as the fallback that the [v1.2 design](intent-model-v1.2.md#gate-and-the-team-decision-on-unsafe-drafts) planned, that the offline gate accepts at most one must-not-draft case forwarded to drafting (`ml_unsafe_drafts <= 1`). It applied the change after candidate `v1.2.0` with policy `v4` failed the gate on `intent/v2` because of one such case.
 
-The join with `main` ([ADR-0021](../decisions/0021-repository-layout-and-ai-ml-migration.md)) does not take this change. The threshold stays 0: `ml_unsafe_drafts == 0` in `eval/configs/autoeval.json`. A safety target is never lowered so that a candidate passes ([NFR-05](../product/requirements.md#5-quality-requirements); [precedence of the rules](../rules/README.md#precedence)). Staff approval of every draft (FR-04) is the last safeguard, not a reason to relax the gate before it. A change of the safety target needs an ADR decided before any result on the scenario set is seen. The project lead decided this on 2026-11-17.
+The join with `main` ([ADR-0021](../decisions/0021-repository-layout-and-ai-ml-migration.md)) does not take this change. The threshold stays 0, `ml_unsafe_drafts == 0`, in every gate that this repository uses to accept a model. A safety target is never lowered so that a candidate passes ([NFR-05](../product/requirements.md#5-quality-requirements); [precedence of the rules](../rules/README.md#precedence)). Staff approval of every draft (FR-04) is the last safeguard, not a reason to relax the gate before it. A change of the safety target needs an ADR decided before any result on the scenario set is seen. The project lead decided this on 2026-11-17. `pipeline/configs/autoeval.json` of `main` keeps `ml_unsafe_drafts <= 1` byte for byte ([ADR-0028, Kept parts of `main`](../decisions/0028-repository-layout-for-the-pull-request-into-main.md#kept-parts-of-main)). `.github/workflows/autoeval.yml` enforces no gate of the autoeval while `ENFORCE` keeps its default `false`, so that threshold decides nothing ([ADR-0028, Checks and CI](../decisions/0028-repository-layout-for-the-pull-request-into-main.md#checks-and-ci)). The threshold of `main` returns to 0 when issue #34 rewrites the autoeval, with the agreement of its author.

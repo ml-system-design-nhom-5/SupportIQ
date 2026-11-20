@@ -28,7 +28,7 @@ flowchart LR
     BE -->|"SQL"| DB[("PostgreSQL")]
     AI -->|"loads at startup"| ART[("Release manifest:<br/>model, KB, prompts, routing")]
     AI -->|"allow-listed host only"| LLM["LLM provider"]
-    ML["ml/ training"] -.->|"versioned artifact"| ART
+    ML["pipeline/ training"] -.->|"versioned artifact"| ART
 ```
 
 | Component | Responsibility |
@@ -68,7 +68,7 @@ sequenceDiagram
 
 ## Project status
 
-The AI and ML code of `main` is joined into the layout of [ADR-0021](docs/decisions/0021-repository-layout-and-ai-ml-migration.md). Decisions are recorded in [docs/decisions/](docs/decisions/README.md), and contract changes in the [contracts changelog](contracts/CHANGELOG.md).
+The parts of `main` are kept at their paths, byte for byte, next to the components ([ADR-0028](docs/decisions/0028-repository-layout-for-the-pull-request-into-main.md)). Decisions are recorded in [docs/decisions/](docs/decisions/README.md), and contract changes in the [contracts changelog](contracts/CHANGELOG.md).
 
 - `frontend`, `backend`, `ai-service`, `ml/`, `eval/`, `contracts/`, and `deploy/` exist, each with its README ([Repository layout](#repository-layout)).
 - The first release of `ai-service`, `release-2026-11-18-02`, passed the offline evaluation gate. Its gate run record and its manifest are in [eval/releases/release-2026-11-18-02/](eval/releases/release-2026-11-18-02/). It serves no KB document, so no request gets a draft yet ([ai-service README, Known limits](ai-service/README.md#known-limits)).
@@ -87,10 +87,17 @@ The AI and ML code of `main` is joined into the layout of [ADR-0021](docs/decisi
 | [`frontend/`](frontend/README.md) | The web app: sign-in, the demo shop at `/shop`, the console at `/console`, and the admin area at `/admin`, with the Pages Function that is the ingress of the demo deployment |
 | [`backend/`](backend/README.md) | Sign-in, the read-only shop, the ticket workflow behind `/console`, internal accounts, the simulated commerce data, the pseudonym maps, and the audit log |
 | [`ai-service/`](ai-service/README.md) | The AI pipeline for `backend`: intent classification, retrieval of KB document versions, the routing recommendation, and LLM drafting with citations |
-| [`ml/`](ml/README.md) | The data preparation, the training, the baseline, and the cross-validation of the intent model, with the run records in `ml/runs/` |
-| [`eval/`](eval/README.md) | The evaluation code, the test and scenario sets with their frozen inputs, the release command, and the gate run records and published manifests of the releases in `eval/releases/` |
+| [`ml/`](ml/README.md) | The run records of the intent model that `ai-service` serves, in `ml/runs/` |
+| [`eval/`](eval/README.md) | The release command, the gate run records and published manifests of the releases in `eval/releases/`, and the output of KB ingestion |
 | [`deploy/`](deploy/README.md) | The setup of the demo on free plans: the setup order, the settings of each platform, and the checks before and after the first deploy; and, in `deploy/local/`, the local run of the whole system ([local run guide](docs/guides/local-run.md)) |
-| `data/` | Raw data, committed unchanged: the KB versions in `data/raw/kb/<kb_version>/` and the KB drafts of `main` in `data/raw/knowledge/`. Downloaded datasets, such as Bitext, are not committed ([DATA-06 to DATA-08](docs/rules/data-and-ml.md#data-layout)) |
+| `data/` | Data committed unchanged: the KB versions in `data/raw/kb/<kb_version>/`, the interim escalation cases in `data/benchmarks/escalation/`, and the data of `main`: its other test and scenario sets in `data/benchmarks/`, and `data/business/`, `data/datasets/`, `data/intent/`, and `data/knowledge/`. Downloaded datasets, such as Bitext, are not committed ([DATA-06 to DATA-08](docs/rules/data-and-ml.md#data-layout)) |
+| [`pipeline/`](pipeline/README.md) | The offline tools of `main`: the data preparation, the training, and the evaluation of the intent model and of the whole system, with the autoeval. Not on the serving path |
+| `artifacts/` | The outputs of the runs of `main`: data preparation, training, evaluation, audits, browser tests, and the search index |
+| [`tests/`](tests/README.md), `pytest.ini` | The tests of `pipeline/`, `scripts/`, and `apps/`, with their pytest configuration. Each component keeps its own tests |
+| `scripts/` | 20 scripts of `main` for training, evaluation, and acceptance runs |
+| `apps/` | The code of `main` that `pipeline/`, `tests/`, and `scripts/` import. Nothing deploys it, and `apps/backend/` and `apps/demo/` are frozen |
+
+The rows from `pipeline/` to `apps/` are parts of `main`, kept at their paths byte for byte. They follow no engineering rule yet ([ADR-0028, Technical debt](docs/decisions/0028-repository-layout-for-the-pull-request-into-main.md#technical-debt)).
 
 ## Run and test on your machine
 
@@ -107,7 +114,7 @@ Each part also runs on its own. Set it up and run it as its README states; the c
 - **`backend`** ([Set up](backend/README.md#set-up), [Run and test](backend/README.md#run-and-test)): one replica and every test run against PostgreSQL 17, with the settings of `backend/.env`, made from `.env.example`. The README sets up PostgreSQL 17 with Homebrew. The unit tests need no database: `uv run pytest tests/unit`.
 - **`ai-service`** ([Set up](ai-service/README.md#set-up), [Run and test](ai-service/README.md#run-and-test)): `uv run pytest` runs the tests on Linux, macOS, and Windows; without torch, the tests that need it are skipped. `ai-service serve` loads the real model, so it runs only on Linux, because torch is locked for Linux only ([ADR-0021, Python and dependencies](docs/decisions/0021-repository-layout-and-ai-ml-migration.md#python-and-dependencies)). It also needs the files of a published release on the machine; without them it does not start.
 - **The release command in `eval/release/`** ([Set up](eval/release/README.md#set-up), [Run and test](eval/release/README.md#run-and-test)): `uv run --project eval/release pytest eval/release` runs its tests from the repository root. The offline evaluation gate runs in Docker.
-- **`ml/` and the rest of `eval/`** ([ml/ State after the join](ml/README.md#state-after-the-join), [eval/ State after the join](eval/README.md#state-after-the-join)): the code moved from `main` does not run yet, because it has no project files. [#33](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/33) and [#34](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/34) add them.
+- **`pipeline/`, `tests/`, and `scripts/` of `main`** ([ADR-0028, Technical debt](docs/decisions/0028-repository-layout-for-the-pull-request-into-main.md#technical-debt)): they keep the requirements files of `main`, without a lockfile, and no workflow runs them except `.github/workflows/autoeval.yml`. Their live modes are not used, because they send messages to Gemini without `backend` and `ai-service` ([ADR-0028, Temporary rules](docs/decisions/0028-repository-layout-for-the-pull-request-into-main.md#temporary-rules), statement 3).
 
 ## Documentation
 
