@@ -12,6 +12,14 @@ A measurement of `backend` on 2026-11-18 found raw names, phone numbers, and add
 
 **Revision of 2026-11-20.** The first version said that 11 of the 50 messages of round 1 never reached the fake `ai-service`. All 50 reached it: 39 is the number of distinct request texts, because messages of one template that were pseudonymized alike give the same text ([What the measurement found](#what-the-measurement-found)). The revision corrects that fact, adds the 3 request texts that show over-detection, states how the re-measurement counts the messages that reached the fake `ai-service` ([Evaluation](#evaluation), statements 2 and 3), and removes the answered open question. No decision of this design changes.
 
+**Second revision of 2026-11-20.** The project lead changed one point of [Layer 1, names](#layer-1-names), and settled two that the approved text left open:
+
+- changed: span growth also skips the stoplist words of the pre-send check, where the approved text skipped titles only (item 1);
+- settled: the Vietnamese name rule takes the longest window of 2 to 4 words in a run of capitalized words (item 2);
+- settled: family names are compared with their diacritics, and only the unambiguous ones also have a fixed unaccented spelling (item 2).
+
+The revision also states the known limits of the rules ([Layer 1, phone](#layer-1-phone); [Layer 1, names](#layer-1-names), item 6). The approved text of item 1, and the readings that the two settled points rule out, are kept under [Alternatives considered](#alternatives-considered). No other decision changes.
+
 ## Goals and non-goals
 
 ### Goals
@@ -87,13 +95,24 @@ The `PHONE` pattern keeps its 9 to 15 digits and adds two forms:
 1. A first group in parentheses, of 2 to 5 digits, after an optional `+` and country group: "(00)504-5188", "+1 (393) 722-1568". A parenthesized group of 1 digit, such as a list number "(1)", starts no value.
 2. An extension right after the last group: `x`, `ext`, or `ext.`, then 1 to 6 digits, with no letter or digit after them. The extension is part of the value, and its digits do not count toward the 9 to 15. "0901110001pm" still ends no value.
 
+A known limit: an extension written after a space, such as "0901 110 001 ext. 12", is not part of the value, because it does not come right after the last group. Its digits stay as written.
+
 ### Layer 1: names
 
-1. **Span growth.** A `PERSON` span grows over each capitalized word right next to it, up to 4 words in total, so "Vũ" and "Dũng" join the pseudonym. A word on the list of titles (`Mr`, `Mrs`, `Ms`, `Miss`, `Dr`, `Ông`, `Bà`, `Chị`, `Cô`, `Chú`) is not added.
-2. **Vietnamese name rule.** 2 to 4 capitalized words, of which the first or the last is on a fixed list of Vietnamese family names, are a `NAME`. This finds "Hương Nguyễn", "Phương Hữu Bùi", and "Anh Anh Lê".
+1. **Span growth.** A `PERSON` span grows over each capitalized word right next to it, one space apart, up to 4 words in total, so "Vũ" and "Dũng" join the pseudonym.
+   - A word on the list of titles (`Mr`, `Mrs`, `Ms`, `Miss`, `Dr`, `Ông`, `Bà`, `Chị`, `Cô`, `Chú`) is not added.
+   - Nor is a word of the stoplist of the [pre-send check](#layer-2-the-pre-send-check): `I`, `Thanks`, `Thank`, `Regards`, `Best`, `Dear`, `Hi`, `Hello`, and `Please`. So "Thanks Lan" becomes "Thanks [NAME_1]".
+   - Span growth and the pre-send check use one list.
+2. **Vietnamese name rule.** In each run of capitalized words, the longest window of 2 to 4 words whose first or last word is on a fixed list of Vietnamese family names, and whose first word is not a title, is a `NAME`.
+   - It finds "Hương Nguyễn", "Phương Hữu Bùi", and "Anh Anh Lê". "Hi Nguyễn Văn An" becomes "Hi [NAME_1]", and "Bà Hương Nguyễn" becomes "Bà [NAME_1]".
+   - **Comparing family names.** Family names are compared with their diacritics, after Unicode NFC normalization. A second fixed list holds the unaccented spelling of the family names that no common English word shares: Nguyen, Tran, Pham, Hoang, Huynh, Phan, Vu, Dang, Bui, Duong, Ngo. Every other family name, such as "Đỗ", "Hồ", and "Lê", is compared with its diacritics only, so "Do You Ship" is no name.
+   - **Source of the list.** The list of family names comes from a public list of common Vietnamese family names, named in the code, and never from the generator of the measured messages. Otherwise the re-measurement would test the list against itself.
 3. **Person-cue rule.** 2 to 4 capitalized words that the model labels `ORG`, `GPE`, or `LOC` are a `NAME` when a cue from a fixed list comes right before them: "my name is", "I am", "this is", "on behalf of", "Regards,", "Thanks,", and "my" with a word for a relative or a neighbour. This finds "Kathryn Reynolds".
 4. Product names of the catalog are still excluded ([`drop_product_names`](../../backend/app/pseudonymization/domain/detection.py)), for the rule detectors too.
 5. The lists are constants of the module, versioned with it. A change of a list is a change of the detector version ([ADR-0010, Placeholder syntax](../decisions/0010-pseudonymization-and-egress-control.md#placeholder-syntax), item 5).
+6. **Known limits.** Tests state both limits as they are.
+   - "Hà Nội" and "Hồ Chí Minh" alone are taken for names, because "Hà" and "Hồ" are family names. This is over-detection ([Non-goals](#non-goals)).
+   - A family name without an unaccented spelling, typed without diacritics, is not found by the Vietnamese name rule. Examples are "Le Van An" and "Do Minh". Only the model can find such a name. The pre-send check finds it only when a part of it stands beside a placeholder.
 
 ### Layer 1: addresses
 
@@ -194,6 +213,10 @@ The guardrails do not change: staff approve every reply, nothing is sent to a cu
 - **Layer 1 only.** No detector is complete ([ADR-0010, Detection](../decisions/0010-pseudonymization-and-egress-control.md#detection)), and the partial spans of round 1 show that a found value can still leave a piece behind. The pre-send check catches those pieces.
 - **A larger or multilingual model** instead of the name and address rules. It changes [ADR-0017](../decisions/0017-named-entity-model-from-its-release-url.md), needs a new trial, and must fit the memory of the free instance beside `backend` (NFR-08). It stays an option if the rules fail the re-measurement.
 - **Block every text with a name-like or digit-like residue anywhere.** It would stop most messages, because order totals, dates, and product names look the same.
+- **Span growth over every capitalized word except titles** (the approved text of [Layer 1, names](#layer-1-names), item 1, before the second revision). It joins a greeting or a polite word to the name, as in "Thanks Lan". The stoplist of the pre-send check already lists those words.
+- **The Vietnamese name rule on a whole run of capitalized words.** It misses a name after another capitalized word, as in "Hi Nguyễn Văn An", because neither end of the run is a family name.
+- **Family names compared without diacritics, all of them**, as known values are. It finds every name typed without diacritics, but "Do", "Ho", and "Le" are also English words, so "Do You Ship" would become a name.
+- **Family names compared with their diacritics only.** It misses every name typed without diacritics, even "Nguyen".
 
 ## Testing and evaluation
 
