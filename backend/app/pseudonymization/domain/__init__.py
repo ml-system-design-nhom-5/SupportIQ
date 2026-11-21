@@ -1,5 +1,11 @@
 """Domain of pseudonymization: placeholders, detectors, and the pseudonym map (ADR-0010)."""
 
+from app.pseudonymization.domain.address_rules import (
+    ABBREVIATED_ADDRESS_WORDS,
+    ADDRESS_PART_COUNT,
+    ADDRESS_WORDS,
+    AddressRuleDetector,
+)
 from app.pseudonymization.domain.detection import (
     Detection,
     DetectionSource,
@@ -54,6 +60,9 @@ from app.pseudonymization.domain.pseudonym_map import (
 )
 
 __all__ = [
+    "ABBREVIATED_ADDRESS_WORDS",
+    "ADDRESS_PART_COUNT",
+    "ADDRESS_WORDS",
     "AMBIGUOUS_UNACCENTED_FAMILY_NAMES",
     "NAME_NEIGHBOUR_STOPLIST",
     "NAME_STOP_WORDS",
@@ -64,6 +73,7 @@ __all__ = [
     "VIETNAMESE_FAMILY_NAMES",
     "VIETNAMESE_FAMILY_NAMES_UNACCENTED",
     "VIETNAMESE_MIDDLE_NAMES",
+    "AddressRuleDetector",
     "Detection",
     "DetectionSource",
     "Detector",
