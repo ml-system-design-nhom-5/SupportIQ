@@ -1,8 +1,10 @@
 """The address rule of step 4 (ADR-0029, statement 3; leak fixes design, Layer 1, addresses).
 
 An address is a house number, then up to 5 parts of capitalized words, address words, or a
-postal code, with at least one address word. The lists are constants of this module, so a change
-of a list is a change of the detector version (ADR-0010, Placeholder syntax, item 5).
+postal code, with at least one address word. The address words include their spellings without
+diacritics, except "To" and "Day", and the abbreviations "Q.", "P.", and "TP." (design,
+revision 4). The lists are constants of this module, so a change of a list is a change of the
+detector version (ADR-0010, Placeholder syntax, item 5).
 """
 
 import re
@@ -18,7 +20,7 @@ from app.pseudonymization.domain.words import (
 
 # The street and administrative words of the design, compared after NFC normalization and case
 # folding (design, Layer 1, addresses, item 3).
-ADDRESS_WORDS = (
+VIETNAMESE_ADDRESS_WORDS = (
     "Đường",
     "Phố",
     "Ngõ",
@@ -39,6 +41,29 @@ ADDRESS_WORDS = (
     "Thị xã",
     "Thành phố",
     "Tỉnh",
+)
+# The same words without diacritics, with "đ" written as "d", except "To" and "Day", which are
+# also common English words; "Khu" has no diacritics (design, Layer 1, addresses, item 3).
+VIETNAMESE_ADDRESS_WORDS_UNACCENTED = (
+    "Duong",
+    "Pho",
+    "Ngo",
+    "Ngach",
+    "Hem",
+    "Kiet",
+    "Thon",
+    "Ap",
+    "Xom",
+    "Phuong",
+    "Xa",
+    "Thi tran",
+    "Quan",
+    "Huyen",
+    "Thi xa",
+    "Thanh pho",
+    "Tinh",
+)
+ENGLISH_ADDRESS_WORDS = (
     "Street",
     "St",
     "Avenue",
@@ -54,8 +79,16 @@ ADDRESS_WORDS = (
     "Suite",
     "Unit",
 )
+ADDRESS_WORDS = (
+    *VIETNAMESE_ADDRESS_WORDS,
+    *VIETNAMESE_ADDRESS_WORDS_UNACCENTED,
+    *ENGLISH_ADDRESS_WORDS,
+)
 # The abbreviations that a period may follow inside an address, as in "12 Main St., Springfield".
 ABBREVIATED_ADDRESS_WORDS = frozenset({"St", "Ave", "Rd", "Ln", "Blvd", "Apt"})
+# Quận, Phường, and Thành phố: address words only with their period and with a number or a
+# capitalized word after it, as in "Q.1", "P. 5", or "TP.HCM" (design, Layer 1, addresses).
+VIETNAMESE_ABBREVIATIONS = ("Q", "P", "TP")
 ADDRESS_PART_COUNT = 5
 
 # The form of a house number: 1 to 5 digits, then a letter, or "/" and digits. A number of this
@@ -64,6 +97,11 @@ _NUMBER = r"[0-9]{1,5}(?:[^\W\d_]|/[0-9]+)?"
 # A house number, then the spaces before the first part.
 _HOUSE_NUMBER = re.compile(rf"{NOTHING_JOINED_BEFORE}{_NUMBER} +")
 _NUMBER_AFTER_WORD = re.compile(rf" +{_NUMBER}{NOTHING_JOINED_AFTER}")
+_NUMBER_ALONE = re.compile(rf"{_NUMBER}{NOTHING_JOINED_AFTER}")
+# An abbreviation, its period, and the spaces after it, if any, compared without case.
+_ABBREVIATION = re.compile(
+    rf"(?:{'|'.join(map(re.escape, VIETNAMESE_ABBREVIATIONS))})\. *", re.IGNORECASE
+)
 _POSTAL_CODE = re.compile(rf"[0-9]{{5,6}}{NOTHING_JOINED_AFTER}")
 # A word, or words joined by a hyphen or an apostrophe, as in "Rịa-Vũng" or "O'Connell".
 _PLACE_WORD = re.compile(rf"{WORD_PATTERN}(?:[-']{WORD_PATTERN})*{NOTHING_JOINED_AFTER}")
@@ -126,12 +164,27 @@ def _address_end(message: str, position: int) -> int | None:
 
 
 def _element_at(message: str, position: int) -> tuple[int, bool] | None:
-    # The end of the postal code, address word, or capitalized word at `position`, and whether
-    # it is an address word.
+    # The end of the abbreviation, postal code, address word, or capitalized word at `position`,
+    # and whether it is an address word.
+    if (abbreviation_end := _abbreviation_end(message, position)) is not None:
+        return abbreviation_end, True
     if (postal_code := _POSTAL_CODE.match(message, position)) is not None:
         return postal_code.end(), False
     word = _PLACE_WORD.match(message, position)
     return _word_element(message, word) if word is not None else None
+
+
+def _abbreviation_end(message: str, position: int) -> int | None:
+    # The end of "Q.", "P.", or "TP." with the number or the capitalized word after its period,
+    # with or without spaces between. The address rule reads "Q.1" and "TP.HCM" on its own,
+    # because the word reading takes them for codes.
+    abbreviation = _ABBREVIATION.match(message, position)
+    if abbreviation is None:
+        return None
+    if (number := _NUMBER_ALONE.match(message, abbreviation.end())) is not None:
+        return number.end()
+    word = _PLACE_WORD.match(message, abbreviation.end())
+    return word.end() if word is not None and _is_capitalized(word.group()) else None
 
 
 def _word_element(message: str, word: re.Match[str]) -> tuple[int, bool] | None:
@@ -142,8 +195,12 @@ def _word_element(message: str, word: re.Match[str]) -> tuple[int, bool] | None:
     if key in _ADDRESS_WORD_KEYS:
         is_abbreviation = key in _ABBREVIATION_KEYS
         return _after_address_word(message, word.end(), is_abbreviation=is_abbreviation), True
-    is_capitalized = all(piece[0].isupper() for piece in _JOINED_WORD.split(word.group()))
-    return (word.end(), False) if is_capitalized else None
+    return (word.end(), False) if _is_capitalized(word.group()) else None
+
+
+def _is_capitalized(word: str) -> bool:
+    # Each piece of a word joined by a hyphen or an apostrophe starts with a capital.
+    return all(piece[0].isupper() for piece in _JOINED_WORD.split(word))
 
 
 def _is_address_phrase(first: str, second: str) -> bool:

@@ -17,10 +17,14 @@ from app.pseudonymization.domain import (
     ABBREVIATED_ADDRESS_WORDS,
     ADDRESS_PART_COUNT,
     ADDRESS_WORDS,
+    VIETNAMESE_ABBREVIATIONS,
+    VIETNAMESE_ADDRESS_WORDS,
+    VIETNAMESE_ADDRESS_WORDS_UNACCENTED,
     AddressRuleDetector,
     Detection,
     DetectionSource,
     PseudonymType,
+    VietnameseNameDetector,
     resolve_overlaps,
 )
 
@@ -149,9 +153,142 @@ def test_an_address_comes_from_the_rule_source() -> None:
     assert detection.source is DetectionSource.RULE
 
 
-def test_address_words_without_diacritics_are_no_address_words() -> None:
-    # A known limit of the design (Layer 1, addresses): address words keep their diacritics.
-    assert addresses("at 12 Nguyen Hue, Phuong Ben Nghe") == []
+@pytest.mark.parametrize(
+    "address",
+    [
+        "12 Lê Lợi, Q.1, TP.HCM",
+        "12 Lê Lợi, Q. 1, TP. HCM",
+        "12 Nguyen Hue, Phuong Ben Nghe, Quan 1",
+        "12 Hem 5, Phuong 3",
+        "12 Pho Hue, Hai Ba Trung",
+    ],
+    ids=["abbreviations", "abbreviations-with-spaces", "without-diacritics", "hem", "pho"],
+)
+def test_an_address_in_everyday_typing_is_one_address(address: str) -> None:
+    # The examples of the fourth revision of the design (Layer 1, addresses).
+    assert addresses(f"Ship to {address} please") == [address]
+
+
+UNACCENTED_FORMS = [
+    form
+    for spelling in VIETNAMESE_ADDRESS_WORDS_UNACCENTED
+    for form in (spelling, spelling.upper(), spelling.lower())
+]
+
+
+@pytest.mark.parametrize("word", UNACCENTED_FORMS)
+def test_an_address_word_without_diacritics_is_an_address_word(word: str) -> None:
+    assert addresses(f"at 12 Le Loi, {word} 5") == [f"12 Le Loi, {word} 5"]
+
+
+# The design takes 17 spellings without diacritics and leaves out 2 (Layer 1, addresses).
+UNACCENTED_SPELLING_COUNT = 17
+
+
+def without_diacritics(word: str) -> str:
+    letters = word.replace("Đ", "D").replace("đ", "d")
+    return "".join(character for character in nfd(letters) if not unicodedata.combining(character))
+
+
+def test_the_spellings_without_diacritics_are_the_vietnamese_words_except_to_and_day() -> None:
+    spellings = {without_diacritics(word) for word in VIETNAMESE_ADDRESS_WORDS}
+    expected = spellings - set(VIETNAMESE_ADDRESS_WORDS) - {"To", "Day"}
+
+    assert set(VIETNAMESE_ADDRESS_WORDS_UNACCENTED) == expected
+    assert len(VIETNAMESE_ADDRESS_WORDS_UNACCENTED) == UNACCENTED_SPELLING_COUNT
+
+
+@pytest.mark.parametrize(
+    "message", ["Delivery takes 1 to 2 weeks", "I paid for 2 day shipping"], ids=["to", "day"]
+)
+def test_to_and_day_stay_no_address_words(message: str) -> None:
+    # "To" and "Day" are also common English words (design, Layer 1, addresses, item 3).
+    assert addresses(message) == []
+
+
+@pytest.mark.parametrize(
+    "form", ["Q.10", "P. 5", "P.Bến Nghé", "TP.Hồ Chí Minh", "TP. Hồ Chí Minh", "Tp.HCM", "q.3"]
+)
+def test_an_abbreviation_with_its_period_is_an_address_word(form: str) -> None:
+    assert addresses(f"at 12 Lê Lợi, {form} today") == [f"12 Lê Lợi, {form}"]
+
+
+def kept_rule_detections(message: str) -> list[tuple[PseudonymType, str]]:
+    """The detections of the Vietnamese name rule and the address rule after the overlap rule."""
+    found = [
+        *VietnameseNameDetector().detect(message, ()),
+        *AddressRuleDetector().detect(message, ()),
+    ]
+    return [(d.pseudonym_type, message[d.start : d.end]) for d in resolve_overlaps(found)]
+
+
+@pytest.mark.parametrize(
+    ("message", "kept"),
+    [
+        ("Duong Van An", [(PseudonymType.NAME, "Duong Van An")]),
+        ("Ngo Van An", [(PseudonymType.NAME, "Ngo Van An")]),
+        ("12 Duong Lang, Quan Dong Da", [(PseudonymType.ADDRESS, "12 Duong Lang, Quan Dong Da")]),
+    ],
+    ids=["duong-alone", "ngo-alone", "duong-in-an-address"],
+)
+def test_duong_and_ngo_are_a_name_alone_and_an_address_word_in_an_address(
+    message: str, kept: list[tuple[PseudonymType, str]]
+) -> None:
+    assert kept_rule_detections(message) == kept
+
+
+def test_a_house_number_before_a_family_name_that_is_an_address_word_gives_an_address() -> None:
+    # A known limit of the design (Layer 1, addresses): the name is still replaced, with the
+    # wrong type.
+    assert kept_rule_detections("12 Ngo Van An") == [(PseudonymType.ADDRESS, "12 Ngo Van An")]
+
+
+def test_a_number_after_to_or_day_ends_the_address() -> None:
+    # A known limit of the design (Layer 1, addresses): only an address word keeps the number
+    # after it.
+    assert addresses("at 12 To 5, Phuong 3") == []
+
+
+@pytest.mark.parametrize(
+    ("message", "found"),
+    [
+        ("I ordered 2 Pho Bowls", ["2 Pho Bowls"]),
+        ("Please send 2 Hem Tapes", ["2 Hem Tapes"]),
+        ("mua 2 quan jean", ["2 quan"]),
+    ],
+    ids=["pho", "hem", "quan"],
+)
+def test_a_word_spelled_as_an_address_word_starts_an_address_after_a_number(
+    message: str, found: list[str]
+) -> None:
+    # Over-detection, which the design accepts (Layer 1, addresses, known limits).
+    assert addresses(message) == found
+
+
+@pytest.mark.parametrize(
+    ("message", "found"),
+    [
+        ("12 P. Nguyen", ["12 P. Nguyen"]),
+        ("Ship to 12 Main Street, P. Nguyen", ["12 Main Street, P. Nguyen"]),
+    ],
+    ids=["after-a-house-number", "inside-an-address"],
+)
+def test_an_initial_with_a_capitalized_word_after_it_reads_as_an_abbreviation(
+    message: str, found: list[str]
+) -> None:
+    # A known limit of the design (Layer 1, addresses): the name is still replaced, as part of
+    # the address.
+    assert addresses(message) == found
+
+
+@pytest.mark.parametrize(
+    "message",
+    ["at 12 Lê Lợi, Q1, TPHCM", "at 12 Lê Lợi, tp.hcm", "at 12 Lê Lợi, TX.Thuận An"],
+    ids=["without-the-period", "lowercase-after-the-period", "other-abbreviation"],
+)
+def test_other_forms_of_the_abbreviations_are_read_as_before(message: str) -> None:
+    # A known limit of the design (Layer 1, addresses).
+    assert addresses(message) == []
 
 
 def test_a_line_break_joins_a_greeting_to_an_address() -> None:
@@ -164,10 +301,24 @@ def test_a_period_after_an_abbreviation_joins_the_next_sentence() -> None:
     assert addresses("Ship to 12 Main St. Thanks a lot") == ["12 Main St. Thanks"]
 
 
+def test_p_s_on_the_line_after_an_address_joins_it() -> None:
+    # Over-detection, which the design accepts (Layer 1, addresses, known limits).
+    assert addresses("Ship to 12 Main Street\nP.S. Thanks") == ["12 Main Street\nP.S"]
+
+
+def test_a_time_in_capitals_with_periods_after_a_number_gives_an_address() -> None:
+    # Over-detection, which the design accepts (Layer 1, addresses, known limits).
+    assert addresses("Please deliver before 5 P.M. tomorrow") == ["5 P.M"]
+
+
 @pytest.mark.parametrize(
     ("message", "found"),
-    [("at 12 main street, springfield", []), ("at 12 đường lê lợi", ["12 đường"])],
-    ids=["english", "vietnamese"],
+    [
+        ("at 12 main street, springfield", []),
+        ("at 12 đường lê lợi", ["12 đường"]),
+        ("at 12 duong le loi", ["12 duong"]),
+    ],
+    ids=["english", "vietnamese", "vietnamese-without-diacritics"],
 )
 def test_a_street_name_in_lowercase_is_no_part_of_an_address(
     message: str, found: list[str]
@@ -176,18 +327,14 @@ def test_a_street_name_in_lowercase_is_no_part_of_an_address(
     assert addresses(message) == found
 
 
-def test_vietnamese_abbreviations_of_address_words_are_no_address_words() -> None:
-    # A known limit of the design (Layer 1, addresses): "Q.1" reads as a code, and neither "Q"
-    # nor "TP" is an address word.
-    assert addresses("at 12 Lê Lợi, Q.1, TP.HCM") == []
-
-
 def test_the_abbreviations_are_address_words() -> None:
     assert ABBREVIATED_ADDRESS_WORDS.issubset(ADDRESS_WORDS)
     assert len(set(ADDRESS_WORDS)) == len(ADDRESS_WORDS)
 
 
-@pytest.mark.parametrize("word", sorted({*ADDRESS_WORDS, *ABBREVIATED_ADDRESS_WORDS}))
+@pytest.mark.parametrize(
+    "word", sorted({*ADDRESS_WORDS, *ABBREVIATED_ADDRESS_WORDS, *VIETNAMESE_ABBREVIATIONS})
+)
 def test_every_address_word_is_in_nfc(word: str) -> None:
     assert unicodedata.is_normalized("NFC", word)
 
@@ -203,6 +350,12 @@ ADDRESS_WORD_FORMS = st.sampled_from(
         "Unit 7B",
         "phường 5",
         "Hẻm 34/5",
+        "Q.1",
+        "Q. 1",
+        "P. 5",
+        "P.Bến Nghé",
+        "TP.HCM",
+        "q.3",
     ]
 )
 POSTAL_CODES = st.from_regex(r"[0-9]{5,6}", fullmatch=True)
@@ -250,6 +403,7 @@ TOKENS = st.one_of(
 TOKEN_SEPARATORS = st.sampled_from([" ", " ", " ", ", ", ",", "\n", ". ", "  "])
 HOUSE_NUMBER_START = re.compile(r"[0-9]{1,5}(?:[^\W\d_]|/[0-9]+)? ")
 ADDRESS_WORD_KEYS = {nfc(word).casefold() for word in ADDRESS_WORDS}
+ABBREVIATION_START = re.compile(rf"(?:{'|'.join(VIETNAMESE_ABBREVIATIONS)})\.", re.IGNORECASE)
 
 
 @st.composite
@@ -260,14 +414,21 @@ def text_with_numbers(draw: st.DrawFn) -> str:
 
 
 def address_word_flags(text: str) -> list[tuple[str, bool]]:
-    """Each word of an address, and whether it is an address word or part of one of two words."""
-    words = [nfc(word).rstrip(".") for word in re.split(r"[\s,]+", text) if word]
+    """Each word of an address, and whether it is an address word or part of one of two words.
+
+    A word that starts with "Q.", "P.", or "TP." is an address word too, as in "Q.1" or "TP.HCM".
+    """
+    raw_words = [nfc(word) for word in re.split(r"[\s,]+", text) if word]
+    words = [word.rstrip(".") for word in raw_words]
     keys = [word.casefold() for word in words]
     pairs = {f"{first} {second}" for first, second in pairwise(keys)}
     in_pair = {key for pair in pairs & ADDRESS_WORD_KEYS for key in pair.split(" ")}
     return [
-        (word, key in ADDRESS_WORD_KEYS or key in in_pair)
-        for word, key in zip(words, keys, strict=True)
+        (
+            word,
+            key in ADDRESS_WORD_KEYS or key in in_pair or ABBREVIATION_START.match(raw) is not None,
+        )
+        for word, key, raw in zip(words, keys, raw_words, strict=True)
     ]
 
 

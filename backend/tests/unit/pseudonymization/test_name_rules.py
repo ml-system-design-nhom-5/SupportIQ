@@ -306,6 +306,18 @@ def test_a_given_name_before_a_window_of_two_words_stays_outside_it() -> None:
     assert vietnamese_names("call Lan Pham Minh") == ["Pham Minh"]
 
 
+@pytest.mark.parametrize(
+    ("message", "names"),
+    [("TP.Hồ Chí Minh", []), ("12 Lê Lợi, Q.1, TP.HCM", ["Lê Lợi"])],
+    ids=["city-after-tp", "address-with-abbreviations"],
+)
+def test_the_name_rules_read_the_address_abbreviations_as_codes(
+    message: str, names: list[str]
+) -> None:
+    # Only the address rule reads "Q.", "P.", and "TP." (design, Layer 1, addresses).
+    assert vietnamese_names(message) == names
+
+
 def test_every_vietnamese_name_comes_from_the_rule_source() -> None:
     (detection,) = VietnameseNameDetector().detect("from Hương Nguyễn", ())
 
