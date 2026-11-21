@@ -25,6 +25,8 @@ repos:
       # checks them, except gitleaks and the hooks of the temporary rules (ADR-0028, Checks,
       # statements 1 to 4). It is a files pattern because a hook takes one exclude, and three of
       # these hooks already exclude the frozen data.
+      # TODO(#42): the kept parts follow no engineering rule yet; this pattern goes when they do
+      # (ADR-0028, Follow-ups).
       - id: check-added-large-files
         args: [--enforce-all, --maxkb=500]
         files: &outside-kept-parts |
@@ -259,6 +261,8 @@ repos:
   # The temporary rules of ADR-0028: apps/backend/ and apps/demo/ of main stay frozen, and only
   # the 28 files that import them at f6c1473 may import them (Temporary rules, statements 1 and
   # 2; RULE-03). The hooks of this section exist to check the kept parts, so they do not skip them.
+  # TODO(#42): the kept parts of main follow no engineering rule yet; this section goes with the
+  # temporary rules at step 4 of ADR-0028, Follow-ups.
   - repo: local
     hooks:
       # The index must hold the paths, modes, and blobs of apps/backend/ and apps/demo/ that step

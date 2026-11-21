@@ -83,6 +83,8 @@ async def test_the_loop_claims_and_runs_a_queued_job() -> None:
     assert EventName.SUGGESTION_JOB_CLAIMED in events.names()
 
 
+# TODO(#43): this test and the next are the only ones that reach the failure path of a job, and the
+# branch that ends its loop of errors is covered only in some test orders (TEST-15, TEST-17).
 @pytest.mark.anyio
 async def test_a_failing_job_is_logged_once_and_the_loop_survives() -> None:
     runner = RecordingRunner(failure=DatabaseUnavailableError())
