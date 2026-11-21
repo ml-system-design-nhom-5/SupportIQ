@@ -1,6 +1,6 @@
 # Security and privacy rules
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-12
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-21
 
 Strict rules for protecting data and keys, especially when calling LLM providers (FR-08, FR-09). All data in this project is simulated, but it is handled exactly as real data would be, so the habits and the controls are right from the start.
 
@@ -49,7 +49,7 @@ Everything else is forbidden, including names, emails, phone numbers, addresses,
 
 The mechanism, the placeholder syntax, and the detectors are defined in [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md).
 
-**SEC-36.** `backend` MUST pseudonymize every customer message before any text derived from it leaves `backend`. `ai-service` MUST NOT receive raw personal data. If pseudonymization fails, nothing is sent: the suggestion parts become `unavailable` with `pseudonymization_failed` (fail closed). A detector can still miss a value; a miss is not a failure, and it is measured and reported against NFR-06 ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#detection)).
+**SEC-36.** `backend` MUST pseudonymize every customer message before any text derived from it leaves `backend`. `ai-service` MUST NOT receive raw personal data. If pseudonymization fails, nothing is sent: the suggestion parts become `unavailable` with `pseudonymization_failed` (fail closed). A detector can still miss a value. A residue that the pre-send check finds fails closed; a value that every detector and the check miss is not a failure, and it is measured and reported against NFR-06 ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#detection), [ADR-0029](../decisions/0029-rule-based-detectors-and-a-pre-send-check.md)).
 
 **SEC-37.** The pseudonym map is stored only in the `backend` database and is Confidential. Only the `pseudonymization` feature module reads or writes it, through its public API, and an import-linter contract enforces this. Its rows are inserted once and never updated. Map rows are never returned by any operation, logged, or exported. Restoration happens only when `backend` builds AI text for `/console` or compares a sent reply with its draft. The original values behind pseudonyms MUST NOT appear in logs, telemetry, error messages, or exports. Responses may still contain the Confidential data that their schema defines, such as a customer's display name in the ticket workspace.
 

@@ -1,6 +1,6 @@
 # Glossary
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-20
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-21
 
 The canonical meaning of every domain term. Code, contracts, docs, and UI use these terms exactly. Add a term here in the same PR that introduces it.
 
@@ -43,7 +43,7 @@ The canonical meaning of every domain term. Code, contracts, docs, and UI use th
 | Offline evaluation gate | The check that a candidate release manifest meets the quality targets on the frozen test and scenario sets before it is published. If it fails, the previous release stays ([DATA-57](rules/data-and-ml.md#models-and-artifacts)). | — |
 | Order context | Minimal simulated order, shipment, and refund data that `backend` passes to `ai-service`. It contains no identifiers. | — |
 | Placeholder | Text that stands in for a personal-data value: a pseudonym or a mask. Every placeholder matches one regular expression defined in [ADR-0010](decisions/0010-pseudonymization-and-egress-control.md#placeholder-syntax). The word keeps its ordinary meaning only for dummy values in settings files such as `.env.example`; anywhere else, use it only in this sense. | token |
-| Pre-send check | The last step of pseudonymization in `backend`: it reads the pseudonymized text and fails closed when a value of the pseudonym map or a known value is left outside a placeholder, or a residue of a value is left beside one. Proposed in [ADR-0029](decisions/0029-rule-based-detectors-and-a-pre-send-check.md). | egress check (egress control is the allow-list of hosts) |
+| Pre-send check | The last step of pseudonymization in `backend`: it reads the pseudonymized text and fails closed when a value of the pseudonym map or a known value is left outside a placeholder, or a residue of a value is left beside one. Defined in [ADR-0029](decisions/0029-rule-based-detectors-and-a-pre-send-check.md) and the [personal-data leak fixes design](design/personal-data-leak-fixes.md#layer-2-the-pre-send-check). | egress check (egress control is the allow-list of hosts) |
 | Product | A simulated item in the read-only shop catalog ([ADR-0013](decisions/0013-shop-demo-with-read-only-catalog.md)). | item |
 | Provenance | Everything needed to reconstruct a suggestion: inputs, release and asset versions, and outputs. | — |
 | Pseudonym | A numbered placeholder, such as `[ORDER_ID_1]`, that `backend` writes over a personal-data value. Only `backend` can restore it ([ADR-0010](decisions/0010-pseudonymization-and-egress-control.md)). | token |
