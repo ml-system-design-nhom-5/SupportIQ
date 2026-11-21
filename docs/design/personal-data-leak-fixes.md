@@ -43,6 +43,15 @@ The revision also states the known limits of the rules ([Layer 1, phone](#layer-
 
 The revision adds the known limits that follow from these points (Layer 1, names, item 6; Layer 1, addresses; Layer 2), and three [open questions](#open-questions): a longer list of family names, whether a name missed only because its family name is not on the list stops the PR, and the everyday typing of addresses. The approved texts and the readings that the lead ruled out are kept under [Alternatives considered](#alternatives-considered). No other decision changes.
 
+**Fourth revision of 2026-11-21.** The project lead decided two open questions of the third revision, and the revision changes these points of [Layer 1, names](#layer-1-names), [Layer 1, addresses](#layer-1-addresses), and [Rollout](#rollout):
+
+- settled: a name that the re-measurement misses only because its family name is not on the list stops the PR, as any leak does; the PR then waits for the independent set for NFR-06, and a longer list of family names is chosen on that set (Rollout, step 3, to which item 6 of Layer 1, names, now points);
+- changed: the address rule also takes the address words typed without diacritics, except "To" and "Day", which are also common English words (Layer 1, addresses, item 3);
+- changed: "Q.", "P.", and "TP." join the address words, read only with their period and with a number or a capitalized word after it, with or without spaces, so "12 Lê Lợi, Q.1, TP.HCM" and "12 Lê Lợi, Q. 1, TP. HCM" are each one address; the name rules still read "Q.1" and "TP.HCM" as codes (Layer 1, addresses);
+- kept: a street name in lowercase stays a known limit and an open question, until after the PR into `main`.
+
+The revision adds the known limits that follow from these points, the over-detection of the new readings on the seed catalog and the trial set, measured before the code (Layer 1, addresses), and the tests of each new form, each word left out, and each new limit ([Unit tests](#unit-tests)). It removes the answered open question, narrows the one about everyday typing to street names in lowercase, and adds one about other abbreviations. The approved texts and the readings ruled out are kept under [Alternatives considered](#alternatives-considered). No other decision changes.
+
 ## Goals and non-goals
 
 ### Goals
@@ -150,7 +159,7 @@ A word joined to a letter or digit by a hyphen, a dot, a slash, or an at sign, o
    - Place names that start or end with a family name are taken for names when they stand alone: "Hồ Chí Minh", "Phan Thiết", and "Hoàng Mai", and "Phan Thiet" without diacritics. So are street names such as "Lê Lợi" and "Nguyễn Huệ" outside an address. This is over-detection ([Non-goals](#non-goals)).
    - A capitalized word that starts a sentence or the text joins the person name right after it: "Ask Robert Johnson about the refund" becomes "[NAME_1] about the refund". This is over-detection too (item 1).
    - The Vietnamese name rule does not find a family name of the list that is typed without diacritics and has no unaccented spelling on the list, unless a middle name follows it. Examples are "Do Minh" and "Le Thu Ha". The model, a known value of the ticket ([ADR-0010, Detection](../decisions/0010-pseudonymization-and-egress-control.md#detection), step 2), and the person-cue rule can still find such a name. The pre-send check finds it when it is a value of the map or a known value outside a placeholder, or when a part of it stands beside a placeholder.
-   - The Vietnamese name rule does not find a family name that is not on the list, such as "Lâm", "Đinh", or "Mai". If the re-measurement misses such a name, the report states it as a known limit against NFR-06. The list never changes to fit the measured messages (guardrail 5, [DATA-25](../rules/data-and-ml.md#leakage)). A longer list is an [open question](#open-questions).
+   - The Vietnamese name rule does not find a family name that is not on the list, such as "Lâm", "Đinh", or "Mai". [Rollout](#rollout), step 3, states what a miss of such a name in the re-measurement means for the PR. The list never changes to fit the measured messages (guardrail 5, [DATA-25](../rules/data-and-ml.md#leakage)). A longer list is an [open question](#open-questions).
    - A given name before a window of two words stays outside it: in "Lan Pham Minh", the rule finds "Pham Minh" (item 2), and "Lan" stays beside the placeholder. The pre-send check stops such a ticket, unless "Lan" starts a sentence or the text. Then only the model, or a known value of the ticket that holds the whole name, can find "Lan".
    - The person cues are English, so a message in Vietnamese, such as "Tôi là Lan Anh", gets no help from the person-cue rule. CST-06 sets the language of the data, KB, prompts, and UI, and `backend` has no gate on the language of a customer message.
 
@@ -160,7 +169,38 @@ An address is a span that:
 
 1. starts with a house number: 1 to 5 digits, optionally followed by a letter or by `/` and digits;
 2. continues over up to 5 comma-separated parts, each made of capitalized words, address words, or a postal code of 5 or 6 digits;
-3. holds at least one address word from a fixed list, compared without case: the Vietnamese street and administrative words (`Đường`, `Phố`, `Ngõ`, `Ngách`, `Hẻm`, `Kiệt`, `Tổ`, `Khu`, `Dãy`, `Thôn`, `Ấp`, `Xóm`, `Phường`, `Xã`, `Thị trấn`, `Quận`, `Huyện`, `Thị xã`, `Thành phố`, `Tỉnh`) and the English ones (`Street`, `St`, `Avenue`, `Ave`, `Road`, `Rd`, `Lane`, `Ln`, `Drive`, `Boulevard`, `Blvd`, `Apt`, `Suite`, `Unit`).
+3. holds at least one address word from a fixed list, compared without case:
+   - the Vietnamese street and administrative words: `Đường`, `Phố`, `Ngõ`, `Ngách`, `Hẻm`, `Kiệt`, `Tổ`, `Khu`, `Dãy`, `Thôn`, `Ấp`, `Xóm`, `Phường`, `Xã`, `Thị trấn`, `Quận`, `Huyện`, `Thị xã`, `Thành phố`, `Tỉnh`;
+   - their spellings without diacritics, except two that are also common English words (the table below);
+   - the Vietnamese abbreviations `Q.` (Quận), `P.` (Phường), and `TP.` (Thành phố), only in the reading stated below;
+   - the English ones: `Street`, `St`, `Avenue`, `Ave`, `Road`, `Rd`, `Lane`, `Ln`, `Drive`, `Boulevard`, `Blvd`, `Apt`, `Suite`, `Unit`.
+
+The spellings without diacritics are the Vietnamese words of item 3 without their diacritics, with "đ" written as "d". Of the 20 words, "Khu" has no diacritics and is on the list already. The rule takes 17 spellings and leaves out 2:
+
+| Address word | Without diacritics | Taken | Reason |
+|---|---|---|---|
+| Đường | Duong | Yes | No English word. It is also a family name without diacritics ([Layer 1, names](#layer-1-names), item 2); inside an address, the longer `ADDRESS` wins over the `NAME` |
+| Phố | Pho | Yes | "pho" is also English for the noodle soup, but the catalog sells no food, so only a sentence such as "2 Pho Bowls" becomes an address, while leaving it out would leave a phố typed without diacritics whole, as in "12 Pho Hue, Hai Ba Trung" |
+| Ngõ | Ngo | Yes | "NGO" is an abbreviation, not a common word. It is also a family name without diacritics, as "Duong" is |
+| Ngách | Ngach | Yes | No English word |
+| Hẻm | Hem | Yes | "hem" is also English for the folded edge of a cloth, but the catalog sells no sewing goods, so only a sentence such as "2 Hem Tapes" becomes an address, while leaving it out would leave a hẻm typed without diacritics whole, as in "12 Hem 5, Phuong 3" |
+| Kiệt | Kiet | Yes | No English word |
+| Tổ | To | No | "to": address words are compared without case, so "1 to 2 weeks", an everyday sentence about delivery, would become an address |
+| Khu | Khu | On the list already | It has no diacritics |
+| Dãy | Day | No | "day": "2 day shipping", an everyday phrase about delivery, would become an address |
+| Thôn | Thon | Yes | No English word |
+| Ấp | Ap | Yes | "AP" is an abbreviation, not a common word |
+| Xóm | Xom | Yes | No English word |
+| Phường | Phuong | Yes | No English word |
+| Xã | Xa | Yes | No English word |
+| Thị trấn | Thi tran | Yes | No English words. It is compared as two words, as "Thị trấn" is |
+| Quận | Quan | Yes | No English word |
+| Huyện | Huyen | Yes | No English word |
+| Thị xã | Thi xa | Yes | No English words. It is compared as two words |
+| Thành phố | Thanh pho | Yes | No English phrase. It is compared as two words, as "Thành phố" is |
+| Tỉnh | Tinh | Yes | No English word |
+
+So "12 Nguyen Hue, Phuong Ben Nghe, Quan 1" is one address of 3 parts, and "12 Hem 5, Phuong 3" is one address of 2.
 
 The span is an `ADDRESS` detection, so the overlap rule lets it replace the names that the model found inside it ([ADR-0010, Detection](../decisions/0010-pseudonymization-and-egress-control.md#detection), step 5: the longer span wins). The `FAC`-based address of the adapter stays.
 
@@ -171,16 +211,27 @@ The rule reads the parts of an address in this way:
 - A number in the form of a house number right after an address word, with or without a period, belongs to the address: "Apt. 5B", "Phường 5", "Quận 3", "Hẻm 34/5", "Đường 3/2".
 - Two capitalized words joined by a hyphen or an apostrophe are one capitalized word, because place names are written so: "Tỉnh Bà Rịa-Vũng Tàu", "O'Connell Street". This differs from the name rules, which read a word joined by a hyphen as part of a code ([Layer 1, names](#layer-1-names)). "ORD-12345" still ends a part, because "12345" is no capitalized word.
 - A line break between two parts counts as a comma, so "12 Main Street" and "Springfield, IL 62701" on the next line are one address of 3 parts. An address still has at most 5 parts.
-- A word is read as the name rules read it, and an address word is compared after NFC normalization and case folding, with its diacritics.
+- A word is read as the name rules read it, and an address word is compared after NFC normalization and case folding, with its diacritics. A spelling without diacritics is an address word only when the table above takes it, so "Tô" is no "Tổ".
+- `Q.`, `P.`, and `TP.` are address words only with their period, and only when a number in the form of a house number or a capitalized word follows the period, with no space or with spaces between: "Q.1", "Q. 1", "Q.10", "P. 5", "P.Bến Nghé", "TP.HCM", "TP. Hồ Chí Minh". The number or the word belongs to the address, as after any address word, and more capitalized words may follow in the same part, so "TP.Hồ Chí Minh" is one part. Without a space, the word reading takes "Q.1" and "TP.HCM" for codes ([Layer 1, names](#layer-1-names), opening paragraphs), so the address rule reads that form on its own. Like every address word, the abbreviation is compared without case, so "Tp.HCM" and "q.3" are read too, but a word after the period must be capitalized. So "12 Lê Lợi, Q.1, TP.HCM" and "12 Lê Lợi, Q. 1, TP. HCM" are each one address of 3 parts.
+- Only the address rule reads the abbreviations so. The name rules still read "Q.1" and "TP.HCM" as codes ([Layer 1, names](#layer-1-names), opening paragraphs): no word of them joins a name, and "TP.Hồ Chí Minh" alone gives no `NAME`.
+
+A prototype of the readings of the fourth revision, run on 2026-11-21 before the code, measured their over-detection:
+
+- On the 8 product names of the seed catalog ([`synthetic-dev-only-v1.json`](../../backend/seed/synthetic-dev-only-v1.json)), each as written and in title case, alone, after a quantity ("2 Desk lamp"), and in a sentence, the address rule finds no address in the 48 texts, as before. No product name holds a word of the new lists.
+- On the trial set ([Evaluation](#evaluation), statement 1), no detection of the 32 messages changes: names and addresses keep 11 of 12 values covered each and 0 over-detections each, and the pre-send check stops none of the messages. The trial runs again after the code.
 
 Known limits of the address rule. Tests state each limit as it is.
 
-- Address words typed without diacritics, such as "Phuong", "Quan", or "Duong", are no address words, so "12 Nguyen Hue, Phuong Ben Nghe" is not found.
-- A street name in lowercase is no part of an address, because only address words may be in lowercase: "12 main street" is not found, and "12 đường lê lợi" gives "12 đường".
-- Vietnamese abbreviations of address words, such as "Q.1" and "TP.HCM", read as codes, and they are no address words: "12 Lê Lợi, Q.1, TP.HCM" is not found.
-- These three ways of everyday typing are an [open question](#open-questions).
-- A greeting on the line after an address joins it: "12 Main Street" and "Thanks, Lan" on the next line are one address. This is over-detection ([Non-goals](#non-goals)).
+- A street name in lowercase is no part of an address, because only address words may be in lowercase: "12 main street" is not found, and "12 đường lê lợi" and "12 duong le loi" give "12 đường" and "12 duong". This is an [open question](#open-questions).
+- A number after "To" or "Day" ends the address, because only an address word keeps the number after it, and an address with no other address word is not found: "12 To 5, Phuong 3" is not found, although "Phuong" is an address word.
+- A word that is spelled as an address word without diacritics starts an address after a number: "I ordered 2 Pho Bowls" and "Please send 2 Hem Tapes", with the English words "pho" and "hem", give "2 Pho Bowls" and "2 Hem Tapes"; and in "mua 2 quan jean" ("buy 2 pairs of jeans", with "quần" typed as "quan"), the rule finds "2 quan". This is over-detection ([Non-goals](#non-goals)).
+- A house number right before a family name that is also an address word, "Duong" or "Ngo", starts an address: "12 Ngo Van An" is one `ADDRESS`, not a `NAME`. The name is still replaced, with the wrong type.
+- An initial "P." or "Q." with a capitalized word after it reads as an abbreviation after a house number or inside an address: "12 P. Nguyen" is one address, and "Ship to 12 Main Street, P. Nguyen" gives "12 Main Street, P. Nguyen". The name is still replaced, as part of the `ADDRESS`.
+- Other forms of the abbreviations are read as before: without the period, with a word in lowercase after the period, and other abbreviations such as "TX.". So "12 Lê Lợi, Q1, TPHCM", "12 Lê Lợi, tp.hcm", and "12 Lê Lợi, TX.Thuận An" are not found. The other abbreviations are an [open question](#open-questions).
+- A greeting on the line after an address joins it: "12 Main Street" and "Thanks, Lan" on the next line are one address. This is over-detection.
+- So does "P.S." on the line after an address: "Ship to 12 Main Street" and "P.S. Thanks" on the next line give one address that ends with "P.S". This is over-detection too.
 - So does the next sentence after an abbreviation with a period: "Ship to 12 Main St. Thanks a lot" gives "12 Main St. Thanks". This is over-detection too.
+- A time in capitals with periods after a number gives one address: "Please deliver before 5 P.M. tomorrow" gives "5 P.M". This is over-detection too.
 
 ### Layer 2: the pre-send check
 
@@ -293,6 +344,13 @@ The guardrails do not change: staff approve every reply, nothing is sent to a cu
 - **A number only after "Apt", "Suite", or "Unit"** (a first reading of the third revision). "12 Lê Lợi, phường 5, quận 3" would end at "phường" and leave "5, quận 3".
 - **A phone number of the map compared with its extension** (a reading of [Layer 2](#layer-2-the-pre-send-check) before the third revision). The digits of the extension would follow those of the number, so "0901 110 001 x12", written again outside its placeholder, would pass.
 - **One space only beside a `[NAME_n]`** (the letter of Layer 2 before the third revision). "Vũ  [NAME_1]" with two spaces would pass, and span growth does not join "Vũ" either.
+- **No address words without diacritics** (the approved text of [Layer 1, addresses](#layer-1-addresses) before the fourth revision, a known limit). "12 Nguyen Hue, Phuong Ben Nghe, Quan 1" would not be found.
+- **"To" and "Day" taken, or address words compared without diacritics.** Address words are compared without case, so "1 to 2 weeks" and "2 day shipping", everyday sentences about delivery, would become addresses. Comparing without diacritics would also take other words, such as "Tô" for "Tổ".
+- **"Hem" and "Pho" left out** (a first draft of the fourth revision). "2 Hem Tapes" and "2 Pho Bowls" would stay as written, but the catalog sells no sewing goods and no food. An address of a hẻm or a phố typed without diacritics would then leave whole: "12 Pho Hue, Hai Ba Trung" would not be found, and nor would "12 Hem 5, Phuong 3", because only an address word keeps the number after it.
+- **Abbreviations read as codes** (the approved text of Layer 1, addresses, before the fourth revision, a known limit). "12 Lê Lợi, Q.1, TP.HCM" would not be found.
+- **Only the form without a space after the period** (a first draft of the fourth revision). It narrows the decision to add "Q.", "P.", and "TP." to the address words: "12 Lê Lợi, Q. 1, TP. HCM" would not be found, although an address word keeps the number after it, as in "Quận 3".
+- **Abbreviations without the period**, such as "Q1", "P5", and "TP". "Q1" is also a quarter of a year, "P5" a page or a model, and "TP" an English abbreviation, so "2 TP Rolls" would become an address.
+- **The name rules reading "Q.", "P.", and "TP." as words too.** They would read "Hồ" of "TP.Hồ Chí Minh" as a word and find the city as a name, and they would need a second reading of codes beside the one that keeps "ORD-12345" out of a name.
 
 ## Testing and evaluation
 
@@ -301,7 +359,15 @@ The guardrails do not change: staff approve every reply, nothing is sent to a cu
 - One test per leak form of [What the measurement found](#what-the-measurement-found): the 4 names left whole, the 2 names left in part, the 4 phone numbers left whole, the 3 extensions left in part, the 2 addresses left whole, and each kind of address left in part. Each test uses the message rebuilt from its template.
 - At least 5 positive and 5 negative examples for each changed or new detector ([ADR-0010, Detection](../decisions/0010-pseudonymization-and-egress-control.md#detection)). The negatives include an ISO date, a list number "(1)", a price, an order total, a time such as "2pm", a product name of the catalog, a city name alone, and a title alone.
 - The name rules: each example of [Layer 1, names](#layer-1-names), its opening paragraphs and items 1 to 3, such as "Robert Johnson ORD-12345", "Mr Tran", "Dear Pham Minh", "NGUYEN VAN AN", "Le Van An", "Do You Ship", "Le Monde", and "Ho Ho Ho"; a message typed with decomposed diacritics; a test that the unaccented list is the list of the source without diacritics, except "Do", "Ho", and "Le"; and one test per known limit of item 6.
-- The address rule: each reading of [Layer 1, addresses](#layer-1-addresses), such as "12 Main St., Springfield", "Apt. 5B", "phường 5, quận 3", "Tỉnh Bà Rịa-Vũng Tàu", "12 Main Street ORD-12345", and a city on the next line, and one test per known limit of the rule.
+- The address rule: each reading of [Layer 1, addresses](#layer-1-addresses), such as "12 Main St., Springfield", "Apt. 5B", "phường 5, quận 3", "Tỉnh Bà Rịa-Vũng Tàu", "12 Main Street ORD-12345", and a city on the next line, and one test per known limit of the rule. The readings of the fourth revision have these tests:
+  - "12 Lê Lợi, Q.1, TP.HCM", "12 Lê Lợi, Q. 1, TP. HCM", and "12 Nguyen Hue, Phuong Ben Nghe, Quan 1", each one address of 3 parts, and "12 Hem 5, Phuong 3" and "12 Pho Hue, Hai Ba Trung", each one address;
+  - each of the 17 spellings without diacritics in an address, in capitals and in lowercase, the two-word ones too;
+  - a test that the spellings without diacritics are the Vietnamese address words without their diacritics, except "To" and "Day";
+  - one test for each of the two words left out, which stays as before: "1 to 2 weeks" and "2 day shipping" give no address;
+  - each form of the abbreviations: "Q.10", "P. 5", "P.Bến Nghé", "TP.Hồ Chí Minh", "TP. Hồ Chí Minh", "Tp.HCM", and "q.3";
+  - "Duong" and "Ngo" both ways, through the overlap rule: "Duong Van An" and "Ngo Van An" alone are one `NAME` each, and "12 Duong Lang, Quan Dong Da" is one `ADDRESS` with no `NAME` left;
+  - a test that the name rules still read the abbreviations as codes: "TP.Hồ Chí Minh" alone gives no `NAME`, and "12 Lê Lợi, Q.1, TP.HCM" gives the same `NAME` as before;
+  - one test for each new known limit: "12 duong le loi", "12 To 5, Phuong 3", "2 Pho Bowls" and "2 Hem Tapes", each an address as the limit states, "mua 2 quan jean", "12 Ngo Van An", "12 P. Nguyen" and the same initial inside an address, each of the three forms of abbreviations that are read as before, "P.S." on the line after an address, and "5 P.M.".
 - The pre-send check: each finding of its table, positive and negative, and a text with no placeholder. The negatives include each stoplist word beside a `[NAME_n]` ("I", "Thanks [NAME_1]", "[NAME_1]. Please", "This is [NAME_1] I want"), and an amount after an address ("[ADDRESS_1], 250000 VND", "[ADDRESS_1], $250000"). The positives include a phone number of the map with an extension, written again without it, and a word two spaces from a `[NAME_n]`. The known limit of a link has its own test.
 - The use case: a stop keeps no map row, writes the audit entry `failed` with `personal_data_left`, raises `PersonalDataLeftError`, and logs no value of the message ([TEST-26](../rules/testing.md#guardrail-tests), last item).
 
@@ -333,13 +399,13 @@ The guardrails do not change: staff approve every reply, nothing is sent to a cu
 
 1. [ADR-0029](../decisions/0029-rule-based-detectors-and-a-pre-send-check.md) is accepted first, because this design changes three passages of ADR-0010 and one sentence of [SEC-36](../rules/security-and-privacy.md#pseudonymization).
 2. One PR changes the detectors, adds the pre-send check, changes SEC-36, and adds the tests. It goes in before the PR into `main`.
-3. The re-measurement runs on that PR. If a type still leaks, the PR does not merge, and the cause goes into this design as a revision.
+3. The re-measurement runs on that PR. If a type still leaks, the PR does not merge, and the cause goes into this design as a revision. A name that the re-measurement misses only because its family name is not on the list ([Layer 1, names](#layer-1-names), item 6) is such a leak: the PR then waits for the independent set for NFR-06 ([Open questions](#open-questions)), and a longer list of family names is chosen on that set.
 4. A database that holds maps made by the old detectors keeps them. A later run for such a ticket, such as a retry, ends with `stored_map_differs` and manual handling, which is safe. The deployment after the PR into `main` starts with a new database ([ADR-0021, Merge procedure](../decisions/0021-repository-layout-and-ai-ml-migration.md#merge-procedure), statement 10).
 5. To roll back, revert the PR. The maps stored while it was in place differ from the old detectors' maps, so those tickets fail closed in the same way.
 
 ## Open questions
 
-- **An independent set for NFR-06.** The re-measurement uses the messages whose failures the rules were written from. An NFR-06 figure without that bias needs a new set: another seed and templates written before the rules are seen. Who writes it, and does the PR into `main` wait for it?
+- **An independent set for NFR-06.** The re-measurement uses the messages whose failures the rules were written from. An NFR-06 figure without that bias needs a new set: another seed and templates written before the rules are seen. Who writes it? Apart from the case of [Rollout](#rollout), step 3, does the PR into `main` wait for it?
 - **A longer list of family names**, such as "Lâm", "Đinh", and "Mai" ([Layer 1, names](#layer-1-names), item 6). Which names join the list, chosen on the independent set above and never on the measured messages?
-- **A name missed only because its family name is not on the list.** Item 6 reports it as a known limit against NFR-06, while the third [goal](#goals) asks for 0 raw values of each type, and [Rollout](#rollout), step 3, stops the PR when a type still leaks. Does such a miss stop the PR? It is decided before the re-measurement runs, so that the answer does not depend on its result.
-- **Everyday typing of addresses** ([Layer 1, addresses](#layer-1-addresses), known limits). Should the address rule also take address words typed without diacritics, except those that are common English words, such as "To" for "Tổ", "Day" for "Dãy", and "Hem" for "Hẻm"; street names in lowercase; and the abbreviations "Q.", "P.", and "TP."?
+- **Street names in lowercase** ([Layer 1, addresses](#layer-1-addresses), known limits). Should the address rule take a street name in lowercase, as in "12 đường lê lợi"? It is left until after the PR into `main`.
+- **Other abbreviations of address words** ([Layer 1, addresses](#layer-1-addresses), known limits). Should the address rule also read "TX." (Thị xã), "TT." (Thị trấn), "H." (Huyện), and "X." (Xã)?
