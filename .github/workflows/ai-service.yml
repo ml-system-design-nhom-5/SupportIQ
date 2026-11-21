@@ -1,0 +1,257 @@
+# ai-service checks: formatting, lint, strict types, layer boundaries, generated models, the
+# dependency audit, the tests on Linux twice (without torch, with the fakes, and with torch from
+# the CPU index, with coverage), and the image build (ADR-0021, CI, statements 1 and 4). Until
+# eval.yml exists, it also checks and tests the release command in eval/release/ (statement 7).
+# Tool versions come from ai-service/uv.lock and eval/release/uv.lock, Python from
+# .python-version, and the hooks from the ai-service section of .pre-commit-config.yaml. No job
+# holds a secret, and no test calls an
+# LLM: a fake LLM adapter replaces Gemini (statement 2). Every workflow follows the convention
+# in docs/guides/repository-checks.md.
+name: ai-service
+
+on:
+  push:
+    branches:
+      - main
+      - "build/**"
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ai-service-checks:
+    name: ai-service-checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          version: "0.11.11"
+          enable-cache: false
+      - name: Install pre-commit
+        run: |
+          uv tool install --python 3.12 pre-commit==4.7.0
+          uv tool dir --bin >> "$GITHUB_PATH"
+      - name: Install the Python of .python-version and the locked ai-service dependencies
+        working-directory: ai-service
+        run: uv sync --locked
+      - name: Check the formatting (ruff format)
+        run: pre-commit run ai-service-format --all-files --show-diff-on-failure
+      - name: Lint (ruff)
+        run: pre-commit run ai-service-lint --all-files --show-diff-on-failure
+      - name: Type-check in strict mode (pyright)
+        run: pre-commit run ai-service-types --all-files --show-diff-on-failure
+      - name: Check the layer and feature boundaries (import-linter)
+        run: pre-commit run ai-service-imports --all-files --show-diff-on-failure
+      - name: Check that the generated models match the contract (CON-26)
+        run: pre-commit run ai-service-generated --all-files --show-diff-on-failure
+      - name: Audit every locked dependency for known vulnerabilities (WF-31)
+        working-directory: ai-service
+        # pip-audit looks each package up on PyPI by its version, and PyPI does not know the
+        # local version `+cpu` of the CPU build of torch. The first export leaves torch out. torch
+        # is then audited as the public release of its version in uv.lock, built from the same
+        # source, so the advisories of that release are those of the CPU build.
+        # PyPI reads can exceed 15 s on CI, so each may take 60 s; a timeout still fails the step.
+        run: |
+          uv export --locked --all-groups --no-emit-project --no-emit-package torch \
+            --format requirements-txt --output-file "$RUNNER_TEMP/requirements.txt"
+          uv run --locked pip-audit --strict --disable-pip --require-hashes --timeout 60 \
+            --requirement "$RUNNER_TEMP/requirements.txt"
+          torch_requirement="$(uv export --locked --only-group torch --no-emit-project \
+            --no-hashes --format requirements-txt \
+            | sed -E -n 's/^(torch==[0-9][0-9.]*)\+cpu( ;.*)?$/\1/p')"
+          public_release='^torch==[0-9][0-9.]*$'
+          if ! [[ "$torch_requirement" =~ $public_release ]]; then
+            echo "::error::uv.lock holds no single torch==<version>+cpu requirement to audit"
+            exit 1
+          fi
+          printf '%s\n' "$torch_requirement" > "$RUNNER_TEMP/torch-requirement.txt"
+          uv run --locked pip-audit --strict --disable-pip --no-deps --timeout 60 \
+            --requirement "$RUNNER_TEMP/torch-requirement.txt"
+
+  ai-service-tests:
+    name: ai-service-tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          version: "0.11.11"
+          enable-cache: false
+      - name: Install the Python of .python-version and the locked dependencies, without torch
+        working-directory: ai-service
+        run: uv sync --locked
+      - name: Run the tests with the fakes, without torch (ADR-0021, CI, statement 4)
+        working-directory: ai-service
+        run: uv run --locked pytest --junitxml="$RUNNER_TEMP/ai-service-tests.xml"
+      # The tests that need torch skip with this one reason, by design: ai-service-tests-torch
+      # runs them and allows no skip (ADR-0021, CI, statement 4, which stands above TEST-20).
+      # Every other skip fails, as TEST-20 requires. pytest reports a module that skips while it
+      # is collected as "collection skipped", with its reason in the text, as the tuple
+      # (path, line, "Skipped: <reason>").
+      - name: Fail on every skipped test, except the tests that need torch (TEST-20)
+        working-directory: ai-service
+        run: |
+          uv run --locked python -I - "$RUNNER_TEMP/ai-service-tests.xml" <<'PYTHON'
+          import ast
+          import sys
+          import xml.etree.ElementTree as ET
+
+          ALLOWED_REASON = "torch is installed only by the torch group, on Linux"
+          COLLECTION_SKIP = "collection skipped"
+          SKIP_PREFIX = "Skipped: "
+
+
+          def reason_of(skipped):
+              message = skipped.get("message", "")
+              if message != COLLECTION_SKIP:
+                  return message
+              try:
+                  return str(ast.literal_eval(skipped.text or "")[2]).removeprefix(SKIP_PREFIX)
+              except (ValueError, SyntaxError, TypeError, IndexError):
+                  return message
+
+
+          unexpected = [
+              f"{case.get('classname', '')}::{case.get('name', '')}: {reason_of(skipped)}"
+              for case in ET.parse(sys.argv[1]).iter("testcase")
+              for skipped in case.iter("skipped")
+              if reason_of(skipped) != ALLOWED_REASON
+          ]
+          print("\n".join(unexpected))
+          sys.exit(1 if unexpected else 0)
+          PYTHON
+
+  ai-service-tests-torch:
+    name: ai-service-tests-torch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          version: "0.11.11"
+          enable-cache: false
+      - name: Install the Python of .python-version and the locked dependencies, with torch
+        working-directory: ai-service
+        run: uv sync --locked --group torch
+      - name: Check that torch from the CPU index is installed
+        working-directory: ai-service
+        run: uv run --locked --group torch python -I -c "import torch; print(torch.__version__)"
+      - name: Run every test with torch, with branch coverage (ADR-0021, CI, statement 4)
+        working-directory: ai-service
+        run: >-
+          uv run --locked --group torch pytest --cov --cov-report=
+          --junitxml="$RUNNER_TEMP/ai-service-tests-torch.xml"
+      # The text of a skip names its file, line, and reason, also for a module that skips while
+      # it is collected; an expected failure has only its message.
+      - name: Fail on any skipped test, so every test that needs torch ran
+        working-directory: ai-service
+        run: |
+          uv run --locked --group torch python -I - "$RUNNER_TEMP/ai-service-tests-torch.xml" <<'PYTHON'
+          import sys
+          import xml.etree.ElementTree as ET
+
+          skipped = [
+              f"{case.get('classname', '')}::{case.get('name', '')}: {skip.text or skip.get('message', '')}"
+              for case in ET.parse(sys.argv[1]).iter("testcase")
+              for skip in case.iter("skipped")
+          ]
+          print("\n".join(skipped))
+          sys.exit(1 if skipped else 0)
+          PYTHON
+      - name: Check the overall branch coverage of at least 80% (TEST-21)
+        working-directory: ai-service
+        run: uv run --locked --group torch coverage report --fail-under=80
+      - name: Check the branch coverage of the domain and application layers of at least 90% (TEST-21)
+        working-directory: ai-service
+        run: >-
+          uv run --locked --group torch coverage report --fail-under=90
+          --include="*/app/*/domain/*,*/app/*/application/*"
+
+  # Until eval.yml exists, the release command in eval/release/ is checked here, at the rule
+  # level of ai-service (ADR-0021, CI, statement 7). It installs ai-service from the checkout,
+  # through an editable path dependency, without torch.
+  ai-service-release-command:
+    name: ai-service-release-command
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          version: "0.11.11"
+          enable-cache: false
+      - name: Install pre-commit
+        run: |
+          uv tool install --python 3.12 pre-commit==4.7.0
+          uv tool dir --bin >> "$GITHUB_PATH"
+      - name: Install the Python of .python-version and the locked release command dependencies
+        working-directory: eval/release
+        run: uv sync --locked
+      - name: Check the formatting (ruff format)
+        run: pre-commit run eval-release-format --all-files --show-diff-on-failure
+      - name: Lint (ruff)
+        run: pre-commit run eval-release-lint --all-files --show-diff-on-failure
+      - name: Type-check in strict mode (pyright)
+        run: pre-commit run eval-release-types --all-files --show-diff-on-failure
+      - name: Check the layer boundaries (import-linter)
+        run: pre-commit run eval-release-imports --all-files --show-diff-on-failure
+      - name: Run the tests with branch coverage
+        working-directory: eval/release
+        run: uv run --locked pytest --cov --cov-report=
+      - name: Check the overall branch coverage of at least 80% (TEST-21)
+        working-directory: eval/release
+        run: uv run --locked coverage report --fail-under=80
+      - name: Check the branch coverage of the domain layer of at least 90% (TEST-21)
+        working-directory: eval/release
+        run: >-
+          uv run --locked coverage report --fail-under=90
+          --include="*/supportiq_release/*/domain/*"
+      - name: Audit every locked dependency for known vulnerabilities (WF-31)
+        working-directory: eval/release
+        # The editable path dependency on ai-service has no hashes, so the export leaves out the
+        # local packages, and the dependencies of ai-service are audited from the export.
+        # PyPI reads can exceed 15 s on CI, so each may take 60 s; a timeout still fails the step.
+        run: |
+          uv export --locked --all-groups --no-emit-project --no-emit-local \
+            --format requirements-txt --output-file "$RUNNER_TEMP/requirements-release.txt"
+          uv run --locked pip-audit --strict --disable-pip --require-hashes --timeout 60 \
+            --requirement "$RUNNER_TEMP/requirements-release.txt"
+
+  ai-service-image:
+    name: ai-service-image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the ai-service image, with torch from the CPU index (ARCH-10)
+        run: docker build --tag supportiq-ai-service:ci ai-service

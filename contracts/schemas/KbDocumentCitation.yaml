@@ -1,0 +1,39 @@
+description: >-
+  A citation of one KB document version. It supports a policy, an eligibility, or a conclusion
+  that a draft segment states, even when the claim is about the customer's order (ADR-0014,
+  statement 2). Data class: Internal.
+type: object
+required:
+  - source_type
+  - citation_id
+  - document_id
+  - version
+  - snippet
+properties:
+  source_type:
+    description: >-
+      The kind of source: always `kb_document` in this variant. Data class: Internal.
+    type: string
+    enum:
+      - kb_document
+  citation_id:
+    $ref: './AiItemId.yaml'
+    description: >-
+      The identifier of the citation, unique among the citations of the draft. Segments refer to
+      it in `citation_ids`. Data class: Internal.
+  document_id:
+    $ref: './KbDocumentId.yaml'
+    description: >-
+      The cited KB document. Data class: Internal.
+  version:
+    $ref: './KbDocumentVersionTag.yaml'
+    description: >-
+      The cited version of the document. It is a version that the KB of the result contains.
+      Data class: Internal.
+  snippet:
+    description: >-
+      The passage of the cited version that supports the segment, from 1 to 2 000 characters.
+      KB text is untrusted data and is shown as plain text (SEC-22, SEC-24). Data class: Public.
+    type: string
+    minLength: 1
+    maxLength: 2000

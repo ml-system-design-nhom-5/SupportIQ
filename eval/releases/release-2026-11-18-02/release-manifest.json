@@ -1,0 +1,128 @@
+{
+  "format": "supportiq-release-manifest/interim-1",
+  "release_id": "release-2026-11-18-02",
+  "assets": {
+    "model": {
+      "version": "v1.0.0",
+      "files": [
+        {
+          "path": "model/artifact.json",
+          "sha256": "825370bf4bd1283438acf1ae26ee9687290858cf8d6929cbb4d5afa2ea2f7fc6",
+          "size_bytes": 577
+        },
+        {
+          "path": "model/config.json",
+          "sha256": "6fa1fa9cc6a94063a977b0adaf2c9c3b296cf296d4ad9dcc6f2c52ca3bac9cb2",
+          "size_bytes": 3349
+        },
+        {
+          "path": "model/model.safetensors",
+          "sha256": "dc7af8cffb19fe7711ed5a5d0137ffff3d7d1a1f43bad5a35edff8c8de4c1302",
+          "size_bytes": 267967920
+        },
+        {
+          "path": "model/tokenizer.json",
+          "sha256": "5f218e0ea9eaa9f154815cc067351fb941bea26da81bfd12af3ded3cc66fa3ff",
+          "size_bytes": 711648
+        },
+        {
+          "path": "model/tokenizer_config.json",
+          "sha256": "a0cc1faf9647cb9748cb7e94443dded7c5ef0c9428fb43adde9a723955d8250a",
+          "size_bytes": 365
+        }
+      ]
+    },
+    "kb": {
+      "version": "v2",
+      "files": [
+        {
+          "path": "kb/kb.json",
+          "sha256": "434f7f72f90c9def6ebf0046b72afaed9028120653236e5c24775f86cb1e6a3c",
+          "size_bytes": 82
+        }
+      ]
+    },
+    "mapping": {
+      "version": "v2",
+      "files": [
+        {
+          "path": "mapping/document-intents.json",
+          "sha256": "c8d9c3691b23081284f2fece9de14d5df2f3eb693ed5647e5e42f6cc8d4cd8c6",
+          "size_bytes": 115
+        }
+      ]
+    },
+    "prompts": {
+      "version": "grounded-v4",
+      "files": [
+        {
+          "path": "prompts/drafting-requires-authority.txt",
+          "sha256": "4d52008bc08595dcc9ff5d8aa825e3a8158e3fe0d67d87760d2bd131b78e4101",
+          "size_bytes": 483
+        },
+        {
+          "path": "prompts/drafting-system.txt",
+          "sha256": "8170a5123c14a2658fc79d0c808dc74c6cc0427b5fabd354c50ffccf679f7891",
+          "size_bytes": 2172
+        }
+      ]
+    },
+    "routing": {
+      "version": "main-untuned-v1",
+      "model_version": "v1.0.0",
+      "files": [
+        {
+          "path": "routing/routing.json",
+          "sha256": "f49f339e441e92390bcf0c92a2561f849bebc9d690f2c480f9b558df3465e8b6",
+          "size_bytes": 3820
+        }
+      ]
+    },
+    "index": {
+      "version": "bge-small-en-v1.5-main-untuned-v1-kb-v2",
+      "files": [
+        {
+          "path": "index/encoder/config.json",
+          "sha256": "094f8e891b932f2000c92cfc663bac4c62069f5d8af5b5278c4306aef3084750",
+          "size_bytes": 743
+        },
+        {
+          "path": "index/encoder/model.safetensors",
+          "sha256": "3c9f31665447c8911517620762200d2245a2518d6e7208acc78cd9db317e21ad",
+          "size_bytes": 133466304
+        },
+        {
+          "path": "index/encoder/special_tokens_map.json",
+          "sha256": "b6d346be366a7d1d48332dbc9fdf3bf8960b5d879522b7799ddba59e76237ee3",
+          "size_bytes": 125
+        },
+        {
+          "path": "index/encoder/tokenizer.json",
+          "sha256": "d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66",
+          "size_bytes": 711396
+        },
+        {
+          "path": "index/encoder/tokenizer_config.json",
+          "sha256": "9261e7d79b44c8195c1cada2b453e55b00aeb81e907a6664974b4d7776172ab3",
+          "size_bytes": 366
+        },
+        {
+          "path": "index/encoder/vocab.txt",
+          "sha256": "07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3",
+          "size_bytes": 231508
+        },
+        {
+          "path": "index/index.json",
+          "sha256": "328a28f085b2a21cd54d3605a24fe09cee2860ab270468fd6f2585d2133dd69d",
+          "size_bytes": 427
+        }
+      ]
+    }
+  },
+  "gate_run": {
+    "run_id": "release-2026-11-18-02",
+    "outcome": "passed",
+    "record": "eval/releases/release-2026-11-18-02/gate-run.json",
+    "record_sha256": "8965da3cc683ba5d953cf0e6bf45de93e8c8dbf23d3fe488fee24b6ccdcf5d9f"
+  }
+}

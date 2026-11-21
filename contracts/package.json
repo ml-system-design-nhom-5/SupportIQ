@@ -1,0 +1,28 @@
+{
+  "name": "supportiq-contracts",
+  "private": true,
+  "description": "Lint, example validation, bundling, and mocks for the SupportIQ API contracts.",
+  "type": "module",
+  "packageManager": "pnpm@12.16.1",
+  "engines": {
+    "node": ">=24.22.2 <25"
+  },
+  "scripts": {
+    "check": "tsc --project tsconfig.json && eslint . && prettier --check \"**/*.{ts,js}\" && redocly lint && node scripts/check-lint-rules.ts",
+    "lint": "redocly lint",
+    "format": "prettier --write \"**/*.{ts,js}\"",
+    "bundle": "redocly bundle",
+    "mock": "prism mock --host 127.0.0.1 --port 4010 backend.openapi.yaml",
+    "mock:ai-service": "prism mock --host 127.0.0.1 --port 4012 ai-service.openapi.yaml",
+    "check:mock": "node scripts/check-mock.ts"
+  },
+  "devDependencies": {
+    "@redocly/cli": "2.72.1",
+    "@stoplight/prism-cli": "5.16.0",
+    "@types/node": "24.19.2",
+    "eslint": "10.14.0",
+    "prettier": "3.9.10",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.1"
+  }
+}

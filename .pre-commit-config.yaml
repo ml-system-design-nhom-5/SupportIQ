@@ -1,0 +1,477 @@
+# Repository-wide checks, run by pre-commit on every commit and in CI (WF-20, RULE-03).
+# pre-commit is the single runner: this file pins every hook by commit SHA, and the
+# default_language_version block pins the runtimes that pre-commit installs for them.
+# Install, commands, and the CI convention: docs/guides/repository-checks.md.
+minimum_pre_commit_version: 4.7.0
+default_install_hook_types:
+  - pre-commit
+# CI runs `pre-commit run --all-files --hook-stage manual`, so every hook without its own
+# `stages` runs both on commit and in CI.
+default_stages:
+  - pre-commit
+  - manual
+default_language_version:
+  golang: 1.27.3
+  node: 24.22.2
+# Generated code is never linted (CON-26).
+exclude: (^|/)generated/
+
+repos:
+  # ===== Repository checks (owner: team) =====
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # frozen: v6.0.0
+    hooks:
+      # The kept parts of main keep every byte, mode, and path, so no hook that can reach them
+      # checks them, except gitleaks and the hooks of the temporary rules (ADR-0028, Checks,
+      # statements 1 to 4). It is a files pattern because a hook takes one exclude, and three of
+      # these hooks already exclude the frozen data.
+      # TODO(#42): the kept parts follow no engineering rule yet; this pattern goes when they do
+      # (ADR-0028, Follow-ups).
+      - id: check-added-large-files
+        args: [--enforce-all, --maxkb=500]
+        files: &outside-kept-parts |
+          (?x)^(?!
+            (apps|artifacts|pipeline|scripts|tests)/
+            | pytest\.ini$
+            | data/(benchmarks/(?!escalation/)|business/|datasets/|intent/|knowledge/)
+            | docs/(
+                ARCHITECTURE\.md | images/image1\.png | images/image2\.png | CHỦ\ ĐỀ\ 1\.md
+                | AI_PIPELINE_METRIC_IMPROVEMENTS\.md | autoeval\.md | data-quality\.md
+                | guides/evaluation-evidence\.md | design/documentation-pruning\.md
+              )$
+          )
+      - id: check-case-conflict
+        files: *outside-kept-parts
+      - id: check-executables-have-shebangs
+        files: *outside-kept-parts
+      - id: check-json
+        files: *outside-kept-parts
+      - id: check-merge-conflict
+        files: *outside-kept-parts
+      - id: check-yaml
+        # pnpm writes pnpm-lock.yaml as two YAML documents.
+        args: [--allow-multiple-documents]
+        files: *outside-kept-parts
+      # The hooks that fix files never touch the frozen data: every file of data/raw/ and every
+      # data file of data/benchmarks/escalation/ keeps its bytes, CRLF line ends included. The
+      # READMEs of the suites are still checked (ADR-0021, Large files and data, statement 3;
+      # ADR-0028, Checks, statement 2; .gitattributes).
+      - id: end-of-file-fixer
+        files: *outside-kept-parts
+        exclude: &frozen-data '^(data/raw/|data/benchmarks/escalation/(?!.*README\.md$))'
+      - id: mixed-line-ending
+        args: [--fix=lf]
+        files: *outside-kept-parts
+        exclude: *frozen-data
+      - id: trailing-whitespace
+        files: *outside-kept-parts
+        exclude: *frozen-data
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e  # frozen: v8.30.1
+    hooks:
+      # On commit: the staged changes.
+      - id: gitleaks
+        stages: [pre-commit]
+      # In CI: every commit reachable from HEAD, not other branches of the clone.
+      - id: gitleaks
+        alias: gitleaks-history
+        name: Detect hardcoded secrets in the git history
+        entry: gitleaks git --redact --verbose --log-opts=HEAD
+        stages: [manual]
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: 341e2a331ba578029e66c2e01183e7a6b5ca9ab4  # frozen: v0.24.0
+    hooks:
+      # Markdown style, and every relative link and #fragment (.markdownlint-cli2.yaml).
+      - id: markdownlint-cli2
+        files: *outside-kept-parts
+        additional_dependencies:
+          - markdownlint-rule-relative-links@5.1.4
+  - repo: https://github.com/rhysd/actionlint
+    rev: 914e7df21a07ef503a81201c76d2b11c789d3fca  # frozen: v1.7.12
+    hooks:
+      - id: actionlint
+        # shellcheck and pyflakes exist on CI runners but not on every machine; turning
+        # them off keeps the result the same everywhere (WF-20).
+        args: [-shellcheck=, -pyflakes=]
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: 745eface02aef23e168a8afb6b5737818efbea95  # frozen: v0.11.0.1
+    hooks:
+      # The bash scripts of the local run and of the gate (docs/design/local-run.md). This
+      # version installs shellcheck 0.11.0, which is GPL-3.0: the team approved it on 2026-11-18
+      # as a development tool that runs only here and is never shipped (WF-30).
+      - id: shellcheck
+        files: ^(deploy/local/|eval/release/gate/).*\.sh$
+
+  # The workflow convention of docs/guides/repository-checks.md, for every item that a pattern
+  # can check (RULE-03). A hook fails when its pattern matches a line or, with --negate, when
+  # its required pattern is missing from the file. pygrep comes with pre-commit, so no tool is
+  # added. The guide lists the items that stay with the reviewers.
+  - repo: local
+    hooks:
+      # Until issue #34 rewrites it, autoeval.yml of main fails 9 of these hooks, so those 9 skip
+      # it. Every other hook still checks it (ADR-0028, Checks, statement 7).
+      - id: workflow-triggers
+        name: "Workflow convention 2: exactly the push and pull_request triggers"
+        language: pygrep
+        entry: '^on:\n  push:\n    branches:\n      - main\n      - "build/\*\*"\n  pull_request:\n    branches:\n      - main\n\n+(?=[^\s#])'
+        args: [--multiline, --negate]
+        files: &workflows-except-autoeval '^\.github/workflows/(?!autoeval\.yml$)'
+        # deploy.yml has its own trigger, pinned by deploy-workflow-trigger.
+        exclude: ^\.github/workflows/deploy\.yml$
+      - id: workflow-no-path-filters
+        name: "Workflow convention 3: no paths or paths-ignore"
+        language: pygrep
+        entry: '^\s*paths(-ignore)?:'
+        files: *workflows-except-autoeval
+      - id: workflow-no-if
+        name: "Workflow convention 3: no job-level or step-level if"
+        language: pygrep
+        entry: '^\s+(-\s+)?if:'
+        files: *workflows-except-autoeval
+      - id: workflow-permissions-read
+        name: "Workflow convention 4: permissions contents read at the top"
+        language: pygrep
+        entry: '^permissions:\n  contents: read\n+(?=[^\s#])'
+        args: [--multiline, --negate]
+        files: ^\.github/workflows/
+      - id: workflow-no-job-permissions
+        name: "Workflow convention 4: no job widens the permissions"
+        language: pygrep
+        entry: '^\s+permissions:'
+        files: ^\.github/workflows/
+      - id: workflow-no-pull-request-target
+        name: "Workflow convention 4: no pull_request_target"
+        language: pygrep
+        entry: 'pull_request_target'
+        files: ^\.github/workflows/
+      - id: workflow-pinned-actions
+        name: "Workflow convention 5: every uses names a commit SHA and a version comment"
+        language: pygrep
+        entry: '^\s*(-\s+)?uses:(?!\s+[^@\s]+@[0-9a-f]{40}\s+#\s*v\d)'
+        files: *workflows-except-autoeval
+      - id: workflow-checkout-credentials
+        name: "Workflow convention 5: actions/checkout sets persist-credentials false"
+        language: pygrep
+        entry: '^[ \t]*(-[ \t]+)?uses:[ \t]+actions/checkout@[^\n]*\n((?![ \t]*-[ \t])(?![ \t]*persist-credentials:[ \t]*false[ \t]*\n)[^\n]*\n)*([ \t]*-[ \t]|\Z)'
+        args: [--multiline]
+        files: *workflows-except-autoeval
+      - id: workflow-pinned-runner
+        name: "Workflow convention 6: jobs run on ubuntu-24.04"
+        language: pygrep
+        entry: '^\s*runs-on:(?!\s*ubuntu-24\.04\s*$)'
+        files: *workflows-except-autoeval
+      - id: workflow-concurrency
+        name: "Workflow convention 7: the concurrency group"
+        language: pygrep
+        entry: '^concurrency:\n  group: \$\{\{ github\.workflow \}\}-\$\{\{ github\.ref \}\}\n  cancel-in-progress: true\n'
+        args: [--multiline, --negate]
+        files: *workflows-except-autoeval
+        # deploy.yml has its own concurrency, pinned by deploy-workflow-concurrency.
+        exclude: ^\.github/workflows/deploy\.yml$
+      - id: workflow-has-timeout
+        name: "Workflow convention 8: timeout-minutes is present"
+        language: pygrep
+        entry: '^\s+timeout-minutes: [0-9]+\s*$'
+        args: [--negate]
+        files: ^\.github/workflows/
+      - id: workflow-timeout-on-every-job
+        name: "Workflow convention 8: every job sets timeout-minutes"
+        language: pygrep
+        entry: '^jobs:\n([^\n]*\n)*?  [A-Za-z0-9_-]+:\n((?!  [^ \n])(?!    timeout-minutes:)[^\n]*\n)*((?=  [^ \n])|\Z)'
+        args: [--multiline]
+        files: ^\.github/workflows/
+      - id: workflow-frozen-installs
+        name: "Workflow convention 9: frozen installs and the pinned pre-commit"
+        language: pygrep
+        entry: '\bpnpm (install|i)\b(?!.*--frozen-lockfile)|\buv sync\b(?!.*--locked)|\bpip3? install\b|\bnpm (install|i)\b|\binstall\b.*\bpre-commit(?!==4\.7\.0\b)'
+        files: *workflows-except-autoeval
+      - id: workflow-no-continue-on-error
+        name: "Workflow convention 10: no continue-on-error"
+        language: pygrep
+        entry: 'continue-on-error'
+        files: ^\.github/workflows/
+      - id: workflow-no-ignored-exit-code
+        name: "Workflow convention 10: no || true or || :"
+        language: pygrep
+        entry: '\|\|\s*(true\b|:(\s|$))'
+        files: ^\.github/workflows/
+      - id: workflow-no-retries
+        name: "Workflow convention 10: no retry actions and no reruns"
+        language: pygrep
+        entry: '^\s*(-\s+)?uses:\s*\S*retry|\bgh\s+run\s+rerun\b'
+        args: [--ignore-case]
+        files: ^\.github/workflows/
+      - id: workflow-secrets-only-in-deploy
+        name: "Workflow convention 13: no workflow but deploy.yml reads a secret"
+        language: pygrep
+        entry: 'secrets\.[A-Za-z_]'
+        files: *workflows-except-autoeval
+        exclude: ^\.github/workflows/deploy\.yml$
+      - id: workflow-no-inherited-secrets
+        name: "Workflow convention 13: no secrets: inherit and no environment"
+        language: pygrep
+        entry: '\bsecrets:\s*inherit\b|^\s+environment:'
+        files: ^\.github/workflows/
+      # The exceptions of deploy.yml: its trigger (convention 2), its concurrency (convention 7),
+      # and the two steps that read its two secrets (convention 13).
+      - id: deploy-workflow-trigger
+        name: "Workflow convention 2, deploy.yml: only workflow_dispatch"
+        language: pygrep
+        entry: '^on:\n  workflow_dispatch:\n\n+(?=[^\s#])'
+        args: [--multiline, --negate]
+        files: ^\.github/workflows/deploy\.yml$
+      - id: deploy-workflow-concurrency
+        name: "Workflow convention 7, deploy.yml: one deploy at a time, never cancelled"
+        language: pygrep
+        entry: '^concurrency:\n  group: deploy\n  cancel-in-progress: false\n'
+        args: [--multiline, --negate]
+        files: ^\.github/workflows/deploy\.yml$
+      # Fails on a line that reads a secret and is not one of the two allowed lines, and on an
+      # allowed line that appears twice.
+      - id: deploy-workflow-secrets
+        name: "Workflow convention 13, deploy.yml: only the two secrets of the deploy"
+        language: pygrep
+        entry: '^(?!          DATABASE_URL_OWNER: \$\{\{ secrets\.DEPLOY_DATABASE_URL_OWNER \}\}\n)(?!          RENDER_DEPLOY_HOOK_URL: \$\{\{ secrets\.RENDER_DEPLOY_HOOK_URL \}\}\n)[^\n]*secrets\.[A-Za-z_]|secrets\.DEPLOY_DATABASE_URL_OWNER\b.*secrets\.DEPLOY_DATABASE_URL_OWNER\b|secrets\.RENDER_DEPLOY_HOOK_URL\b.*secrets\.RENDER_DEPLOY_HOOK_URL\b'
+        args: [--multiline]
+        files: ^\.github/workflows/deploy\.yml$
+      # Requires each secret in the env of the one step that uses it, with that step's command,
+      # so no other command of the step can read it and the hook call keeps its limits.
+      - id: deploy-workflow-secret-steps
+        name: "Workflow convention 13, deploy.yml: each secret only in the step that uses it"
+        language: pygrep
+        entry: '^      - name: Apply the migrations on Supabase, as the owner role\n        working-directory: backend\n        env:\n          DATABASE_URL_OWNER: \$\{\{ secrets\.DEPLOY_DATABASE_URL_OWNER \}\}\n        run: uv run --locked --no-dev backend migrate\n.*^      - name: Call the Render deploy hook with ref set to the migrated commit\n        env:\n          RENDER_DEPLOY_HOOK_URL: \$\{\{ secrets\.RENDER_DEPLOY_HOOK_URL \}\}\n        run: >-\n          curl --fail --silent --show-error --max-time 30 --proto ''=https'' --request POST\n          "\$\{RENDER_DEPLOY_HOOK_URL\}&ref=\$\{GITHUB_SHA\}"\n'
+        args: [--multiline, --negate]
+        files: ^\.github/workflows/deploy\.yml$
+      # The jobs of backend.yml, from `jobs:` to the end of the file, renamed to deploy-…, must
+      # equal the jobs of deploy.yml up to its end marker (convention 14). It needs bash, sed,
+      # and diff, and uses only what BSD and GNU sed share. It has no `stages`, so it runs on
+      # commit and in the repository-checks job.
+      - id: deploy-workflow-copies-backend
+        name: "Workflow convention 14: deploy.yml repeats the jobs of backend.yml"
+        language: system
+        entry: >-
+          bash -c 'diff -u
+          <(sed -n "/^jobs:\$/,\$p" .github/workflows/backend.yml
+          | sed -E "s/^  backend-(checks|tests|image):\$/  deploy-\1:/; s/^    name: backend-(checks|tests|image)\$/    name: deploy-\1/")
+          <(sed -n "/^jobs:\$/,/^  # ===== end of the jobs of backend.yml =====\$/p" .github/workflows/deploy.yml
+          | sed "\$d")'
+        files: ^\.github/workflows/(backend|deploy)\.yml$
+        pass_filenames: false
+
+  # The temporary rules of ADR-0028: apps/backend/ and apps/demo/ of main stay frozen, and only
+  # the 28 files that import them at f6c1473 may import them (Temporary rules, statements 1 and
+  # 2; RULE-03). The hooks of this section exist to check the kept parts, so they do not skip them.
+  # TODO(#42): the kept parts of main follow no engineering rule yet; this section goes with the
+  # temporary rules at step 4 of ADR-0028, Follow-ups.
+  - repo: local
+    hooks:
+      # The index must hold the paths, modes, and blobs of apps/backend/ and apps/demo/ that step
+      # 2 restored from f6c1473. The value was taken right after step 2 (d53a86f); recompute it
+      # with `git ls-files --stage -- apps/backend apps/demo | git hash-object --stdin`.
+      - id: kept-apps-frozen
+        name: "ADR-0028, temporary rule 1: apps/backend/ and apps/demo/ stay frozen"
+        language: system
+        entry: >-
+          sh -c 'test "$(git ls-files --stage -- apps/backend apps/demo | git hash-object --stdin)"
+          = d83fb430a6c003ba3d8de6030eb69df65160b610
+          || { echo "apps/backend/ or apps/demo/ differs from f6c1473, and both are frozen"; exit 1; }'
+        always_run: true
+        pass_filenames: false
+      - id: kept-apps-imports
+        name: "ADR-0028, temporary rule 1: no new import of apps.backend or apps.demo"
+        language: pygrep
+        entry: 'apps[./](backend|demo)\b|\bfrom\s+apps\s+import\s.*\b(backend|demo)\b'
+        types: [python]
+        exclude: |
+          (?x)^(
+            apps/(backend|demo)/
+            | (
+                pipeline/evaluation/(
+                  application_acceptance | fault_boundary_runner | flash_lite_acceptance
+                  | system_execution | system_performance | system_server)
+                | scripts/(collect_final_acceptance_evidence | run_intent_correction_diagnostic)
+                | tests/application/(
+                  test_ai_boundary | test_application | test_backend_safety_closure
+                  | test_intent_correction_diagnostic | test_workflow_privacy)
+                | tests/e2e/test_full_pipeline
+                | tests/integration/(test_completion_oversight | test_demo_flow | test_system_oversight)
+                | tests/unit/(
+                  test_demo_api | test_demo_lifespan | test_mandatory_routing_b
+                  | test_model_runtime_parity_b | test_observability | test_pagination_pushdown
+                  | test_privacy_pii | test_retrieval_grounding_b2 | test_retry_draft
+                  | test_schema_constraints | test_typed_fault_propagation_a)
+              )\.py$
+          )
+
+  # ===== Contract checks (owner: contracts gatekeeper) =====
+  # The tool versions are pinned in contracts/pnpm-lock.yaml, so the hook calls the
+  # contracts package. It needs `pnpm install --frozen-lockfile` in contracts/ first.
+  # CI runs it in .github/workflows/contracts.yml.
+  - repo: local
+    hooks:
+      - id: contracts-check
+        name: Lint the contracts and validate their examples
+        language: system
+        # Runs inside contracts/, so Corepack and pnpm read its packageManager field.
+        entry: bash -c 'cd contracts && pnpm run check'
+        files: ^contracts/
+        pass_filenames: false
+        stages: [pre-commit]
+
+  # ===== backend hooks (owner: backend engineer) =====
+  # Add the backend hooks between this line and the end marker of this section.
+  # The tool versions are pinned in backend/uv.lock, so each hook calls the backend project
+  # through `uv run --locked` (docs/guides/repository-checks.md, convention 12). They need uv
+  # on the PATH. CI runs them in .github/workflows/backend.yml.
+  - repo: local
+    hooks:
+      - id: backend-format
+        name: Check the formatting of the backend code (ruff format)
+        language: system
+        entry: bash -c 'cd backend && uv run --locked ruff format --check .'
+        files: ^backend/
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: backend-lint
+        name: Lint the backend code (ruff)
+        language: system
+        entry: bash -c 'cd backend && uv run --locked ruff check .'
+        files: ^backend/
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: backend-types
+        name: Type-check the backend code in strict mode (pyright)
+        language: system
+        entry: bash -c 'cd backend && uv run --locked pyright'
+        files: ^backend/
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: backend-imports
+        name: Check the layer and feature boundaries of backend (import-linter)
+        language: system
+        entry: bash -c 'cd backend && uv run --locked lint-imports'
+        files: ^backend/
+        pass_filenames: false
+        stages: [pre-commit]
+      # Regenerates the models of both contracts in place, with the options of
+      # backend/pyproject.toml (the `ai-service` profile for the client's models), and fails
+      # when they differ from the files before; stage the regenerated files then.
+      - id: backend-generated
+        name: Check that the generated backend models match the contracts (CON-26)
+        language: system
+        entry: >-
+          bash -c 'cd backend && backend_models="$(mktemp)" && client_models="$(mktemp)" &&
+          cp app/generated/__init__.py "$backend_models" &&
+          cp app/suggestions/adapters/generated/__init__.py "$client_models" &&
+          uv run --locked datamodel-codegen &&
+          uv run --locked datamodel-codegen --profile ai-service &&
+          diff -u "$backend_models" app/generated/__init__.py &&
+          diff -u "$client_models" app/suggestions/adapters/generated/__init__.py'
+        files: ^(backend|contracts)/
+        pass_filenames: false
+        stages: [pre-commit]
+  # ===== end of backend hooks =====
+
+  # The component sections stay apart, so changes to several of them merge without conflicts.
+  # Each component keeps its hook versions in its own lockfile, as contracts-check does,
+  # and its workflow runs its hooks with `pre-commit run <hook-id> --all-files`
+  # (docs/guides/repository-checks.md).
+
+  # ===== frontend hooks (owner: frontend engineer) =====
+  # The tool versions are pinned in frontend/pnpm-lock.yaml, so the hook calls the frontend
+  # package. It needs `pnpm install --frozen-lockfile` in frontend/ first. A change to the backend
+  # contract also runs it, because the generated client must stay up to date (TS-27).
+  # CI runs it in .github/workflows/frontend.yml.
+  - repo: local
+    hooks:
+      - id: frontend-check
+        name: Check the format, lint, types, boundaries, and generated client of frontend
+        language: system
+        # Runs inside frontend/, so Corepack and pnpm read its packageManager field.
+        entry: bash -c 'cd frontend && pnpm run check'
+        files: ^(frontend/|contracts/backend\.openapi\.yaml$|contracts/schemas/)
+        pass_filenames: false
+        stages: [pre-commit]
+  # ===== end of frontend hooks =====
+
+  # ===== ai-service hooks (owner: ML engineer and RAG engineer) =====
+  # The same hooks as backend, for every rule that backend follows (ADR-0021, CI, statement 1).
+  # The tool versions are pinned in ai-service/uv.lock, so each hook calls the ai-service project
+  # through `uv run --locked` (docs/guides/repository-checks.md, convention 12). They need uv on
+  # the PATH, and not torch. CI runs them in .github/workflows/ai-service.yml.
+  - repo: local
+    hooks:
+      - id: ai-service-format
+        name: Check the formatting of the ai-service code (ruff format)
+        language: system
+        entry: bash -c 'cd ai-service && uv run --locked ruff format --check .'
+        files: ^ai-service/
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: ai-service-lint
+        name: Lint the ai-service code (ruff)
+        language: system
+        entry: bash -c 'cd ai-service && uv run --locked ruff check .'
+        files: ^ai-service/
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: ai-service-types
+        name: Type-check the ai-service code in strict mode (pyright)
+        language: system
+        entry: bash -c 'cd ai-service && uv run --locked pyright'
+        files: ^ai-service/
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: ai-service-imports
+        name: Check the layer and feature boundaries of ai-service (import-linter)
+        language: system
+        entry: bash -c 'cd ai-service && uv run --locked lint-imports'
+        files: ^ai-service/
+        pass_filenames: false
+        stages: [pre-commit]
+      # Regenerates the models in place, with the options of ai-service/pyproject.toml, and
+      # fails when they differ from the file before; stage the regenerated file then.
+      - id: ai-service-generated
+        name: Check that the generated ai-service models match the contract (CON-26)
+        language: system
+        entry: >-
+          bash -c 'cd ai-service && committed="$(mktemp)" &&
+          cp app/generated/__init__.py "$committed" &&
+          uv run --locked datamodel-codegen &&
+          diff -u "$committed" app/generated/__init__.py'
+        files: ^(ai-service/|contracts/ai-service\.openapi\.yaml$|contracts/schemas/)
+        pass_filenames: false
+        stages: [pre-commit]
+      # Until eval.yml exists, the release command in eval/release/ follows the rule level of
+      # ai-service, with its own lockfile (ADR-0021, CI, statement 7). It has no model generated
+      # from a contract. Its types and layer checks read the source of ai-service, so a change
+      # there runs them too.
+      - id: eval-release-format
+        name: Check the formatting of the release command (ruff format)
+        language: system
+        entry: bash -c 'cd eval/release && uv run --locked ruff format --check .'
+        files: ^eval/release/
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: eval-release-lint
+        name: Lint the release command (ruff)
+        language: system
+        entry: bash -c 'cd eval/release && uv run --locked ruff check .'
+        files: ^eval/release/
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: eval-release-types
+        name: Type-check the release command in strict mode (pyright)
+        language: system
+        entry: bash -c 'cd eval/release && uv run --locked pyright'
+        files: ^(eval/release/|ai-service/app/)
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: eval-release-imports
+        name: Check the layer boundaries of the release command (import-linter)
+        language: system
+        entry: bash -c 'cd eval/release && uv run --locked lint-imports'
+        files: ^(eval/release/|ai-service/app/)
+        pass_filenames: false
+        stages: [pre-commit]
+  # ===== end of ai-service hooks =====

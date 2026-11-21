@@ -1,0 +1,414 @@
+# Design: Fixes for the personal data that pseudonymization leaves
+
+- **Status:** Approved
+- **Owner:** backend engineer
+- **Reviewers:** project lead, ML engineer
+- **Last reviewed:** 2026-11-21
+- **Related:** [Requirements](../product/requirements.md) (FR-09, NFR-06), [SEC-36](../rules/security-and-privacy.md#pseudonymization), [LOG-29](../rules/logging-and-observability.md#privacy-in-telemetry), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md), [ADR-0017](../decisions/0017-named-entity-model-from-its-release-url.md), [ADR-0020](../decisions/0020-storage-errors-of-the-pseudonym-map.md), [ADR-0029](../decisions/0029-rule-based-detectors-and-a-pre-send-check.md), [backend ticket workflow design](backend-ticket-workflow.md#pseudonymization)
+
+## Summary
+
+A measurement of `backend` on 2026-11-18 found raw names, phone numbers, and addresses in the requests that a fake `ai-service` received: 4 of 33 names, 4 of 16 phone numbers, and 2 of 18 addresses, in 123 of 343 requests. Guardrail 4, [SEC-36](../rules/security-and-privacy.md#pseudonymization), and FR-09 forbid this, so the fix comes before the pull request (PR) into `main`. This design fixes each cause in the detectors of the `pseudonymization` module (layer 1) and adds a pre-send check at the end of pseudonymization that sends nothing while personal data is left (layer 2). Layer 2 cannot replace layer 1: it finds what a detector found only in part, never a value that no detector saw. Three passages of [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md) stand against this design, so [ADR-0029](../decisions/0029-rule-based-detectors-and-a-pre-send-check.md) replaces them; no contract changes.
+
+**Revision of 2026-11-20.** The first version said that 11 of the 50 messages of round 1 never reached the fake `ai-service`. All 50 reached it: 39 is the number of distinct request texts, because messages of one template that were pseudonymized alike give the same text ([What the measurement found](#what-the-measurement-found)). The revision corrects that fact, adds the 3 request texts that show over-detection, states how the re-measurement counts the messages that reached the fake `ai-service` ([Evaluation](#evaluation), statements 2 and 3), and removes the answered open question. No decision of this design changes.
+
+**Second revision of 2026-11-20.** The project lead changed one point of [Layer 1, names](#layer-1-names), and settled two that the approved text left open:
+
+- changed: span growth also skips the stoplist words of the pre-send check, where the approved text skipped titles only (item 1);
+- settled: the Vietnamese name rule takes the longest window of 2 to 4 words in a run of capitalized words (item 2);
+- settled: family names are compared with their diacritics, and only the unambiguous ones also have a fixed unaccented spelling (item 2).
+
+The revision also states the known limits of the rules ([Layer 1, phone](#layer-1-phone); [Layer 1, names](#layer-1-names), item 6). The approved text of item 1, and the readings that the two settled points rule out, are kept under [Alternatives considered](#alternatives-considered). No other decision changes.
+
+**Third revision of 2026-11-21.** The second revision said that span growth and the pre-send check use one list, but only the pre-send check skips a word that starts a sentence or the text. A review of the name rules, the address rule, and the pre-send check then found more points that the text left open or got wrong. The project lead decided them all, and the revision changes these points of [Layer 1, names](#layer-1-names), [Layer 1, addresses](#layer-1-addresses), and [Layer 2](#layer-2-the-pre-send-check):
+
+- settled: span growth adds a word that starts a sentence or the text, unlike the pre-send check (item 1);
+- changed: the name rules read a word with its combining marks, and compare it with a list after Unicode NFC normalization, so a message typed with decomposed diacritics gives the same names; the message itself does not change (opening paragraph);
+- changed: a word joined to a letter or digit by a hyphen, a dot, a slash, or an at sign is part of a code and never joins a name, so "Robert Johnson ORD-12345" keeps the order ID whole (opening paragraph);
+- changed: a word of the stoplist is never part of a window of the Vietnamese name rule, and a title at the start of a window, with or without a period, is left out of the `NAME` instead of ruling the window out (item 2);
+- settled: of two windows of equal length, the one that starts with a family name wins, then the left one (item 2);
+- settled: family names are compared after case folding too, so a name in capitals is found (item 2);
+- changed: the unaccented list is the list of the source without diacritics, except "Do", "Ho", and "Le": 14 names, where the approved text had 11 (item 2);
+- changed: "Le", "Do", and "Ho" without diacritics are family names when a middle name of a fixed list comes right after them (item 2);
+- changed: a name whose family name is not on the list is a known limit, and the list never changes to fit the measured messages (item 6);
+- settled: an address part ends at its first word that fits none of the kinds of the rule, and the address ends with it (Layer 1, addresses);
+- settled: a period after an abbreviated address word, and a number after any address word, belong to the address (Layer 1, addresses);
+- settled: two capitalized words joined by a hyphen or an apostrophe are one word of an address, unlike in the name rules (Layer 1, addresses);
+- settled: a line break between two parts of an address counts as a comma (Layer 1, addresses);
+- settled: the pre-send check compares a phone number without its extension (Layer 2);
+- settled: the pre-send check reads the word beside a `[NAME_n]`, and the number before a `[NAME_n]` or `[ADDRESS_n]`, with one or more spaces between, and reads no word as part of a code (Layer 2);
+- settled: a currency word or sign right before a number makes it an amount too, as in "$250000" (Layer 2);
+- corrected: "Hà Nội" is no known limit, because "Hà" is not on the list of family names (item 6);
+- corrected: the model is not the only step that can find a name that the Vietnamese name rule misses (item 6).
+
+The revision adds the known limits that follow from these points (Layer 1, names, item 6; Layer 1, addresses; Layer 2), and three [open questions](#open-questions): a longer list of family names, whether a name missed only because its family name is not on the list stops the PR, and the everyday typing of addresses. The approved texts and the readings that the lead ruled out are kept under [Alternatives considered](#alternatives-considered). No other decision changes.
+
+**Fourth revision of 2026-11-21.** The project lead decided two open questions of the third revision, and the revision changes these points of [Layer 1, names](#layer-1-names), [Layer 1, addresses](#layer-1-addresses), and [Rollout](#rollout):
+
+- settled: a name that the re-measurement misses only because its family name is not on the list stops the PR, as any leak does; the PR then waits for the independent set for NFR-06, and a longer list of family names is chosen on that set (Rollout, step 3, to which item 6 of Layer 1, names, now points);
+- changed: the address rule also takes the address words typed without diacritics, except "To" and "Day", which are also common English words (Layer 1, addresses, item 3);
+- changed: "Q.", "P.", and "TP." join the address words, read only with their period and with a number or a capitalized word after it, with or without spaces, so "12 Lê Lợi, Q.1, TP.HCM" and "12 Lê Lợi, Q. 1, TP. HCM" are each one address; the name rules still read "Q.1" and "TP.HCM" as codes (Layer 1, addresses);
+- kept: a street name in lowercase stays a known limit and an open question, until after the PR into `main`.
+
+The revision adds the known limits that follow from these points, the over-detection of the new readings on the seed catalog and the trial set, measured before the code (Layer 1, addresses), and the tests of each new form, each word left out, and each new limit ([Unit tests](#unit-tests)). It removes the answered open question, narrows the one about everyday typing to street names in lowercase, and adds one about other abbreviations. The approved texts and the readings ruled out are kept under [Alternatives considered](#alternatives-considered). No other decision changes.
+
+**Fifth revision of 2026-11-21.** The project lead answered one more open question before the re-measurement ran: apart from the case of [Rollout](#rollout), step 3, the PR into `main` does not wait for the independent set for NFR-06. The re-measurement is the regression check that Rollout, step 3, and [ADR-0029, Validation](../decisions/0029-rule-based-detectors-and-a-pre-send-check.md#validation) ask for. A new set made with Faker would still be `synthetic-dev-only`, which [DATA-03](../rules/data-and-ml.md#sources-and-acceptable-use) keeps out of evaluation reports, so an unbiased NFR-06 figure also needs messages from an approved source. The revision states the answer in Rollout, step 3, says in [Evaluation](#evaluation), statement 4, that the re-measurement is a regression check and not an NFR-06 figure, keeps the answer that the lead ruled out under [Alternatives considered](#alternatives-considered), and narrows the open question to who writes the set and from which approved source. No other decision changes.
+
+## Goals and non-goals
+
+### Goals
+
+- Every leak form that the measurement found is a unit test of `backend` that passes.
+- A pseudonymized text in which the pre-send check finds personal data never leaves `backend`: both suggestion parts end `unavailable` with `pseudonymization_failed`, and staff handle the ticket manually.
+- The same 50 messages, run again through the same measurement, report 0 raw values of each type, with every one of the 50 messages measured, and the report states how many tickets the pre-send check stopped.
+
+### Non-goals
+
+- A different named-entity model. `en_core_web_sm` stays, as [ADR-0017](../decisions/0017-named-entity-model-from-its-release-url.md) states ([Alternatives considered](#alternatives-considered)).
+- Over-detection. The measurement shows some, such as "Order ORD-…" taken for a name; it costs draft quality, not privacy, and belongs to a separate change.
+- The masking in `ai-service` (the second layer of ADR-0010). It stays as it is.
+- The other backend of the measurement, on the branch `minh`.
+
+## Background
+
+### What the measurement found
+
+The measurement was round 1 of the comparison of two backends, run on 2026-11-18 on GitHub Actions with Ubuntu 24.04. Its files are outside this repository, in the results archive `results-44308559314`: `suites/a/privacy.json` holds the counts, and `suites/a/fake_ai.jsonl` holds every request body that the fake `ai-service` received.
+
+- The input is 50 `synthetic-dev-only` customer messages, made by Faker with the seed 20261118, half with the locale `vi_VN` and half with `en_US`: 10 templates written 4 times each for drafts, 5 for authority, and 5 for human handover. They plant 33 names, 16 phone numbers, 18 addresses, and 19 emails.
+- The scan counts a planted value as leaked when it appears verbatim, or JSON-escaped, in a request body. It found 0 of 19 emails and 0 of 4 order IDs.
+- All 50 messages reached the fake `ai-service`. The ticket of each message has one analysis request and one draft request, both answered with 200, and `backend.log` holds the event `ai_service.called` for both and no event `pseudonymization.failed`. A request belongs to the ticket whose `created_at` equals the `as_of` of its body, to the millisecond: `backend` sends the ticket's `created_at` as `as_of` ([`suggestions/domain/requests.py:55`](../../backend/app/suggestions/domain/requests.py)). Each of the 343 analysis and draft requests matches exactly one of the 192 tickets of the run (`suites/a/e2e.csv`, `backend.log`, `fake_ai.jsonl`).
+- The 50 tickets give only 39 distinct request texts. Pseudonyms are numbered per ticket, so two messages of one template whose values were all replaced give the same text: 17 messages fall into 6 groups of equal texts. In each of the 17, every field of the template holds placeholders only, so none of them leaks a value. The scan compares each planted value with all 343 request texts, so the counts above cover all 50 messages.
+
+Each request body that the fake `ai-service` received was aligned with its template. That shows, for every planted value, what was replaced and what was left:
+
+| Type | Values left whole | Values left in part | What the detectors did |
+|---|---|---|---|
+| Name | 4: "Bà Hương Nguyễn", "Phương Hữu Bùi", "Anh Anh Lê", "Kathryn Reynolds" | 2: one word of the name beside its pseudonym ("Vũ [NAME_1]", "Dũng [NAME_2]"). A third, "Bà [NAME_1]", leaves only the title "Bà" (Mrs.) | The model labels the 4 names `ORG`, nothing, `LOC`, and `GPE`, not `PERSON`, so they are dropped. For the other 2, its `PERSON` span stops one word short |
+| Phone | 4: "(00)504-5188", "810.651.1446x46429", "590-224-0978x548", "+1-393-722-1568x72928" | 3: the end of the number and its extension beside the pseudonym ("[PHONE_1]-3701x6147") | The pattern does not accept parentheses or an extension such as "x548" |
+| Address | 2: "9 Hoàng Dãy, JaneHuyện, 190841", "22 Lê Ngõ, JohnQuận, 217827" | All 16 others: the house number, a street or ward word, or the postal code beside pseudonyms ("72 [NAME_1], [NAME_2] xã, 660877") | An address exists only around a facility (`FAC`) that the model labels. The model labels most street names as persons, places, or numbers |
+
+The labels come from running the detectors of `backend` (`en_core_web_sm` 3.8.0) on the messages rebuilt from their templates, with the leaked values and stand-ins for the email and the order ID.
+
+The request texts of 3 messages fit no template, because a placeholder covers words of the template: over-detection ([Non-goals](#non-goals)). The texts of `m016` and `m036` (the template of a neighbour who received a box) hold two `NAME` placeholders and no `ORDER_ID` placeholder, so their order ID went into a name together with words around it. The text of `m047` (a human handover by email) holds one placeholder more than its template has fields: a word of the template was taken for a name. The alignment cannot place these 3 texts; the scan still counts their values, because it compares each value with the whole text.
+
+### Why the detectors miss them
+
+- **Phone** ([`detectors.py:37`](../../backend/app/pseudonymization/domain/detectors.py)): a value is digit groups joined by a space, a dot, or a hyphen, with an optional leading `+`, as [ADR-0010, Detection](../decisions/0010-pseudonymization-and-egress-control.md#detection), step 3, states. A parenthesis ends the group, so "(00)504-5188" splits into groups of 2 and 7 digits, both under 9. A letter stuck to the last group stops the value there, so "1446x46429" cannot end at "1446", and the extension stays.
+- **Name** ([`named_entity_detector.py:61-66`](../../backend/app/pseudonymization/adapters/named_entity_detector.py)): only entities labeled `PERSON` become names. `en_core_web_sm` is an English model, and it labels Vietnamese names, and an English name in parentheses before an email, as an organization, a place, or nothing. The trial of the [backend ticket workflow design, Choice 1](backend-ticket-workflow.md#choice-1-the-named-entity-library) already found 10 of 12 names (2 Vietnamese names missed).
+- **Address** ([`named_entity_detector.py:71-88`](../../backend/app/pseudonymization/adapters/named_entity_detector.py)): an address grows from a `FAC` entity to the house number before it and the places after it. Without a `FAC` label there is no address, and the words that the model labels `PERSON` become names inside the address. The same trial found 1 of 12 addresses, and the [workflow design, Open questions](backend-ticket-workflow.md#open-questions), already asks for another way to detect them.
+- **Known values** do not help here: the messages name third persons and new addresses, which `backend` does not hold, as FR-09 and the appendix of the requirements expect.
+
+### What the other backend shows
+
+The backend of the branch `minh` (`org/minh` at `88a18d9`) checks the request again just before it sends it, and sends nothing if personal data is left (`apps/backend/tickets/jobs.py:288-309`). Its check runs the same patterns again and looks for the values it already found. The same measurement found 2 of 33 names, 3 of 16 phone numbers, and 2 of 18 addresses in its requests. A check that only repeats the first pass finds nothing new, so a pre-send check alone does not close the leaks.
+
+## Design
+
+### Components and responsibilities
+
+Only `backend` changes, and only its `pseudonymization` feature module and its composition root.
+
+| Part | Change |
+|---|---|
+| `domain/detectors.py`, `PatternDetector` | The phone pattern of [Layer 1, phone](#layer-1-phone) |
+| `adapters/named_entity_detector.py` | `PERSON` spans grow over the capitalized words next to them ([Layer 1, names](#layer-1-names)) |
+| A new domain module of name rules | The Vietnamese name rule and the person-cue rule ([Layer 1, names](#layer-1-names)) |
+| A new domain module of address rules | The address rule of [Layer 1, addresses](#layer-1-addresses) |
+| A new domain module of word reading | How the name rules, the address rule, and the pre-send check read a word ([Layer 1, names](#layer-1-names), opening paragraphs) |
+| A new domain module, the pre-send check | [Layer 2](#layer-2-the-pre-send-check) |
+| `domain/errors.py` | `PersonalDataLeftError`, a `PseudonymizationError` with the failure reason `personal_data_left` |
+| `application/pseudonymize.py` | Runs the pre-send check on the built text, before the map is stored or compared |
+| Composition root | Adds the two rule detectors to the detectors of step 4 |
+
+The public API of the module keeps its two functions ([ADR-0010, Storage and lifecycle](../decisions/0010-pseudonymization-and-egress-control.md#storage-and-lifecycle), item 6): the check runs inside `pseudonymize`. The `suggestions` module sends only the text that `pseudonymize` returns. The other fields of the request to `ai-service` are typed (`OrderContext`, `Timestamp`, `AssetVersion`, `IntentLabel` in [`ai-service` contract](../../contracts/ai-service.openapi.yaml)) and hold no free text.
+
+### Layer 1: phone
+
+The `PHONE` pattern keeps its 9 to 15 digits and adds two forms:
+
+1. A first group in parentheses, of 2 to 5 digits, after an optional `+` and country group: "(00)504-5188", "+1 (393) 722-1568". A parenthesized group of 1 digit, such as a list number "(1)", starts no value.
+2. An extension right after the last group: `x`, `ext`, or `ext.`, then 1 to 6 digits, with no letter or digit after them. The extension is part of the value, and its digits do not count toward the 9 to 15. "0901110001pm" still ends no value.
+
+A known limit: an extension written after a space, such as "0901 110 001 ext. 12", is not part of the value, because it does not come right after the last group. Its digits stay as written.
+
+### Layer 1: names
+
+The name rules read a word as a letter followed by letters and combining marks: the combining diacritical marks U+0300 to U+036F (each of Unicode category `Mn`), which hold every Vietnamese diacritic. They compare a word with a list after Unicode NFC normalization. So "Vũ" typed with a decomposed tilde is one word and the family name "Vũ". The rules never change the message: their spans index the message as it came.
+
+A word joined to a letter or digit by a hyphen, a dot, a slash, or an at sign, on either side, is part of a code, such as an order ID or an email, and never joins a name. So "Robert Johnson ORD-12345" grows no further than "Robert Johnson", and the order ID stays whole. This holds for span growth and for the Vietnamese name rule. A dot that ends a sentence joins nothing, so "Robert Johnson Smith." still grows.
+
+1. **Span growth.** A `PERSON` span grows over each capitalized word right next to it, one space apart, up to 4 words in total, so "Vũ" and "Dũng" join the pseudonym.
+   - A word on the list of titles (`Mr`, `Mrs`, `Ms`, `Miss`, `Dr`, `Ông`, `Bà`, `Chị`, `Cô`, `Chú`) is not added.
+   - Nor is a word of the stoplist of the [pre-send check](#layer-2-the-pre-send-check): `I`, `Thanks`, `Thank`, `Regards`, `Best`, `Dear`, `Hi`, `Hello`, and `Please`. So "Thanks Lan" becomes "Thanks [NAME_1]".
+   - Span growth and the pre-send check use one list of words, but only the pre-send check also skips a word that starts a sentence or the text. Span growth adds such a word, so "Ask Robert Johnson" becomes one name. An extra word in a name only makes the draft worse, while a skipped word can leave a family name in the text: at the start of a sentence, the model finds "Thị Lan" in "Vũ Thị Lan" (FR-09).
+2. **Vietnamese name rule.** In each run of capitalized words, one space apart, the longest window of 2 to 4 words whose first or last word is on a fixed list of Vietnamese family names is a `NAME`.
+   - It finds "Hương Nguyễn", "Phương Hữu Bùi", and "Anh Anh Lê".
+   - **Stoplist words and titles.** The nine words of the stoplist of item 1 are never part of a window, so "Hi Nguyễn Văn An" becomes "Hi [NAME_1]", and "Dear Pham Minh" becomes "Dear [NAME_1]". A title may only be the first word of a window, and the `NAME` leaves it out, as span growth leaves titles out ([ADR-0029](../decisions/0029-rule-based-detectors-and-a-pre-send-check.md), statement 2): "Bà Hương Nguyễn" becomes "Bà [NAME_1]", "Mr Tran" becomes "Mr [NAME_1]", and "Dear Mr Tran" becomes "Dear Mr [NAME_1]". A title may end with a period, as in "Mr. Tran".
+   - **Windows of equal length.** The window that starts with a family name wins. When both or neither do, the left one wins. So the rule always finds the same name in the same message: in "Lan Pham Minh", it finds "Pham Minh".
+   - **Comparing family names.** Family names are compared after Unicode NFC normalization and case folding, so "NGUYEN VAN AN", as in a bank transfer note, is found. A second fixed list holds the unaccented spelling of the family names: the list of the source without diacritics, except three names that are also common words:
+     - "Do", the verb, as in "Do You Ship";
+     - "Ho", as in "Ho Ho Ho";
+     - "Le", as in "Le Monde".
+
+     That leaves 14 names: Nguyen, Tran, Pham, Hoang, Huynh, Vu, Vo, Phan, Truong, Bui, Dang, Ngo, Duong, Ly. "Dang" ("dang it"), "Ngo" (NGO), and "Vu" ("Déjà Vu") are words too, but rare ones, and the rule needs at least 2 capitalized words, so they can only cause over-detection.
+   - **"Le", "Do", and "Ho" without diacritics.** They are family names only when the word right after them is a middle name of a fixed list, compared in the same way: "Văn" and "Thị", and their unaccented spellings "Van" and "Thi". So "Le Van An", "Do Thi Mai", and "Ho Van Nam" are names, and "Do You Ship", "Le Monde", and "Ho Ho Ho" are not.
+   - **Source of the lists.** The family names and the middle names come from one public source about Vietnamese names, named in the code with its revision, and never from the generator of the measured messages. Otherwise the re-measurement would test the lists against themselves.
+3. **Person-cue rule.** 2 to 4 capitalized words that the model labels `ORG`, `GPE`, or `LOC` are a `NAME` when a cue from a fixed list comes right before them: "my name is", "I am", "this is", "on behalf of", "Regards,", "Thanks,", and "my" with a word for a relative or a neighbour. This finds "Kathryn Reynolds".
+4. Product names of the catalog are still excluded ([`drop_product_names`](../../backend/app/pseudonymization/domain/detection.py)), for the rule detectors too.
+5. The lists are constants of the module, versioned with it. A change of a list is a change of the detector version ([ADR-0010, Placeholder syntax](../decisions/0010-pseudonymization-and-egress-control.md#placeholder-syntax), item 5).
+6. **Known limits.** Tests state each limit as it is.
+   - Place names that start or end with a family name are taken for names when they stand alone: "Hồ Chí Minh", "Phan Thiết", and "Hoàng Mai", and "Phan Thiet" without diacritics. So are street names such as "Lê Lợi" and "Nguyễn Huệ" outside an address. This is over-detection ([Non-goals](#non-goals)).
+   - A capitalized word that starts a sentence or the text joins the person name right after it: "Ask Robert Johnson about the refund" becomes "[NAME_1] about the refund". This is over-detection too (item 1).
+   - The Vietnamese name rule does not find a family name of the list that is typed without diacritics and has no unaccented spelling on the list, unless a middle name follows it. Examples are "Do Minh" and "Le Thu Ha". The model, a known value of the ticket ([ADR-0010, Detection](../decisions/0010-pseudonymization-and-egress-control.md#detection), step 2), and the person-cue rule can still find such a name. The pre-send check finds it when it is a value of the map or a known value outside a placeholder, or when a part of it stands beside a placeholder.
+   - The Vietnamese name rule does not find a family name that is not on the list, such as "Lâm", "Đinh", or "Mai". [Rollout](#rollout), step 3, states what a miss of such a name in the re-measurement means for the PR. The list never changes to fit the measured messages (guardrail 5, [DATA-25](../rules/data-and-ml.md#leakage)). A longer list is an [open question](#open-questions).
+   - A given name before a window of two words stays outside it: in "Lan Pham Minh", the rule finds "Pham Minh" (item 2), and "Lan" stays beside the placeholder. The pre-send check stops such a ticket, unless "Lan" starts a sentence or the text. Then only the model, or a known value of the ticket that holds the whole name, can find "Lan".
+   - The person cues are English, so a message in Vietnamese, such as "Tôi là Lan Anh", gets no help from the person-cue rule. CST-06 sets the language of the data, KB, prompts, and UI, and `backend` has no gate on the language of a customer message.
+
+### Layer 1: addresses
+
+An address is a span that:
+
+1. starts with a house number: 1 to 5 digits, optionally followed by a letter or by `/` and digits;
+2. continues over up to 5 comma-separated parts, each made of capitalized words, address words, or a postal code of 5 or 6 digits;
+3. holds at least one address word from a fixed list, compared without case:
+   - the Vietnamese street and administrative words: `Đường`, `Phố`, `Ngõ`, `Ngách`, `Hẻm`, `Kiệt`, `Tổ`, `Khu`, `Dãy`, `Thôn`, `Ấp`, `Xóm`, `Phường`, `Xã`, `Thị trấn`, `Quận`, `Huyện`, `Thị xã`, `Thành phố`, `Tỉnh`;
+   - their spellings without diacritics, except two that are also common English words (the table below);
+   - the Vietnamese abbreviations `Q.` (Quận), `P.` (Phường), and `TP.` (Thành phố), only in the reading stated below;
+   - the English ones: `Street`, `St`, `Avenue`, `Ave`, `Road`, `Rd`, `Lane`, `Ln`, `Drive`, `Boulevard`, `Blvd`, `Apt`, `Suite`, `Unit`.
+
+The spellings without diacritics are the Vietnamese words of item 3 without their diacritics, with "đ" written as "d". Of the 20 words, "Khu" has no diacritics and is on the list already. The rule takes 17 spellings and leaves out 2:
+
+| Address word | Without diacritics | Taken | Reason |
+|---|---|---|---|
+| Đường | Duong | Yes | No English word. It is also a family name without diacritics ([Layer 1, names](#layer-1-names), item 2); inside an address, the longer `ADDRESS` wins over the `NAME` |
+| Phố | Pho | Yes | "pho" is also English for the noodle soup, but the catalog sells no food, so only a sentence such as "2 Pho Bowls" becomes an address, while leaving it out would leave a phố typed without diacritics whole, as in "12 Pho Hue, Hai Ba Trung" |
+| Ngõ | Ngo | Yes | "NGO" is an abbreviation, not a common word. It is also a family name without diacritics, as "Duong" is |
+| Ngách | Ngach | Yes | No English word |
+| Hẻm | Hem | Yes | "hem" is also English for the folded edge of a cloth, but the catalog sells no sewing goods, so only a sentence such as "2 Hem Tapes" becomes an address, while leaving it out would leave a hẻm typed without diacritics whole, as in "12 Hem 5, Phuong 3" |
+| Kiệt | Kiet | Yes | No English word |
+| Tổ | To | No | "to": address words are compared without case, so "1 to 2 weeks", an everyday sentence about delivery, would become an address |
+| Khu | Khu | On the list already | It has no diacritics |
+| Dãy | Day | No | "day": "2 day shipping", an everyday phrase about delivery, would become an address |
+| Thôn | Thon | Yes | No English word |
+| Ấp | Ap | Yes | "AP" is an abbreviation, not a common word |
+| Xóm | Xom | Yes | No English word |
+| Phường | Phuong | Yes | No English word |
+| Xã | Xa | Yes | No English word |
+| Thị trấn | Thi tran | Yes | No English words. It is compared as two words, as "Thị trấn" is |
+| Quận | Quan | Yes | No English word |
+| Huyện | Huyen | Yes | No English word |
+| Thị xã | Thi xa | Yes | No English words. It is compared as two words |
+| Thành phố | Thanh pho | Yes | No English phrase. It is compared as two words, as "Thành phố" is |
+| Tỉnh | Tinh | Yes | No English word |
+
+So "12 Nguyen Hue, Phuong Ben Nghe, Quan 1" is one address of 3 parts, and "12 Hem 5, Phuong 3" is one address of 2.
+
+The span is an `ADDRESS` detection, so the overlap rule lets it replace the names that the model found inside it ([ADR-0010, Detection](../decisions/0010-pseudonymization-and-egress-control.md#detection), step 5: the longer span wins). The `FAC`-based address of the adapter stays.
+
+The rule reads the parts of an address in this way:
+
+- A part ends at its first word that fits none of the three kinds, and the address ends with it: "Ship to 12 Main Street today" gives "12 Main Street".
+- A period right after `St`, `Ave`, `Rd`, `Ln`, `Blvd`, or `Apt` belongs to the address: "12 Main St., Springfield".
+- A number in the form of a house number right after an address word, with or without a period, belongs to the address: "Apt. 5B", "Phường 5", "Quận 3", "Hẻm 34/5", "Đường 3/2".
+- Two capitalized words joined by a hyphen or an apostrophe are one capitalized word, because place names are written so: "Tỉnh Bà Rịa-Vũng Tàu", "O'Connell Street". This differs from the name rules, which read a word joined by a hyphen as part of a code ([Layer 1, names](#layer-1-names)). "ORD-12345" still ends a part, because "12345" is no capitalized word.
+- A line break between two parts counts as a comma, so "12 Main Street" and "Springfield, IL 62701" on the next line are one address of 3 parts. An address still has at most 5 parts.
+- A word is read as the name rules read it, and an address word is compared after NFC normalization and case folding, with its diacritics. A spelling without diacritics is an address word only when the table above takes it, so "Tô" is no "Tổ".
+- `Q.`, `P.`, and `TP.` are address words only with their period, and only when a number in the form of a house number or a capitalized word follows the period, with no space or with spaces between: "Q.1", "Q. 1", "Q.10", "P. 5", "P.Bến Nghé", "TP.HCM", "TP. Hồ Chí Minh". The number or the word belongs to the address, as after any address word, and more capitalized words may follow in the same part, so "TP.Hồ Chí Minh" is one part. Without a space, the word reading takes "Q.1" and "TP.HCM" for codes ([Layer 1, names](#layer-1-names), opening paragraphs), so the address rule reads that form on its own. Like every address word, the abbreviation is compared without case, so "Tp.HCM" and "q.3" are read too, but a word after the period must be capitalized. So "12 Lê Lợi, Q.1, TP.HCM" and "12 Lê Lợi, Q. 1, TP. HCM" are each one address of 3 parts.
+- Only the address rule reads the abbreviations so. The name rules still read "Q.1" and "TP.HCM" as codes ([Layer 1, names](#layer-1-names), opening paragraphs): no word of them joins a name, and "TP.Hồ Chí Minh" alone gives no `NAME`.
+
+A prototype of the readings of the fourth revision, run on 2026-11-21 before the code, measured their over-detection:
+
+- On the 8 product names of the seed catalog ([`synthetic-dev-only-v1.json`](../../backend/seed/synthetic-dev-only-v1.json)), each as written and in title case, alone, after a quantity ("2 Desk lamp"), and in a sentence, the address rule finds no address in the 48 texts, as before. No product name holds a word of the new lists.
+- On the trial set ([Evaluation](#evaluation), statement 1), no detection of the 32 messages changes: names and addresses keep 11 of 12 values covered each and 0 over-detections each, and the pre-send check stops none of the messages. The trial runs again after the code.
+
+Known limits of the address rule. Tests state each limit as it is.
+
+- A street name in lowercase is no part of an address, because only address words may be in lowercase: "12 main street" is not found, and "12 đường lê lợi" and "12 duong le loi" give "12 đường" and "12 duong". This is an [open question](#open-questions).
+- A number after "To" or "Day" ends the address, because only an address word keeps the number after it, and an address with no other address word is not found: "12 To 5, Phuong 3" is not found, although "Phuong" is an address word.
+- A word that is spelled as an address word without diacritics starts an address after a number: "I ordered 2 Pho Bowls" and "Please send 2 Hem Tapes", with the English words "pho" and "hem", give "2 Pho Bowls" and "2 Hem Tapes"; and in "mua 2 quan jean" ("buy 2 pairs of jeans", with "quần" typed as "quan"), the rule finds "2 quan". This is over-detection ([Non-goals](#non-goals)).
+- A house number right before a family name that is also an address word, "Duong" or "Ngo", starts an address: "12 Ngo Van An" is one `ADDRESS`, not a `NAME`. The name is still replaced, with the wrong type.
+- An initial "P." or "Q." with a capitalized word after it reads as an abbreviation after a house number or inside an address: "12 P. Nguyen" is one address, and "Ship to 12 Main Street, P. Nguyen" gives "12 Main Street, P. Nguyen". The name is still replaced, as part of the `ADDRESS`.
+- Other forms of the abbreviations are read as before: without the period, with a word in lowercase after the period, and other abbreviations such as "TX.". So "12 Lê Lợi, Q1, TPHCM", "12 Lê Lợi, tp.hcm", and "12 Lê Lợi, TX.Thuận An" are not found. The other abbreviations are an [open question](#open-questions).
+- A greeting on the line after an address joins it: "12 Main Street" and "Thanks, Lan" on the next line are one address. This is over-detection.
+- So does "P.S." on the line after an address: "Ship to 12 Main Street" and "P.S. Thanks" on the next line give one address that ends with "P.S". This is over-detection too.
+- So does the next sentence after an abbreviation with a period: "Ship to 12 Main St. Thanks a lot" gives "12 Main St. Thanks". This is over-detection too.
+- A time in capitals with periods after a number gives one address: "Please deliver before 5 P.M. tomorrow" gives "5 P.M". This is over-detection too.
+
+### Layer 2: the pre-send check
+
+The pre-send check runs on the pseudonymized text that `pseudonymize` built, with the entries of its map and the known values of the ticket. It compares a value with the text outside placeholders in one of two ways, by type:
+
+- **Digits only**, for `PHONE` and `CARD`: the digits of the value, without the extension of a phone number, in order and without a gap, inside one run of digits and separators of the text. "0901110001" is found in "0901 110 001" and in "09011100012", and "0901110001x12" in "0901-110-001".
+- **Whole words**, ignoring case and diacritics, for `NAME`, `EMAIL`, `ADDRESS`, `ORDER_ID`, `TRACKING_ID`, and `TRANSACTION_ID`, as step 2 compares them ([`find_whole_words`](../../backend/app/pseudonymization/domain/detection.py)).
+
+It fails when it finds any of these:
+
+| Finding | Example | Why the detectors do not find it |
+|---|---|---|
+| A value of the map, again, outside a placeholder: every original value except `LITERAL` ones | A name that the model found in one sentence and not in the next | A detector returns spans, and only those spans are replaced. The model judges each occurrence in its own context |
+| A known value of the ticket outside a placeholder | The customer's phone number written with other separators, or inside a longer digit run, such as "09011100012" | Step 2 finds whole words of the stored spelling only |
+| Digits or letters joined to a placeholder by nothing or by `-`, `.`, `/`, `x`, or `@` | "[PHONE_1]-3701x6147" | Each detector judges its own spans; nothing looks at what is left beside a replaced span |
+| A capitalized word right before or after a `[NAME_n]`, with one or more spaces between, that is not on the stoplist: `I`, the titles of [Layer 1, names](#layer-1-names), the words of thanks and greeting (`Thanks`, `Thank`, `Regards`, `Best`, `Dear`, `Hi`, `Hello`), `Please`, and any word that starts a sentence or the text | "Vũ [NAME_1]"; not "Thanks [NAME_1]", "[NAME_1]. Please", or "This is [NAME_1] I want" | The same |
+| A number of 1 to 5 digits right before a `[NAME_n]` or `[ADDRESS_n]`, with one or more spaces between, or a number of 5 or 6 digits in the comma-separated part right after one, unless a currency word or sign stands right before or after it (`VND`, `đ`, `USD`, `$`) | "72 [NAME_1], [NAME_2] xã, 660877"; not "[ADDRESS_1], 250000 VND" or "[ADDRESS_1], $250000" | The same: a house number and a postal code left around a street that the model took for a name |
+
+The check reads the words beside a placeholder as the name rules do: a word holds its combining marks, and the stoplist is compared after NFC normalization ([Layer 1, names](#layer-1-names)). Unlike the name rules, it reads no word as part of a code, so "Pierre" of "Jean-Pierre [NAME_1]" is the word before the placeholder, and the check stops the ticket.
+
+It does not find a value that no detector found and that stands away from every placeholder, such as "Bà Hương Nguyễn" in round 1. Only layer 1 fixes those.
+
+Known limit of the check: a placeholder inside the path of a link, as in `https://shop.test/orders/[ORDER_ID_1]`, is joined to the text by "/", so the check stops the ticket. This is a false stop, which the re-measurement counts ([Evaluation](#evaluation), statement 2). A test states it as it is.
+
+### Flow
+
+```mermaid
+sequenceDiagram
+    participant J as Suggestion job
+    participant P as pseudonymize
+    participant DB as PostgreSQL
+    participant AI as ai-service
+    J->>P: Message, customer, order
+    P->>DB: Load the known values and product names
+    alt The records cannot be loaded, or a detector raises
+        P->>DB: Audit message.pseudonymized failed (detector_error)
+        P-->>J: PseudonymizationError
+        J->>DB: Both parts unavailable, pseudonymization_failed
+    else The detectors run
+        P->>P: Steps 1 to 5 of ADR-0010, with the rules of layer 1
+        P->>P: Build the text with pseudonyms
+        alt The text is over 4 000 characters, or a type needs a pseudonym above 999
+            P->>DB: Audit failed (text_too_long or pseudonym_limit_exceeded)
+            P-->>J: PseudonymizationError
+            J->>DB: Both parts unavailable, pseudonymization_failed
+        else The pre-send check finds personal data
+            P->>DB: Audit failed (personal_data_left), no map row
+            P-->>J: PersonalDataLeftError
+            J->>DB: Both parts unavailable, pseudonymization_failed
+        else The check passes
+            P->>DB: Store the map, or compare it with the stored one
+            alt The stored map differs
+                P->>DB: Audit failed (stored_map_differs)
+                P-->>J: PseudonymizationError
+                J->>DB: Both parts unavailable, pseudonymization_failed
+            else A transient database error
+                P-->>J: DatabaseUnavailableError: the job waits for its lease
+            else Stored or equal
+                P->>DB: Audit message.pseudonymized succeeded
+                P-->>J: The pseudonymized text
+                J->>AI: Analysis and draft requests with that text only
+            end
+        end
+    end
+```
+
+1. The detectors run on the raw message, the overlap rule keeps one detection per character, and the text is built, as today. Building fails for a text over 4 000 characters or a pseudonym above 999 (`domain/pseudonym_map.py:135`, `:170`).
+2. The pre-send check runs on that text before any map row is written, so a stopped run keeps no map ([ADR-0010, Storage and lifecycle](../decisions/0010-pseudonymization-and-egress-control.md#storage-and-lifecycle), items 2 and 3).
+3. A stopped run raises `PersonalDataLeftError`. The existing failure path does the rest: an audit entry in a transaction of its own, the event `pseudonymization.failed`, both parts `unavailable` with `pseudonymization_failed`, no call to `ai-service`, and no retry, because the check is deterministic.
+
+### Data and contracts
+
+- No contract changes. The reason code `pseudonymization_failed` already means that pseudonymization did not produce a text that may leave `backend`, and that `ai-service` was not called ([`AiReasonCode`](../../contracts/schemas/AiReasonCode.yaml), [contracts v1 design](contracts-v1.md#reason-codes)). A stop by the pre-send check is that case, and staff handle it the same way.
+- The audit entry `message.pseudonymized` gets one more value for its field `failure_reason`: `personal_data_left`. The field and its values live in the code of `backend` (`FAILURE_REASON_FIELD`, [`application/pseudonymize.py:56`](../../backend/app/pseudonymization/application/pseudonymize.py); `PseudonymizationFailureReason`, [`domain/errors.py:12-18`](../../backend/app/pseudonymization/domain/errors.py)), not in a contract.
+- No migration. The table `pseudonym_map_entries` does not change.
+
+### Errors and guardrails
+
+| Failure | Behavior | Test |
+|---|---|---|
+| The pre-send check finds personal data | No map row; audit `failed` with `personal_data_left`; event `pseudonymization.failed` at `error`; both parts `unavailable` with `pseudonymization_failed`; no call to `ai-service`; no retry | Use-case test of `PseudonymizeMessage` with each finding of the table; integration test of the job against PostgreSQL with a fake `ai-service` that records 0 calls |
+| A rule detector raises | Fails closed as a detector error, as today | Use-case test with a raising detector |
+| A ticket pseudonymized by the old detectors runs again | The computed map differs from the stored one: `stored_map_differs`, fail closed ([ADR-0020](../decisions/0020-storage-errors-of-the-pseudonym-map.md), statement 3) | The existing integration test of a differing map |
+| A rule replaces a word that is no personal data | The word becomes a pseudonym and is restored for staff. It can weaken classification and retrieval | Negative unit tests; over-detection measured ([Testing and evaluation](#testing-and-evaluation)) |
+| The pre-send check stops a text without personal data | The ticket is handled manually | Negative unit tests; the number of false stops is measured |
+
+The guardrails do not change: staff approve every reply, nothing is sent to a customer automatically, and a ticket that the AI cannot serve goes to manual handling. Every change here makes `backend` send less, never more.
+
+## Alternatives considered
+
+- **Pre-send check only.** It is the way of the branch `minh`, which still leaked 7 of 86 values. A check that repeats the first pass finds nothing new.
+- **Layer 1 only.** No detector is complete ([ADR-0010, Detection](../decisions/0010-pseudonymization-and-egress-control.md#detection)), and the partial spans of round 1 show that a found value can still leave a piece behind. The pre-send check catches those pieces.
+- **A larger or multilingual model** instead of the name and address rules. It changes [ADR-0017](../decisions/0017-named-entity-model-from-its-release-url.md), needs a new trial, and must fit the memory of the free instance beside `backend` (NFR-08). It stays an option if the rules fail the re-measurement.
+- **Block every text with a name-like or digit-like residue anywhere.** It would stop most messages, because order totals, dates, and product names look the same.
+- **Span growth over every capitalized word except titles** (the approved text of [Layer 1, names](#layer-1-names), item 1, before the second revision). It joins a greeting or a polite word to the name, as in "Thanks Lan". The stoplist of the pre-send check already lists those words.
+- **Span growth that also skips a word that starts a sentence or the text**, as the pre-send check does (a reading of [Layer 1, names](#layer-1-names), item 1, before the third revision). "Ask Robert Johnson" would stay "Ask [NAME_1]", but "Vũ" would stay beside "[NAME_1]" when the model finds only "Thị Lan" at the start of a sentence, and the pre-send check skips that word too.
+- **A window that starts with a title is no name** (the approved text of [Layer 1, names](#layer-1-names), item 2, before the third revision). It misses "Mr Tran", because the name without its title is one word.
+- **Windows of equal length left to the code.** The rule would find "Lan Pham" or "Pham Minh" in "Lan Pham Minh" by the order of the code, not by a stated rule.
+- **"Hà" on the list of family names.** The source does not list it, and "Hà Nội", "Hà Giang", and "Hà Tĩnh" would become names.
+- **A longer list of family names now**, such as "Lâm", "Đinh", and "Mai". Each added name also brings over-detection of place names, such as "Lâm Đồng" and "Cao Bằng", and both effects can only be measured on messages. The only messages at hand are the measured ones, and a list chosen from them would fit the test to itself. It is chosen on the independent set for NFR-06 ([Open questions](#open-questions)).
+- **NFC normalization of the whole message** before detection. It changes the text that `backend` pseudonymizes, stores, and restores, and the spans of every other detector. Reading words with their combining marks inside the rules finds the same names and leaves the message as it came.
+- **The Vietnamese name rule on a whole run of capitalized words.** It misses a name after another capitalized word, as in "Hi Nguyễn Văn An", because neither end of the run is a family name.
+- **Family names compared without diacritics, all of them**, as known values are. It finds every name typed without diacritics, but "Do", "Ho", and "Le" are also English words, so "Do You Ship" would become a name.
+- **Family names compared with their diacritics only.** It misses every name typed without diacritics, even "Nguyen".
+- **An unaccented list of 11 names** (the approved text of item 2 before the third revision). It also left out "Vo", "Truong", and "Ly", which share no common word.
+- **"Le", "Do", and "Ho" compared with their diacritics only** (the approved text of item 2 before the third revision). It misses "Le Van An" and "Do Thi Mai", although a middle name right after them rules out the common words.
+- **Family names compared with their case** (a reading of item 2 before the third revision, which did not mention case). It misses a name typed in capitals, such as "NGUYEN VAN AN".
+- **A part with one word outside the three kinds is no part** (a reading of [Layer 1, addresses](#layer-1-addresses), item 2, before the third revision). "Ship to 12 Main Street today" would be no address, because "today" spoils its only part.
+- **No period, number after an address word, joined word, or line break inside an address** (the letter of Layer 1, addresses, item 2, before the third revision). "12 Main St., Springfield" would hold no address word, "Apt 5" and "Phường 5" would leave "5", "Bà Rịa-Vũng Tàu" would leave "Rịa-Vũng Tàu", and a city on the next line would be sent whole.
+- **A number only after "Apt", "Suite", or "Unit"** (a first reading of the third revision). "12 Lê Lợi, phường 5, quận 3" would end at "phường" and leave "5, quận 3".
+- **A phone number of the map compared with its extension** (a reading of [Layer 2](#layer-2-the-pre-send-check) before the third revision). The digits of the extension would follow those of the number, so "0901 110 001 x12", written again outside its placeholder, would pass.
+- **One space only beside a `[NAME_n]`** (the letter of Layer 2 before the third revision). "Vũ  [NAME_1]" with two spaces would pass, and span growth does not join "Vũ" either.
+- **No address words without diacritics** (the approved text of [Layer 1, addresses](#layer-1-addresses) before the fourth revision, a known limit). "12 Nguyen Hue, Phuong Ben Nghe, Quan 1" would not be found.
+- **"To" and "Day" taken, or address words compared without diacritics.** Address words are compared without case, so "1 to 2 weeks" and "2 day shipping", everyday sentences about delivery, would become addresses. Comparing without diacritics would also take other words, such as "Tô" for "Tổ".
+- **"Hem" and "Pho" left out** (a first draft of the fourth revision). "2 Hem Tapes" and "2 Pho Bowls" would stay as written, but the catalog sells no sewing goods and no food. An address of a hẻm or a phố typed without diacritics would then leave whole: "12 Pho Hue, Hai Ba Trung" would not be found, and nor would "12 Hem 5, Phuong 3", because only an address word keeps the number after it.
+- **Abbreviations read as codes** (the approved text of Layer 1, addresses, before the fourth revision, a known limit). "12 Lê Lợi, Q.1, TP.HCM" would not be found.
+- **Only the form without a space after the period** (a first draft of the fourth revision). It narrows the decision to add "Q.", "P.", and "TP." to the address words: "12 Lê Lợi, Q. 1, TP. HCM" would not be found, although an address word keeps the number after it, as in "Quận 3".
+- **Abbreviations without the period**, such as "Q1", "P5", and "TP". "Q1" is also a quarter of a year, "P5" a page or a model, and "TP" an English abbreviation, so "2 TP Rolls" would become an address.
+- **The name rules reading "Q.", "P.", and "TP." as words too.** They would read "Hồ" of "TP.Hồ Chí Minh" as a word and find the city as a name, and they would need a second reading of codes beside the one that keeps "ORD-12345" out of a name.
+- **The PR into `main` waits for the independent set in every case** (an answer to the open question that the lead ruled out in the fifth revision). [ADR-0029, Validation](../decisions/0029-rule-based-detectors-and-a-pre-send-check.md#validation), asks for the re-measurement on the 50 messages and names an independent set only as a reason to revisit, and a new set made with Faker would not give an NFR-06 figure either, because it would be `synthetic-dev-only` ([DATA-03](../rules/data-and-ml.md#sources-and-acceptable-use)).
+
+## Testing and evaluation
+
+### Unit tests
+
+- One test per leak form of [What the measurement found](#what-the-measurement-found): the 4 names left whole, the 2 names left in part, the 4 phone numbers left whole, the 3 extensions left in part, the 2 addresses left whole, and each kind of address left in part. Each test uses the message rebuilt from its template.
+- At least 5 positive and 5 negative examples for each changed or new detector ([ADR-0010, Detection](../decisions/0010-pseudonymization-and-egress-control.md#detection)). The negatives include an ISO date, a list number "(1)", a price, an order total, a time such as "2pm", a product name of the catalog, a city name alone, and a title alone.
+- The name rules: each example of [Layer 1, names](#layer-1-names), its opening paragraphs and items 1 to 3, such as "Robert Johnson ORD-12345", "Mr Tran", "Dear Pham Minh", "NGUYEN VAN AN", "Le Van An", "Do You Ship", "Le Monde", and "Ho Ho Ho"; a message typed with decomposed diacritics; a test that the unaccented list is the list of the source without diacritics, except "Do", "Ho", and "Le"; and one test per known limit of item 6.
+- The address rule: each reading of [Layer 1, addresses](#layer-1-addresses), such as "12 Main St., Springfield", "Apt. 5B", "phường 5, quận 3", "Tỉnh Bà Rịa-Vũng Tàu", "12 Main Street ORD-12345", and a city on the next line, and one test per known limit of the rule. The readings of the fourth revision have these tests:
+  - "12 Lê Lợi, Q.1, TP.HCM", "12 Lê Lợi, Q. 1, TP. HCM", and "12 Nguyen Hue, Phuong Ben Nghe, Quan 1", each one address of 3 parts, and "12 Hem 5, Phuong 3" and "12 Pho Hue, Hai Ba Trung", each one address;
+  - each of the 17 spellings without diacritics in an address, in capitals and in lowercase, the two-word ones too;
+  - a test that the spellings without diacritics are the Vietnamese address words without their diacritics, except "To" and "Day";
+  - one test for each of the two words left out, which stays as before: "1 to 2 weeks" and "2 day shipping" give no address;
+  - each form of the abbreviations: "Q.10", "P. 5", "P.Bến Nghé", "TP.Hồ Chí Minh", "TP. Hồ Chí Minh", "Tp.HCM", and "q.3";
+  - "Duong" and "Ngo" both ways, through the overlap rule: "Duong Van An" and "Ngo Van An" alone are one `NAME` each, and "12 Duong Lang, Quan Dong Da" is one `ADDRESS` with no `NAME` left;
+  - a test that the name rules still read the abbreviations as codes: "TP.Hồ Chí Minh" alone gives no `NAME`, and "12 Lê Lợi, Q.1, TP.HCM" gives the same `NAME` as before;
+  - one test for each new known limit: "12 duong le loi", "12 To 5, Phuong 3", "2 Pho Bowls" and "2 Hem Tapes", each an address as the limit states, "mua 2 quan jean", "12 Ngo Van An", "12 P. Nguyen" and the same initial inside an address, each of the three forms of abbreviations that are read as before, "P.S." on the line after an address, and "5 P.M.".
+- The pre-send check: each finding of its table, positive and negative, and a text with no placeholder. The negatives include each stoplist word beside a `[NAME_n]` ("I", "Thanks [NAME_1]", "[NAME_1]. Please", "This is [NAME_1] I want"), and an amount after an address ("[ADDRESS_1], 250000 VND", "[ADDRESS_1], $250000"). The positives include a phone number of the map with an extension, written again without it, and a word two spaces from a `[NAME_n]`. The known limit of a link has its own test.
+- The use case: a stop keeps no map row, writes the audit entry `failed` with `personal_data_left`, raises `PersonalDataLeftError`, and logs no value of the message ([TEST-26](../rules/testing.md#guardrail-tests), last item).
+
+### Integration tests
+
+- `tests/integration/workflow/test_pseudonymization_runs.py` against PostgreSQL 17: a stopped run ends both parts `unavailable` with `pseudonymization_failed`, stores no map, and makes no call to the fake `ai-service`.
+
+### Evaluation
+
+1. **Trial set.** The named-entity trial of the workflow design ([`named_entity_trial.py`](../../backend/tests/trials/named_entity_trial.py), 32 messages with 12 names and 12 addresses) runs before and after the change, and reports recall and over-detection per type. It was written before round 1, so the rules were not written from it.
+2. **Re-measurement.** The privacy sweep and scan of round 1 run again on `backend` with the same 50 messages (the same file, checked by its SHA-256 sum), the same fake `ai-service`, and the same scan. The sweep writes the ticket ID of each message next to its message ID. The report states, per type: the values left whole, the values left in part (the alignment of [What the measurement found](#what-the-measurement-found), done per ticket), the number of the 50 messages that reached the fake `ai-service`, the number of tickets that the pre-send check stopped, the number of false stops: stopped tickets whose stopped text holds no raw value, by the alignment, and the number of request texts that fit no template, as over-detection (3 in round 1).
+3. The re-measurement passes only when every one of the 50 messages is measured: it reached the fake `ai-service`, or pseudonymization stopped it with a failure reason in the audit log. A message reached the fake `ai-service` when the fake recorded an analysis or draft request whose `as_of` equals the `created_at` of the message's ticket, to the millisecond. Messages are counted per ticket, never as distinct request texts, because pseudonymized messages of one template can be equal. The report states the number of requests that match no ticket and the number that match more than one; the run passes only when both are 0. A message that did neither is reported as not measured, and the run does not pass.
+4. The rules of layer 1 are written from the failures of these 50 messages, so the re-measurement is a regression check that each failure is fixed, not an NFR-06 figure, also because its messages are `synthetic-dev-only` ([DATA-03](../rules/data-and-ml.md#sources-and-acceptable-use); [Open questions](#open-questions)).
+
+## Observability
+
+- The event `pseudonymization.failed` keeps its fields and gets the reason `personal_data_left`, at `error`, because a stop means that a detector missed part of a value: a defect ([ADR-0010, Failure handling](../decisions/0010-pseudonymization-and-egress-control.md#failure-handling)). It carries the ticket ID, the reason, and the placeholder type next to the finding, never the value or the text ([LOG-29](../rules/logging-and-observability.md#privacy-in-telemetry)).
+- The span of `pseudonymize` keeps its attributes. The audit entry is the evidence for NFR-06 ([ADR-0010, Storage and lifecycle](../decisions/0010-pseudonymization-and-egress-control.md#storage-and-lifecycle), item 5).
+- No new metric.
+
+## Security and privacy
+
+- The message, the pseudonymized text, and the map are Confidential. The check reads them inside `backend` only, and nothing new leaves `backend`.
+- A stopped run sends nothing to `ai-service`, so no raw value of that ticket reaches the LLM provider.
+- The rule lists hold no personal data: titles, cue words, family names, middle names, and address words.
+- The test messages are `synthetic-dev-only` values made by Faker.
+
+## Rollout
+
+1. [ADR-0029](../decisions/0029-rule-based-detectors-and-a-pre-send-check.md) is accepted first, because this design changes three passages of ADR-0010 and one sentence of [SEC-36](../rules/security-and-privacy.md#pseudonymization).
+2. One PR changes the detectors, adds the pre-send check, changes SEC-36, and adds the tests. It goes in before the PR into `main`.
+3. The re-measurement runs on that PR. If a type still leaks, the PR does not merge, and the cause goes into this design as a revision. A name that the re-measurement misses only because its family name is not on the list ([Layer 1, names](#layer-1-names), item 6) is such a leak: the PR then waits for the independent set for NFR-06 ([Open questions](#open-questions)), and a longer list of family names is chosen on that set. Apart from that case, the PR does not wait for the independent set.
+4. A database that holds maps made by the old detectors keeps them. A later run for such a ticket, such as a retry, ends with `stored_map_differs` and manual handling, which is safe. The deployment after the PR into `main` starts with a new database ([ADR-0021, Merge procedure](../decisions/0021-repository-layout-and-ai-ml-migration.md#merge-procedure), statement 10).
+5. To roll back, revert the PR. The maps stored while it was in place differ from the old detectors' maps, so those tickets fail closed in the same way.
+
+## Open questions
+
+- **An independent set for NFR-06.** The re-measurement uses the messages whose failures the rules were written from, so it is a regression check, not an NFR-06 figure. A figure without that bias needs a new set from an approved source ([DATA-03](../rules/data-and-ml.md#sources-and-acceptable-use)), written by someone who has not seen the rules. Who writes it, and from which approved source? [Rollout](#rollout), step 3, states when the PR into `main` waits for it.
+- **A longer list of family names**, such as "Lâm", "Đinh", and "Mai" ([Layer 1, names](#layer-1-names), item 6). Which names join the list, chosen on the independent set above and never on the measured messages?
+- **Street names in lowercase** ([Layer 1, addresses](#layer-1-addresses), known limits). Should the address rule take a street name in lowercase, as in "12 đường lê lợi"? It is left until after the PR into `main`.
+- **Other abbreviations of address words** ([Layer 1, addresses](#layer-1-addresses), known limits). Should the address rule also read "TX." (Thị xã), "TT." (Thị trấn), "H." (Huyện), and "X." (Xã)?

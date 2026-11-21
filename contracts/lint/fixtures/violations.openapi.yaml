@@ -1,0 +1,76 @@
+# Breaks each custom lint rule once. scripts/check-lint-rules.ts expects every supportiq rule of
+# redocly.yaml to report a problem here. This file is test data, not a contract.
+openapi: 3.1.0
+info:
+  title: Lint rule fixture
+  version: 0.0.0
+  description: >-
+    A contract with one violation of each custom rule. Data class: Internal.
+paths:
+  /v1/things:
+    get:
+      # operation-id-camel-case, operation-documented (no description),
+      # operation-security (no security), operation-4xx-response (input and no 4xx)
+      operationId: list_things
+      summary: List things
+      parameters:
+        # limit-maximum
+        - name: limit
+          in: query
+          description: >-
+            The page size. Data class: Internal.
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: The things.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Thing"
+              examples:
+                # response-examples: an inline example instead of a file
+                inline:
+                  value: {}
+    post:
+      operationId: createThing
+      summary: Create a thing
+      description: Creates a thing.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              # request-body-closed: Thing does not set additionalProperties: false
+              $ref: "#/components/schemas/Thing"
+      responses:
+        "422":
+          description: The request is invalid.
+components:
+  schemas:
+    Thing:
+      description: >-
+        A thing. Data class: Internal.
+      type: object
+      properties:
+        # property-naming: a boolean without is_, has_, or can_
+        active:
+          description: >-
+            Whether the thing is active. Data class: Internal.
+          type: boolean
+        # schema-description: no description
+        label:
+          type: string
+    ProblemDetails:
+      description: >-
+        An error body. Data class: Internal.
+      type: object
+      properties:
+        type:
+          description: >-
+            The problem type. Data class: Internal.
+          type: string
+          enum:
+            # problem-type-urn
+            - urn:supportiq:problems:NotFound

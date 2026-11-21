@@ -1,0 +1,10 @@
+{
+  "summary": "A warning of the suggestion is not acknowledged",
+  "value": {
+    "type": "urn:supportiq:problem:invalid-request",
+    "title": "Invalid request",
+    "status": 422,
+    "detail": "Every warning of the suggestion must be acknowledged in acknowledged_warning_ids.",
+    "trace_id": "4da6a3ce929d0e0e4736bf92f3577b37"
+  }
+}

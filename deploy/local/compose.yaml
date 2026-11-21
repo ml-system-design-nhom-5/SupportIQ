@@ -1,0 +1,226 @@
+# The local run of the whole system (docs/design/local-run.md, docs/guides/local-run.md).
+# deploy/local/local-run.sh writes .local-run/secrets.env, builds the images one at a time, and
+# runs this project with --env-file local-run.env and --env-file ../../.local-run/secrets.env.
+# The profile `ai` adds ai-service, and the profile `observability` adds otel-lgtm.
+#
+# Every published port is bound to 127.0.0.1. Inside the containers, the servers listen on every
+# interface, because a published port reaches a container through its own network interface.
+# No value here is a secret: each secret comes from the environment or the env files at run time,
+# and no image holds one (SEC-09, SEC-29).
+name: supportiq-local
+
+x-backend-settings: &backend-settings
+  DATABASE_URL_APP: postgresql+asyncpg://supportiq_app:${LOCAL_DB_APP_PASSWORD:?run deploy/local/local-run.sh start}@postgres:5432/supportiq
+  # The database runs on the same host without TLS (SEC-28, local development).
+  DATABASE_TLS: disable
+  # The browser uses plain HTTP on localhost (ARCH-37).
+  SESSION_COOKIE_SECURE: "false"
+  ALLOWED_ORIGINS: ${LOCAL_ALLOWED_ORIGINS:?}
+  # Without the profile ai, no container has this name, so each call fails with a connection
+  # error and staff handle the ticket manually (docs/design/local-run.md, Two modes).
+  AI_SERVICE_BASE_URL: http://ai-service:8000
+  AI_SERVICE_TOKEN: ${LOCAL_SERVICE_TOKEN:?run deploy/local/local-run.sh start}
+  BACKEND_BUILD_VERSION: ${LOCAL_BACKEND_BUILD_VERSION:?}
+
+x-healthcheck-timing: &healthcheck-timing
+  interval: 5s
+  timeout: 5s
+  retries: 3
+  start_interval: 2s
+
+services:
+  postgres:
+    # PostgreSQL 17.11, the image of the CI job backend-tests and of the gate (WF-20), as a
+    # multi-platform index (amd64 and arm64).
+    image: postgres:17.11@sha256:748a18a54d3842d43bc156f0840d78029b8d349e0feca98c12b9c4ce3404a6b3
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${LOCAL_DB_SUPERUSER_PASSWORD:?run deploy/local/local-run.sh start}
+      # Read only by postgres-init.sh, on the first start of the volume.
+      LOCAL_DB_OWNER_PASSWORD: ${LOCAL_DB_OWNER_PASSWORD:?run deploy/local/local-run.sh start}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres-init.sh:/docker-entrypoint-initdb.d/postgres-init.sh:ro
+    ports:
+      # LOCAL_DB_PORT: 5434, or the value of the user's environment; inside, always 5432.
+      - 127.0.0.1:${LOCAL_DB_PORT:?}:5432
+    healthcheck:
+      # Over TCP: during the first start, the image runs a server on its socket only, and the
+      # setup connects over TCP.
+      test: ["CMD", "pg_isready", "--host", "127.0.0.1", "--username", "postgres"]
+      start_period: 60s
+      <<: *healthcheck-timing
+    networks:
+      - database
+
+  backend-setup:
+    # The one-off setup of every start, as the owner: each command is idempotent.
+    image: supportiq-local-backend
+    pull_policy: never
+    command:
+      - sh
+      - -c
+      - backend create-app-role && backend migrate && backend seed --if-empty
+    environment:
+      <<: *backend-settings
+      DATABASE_URL_OWNER: postgresql+asyncpg://supportiq_owner:${LOCAL_DB_OWNER_PASSWORD:?run deploy/local/local-run.sh start}@postgres:5432/supportiq
+      SEED_PASSWORD_CUSTOMER: ${SEED_PASSWORD_CUSTOMER:?run deploy/local/local-run.sh start}
+      SEED_PASSWORD_STAFF: ${SEED_PASSWORD_STAFF:?run deploy/local/local-run.sh start}
+      SEED_PASSWORD_MANAGER: ${SEED_PASSWORD_MANAGER:?run deploy/local/local-run.sh start}
+      SEED_PASSWORD_ADMIN: ${SEED_PASSWORD_ADMIN:?run deploy/local/local-run.sh start}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - database
+
+  backend:
+    build:
+      context: ../../backend
+    image: supportiq-local-backend
+    pull_policy: never
+    # backend serve never receives the owner URL or a seed password (ADR-0016, backend on
+    # Render, item 3).
+    environment:
+      <<: *backend-settings
+      # The traces go to otel-lgtm only with the profile observability, when local-run.sh sets
+      # LOCAL_TRACE_EXPORTER to otlp (docs/design/local-run.md, Observability profile).
+      TRACE_EXPORTER: ${LOCAL_TRACE_EXPORTER:-none}
+      OTLP_TRACES_ENDPOINT: http://otel-lgtm:4318/v1/traces
+    ports:
+      - 127.0.0.1:${LOCAL_BACKEND_PORT:?}:8000
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=4)
+      start_period: 180s
+      <<: *healthcheck-timing
+    depends_on:
+      backend-setup:
+        condition: service_completed_successfully
+      # Only with the profile ai: a release that fails its check stops the start first.
+      ai-service:
+        condition: service_healthy
+        required: false
+      # Only with the profile observability.
+      otel-lgtm:
+        condition: service_healthy
+        required: false
+    networks:
+      - database
+      - frontend
+      - ai-service
+      - telemetry
+
+  frontend:
+    build:
+      context: ../../frontend
+      dockerfile: ../deploy/local/frontend.Dockerfile
+    image: supportiq-local-frontend
+    pull_policy: never
+    environment:
+      SUPPORTIQ_BACKEND_URL: http://backend:8000
+    ports:
+      - 127.0.0.1:${LOCAL_FRONTEND_PORT:?}:5173
+    healthcheck:
+      # Through the proxy of the dev server, so a healthy frontend also reaches backend, and the
+      # entry module of the app, so the dev server can also transform the code.
+      test:
+        - CMD
+        - node
+        - -e
+        - "Promise.all(['/health/ready', '/src/app/main.tsx'].map((path) => fetch('http://127.0.0.1:5173' + path))).then((responses) => process.exit(responses.every((response) => response.ok) ? 0 : 1), () => process.exit(1))"
+      start_period: 120s
+      <<: *healthcheck-timing
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - frontend
+
+  ai-service:
+    profiles: [ai]
+    build:
+      context: ../../ai-service
+    image: supportiq-local-ai-service
+    pull_policy: never
+    # As the user who runs local-run.sh, as in the gate, so the release folder reads like the
+    # user's own files. The file system is read-only, and HOME is a tmpfs.
+    user: ${LOCAL_RUN_UID:-10001}:${LOCAL_RUN_GID:-10001}
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment:
+      HOME: /tmp
+      SERVICE_TOKEN: ${LOCAL_SERVICE_TOKEN:?run deploy/local/local-run.sh start}
+      RELEASE_MANIFEST_PATH: /srv/release/release-manifest.json
+      # From the user's environment only; local-run.sh stops before it asks anything when one
+      # is missing (docs/design/local-run.md, Two modes).
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${LOCAL_GEMINI_MODEL:?}
+      LLM_INPUT_PRICE_MICRO_USD_PER_MILLION_TOKENS: ${LLM_INPUT_PRICE_MICRO_USD_PER_MILLION_TOKENS:-}
+      LLM_OUTPUT_PRICE_MICRO_USD_PER_MILLION_TOKENS: ${LLM_OUTPUT_PRICE_MICRO_USD_PER_MILLION_TOKENS:-}
+    volumes:
+      - ${LOCAL_RELEASE_FOLDER:-./no-release-folder}:/srv/release:ro
+    ports:
+      - 127.0.0.1:${LOCAL_AI_SERVICE_PORT:?}:8000
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=4)
+      # As long as the wait of local-run.sh: on a virtual machine with 2 CPUs and 4 GiB, with
+      # otel-lgtm next to it, ai-service was healthy after 259 to 419 s in three test runs. A
+      # faster machine loses nothing, because start_interval reports the first check that passes.
+      start_period: 600s
+      <<: *healthcheck-timing
+    networks:
+      - ai-service
+
+  otel-lgtm:
+    profiles: [observability]
+    # The local Grafana stack of ADR-0007, statement 4, as a multi-platform index (amd64 and
+    # arm64), read on Docker Hub on 2026-11-18.
+    image: grafana/otel-lgtm:0.41.0@sha256:2e3290657f2f2a256c7a9175f097424a3ac5b54840741ace433e108e109348b6
+    # Not as root (SEC-29): the image supports any user in group 0. Its data lives in tmpfs:
+    # /data for every store, and /var/tempo, where Tempo 3.1.1 also writes and which only root
+    # could create in the image.
+    user: "10001:0"
+    tmpfs:
+      - /data:uid=10001,gid=0,mode=0770
+      - /var/tempo:uid=10001,gid=0,mode=0770
+    environment:
+      # Only the Grafana account admin signs in, with LOCAL_GRAFANA_ADMIN_PASSWORD of the user's
+      # environment, otherwise the value of secrets.env (docs/design/local-run.md,
+      # Observability profile). The image would let anonymous visitors in as Admin.
+      GF_SECURITY_ADMIN_PASSWORD: ${LOCAL_GRAFANA_ADMIN_PASSWORD:-}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      # Nothing leaves the machine (ADR-0007, decision driver 5): Grafana sends no usage
+      # statistics, checks for no update, and installs no plugin at startup.
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+    ports:
+      - 127.0.0.1:${LOCAL_GRAFANA_PORT:?}:3000
+    healthcheck:
+      # The check of the image skips a store that does not listen yet, so Grafana is checked
+      # too. As long as the wait of local-run.sh: on a virtual machine with 2 CPUs and 4 GiB,
+      # with ai-service next to it, otel-lgtm was healthy after 281 to 408 s in three test runs.
+      test: ["CMD-SHELL", "/otel-lgtm/docker/healthcheck.sh && curl -fsS -o /dev/null http://127.0.0.1:3000/api/health"]
+      start_period: 600s
+      <<: *healthcheck-timing
+    networks:
+      - telemetry
+
+volumes:
+  postgres-data:
+
+networks:
+  database:
+  frontend:
+  ai-service:
+  telemetry:

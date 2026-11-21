@@ -1,0 +1,10 @@
+{
+  "summary": "A ticket without a reply yet",
+  "value": {
+    "ticket_id": "TCK-1042",
+    "order_id": "ORD-20931",
+    "message": "I asked for a refund for the headphones three weeks ago. When will it be paid?",
+    "created_at": "2026-11-05T08:12:30Z",
+    "customer_status": "received"
+  }
+}

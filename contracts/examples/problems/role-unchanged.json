@@ -1,0 +1,11 @@
+{
+  "summary": "The account already has the requested role",
+  "value": {
+    "type": "urn:supportiq:problem:invalid-request",
+    "title": "Invalid request",
+    "status": 422,
+    "detail": "The account already has this role.",
+    "trace_id": "43dd8448eb211c80319c0af7651916cd",
+    "violated_rule": "role_unchanged"
+  }
+}

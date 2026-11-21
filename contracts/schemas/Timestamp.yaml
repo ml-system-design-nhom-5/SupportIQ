@@ -1,0 +1,8 @@
+description: >-
+  A point in time as an RFC 3339 string in UTC with the `Z` designator and at
+  most microsecond precision, for example `2026-11-05T09:30:00Z` or
+  `2026-11-05T09:30:00.125Z` (CON-17). Data class: that of the property holding
+  this value.
+type: string
+format: date-time
+pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,6})?Z$'

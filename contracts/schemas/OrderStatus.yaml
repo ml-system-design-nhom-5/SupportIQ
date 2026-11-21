@@ -1,0 +1,16 @@
+description: >-
+  The status of a simulated order.
+  `placed`: the order was placed and nobody has started preparing it.
+  `processing`: the order is being prepared and has not left the warehouse.
+  `shipped`: the order was handed to the carrier.
+  `delivered`: the order reached the customer.
+  `cancelled`: the order was cancelled and nothing more is shipped.
+  Consumers map an unknown value to a neutral presentation (CON-22).
+  Data class: that of the property holding this value.
+type: string
+enum:
+  - placed
+  - processing
+  - shipped
+  - delivered
+  - cancelled

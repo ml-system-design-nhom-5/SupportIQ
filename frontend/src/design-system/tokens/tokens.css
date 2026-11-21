@@ -1,0 +1,154 @@
+/*
+ * Design tokens of the console UI design (docs/design/console-ui.md, Design tokens), exposed as
+ * Tailwind theme values and CSS variables (ADR-0008, UI-05 to UI-09). This is the only file with
+ * color, size, and duration literals. Each `--*: initial` line removes the Tailwind default
+ * scale of that namespace, so a class outside the tokens does not exist and the
+ * `better-tailwindcss/no-unknown-classes` lint rule reports it.
+ */
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
+
+@theme {
+  /* Color roles (UI-06). */
+  --color-*: initial;
+  --color-background: #f4f4f5;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-border: #e4e4e7;
+  --color-border-strong: #71717a;
+  --color-text: #18181b;
+  --color-text-muted: #52525b;
+  --color-text-inverse: #ffffff;
+  --color-primary: #1d4ed8;
+  --color-primary-foreground: #ffffff;
+  --color-focus-ring: #2563eb;
+  --color-success: #15803d;
+  --color-success-subtle: #f0fdf4;
+  --color-warning: #b45309;
+  --color-warning-subtle: #fffbeb;
+  --color-danger: #b91c1c;
+  --color-danger-subtle: #fef2f2;
+  --color-info: #0369a1;
+  --color-info-subtle: #f0f9ff;
+  --color-ai: #6d28d9;
+  --color-ai-subtle: #f5f3ff;
+
+  /* Typography (UI-08): Inter for UI text, JetBrains Mono for IDs and versions. Both are
+     bundled with frontend, never loaded from a font server (SEC-23). */
+  --font-*: initial;
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+  --font-weight-*: initial;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --text-*: initial;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.5;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.5;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.5;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.5;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 1.5;
+  --text-3xl: 1.875rem;
+  --text-3xl--line-height: 1.5;
+  --leading-*: initial;
+  --tracking-*: initial;
+
+  /* Spacing (UI-07): the 4 px grid, with the steps 0, 4, 8, 12, 16, 24, 32, 48, and 64 px.
+     Each key is the step divided by 4, as in the default Tailwind scale. */
+  --spacing: initial;
+  --spacing-*: initial;
+  --spacing-0: 0px;
+  --spacing-1: 0.25rem;
+  --spacing-2: 0.5rem;
+  --spacing-3: 0.75rem;
+  --spacing-4: 1rem;
+  --spacing-6: 1.5rem;
+  --spacing-8: 2rem;
+  --spacing-12: 3rem;
+  --spacing-16: 4rem;
+
+  /* Radius and elevation (UI-09). */
+  --radius-*: initial;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --shadow-*: initial;
+  --shadow-sm: 0 1px 2px rgb(24 24 27 / 0.06);
+  --shadow-md: 0 4px 12px rgb(24 24 27 / 0.08);
+  --shadow-lg: 0 12px 32px rgb(24 24 27 / 0.16);
+  --inset-shadow-*: initial;
+  --drop-shadow-*: initial;
+  --text-shadow-*: initial;
+  --blur-*: initial;
+
+  /* Motion (UI-09): 100 ms and 200 ms with one easing curve. The lint rules allow only
+     `duration-100` and `duration-200`. */
+  --ease-*: initial;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --default-transition-duration: 200ms;
+  --default-transition-timing-function: var(--ease-standard);
+  --animate-*: initial;
+
+  /* Content widths of the designs: sign-in card, dialogs, form dialogs and the account menu
+     (account management design, mockups), the shop column (shop UI design, Layout), and the admin
+     column (admin UI design, Layout). */
+  --container-*: initial;
+  --container-sign-in: 22.5rem;
+  --container-dialog: 30rem;
+  --container-form-dialog: 32.5rem;
+  --container-menu: 15rem;
+  --container-shop: 60rem;
+  --container-admin: 65rem;
+
+  /* Console widths (console UI design, Layout and mockups): the default widths of the inbox
+     column, 272 px, and of the AI sidebar, 340 px, for stories of a single component (the
+     resizable columns take theirs from column-sizes.ts, and the ColumnWidths story of
+     tokens.stories.tsx keeps them equal), the KB side sheet, the order popovers, and the citation hint. */
+  --container-inbox: 17rem;
+  --container-ai-sidebar: 21.25rem;
+  --container-sheet: 32.5rem;
+  --container-popover: 22.5rem;
+  --container-popover-wide: 40rem;
+  --container-hint: 20rem;
+
+  /* The least height of the reply panel, which fills the rest of the middle column (console UI
+     design, placement rule 2; mockup.css: `.col > .panel.fill { min-height: 280px }`). */
+  --height-reply-panel: 17.5rem;
+
+  /* The neutral product image (UI-38): the same height at every width. */
+  --aspect-*: initial;
+  --height-product-card: 8.75rem;
+  --height-product-detail: 17.5rem;
+}
+
+/* A part of a panel that draws the line above it (PanelSection): every part after the first,
+   except the one right after a PanelHeader, which draws that line itself. One line separates
+   two parts, as in the mockups (mockup.css: `.panel-head` has the bottom border, and only
+   `.panel-body + .panel-body` has a top border). */
+@custom-variant panel-divider (&:not(:first-child, [data-panel-header] + *));
+
+@layer base {
+  html {
+    background-color: var(--color-background);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    overflow-wrap: break-word;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      transition-duration: 0ms !important;
+    }
+  }
+}

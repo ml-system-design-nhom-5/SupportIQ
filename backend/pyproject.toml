@@ -1,0 +1,591 @@
+[project]
+name = "supportiq-backend"
+version = "0.1.0"
+description = "SupportIQ backend: sign-in, the read-only shop, the ticket workflow, and internal accounts."
+readme = "README.md"
+# One Python version for all Python code, pinned with ../.python-version (PY-01).
+requires-python = "~=3.14.4"
+# Runtime dependencies. Every one is justified in the Dependencies table of README.md (WF-27).
+dependencies = [
+    "alembic==1.20.1",
+    "argon2-cffi==25.1.0",
+    "asyncpg==0.32.0",
+    "en-core-web-sm==3.8.0",
+    "fastapi==0.162.0",
+    "httpx==0.28.1",
+    "opentelemetry-api==1.45.2",
+    "opentelemetry-exporter-otlp-proto-http==1.45.2",
+    "opentelemetry-instrumentation-fastapi==0.66b2",
+    "opentelemetry-instrumentation-sqlalchemy==0.66b2",
+    "opentelemetry-sdk==1.45.2",
+    "pydantic==2.14.3",
+    "pydantic-core==2.50.4",
+    "pydantic-settings==2.16.2",
+    "spacy==3.8.18",
+    "sqlalchemy[asyncio]==2.0.57",
+    "starlette==1.10.0",
+    "uvicorn==0.54.0",
+]
+
+[project.scripts]
+backend = "app.composition_root:main"
+
+[dependency-groups]
+# Development dependencies, separate from the runtime ones (PY-46).
+dev = [
+    "anyio==4.16.0",
+    "coverage==7.17.2",
+    "datamodel-code-generator==0.90.0",
+    "hypothesis==6.170.15",
+    "import-linter==2.16",
+    "pip-audit==2.10.1",
+    "pyright[nodejs]==1.1.414",
+    "pytest==9.2.0",
+    "pytest-cov==7.1.0",
+    "pytest-randomly==5.0.0",
+    "pytest-socket==0.8.1",
+    "pytest-xdist==3.8.0",
+    "ruff==0.17.4",
+    "schemathesis==4.33.1",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.11,<0.12"]
+build-backend = "uv_build"
+
+# The package is app/ at the root of the project, without src/ (PY-06, ADR-0028).
+[tool.uv.build-backend]
+module-name = "app"
+module-root = ""
+
+# The named-entity model is not on PyPI. ADR-0017 allows this one release URL; uv.lock pins its
+# checksum, and `uv sync --locked` refuses a wheel that differs (SEC-30, SEC-31).
+[tool.uv.sources]
+en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
+
+# ----- Code generation (CON-25, CON-26) -----
+# `uv run datamodel-codegen` reads these options. The output is never edited by hand, and CI
+# regenerates it and fails when the committed file differs.
+[tool.datamodel-codegen]
+input = "../contracts/backend.openapi.yaml"
+input-file-type = "openapi"
+output = "app/generated/__init__.py"
+output-model-type = "pydantic_v2.BaseModel"
+target-python-version = "3.14"
+use-annotated = true
+field-constraints = true
+use-standard-collections = true
+use-union-operator = true
+use-specialized-enum = true
+strict-nullable = true
+disable-timestamp = true
+use-double-quotes = true
+formatters = ["builtin"]
+# An optional field of a request that the body leaves out is `MISSING`, not None, so a body
+# with `null` in it is refused (the contract never uses null, CON-08). `pydantic.MISSING`
+# needs Pydantic 2.14, the pinned version.
+use-missing-sentinel = true
+target-pydantic-version = "2.14"
+# Pydantic cannot apply the `pattern` of `Timestamp` to a datetime type, so the generator
+# would drop it with a warning. As a string, every timestamp is written by one function of
+# platform.web, which a unit test checks against the contract's pattern.
+type-overrides = { Timestamp = "builtins.str" }
+
+# The models of the `ai-service` contract, which only the adapters of `suggestions` read
+# (backend ticket workflow design, The `ai-service` client). `uv run datamodel-codegen
+# --profile ai-service` writes them; the profile keeps every option above and changes only the
+# input and the output.
+[tool.datamodel-codegen.profiles.ai-service]
+input = "../contracts/ai-service.openapi.yaml"
+output = "app/suggestions/adapters/generated/__init__.py"
+
+# ----- Formatting and linting (PY-03, PY-04, PY-05) -----
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+src = [".", "tests"]
+# Generated code is never linted (CON-26).
+extend-exclude = [
+    "app/generated",
+    "app/suggestions/adapters/generated",
+]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "N", "D", "ANN", "B", "PIE", "RUF", "S", "ASYNC", "DTZ", "T20",
+    "ERA", "C90", "PL", "PT", "PTH", "RET", "SIM", "C4", "TRY", "EM", "ARG", "TID",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests: `assert` is the pytest assertion (PY-29); test names state the behavior, so a
+# docstring per test function would repeat the name (TEST-03); the credentials are synthetic
+# test values, never secrets (TEST-18).
+"tests/**" = ["S101", "D103", "S105", "S106"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.mccabe]
+max-complexity = 8
+
+[tool.ruff.lint.pylint]
+max-args = 5
+max-branches = 8
+max-returns = 4
+max-statements = 30
+max-nested-blocks = 3
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "tests"]
+
+# ----- Type checking (PY-03, CODE-26) -----
+[tool.pyright]
+include = ["app", "tests"]
+exclude = [
+    "app/generated",
+    "app/suggestions/adapters/generated",
+    "**/__pycache__",
+    ".venv",
+]
+ignore = [
+    "app/generated",
+    "app/suggestions/adapters/generated",
+]
+typeCheckingMode = "strict"
+pythonVersion = "3.14"
+venvPath = "."
+venv = ".venv"
+reportMissingModuleSource = "error"
+reportUnnecessaryTypeIgnoreComment = "error"
+
+# ----- Tests (TEST-14 to TEST-16, TEST-21) -----
+[tool.pytest.ini_options]
+minversion = "9.0"
+testpaths = ["tests"]
+# The fakes and builders live in the `tests` package, next to the tests that own them (ARCH-27).
+pythonpath = ["."]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--import-mode=importlib",
+    # Parallel workers, each with its own database (TEST-15).
+    "--numprocesses=auto",
+    "--dist=loadfile",
+    # No socket in unit tests (TEST-16). tests/conftest.py limits the integration and contract
+    # layers to the loopback addresses, where the local PostgreSQL runs.
+    "--disable-socket",
+    "--allow-unix-socket",
+]
+xfail_strict = true
+# Zero warnings (PY-03): every warning fails the test run.
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+branch = true
+source = ["app"]
+# Generated code is excluded from coverage (CON-26, TEST-22).
+omit = [
+    "*/app/generated/*",
+    "*/app/suggestions/adapters/generated/*",
+]
+
+[tool.coverage.report]
+# The overall floor of TEST-21. The floor for the domain and application layers is checked by
+# a second `coverage report` with --include (README.md, Test).
+fail_under = 80
+show_missing = true
+skip_covered = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "assert_never\\(",
+    "raise AssertionError",
+    "\\.\\.\\.$",
+]
+
+# ----- Layer and feature boundaries (ARCH-11, ARCH-17, ARCH-18, ARCH-19) -----
+# Third-party contracts follow indirect imports, so a domain module cannot reach a framework
+# through another module. Contracts between modules of backend check direct imports, because
+# a public API of a feature may be imported from any layer.
+[tool.importlinter]
+root_package = "app"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Layers inside each feature: api, then application, then domain (ARCH-11)"
+type = "layers"
+containers = [
+    "app.accounts",
+    "app.commerce",
+    "app.tickets",
+    "app.reports",
+    "app.suggestions",
+    "app.pseudonymization",
+    "app.audit",
+    "app.idempotency",
+]
+layers = ["(api)", "(application)", "domain"]
+
+[[tool.importlinter.contracts]]
+name = "Layers inside platform: web, then application, then domain (ARCH-11, ARCH-19)"
+type = "layers"
+containers = ["app.platform"]
+layers = ["web", "application", "domain"]
+
+[[tool.importlinter.contracts]]
+name = "Features depend on each other without cycles, and platform on no feature (ARCH-18)"
+type = "layers"
+layers = [
+    "app.composition_root",
+    "app.reports",
+    "app.tickets",
+    "app.suggestions",
+    "app.pseudonymization",
+    "app.commerce",
+    "app.accounts",
+    "app.audit | app.idempotency",
+    "app.platform",
+]
+
+[[tool.importlinter.contracts]]
+name = "Domain and application code use no framework, driver, or SDK (ARCH-11, ARCH-12)"
+type = "forbidden"
+source_modules = [
+    "app.accounts.domain",
+    "app.accounts.application",
+    "app.commerce.domain",
+    "app.commerce.application",
+    "app.tickets.domain",
+    "app.tickets.application",
+    "app.reports.domain",
+    "app.reports.application",
+    "app.suggestions.domain",
+    "app.suggestions.application",
+    "app.pseudonymization.domain",
+    "app.pseudonymization.application",
+    "app.audit.domain",
+    "app.idempotency.domain",
+    "app.idempotency.application",
+    "app.platform.domain",
+    "app.platform.application",
+]
+forbidden_modules = [
+    "alembic", "argon2", "asyncpg", "en_core_web_sm", "fastapi", "httpx", "opentelemetry",
+    "pydantic", "pydantic_settings", "spacy", "sqlalchemy", "starlette", "uvicorn",
+    "app.generated",
+    "app.migrations",
+    "app.platform.settings",
+]
+
+[[tool.importlinter.contracts]]
+name = "Domain and application code import no adapter and no interface code (ARCH-11)"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = [
+    "app.accounts.domain",
+    "app.accounts.application",
+    "app.commerce.domain",
+    "app.commerce.application",
+    "app.tickets.domain",
+    "app.tickets.application",
+    "app.reports.domain",
+    "app.reports.application",
+    "app.suggestions.domain",
+    "app.suggestions.application",
+    "app.pseudonymization.domain",
+    "app.pseudonymization.application",
+    "app.audit.domain",
+    "app.idempotency.domain",
+    "app.idempotency.application",
+    "app.platform.domain",
+    "app.platform.application",
+]
+forbidden_modules = [
+    "app.accounts.adapters",
+    "app.accounts.api",
+    "app.commerce.adapters",
+    "app.commerce.api",
+    "app.tickets.adapters",
+    "app.tickets.api",
+    "app.reports.adapters",
+    "app.reports.api",
+    "app.suggestions.api",
+    "app.suggestions.adapters",
+    "app.pseudonymization.adapters",
+    "app.audit.adapters",
+    "app.idempotency.adapters",
+    "app.platform.adapters",
+    "app.platform.web",
+]
+
+[[tool.importlinter.contracts]]
+name = "Adapters use no contract model and no settings (ARCH-11, ARCH-15, ARCH-33)"
+type = "forbidden"
+source_modules = [
+    "app.accounts.adapters",
+    "app.commerce.adapters",
+    "app.tickets.adapters",
+    "app.reports.adapters",
+    "app.suggestions.adapters",
+    "app.pseudonymization.adapters",
+    "app.audit.adapters",
+    "app.idempotency.adapters",
+    "app.platform.adapters",
+]
+forbidden_modules = ["app.generated", "app.platform.settings"]
+
+[[tool.importlinter.contracts]]
+name = "Adapters import no application code, interface code, or other adapter (ARCH-11)"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = [
+    "app.accounts.adapters",
+    "app.commerce.adapters",
+    "app.tickets.adapters",
+    "app.reports.adapters",
+    "app.suggestions.adapters",
+    "app.pseudonymization.adapters",
+    "app.audit.adapters",
+    "app.idempotency.adapters",
+]
+forbidden_modules = [
+    "fastapi",
+    "starlette",
+    "app.accounts.application",
+    "app.accounts.api",
+    "app.commerce.application",
+    "app.commerce.api",
+    "app.tickets.application",
+    "app.tickets.api",
+    "app.reports.application",
+    "app.reports.api",
+    "app.suggestions.api",
+    "app.suggestions.application",
+    "app.pseudonymization.application",
+    "app.idempotency.application",
+    "app.platform.adapters",
+    "app.platform.web",
+]
+
+[[tool.importlinter.contracts]]
+name = "Interface code uses no driver and no settings (ARCH-11)"
+type = "forbidden"
+source_modules = [
+    "app.accounts.api",
+    "app.commerce.api",
+    "app.tickets.api",
+    "app.reports.api",
+    "app.suggestions.api",
+    "app.platform.web",
+]
+forbidden_modules = [
+    "alembic", "argon2", "asyncpg", "sqlalchemy", "uvicorn",
+    "app.migrations",
+    "app.platform.settings",
+]
+
+[[tool.importlinter.contracts]]
+name = "Interface code imports no adapter (ARCH-11)"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = [
+    "app.accounts.api",
+    "app.commerce.api",
+    "app.tickets.api",
+    "app.reports.api",
+    "app.suggestions.api",
+    "app.platform.web",
+]
+forbidden_modules = [
+    "app.suggestions.adapters",
+    "app.pseudonymization.adapters",
+    "app.accounts.adapters",
+    "app.commerce.adapters",
+    "app.tickets.adapters",
+    "app.reports.adapters",
+    "app.audit.adapters",
+    "app.idempotency.adapters",
+    "app.platform.adapters",
+]
+
+[[tool.importlinter.contracts]]
+name = "tickets reaches other features only through their public API (ARCH-17)"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = ["app.tickets"]
+forbidden_modules = [
+    "app.suggestions.domain",
+    "app.suggestions.application",
+    "app.suggestions.adapters",
+    "app.suggestions.api",
+    "app.pseudonymization.domain",
+    "app.pseudonymization.application",
+    "app.pseudonymization.adapters",
+    "app.commerce.domain",
+    "app.commerce.application",
+    "app.commerce.adapters",
+    "app.commerce.api",
+    "app.accounts.domain",
+    "app.accounts.application",
+    "app.accounts.adapters",
+    "app.accounts.api",
+    "app.idempotency.domain",
+    "app.idempotency.application",
+    "app.idempotency.adapters",
+    "app.platform.domain",
+    "app.platform.application",
+    "app.platform.adapters",
+    "app.platform.settings",
+]
+
+[[tool.importlinter.contracts]]
+name = "reports reaches other features only through their public API, never their adapters, and never pseudonymization (ARCH-17, SEC-37)"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = ["app.reports"]
+forbidden_modules = [
+    # Not even its public API: the export must never restore a pseudonym (SEC-33).
+    "app.pseudonymization",
+    "app.tickets.domain",
+    "app.tickets.application",
+    "app.tickets.adapters",
+    "app.tickets.api",
+    "app.suggestions.domain",
+    "app.suggestions.application",
+    "app.suggestions.adapters",
+    "app.suggestions.api",
+    "app.commerce.domain",
+    "app.commerce.application",
+    "app.commerce.adapters",
+    "app.commerce.api",
+    "app.accounts.domain",
+    "app.accounts.application",
+    "app.accounts.adapters",
+    "app.accounts.api",
+    "app.audit.domain",
+    "app.audit.adapters",
+    "app.idempotency.domain",
+    "app.idempotency.application",
+    "app.idempotency.adapters",
+    "app.platform.domain",
+    "app.platform.application",
+    "app.platform.adapters",
+    "app.platform.settings",
+]
+
+[[tool.importlinter.contracts]]
+name = "commerce reaches other features only through their public API (ARCH-17)"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = ["app.commerce"]
+forbidden_modules = [
+    "app.accounts.domain",
+    "app.accounts.application",
+    "app.accounts.adapters",
+    "app.accounts.api",
+    "app.platform.domain",
+    "app.platform.application",
+    "app.platform.adapters",
+    "app.platform.settings",
+]
+
+[[tool.importlinter.contracts]]
+name = "accounts reaches other features only through their public API (ARCH-17)"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = ["app.accounts"]
+forbidden_modules = [
+    "app.audit.domain",
+    "app.audit.adapters",
+    "app.idempotency.domain",
+    "app.idempotency.application",
+    "app.idempotency.adapters",
+    "app.platform.domain",
+    "app.platform.application",
+    "app.platform.adapters",
+    "app.platform.settings",
+]
+
+[[tool.importlinter.contracts]]
+name = "audit and idempotency reach platform only through its public API (ARCH-17)"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = ["app.audit", "app.idempotency"]
+forbidden_modules = [
+    "app.platform.domain",
+    "app.platform.application",
+    "app.platform.adapters",
+    "app.platform.settings",
+]
+
+[[tool.importlinter.contracts]]
+name = "suggestions reaches other features only through their public API (ARCH-17)"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = ["app.suggestions"]
+forbidden_modules = [
+    "app.pseudonymization.domain",
+    "app.pseudonymization.application",
+    "app.pseudonymization.adapters",
+    "app.commerce.domain",
+    "app.commerce.application",
+    "app.commerce.adapters",
+    "app.commerce.api",
+    "app.accounts.domain",
+    "app.accounts.application",
+    "app.accounts.adapters",
+    "app.accounts.api",
+    "app.audit.domain",
+    "app.audit.adapters",
+    "app.idempotency.domain",
+    "app.idempotency.application",
+    "app.idempotency.adapters",
+    "app.platform.domain",
+    "app.platform.application",
+    "app.platform.adapters",
+    "app.platform.settings",
+]
+
+[[tool.importlinter.contracts]]
+name = "Only pseudonymization reads its internals and the pseudonym map (SEC-37)"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = [
+    "app.accounts",
+    "app.audit",
+    "app.commerce",
+    "app.idempotency",
+    "app.platform",
+    "app.reports",
+    "app.suggestions",
+    "app.tickets",
+]
+forbidden_modules = [
+    "app.pseudonymization.domain",
+    "app.pseudonymization.application",
+    "app.pseudonymization.adapters",
+]
+
+[[tool.importlinter.contracts]]
+name = "pseudonymization reaches other features only through their public API (ARCH-17)"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = ["app.pseudonymization"]
+forbidden_modules = [
+    "app.commerce.domain",
+    "app.commerce.application",
+    "app.commerce.adapters",
+    "app.commerce.api",
+    "app.accounts.domain",
+    "app.accounts.application",
+    "app.accounts.adapters",
+    "app.accounts.api",
+    "app.audit.domain",
+    "app.audit.adapters",
+    "app.platform.domain",
+    "app.platform.application",
+    "app.platform.adapters",
+    "app.platform.settings",
+]

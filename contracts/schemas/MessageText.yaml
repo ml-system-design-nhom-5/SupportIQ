@@ -1,0 +1,9 @@
+description: >-
+  Text written by a person in a ticket: a customer message or a reply. From 1 to
+  2 000 characters, counted in Unicode code points as JSON Schema counts string
+  length, so a character outside the Basic Multilingual Plane counts once.
+  `backend` stores and returns the text exactly as received, without trimming
+  or normalizing it. Data class: that of the property holding this value.
+type: string
+minLength: 1
+maxLength: 2000

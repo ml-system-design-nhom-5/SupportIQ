@@ -1,0 +1,10 @@
+{
+  "summary": "The KB version is not the loaded one",
+  "value": {
+    "type": "urn:supportiq:problem:invalid-request",
+    "title": "Invalid request",
+    "status": 422,
+    "detail": "The kb_version is not the KB version that ai-service has loaded.",
+    "trace_id": "8448eb211c80319c0af7651916cd43dd"
+  }
+}

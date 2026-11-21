@@ -1,0 +1,735 @@
+{
+  "label": "interim, not the shared scenario set",
+  "set": "escalation/interim-v1",
+  "written_for": {
+    "ai_service_contract": "1.0.0",
+    "model_version": "v1.0.0",
+    "routing_version": "main-untuned-v1",
+    "kb_version": "v2",
+    "kb_document_count": 0
+  },
+  "cases": [
+    {
+      "case_id": "esc01-below-tau",
+      "esc_rule": "ESC-01",
+      "signal": "The top-1 probability (0.40) is below tau (0.70); the gap to the second intent (0.25) is not below delta (0.10)",
+      "request": {
+        "message": "Something is wrong with [ORDER_ID_1] and I do not know what to do.",
+        "as_of": "2026-11-17T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {"label": "delivery_issue", "probability": 0.40},
+          {"label": "track_order", "probability": 0.15}
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": ["low_confidence", "no_valid_document"],
+        "forbidden_reason_codes": [],
+        "no_other_reason_codes": true,
+        "requires_authority": false,
+        "llm_called": false
+      },
+      "without_kb_evidence": "low_confidence comes from tau alone. The release holds no KB document version, so no_valid_document is added (ESC-04); routing abstains on either code, and no draft exists until staff confirm or correct the intent."
+    },
+    {
+      "case_id": "esc01-below-delta",
+      "esc_rule": "ESC-01",
+      "signal": "The gap between the top two probabilities (0.47 and 0.44) is below delta (0.10)",
+      "request": {
+        "message": "What are the rules for getting my money back when I send a dress back?",
+        "as_of": "2026-11-17T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {"label": "refund_policy", "probability": 0.47},
+          {"label": "return_policy", "probability": 0.44}
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": ["low_confidence", "no_valid_document"],
+        "forbidden_reason_codes": [],
+        "no_other_reason_codes": true,
+        "requires_authority": false,
+        "llm_called": false
+      },
+      "without_kb_evidence": "low_confidence holds whatever the KB holds. With tau 0.70 and delta 0.10, a gap below delta always comes with a top-1 probability below tau, so this case cannot show delta alone. no_valid_document is added because the release holds no KB document version."
+    },
+    {
+      "case_id": "esc01-at-tau",
+      "esc_rule": "ESC-01",
+      "signal": "The top-1 probability is exactly tau (0.70), and the gap to the second intent (0.60) is not below delta (0.10): a probability equal to tau is not low",
+      "request": {
+        "message": "Where is [ORDER_ID_1] now? It left the warehouse on Monday.",
+        "as_of": "2026-11-17T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {"label": "track_order", "probability": 0.70},
+          {"label": "track_delivery", "probability": 0.10}
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": ["no_valid_document"],
+        "forbidden_reason_codes": ["low_confidence"],
+        "no_other_reason_codes": true,
+        "requires_authority": false,
+        "llm_called": false
+      },
+      "without_kb_evidence": "The intent is not low, so only the evidence decides. The release holds no KB document version, so routing abstains with no_valid_document alone."
+    },
+    {
+      "case_id": "esc01-staff-confirms-intent",
+      "esc_rule": "ESC-01",
+      "signal": "Staff confirmed the intent with intent_override, so low_confidence is never set",
+      "request": {
+        "message": "When will [ORDER_ID_1] arrive? The tracking page has not changed for four days.",
+        "as_of": "2026-11-17T09:00:00Z",
+        "intent_override": "delivery_time"
+      },
+      "inject": null,
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": ["no_valid_document"],
+        "forbidden_reason_codes": ["low_confidence"],
+        "no_other_reason_codes": true,
+        "requires_authority": false,
+        "llm_called": false
+      },
+      "without_kb_evidence": "The staff choice replaces the intent distribution, so the outcome does not depend on the model. With a KB document in effect this request would get a draft; the release holds none, so it abstains with no_valid_document (ESC-04)."
+    },
+    {
+      "case_id": "esc02-out-of-scope-intent",
+      "esc_rule": "ESC-02",
+      "signal": "A confident intent outside the 12 in-scope intents (recover_password, 0.94)",
+      "request": {
+        "message": "I cannot sign in because I forgot my password.",
+        "as_of": "2026-11-17T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {"label": "recover_password", "probability": 0.94}
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": ["out_of_scope_intent", "no_valid_document"],
+        "forbidden_reason_codes": [],
+        "no_other_reason_codes": true,
+        "requires_authority": false,
+        "llm_called": false
+      },
+      "without_kb_evidence": "out_of_scope_intent comes from the intent alone and leads to manual handling. no_valid_document is added because the release holds no KB document version."
+    },
+    {
+      "case_id": "esc02-password-message",
+      "esc_rule": "ESC-02",
+      "signal": "The model reads an account request, which is outside the 12 in-scope intents",
+      "request": {
+        "message": "I forgot my password and the reset link never reaches [EMAIL_1]. How do I get back into my account?",
+        "as_of": "2026-11-17T09:00:00Z"
+      },
+      "inject": null,
+      "depends_on_model": true,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": ["out_of_scope_intent", "no_valid_document"],
+        "forbidden_reason_codes": ["human_agent_requested"],
+        "no_other_reason_codes": false,
+        "requires_authority": null,
+        "llm_called": false
+      },
+      "without_kb_evidence": "out_of_scope_intent depends on the top intent of the model, not on the KB. no_valid_document is added because the release holds no KB document version."
+    },
+    {
+      "case_id": "esc02-store-hours-message",
+      "esc_rule": "ESC-02",
+      "signal": "The model reads a store question, which is outside the 12 in-scope intents",
+      "request": {
+        "message": "What time does your store near [ADDRESS_1] open on Sundays?",
+        "as_of": "2026-11-17T09:00:00Z"
+      },
+      "inject": null,
+      "depends_on_model": true,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": ["out_of_scope_intent", "no_valid_document"],
+        "forbidden_reason_codes": ["human_agent_requested"],
+        "no_other_reason_codes": false,
+        "requires_authority": null,
+        "llm_called": false
+      },
+      "without_kb_evidence": "out_of_scope_intent depends on the top intent of the model, not on the KB. no_valid_document is added because the release holds no KB document version."
+    },
+    {
+      "case_id": "esc03a-refund-request-message",
+      "esc_rule": "ESC-03 (a)",
+      "signal": "The model reads a refund request, and request_refund is a sensitive intent",
+      "request": {
+        "message": "Please refund [ORDER_ID_1]. I want my money back for the headphones.",
+        "as_of": "2026-11-17T09:00:00Z",
+        "order_context": {"order_status": "delivered", "shipment_status": "delivered"}
+      },
+      "inject": null,
+      "depends_on_model": true,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": ["no_valid_document"],
+        "forbidden_reason_codes": ["human_agent_requested"],
+        "no_other_reason_codes": false,
+        "requires_authority": true,
+        "llm_called": false
+      },
+      "without_kb_evidence": "requires_authority comes from the intent distribution alone and never prevents retrieval or a draft (ESC-03 (a)). The release holds no KB document version, so routing abstains with no_valid_document instead of drafting supporting information."
+    },
+    {
+      "case_id": "esc03a-sensitive-intent-not-first",
+      "esc_rule": "ESC-03 (a)",
+      "signal": "A damaged delivery whose customer also asks for the money back: request_refund is second (0.18), at or above sensitive_intent_min_probability (0.10)",
+      "request": {
+        "message": "My parcel [ORDER_ID_1] came with a broken lid. I want my money back.",
+        "as_of": "2026-11-17T09:00:00Z",
+        "order_context": {"order_status": "delivered", "shipment_status": "delivered"}
+      },
+      "inject": {
+        "intent_distribution": [
+          {"label": "delivery_issue", "probability": 0.76},
+          {"label": "request_refund", "probability": 0.18}
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": ["no_valid_document"],
+        "forbidden_reason_codes": [],
+        "no_other_reason_codes": true,
+        "requires_authority": true,
+        "llm_called": false
+      },
+      "without_kb_evidence": "The authority flag comes from the second intent alone (ADR-0005, statement 5). The release holds no KB document version, so routing abstains with no_valid_document."
+    },
+    {
+      "case_id": "esc03a-sensitive-intent-at-threshold",
+      "esc_rule": "ESC-03 (a)",
+      "signal": "cancel_order has exactly sensitive_intent_min_probability (0.10): a probability equal to the threshold counts",
+      "request": {
+        "message": "Where is [ORDER_ID_1]? If it is still far away, I may cancel it.",
+        "as_of": "2026-11-17T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {"label": "track_order", "probability": 0.85},
+          {"label": "cancel_order", "probability": 0.10}
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": ["no_valid_document"],
+        "forbidden_reason_codes": ["low_confidence"],
+        "no_other_reason_codes": true,
+        "requires_authority": true,
+        "llm_called": false
+      },
+      "without_kb_evidence": "The authority flag comes from the sensitive intent at the threshold alone (ADR-0005, statement 5). The release holds no KB document version, so routing abstains with no_valid_document."
+    },
+    {
+      "case_id": "esc03a-sensitive-intent-staff-choice",
+      "esc_rule": "ESC-03 (a)",
+      "signal": "Staff chose request_refund with intent_override",
+      "request": {
+        "message": "The kettle from [ORDER_ID_1] stopped working after one day, so I would like my money back.",
+        "as_of": "2026-11-17T09:00:00Z",
+        "intent_override": "request_refund"
+      },
+      "inject": null,
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": ["no_valid_document"],
+        "forbidden_reason_codes": ["low_confidence"],
+        "no_other_reason_codes": true,
+        "requires_authority": true,
+        "llm_called": false
+      },
+      "without_kb_evidence": "A sensitive intent chosen by staff sets the authority flag as a predicted one does, whatever the KB holds. The release holds no KB document version, so routing abstains with no_valid_document."
+    },
+    {
+      "case_id": "esc03a-refund-policy-question",
+      "esc_rule": "ESC-03 (a)",
+      "signal": "A question about the refund policy only, with no sensitive intent at 0.10 or above and no sensitive term",
+      "request": {
+        "message": "How long does a refund usually take after you receive a returned item?",
+        "as_of": "2026-11-17T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {"label": "refund_policy", "probability": 0.93}
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": ["no_valid_document"],
+        "forbidden_reason_codes": [],
+        "no_other_reason_codes": true,
+        "requires_authority": false,
+        "llm_called": false
+      },
+      "without_kb_evidence": "A message that only asks about a refund policy needs no authority (requirements, 4.1). The release holds no KB document version, so routing abstains with no_valid_document."
+    },
+    {
+      "case_id": "esc03a-term-suspected-fraud",
+      "esc_rule": "ESC-03 (a)",
+      "signal": "The sensitive term 'fraud' (suspected_fraud), with a confident intent that is not sensitive",
+      "request": {
+        "message": "My son [NAME_1] says the payment for [ORDER_ID_1] looks like fraud.",
+        "as_of": "2026-11-17T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {"label": "track_order", "probability": 0.93}
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": ["no_valid_document"],
+        "forbidden_reason_codes": [],
+        "no_other_reason_codes": true,
+        "requires_authority": true,
+        "llm_called": false
+      },
+      "without_kb_evidence": "The term is the only authority signal, because no sensitive intent reaches 0.10. The release holds no KB document version, so routing abstains with no_valid_document."
+    },
+    {
+      "case_id": "esc03a-term-unauthorized",
+      "esc_rule": "ESC-03 (a)",
+      "signal": "The sensitive term 'unauthorized' (suspected_fraud), with a confident intent that is not sensitive",
+      "request": {
+        "message": "My card statement shows an unauthorized charge for [ORDER_ID_1].",
+        "as_of": "2026-11-17T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {"label": "track_order", "probability": 0.93}
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": ["no_valid_document"],
+        "forbidden_reason_codes": [],
+        "no_other_reason_codes": true,
+        "requires_authority": true,
+        "llm_called": false
+      },
+      "without_kb_evidence": "The term is the only authority signal, because no sensitive intent reaches 0.10. The release holds no KB document version, so routing abstains with no_valid_document."
+    },
+    {
+      "case_id": "esc03a-term-legal-claim",
+      "esc_rule": "ESC-03 (a)",
+      "signal": "The sensitive term 'legal action' (legal_claim), with a confident intent that is not sensitive",
+      "request": {
+        "message": "If [ORDER_ID_1] is not sorted out by Friday, I will take legal action.",
+        "as_of": "2026-11-17T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {"label": "track_order", "probability": 0.93}
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": ["no_valid_document"],
+        "forbidden_reason_codes": [],
+        "no_other_reason_codes": true,
+        "requires_authority": true,
+        "llm_called": false
+      },
+      "without_kb_evidence": "The term is the only authority signal, because no sensitive intent reaches 0.10. The release holds no KB document version, so routing abstains with no_valid_document."
+    },
+    {
+      "case_id": "esc03a-term-transaction-dispute",
+      "esc_rule": "ESC-03 (a)",
+      "signal": "The sensitive term 'chargeback' (transaction_dispute), with a confident intent that is not sensitive",
+      "request": {
+        "message": "I have asked my bank for a chargeback on the payment for [ORDER_ID_1].",
+        "as_of": "2026-11-17T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {"label": "track_order", "probability": 0.93}
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": ["no_valid_document"],
+        "forbidden_reason_codes": [],
+        "no_other_reason_codes": true,
+        "requires_authority": true,
+        "llm_called": false
+      },
+      "without_kb_evidence": "The term is the only authority signal, because no sensitive intent reaches 0.10. The release holds no KB document version, so routing abstains with no_valid_document."
+    },
+    {
+      "case_id": "esc03a-term-policy-exception",
+      "esc_rule": "ESC-03 (a)",
+      "signal": "The sensitive term 'make an exception' (policy_exception), with a confident intent that is not sensitive",
+      "request": {
+        "message": "The return window for [ORDER_ID_1] closed two days ago. Could you make an exception for me?",
+        "as_of": "2026-11-17T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {"label": "track_order", "probability": 0.93}
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": ["no_valid_document"],
+        "forbidden_reason_codes": [],
+        "no_other_reason_codes": true,
+        "requires_authority": true,
+        "llm_called": false
+      },
+      "without_kb_evidence": "The term is the only authority signal, because no sensitive intent reaches 0.10. The release holds no KB document version, so routing abstains with no_valid_document."
+    },
+    {
+      "case_id": "esc03a-term-legal-claim-message",
+      "esc_rule": "ESC-03 (a)",
+      "signal": "The sensitive terms 'lawyer' and 'lawsuit' (legal_claim), with the intent of the model",
+      "request": {
+        "message": "My lawyer will file a lawsuit if [ORDER_ID_1] is not resolved this week.",
+        "as_of": "2026-11-17T09:00:00Z"
+      },
+      "inject": null,
+      "depends_on_model": true,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": ["no_valid_document"],
+        "forbidden_reason_codes": ["human_agent_requested"],
+        "no_other_reason_codes": false,
+        "requires_authority": true,
+        "llm_called": false
+      },
+      "without_kb_evidence": "The authority flag comes from the terms, whatever the model predicts; only the recommendation depends on the model. The release holds no KB document version, so routing abstains with no_valid_document."
+    },
+    {
+      "case_id": "esc03b-human-agent-message",
+      "esc_rule": "ESC-03 (b)",
+      "signal": "The model reads a request for a person (human_agent)",
+      "request": {
+        "message": "Please connect me with a human agent. I do not want to chat with a bot.",
+        "as_of": "2026-11-17T09:00:00Z"
+      },
+      "inject": null,
+      "depends_on_model": true,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "escalate",
+        "draft_status": "escalation_recommended",
+        "required_reason_codes": ["human_agent_requested", "no_valid_document"],
+        "forbidden_reason_codes": [],
+        "no_other_reason_codes": false,
+        "requires_authority": null,
+        "llm_called": false
+      },
+      "without_kb_evidence": "A human_agent request never gets a draft, with or without evidence. no_valid_document is added because the release holds no KB document version; escalation still wins."
+    },
+    {
+      "case_id": "esc03b-human-agent",
+      "esc_rule": "ESC-03 (b)",
+      "signal": "A confident human_agent intent (0.95), which never sets the authority flag by itself",
+      "request": {
+        "message": "I would like to speak with a real person about [ORDER_ID_1].",
+        "as_of": "2026-11-17T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {"label": "human_agent", "probability": 0.95}
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "escalate",
+        "draft_status": "escalation_recommended",
+        "required_reason_codes": ["human_agent_requested", "no_valid_document"],
+        "forbidden_reason_codes": [],
+        "no_other_reason_codes": true,
+        "requires_authority": false,
+        "llm_called": false
+      },
+      "without_kb_evidence": "A human_agent request never gets a draft, with or without evidence. no_valid_document is added because the release holds no KB document version; escalation still wins."
+    },
+    {
+      "case_id": "esc03b-human-agent-low-confidence",
+      "esc_rule": "ESC-03 (b)",
+      "signal": "human_agent is first but below tau (0.55); escalation still wins over the abstention",
+      "request": {
+        "message": "Can someone from your team call me back about [ORDER_ID_1]?",
+        "as_of": "2026-11-17T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {"label": "human_agent", "probability": 0.55},
+          {"label": "customer_service", "probability": 0.30}
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "escalate",
+        "draft_status": "escalation_recommended",
+        "required_reason_codes": ["low_confidence", "human_agent_requested", "no_valid_document"],
+        "forbidden_reason_codes": [],
+        "no_other_reason_codes": true,
+        "requires_authority": false,
+        "llm_called": false
+      },
+      "without_kb_evidence": "No draft is possible on either code. no_valid_document is added because the release holds no KB document version; escalation still wins."
+    },
+    {
+      "case_id": "esc03b-human-agent-with-term",
+      "esc_rule": "ESC-03 (b)",
+      "signal": "A human_agent intent (0.95) and the sensitive term 'lawsuit': escalation, and the term adds the authority flag",
+      "request": {
+        "message": "I want to talk to a real person about the lawsuit over [ORDER_ID_1].",
+        "as_of": "2026-11-17T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {"label": "human_agent", "probability": 0.95}
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "escalate",
+        "draft_status": "escalation_recommended",
+        "required_reason_codes": ["human_agent_requested", "no_valid_document"],
+        "forbidden_reason_codes": [],
+        "no_other_reason_codes": true,
+        "requires_authority": true,
+        "llm_called": false
+      },
+      "without_kb_evidence": "Both signals hold without evidence. no_valid_document is added because the release holds no KB document version; escalation still wins."
+    },
+    {
+      "case_id": "esc04-no-valid-document",
+      "esc_rule": "ESC-04",
+      "signal": "A confident in-scope intent (shipping_costs, 0.94) with no KB document version to support a draft",
+      "request": {
+        "message": "How much does shipping to [ADDRESS_1] cost for a small parcel?",
+        "as_of": "2026-11-17T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {"label": "shipping_costs", "probability": 0.94}
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": ["no_valid_document"],
+        "forbidden_reason_codes": [],
+        "no_other_reason_codes": true,
+        "requires_authority": false,
+        "llm_called": false
+      },
+      "without_kb_evidence": "This is the case that the empty KB produces: no document version supports the request, so the AI abstains and the LLM is never called."
+    },
+    {
+      "case_id": "esc04-no-valid-document-message",
+      "esc_rule": "ESC-04",
+      "signal": "The model reads a return question, and no KB document version supports a draft",
+      "request": {
+        "message": "How many days do I have to send back a jacket from [ORDER_ID_1]?",
+        "as_of": "2026-11-17T09:00:00Z"
+      },
+      "inject": null,
+      "depends_on_model": true,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": ["no_valid_document"],
+        "forbidden_reason_codes": ["human_agent_requested"],
+        "no_other_reason_codes": false,
+        "requires_authority": null,
+        "llm_called": false
+      },
+      "without_kb_evidence": "This is the case that the empty KB produces: no document version supports the request, so the AI abstains and the LLM is never called."
+    },
+    {
+      "case_id": "esc05-intent-model-failure",
+      "esc_rule": "ESC-05",
+      "signal": "The intent model fails",
+      "request": {
+        "message": "Where is [ORDER_ID_1] right now?",
+        "as_of": "2026-11-17T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": null,
+        "failure": "intent_model"
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 500,
+        "problem_type": "urn:supportiq:problem:internal-error",
+        "recommendation": null,
+        "draft_status": null,
+        "required_reason_codes": [],
+        "forbidden_reason_codes": [],
+        "no_other_reason_codes": false,
+        "requires_authority": null,
+        "llm_called": false
+      },
+      "without_kb_evidence": "The failure comes before retrieval, so the KB plays no part. backend then records ai_service_unavailable and staff handle the ticket manually."
+    },
+    {
+      "case_id": "esc05-retrieval-failure",
+      "esc_rule": "ESC-05",
+      "signal": "The search of the KB fails",
+      "request": {
+        "message": "Where is [ORDER_ID_1] right now?",
+        "as_of": "2026-11-17T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": null,
+        "failure": "retrieval"
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 500,
+        "problem_type": "urn:supportiq:problem:internal-error",
+        "recommendation": null,
+        "draft_status": null,
+        "required_reason_codes": [],
+        "forbidden_reason_codes": [],
+        "no_other_reason_codes": false,
+        "requires_authority": null,
+        "llm_called": false
+      },
+      "without_kb_evidence": "A failed search is a technical failure, never a lack of evidence, so it is not reported as no_valid_document even though the KB is empty. backend then records ai_service_unavailable and staff handle the ticket manually."
+    },
+    {
+      "case_id": "esc05-llm-failure-not-reached",
+      "esc_rule": "ESC-05",
+      "signal": "The LLM fails, but routing abstains before the drafting step",
+      "request": {
+        "message": "Where is [ORDER_ID_1] right now?",
+        "as_of": "2026-11-17T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {"label": "track_order", "probability": 0.93}
+        ],
+        "failure": "llm"
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": ["no_valid_document"],
+        "forbidden_reason_codes": ["llm_unavailable"],
+        "no_other_reason_codes": true,
+        "requires_authority": false,
+        "llm_called": false
+      },
+      "without_kb_evidence": "With no KB document version, routing abstains with no_valid_document and the LLM is never called, so its failure cannot change the outcome. A release that serves KB documents needs a new version of this set, where this case expects llm_unavailable."
+    }
+  ]
+}

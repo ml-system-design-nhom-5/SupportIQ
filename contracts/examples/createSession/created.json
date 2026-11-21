@@ -1,0 +1,9 @@
+{
+  "summary": "A customer signed in",
+  "description": "The session was created; Set-Cookie carries the session identifier.",
+  "value": {
+    "account_id": "5f0c2a8e-3b1d-4c7a-9e2f-1a6b8d4c0e31",
+    "display_name": "Lan Tran",
+    "role": "customer"
+  }
+}

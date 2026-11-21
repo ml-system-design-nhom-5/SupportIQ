@@ -30,10 +30,30 @@ const ICONS = {
   refresh: '<path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M8 16H3v5"/>',
   more: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
   copy: '<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2"/>',
+  eye: '<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>',
+  fileCheck: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m9 15 2 2 4-4"/>',
+  timer: '<path d="M10 2h4"/><path d="m12 14 3-3"/><circle cx="12" cy="14" r="8"/>',
+  activity: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+  penLine: '<path d="M12 20h9"/><path d="M16.38 3.62a1 1 0 0 1 3 3L7.37 18.64a2 2 0 0 1-.86.5l-2.87.84a.5.5 0 0 1-.62-.62l.84-2.87a2 2 0 0 1 .5-.86z"/>',
+  listChecks: '<path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/>',
+  panelLeftClose: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/>',
+  panelLeftOpen: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m14 9 3 3-3 3"/>',
+  panelRightClose: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/><path d="m8 9 3 3-3 3"/>',
+  panelRightOpen: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/><path d="m10 15-3-3 3-3"/>',
+  gripVertical: '<circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/>',
 };
 
 function icon(name, extraClass = "") {
   return `<svg class="icon ${extraClass}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
+}
+
+// The account menu trigger and the password field (account management design).
+function accountTrigger(name, role) {
+  return `<span class="account-trigger">${icon("user")}<span><b>${name}</b> · ${role}</span>${icon("chevronDown", "icon-sm")}</span>`;
+}
+
+function passwordInput(dots = "••••••••••") {
+  return `<span class="input"><span>${dots}</span><span class="toggle" title="Show password">${icon("eye")}</span></span>`;
 }
 
 // ---------- One presentation per status (UI-12) ----------
@@ -227,8 +247,7 @@ function appBar(user, active = "tickets") {
   return `<header class="appbar">
     <div class="brand">SupportIQ <span>Console</span></div>
     <nav><a class="${active === "tickets" ? "active" : ""}">${icon("inbox")}Tickets</a>${reports}</nav>
-    <div class="user">${icon("user")}<span><b>${user.name}</b> · ${user.role}</span>
-      <button class="btn btn-ghost btn-sm">${icon("logOut", "icon-sm")}Sign out</button></div>
+    <div class="user">${accountTrigger(user.name, user.role)}</div>
   </header>`;
 }
 
@@ -255,16 +274,18 @@ function inboxItem(q, activeId) {
   </div>`;
 }
 
-function inboxRail(railKey, activeId, { emptyText, hide } = {}) {
+function inboxRail(railKey, activeId, { emptyText, hide, layout } = {}) {
   const list = (railKey === "open" ? OPEN_INBOX : RAILS[railKey].items).filter((q) => q.id !== hide);
   const title = railKey === "open" ? "Open" : RAILS[railKey].title;
+  // Closed tickets come newest first by `closed_at`; every other queue comes oldest first.
+  const order = railKey === "closed" ? "Newest first" : "Oldest first";
   const index = list.findIndex((q) => q.id === activeId);
   const start = Math.max(0, index - 4);
   const items = emptyText
     ? `<div class="rail-empty muted">${icon("inbox")}${emptyText}</div>`
     : list.slice(start, start + 6).map((q) => inboxItem(q, activeId)).join("");
   return `<aside class="rail">
-    <div class="rail-head">${icon("inbox")}<button class="btn btn-sm">${title} ${icon("chevronDown", "icon-sm")}</button><span class="trail muted small">Oldest first</span></div>
+    <div class="rail-head">${layout ? collapseButton("panelLeftClose", "Collapse inbox") : icon("inbox")}<button class="btn btn-sm">${title} ${icon("chevronDown", "icon-sm")}</button><span class="trail muted small">${order}</span></div>
     ${items}
   </aside>`;
 }
@@ -363,7 +384,13 @@ function intentStrip(s) {
   const alternatives = isChosen ? "" : s.candidates
     .map((c) => `<button class="btn btn-sm">${c.name}<span class="muted">${c.percent}%</span></button>`)
     .join("");
-  const change = `<span class="row wrap"><span class="muted small">Not right? Use:</span>${alternatives}<button class="btn btn-sm btn-ghost">Other intent ${icon("chevronRight", "icon-sm")}</button></span>`;
+  // Without `correct_intent` the strip is read-only: the next candidates are plain chips.
+  const nextCandidates = s.candidates
+    .map((c) => `<span class="candidate-chip">${c.name}<span class="muted">${c.percent}%</span></span>`)
+    .join("");
+  const change = s.intentReadOnly
+    ? `<span class="row wrap"><span class="muted small">Next candidates:</span>${nextCandidates}</span>`
+    : `<span class="row wrap"><span class="muted small">Not right? Use:</span>${alternatives}<button class="btn btn-sm btn-ghost">Other intent ${icon("chevronRight", "icon-sm")}</button></span>`;
   const conf = s.intent.band ? confidence(s.intent.band, s.intent.percent) : "";
   const tone = isChosen ? "badge-neutral" : "badge-ai";
   return `<section class="panel panel-ai">
@@ -429,13 +456,20 @@ function draftPanel(s, opts) {
   </section>`;
 }
 
+// What staff noted with a proposal: shown to a manager only, under the proposal text.
+function proposalStaffInput(p) {
+  if (!p.staffInput) return "";
+  const chips = p.staffInput.reasons.map((r) => `<span class="chip">${r}</span>`).join("");
+  return `<div class="stack-8 staff-input"><span class="muted">${p.staffInput.basis}</span><div class="row wrap">${chips}</div><div>${p.staffInput.note}</div></div>`;
+}
+
 function proposalPanel(s) {
   const p = s.proposal;
   return `<section class="panel fill">
     <div class="panel-head">${icon("clock")}Reply for approval<span class="trail muted small">${s.proposalHint ?? "Send it as proposed, or edit it first"}</span></div>
     <div class="panel-body grow"><div class="compare">
       <div class="compare-card editable"><div class="head">${icon("user", "icon-sm")}Staff proposal<span class="trail muted small">${p.by} · ${p.submitted}</span></div>
-        <div class="draft-text"><p>${p.text}</p></div></div>
+        <div class="draft-text"><p>${p.text}</p></div>${proposalStaffInput(p)}</div>
       <div class="compare-card ai"><div class="head">${icon("sparkles", "icon-sm")}AI draft<span class="trail"><span class="badge badge-ai">For comparison</span></span></div>
         <div class="draft-text">${draftText(s.draft)}</div></div>
     </div></div>
@@ -452,7 +486,7 @@ function skeletonPanel(s) {
 }
 
 function outdatedPanel(s) {
-  return `<section class="panel fill">
+  return `<section class="panel panel-ai fill">
     <div class="panel-head">${icon("sparkles")}AI draft<span class="trail">${badge(DRAFT_STATUS.pending)}</span></div>
     <div class="panel-body"><div class="outdated"><span class="badge badge-neutral">Outdated</span><div class="draft-text">${draftText(s.draft)}</div></div></div>
     <div class="panel-body grow"><div class="stack-8"><span class="skeleton w-90"></span><span class="skeleton w-100"></span><span class="skeleton w-60"></span></div></div>
@@ -514,11 +548,16 @@ function rejectedPanel(s) {
   </section>`;
 }
 
-function escalatedPanel(s) {
+// The escalation sits above the draft panel when a draft is ready, and above the editor otherwise.
+function escalatedPanel(s, opts) {
   const chips = s.escalation.reasons.map((r) => `<span class="chip">${r}</span>`).join("");
+  const escalation = `<div class="panel-head">${icon("arrowUpCircle")}Escalated by ${s.escalation.by}<span class="trail muted small">${s.escalation.when}</span></div>
+    <div class="panel-body stack-8"><div class="row wrap">${chips}</div><div>${s.escalation.note}</div></div>`;
+  if (s.isDraftReady) {
+    return `<section class="panel">${escalation}</section>${draftPanel(s, opts)}`;
+  }
   return `<section class="panel fill">
-    <div class="panel-head">${icon("arrowUpCircle")}Escalated by ${s.escalation.by}<span class="trail muted small">${s.escalation.when}</span></div>
-    <div class="panel-body stack-8"><div class="row wrap">${chips}</div><div>${s.escalation.note}</div></div>
+    ${escalation}
     <div class="panel-body grow stack-8">${editor("")}</div>
     ${actionBar(s.actions)}
   </section>`;
@@ -610,15 +649,52 @@ const SIDEBARS = { ai: aiSidebar, unavailable: unavailableSidebar, manual: manua
 
 // ---------- Screens ----------
 
+// ---------- Column controls (layout revision of 2026-11-15) ----------
+
+function collapseButton(iconName, label) {
+  return `<button class="btn btn-sm btn-ghost btn-icon" aria-expanded="true" aria-label="${label}">${icon(iconName, "icon-sm")}</button>`;
+}
+
+// A window splitter: focusable, moved with the arrow keys; Enter collapses or restores the column.
+function splitter(label, valueNow) {
+  return `<div class="splitter" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Resize ${label}" aria-valuenow="${valueNow}"><span class="grip">${icon("gripVertical", "icon-sm")}</span></div>`;
+}
+
+// A collapsed column keeps a narrow rail with its open button and its icon.
+function collapsedColumn(side, iconName, label, mark = "") {
+  const openIcon = side === "left" ? "panelLeftOpen" : "panelRightOpen";
+  return `<aside class="column-rail column-rail-${side}" aria-label="${label}">
+    <button class="btn btn-sm btn-ghost btn-icon" aria-expanded="false" aria-label="Open ${label.toLowerCase()}">${icon(openIcon, "icon-sm")}</button>
+    ${mark}<span class="muted" aria-hidden="true">${icon(iconName)}</span>
+  </aside>`;
+}
+
+// The mark of a staff note that the collapsed AI sidebar hides: the icon of "For staff only".
+const HIDDEN_NOTE_MARK = `<span class="rail-mark" role="img" aria-label="Note for staff in AI details" title="Note for staff in AI details">${icon("info", "icon-sm")}</span>`;
+
+function sidebarColumn(sidebar, layout, hasStaffNote) {
+  if (!layout) return `<div class="col">${sidebar}</div>`;
+  if (layout.sidebar === "collapsed") return collapsedColumn("right", "sparkles", "AI details", hasStaffNote ? HIDDEN_NOTE_MARK : "");
+  return `<div class="col"><div class="column-head">${icon("sparkles", "icon-sm")}AI details${collapseButton("panelRightClose", "Collapse AI details")}</div>${sidebar}</div>`;
+}
+
 function workspace(overrides, label, opts = {}) {
   const s = { ...BASE, ...overrides };
-  const rail = inboxRail(s.rail ?? "open", s.hideInRail ? null : s.ticket.id, { ...opts, hide: s.hideInRail ? s.ticket.id : null });
+  const layout = opts.layout;
+  const isInboxCollapsed = layout?.inbox === "collapsed";
+  const rail = isInboxCollapsed
+    ? collapsedColumn("left", "inbox", "Inbox")
+    : inboxRail(s.rail ?? "open", s.hideInRail ? null : s.ticket.id, { ...opts, hide: s.hideInRail ? s.ticket.id : null });
   const sidebar = SIDEBARS[s.sidebar ?? "ai"](s);
-  return `<div class="app">${appBar(s.user)}<div class="shell">${rail}
+  const shellClass = !layout ? "shell" : isInboxCollapsed ? "shell inbox-collapsed" : "shell with-splitter";
+  const workspaceClass = !layout ? "workspace" : layout.sidebar === "collapsed" ? "workspace sidebar-collapsed" : "workspace with-splitter";
+  const inboxSplitter = layout && !isInboxCollapsed ? splitter("inbox", 272) : "";
+  const sidebarSplitter = layout && layout.sidebar !== "collapsed" ? splitter("AI details", 340) : "";
+  return `<div class="app">${appBar(s.user)}<div class="${shellClass}">${rail}${inboxSplitter}
     <div class="page">${ticketHeader(s, opts)}${banners(s)}
-      <div class="workspace">
+      <div class="${workspaceClass}">
         <div class="col">${messagePanel(s)}${intentStrip(s)}${replyArea(s, opts)}</div>
-        <div class="col">${sidebar}</div>
+        ${sidebarSplitter}${sidebarColumn(sidebar, layout, Boolean(s.staffNote))}
       </div></div></div>${opts.overlay ?? ""}${mockLabel(label)}</div>`;
 }
 
@@ -721,22 +797,40 @@ function reportRow(label, value, target) {
   return `<tr><td>${label}</td><td class="num">${value}</td><td class="muted">${target ?? "No target"}</td></tr>`;
 }
 
-function reportTable(title, rows) {
-  return `<section class="panel"><div class="panel-head">${title}</div>
+function reportTable(iconName, title, rows) {
+  return `<section class="panel"><div class="panel-head">${icon(iconName)}${title}</div>
     <table class="report"><thead><tr><th>Figure</th><th class="num">Value</th><th>Target</th></tr></thead><tbody>${rows.join("")}</tbody></table></section>`;
 }
 
+// The sections, figures, labels, and targets of the Reports page, in its order. Figures are sample
+// values, not results. The period is the default, Last 7 days, on 15 Nov 2026. The console fills
+// the rows of a three-column grid and the page scrolls; the mockup stacks each column of that grid,
+// in the same order, so that every section fits in the screenshot.
 function reportsScreen() {
+  const sections = [
+    reportTable("inbox", "Tickets", [reportRow("Created, assisted", "120 tickets"), reportRow("Created, manual", "32 tickets"), reportRow("Closed, assisted", "114 tickets"), reportRow("Closed, manual", "30 tickets")]),
+    reportTable("fileCheck", "Draft decisions", [reportRow("Approved", "52 replies · 45.6%"), reportRow("Edited", "47 replies · 41.2%"), reportRow("Rejected", "15 replies · 13.2%")]),
+    reportTable("timer", "Speed", [
+      reportRow("End-to-end latency p50", "3.6 s", "At most 4 s"),
+      reportRow("End-to-end latency p95", "10.8 s", "At most 12 s"),
+      reportRow("Tickets measured for latency", "118 tickets"),
+      reportRow("Handling time p50, assisted", "2 min 10 s", "At least 20% shorter than manual"),
+      reportRow("Handling time p50, manual", "3 min 05 s"),
+      reportRow("Closed tickets measured, assisted", "114 tickets"),
+      reportRow("Closed tickets measured, manual", "30 tickets"),
+    ]),
+    reportTable("activity", "AI health and cost", [reportRow("AI error rate", "4.1% · 5 of 123 suggestions"), reportRow("LLM cost, total", "$4.20"), reportRow("LLM cost per suggestion that called the LLM", "$0.040"), reportRow("Suggestions that called the LLM", "105 suggestions")]),
+    reportTable("arrowUpCircle", "Escalations by staff reason", [reportRow("Escalations", "12 escalations"), reportRow("Wrong intent", "2 escalations"), reportRow("Missing case info", "6 escalations"), reportRow("Case exception", "4 escalations")]),
+    reportTable("sparkles", "AI outcomes", [reportRow("Draft ready", "98 suggestions"), reportRow("AI abstained", "14 suggestions"), reportRow("Escalation recommended", "6 suggestions"), reportRow("LLM unavailable", "3 suggestions"), reportRow("AI unavailable", "2 suggestions")]),
+    reportTable("penLine", "Edits and rejections by staff reason", [reportRow("Edited: Missing case info", "9 replies"), reportRow("Edited: Tone or clarity", "21 replies"), reportRow("Rejected: Wrong source", "6 replies"), reportRow("Rejected: Unsupported claim", "9 replies")]),
+    reportTable("listChecks", "AI reasons", [reportRow("Low confidence", "9 suggestions"), reportRow("Requires authority", "18 suggestions"), reportRow("No valid document", "5 suggestions"), reportRow("Drafting failed", "3 suggestions")]),
+  ];
+  const columns = [0, 1, 2]
+    .map((column) => `<div class="report-column">${sections.filter((_, index) => index % 3 === column).join("")}</div>`)
+    .join("");
   return `<div class="app">${appBar(MANAGER, "reports")}<div class="page page-scroll"><div class="reports">
-    <div class="row"><h1 class="page-title">Reports</h1><span class="trail row"><button class="btn btn-sm">1 Oct 2026 – 31 Oct 2026 ${icon("chevronDown", "icon-sm")}</button></span></div>
-    <div class="report-grid">
-      ${reportTable("Tickets", [reportRow("Created, assisted", "120 tickets"), reportRow("Created, manual", "32 tickets"), reportRow("Closed, assisted", "114 tickets"), reportRow("Closed, manual", "30 tickets")])}
-      ${reportTable("Draft decisions", [reportRow("Approved", "52 replies · 46%"), reportRow("Edited", "47 replies · 41%"), reportRow("Rejected", "15 replies · 13%")])}
-      ${reportTable("Speed", [reportRow("End-to-end latency p50", "3.6 s", "At most 4 s"), reportRow("End-to-end latency p95", "10.8 s", "At most 12 s"), reportRow("Handling time p50, assisted", "2 min 10 s"), reportRow("Handling time p50, manual", "3 min 05 s")])}
-      ${reportTable("AI health and cost", [reportRow("AI error rate", "1.8%"), reportRow("LLM cost, total", "$4.20"), reportRow("LLM cost per suggestion", "$0.03")])}
-      ${reportTable("Escalations by staff reason", [reportRow("Missing case info", "6 tickets"), reportRow("Case exception", "4 tickets"), reportRow("Wrong intent", "2 tickets")])}
-      ${reportTable("AI outcomes", [reportRow("Draft ready", "98 suggestions"), reportRow("AI abstained", "14 suggestions"), reportRow("Escalation recommended", "6 suggestions"), reportRow("AI unavailable", "2 suggestions")])}
-    </div>
+    <div class="row"><h1 class="page-title">Reports</h1><span class="muted">9 Nov 2026 – 15 Nov 2026</span><span class="trail row"><button class="btn" aria-label="Report period: Last 7 days">Last 7 days ${icon("chevronDown", "icon-sm")}</button></span></div>
+    <div class="report-grid">${columns}</div>
   </div></div>${mockLabel("Reports, manager · sample figures, not results")}</div>`;
 }
 
@@ -745,7 +839,7 @@ function signInScreen() {
     <section class="panel sign-in">
       <div class="brand">SupportIQ <span>Console</span></div>
       <label class="field"><span class="small strong">Login name</span><span class="input">staff-1</span></label>
-      <label class="field"><span class="small strong">Password</span><span class="input">••••••••••</span></label>
+      <label class="field"><span class="small strong">Password</span>${passwordInput()}</label>
       <div class="error-line small">${icon("alert", "icon-sm")}The login name or the password is not correct.</div>
       <button class="btn btn-primary">Sign in</button>
     </section>
@@ -789,13 +883,55 @@ function tokenSheet() {
 
 const SENDABLE = { ...BASE.actions, send: { label: "Send reply", enabled: true, icon: "send" }, reason: "" };
 
+// A reply proposal with what staff noted, as a manager reads it.
+const MANAGER_PROPOSAL_WITH_INPUT = {
+  ...MANAGER_REVIEW, intentReadOnly: true,
+  proposal: {
+    ...MANAGER_REVIEW.proposal,
+    staffInput: { basis: "Based on the AI draft.", reasons: ["Tone or clarity"], note: "I left out the policy sentence, because a manager decides the refund." },
+  },
+};
+
+// An escalated ticket with a ready draft, shared by the manager view and the staff read-only view.
+const ESCALATED_WITH_DRAFT = {
+  ...MANAGER_REVIEW, proposal: undefined, isAuthorityRequired: false, reply: "escalated", isDraftReady: true, intentReadOnly: true,
+  ticket: { id: "TCK-1036", status: "escalated", mode: "Assisted", customer: "Nam Dang", received: "2 h ago" },
+  message: "The app says my parcel was delivered but nobody here received it.",
+  order: { ...BASE.order, id: "ORD-20811", chip: "Delivered · No refund requested" },
+  intent: { name: "Delivery issue", band: "high", percent: 86, source: "Predicted" },
+  candidates: [{ name: "Track order", percent: 8 }, { name: "Request refund", percent: 3 }],
+  reasonChips: [], staffNote: "The shipment shows as delivered. The customer says it never arrived.",
+  escalation: { by: "Minh Le (staff)", when: "20 min ago", reasons: ["Missing case info"], note: "The customer says the parcel never arrived, and the order shows no signature." },
+  draft: {
+    generated: "2 h ago",
+    paragraphs: [
+      [{ text: "I'm sorry your parcel has not reached you." }],
+      [
+        { text: "Our records show the parcel as delivered.", cites: ["order"] },
+        { text: "A parcel that shows as delivered but did not arrive is handled as described in our missing parcels policy.", cites: [1] },
+      ],
+    ],
+  },
+  sources: [{ num: 1, title: "Missing parcels", id: "missing-parcels", version: "v1", validity: "valid", period: "Since 1 Aug 2026" }],
+};
+
 const SCREENS = {
   tokens: tokenSheet,
   reports: reportsScreen,
   "sign-in": signInScreen,
 
   "workspace-staff": () => workspace({}, "Workspace · staff, draft ready with a warning"),
-  "workspace-manager": () => workspace(MANAGER_REVIEW, "Workspace · manager, reply proposal"),
+  "workspace-manager": () => workspace({
+    ...MANAGER_PROPOSAL_WITH_INPUT,
+  }, "Workspace · manager, reply proposal with what staff noted"),
+  // The layout revision of 2026-11-15: the window splitters and the collapse buttons of both columns.
+  "layout-inbox-collapsed": () => workspace({}, "Layout · inbox collapsed, staff", { layout: { inbox: "collapsed", sidebar: "open" } }),
+  "layout-sidebar-collapsed": () => workspace({
+    ...MANAGER_PROPOSAL_WITH_INPUT,
+  }, "Layout · AI details collapsed, manager", { layout: { inbox: "open", sidebar: "collapsed" } }),
+  "layout-both-collapsed": () => workspace({
+    ...MANAGER_PROPOSAL_WITH_INPUT,
+  }, "Layout · inbox and AI details collapsed, manager", { layout: { inbox: "collapsed", sidebar: "collapsed" } }),
   "order-single": () => workspace({}, "Order chip · a customer with one order", { orderPopover: "single" }),
   "order-multiple": () => workspace({}, "Order chip · a customer with several orders", { orderPopover: "multiple" }),
   "action-menu": () => workspace({}, "More menu · Submit for approval when authority is not required", { menuOpen: true }),
@@ -811,7 +947,7 @@ const SCREENS = {
     candidates: [{ name: "Delivery time", percent: 6 }, { name: "Track order", percent: 2 }],
     reply: "skeleton", staffNote: "", warnings: [],
     sources: [{ num: null, title: "Shipping FAQ", id: "shipping-faq", version: "v5", validity: "valid", period: "Since 1 Oct 2026" }],
-    actions: { ...ACTIONS_OFF, reason: "The AI is still working on this ticket." },
+    actions: { ...ACTIONS_OFF, escalate: { enabled: true }, reason: "The AI is still working on this ticket." },
   }, "State · partial, analysis shown and draft pending"),
   "state-choose-intent": () => workspace({
     ticket: { id: "TCK-1046", status: "open", mode: "Assisted", customer: "Lan Anh", received: "6 min ago" },
@@ -850,7 +986,10 @@ const SCREENS = {
   "state-intent-changed": () => workspace({
     intent: { name: "Request refund", source: "Chosen by staff" },
     reply: "outdated", warnings: [],
-    actions: { ...ACTIONS_OFF, reason: "The AI is still working on this ticket." },
+    // The new analysis is ready and the new draft is pending: the staff note comes with the draft,
+    // and the sources carry citation numbers only for a draft that the reply area shows.
+    staffNote: "", sources: POLICY_SOURCES.map((d) => ({ ...d, num: null })),
+    actions: { ...ACTIONS_OFF, escalate: { enabled: true }, reason: "The AI is still working on this ticket." },
   }, "State · intent changed"),
   "state-ai-unavailable": () => workspace({
     ...NO_ORDER_FACTS, intentView: "none", reply: "manual", sidebar: "unavailable", replyBadge: DRAFT_STATUS.unavailable,
@@ -870,24 +1009,24 @@ const SCREENS = {
     actions: { edit: { label: "Edit draft", enabled: true }, reject: { enabled: true }, escalate: { enabled: true }, more: { hidden: true }, send: { label: "Submit for approval", enabled: true, icon: "clock" }, reason: "A manager sends the reply on this ticket." },
   }, "State · authority required, staff view"),
   "state-awaiting-approval-staff": () => workspace({
-    ...AUTHORITY_DRAFT, ticket: { ...AUTHORITY_DRAFT.ticket, status: "awaiting_approval" }, reply: "proposal", hideInRail: true,
+    ...AUTHORITY_DRAFT, ticket: { ...AUTHORITY_DRAFT.ticket, status: "awaiting_approval" }, reply: "proposal", hideInRail: true, intentReadOnly: true,
     proposal: { by: "Mai Nguyen (you)", submitted: "2 min ago", text: "Hi Bao, I'm sorry the shoes did not last. I have passed your refund request to a manager, who will decide on it and reply to you here." },
     proposalHint: "Waiting for a manager",
-    actions: { ...ACTIONS_OFF, reason: "This ticket is read-only for you. A manager sends the reply." },
+    // Authority required: Submit for approval holds the place of Send reply, so More is absent.
+    actions: { ...ACTIONS_OFF, more: { hidden: true }, send: { label: "Submit for approval", enabled: false, icon: "clock" }, reason: "This ticket is read-only for you. A manager sends the reply." },
   }, "State · awaiting approval, staff read-only view"),
   "state-escalated": () => workspace({
-    ...MANAGER_REVIEW, rail: "escalated", proposal: undefined, isAuthorityRequired: false, reply: "escalated",
-    ticket: { id: "TCK-1036", status: "escalated", mode: "Assisted", customer: "Nam Dang", received: "2 h ago" },
-    message: "The app says my parcel was delivered but nobody here received it.",
-    order: { ...BASE.order, id: "ORD-20811", chip: "Delivered · No refund requested" },
-    intent: { name: "Delivery issue", band: "high", percent: 86, source: "Predicted" },
-    candidates: [{ name: "Track order", percent: 8 }, { name: "Request refund", percent: 3 }],
-    reasonChips: [], staffNote: "The shipment shows as delivered. The customer says it never arrived.",
-    escalation: { by: "Minh Le (staff)", when: "20 min ago", reasons: ["Missing case info"], note: "The customer says the parcel never arrived, and the order shows no signature." },
-    actions: { edit: { hidden: true }, reject: { hidden: true }, escalate: { enabled: false }, more: { enabled: false }, send: { label: "Send reply", enabled: false, icon: "send" }, reason: "Write a reply to send it." },
-  }, "State · escalated, manager view"),
+    ...ESCALATED_WITH_DRAFT, rail: "escalated",
+    actions: { edit: { label: "Edit draft", enabled: true }, reject: { enabled: true }, escalate: { enabled: false }, more: { enabled: false }, send: { label: "Send reply", enabled: true, icon: "send" } },
+  }, "State · escalated with a ready draft, manager view"),
+  // Staff have only the Open queue, so the ticket that they escalated is no longer in their inbox.
+  "state-escalated-staff": () => workspace({
+    ...ESCALATED_WITH_DRAFT, user: STAFF, rail: "open", hideInRail: true,
+    escalation: { ...ESCALATED_WITH_DRAFT.escalation, by: "Mai Nguyen (you)" },
+    actions: { ...ACTIONS_OFF, reason: "This ticket is read-only for you. A manager sends the reply." },
+  }, "State · escalated with a ready draft, staff read-only view"),
   "state-closed": () => workspace({
-    ...MANAGER_REVIEW, rail: "closed", proposal: undefined, isAuthorityRequired: false, reply: "closed",
+    ...MANAGER_REVIEW, rail: "closed", proposal: undefined, isAuthorityRequired: false, reply: "closed", intentReadOnly: true,
     ticket: { id: "TCK-1031", status: "closed", mode: "Assisted", customer: "Vy Hoang", received: "Yesterday" },
     message: "How long do refunds to a bank card take?",
     order: { ...BASE.order, id: "ORD-20760", chip: "Delivered · Refund paid" },
@@ -909,8 +1048,8 @@ const SCREENS = {
   }, "State · draft rejected"),
   "state-placeholder": () => workspace({
     reply: "editing", warnings: [],
-    editorHtml: 'We have sent the return label to <mark class="placeholder" title="Personal data hidden: replace before sending">[EMAIL]</mark>. Please reply with the tracking number of your return.',
-    editorHint: "Personal data hidden: replace before sending.",
+    editorHtml: 'We have sent the return label to <mark class="placeholder" title="Personal data or reserved text: replace before sending">[EMAIL]</mark>. Please reply with the tracking number of your return.',
+    editorHint: "Personal data or reserved text: replace before sending.",
     actions: { ...BASE.actions, edit: { label: "Discard edits", enabled: true }, reason: "Replace the highlighted text to send the reply." },
   }, "State · placeholder in the editor"),
   "state-error": () => centered(STAFF, "open", "TCK-1042", `<div class="empty-state">${icon("alert")}<b>This ticket could not be loaded</b><span class="muted">Your connection may have dropped. Try again in a moment.</span><button class="btn btn-sm">Try again</button><span class="row small muted">Details: trace 4bf92f35 ${icon("copy", "icon-sm")}</span></div>`, "State · error, with a copyable trace ID"),

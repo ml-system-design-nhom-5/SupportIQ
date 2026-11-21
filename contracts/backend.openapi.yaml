@@ -1,0 +1,4645 @@
+openapi: 3.1.0
+info:
+  title: SupportIQ backend API
+  version: 1.3.0
+  description: |
+    The contract between `frontend` and `backend` for sign-in, the read-only shop, the review
+    console of staff and managers, and the admin area. Version 1.0.1 holds the operations of
+    contract PR 2, taken from the [contracts v1 design](../docs/design/contracts-v1.md)
+    (revision 2) and the [backend foundation design](../docs/design/backend-foundation.md).
+    Version 1.1.0 adds the own password change, account creation, and password resets of the
+    [account management design](../docs/design/account-management.md) (ADR-0015). Version
+    1.2.0 adds the console operations and `getAdminVersions` of the contracts v1 design, as
+    the [backend ticket workflow design](../docs/design/backend-ticket-workflow.md) implements
+    them. Version 1.2.1 states which tickets the end-to-end latency and the handling time of
+    the report measure. Version 1.3.0 adds `getSuggestionEvents`, the suggestion progress
+    stream of ADR-0022.
+
+    ## Responsibility
+
+    - `backend` is the only enforcement point for authentication, roles, and object-level
+      access (SEC-16, SEC-17, SEC-20). `frontend` hides an action only as a convenience.
+    - The AI only suggests. `sendReply` is the only operation that sends anything to a
+      customer, and it always needs a staff or manager action (FR-04). Once a ticket requires
+      authority, only a manager sends its reply (FR-06). No reply or proposal body may contain
+      a placeholder (SEC-38).
+    - No operation creates, changes, or deletes a product, an order, a shipment, or a refund
+      (ADR-0013). The only writes are sessions, shop tickets, internal accounts, changes to
+      internal accounts, passwords, ticket views, suggestions, reply proposals, replies, and
+      escalations.
+    - `backend` stores only the Argon2id hash of a password. It never generates a password, and
+      no response has a field that can carry one (ADR-0015).
+    - No `/v1/shop/` schema has a field that can carry AI output. No `/v1/admin/` schema has a
+      field that can carry a ticket, a message, an order, or a report, and no admin operation
+      reaches a customer account (SEC-41).
+    - `backend` never sends a field that this contract does not define (CON-21).
+
+    ## Authentication and roles
+
+    Sign-in follows ADR-0009. `createSession` sets the `supportiq_session` cookie, and every
+    other operation except the health checks requires it (security scheme `sessionCookie`).
+    The cookie is `HttpOnly`: `frontend` never reads it and learns the account from
+    `getCurrentSession`. Each operation lists the roles that may call it in its description and
+    in `x-supportiq-roles`, which repeats the permission table of the contracts v1 design. A
+    signed-in role that is not listed gets `403 forbidden`.
+
+    The state-changing operations (`createSession`, `deleteCurrentSession`, `changeOwnPassword`,
+    `createShopTicket`, `recordTicketView`, `createSuggestion`, `createReplyProposal`,
+    `sendReply`, `createEscalation`, `createAdminAccount`, `changeAccountRole`,
+    `changeAccountStatus`, and `resetAccountPassword`) check the `Origin` header against the
+    allowed origins before anything else, authentication included. The browser sets that
+    header, so it is not a parameter. A missing or unknown origin returns `403 forbidden`
+    (ADR-0009, statement 7).
+
+    ## Errors
+
+    Every error body is a `ProblemDetails` with a problem type from the registry (CON-12) and
+    the media type `application/problem+json`. `backend` returns `422 invalid-request` for every
+    invalid request, including a body that is not valid JSON, and never returns `400`.
+
+    The ingress can answer `413` or `429` before `backend` sees a request, and `502` or `504`
+    when `backend` is unreachable or a write in flight fails (ADR-0011). Those responses are not
+    part of this contract and their bodies are not `ProblemDetails`. `frontend` treats all four
+    as technical failures. After `502` or `504` the outcome of a write is unknown, and a retry
+    with the same `Idempotency-Key` cannot repeat its effect (ERR-15).
+
+    ## Headers
+
+    - `traceparent` is optional on every request. `backend` starts a new trace when it is absent
+      or invalid, and returns the trace ID in every error body.
+    - `Idempotency-Key` is required on `changeOwnPassword`, `createShopTicket`,
+      `recordTicketView`, `createSuggestion`, `createReplyProposal`, `sendReply`,
+      `createEscalation`, `createAdminAccount`, `changeAccountRole`, `changeAccountStatus`, and
+      `resetAccountPassword`, the writes that a client may retry (ERR-15, CON-13).
+      `createSession` and `deleteCurrentSession` take none and are never retried automatically
+      (TS-29): before sign-in there is no account to scope a key to, a repeated sign-in only
+      creates one more session, and a repeated sign-out gets `401`, which `frontend` treats as
+      signed out.
+    - No operation uses a custom `X-` header (CON-13).
+
+    ## Timeouts
+
+    - **Latency target:** the requirements set none for these operations. NFR-08 covers a
+      suggestion, from ticket creation until its draft part leaves `pending` (p95 at most
+      12 s). `createSuggestion` answers before the suggestion runs, and the console follows it
+      with `getSuggestionEvents`, a stream that the bounds below limit only until its response
+      headers (ADR-0022, statement 8).
+    - **Caller's timeout:** `frontend` stops waiting for a response after 10 000 ms per
+      request, a `frontend` setting. That is the sum of the single bounds of `backend` below: a
+      pool wait of 3 000 ms, one statement of 5 000 ms, and the sign-in delay of 2 000 ms. A
+      request with several statements can take longer: `backend` may then finish a write after
+      `frontend` stopped waiting, and a retry with the same `Idempotency-Key` returns its result.
+    - **Provider bounds:** `backend` bounds every database call with the timeout settings of the
+      backend foundation design (`database_connect_timeout_ms`, `database_statement_timeout_ms`,
+      `database_lock_timeout_ms`, `database_pool_timeout_ms`) and answers `503 not-ready` when
+      one fires. A throttled `createSession` or `changeOwnPassword` also waits
+      `sign_in_failure_delay_ms`. `recordTicketView`, `getConsoleKbDocumentVersion`, and
+      `getAdminVersions` wait for `ai-service` at most `ai_service_read_timeout_ms`, 3 000 ms
+      at first; no other operation waits for `ai-service`.
+    - **Retries:** reads, and writes with an `Idempotency-Key`, may be retried after `503` as
+      ERR-12 and TS-29 allow.
+
+    ## Compatibility
+
+    Version 1.0.0 is the first version and has no earlier consumer. Compatible and breaking
+    changes follow CON-19 and CON-20. Consumers ignore unknown response fields (CON-21) and
+    map unknown enum values to a safe default (CON-22). Every change of version 1.1.0 is
+    compatible: new operations, a new response field, a narrower response length, and new enum
+    values in responses. Every change of version 1.2.0 is compatible too: new operations, new
+    schemas, and four new problem types in responses.
+servers:
+  - url: /
+    description: >-
+      The base URL of `backend`. Every path of this contract is relative to it.
+tags:
+  - name: sessions
+    description: >-
+      Sign-in, the current session, the own password change, and sign-out (ADR-0009,
+      ADR-0015).
+  - name: shop
+    description: >-
+      The read-only catalog, the customer's own orders, and the customer's own tickets
+      (ADR-0013). Callable by `customer` only.
+  - name: console
+    description: >-
+      The review console: ticket queues, the ticket workspace, suggestions, reply proposals,
+      replies, escalations, KB document versions, and reports (FR-04 to FR-07, FR-10). Callable
+      by `staff` and `manager`, as each operation states.
+  - name: admin
+    description: >-
+      Internal accounts: listing, creation, role changes, status changes, and password resets,
+      and the versions in use (ADR-0012, ADR-0015). Callable by `admin` only.
+  - name: health
+    description: Liveness and readiness of `backend` (ERR-18). No session is required.
+paths:
+  /v1/sessions:
+    post:
+      operationId: createSession
+      tags:
+        - sessions
+      summary: Sign in with a login name and a password
+      description: >-
+        Verifies the credentials and creates a session (ADR-0009). Callable without a session.
+        On success, `backend` stores only the SHA-256 hash of a new random session identifier
+        and returns the identifier in the `supportiq_session` cookie. An unknown login name, a
+        wrong password, and a deactivated account return the same `401`, and the password is
+        verified even for an unknown name, so the response does not reveal which login names
+        exist. While a login name has `sign_in_failure_limit` or more failures within
+        `sign_in_failure_window_ms`, every attempt for it waits `sign_in_failure_delay_ms` and
+        then gets `401` without a password check, even with the right password (backend
+        foundation design, Sign-in and sessions).
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSessionRequest'
+      responses:
+        '201':
+          description: >-
+            The session was created. The body describes the signed-in account, and
+            `Set-Cookie` carries the session identifier.
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/SessionCookie'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionView'
+              examples:
+                created:
+                  $ref: ./examples/createSession/created.json
+        '401':
+          $ref: '#/components/responses/InvalidCredentials'
+        '403':
+          $ref: '#/components/responses/ForbiddenOrigin'
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/sessions/current:
+    get:
+      operationId: getCurrentSession
+      tags:
+        - sessions
+      summary: Read the signed-in account
+      description: >-
+        Returns the account of the current session. Roles: `customer`, `staff`, `manager`, and
+        `admin`. `frontend` uses it after sign-in and on load to choose the area of the role:
+        `/shop` for `customer`, `/console` for `staff` and `manager`, and `/admin` for `admin`.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - customer
+        - staff
+        - manager
+        - admin
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+      responses:
+        '200':
+          description: The account of the current session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionView'
+              examples:
+                customer:
+                  $ref: ./examples/getCurrentSession/customer.json
+                staff:
+                  $ref: ./examples/getCurrentSession/staff.json
+                manager:
+                  $ref: ./examples/getCurrentSession/manager.json
+                admin:
+                  $ref: ./examples/getCurrentSession/admin.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+    delete:
+      operationId: deleteCurrentSession
+      tags:
+        - sessions
+      summary: Sign out
+      description: >-
+        Deletes the current session. Roles: `customer`, `staff`, `manager`, and `admin`. It takes
+        no `Idempotency-Key`: a retry after a success gets `401`, which `frontend` treats as
+        signed out.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - customer
+        - staff
+        - manager
+        - admin
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+      responses:
+        '204':
+          description: >-
+            The session was deleted. There is no body, and no `Set-Cookie`: the browser keeps
+            the cookie, which no longer names a session, so it gets `401`.
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenOrigin'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/sessions/current/password-changes:
+    post:
+      operationId: changeOwnPassword
+      tags:
+        - sessions
+      summary: Change the password of the signed-in account
+      description: >-
+        Replaces the password of the caller's own account (ADR-0015). Roles: `customer`,
+        `staff`, `manager`, and `admin`. A wrong `current_password` counts as a sign-in failure
+        of the account's login name. While that name has `sign_in_failure_limit` or more failures
+        within `sign_in_failure_window_ms`, every attempt waits `sign_in_failure_delay_ms` and is
+        refused without a password check, even with the right password (ADR-0009, statement 8).
+        Both return `422` with `current_password_incorrect`, never `401`, so the session stays.
+        On success, in one transaction, `backend` stores only the Argon2id hash of
+        `new_password`, deletes every other session of the account when
+        `is_signed_out_elsewhere` is true, deletes the sign-in failures of the login name, and
+        writes the audit log entry `account.password_changed`. The current session always stays.
+        The `Idempotency-Key` is compared without the password fields (ERR-15): a retry with the
+        same key and the same `is_signed_out_elsewhere` returns the original `201`, whatever the
+        passwords.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - customer
+        - staff
+        - manager
+        - admin
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeOwnPasswordRequest'
+      responses:
+        '201':
+          description: >-
+            The password was changed, or this is the original result of a retry. The body
+            describes the caller's account, as `getCurrentSession` does.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionView'
+              examples:
+                changed:
+                  $ref: ./examples/changeOwnPassword/changed.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenOrigin'
+        '409':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '422':
+          $ref: '#/components/responses/InvalidPasswordChange'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/shop/products:
+    get:
+      operationId: listShopProducts
+      tags:
+        - shop
+      summary: List the catalog products
+      description: >-
+        Returns one page of the read-only catalog (ADR-0013). Role: `customer`. Products are
+        ordered by `name`, ascending, and products with the same name by `product_id`,
+        ascending. Both are compared by Unicode code point, not by locale.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - customer
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: One page of products.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShopProductPage'
+              examples:
+                first-page:
+                  $ref: ./examples/listShopProducts/first-page.json
+                last-page:
+                  $ref: ./examples/listShopProducts/last-page.json
+                empty:
+                  $ref: ./examples/listShopProducts/empty.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRole'
+        '422':
+          $ref: '#/components/responses/InvalidListRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/shop/products/{product_id}:
+    get:
+      operationId: getShopProduct
+      tags:
+        - shop
+      summary: Read one catalog product
+      description: >-
+        Returns one product of the catalog. Role: `customer`. An unknown `product_id` returns
+        `404`.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - customer
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '200':
+          description: The product.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShopProductView'
+              examples:
+                found:
+                  $ref: ./examples/getShopProduct/found.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRole'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/shop/orders:
+    get:
+      operationId: listShopOrders
+      tags:
+        - shop
+      summary: List the caller's orders
+      description: >-
+        Returns one page of the signed-in customer's own orders, and never another customer's
+        (SEC-17). Role: `customer`. Orders are ordered by `placed_at`, newest first, and orders
+        with the same `placed_at` by `order_id`, ascending by Unicode code point.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - customer
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: One page of the caller's orders.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShopOrderPage'
+              examples:
+                first-page:
+                  $ref: ./examples/listShopOrders/first-page.json
+                last-page:
+                  $ref: ./examples/listShopOrders/last-page.json
+                empty:
+                  $ref: ./examples/listShopOrders/empty.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRole'
+        '422':
+          $ref: '#/components/responses/InvalidListRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/shop/orders/{order_id}:
+    get:
+      operationId: getShopOrder
+      tags:
+        - shop
+      summary: Read one of the caller's orders
+      description: >-
+        Returns one of the signed-in customer's orders with its lines, shipment, and refund.
+        Role: `customer`. An unknown `order_id`, or the ID of another customer's order, returns
+        the same `404`, so the order's existence is not revealed (SEC-17).
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - customer
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: The order.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShopOrderView'
+              examples:
+                in-transit:
+                  $ref: ./examples/getShopOrder/in-transit.json
+                refund-under-review:
+                  $ref: ./examples/getShopOrder/refund-under-review.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRole'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/shop/tickets:
+    get:
+      operationId: listShopTickets
+      tags:
+        - shop
+      summary: List the caller's tickets
+      description: >-
+        Returns one page of the signed-in customer's own tickets, optionally only those about
+        one order. Role: `customer`. Tickets are ordered by `created_at`, newest first, and
+        tickets with the same `created_at` by `ticket_id`, ascending by Unicode code point. The
+        shop lists only tickets created through `createShopTicket`; tickets imported for
+        evaluation never appear here. An `order_id` that is not one of the caller's orders
+        returns `404`.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - customer
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - name: order_id
+          in: query
+          required: false
+          description: >-
+            Lists only the tickets about this order, which must be one of the caller's orders.
+            Absent means every ticket of the caller. Data class: Confidential.
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        '200':
+          description: One page of the caller's tickets.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShopTicketPage'
+              examples:
+                first-page:
+                  $ref: ./examples/listShopTickets/first-page.json
+                last-page:
+                  $ref: ./examples/listShopTickets/last-page.json
+                empty:
+                  $ref: ./examples/listShopTickets/empty.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRole'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/InvalidListRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+    post:
+      operationId: createShopTicket
+      tags:
+        - shop
+      summary: Write to support about one of the caller's orders
+      description: >-
+        Creates a ticket that holds the customer's message about one of their orders (ADR-0013).
+        Role: `customer`. The ticket starts `open` for staff, and the customer sees it as
+        `received`. The customer never waits for AI: `backend` answers before any suggestion
+        runs. An `order_id` that is not one of the caller's orders returns `404` and creates
+        nothing. A retry with the same `Idempotency-Key` and the same body returns the original
+        `201` and creates no second ticket.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - customer
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateShopTicketRequest'
+      responses:
+        '201':
+          description: The ticket was created, or this is the original result of a retry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShopTicketView'
+              examples:
+                created:
+                  $ref: ./examples/createShopTicket/created.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRoleOrOrigin'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/shop/tickets/{ticket_id}:
+    get:
+      operationId: getShopTicket
+      tags:
+        - shop
+      summary: Read one of the caller's tickets
+      description: >-
+        Returns one of the signed-in customer's tickets, with the reply once staff sent it.
+        Role: `customer`. An unknown `ticket_id`, the ID of another customer's ticket, or the ID
+        of an imported ticket returns the same `404` (SEC-17).
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - customer
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/TicketId'
+      responses:
+        '200':
+          description: The ticket.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShopTicketView'
+              examples:
+                received:
+                  $ref: ./examples/getShopTicket/received.json
+                replied:
+                  $ref: ./examples/getShopTicket/replied.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRole'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/console/tickets:
+    get:
+      operationId: listConsoleTickets
+      tags:
+        - console
+      summary: List the tickets in one status
+      description: >-
+        Returns one page of the tickets in one `status`, for the console queues. Roles: `staff`,
+        who may list `open` tickets only and get `403` for another status, and `manager`, who
+        may list every status. `open`, `awaiting_approval`, and `escalated` tickets are ordered
+        by `created_at`, oldest first, so the ticket that waited longest comes first; `closed`
+        tickets are ordered by `closed_at`, newest first. Tickets with the same time are ordered
+        by `ticket_id`, ascending by Unicode code point. All staff share one queue: no ticket is
+        assigned to a person (contracts v1 design, non-goals).
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - staff
+        - manager
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/ConsoleTicketStatusFilter'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: One page of the tickets in the status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketSummaryPage'
+              examples:
+                open-queue:
+                  $ref: ./examples/listConsoleTickets/open-queue.json
+                awaiting-approval:
+                  $ref: ./examples/listConsoleTickets/awaiting-approval.json
+                escalated:
+                  $ref: ./examples/listConsoleTickets/escalated.json
+                closed:
+                  $ref: ./examples/listConsoleTickets/closed.json
+                empty:
+                  $ref: ./examples/listConsoleTickets/empty.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRole'
+        '422':
+          $ref: '#/components/responses/InvalidConsoleListRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/console/tickets/{ticket_id}:
+    get:
+      operationId: getConsoleTicket
+      tags:
+        - console
+      summary: Read the workspace of a ticket
+      description: >-
+        Returns the ticket workspace: the ticket, the customer's message, the order and the
+        customer's other orders, the current suggestion with pseudonyms restored, the proposal,
+        the escalation, the reply, and the actions that the caller may take now. Roles: `staff`
+        and `manager`, on a ticket in any state; staff get an empty `allowed_actions` on a ticket
+        that is not `open`. This read changes nothing; while a suggestion part is `pending`,
+        the console reads it again after each event of `getSuggestionEvents`, or every 30 s
+        when the stream cannot run, and calls `recordTicketView` once when a person opens the
+        ticket.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - staff
+        - manager
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/ConsoleTicketId'
+      responses:
+        '200':
+          description: The ticket workspace.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketWorkspace'
+              examples:
+                draft-ready:
+                  $ref: ./examples/getConsoleTicket/draft-ready.json
+                suggestion-pending:
+                  $ref: ./examples/getConsoleTicket/suggestion-pending.json
+                abstained-low-confidence:
+                  $ref: ./examples/getConsoleTicket/abstained-low-confidence.json
+                authority-required:
+                  $ref: ./examples/getConsoleTicket/authority-required.json
+                ai-service-unavailable:
+                  $ref: ./examples/getConsoleTicket/ai-service-unavailable.json
+                manual-mode:
+                  $ref: ./examples/getConsoleTicket/manual-mode.json
+                awaiting-approval:
+                  $ref: ./examples/getConsoleTicket/awaiting-approval.json
+                escalated:
+                  $ref: ./examples/getConsoleTicket/escalated.json
+                closed:
+                  $ref: ./examples/getConsoleTicket/closed.json
+                read-only-for-staff:
+                  $ref: ./examples/getConsoleTicket/read-only-for-staff.json
+                llm-unavailable:
+                  $ref: ./examples/getConsoleTicket/llm-unavailable.json
+                pseudonymization-failed:
+                  $ref: ./examples/getConsoleTicket/pseudonymization-failed.json
+                intent-corrected:
+                  $ref: ./examples/getConsoleTicket/intent-corrected.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRole'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/console/tickets/{ticket_id}/views:
+    post:
+      operationId: recordTicketView
+      tags:
+        - console
+      summary: Record that a person opened a ticket
+      description: >-
+        Records that the caller opened the ticket. Roles: `staff` and `manager`, on a ticket in
+        any state. The first view of the ticket starts the handling clock (`handling_started_at`,
+        NFR-11). On the first view of an `open` ticket in `assisted` mode, when the current
+        suggestion used another KB version than the one `ai-service` has loaded, `backend` starts
+        a suggestion with the trigger `kb_version_changed`. When `ai-service` does not answer
+        within `ai_service_read_timeout_ms`, the view is still recorded and no
+        `kb_version_changed` suggestion is started. On every view of an `open` ticket in
+        `assisted` mode whose current suggestion has a part `unavailable` with
+        `ai_service_unavailable`, or a draft `llm_unavailable`, and no part `pending`, `backend`
+        starts a suggestion with the trigger `retry`. A started suggestion repeats the input of
+        the current one, including an intent that staff chose. A retry with the same
+        `Idempotency-Key` returns `204` again and starts nothing more.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - staff
+        - manager
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ConsoleTicketId'
+      responses:
+        '204':
+          description: The view was recorded, or this is the original result of a retry.
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRoleOrOrigin'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/console/tickets/{ticket_id}/suggestions:
+    post:
+      operationId: createSuggestion
+      tags:
+        - console
+      summary: Correct the intent or retry the AI
+      description: >-
+        Starts a new suggestion for an `open` ticket in `assisted` mode and answers at once with
+        it, `pending`; the console then follows it with `getSuggestionEvents`. Roles: `staff`
+        and `manager`.
+        With `intent_override`, the request confirms or corrects the intent (ESC-01), also while
+        a draft is generating, which cancels that draft; it needs a known intent: the analysis
+        of the current suggestion is `ready`, or the current suggestion already carries an
+        override. When no intent is known, it returns `409 suggestion-pending` while a part is
+        `pending`, and `422` otherwise. Without `intent_override`, the request is a retry, valid
+        only when `allowed_actions` contains `retry_suggestion`; otherwise it returns `422`. A
+        retry repeats the input of the failed suggestion, including the intent that staff chose,
+        so a failure after an intent correction keeps that intent. On a ticket that is not
+        `open`, or whose handling mode is `manual`, the request returns
+        `409 invalid-ticket-state`. The new suggestion supersedes the previous one, and the
+        authority flag stays as it is (contracts v1 design, authority rule). A retry with the
+        same `Idempotency-Key` and body returns the original `202` and starts no second
+        suggestion.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - staff
+        - manager
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ConsoleTicketId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSuggestionRequest'
+      responses:
+        '202':
+          description: >-
+            The new suggestion, `pending`, or the original result of a retry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuggestionView'
+              examples:
+                intent-override:
+                  $ref: ./examples/createSuggestion/intent-override.json
+                retry:
+                  $ref: ./examples/createSuggestion/retry.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRoleOrOrigin'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/SuggestionConflict'
+        '422':
+          $ref: '#/components/responses/InvalidSuggestionRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/console/tickets/{ticket_id}/suggestion-events:
+    get:
+      operationId: getSuggestionEvents
+      tags:
+        - console
+      summary: Follow the progress of the current suggestion
+      description: >-
+        Streams the progress of the current suggestion of an `open` ticket in `assisted` mode
+        as server-sent events while one of its parts is `pending` (ADR-0022). Roles: `staff`
+        and `manager`. Like every read, it has no `Origin` check, because a same-origin
+        `EventSource` sends no `Origin` header. A ticket that is not `open`, a ticket in
+        `manual` mode, and a ticket whose current suggestion has no `pending` part get `204`,
+        which stops `EventSource`. The stream first sends `retry: 3000` and the current state,
+        then one event whenever the current suggestion or the status of one of its parts
+        changes. Each event is named `suggestion`, and its `data` is a
+        `SuggestionProgressEvent`: the suggestion ID and the two part statuses, all Internal.
+        An event holds no text; after each one, the console reloads the workspace with
+        `getConsoleTicket`. When nothing was sent for 15 s, the stream sends the comment
+        `: ping`. The stream ends right after the event that shows no `pending` part, when the
+        ticket leaves `open`, after at most `suggestion_events_max_ms` (600 000 by default),
+        and when the replica shuts down. `EventSource` then reconnects and gets `204` once no
+        part is `pending`. `Last-Event-ID` is ignored, because each connection starts with the
+        current state. Consumers map an unknown status as `getConsoleTicket` does (CON-22).
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - staff
+        - manager
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/ConsoleTicketId'
+      responses:
+        '200':
+          description: >-
+            The stream of `suggestion` events, until no part is `pending`.
+          content:
+            text/event-stream:
+              schema:
+                description: >-
+                  One event of the stream, as the fields of its lines in the format of
+                  server-sent events of the HTML standard. The `retry: 3000` line before the
+                  first event and the `: ping` comments are no events. An event has no `id`,
+                  because each connection starts with the current state. Data class:
+                  Internal.
+                type: object
+                additionalProperties: false
+                required:
+                  - event
+                  - data
+                properties:
+                  event:
+                    description: >-
+                      The name of the event. Data class: Internal.
+                    type: string
+                    enum:
+                      - suggestion
+                  data:
+                    description: >-
+                      A `SuggestionProgressEvent` as JSON text. Data class: Internal.
+                    type: string
+                    contentMediaType: application/json
+                    contentSchema:
+                      $ref: '#/components/schemas/SuggestionProgressEvent'
+              examples:
+                draft-ready:
+                  $ref: ./examples/getSuggestionEvents/draft-ready.json
+        '204':
+          description: >-
+            Nothing to follow: the ticket is not `open`, is in `manual` mode, or no part of its
+            current suggestion is `pending`.
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRole'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/console/tickets/{ticket_id}/reply-proposals:
+    post:
+      operationId: createReplyProposal
+      tags:
+        - console
+      summary: Submit a reply for a manager to send
+      description: >-
+        Stores a reply that staff prepared and moves the ticket from `open` to
+        `awaiting_approval`, where a manager sends it as proposed or edited (FR-06). Role:
+        `staff`. Nothing reaches the customer. The checks run in this order and the first
+        failure answers: the `Origin` header, the session, and the role; the ticket exists; the
+        `Idempotency-Key`; the ticket is `open` (`409 invalid-ticket-state`); no part of the
+        current suggestion is `pending` (`409 suggestion-pending`); a `suggestion_id` names the
+        current suggestion (`409 suggestion-superseded`); then the body rules of the basis
+        (`422`). A retry with the same `Idempotency-Key` and body returns the original `201`.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - staff
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ConsoleTicketId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReplyProposalRequest'
+      responses:
+        '201':
+          description: The proposal was stored, or this is the original result of a retry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplyProposalView'
+              examples:
+                from-ai-draft:
+                  $ref: ./examples/createReplyProposal/from-ai-draft.json
+                without-ai-draft:
+                  $ref: ./examples/createReplyProposal/without-ai-draft.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRoleOrOrigin'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/ReplyConflict'
+        '422':
+          $ref: '#/components/responses/InvalidReply'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/console/tickets/{ticket_id}/replies:
+    post:
+      operationId: sendReply
+      tags:
+        - console
+      summary: Send the reply to the customer
+      description: >-
+        Sends the reply that staff or a manager wrote or approved, and closes the ticket. This
+        is the only operation that sends anything to a customer, and it always needs this staff
+        action (FR-04). Roles: `staff`, on an `open` ticket that does not require authority, and
+        `manager`, on every ticket that is not `closed`. On an `awaiting_approval` ticket the
+        basis is `reply_proposal`. The checks run in this order and the first failure answers:
+        the `Origin` header, the session, and the role; the ticket exists; the
+        `Idempotency-Key`; the ticket is not `closed` (`409 invalid-ticket-state`); `staff` act
+        only on an `open` ticket (`403 forbidden`); `staff` never send on a ticket that requires
+        authority (`403 authority-required`, FR-06); no part of the current suggestion is
+        `pending` (`409 suggestion-pending`); a `suggestion_id` names the current suggestion
+        (`409 suggestion-superseded`); then the body rules of the basis (`422`). A body that
+        contains a placeholder is refused, so no placeholder reaches a customer (SEC-38). The
+        reply is sent at most once: a retry with the same `Idempotency-Key` and body returns the
+        original `201` (ERR-16). `frontend` never retries this operation automatically (TS-29).
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - staff
+        - manager
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ConsoleTicketId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendReplyRequest'
+      responses:
+        '201':
+          description: The reply was sent, or this is the original result of a retry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsoleReplyView'
+              examples:
+                from-ai-draft:
+                  $ref: ./examples/sendReply/from-ai-draft.json
+                from-reply-proposal:
+                  $ref: ./examples/sendReply/from-reply-proposal.json
+                without-ai-draft:
+                  $ref: ./examples/sendReply/without-ai-draft.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRoleOriginOrAuthority'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/ReplyConflict'
+        '422':
+          $ref: '#/components/responses/InvalidReply'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/console/tickets/{ticket_id}/escalations:
+    post:
+      operationId: createEscalation
+      tags:
+        - console
+      summary: Move a ticket to a manager
+      description: >-
+        Escalates an `open` ticket to the manager queue with at least one staff reason code
+        (ADR-0006), and records the staff decision `escalate`. Role: `staff`. The AI only
+        recommends an escalation; this staff action decides it. Staff may escalate while a
+        suggestion part is `pending`. The checks run in this order and the first failure
+        answers: the `Origin` header, the session, and the role; the ticket exists; the
+        `Idempotency-Key`; the ticket is `open` (`409 invalid-ticket-state`); a `suggestion_id`
+        names the current suggestion (`409 suggestion-superseded`); then the body rules (`422`).
+        A retry with the same `Idempotency-Key` and body returns the original `201`.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - staff
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ConsoleTicketId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEscalationRequest'
+      responses:
+        '201':
+          description: The ticket was escalated, or this is the original result of a retry.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EscalationView'
+              examples:
+                escalated:
+                  $ref: ./examples/createEscalation/escalated.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRoleOrOrigin'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/EscalationConflict'
+        '422':
+          $ref: '#/components/responses/InvalidEscalation'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/console/kb-documents/{document_id}/versions/{version}:
+    get:
+      operationId: getConsoleKbDocumentVersion
+      tags:
+        - console
+      summary: Read the full text of a KB document version
+      description: >-
+        Returns one KB document version in full, for the citation view of the console (UI-20).
+        Roles: `staff` and `manager`. `backend` reads it from `ai-service` (`getKbDocumentVersion`
+        of the `ai-service` contract) with `ai_service_read_timeout_ms`, and answers `404` when
+        `ai-service` does not know the version, and `503 not-ready` when `ai-service` does not
+        answer in time.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - staff
+        - manager
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/KbDocumentIdPath'
+        - $ref: '#/components/parameters/KbDocumentVersionPath'
+      responses:
+        '200':
+          description: The KB document version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KbDocumentVersion'
+              examples:
+                document-version:
+                  $ref: ./examples/getConsoleKbDocumentVersion/document-version.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRole'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReadyOrAiServiceNotReady'
+  /v1/console/reports:
+    get:
+      operationId: getConsoleReport
+      tags:
+        - console
+      summary: Read the report for a period
+      description: >-
+        Returns the figures of FR-10 for the period from `start_at`, included, to `end_at`,
+        excluded. Role: `manager` (ADR-0012). `backend` computes them on request from its own
+        records: tickets, suggestions, staff decisions, and escalations; never from telemetry
+        (LOG-33). The report holds aggregates only, no text and no identifier of a ticket. The
+        console shows each figure with a label in business language, its unit, and its target
+        where the requirements give one, and computes no figure itself (UI-14, UI-44).
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - manager
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/ReportStartAt'
+        - $ref: '#/components/parameters/ReportEndAt'
+      responses:
+        '200':
+          description: The report for the period.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsoleReport'
+              examples:
+                period-with-activity:
+                  $ref: ./examples/getConsoleReport/period-with-activity.json
+                empty-period:
+                  $ref: ./examples/getConsoleReport/empty-period.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRole'
+        '422':
+          $ref: '#/components/responses/InvalidReportPeriod'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/admin/accounts:
+    get:
+      operationId: listAdminAccounts
+      tags:
+        - admin
+      summary: List the internal accounts
+      description: >-
+        Returns one page of the `staff`, `manager`, and `admin` accounts, the caller's own
+        included. Customer accounts are never listed (SEC-41). Role: `admin`. Accounts are
+        ordered by `display_name`, ascending, and accounts with the same display name by
+        `account_id`, ascending. Both are compared by Unicode code point, not by locale. The
+        list is never empty, because the caller's account is in it.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - admin
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: One page of internal accounts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAccountPage'
+              examples:
+                first-page:
+                  $ref: ./examples/listAdminAccounts/first-page.json
+                last-page:
+                  $ref: ./examples/listAdminAccounts/last-page.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRole'
+        '422':
+          $ref: '#/components/responses/InvalidListRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+    post:
+      operationId: createAdminAccount
+      tags:
+        - admin
+      summary: Create a staff or manager account
+      description: >-
+        Creates an active `staff` or `manager` account with the password that the admin sets
+        (ADR-0015). Role: `admin`. The login name is `<role>-<number>`. With `login_number`,
+        `backend` uses that number and returns `409 login-name-taken` when an account already
+        has the login name. Without it, `backend` takes one more than the largest number of any
+        login name with the prefix `<role>-`, whatever the current role or status of that
+        account, or 1 when there is none. A role change never renames an account. In the same
+        transaction, `backend` stores only the Argon2id hash of `password` and writes the audit
+        log entry `account.created`. Changes to accounts are serialized, and the caller is
+        reloaded after the wait, so a caller who is no longer an active admin gets `401`. A
+        `role` other than `staff` or `manager` returns `422`. The `Idempotency-Key` is compared
+        without `password` (ERR-15): a retry with the same key and the same other fields returns
+        the original `201`, whatever the password.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - admin
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAdminAccountRequest'
+      responses:
+        '201':
+          description: >-
+            The account was created, or this is the original result of a retry. The body is
+            the new account with its login name.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAccountView'
+              examples:
+                created:
+                  $ref: ./examples/createAdminAccount/created.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRoleOrOrigin'
+        '409':
+          $ref: '#/components/responses/IdempotencyKeyReusedOrLoginNameTaken'
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/admin/accounts/{account_id}/role-changes:
+    post:
+      operationId: changeAccountRole
+      tags:
+        - admin
+      summary: Change an account's role between staff and manager
+      description: >-
+        Changes the role of a `staff` or `manager` account to the other of those two roles
+        (ADR-0012, admin limits 3 to 6). Role: `admin`. The change deletes every session of the
+        account and writes the audit log entry `account.role_changed` in the same transaction.
+        Changes to accounts are serialized, and the caller is reloaded after the wait, so a
+        caller who is no longer an active admin gets `401`. A customer account or an unknown
+        `account_id` returns `404`, as if it did not exist. The request returns `422` when the
+        target is the caller, when the target is an `admin` account, when `role` is already the
+        account's role, or when the change would leave no active `manager`.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - admin
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/AccountId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeAccountRoleRequest'
+      responses:
+        '201':
+          description: >-
+            The role was changed, or this is the original result of a retry. The body is the
+            account after the change.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAccountView'
+              examples:
+                made-manager:
+                  $ref: ./examples/changeAccountRole/made-manager.json
+                made-staff:
+                  $ref: ./examples/changeAccountRole/made-staff.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRoleOrOrigin'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '422':
+          $ref: '#/components/responses/InvalidRoleChange'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/admin/accounts/{account_id}/status-changes:
+    post:
+      operationId: changeAccountStatus
+      tags:
+        - admin
+      summary: Deactivate or reactivate an internal account
+      description: >-
+        Deactivates or reactivates a `staff`, `manager`, or `admin` account (ADR-0012, admin
+        limits 4 to 6). Role: `admin`. A deactivated account cannot sign in. The change deletes
+        every session of the account and writes the audit log entry `account.status_changed` in
+        the same transaction. Changes to accounts are serialized, and the caller is reloaded
+        after the wait, so a caller who is no longer an active admin gets `401`. A customer
+        account or an unknown `account_id` returns `404`, as if it did not exist. The request
+        returns `422` when the target is the caller, when `is_active` is already the account's
+        status, or when the change would leave no active `manager`.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - admin
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/AccountId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeAccountStatusRequest'
+      responses:
+        '201':
+          description: >-
+            The status was changed, or this is the original result of a retry. The body is the
+            account after the change.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAccountView'
+              examples:
+                deactivated:
+                  $ref: ./examples/changeAccountStatus/deactivated.json
+                reactivated:
+                  $ref: ./examples/changeAccountStatus/reactivated.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRoleOrOrigin'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '422':
+          $ref: '#/components/responses/InvalidStatusChange'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/admin/accounts/{account_id}/password-resets:
+    post:
+      operationId: resetAccountPassword
+      tags:
+        - admin
+      summary: Reset the password of a staff or manager account
+      description: >-
+        Replaces the password of a `staff` or `manager` account with the password that the admin
+        sets (ADR-0015). Role: `admin`. A deactivated account can be reset, and it still cannot
+        sign in until an admin reactivates it. In one transaction, `backend` stores only the
+        Argon2id hash of `password`, deletes every session of the account when
+        `is_signed_out_everywhere` is true, deletes the sign-in failures of the account's login
+        name, and writes the audit log entry `account.password_reset`. Changes to accounts are
+        serialized, and the caller is reloaded after the wait, so a caller who is no longer an
+        active admin gets `401`. A customer account or an unknown `account_id` returns `404`, as
+        if it did not exist. The request returns `422` when the target is the caller, who
+        changes their own password with `changeOwnPassword`, or an `admin` account. The
+        `Idempotency-Key` is compared without `password` (ERR-15): a retry with the same key,
+        the same `account_id`, and the same `is_signed_out_everywhere` returns the original
+        `201`, whatever the password.
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - admin
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/AccountId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetAccountPasswordRequest'
+      responses:
+        '201':
+          description: >-
+            The password was reset, or this is the original result of a retry. The body is the
+            account after the reset.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAccountView'
+              examples:
+                reset:
+                  $ref: ./examples/resetAccountPassword/reset.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRoleOrOrigin'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyKeyReused'
+        '422':
+          $ref: '#/components/responses/InvalidPasswordReset'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/admin/versions:
+    get:
+      operationId: getAdminVersions
+      tags:
+        - admin
+      summary: Read the versions in use
+      description: >-
+        Returns the build version of `backend` and the release and asset versions that
+        `ai-service` serves (DATA-56), for the admin area. Role: `admin`. `backend` reads them
+        from `ai-service` (`getAssetVersions` of the `ai-service` contract) with
+        `ai_service_read_timeout_ms`. When `ai-service` does not answer in time or answers with
+        an error, the response is still `200`, with `ai_service_status` `unavailable` and
+        without `ai_service_versions`. The response holds versions only: no ticket, message,
+        order, or report (SEC-41).
+      security:
+        - sessionCookie: []
+      x-supportiq-roles:
+        - admin
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+      responses:
+        '200':
+          description: The versions in use.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminVersionsView'
+              examples:
+                ai-service-available:
+                  $ref: ./examples/getAdminVersions/ai-service-available.json
+                ai-service-unavailable:
+                  $ref: ./examples/getAdminVersions/ai-service-unavailable.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/ForbiddenRole'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /health/live:
+    get:
+      operationId: checkLiveness
+      tags:
+        - health
+      summary: Check that the backend process runs
+      description: >-
+        Liveness (ERR-18): answers `204` while the process can serve HTTP. It checks no
+        dependency. Callable without a session.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+      responses:
+        '204':
+          description: The process runs. There is no body.
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /health/ready:
+    get:
+      operationId: checkReadiness
+      tags:
+        - health
+      summary: Check that backend can serve requests
+      description: >-
+        Readiness (ERR-18): answers `204` when the settings are valid and the database answers
+        within its timeout, and `503 not-ready` otherwise. An instance that is not ready
+        receives no traffic (ERR-18). Callable without a session.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+      responses:
+        '204':
+          description: The instance is ready. There is no body.
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: supportiq_session
+      description: >-
+        The session cookie set by `createSession` (ADR-0009, statements 4 and 10). Its value is
+        a random session identifier, which is Secret: `backend` stores only its SHA-256 hash, and
+        `frontend` never reads it because the cookie is `HttpOnly`. A missing, unknown, expired,
+        or idle session returns `401`.
+  headers:
+    SessionCookie:
+      description: >-
+        Sets the session cookie `supportiq_session=<session identifier>` with the attributes
+        `HttpOnly`, `SameSite=Strict`, and `Path=/`, and `Secure` outside local development
+        (ADR-0009, statement 4). The attributes may come in any order, and their names and
+        values are case-insensitive, as RFC 6265 defines. The cookie has no `Expires` or
+        `Max-Age` attribute; `backend` enforces the idle timeout and the absolute lifetime of the
+        session. The session identifier is Secret. Data class: Secret.
+      required: true
+      schema:
+        type: string
+        pattern: '^supportiq_session=[^;]+(;.*)?$'
+      example: supportiq_session=EXAMPLE-NOT-A-SESSION-ID; HttpOnly; SameSite=Strict; Path=/
+  parameters:
+    Traceparent:
+      name: traceparent
+      in: header
+      required: false
+      description: >-
+        The W3C Trace Context header (ADR-0004, decision 6; LOG-05). Absent means that `backend`
+        starts a new trace, which is the normal case because `frontend` exports no telemetry in
+        v1 (LOG-04). `backend` also ignores a value that is not a valid `traceparent` and starts a
+        new trace, as the W3C specification requires, so this header never causes `422`. Data
+        class: Internal.
+      schema:
+        type: string
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: >-
+        A key that the client creates once per user action, as a UUID in lowercase hexadecimal
+        with hyphens. A retry of the same action reuses it (TS-29). The same key with the same
+        body and path parameters returns the original result without repeating the effect, and
+        the same key with a different body or different path parameters returns
+        `409 idempotency-key-reused` (ERR-15). Password fields are not compared, because no
+        password is ever stored: on `changeOwnPassword`, `createAdminAccount`, and
+        `resetAccountPassword`, the same key with the same other fields and a different password
+        returns the original result. A key belongs to the signed-in account and the operation,
+        and `backend` remembers it for at least 24 hours.
+        Only a success is remembered: after an error response, the same key runs as a new
+        request. A request that arrives while the first one with its key is still running waits
+        for it, and gets `503 not-ready` if the wait exceeds the lock timeout of `backend`. A
+        missing or malformed key returns `422`. Data class: Internal.
+      schema:
+        type: string
+        format: uuid
+        pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: >-
+        The maximum number of items on the page, from 1 to 100 (CON-14). Absent means 20.
+        Another value returns `422`. Data class: Internal.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: >-
+        The position after which the page starts: the `next_cursor` of the previous page.
+        Absent means the first page. The cursor is opaque, and consumers never parse or build it
+        (CON-15). It belongs to the operation that returned it, and it never contains a
+        Confidential value. Send it with the same filter parameters as the first page; `limit`
+        may change from page to page. With another `order_id` on `listShopTickets`, the page
+        holds the tickets of that order that come after the cursor's position in the sort
+        order. Following `next_cursor` from the first page returns each item at most once and
+        skips no item that existed when the first page was read. A malformed cursor, or a cursor
+        returned by another operation, returns `422`. Data class: Internal.
+      schema:
+        $ref: '#/components/schemas/Cursor'
+    ProductId:
+      name: product_id
+      in: path
+      required: true
+      description: >-
+        The identifier of a catalog product (CON-15). Data class: Public.
+      schema:
+        type: string
+        minLength: 1
+    OrderId:
+      name: order_id
+      in: path
+      required: true
+      description: >-
+        The identifier of one of the caller's orders (CON-15). It identifies a person's
+        purchase. Data class: Confidential.
+      schema:
+        type: string
+        minLength: 1
+    TicketId:
+      name: ticket_id
+      in: path
+      required: true
+      description: >-
+        The identifier of one of the caller's tickets (CON-15). Data class: Internal.
+      schema:
+        type: string
+        minLength: 1
+    AccountId:
+      name: account_id
+      in: path
+      required: true
+      description: >-
+        The identifier of an internal account, as `listAdminAccounts` returns it (CON-15). Data
+        class: Internal.
+      schema:
+        type: string
+        minLength: 1
+    ConsoleTicketId:
+      name: ticket_id
+      in: path
+      required: true
+      description: >-
+        The identifier of a ticket, as `listConsoleTickets` returns it (CON-15). Data class:
+        Internal.
+      schema:
+        type: string
+        minLength: 1
+    ConsoleTicketStatusFilter:
+      name: status
+      in: query
+      required: true
+      description: >-
+        The status of the tickets to list. `staff` may ask for `open` only. A missing or unknown
+        value returns `422`. Data class: Internal.
+      schema:
+        $ref: '#/components/schemas/ConsoleTicketStatus'
+    KbDocumentIdPath:
+      name: document_id
+      in: path
+      required: true
+      description: >-
+        The KB document, as a citation or a ranked document of a suggestion names it (CON-15).
+        Data class: Internal.
+      schema:
+        $ref: '#/components/schemas/KbDocumentId'
+    KbDocumentVersionPath:
+      name: version
+      in: path
+      required: true
+      description: >-
+        The version of the KB document, as a citation or a ranked document of a suggestion names
+        it (CON-15). Data class: Internal.
+      schema:
+        $ref: '#/components/schemas/KbDocumentVersionTag'
+    ReportStartAt:
+      name: start_at
+      in: query
+      required: true
+      description: >-
+        The start of the report period, included. It must be earlier than `end_at`; otherwise,
+        or when it is missing or not a `Timestamp`, the response is `422`. Data class: Internal.
+      schema:
+        $ref: '#/components/schemas/Timestamp'
+    ReportEndAt:
+      name: end_at
+      in: query
+      required: true
+      description: >-
+        The end of the report period, excluded: a record at exactly `end_at` belongs to the next
+        period. Data class: Internal.
+      schema:
+        $ref: '#/components/schemas/Timestamp'
+  responses:
+    Unauthenticated:
+      description: >-
+        `unauthenticated`: no valid session. The `supportiq_session` cookie is missing or
+        unknown, the session expired or was idle too long, or the session was deleted, for
+        example by a sign-out, by a role or status change of its account (ADR-0012, admin limit
+        6), or by a password change or reset of its account (ADR-0015). `frontend` goes to
+        sign-in.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            unauthenticated:
+              $ref: ./examples/problems/unauthenticated.json
+    InvalidCredentials:
+      description: >-
+        `unauthenticated`: the credentials were not accepted. The same response for an unknown
+        login name, a wrong password, a deactivated account, and an attempt for a login name at
+        the sign-in failure limit, which gets it after `sign_in_failure_delay_ms` (ADR-0009,
+        statement 8).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            invalid-credentials:
+              $ref: ./examples/problems/invalid-credentials.json
+    ForbiddenRole:
+      description: >-
+        `forbidden`: the caller's role may not call this operation (contracts v1 permission
+        table). For example, an admin calls a `/v1/shop/` operation, or a customer calls a
+        `/v1/admin/` operation.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            forbidden-role:
+              $ref: ./examples/problems/forbidden-role.json
+    ForbiddenOrigin:
+      description: >-
+        `forbidden`: the `Origin` header is missing or not allowed (ADR-0009, statement 7). The
+        request changed nothing.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            forbidden-origin:
+              $ref: ./examples/problems/forbidden-origin.json
+    ForbiddenRoleOrOrigin:
+      description: >-
+        `forbidden`: the `Origin` header is missing or not allowed (ADR-0009, statement 7), or
+        the caller's role may not call this operation (contracts v1 permission table). The
+        `Origin` check runs first. The request changed nothing.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            forbidden-role:
+              $ref: ./examples/problems/forbidden-role.json
+            forbidden-origin:
+              $ref: ./examples/problems/forbidden-origin.json
+    NotFound:
+      description: >-
+        `not-found`: the resource does not exist, or the caller may not know about it (SEC-17).
+        Another customer's order or ticket, and a customer account in an admin operation, return
+        this same response, so their existence is not revealed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            not-found:
+              $ref: ./examples/problems/not-found.json
+    IdempotencyKeyReused:
+      description: >-
+        `idempotency-key-reused`: the `Idempotency-Key` was used before by the same account on
+        the same operation with a different body or different path parameters (ERR-15). Nothing
+        changed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            idempotency-key-reused:
+              $ref: ./examples/problems/idempotency-key-reused.json
+    IdempotencyKeyReusedOrLoginNameTaken:
+      description: >-
+        `idempotency-key-reused`: the `Idempotency-Key` was used before by the same account on
+        the same operation with different fields other than the password (ERR-15). Or
+        `login-name-taken`: the login name composed from `role` and `login_number` is already
+        an account's login name (ADR-0015). Nothing changed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            idempotency-key-reused:
+              $ref: ./examples/problems/idempotency-key-reused.json
+            login-name-taken:
+              $ref: ./examples/problems/login-name-taken.json
+    InvalidRequest:
+      description: >-
+        `invalid-request`: the request breaks the contract. The body is not valid JSON, misses a
+        required field, has an unknown field (CON-07), or has a value outside its type, length,
+        or pattern, or a required header such as `Idempotency-Key` is missing or malformed.
+        Nothing changed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            invalid-request:
+              $ref: ./examples/problems/invalid-request.json
+    InvalidListRequest:
+      description: >-
+        `invalid-request`: `limit` is not an integer from 1 to 100, `cursor` is empty, malformed,
+        or returned by another operation (CON-14), or the `order_id` filter of `listShopTickets`
+        is empty.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            invalid-limit:
+              $ref: ./examples/problems/invalid-limit.json
+            invalid-cursor:
+              $ref: ./examples/problems/invalid-cursor.json
+    InvalidRoleChange:
+      description: >-
+        `invalid-request`: the request fails validation against this contract, as for
+        `InvalidRequest`, or a well-formed request is refused under the admin limits 3 to 5 of
+        ADR-0012 or because the value is unchanged: the target is the caller's own account, the
+        target is an `admin` account, `role` is already the account's role, or the change would
+        leave no active `manager`. `violated_rule` names the reason of a refusal, and is absent
+        when the request fails validation. Nothing changed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/AccountChangeProblemDetails'
+          examples:
+            invalid-request:
+              $ref: ./examples/problems/invalid-request.json
+            own-account:
+              $ref: ./examples/problems/own-account.json
+            admin-role-unchangeable:
+              $ref: ./examples/problems/admin-role-unchangeable.json
+            role-unchanged:
+              $ref: ./examples/problems/role-unchanged.json
+            last-active-manager:
+              $ref: ./examples/problems/last-active-manager.json
+    InvalidStatusChange:
+      description: >-
+        `invalid-request`: the request fails validation against this contract, as for
+        `InvalidRequest`, or a well-formed request is refused under the admin limits 4 and 5 of
+        ADR-0012 or because the value is unchanged: the target is the caller's own account,
+        `is_active` is already the account's status, or the change would leave no active
+        `manager`. `violated_rule` names the reason of a refusal, and is absent when the request
+        fails validation. Nothing changed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/AccountChangeProblemDetails'
+          examples:
+            invalid-request:
+              $ref: ./examples/problems/invalid-request.json
+            own-account:
+              $ref: ./examples/problems/own-account.json
+            status-unchanged:
+              $ref: ./examples/problems/status-unchanged.json
+            last-active-manager:
+              $ref: ./examples/problems/last-active-manager.json
+    InvalidPasswordChange:
+      description: >-
+        `invalid-request`: the request fails validation against this contract, as for
+        `InvalidRequest`, or `current_password` was not accepted: it is wrong, or the login
+        name of the account is at the sign-in failure limit, which gets this response after
+        `sign_in_failure_delay_ms` (ADR-0009, statement 8). `violated_rule` is
+        `current_password_incorrect` for a refusal, and is absent when the request fails
+        validation. Nothing changed, and the session stays.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/AccountChangeProblemDetails'
+          examples:
+            invalid-request:
+              $ref: ./examples/problems/invalid-request.json
+            current-password-incorrect:
+              $ref: ./examples/problems/current-password-incorrect.json
+    InvalidPasswordReset:
+      description: >-
+        `invalid-request`: the request fails validation against this contract, as for
+        `InvalidRequest`, or a well-formed request is refused under ADR-0015: the target is the
+        caller's own account, or the target is an `admin` account. `violated_rule` names the
+        reason of a refusal, and is absent when the request fails validation. Nothing changed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/AccountChangeProblemDetails'
+          examples:
+            invalid-request:
+              $ref: ./examples/problems/invalid-request.json
+            own-account:
+              $ref: ./examples/problems/own-account.json
+            admin-password-unresettable:
+              $ref: ./examples/problems/admin-password-unresettable.json
+    NotReady:
+      description: >-
+        `not-ready`: `backend` cannot serve the request now. The database is unavailable, or a
+        database timeout or lock wait limit was reached (ERR-09, ERR-18). The request changed
+        nothing. A client may retry a read, or a write with the same `Idempotency-Key`, as ERR-12
+        and TS-29 allow.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            not-ready:
+              $ref: ./examples/problems/not-ready.json
+    InternalError:
+      description: >-
+        `internal-error`: an unexpected failure in `backend`, logged at `error` level with the
+        trace ID. The body names no internal detail (CON-12).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            internal-error:
+              $ref: ./examples/problems/internal-error.json
+    ForbiddenRoleOriginOrAuthority:
+      description: >-
+        `forbidden`: the `Origin` header is missing or not allowed (ADR-0009, statement 7), or
+        the caller's role may not call this operation on this ticket, such as `staff` on a
+        ticket that is not `open`. Or `authority-required`: `staff` tried to send the reply of
+        an `open` ticket that requires authority (FR-06); only a manager may send it, and staff
+        submit a reply proposal instead. The `Origin` check runs first. Nothing changed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            forbidden-role:
+              $ref: ./examples/problems/forbidden-role.json
+            forbidden-origin:
+              $ref: ./examples/problems/forbidden-origin.json
+            authority-required:
+              $ref: ./examples/problems/authority-required.json
+    SuggestionConflict:
+      description: >-
+        `idempotency-key-reused`: the `Idempotency-Key` was used before by the same account on
+        the same operation with a different body or different path parameters (ERR-15). Or
+        `invalid-ticket-state`: the ticket is not `open`, or its handling mode is `manual`. Or
+        `suggestion-pending`: an intent correction arrived while no intent is known and a part
+        of the current suggestion is still `pending`. Nothing changed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            idempotency-key-reused:
+              $ref: ./examples/problems/idempotency-key-reused.json
+            invalid-ticket-state:
+              $ref: ./examples/problems/invalid-ticket-state.json
+            suggestion-pending:
+              $ref: ./examples/problems/suggestion-pending.json
+    ReplyConflict:
+      description: >-
+        `idempotency-key-reused`: the `Idempotency-Key` was used before by the same account on
+        the same operation with a different body or different path parameters (ERR-15). Or
+        `invalid-ticket-state`: the ticket's state does not allow the operation, for example a
+        `closed` ticket. Or `suggestion-pending`: a part of the current suggestion is still
+        `pending`, so the authority flag may not be known yet. Or `suggestion-superseded`: the
+        `suggestion_id` of the body is not the ticket's current suggestion. Nothing changed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            idempotency-key-reused:
+              $ref: ./examples/problems/idempotency-key-reused.json
+            invalid-ticket-state:
+              $ref: ./examples/problems/invalid-ticket-state.json
+            suggestion-pending:
+              $ref: ./examples/problems/suggestion-pending.json
+            suggestion-superseded:
+              $ref: ./examples/problems/suggestion-superseded.json
+    EscalationConflict:
+      description: >-
+        `idempotency-key-reused`: the `Idempotency-Key` was used before by the same account on
+        the same operation with a different body or different path parameters (ERR-15). Or
+        `invalid-ticket-state`: the ticket is not `open`. Or `suggestion-superseded`: the
+        `suggestion_id` of the body is not the ticket's current suggestion. Nothing changed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            idempotency-key-reused:
+              $ref: ./examples/problems/idempotency-key-reused.json
+            invalid-ticket-state:
+              $ref: ./examples/problems/invalid-ticket-state.json
+            suggestion-superseded:
+              $ref: ./examples/problems/suggestion-superseded.json
+    InvalidSuggestionRequest:
+      description: >-
+        `invalid-request`: the request fails validation against this contract, as for
+        `InvalidRequest`; or it is a retry while `allowed_actions` has no `retry_suggestion`, for
+        example after `pseudonymization_failed`, which a retry cannot fix; or it corrects the
+        intent while no intent is known and no part is `pending`. Nothing changed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            invalid-request:
+              $ref: ./examples/problems/invalid-request.json
+            nothing-to-retry:
+              $ref: ./examples/problems/nothing-to-retry.json
+            no-intent-known:
+              $ref: ./examples/problems/no-intent-known.json
+    InvalidReply:
+      description: >-
+        `invalid-request`: the request fails validation against this contract, as for
+        `InvalidRequest`, or it breaks a rule of its basis: the basis is not valid for the
+        ticket (for example `no_ai_draft` while the current draft is `draft_ready`, or
+        `reply_proposal` with another proposal), a warning of the suggestion is not
+        acknowledged, a required reason code or note is missing, or the body contains a
+        placeholder (SEC-38). Nothing changed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            invalid-request:
+              $ref: ./examples/problems/invalid-request.json
+            reply-basis-invalid:
+              $ref: ./examples/problems/reply-basis-invalid.json
+            warnings-not-acknowledged:
+              $ref: ./examples/problems/warnings-not-acknowledged.json
+            note-required:
+              $ref: ./examples/problems/note-required.json
+            placeholder-in-body:
+              $ref: ./examples/problems/placeholder-in-body.json
+    InvalidEscalation:
+      description: >-
+        `invalid-request`: the request fails validation against this contract, as for
+        `InvalidRequest`, or `staff_reason_codes` contains `other` and `note` is absent, so the
+        reason would not be recorded (ADR-0006). Nothing changed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            invalid-request:
+              $ref: ./examples/problems/invalid-request.json
+            note-required:
+              $ref: ./examples/problems/note-required.json
+    InvalidConsoleListRequest:
+      description: >-
+        `invalid-request`: `status` is missing or unknown, `limit` is not an integer from 1 to
+        100, or `cursor` is empty, malformed, or returned by another operation or for another
+        `status` (CON-14).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            invalid-status:
+              $ref: ./examples/problems/invalid-status.json
+            invalid-limit:
+              $ref: ./examples/problems/invalid-limit.json
+            invalid-cursor:
+              $ref: ./examples/problems/invalid-cursor.json
+    InvalidReportPeriod:
+      description: >-
+        `invalid-request`: `start_at` or `end_at` is missing or not a `Timestamp`, or `start_at`
+        is not earlier than `end_at`.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            invalid-request:
+              $ref: ./examples/problems/invalid-request.json
+            invalid-period:
+              $ref: ./examples/problems/invalid-period.json
+    NotReadyOrAiServiceNotReady:
+      description: >-
+        `not-ready`: `backend` cannot serve the request now, as for `NotReady`, or `ai-service`
+        did not answer within `ai_service_read_timeout_ms` or answered with `5xx` (ERR-09). A
+        client may retry the read, as ERR-12 and TS-29 allow.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            not-ready:
+              $ref: ./examples/problems/not-ready.json
+            ai-service-not-ready:
+              $ref: ./examples/problems/ai-service-not-ready.json
+  schemas:
+    MessageText:
+      $ref: ./schemas/MessageText.yaml
+    Money:
+      $ref: ./schemas/Money.yaml
+    Timestamp:
+      $ref: ./schemas/Timestamp.yaml
+    ProblemDetails:
+      $ref: ./schemas/ProblemDetails.yaml
+    OrderStatus:
+      $ref: ./schemas/OrderStatus.yaml
+    ShipmentStatus:
+      $ref: ./schemas/ShipmentStatus.yaml
+    RefundStatus:
+      $ref: ./schemas/RefundStatus.yaml
+    IntentLabel:
+      $ref: ./schemas/IntentLabel.yaml
+    ConfidenceBand:
+      $ref: ./schemas/ConfidenceBand.yaml
+    AiReasonCode:
+      $ref: ./schemas/AiReasonCode.yaml
+    AiItemId:
+      $ref: ./schemas/AiItemId.yaml
+    KbDocumentId:
+      $ref: ./schemas/KbDocumentId.yaml
+    KbDocumentVersionTag:
+      $ref: ./schemas/KbDocumentVersionTag.yaml
+    AssetVersions:
+      $ref: ./schemas/AssetVersions.yaml
+    KbDocumentCitation:
+      $ref: ./schemas/KbDocumentCitation.yaml
+    OrderContextCitation:
+      $ref: ./schemas/OrderContextCitation.yaml
+    RankedDocument:
+      $ref: ./schemas/RankedDocument.yaml
+    Warning:
+      $ref: ./schemas/Warning.yaml
+    Placeholder:
+      $ref: ./schemas/Placeholder.yaml
+    StepLatencies:
+      $ref: ./schemas/StepLatencies.yaml
+    KbDocumentVersion:
+      $ref: ./schemas/KbDocumentVersion.yaml
+    AccountChangeRule:
+      description: >-
+        Why a well-formed account change was refused: the admin limits 3 to 5 of ADR-0012, a
+        value that is already the account's value, or a limit of ADR-0015. When several reasons
+        apply, the value is the first of this list.
+        `own_account`: the target is the caller's own account (admin limit 4, ADR-0015).
+        `admin_role_unchangeable`: the target of a role change is an `admin` account (admin limit
+        3); only `changeAccountRole` returns it.
+        `role_unchanged`: `role` is already the account's role; only `changeAccountRole` returns
+        it.
+        `status_unchanged`: `is_active` is already the account's status; only
+        `changeAccountStatus` returns it.
+        `last_active_manager`: the change would leave no active `manager` (admin limit 5).
+        `admin_password_unresettable`: the target of a password reset is an `admin` account
+        (ADR-0015); only `resetAccountPassword` returns it.
+        `current_password_incorrect`: `current_password` is wrong, or the login name of the
+        account is at the sign-in failure limit (ADR-0009, statement 8); only
+        `changeOwnPassword` returns it.
+        Consumers map an unknown value to a generic refusal (CON-22). Data class: Internal.
+      type: string
+      enum:
+        - own_account
+        - admin_role_unchangeable
+        - role_unchanged
+        - status_unchanged
+        - last_active_manager
+        - admin_password_unresettable
+        - current_password_incorrect
+    AccountChangeProblemDetails:
+      description: >-
+        The body of a refused account change: a `ProblemDetails` with the extension member
+        `violated_rule`, used by `changeAccountRole`, `changeAccountStatus`,
+        `resetAccountPassword`, and `changeOwnPassword` only. Data class: Internal.
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+      properties:
+        violated_rule:
+          $ref: '#/components/schemas/AccountChangeRule'
+          description: >-
+            Why the request was refused. Present exactly when a well-formed request is refused
+            for one of the reasons of `AccountChangeRule`. Absent when the request fails
+            validation against this contract, for example with a malformed body or without an
+            `Idempotency-Key` (CON-08). Data class: Internal.
+    Cursor:
+      description: >-
+        An opaque position in a list, from 1 to 512 characters (CON-14, CON-15). Data class:
+        Internal.
+      type: string
+      minLength: 1
+      maxLength: 512
+    AccountRole:
+      description: >-
+        The role of an account (ADR-0012).
+        `customer`: a simulated shopper who uses `/shop`.
+        `staff`: Tier 1 support staff who use `/console`.
+        `manager`: Tier 2 support managers who use `/console` with authority for FR-06 and view
+        reports.
+        `admin`: manages internal accounts and views the versions in use in `/admin`.
+        Consumers treat an unknown value as a role without any area. Data class: Internal.
+      type: string
+      enum:
+        - customer
+        - staff
+        - manager
+        - admin
+    InternalAccountRole:
+      description: >-
+        The role of an internal account, as `AccountRole` defines it without `customer`.
+        Consumers treat an unknown value as a role that cannot be changed. Data class: Internal.
+      type: string
+      enum:
+        - staff
+        - manager
+        - admin
+    AssignableAccountRole:
+      description: >-
+        A role that an admin can give an account: `staff` or `manager`, as `AccountRole` defines
+        them (ADR-0012, admin limit 3). Data class: Internal.
+      type: string
+      enum:
+        - staff
+        - manager
+    Password:
+      description: >-
+        A password that an account owner or an admin sets, from 1 to 128 characters counted in
+        Unicode code points: the limits of `CreateSessionRequest.password`, so every password
+        that can be set can sign in. No other rule applies (ADR-0015). `backend` hashes it
+        exactly as received with Argon2id, and never stores, logs, or returns it. Data class:
+        Secret.
+      type: string
+      format: password
+      minLength: 1
+      maxLength: 128
+    CreateSessionRequest:
+      description: >-
+        The credentials of a seeded account (ADR-0009). Data class: Secret.
+      type: object
+      additionalProperties: false
+      required:
+        - login_name
+        - password
+      properties:
+        login_name:
+          description: >-
+            The login name of the account, from 1 to 64 characters, such as `staff-1`. It names a
+            role and a number, never a person. Data class: Internal.
+          type: string
+          minLength: 1
+          maxLength: 64
+        password:
+          description: >-
+            The password of the account, from 1 to 128 characters. `backend` never stores or
+            logs it. Data class: Secret.
+          type: string
+          format: password
+          minLength: 1
+          maxLength: 128
+    SessionView:
+      description: >-
+        The signed-in account of a session. Data class: Confidential.
+      type: object
+      required:
+        - account_id
+        - display_name
+        - role
+      properties:
+        account_id:
+          description: >-
+            The identifier of the signed-in account, the same identifier that
+            `listAdminAccounts` returns (CON-15). Data class: Internal.
+          type: string
+          minLength: 1
+        display_name:
+          description: >-
+            The name shown for the account: the customer's name, or the staff identity. From 1
+            to 100 characters. Data class: Confidential.
+          type: string
+          minLength: 1
+          maxLength: 100
+        role:
+          $ref: '#/components/schemas/AccountRole'
+          description: >-
+            The role of the account, which decides the area that `frontend` opens. Data class:
+            Internal.
+    ShopProductView:
+      description: >-
+        A product of the read-only catalog (ADR-0013). Data class: Public.
+      type: object
+      required:
+        - product_id
+        - name
+        - description
+        - category
+        - price
+      properties:
+        product_id:
+          description: >-
+            The identifier of the product (CON-15). Data class: Public.
+          type: string
+          minLength: 1
+        name:
+          description: >-
+            The name of the product. Data class: Public.
+          type: string
+          minLength: 1
+        description:
+          description: >-
+            The description of the product, as plain text, which `frontend` never renders as
+            HTML or Markdown (SEC-22). Data class: Public.
+          type: string
+          minLength: 1
+        category:
+          description: >-
+            The name of the product's category, as plain text. Data class: Public.
+          type: string
+          minLength: 1
+        price:
+          $ref: '#/components/schemas/Money'
+          description: >-
+            The price of one unit of the product. Data class: Public.
+    ShopProductPage:
+      description: >-
+        One page of catalog products (CON-14). Data class: Public.
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          description: >-
+            The products of the page, in the order the operation states, at most `limit` of
+            them. Empty when the catalog has no product. Data class: Public.
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ShopProductView'
+        next_cursor:
+          $ref: '#/components/schemas/Cursor'
+          description: >-
+            The cursor of the next page, present when at least one more item follows. Absent on
+            the last page. Data class: Internal.
+    ShopOrderView:
+      description: >-
+        One of the customer's simulated orders (`synthetic-dev-only` commerce data). It has no
+        shipping address and no transaction ID. Data class: Confidential.
+      type: object
+      required:
+        - order_id
+        - order_status
+        - placed_at
+        - order_total
+        - shipping_cost
+        - lines
+        - shipment
+      properties:
+        order_id:
+          description: >-
+            The identifier of the order (CON-15). It identifies a person's purchase. Data
+            class: Confidential.
+          type: string
+          minLength: 1
+        order_status:
+          $ref: '#/components/schemas/OrderStatus'
+          description: >-
+            The status of the order. Data class: Confidential.
+        placed_at:
+          $ref: '#/components/schemas/Timestamp'
+          description: >-
+            When the customer placed the order. Data class: Confidential.
+        order_total:
+          $ref: '#/components/schemas/Money'
+          description: >-
+            The total the customer paid for the order, including `shipping_cost`. Data class:
+            Confidential.
+        shipping_cost:
+          $ref: '#/components/schemas/Money'
+          description: >-
+            The shipping cost of the order, in the same currency as `order_total`. Data class:
+            Confidential.
+        lines:
+          description: >-
+            The lines of the order, in the order of the order's own line numbers. At least one.
+            A product appears at most once in an order. Data class: Confidential.
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ShopOrderLine'
+        shipment:
+          $ref: '#/components/schemas/ShopShipmentView'
+          description: >-
+            The shipment of the order. Always present: an order whose commerce data holds no
+            shipment record yet has `shipment_status` `not_shipped` and no dates. Data class:
+            Confidential.
+        refund:
+          $ref: '#/components/schemas/ShopRefundView'
+          description: >-
+            The refund of the order. Absent when no refund was requested for the order. Data
+            class: Confidential.
+    ShopOrderLine:
+      description: >-
+        One line of an order. Data class: Confidential.
+      type: object
+      required:
+        - product_id
+        - product_name
+        - quantity
+      properties:
+        product_id:
+          description: >-
+            The catalog product of the line, which `getShopProduct` returns (CON-15). Data
+            class: Confidential, because it tells what the customer bought.
+          type: string
+          minLength: 1
+        product_name:
+          description: >-
+            The name of that product, as `ShopProductView.name` holds it. Data class:
+            Confidential, because it tells what the customer bought.
+          type: string
+          minLength: 1
+        quantity:
+          description: >-
+            The number of units of the product in the line. Data class: Confidential.
+          type: integer
+          minimum: 1
+    ShopShipmentView:
+      description: >-
+        The shipment of an order. Data class: Confidential.
+      type: object
+      required:
+        - shipment_status
+      properties:
+        shipment_status:
+          $ref: '#/components/schemas/ShipmentStatus'
+          description: >-
+            The status of the shipment. Data class: Confidential.
+        estimated_delivery_at:
+          $ref: '#/components/schemas/Timestamp'
+          description: >-
+            When the carrier expects to deliver the parcel. Absent when the commerce data holds
+            no estimate. Data class: Confidential.
+        delivered_at:
+          $ref: '#/components/schemas/Timestamp'
+          description: >-
+            When the carrier delivered the parcel. Present exactly when `shipment_status` is
+            `delivered`. Data class: Confidential.
+    ShopRefundView:
+      description: >-
+        The refund of an order. Data class: Confidential.
+      type: object
+      required:
+        - refund_status
+        - refund_amount
+        - refund_requested_at
+      properties:
+        refund_status:
+          $ref: '#/components/schemas/RefundStatus'
+          description: >-
+            The status of the refund. Data class: Confidential.
+        refund_amount:
+          $ref: '#/components/schemas/Money'
+          description: >-
+            The amount requested for the refund, in the currency of the order. Data class:
+            Confidential.
+        refund_requested_at:
+          $ref: '#/components/schemas/Timestamp'
+          description: >-
+            When the refund was requested. Data class: Confidential.
+    ShopOrderPage:
+      description: >-
+        One page of the customer's orders (CON-14). Data class: Confidential.
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          description: >-
+            The orders of the page, in the order the operation states, at most `limit` of them.
+            Empty when the customer has no order. Data class: Confidential.
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ShopOrderView'
+        next_cursor:
+          $ref: '#/components/schemas/Cursor'
+          description: >-
+            The cursor of the next page, present when at least one more item follows. Absent on
+            the last page. Data class: Internal.
+    CreateShopTicketRequest:
+      description: >-
+        A customer's message about one of their orders. Data class: Confidential.
+      type: object
+      additionalProperties: false
+      required:
+        - order_id
+        - message
+      properties:
+        order_id:
+          description: >-
+            The order that the message is about, one of the caller's orders (ADR-0013). Data
+            class: Confidential.
+          type: string
+          minLength: 1
+        message:
+          $ref: '#/components/schemas/MessageText'
+          description: >-
+            The customer's message, exactly as written. Data class: Confidential.
+    ShopTicketStatus:
+      description: >-
+        The status of a ticket as the customer sees it. It never shows the internal ticket
+        state, a suggestion, a proposal, or an escalation.
+        `received`: no reply was sent yet.
+        `replied`: staff sent the reply, which the ticket holds.
+        Consumers show an unknown value as `received`. Data class: Internal.
+      type: string
+      enum:
+        - received
+        - replied
+    ShopTicketView:
+      description: >-
+        A customer's ticket as the shop shows it: the message and, once staff sent it, the
+        reply. It has no field that can hold AI output. Data class: Confidential.
+      type: object
+      required:
+        - ticket_id
+        - order_id
+        - message
+        - created_at
+        - customer_status
+      properties:
+        ticket_id:
+          description: >-
+            The identifier of the ticket, which the customer can quote to support (CON-15). Data
+            class: Internal.
+          type: string
+          minLength: 1
+        order_id:
+          description: >-
+            The order that the ticket is about. Data class: Confidential.
+          type: string
+          minLength: 1
+        message:
+          $ref: '#/components/schemas/MessageText'
+          description: >-
+            The customer's message, exactly as written. Data class: Confidential.
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+          description: >-
+            When the customer sent the message. Data class: Internal.
+        customer_status:
+          $ref: '#/components/schemas/ShopTicketStatus'
+          description: >-
+            Whether the reply was sent. Data class: Internal.
+        reply:
+          $ref: '#/components/schemas/ShopReplyView'
+          description: >-
+            The reply that staff sent. Present exactly when `customer_status` is `replied`, and
+            absent while it is `received`. Data class: Confidential.
+    ShopReplyView:
+      description: >-
+        The reply that staff sent to the customer. Data class: Confidential.
+      type: object
+      required:
+        - body
+        - sent_at
+      properties:
+        body:
+          $ref: '#/components/schemas/MessageText'
+          description: >-
+            The text of the reply, exactly as staff sent it. It never contains a placeholder
+            (ADR-0010). Data class: Confidential.
+        sent_at:
+          $ref: '#/components/schemas/Timestamp'
+          description: >-
+            When staff sent the reply. Data class: Internal.
+    ShopTicketPage:
+      description: >-
+        One page of the customer's tickets (CON-14). Data class: Confidential.
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          description: >-
+            The tickets of the page, in the order the operation states, at most `limit` of
+            them. Empty when the customer has no ticket, or none about the given order. Data
+            class: Confidential.
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ShopTicketView'
+        next_cursor:
+          $ref: '#/components/schemas/Cursor'
+          description: >-
+            The cursor of the next page, present when at least one more item follows. Absent on
+            the last page. Data class: Internal.
+    AdminAccountView:
+      description: >-
+        An internal account as the admin area shows it. It has no email, password, password
+        hash, or session data (ADR-0012, ADR-0015). Data class: Confidential.
+      type: object
+      required:
+        - account_id
+        - login_name
+        - display_name
+        - role
+        - is_active
+      properties:
+        account_id:
+          description: >-
+            The identifier of the account, the same identifier that `getCurrentSession` returns
+            (CON-15). `frontend` uses it for requests and to find the caller's own row, and
+            never shows it. Data class: Internal.
+          type: string
+          minLength: 1
+        login_name:
+          description: >-
+            The login name that the account signs in with, from 1 to 64 characters, such as
+            `staff-4`. It names a role and a number, never a person, and a role change does not
+            rename it (ADR-0015). Data class: Internal.
+          type: string
+          minLength: 1
+          maxLength: 64
+        display_name:
+          description: >-
+            The name shown for the account, a staff identity, from 1 to 100 characters. Data
+            class: Confidential.
+          type: string
+          minLength: 1
+          maxLength: 100
+        role:
+          $ref: '#/components/schemas/InternalAccountRole'
+          description: >-
+            The role of the account. Data class: Internal.
+        is_active:
+          description: >-
+            Whether the account can sign in. `false` means deactivated. Data class: Internal.
+          type: boolean
+    AdminAccountPage:
+      description: >-
+        One page of internal accounts (CON-14). Data class: Confidential.
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          description: >-
+            The accounts of the page, in the order the operation states, at most `limit` of
+            them. Data class: Confidential.
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/AdminAccountView'
+        next_cursor:
+          $ref: '#/components/schemas/Cursor'
+          description: >-
+            The cursor of the next page, present when at least one more item follows. Absent on
+            the last page. Data class: Internal.
+    ChangeAccountRoleRequest:
+      description: >-
+        The new role of a `staff` or `manager` account. Data class: Internal.
+      type: object
+      additionalProperties: false
+      required:
+        - role
+      properties:
+        role:
+          $ref: '#/components/schemas/AssignableAccountRole'
+          description: >-
+            The role that the account gets. The account's current role is refused with
+            `role_unchanged`. Data class: Internal.
+    ChangeAccountStatusRequest:
+      description: >-
+        The new status of an internal account. Data class: Internal.
+      type: object
+      additionalProperties: false
+      required:
+        - is_active
+      properties:
+        is_active:
+          description: >-
+            `true` reactivates the account and `false` deactivates it. The account's current
+            status is refused with `status_unchanged`. Data class: Internal.
+          type: boolean
+    CreateAdminAccountRequest:
+      description: >-
+        A new `staff` or `manager` account with the password that the admin sets (ADR-0015).
+        Data class: Secret.
+      type: object
+      additionalProperties: false
+      required:
+        - role
+        - display_name
+        - password
+      properties:
+        role:
+          $ref: '#/components/schemas/AssignableAccountRole'
+          description: >-
+            The role of the new account, which is also the first part of its login name. Data
+            class: Internal.
+        login_number:
+          description: >-
+            The number of the new login name `<role>-<number>`, from 1 to 9 999. Absent means
+            the next free number: one more than the largest number of any login name with the
+            prefix `<role>-`, or 1 when there is none. A number whose login name an account
+            already has returns `409 login-name-taken`. Data class: Internal.
+          type: integer
+          minimum: 1
+          maximum: 9999
+        display_name:
+          description: >-
+            The name shown for the new account, a staff identity, from 1 to 100 characters
+            counted in Unicode code points. It does not start or end with whitespace and holds no
+            control character (Unicode category Cc: U+0000 to U+001F and U+007F to U+009F).
+            `backend` never trims or repairs it: a value outside these limits returns `422`
+            (SEC-21). Display names need not be unique; the login name tells accounts apart.
+            Data class: Confidential.
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: '^[^\s\x00-\x1F\x7F-\x9F](?:[^\x00-\x1F\x7F-\x9F]*[^\s\x00-\x1F\x7F-\x9F])?$'
+        password:
+          $ref: '#/components/schemas/Password'
+          description: >-
+            The password of the new account, which the admin hands to its owner outside the
+            system. Data class: Secret.
+    ResetAccountPasswordRequest:
+      description: >-
+        The new password of a `staff` or `manager` account, which the admin sets, and whether
+        the account's sessions end (ADR-0015). Data class: Secret.
+      type: object
+      additionalProperties: false
+      required:
+        - password
+        - is_signed_out_everywhere
+      properties:
+        password:
+          $ref: '#/components/schemas/Password'
+          description: >-
+            The password that replaces the account's password, which the admin hands to its
+            owner outside the system. Data class: Secret.
+        is_signed_out_everywhere:
+          description: >-
+            `true` deletes every session of the account, and `false` keeps them. Data class:
+            Internal.
+          type: boolean
+    ChangeOwnPasswordRequest:
+      description: >-
+        The current and the new password of the caller's own account, and whether its other
+        sessions end (ADR-0015). Data class: Secret.
+      type: object
+      additionalProperties: false
+      required:
+        - current_password
+        - new_password
+        - is_signed_out_elsewhere
+      properties:
+        current_password:
+          $ref: '#/components/schemas/Password'
+          description: >-
+            The account's password before the change. Data class: Secret.
+        new_password:
+          $ref: '#/components/schemas/Password'
+          description: >-
+            The password that replaces it. Data class: Secret.
+        is_signed_out_elsewhere:
+          description: >-
+            `true` deletes every other session of the account, and `false` keeps them. The
+            current session always stays. Data class: Internal.
+          type: boolean
+    ConsoleTicketStatus:
+      description: >-
+        The lifecycle state of a ticket (contracts v1 design, ticket lifecycle).
+        `open`: waiting for staff.
+        `awaiting_approval`: staff submitted a reply proposal, and a manager sends the reply.
+        `escalated`: staff escalated the ticket, and a manager handles it.
+        `closed`: a reply was sent to the customer.
+        Consumers show an unknown value as a state with no action (CON-22). Data class:
+        Internal.
+      type: string
+      enum:
+        - open
+        - awaiting_approval
+        - escalated
+        - closed
+    HandlingMode:
+      description: >-
+        Whether the ticket is handled with AI suggestions (`assisted`) or without them
+        (`manual`), for the product-value study (NFR-11). A `manual` ticket gets no suggestion,
+        and its only reply basis is `no_ai_draft`. Shop tickets take the default mode from the
+        settings of `backend`; imported tickets take it from the import file. Consumers treat an
+        unknown value as `manual` (CON-22). Data class: Internal.
+      type: string
+      enum:
+        - assisted
+        - manual
+    StaffReasonCode:
+      description: >-
+        Why staff edited, rejected, or escalated a draft (ADR-0006). Several may apply.
+        `wrong_intent`: the predicted intent was wrong.
+        `wrong_source`: the KB has the right document, but retrieval missed it or chose another.
+        `unsupported_claim`: the draft states something that its sources do not say.
+        `kb_gap`: the KB is missing, outdated, or wrong.
+        `missing_case_info`: order or customer information was missing.
+        `tone_or_clarity`: the content was right, but the wording needed work.
+        `case_exception`: staff deliberately made an exception for this case.
+        `other`: anything else; a `note` is then required.
+        Consumers show an unknown value as an unspecified reason (CON-22). Data class:
+        Internal.
+      type: string
+      enum:
+        - wrong_intent
+        - wrong_source
+        - unsupported_claim
+        - kb_gap
+        - missing_case_info
+        - tone_or_clarity
+        - case_exception
+        - other
+    TicketAction:
+      description: >-
+        An action that the caller may take on the ticket now, computed by `backend` with the same
+        rules that the operations check, so the console offers no action that would be refused.
+        `send_reply`: `sendReply`.
+        `submit_reply_proposal`: `createReplyProposal`.
+        `escalate`: `createEscalation`.
+        `correct_intent`: `createSuggestion` with `intent_override`; offered only when an intent
+        is known.
+        `retry_suggestion`: `createSuggestion` without `intent_override`, after an AI failure that
+        a retry can fix.
+        Consumers ignore an unknown value (CON-22). Data class: Internal.
+      type: string
+      enum:
+        - send_reply
+        - submit_reply_proposal
+        - escalate
+        - correct_intent
+        - retry_suggestion
+    SuggestionTrigger:
+      description: >-
+        Why `backend` started the suggestion (contracts v1 design, suggestion lifecycle).
+        `ticket_created`: the ticket was created in `assisted` mode.
+        `intent_override`: staff or a manager confirmed the predicted intent or chose another.
+        `kb_version_changed`: on the first view of an `open` ticket in `assisted` mode, the
+        previous suggestion used another KB version than the one `ai-service` serves.
+        `retry`: staff opened the ticket after an AI failure, or asked for a retry.
+        A `kb_version_changed` or `retry` suggestion repeats the input of the suggestion it
+        replaces, including an intent that staff chose.
+        Consumers show an unknown value as an unspecified trigger (CON-22). Data class:
+        Internal.
+      type: string
+      enum:
+        - ticket_created
+        - intent_override
+        - kb_version_changed
+        - retry
+    StaffMemberView:
+      description: >-
+        The staff member or manager who did something on a ticket. Data class: Confidential.
+      type: object
+      required:
+        - account_id
+        - display_name
+      properties:
+        account_id:
+          description: >-
+            The identifier of the account (CON-15). Data class: Internal.
+          type: string
+          minLength: 1
+        display_name:
+          description: >-
+            The name shown for the account, from 1 to 100 characters. Data class: Confidential
+            (staff identity).
+          type: string
+          minLength: 1
+          maxLength: 100
+    TicketSummaryIntent:
+      description: >-
+        The intent that the classification model predicted for the ticket's current suggestion.
+        Data class: Internal.
+      type: object
+      required:
+        - label
+        - probability
+        - confidence_band
+      properties:
+        label:
+          $ref: '#/components/schemas/IntentLabel'
+          description: >-
+            The predicted intent. Data class: Internal.
+        probability:
+          description: >-
+            The calibrated probability of the predicted intent, from 0 to 1 (FR-01). Data class:
+            Internal.
+          type: number
+          minimum: 0
+          maximum: 1
+        confidence_band:
+          $ref: '#/components/schemas/ConfidenceBand'
+          description: >-
+            The band of the probability. Data class: Internal.
+    TicketSummary:
+      description: >-
+        One ticket of a console queue. Data class: Confidential.
+      type: object
+      required:
+        - ticket_id
+        - created_at
+        - status
+        - handling_mode
+        - is_authority_required
+        - customer
+        - message_excerpt
+      properties:
+        ticket_id:
+          description: >-
+            The identifier of the ticket (CON-15). Data class: Internal.
+          type: string
+          minLength: 1
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+          description: >-
+            When the customer sent the message. Data class: Internal.
+        status:
+          $ref: '#/components/schemas/ConsoleTicketStatus'
+          description: >-
+            The state of the ticket. Data class: Internal.
+        handling_mode:
+          $ref: '#/components/schemas/HandlingMode'
+          description: >-
+            Whether the ticket is handled with AI suggestions. Data class: Internal.
+        is_authority_required:
+          description: >-
+            Whether only a manager may send the reply (FR-06). It never goes back to false.
+            Data class: Internal.
+          type: boolean
+        handling_started_at:
+          $ref: '#/components/schemas/Timestamp'
+          description: >-
+            When a person first opened the ticket. Absent until then, so the queue shows which
+            tickets nobody opened yet. Data class: Internal.
+        closed_at:
+          $ref: '#/components/schemas/Timestamp'
+          description: >-
+            When the reply was sent, the order of the `closed` queue. Present exactly when
+            `status` is `closed`. Data class: Internal.
+        customer:
+          $ref: '#/components/schemas/ConsoleCustomerView'
+          description: >-
+            The customer who wrote the message. Data class: Confidential.
+        message_excerpt:
+          description: >-
+            The start of the customer's message as written: its first 160 characters, counted
+            in Unicode code points, or the whole message when it is shorter. Data class:
+            Confidential.
+          type: string
+          minLength: 1
+          maxLength: 160
+        draft_status:
+          $ref: '#/components/schemas/DraftStatus'
+          description: >-
+            The status of the draft of the current suggestion. Absent in `manual` mode. Data
+            class: Internal.
+        predicted_intent:
+          $ref: '#/components/schemas/TicketSummaryIntent'
+          description: >-
+            The intent that the model predicted in the current suggestion. Absent while the
+            analysis is not `ready`, when it failed, and when staff chose the intent. Data
+            class: Internal.
+    TicketSummaryPage:
+      description: >-
+        One page of a console queue (CON-14). Data class: Confidential.
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          description: >-
+            The tickets of the page, in the order of the operation, at most `limit`. Data class:
+            Confidential.
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/TicketSummary'
+        next_cursor:
+          $ref: '#/components/schemas/Cursor'
+          description: >-
+            The `cursor` of the next page. Absent on the last page. Data class: Internal.
+    ConsoleCustomerView:
+      description: >-
+        The customer of a ticket, as the console shows them: the display name only. No email,
+        phone, or address. Data class: Confidential.
+      type: object
+      required:
+        - display_name
+      properties:
+        display_name:
+          description: >-
+            The customer's name, from 1 to 100 characters. Data class: Confidential.
+          type: string
+          minLength: 1
+          maxLength: 100
+    ConsoleMessageView:
+      description: >-
+        The customer's message, exactly as written. Data class: Confidential.
+      type: object
+      required:
+        - body
+        - created_at
+      properties:
+        body:
+          $ref: '#/components/schemas/MessageText'
+          description: >-
+            The text of the message, raw, with no pseudonym. Data class: Confidential.
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+          description: >-
+            When the customer sent it. Data class: Internal.
+    ConsoleOrderView:
+      description: >-
+        The order of the ticket, with its shipping address, for staff (contracts v1 design,
+        ticket workspace). Data class: Confidential.
+      type: object
+      required:
+        - order_id
+        - order_status
+        - placed_at
+        - order_total
+        - shipping_cost
+        - lines
+        - shipping_address
+      properties:
+        order_id:
+          description: >-
+            The identifier of the order (CON-15). Data class: Confidential.
+          type: string
+          minLength: 1
+        order_status:
+          $ref: '#/components/schemas/OrderStatus'
+          description: >-
+            The status of the order. Data class: Confidential.
+        placed_at:
+          $ref: '#/components/schemas/Timestamp'
+          description: >-
+            When the customer placed the order. Data class: Confidential.
+        order_total:
+          $ref: '#/components/schemas/Money'
+          description: >-
+            The total paid, shipping included. Data class: Confidential.
+        shipping_cost:
+          $ref: '#/components/schemas/Money'
+          description: >-
+            The shipping cost, in the currency of `order_total`. Data class: Confidential.
+        lines:
+          description: >-
+            The lines of the order, at least one; a product appears at most once. Data class:
+            Confidential.
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ShopOrderLine'
+        shipment:
+          $ref: '#/components/schemas/ShopShipmentView'
+          description: >-
+            The shipment of the order. Absent when the order has none. Data class:
+            Confidential.
+        refund:
+          $ref: '#/components/schemas/ShopRefundView'
+          description: >-
+            The refund of the order. Absent when no refund was requested. Data class:
+            Confidential.
+        shipping_address:
+          description: >-
+            The shipping address of the simulated order, as one text of 1 to 300 characters.
+            Data class: Confidential.
+          type: string
+          minLength: 1
+          maxLength: 300
+    ConsoleOtherOrderView:
+      description: >-
+        Another order of the same customer, read-only context for staff. It has no shipping
+        address, and `backend` never sends it to `ai-service`. Data class: Confidential.
+      type: object
+      required:
+        - order_id
+        - order_status
+        - placed_at
+        - order_total
+        - lines
+      properties:
+        order_id:
+          description: >-
+            The identifier of the order (CON-15). Data class: Confidential.
+          type: string
+          minLength: 1
+        order_status:
+          $ref: '#/components/schemas/OrderStatus'
+          description: >-
+            The status of the order. Data class: Confidential.
+        shipment_status:
+          $ref: '#/components/schemas/ShipmentStatus'
+          description: >-
+            The status of its shipment. Absent when the order has none. Data class:
+            Confidential.
+        refund_status:
+          $ref: '#/components/schemas/RefundStatus'
+          description: >-
+            The status of its refund. Absent when no refund was requested. Data class:
+            Confidential.
+        placed_at:
+          $ref: '#/components/schemas/Timestamp'
+          description: >-
+            When the customer placed the order. Data class: Confidential.
+        order_total:
+          $ref: '#/components/schemas/Money'
+          description: >-
+            The total paid, shipping included. Data class: Confidential.
+        lines:
+          description: >-
+            The lines of the order, at least one. Data class: Confidential.
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/ShopOrderLine'
+    TicketWorkspace:
+      description: >-
+        Everything that staff and managers need to handle one ticket (contracts v1 design,
+        ticket workspace). AI text in it has pseudonyms restored; it is a suggestion and never
+        reaches a customer without a staff action (FR-04). Data class: Confidential.
+      type: object
+      required:
+        - ticket_id
+        - status
+        - handling_mode
+        - is_authority_required
+        - created_at
+        - customer
+        - message
+        - allowed_actions
+      properties:
+        ticket_id:
+          description: >-
+            The identifier of the ticket (CON-15). Data class: Internal.
+          type: string
+          minLength: 1
+        status:
+          $ref: '#/components/schemas/ConsoleTicketStatus'
+          description: >-
+            The state of the ticket. Data class: Internal.
+        handling_mode:
+          $ref: '#/components/schemas/HandlingMode'
+          description: >-
+            Whether the ticket is handled with AI suggestions. Data class: Internal.
+        is_authority_required:
+          description: >-
+            Whether only a manager may send the reply (FR-06). It becomes true once any
+            suggestion of the ticket carries `requires_authority`, and never goes back to false.
+            Data class: Internal.
+          type: boolean
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+          description: >-
+            When the ticket was created. Data class: Internal.
+        handling_started_at:
+          $ref: '#/components/schemas/Timestamp'
+          description: >-
+            When a person first opened the ticket, which starts the handling clock (NFR-11).
+            Absent until then. Data class: Internal.
+        closed_at:
+          $ref: '#/components/schemas/Timestamp'
+          description: >-
+            When the reply was sent. Present exactly when `status` is `closed`. Data class:
+            Internal.
+        customer:
+          $ref: '#/components/schemas/ConsoleCustomerView'
+          description: >-
+            The customer who wrote the message. Data class: Confidential.
+        message:
+          $ref: '#/components/schemas/ConsoleMessageView'
+          description: >-
+            The customer's message. Data class: Confidential.
+        order:
+          $ref: '#/components/schemas/ConsoleOrderView'
+          description: >-
+            The order that the ticket is about. Absent for an imported ticket without an order.
+            Data class: Confidential.
+        other_orders:
+          description: >-
+            The customer's other orders, newest first by `placed_at`, at most 20. Absent when
+            there are none. Data class: Confidential.
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/ConsoleOtherOrderView'
+        suggestion:
+          $ref: '#/components/schemas/SuggestionView'
+          description: >-
+            The current suggestion. Absent in `manual` mode. Data class: Confidential.
+        proposal:
+          $ref: '#/components/schemas/ReplyProposalView'
+          description: >-
+            The reply proposal. Present exactly when staff submitted one, so from
+            `awaiting_approval` on. Data class: Confidential.
+        escalation:
+          $ref: '#/components/schemas/EscalationView'
+          description: >-
+            The escalation. Present exactly when staff escalated the ticket. Data class:
+            Confidential.
+        reply:
+          $ref: '#/components/schemas/ConsoleReplyView'
+          description: >-
+            The reply sent to the customer. Present exactly when `status` is `closed`. Data
+            class: Confidential.
+        allowed_actions:
+          description: >-
+            The actions that the caller may take now, without repeats. Empty for `staff` on a
+            ticket that is not `open`, and for everyone on a `closed` ticket. Data class:
+            Internal.
+          type: array
+          maxItems: 5
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/TicketAction'
+    SuggestionProgressEvent:
+      description: >-
+        The data of one `suggestion` event of `getSuggestionEvents`: the part statuses of the
+        current suggestion of the ticket, never text (ADR-0022, statement 2). Data class:
+        Internal.
+      type: object
+      additionalProperties: false
+      required:
+        - suggestion_id
+        - analysis_status
+        - draft_status
+      properties:
+        suggestion_id:
+          description: >-
+            The identifier of the current suggestion (CON-15). Data class: Internal.
+          type: string
+          minLength: 1
+        analysis_status:
+          description: >-
+            The status of the analysis part, as `analysis_status` of `AnalysisPart`.
+            Consumers map an unknown value to `unavailable` (CON-22). Data class: Internal.
+          type: string
+          enum:
+            - pending
+            - ready
+            - unavailable
+        draft_status:
+          $ref: '#/components/schemas/DraftStatus'
+          description: >-
+            The status of the draft part. Data class: Internal.
+    SuggestionView:
+      description: >-
+        One run of the AI for a ticket, as `backend` recorded it, with the pseudonyms of its AI
+        text restored to their original values; a mask, or a pseudonym that the map does not
+        hold, stays as written (ADR-0010). Data class: Confidential.
+      type: object
+      required:
+        - suggestion_id
+        - trigger
+        - created_at
+        - trace_id
+        - analysis
+        - draft
+      properties:
+        suggestion_id:
+          description: >-
+            The identifier of the suggestion (CON-15). Data class: Internal.
+          type: string
+          minLength: 1
+        trigger:
+          $ref: '#/components/schemas/SuggestionTrigger'
+          description: >-
+            Why `backend` started it. Data class: Internal.
+        intent_override:
+          $ref: '#/components/schemas/IntentLabel'
+          description: >-
+            The intent that staff confirmed or chose. Present when `trigger` is
+            `intent_override`, and on a `kb_version_changed` or `retry` suggestion that repeats a
+            suggestion with an intent that staff chose. Data class: Internal.
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+          description: >-
+            When `backend` started it. Data class: Internal.
+        trace_id:
+          description: >-
+            The W3C trace ID of the job that ran it, as 32 lowercase hexadecimal characters,
+            for the developer details (UI-35). Data class: Internal.
+          type: string
+          pattern: '^[0-9a-f]{32}$'
+        analysis:
+          $ref: '#/components/schemas/AnalysisPart'
+          description: >-
+            The analysis part, with its status. Data class: Internal.
+        draft:
+          $ref: '#/components/schemas/DraftPart'
+          description: >-
+            The draft part, with its status. Data class: Confidential.
+    AnalysisPart:
+      description: >-
+        The analysis part of a suggestion, discriminated by `analysis_status`. Consumers handle
+        an unknown status as `unavailable`, so the ticket is handled manually (CON-22). Data
+        class: Internal.
+      oneOf:
+        - $ref: '#/components/schemas/PendingAnalysisPart'
+        - $ref: '#/components/schemas/ReadyAnalysisPart'
+        - $ref: '#/components/schemas/UnavailableAnalysisPart'
+      discriminator:
+        propertyName: analysis_status
+        mapping:
+          pending: '#/components/schemas/PendingAnalysisPart'
+          ready: '#/components/schemas/ReadyAnalysisPart'
+          unavailable: '#/components/schemas/UnavailableAnalysisPart'
+    PendingAnalysisPart:
+      description: >-
+        An analysis that `ai-service` has not returned yet. The console follows it with
+        `getSuggestionEvents`. Data
+        class: Internal.
+      type: object
+      required:
+        - analysis_status
+      properties:
+        analysis_status:
+          description: >-
+            Always `pending` in this variant. Data class: Internal.
+          type: string
+          enum:
+            - pending
+    ReadyAnalysisPart:
+      description: >-
+        The analysis that `ai-service` returned: intent, documents, routing, and warnings
+        (ADR-0005). Data class: Internal.
+      type: object
+      required:
+        - analysis_status
+        - intent
+        - alternatives
+        - is_in_scope
+        - documents
+        - routing
+        - warnings
+        - versions
+        - step_latencies
+      properties:
+        analysis_status:
+          description: >-
+            Always `ready` in this variant. Data class: Internal.
+          type: string
+          enum:
+            - ready
+        intent:
+          $ref: '#/components/schemas/ConsoleIntent'
+          description: >-
+            The intent that the rest of the pipeline used. Data class: Internal.
+        alternatives:
+          description: >-
+            The next most likely intents of the model, most likely first, at most four. The
+            console shows `intent` and the first two (FR-01). Empty when staff chose the intent.
+            Data class: Internal.
+          type: array
+          maxItems: 4
+          items:
+            $ref: '#/components/schemas/ConsoleIntentAlternative'
+        is_in_scope:
+          description: >-
+            Whether the intent is one of the 12 in-scope intents (requirements §3.2). Data class:
+            Internal.
+          type: boolean
+        documents:
+          description: >-
+            The KB document versions that retrieval found, ordered by `rank`, at most ten. Data
+            class: Internal.
+          type: array
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/RankedDocument'
+        routing:
+          $ref: '#/components/schemas/ConsoleRouting'
+          description: >-
+            The routing recommendation and its reason codes. Data class: Internal.
+        warnings:
+          description: >-
+            The conditions that need staff attention, at most ten. A reply based on the draft
+            acknowledges every one of them. Data class: Internal.
+          type: array
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/Warning'
+        versions:
+          $ref: '#/components/schemas/AssetVersions'
+          description: >-
+            The release and asset versions that produced the analysis (ARCH-39). Data class:
+            Internal.
+        step_latencies:
+          $ref: '#/components/schemas/StepLatencies'
+          description: >-
+            The time that `ai-service` spent on the analysis. Data class: Internal.
+    UnavailableAnalysisPart:
+      description: >-
+        An analysis that `backend` could not get. Staff handle the ticket manually or retry.
+        Data class: Internal.
+      type: object
+      required:
+        - analysis_status
+        - reason_codes
+      properties:
+        analysis_status:
+          description: >-
+            Always `unavailable` in this variant. Data class: Internal.
+          type: string
+          enum:
+            - unavailable
+        reason_codes:
+          description: >-
+            Why: `ai_service_unavailable` or `pseudonymization_failed`, exactly one. Data class:
+            Internal.
+          type: array
+          minItems: 1
+          maxItems: 1
+          items:
+            $ref: '#/components/schemas/AiReasonCode'
+    ConsoleIntent:
+      description: >-
+        The intent of an analysis, discriminated by `source`: the model's prediction (`model`) or
+        the intent that staff chose (`staff`). Consumers handle an unknown `source` as no known
+        intent (CON-22). Data class: Internal.
+      oneOf:
+        - $ref: '#/components/schemas/ConsoleModelIntent'
+        - $ref: '#/components/schemas/ConsoleStaffIntent'
+      discriminator:
+        propertyName: source
+        mapping:
+          model: '#/components/schemas/ConsoleModelIntent'
+          staff: '#/components/schemas/ConsoleStaffIntent'
+    ConsoleModelIntent:
+      description: >-
+        The top intent of the classification model. Data class: Internal.
+      type: object
+      required:
+        - source
+        - label
+        - probability
+        - confidence_band
+      properties:
+        source:
+          description: >-
+            Always `model` in this variant. Data class: Internal.
+          type: string
+          enum:
+            - model
+        label:
+          $ref: '#/components/schemas/IntentLabel'
+          description: >-
+            The predicted intent. Data class: Internal.
+        probability:
+          description: >-
+            The calibrated probability of the predicted intent, from 0 to 1 (FR-01). Data class:
+            Internal.
+          type: number
+          minimum: 0
+          maximum: 1
+        confidence_band:
+          $ref: '#/components/schemas/ConfidenceBand'
+          description: >-
+            The band of the probability. Data class: Internal.
+    ConsoleStaffIntent:
+      description: >-
+        An intent that staff confirmed or chose. It has no probability and no band. Data class:
+        Internal.
+      type: object
+      required:
+        - source
+        - label
+      properties:
+        source:
+          description: >-
+            Always `staff` in this variant. Data class: Internal.
+          type: string
+          enum:
+            - staff
+        label:
+          $ref: '#/components/schemas/IntentLabel'
+          description: >-
+            The intent that staff chose. Data class: Internal.
+    ConsoleIntentAlternative:
+      description: >-
+        A further candidate intent of the model. Data class: Internal.
+      type: object
+      required:
+        - label
+        - probability
+      properties:
+        label:
+          $ref: '#/components/schemas/IntentLabel'
+          description: >-
+            The candidate intent. Data class: Internal.
+        probability:
+          description: >-
+            Its calibrated probability, from 0 to 1. Data class: Internal.
+          type: number
+          minimum: 0
+          maximum: 1
+    ConsoleRouting:
+      description: >-
+        What the AI recommends for the ticket and why. Staff and managers decide. Data class:
+        Internal.
+      type: object
+      required:
+        - recommendation
+        - reason_codes
+      properties:
+        recommendation:
+          $ref: '#/components/schemas/RoutingRecommendation'
+          description: >-
+            The recommended next step. Data class: Internal.
+        reason_codes:
+          description: >-
+            The reason codes of the recommendation, without repeats. Data class: Internal.
+          type: array
+          maxItems: 16
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/AiReasonCode'
+    RoutingRecommendation:
+      description: >-
+        The routing recommendation (ADR-0005).
+        `draft`: the evidence allows a draft.
+        `abstain`: no draft, because of low confidence, an out-of-scope intent, or missing or
+        unusable evidence (ESC-01, ESC-02, ESC-04).
+        `escalate`: no draft; the AI recommends that staff move the ticket to a manager
+        (ESC-03).
+        Consumers map an unknown value to `abstain` (CON-22). Data class: Internal.
+      type: string
+      enum:
+        - draft
+        - abstain
+        - escalate
+    DraftStatus:
+      description: >-
+        The status of the draft part of a suggestion (contracts v1 design, suggestion
+        lifecycle).
+        `pending`: `ai-service` has not answered yet.
+        `draft_ready`: a grounded draft is ready for staff review.
+        `abstained`: no draft, as the routing recommended (ESC-01, ESC-02, ESC-04).
+        `escalation_recommended`: no draft; the AI recommends an escalation (ESC-03).
+        `llm_unavailable`: the routing allowed a draft, but drafting failed inside `ai-service`
+        (ESC-05); staff may retry.
+        `unavailable`: `backend` could not get a draft (`ai_service_unavailable`) or did not ask
+        for one (`pseudonymization_failed`).
+        Consumers map an unknown value to `unavailable`, so the ticket is handled manually
+        (CON-22). Data class: Internal.
+      type: string
+      enum:
+        - pending
+        - draft_ready
+        - abstained
+        - escalation_recommended
+        - llm_unavailable
+        - unavailable
+    DraftPart:
+      description: >-
+        The draft part of a suggestion, discriminated by `draft_status`, so a draft exists only
+        when it is ready (CODE-29). Consumers handle an unknown status as `unavailable` (CON-22).
+        Data class: Confidential.
+      oneOf:
+        - $ref: '#/components/schemas/PendingDraftPart'
+        - $ref: '#/components/schemas/ReadyDraftPart'
+        - $ref: '#/components/schemas/NoDraftPart'
+        - $ref: '#/components/schemas/UnavailableDraftPart'
+      discriminator:
+        propertyName: draft_status
+        mapping:
+          pending: '#/components/schemas/PendingDraftPart'
+          draft_ready: '#/components/schemas/ReadyDraftPart'
+          abstained: '#/components/schemas/NoDraftPart'
+          escalation_recommended: '#/components/schemas/NoDraftPart'
+          llm_unavailable: '#/components/schemas/NoDraftPart'
+          unavailable: '#/components/schemas/UnavailableDraftPart'
+    PendingDraftPart:
+      description: >-
+        A draft that `ai-service` has not returned yet. While it is pending, nobody can send a
+        reply on the ticket: `409 suggestion-pending`, or `403 authority-required` for `staff`
+        on a ticket that already requires authority. Data class: Internal.
+      type: object
+      required:
+        - draft_status
+      properties:
+        draft_status:
+          description: >-
+            Always `pending` in this variant. Data class: Internal.
+          type: string
+          enum:
+            - pending
+    ReadyDraftPart:
+      description: >-
+        A grounded draft for staff to review, with pseudonyms restored. Data class:
+        Confidential.
+      type: object
+      required:
+        - draft_status
+        - segments
+        - citations
+        - text
+        - reason_codes
+        - versions
+        - step_latencies
+      properties:
+        draft_status:
+          description: >-
+            Always `draft_ready` in this variant. Data class: Internal.
+          type: string
+          enum:
+            - draft_ready
+        segments:
+          description: >-
+            The segments of the draft in reading order, at least one and at most 50. Data class:
+            Confidential.
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/ConsoleDraftSegment'
+        citations:
+          description: >-
+            The sources that the segments cite, at most 20. Data class: Confidential, because an
+            order citation carries the value of the order field.
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/CitationView'
+        text:
+          description: >-
+            The canonical plain text of the draft, built by `backend` from the restored
+            segments: segments with the same `paragraph_index` joined by one space, and
+            paragraphs joined by one blank line (`\n\n`). The reply editor starts from it, and
+            the staff decision compares the sent body with it. Restoring pseudonyms can make it
+            longer than the 2 000 characters of the AI text; a reply body still has at most
+            2 000. Data class: Confidential.
+          type: string
+          minLength: 1
+        reason_codes:
+          description: >-
+            The reason codes of the draft outcome, without repeats. Data class: Internal.
+          type: array
+          maxItems: 16
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/AiReasonCode'
+        staff_note:
+          description: >-
+            AI-written text for staff only, with pseudonyms restored. It is never sent to a
+            customer. Absent when the AI added none. Data class: Confidential.
+          type: string
+          minLength: 1
+        versions:
+          $ref: '#/components/schemas/AssetVersions'
+          description: >-
+            The release and asset versions that produced the draft (ARCH-39). Data class:
+            Internal.
+        step_latencies:
+          $ref: '#/components/schemas/StepLatencies'
+          description: >-
+            The time that `ai-service` spent on the draft call. Data class: Internal.
+    NoDraftPart:
+      description: >-
+        A draft outcome without a draft: `abstained`, `escalation_recommended`, or
+        `llm_unavailable`. Data class: Confidential.
+      type: object
+      required:
+        - draft_status
+        - reason_codes
+        - versions
+        - step_latencies
+      properties:
+        draft_status:
+          description: >-
+            The outcome: `abstained`, `escalation_recommended`, or `llm_unavailable`. Data class:
+            Internal.
+          type: string
+          enum:
+            - abstained
+            - escalation_recommended
+            - llm_unavailable
+        reason_codes:
+          description: >-
+            Why there is no draft, without repeats, at least one. Data class: Internal.
+          type: array
+          minItems: 1
+          maxItems: 16
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/AiReasonCode'
+        staff_note:
+          description: >-
+            AI-written text for staff only, such as what information is missing, with pseudonyms
+            restored. Absent when the AI added none. Data class: Confidential.
+          type: string
+          minLength: 1
+        versions:
+          $ref: '#/components/schemas/AssetVersions'
+          description: >-
+            The release and asset versions that produced the outcome. Data class: Internal.
+        step_latencies:
+          $ref: '#/components/schemas/StepLatencies'
+          description: >-
+            The time that `ai-service` spent on the draft call. Data class: Internal.
+    UnavailableDraftPart:
+      description: >-
+        A draft that `backend` could not get, or did not ask for. Staff handle the ticket
+        manually, or retry when `allowed_actions` offers it. Data class: Internal.
+      type: object
+      required:
+        - draft_status
+        - reason_codes
+      properties:
+        draft_status:
+          description: >-
+            Always `unavailable` in this variant. Data class: Internal.
+          type: string
+          enum:
+            - unavailable
+        reason_codes:
+          description: >-
+            Why: `ai_service_unavailable` or `pseudonymization_failed`, exactly one. Data class:
+            Internal.
+          type: array
+          minItems: 1
+          maxItems: 1
+          items:
+            $ref: '#/components/schemas/AiReasonCode'
+    ConsoleDraftSegment:
+      description: >-
+        One part of a draft, with pseudonyms restored. Data class: Confidential.
+      type: object
+      required:
+        - segment_id
+        - paragraph_index
+        - text
+        - citation_ids
+      properties:
+        segment_id:
+          $ref: '#/components/schemas/AiItemId'
+          description: >-
+            The identifier of the segment, unique among the segments of the draft. Data class:
+            Internal.
+        paragraph_index:
+          description: >-
+            The paragraph of the segment: 0 in the first segment, never decreasing. Segments with
+            the same index form one paragraph. Data class: Internal.
+          type: integer
+          minimum: 0
+          maximum: 49
+        text:
+          description: >-
+            The text of the segment with pseudonyms restored, shown as plain text (SEC-22). A
+            mask, or a pseudonym that the map does not hold, stays as written, and the console
+            highlights it (UI-43). Data class: Confidential.
+          type: string
+          minLength: 1
+        citation_ids:
+          description: >-
+            The citations that support the segment, each the `citation_id` of a citation in the
+            same draft, without repeats. Data class: Internal.
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/AiItemId'
+    CitationView:
+      description: >-
+        A citation of a draft, discriminated by `source_type` (ADR-0014): a KB document version
+        as `ai-service` returned it, or a field of the order context with the value that
+        `backend` sent for it. Consumers ignore a citation with an unknown `source_type`
+        (CON-22). Data class: Confidential.
+      oneOf:
+        - $ref: '#/components/schemas/KbDocumentCitation'
+        - $ref: '#/components/schemas/ConsoleOrderContextCitation'
+      discriminator:
+        propertyName: source_type
+        mapping:
+          kb_document: '#/components/schemas/KbDocumentCitation'
+          order_context: '#/components/schemas/ConsoleOrderContextCitation'
+    ConsoleOrderContextCitation:
+      description: >-
+        A citation of one order field, with the value that the suggestion's request held for it,
+        so staff see what the draft was written from (ADR-0014). Data class: Confidential.
+      allOf:
+        - $ref: '#/components/schemas/OrderContextCitation'
+        - description: >-
+            The value of the cited field. Data class: Confidential.
+          type: object
+          required:
+            - value
+          properties:
+            value:
+              $ref: '#/components/schemas/OrderFactValue'
+              description: >-
+                The value of the field in the `order_context` of the suggestion's request, typed
+                as that field is in `OrderContext`. Data class: Confidential.
+    OrderFactValue:
+      description: >-
+        The value of one order field: a status, a time, or an amount, as the field's type in
+        `OrderContext` is. Data class: Confidential.
+      anyOf:
+        - $ref: '#/components/schemas/OrderStatus'
+        - $ref: '#/components/schemas/ShipmentStatus'
+        - $ref: '#/components/schemas/RefundStatus'
+        - $ref: '#/components/schemas/Timestamp'
+        - $ref: '#/components/schemas/Money'
+    ReplyBasis:
+      description: >-
+        What a reply is based on (contracts v1 design, reply bases).
+        `ai_draft`: the draft of the current suggestion, as is or edited.
+        `rejected_ai_draft`: staff rejected the draft and wrote their own reply.
+        `no_ai_draft`: there was no ready draft, or the ticket is in `manual` mode.
+        `reply_proposal`: a manager sent the proposal of the ticket, as is or edited.
+        Consumers show an unknown value as an unspecified basis (CON-22). Data class: Internal.
+      type: string
+      enum:
+        - ai_draft
+        - rejected_ai_draft
+        - no_ai_draft
+        - reply_proposal
+    ReplyProposalBasis:
+      description: >-
+        What a reply proposal is based on: the values of `ReplyBasis` except `reply_proposal`,
+        because a proposal is never based on another proposal.
+        `ai_draft`: the draft of the current suggestion, as is or edited.
+        `rejected_ai_draft`: staff rejected the draft and wrote their own reply.
+        `no_ai_draft`: there was no ready draft, or the ticket is in `manual` mode.
+        Consumers show an unknown value as an unspecified basis (CON-22). Data class: Internal.
+      type: string
+      enum:
+        - ai_draft
+        - rejected_ai_draft
+        - no_ai_draft
+    ReplyBody:
+      description: >-
+        The text that a customer receives, from 1 to 2 000 characters (`MessageText`), with no
+        placeholder: text that matches `Placeholder` is refused with `422`, so no placeholder
+        reaches a customer (SEC-38). Data class: Confidential.
+      allOf:
+        - $ref: '#/components/schemas/MessageText'
+      not:
+        $ref: '#/components/schemas/Placeholder'
+    StaffNoteText:
+      description: >-
+        A note that staff write for their own records, from 1 to 1 000 characters. It is never
+        sent to a customer. Data class: Confidential.
+      type: string
+      minLength: 1
+      maxLength: 1000
+    ReplyProposalView:
+      description: >-
+        A reply that staff prepared for a manager to send. Data class: Confidential.
+      type: object
+      required:
+        - proposal_id
+        - basis
+        - body
+        - staff_reason_codes
+        - proposed_by
+        - created_at
+      properties:
+        proposal_id:
+          description: >-
+            The identifier of the proposal (CON-15). Data class: Internal.
+          type: string
+          minLength: 1
+        basis:
+          $ref: '#/components/schemas/ReplyProposalBasis'
+          description: >-
+            What the proposal is based on. Data class: Internal.
+        body:
+          $ref: '#/components/schemas/ReplyBody'
+          description: >-
+            The proposed reply. Data class: Confidential.
+        suggestion_id:
+          description: >-
+            The suggestion whose draft the proposal is based on. Absent for `no_ai_draft`
+            without a suggestion. Data class: Internal.
+          type: string
+          minLength: 1
+        staff_reason_codes:
+          description: >-
+            The staff reason codes, without repeats; empty when none were given. Data class:
+            Internal.
+          type: array
+          maxItems: 8
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/StaffReasonCode'
+        note:
+          $ref: '#/components/schemas/StaffNoteText'
+          description: >-
+            The staff note. Absent when staff wrote none. Data class: Confidential.
+        proposed_by:
+          $ref: '#/components/schemas/StaffMemberView'
+          description: >-
+            The staff member who submitted it. Data class: Confidential.
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+          description: >-
+            When it was submitted. Data class: Internal.
+    EscalationView:
+      description: >-
+        The escalation of a ticket to the manager queue. Data class: Confidential.
+      type: object
+      required:
+        - escalation_id
+        - staff_reason_codes
+        - escalated_by
+        - escalated_at
+      properties:
+        escalation_id:
+          description: >-
+            The identifier of the escalation (CON-15). Data class: Internal.
+          type: string
+          minLength: 1
+        staff_reason_codes:
+          description: >-
+            Why staff escalated, without repeats, at least one (ADR-0006). Data class: Internal.
+          type: array
+          minItems: 1
+          maxItems: 8
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/StaffReasonCode'
+        note:
+          $ref: '#/components/schemas/StaffNoteText'
+          description: >-
+            The staff note. Present when staff wrote one, always with `other`. Data class:
+            Confidential.
+        suggestion_id:
+          description: >-
+            The suggestion that staff saw. Absent when staff gave none. Data class: Internal.
+          type: string
+          minLength: 1
+        escalated_by:
+          $ref: '#/components/schemas/StaffMemberView'
+          description: >-
+            The staff member who escalated. Data class: Confidential.
+        escalated_at:
+          $ref: '#/components/schemas/Timestamp'
+          description: >-
+            When the ticket was escalated. Data class: Internal.
+    ConsoleReplyView:
+      description: >-
+        The reply sent to the customer. Data class: Confidential.
+      type: object
+      required:
+        - reply_id
+        - basis
+        - body
+        - sent_by
+        - sent_at
+      properties:
+        reply_id:
+          description: >-
+            The identifier of the reply (CON-15). Data class: Internal.
+          type: string
+          minLength: 1
+        basis:
+          $ref: '#/components/schemas/ReplyBasis'
+          description: >-
+            What the reply is based on. Data class: Internal.
+        body:
+          $ref: '#/components/schemas/ReplyBody'
+          description: >-
+            The text that the customer received. Data class: Confidential.
+        suggestion_id:
+          description: >-
+            The suggestion whose draft the reply is based on. Absent when there is none. Data
+            class: Internal.
+          type: string
+          minLength: 1
+        proposal_id:
+          description: >-
+            The proposal that the manager sent. Present exactly when `basis` is
+            `reply_proposal`. Data class: Internal.
+          type: string
+          minLength: 1
+        sent_by:
+          $ref: '#/components/schemas/StaffMemberView'
+          description: >-
+            The staff member or manager who sent it. Data class: Confidential.
+        sent_at:
+          $ref: '#/components/schemas/Timestamp'
+          description: >-
+            When it was sent. Data class: Internal.
+    CreateSuggestionRequest:
+      description: >-
+        An intent correction, or a retry when `intent_override` is absent. Data class: Internal.
+      type: object
+      additionalProperties: false
+      properties:
+        intent_override:
+          $ref: '#/components/schemas/IntentLabel'
+          description: >-
+            The intent that staff confirm or choose (ESC-01). Absent means a retry, which
+            repeats the input of the failed suggestion, including the intent that staff chose
+            for it when there was one. Data class: Internal.
+    SendReplyRequest:
+      description: >-
+        The reply to send, discriminated by `basis`, so each basis carries exactly the fields it
+        needs (contracts v1 design, reply bases). Data class: Confidential.
+      oneOf:
+        - $ref: '#/components/schemas/AiDraftReplyRequest'
+        - $ref: '#/components/schemas/RejectedAiDraftReplyRequest'
+        - $ref: '#/components/schemas/NoAiDraftReplyRequest'
+        - $ref: '#/components/schemas/ReplyProposalReplyRequest'
+      discriminator:
+        propertyName: basis
+        mapping:
+          ai_draft: '#/components/schemas/AiDraftReplyRequest'
+          rejected_ai_draft: '#/components/schemas/RejectedAiDraftReplyRequest'
+          no_ai_draft: '#/components/schemas/NoAiDraftReplyRequest'
+          reply_proposal: '#/components/schemas/ReplyProposalReplyRequest'
+    CreateReplyProposalRequest:
+      description: >-
+        The reply that staff propose, discriminated by `basis`. A proposal has no
+        `reply_proposal` basis. Data class: Confidential.
+      oneOf:
+        - $ref: '#/components/schemas/AiDraftReplyRequest'
+        - $ref: '#/components/schemas/RejectedAiDraftReplyRequest'
+        - $ref: '#/components/schemas/NoAiDraftReplyRequest'
+      discriminator:
+        propertyName: basis
+        mapping:
+          ai_draft: '#/components/schemas/AiDraftReplyRequest'
+          rejected_ai_draft: '#/components/schemas/RejectedAiDraftReplyRequest'
+          no_ai_draft: '#/components/schemas/NoAiDraftReplyRequest'
+    AiDraftReplyRequest:
+      description: >-
+        A reply based on the current draft, as is or edited. Valid when the suggestion is
+        current and its draft is `draft_ready`. Data class: Confidential.
+      type: object
+      additionalProperties: false
+      required:
+        - basis
+        - body
+        - suggestion_id
+        - acknowledged_warning_ids
+      properties:
+        basis:
+          description: >-
+            Always `ai_draft` in this variant. Data class: Internal.
+          type: string
+          enum:
+            - ai_draft
+        body:
+          $ref: '#/components/schemas/ReplyBody'
+          description: >-
+            The reply text: the draft's `text`, as is or edited. Data class: Confidential.
+        suggestion_id:
+          description: >-
+            The current suggestion, whose draft the reply uses. Another suggestion returns
+            `409 suggestion-superseded`. Data class: Internal.
+          type: string
+          minLength: 1
+        acknowledged_warning_ids:
+          description: >-
+            The `warning_id` of every warning of that suggestion, without repeats; empty when it
+            has none. A missing or unknown ID returns `422`. Data class: Internal.
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/AiItemId'
+        staff_reason_codes:
+          description: >-
+            Why staff edited the draft, optional (ADR-0006). Absent means none. Data class:
+            Internal.
+          type: array
+          minItems: 1
+          maxItems: 8
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/StaffReasonCode'
+        note:
+          $ref: '#/components/schemas/StaffNoteText'
+          description: >-
+            A staff note, required when `staff_reason_codes` contains `other`. Absent means none.
+            Data class: Confidential.
+    RejectedAiDraftReplyRequest:
+      description: >-
+        A reply that staff wrote after rejecting the current draft. Valid when the suggestion is
+        current and its draft is `draft_ready`. Data class: Confidential.
+      type: object
+      additionalProperties: false
+      required:
+        - basis
+        - body
+        - suggestion_id
+        - staff_reason_codes
+      properties:
+        basis:
+          description: >-
+            Always `rejected_ai_draft` in this variant. Data class: Internal.
+          type: string
+          enum:
+            - rejected_ai_draft
+        body:
+          $ref: '#/components/schemas/ReplyBody'
+          description: >-
+            The reply text that staff wrote. Data class: Confidential.
+        suggestion_id:
+          description: >-
+            The current suggestion, whose draft staff rejected. Data class: Internal.
+          type: string
+          minLength: 1
+        staff_reason_codes:
+          description: >-
+            Why staff rejected the draft, without repeats, at least one (ADR-0006). Data class:
+            Internal.
+          type: array
+          minItems: 1
+          maxItems: 8
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/StaffReasonCode'
+        note:
+          $ref: '#/components/schemas/StaffNoteText'
+          description: >-
+            A staff note, required when `staff_reason_codes` contains `other`. Absent means none.
+            Data class: Confidential.
+    NoAiDraftReplyRequest:
+      description: >-
+        A reply written without a draft. Valid when no current draft is `draft_ready`, or the
+        ticket is in `manual` mode. Data class: Confidential.
+      type: object
+      additionalProperties: false
+      required:
+        - basis
+        - body
+      properties:
+        basis:
+          description: >-
+            Always `no_ai_draft` in this variant. Data class: Internal.
+          type: string
+          enum:
+            - no_ai_draft
+        body:
+          $ref: '#/components/schemas/ReplyBody'
+          description: >-
+            The reply text that staff wrote. Data class: Confidential.
+        suggestion_id:
+          description: >-
+            The current suggestion that staff saw, such as one that abstained. Absent in
+            `manual` mode or when staff saw none. Data class: Internal.
+          type: string
+          minLength: 1
+    ReplyProposalReplyRequest:
+      description: >-
+        A manager sends the proposal of an `awaiting_approval` ticket, as proposed or edited.
+        Data class: Confidential.
+      type: object
+      additionalProperties: false
+      required:
+        - basis
+        - body
+        - proposal_id
+      properties:
+        basis:
+          description: >-
+            Always `reply_proposal` in this variant. Data class: Internal.
+          type: string
+          enum:
+            - reply_proposal
+        body:
+          $ref: '#/components/schemas/ReplyBody'
+          description: >-
+            The reply text: the proposal's body, as is or edited by the manager. Data class:
+            Confidential.
+        proposal_id:
+          description: >-
+            The proposal of the ticket. Another proposal returns `422`. Data class: Internal.
+          type: string
+          minLength: 1
+    CreateEscalationRequest:
+      description: >-
+        Why staff move the ticket to a manager (ADR-0006). Data class: Confidential.
+      type: object
+      additionalProperties: false
+      required:
+        - staff_reason_codes
+      properties:
+        staff_reason_codes:
+          description: >-
+            The reasons, without repeats, at least one. Data class: Internal.
+          type: array
+          minItems: 1
+          maxItems: 8
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/StaffReasonCode'
+        note:
+          $ref: '#/components/schemas/StaffNoteText'
+          description: >-
+            A staff note, required when `staff_reason_codes` contains `other`; otherwise `422`.
+            Absent means none. Data class: Confidential.
+        suggestion_id:
+          description: >-
+            The current suggestion that staff saw. Another suggestion returns
+            `409 suggestion-superseded`. Absent means none. Data class: Internal.
+          type: string
+          minLength: 1
+    CompletedDraftStatus:
+      description: >-
+        The status of a draft part that left `pending`, without `cancelled`, as `DraftStatus`
+        defines it. Data class: Internal.
+      type: string
+      enum:
+        - draft_ready
+        - abstained
+        - escalation_recommended
+        - llm_unavailable
+        - unavailable
+    ModeCounts:
+      description: >-
+        A number of tickets for each handling mode. Data class: Internal.
+      type: object
+      required:
+        - assisted_count
+        - manual_count
+      properties:
+        assisted_count:
+          description: >-
+            The tickets in `assisted` mode. Data class: Internal.
+          type: integer
+          minimum: 0
+        manual_count:
+          description: >-
+            The tickets in `manual` mode. Data class: Internal.
+          type: integer
+          minimum: 0
+    ModeHandlingTime:
+      description: >-
+        The handling time of the tickets of one mode closed in the period: from the first view
+        to the reply (NFR-11). Data class: Internal.
+      type: object
+      required:
+        - ticket_count
+      properties:
+        ticket_count:
+          description: >-
+            The closed tickets of the mode whose first view came no later than their reply. A
+            ticket first viewed after its reply is left out, because its handling time would be
+            negative. Data class: Internal.
+          type: integer
+          minimum: 0
+        p50_ms:
+          description: >-
+            The median handling time, in milliseconds. Absent when `ticket_count` is 0. Data
+            class: Internal.
+          type: integer
+          minimum: 0
+    StaffReasonReplyCount:
+      description: >-
+        The replies of one draft decision that carry one staff reason code. Data class:
+        Internal.
+      type: object
+      required:
+        - staff_reason_code
+        - reply_count
+      properties:
+        staff_reason_code:
+          $ref: '#/components/schemas/StaffReasonCode'
+          description: >-
+            The reason code. Data class: Internal.
+        reply_count:
+          description: >-
+            The replies with this code. Data class: Internal.
+          type: integer
+          minimum: 1
+    ConsoleReport:
+      description: >-
+        The figures of FR-10 and NFR-11 for one period, computed by `backend` from its own
+        records. Every figure counts records whose time falls in [`start_at`, `end_at`). Shares
+        are numbers from 0 to 1, and a share or a percentile is absent when nothing was counted.
+        Data class: Internal.
+      type: object
+      required:
+        - period
+        - ticket_counts
+        - draft_decisions
+        - escalations
+        - ai_outcomes
+        - end_to_end_latency
+        - ai_error_rate
+        - llm_cost_micro_usd
+        - handling_time
+      properties:
+        period:
+          description: >-
+            The period of the report, as requested. Data class: Internal.
+          type: object
+          required:
+            - start_at
+            - end_at
+          properties:
+            start_at:
+              $ref: '#/components/schemas/Timestamp'
+              description: >-
+                The start of the period, included. Data class: Internal.
+            end_at:
+              $ref: '#/components/schemas/Timestamp'
+              description: >-
+                The end of the period, excluded. Data class: Internal.
+        ticket_counts:
+          description: >-
+            Tickets created and tickets closed in the period, by handling mode. Data class:
+            Internal.
+          type: object
+          required:
+            - created
+            - closed
+          properties:
+            created:
+              $ref: '#/components/schemas/ModeCounts'
+              description: >-
+                Tickets whose `created_at` falls in the period. Data class: Internal.
+            closed:
+              $ref: '#/components/schemas/ModeCounts'
+              description: >-
+                Tickets whose `closed_at` falls in the period. Data class: Internal.
+        draft_decisions:
+          description: >-
+            The staff decisions about a ready draft, recorded when the reply is sent: approved
+            as is, edited, or rejected, with the edits and rejections by staff reason code
+            (FR-10, ADR-0006). Data class: Internal.
+          type: object
+          required:
+            - approve_count
+            - edit_count
+            - reject_count
+            - edit_by_reason
+            - reject_by_reason
+          properties:
+            approve_count:
+              description: >-
+                Replies sent in the period whose basis, or whose proposal's basis, was
+                `ai_draft`, with a body equal to the draft's `text`. Data class: Internal.
+              type: integer
+              minimum: 0
+            edit_count:
+              description: >-
+                Replies sent in the period whose basis, or whose proposal's basis, was
+                `ai_draft`, with a body that differs from the draft's `text`. Data class:
+                Internal.
+              type: integer
+              minimum: 0
+            reject_count:
+              description: >-
+                Replies sent in the period whose basis, or whose proposal's basis, was
+                `rejected_ai_draft`. Data class: Internal.
+              type: integer
+              minimum: 0
+            edit_by_reason:
+              description: >-
+                The edits of `edit_count` by staff reason code: one item per code that occurs,
+                in the order of `StaffReasonCode`. An edit with two codes counts under each, and
+                an edit without a code under none. Data class: Internal.
+              type: array
+              maxItems: 8
+              items:
+                $ref: '#/components/schemas/StaffReasonReplyCount'
+            reject_by_reason:
+              description: >-
+                The rejections of `reject_count` by staff reason code: one item per code that
+                occurs, in the order of `StaffReasonCode`. Every rejection has at least one
+                code, and a rejection with two codes counts under each. Data class: Internal.
+              type: array
+              maxItems: 8
+              items:
+                $ref: '#/components/schemas/StaffReasonReplyCount'
+            approve_share:
+              description: >-
+                `approve_count` divided by the sum of the three counts. Absent when the sum is 0.
+                Data class: Internal.
+              type: number
+              minimum: 0
+              maximum: 1
+            edit_share:
+              description: >-
+                `edit_count` divided by the sum of the three counts. Absent when the sum is 0.
+                Data class: Internal.
+              type: number
+              minimum: 0
+              maximum: 1
+            reject_share:
+              description: >-
+                `reject_count` divided by the sum of the three counts. Absent when the sum is 0.
+                Data class: Internal.
+              type: number
+              minimum: 0
+              maximum: 1
+        escalations:
+          description: >-
+            The escalations of the period, by staff reason code (FR-10). Data class: Internal.
+          type: object
+          required:
+            - escalation_count
+            - by_reason
+          properties:
+            escalation_count:
+              description: >-
+                The escalations whose time falls in the period. Data class: Internal.
+              type: integer
+              minimum: 0
+            by_reason:
+              description: >-
+                One item per staff reason code that occurs, in the order of `StaffReasonCode`.
+                An escalation with two codes counts under each. Data class: Internal.
+              type: array
+              maxItems: 8
+              items:
+                description: >-
+                  The escalations with one reason code. Data class: Internal.
+                type: object
+                required:
+                  - staff_reason_code
+                  - escalation_count
+                properties:
+                  staff_reason_code:
+                    $ref: '#/components/schemas/StaffReasonCode'
+                    description: >-
+                      The reason code. Data class: Internal.
+                  escalation_count:
+                    description: >-
+                      The escalations of the period with this code. Data class: Internal.
+                    type: integer
+                    minimum: 1
+        ai_outcomes:
+          description: >-
+            The draft parts completed in the period, by status and by AI reason code, without
+            `cancelled` parts. Data class: Internal.
+          type: object
+          required:
+            - by_draft_status
+            - by_reason_code
+          properties:
+            by_draft_status:
+              description: >-
+                One item per status that occurs, in the order of `CompletedDraftStatus`. Data
+                class: Internal.
+              type: array
+              maxItems: 5
+              items:
+                description: >-
+                  The draft parts with one status. Data class: Internal.
+                type: object
+                required:
+                  - draft_status
+                  - suggestion_count
+                properties:
+                  draft_status:
+                    $ref: '#/components/schemas/CompletedDraftStatus'
+                    description: >-
+                      The status. Data class: Internal.
+                  suggestion_count:
+                    description: >-
+                      The suggestions whose draft part ended with this status. Data class:
+                      Internal.
+                    type: integer
+                    minimum: 1
+            by_reason_code:
+              description: >-
+                One item per AI reason code that occurs in those draft parts, in the order of
+                `AiReasonCode`. Data class: Internal.
+              type: array
+              maxItems: 16
+              items:
+                description: >-
+                  The draft parts with one reason code. Data class: Internal.
+                type: object
+                required:
+                  - reason_code
+                  - suggestion_count
+                properties:
+                  reason_code:
+                    $ref: '#/components/schemas/AiReasonCode'
+                    description: >-
+                      The reason code. Data class: Internal.
+                  suggestion_count:
+                    description: >-
+                      The suggestions whose draft part carries this code. Data class: Internal.
+                    type: integer
+                    minimum: 1
+        end_to_end_latency:
+          description: >-
+            From ticket creation until the draft part of the ticket's first suggestion left
+            `pending`, for those drafts completed in the period (NFR-08: p95 at most 12 s). A
+            ticket whose first draft part was `cancelled`, for example by an intent correction, is
+            left out, because staff got no result from it; a first draft that ended `unavailable`
+            or `llm_unavailable` counts. Data class: Internal.
+          type: object
+          required:
+            - ticket_count
+          properties:
+            ticket_count:
+              description: >-
+                The tickets measured. Data class: Internal.
+              type: integer
+              minimum: 0
+            p50_ms:
+              description: >-
+                The median, in milliseconds. Absent when `ticket_count` is 0. Data class:
+                Internal.
+              type: integer
+              minimum: 0
+            p95_ms:
+              description: >-
+                The 95th percentile, in milliseconds. Absent when `ticket_count` is 0. Data class:
+                Internal.
+              type: integer
+              minimum: 0
+        ai_error_rate:
+          description: >-
+            The share of suggestions completed in the period that had a part `unavailable` or a
+            draft `llm_unavailable` (FR-10). Suggestions with a `cancelled` part are not counted.
+            Data class: Internal.
+          type: object
+          required:
+            - suggestion_count
+            - failed_count
+          properties:
+            suggestion_count:
+              description: >-
+                The suggestions counted. Data class: Internal.
+              type: integer
+              minimum: 0
+            failed_count:
+              description: >-
+                Those with a part `unavailable` or a draft `llm_unavailable`. Data class:
+                Internal.
+              type: integer
+              minimum: 0
+            share:
+              description: >-
+                `failed_count` divided by `suggestion_count`. Absent when `suggestion_count` is 0.
+                Data class: Internal.
+              type: number
+              minimum: 0
+              maximum: 1
+        llm_cost_micro_usd:
+          description: >-
+            The LLM cost of the draft parts completed in the period, in millionths of a US dollar
+            (FR-10, NFR-10). Infrastructure cost is not part of the report. Data class: Internal.
+          type: object
+          required:
+            - total
+            - llm_call_count
+          properties:
+            total:
+              description: >-
+                The sum of the cost of every draft call, in micro-USD. Data class: Internal.
+              type: integer
+              minimum: 0
+            llm_call_count:
+              description: >-
+                The draft parts whose call used the LLM. Data class: Internal.
+              type: integer
+              minimum: 0
+            average:
+              description: >-
+                `total` divided by `llm_call_count`, rounded to the nearest micro-USD. Absent
+                when `llm_call_count` is 0. Data class: Internal.
+              type: integer
+              minimum: 0
+        handling_time:
+          description: >-
+            The median handling time by handling mode (NFR-11). Data class: Internal.
+          type: object
+          required:
+            - assisted
+            - manual
+          properties:
+            assisted:
+              $ref: '#/components/schemas/ModeHandlingTime'
+              description: >-
+                Tickets in `assisted` mode. Data class: Internal.
+            manual:
+              $ref: '#/components/schemas/ModeHandlingTime'
+              description: >-
+                Tickets in `manual` mode. Data class: Internal.
+    AiServiceStatus:
+      description: >-
+        Whether `backend` could read the versions of `ai-service`.
+        `available`: `ai-service` answered in time.
+        `unavailable`: it did not answer in time, or answered with an error.
+        Consumers treat an unknown value as `unavailable` (CON-22). Data class: Internal.
+      type: string
+      enum:
+        - available
+        - unavailable
+    AdminVersionsView:
+      description: >-
+        The versions in use, for the admin area (ADR-0012). It holds versions only. Data class:
+        Internal.
+      type: object
+      required:
+        - backend_version
+        - ai_service_status
+      properties:
+        backend_version:
+          description: >-
+            The build version of `backend`, the setting `backend_build_version`, such as a
+            commit SHA. From 1 to 64 characters. Data class: Internal.
+          type: string
+          minLength: 1
+          maxLength: 64
+        ai_service_status:
+          $ref: '#/components/schemas/AiServiceStatus'
+          description: >-
+            Whether `ai_service_versions` could be read. Data class: Internal.
+        ai_service_versions:
+          $ref: '#/components/schemas/AssetVersions'
+          description: >-
+            The release and asset versions that `ai-service` serves. Present exactly when
+            `ai_service_status` is `available`. Data class: Internal.
