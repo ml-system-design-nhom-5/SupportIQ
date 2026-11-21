@@ -1,6 +1,6 @@
 """The named-entity detector of ADR-0010, step 4, on spaCy and `en_core_web_sm` (ADR-0017)."""
 
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 
 import spacy
 from spacy.tokens import Doc, Span
@@ -12,6 +12,9 @@ from app.pseudonymization.domain import (
     KnownValue,
     NamedEntityModelMissingError,
     PseudonymType,
+    TextSpan,
+    grow_person_span,
+    person_cue_names,
 )
 
 MODEL_NAME = "en_core_web_sm"
@@ -19,11 +22,16 @@ MODEL_NAME = "en_core_web_sm"
 # without the other components of the pipeline.
 _UNUSED_COMPONENTS = ("tok2vec", "tagger", "parser", "attribute_ruler", "lemmatizer")
 _PLACE_LABELS = frozenset({"GPE", "LOC"})
+# The labels after which a person cue makes a name (personal-data leak fixes design, Layer 1,
+# names, item 3). They stay here, because only this adapter knows the labels of the model.
+_CUE_LABELS = _PLACE_LABELS | {"ORG"}
 
 
 class SpacyNamedEntityDetector:
     """Step 4: person names and postal addresses that the earlier steps did not find.
 
+    A person name grows over the capitalized words right next to it, and words that the model
+    labels an organization or a place are a name after a person cue (ADR-0029, statement 2).
     Pseudonymization drops its detections on product names (`drop_product_names`).
     """
 
@@ -58,14 +66,24 @@ class SpacyNamedEntityDetector:
         except Exception as error:
             # Any failure of the model fails closed (SEC-36).
             raise DetectorError from error
+        entities = ((entity.label_, entity.start_char, entity.end_char) for entity in doc.ents)
         return (
-            *(
-                _detection(entity, PseudonymType.NAME)
-                for entity in doc.ents
-                if entity.label_ == "PERSON"
-            ),
+            *(_grown_name(message, entity) for entity in doc.ents if entity.label_ == "PERSON"),
+            *person_cue_names(message, cue_spans(entities)),
             *(_detection(span, PseudonymType.ADDRESS) for span in _find_addresses(doc)),
         )
+
+
+def cue_spans(entities: Iterable[tuple[str, int, int]]) -> tuple[TextSpan, ...]:
+    """Keep the entities that the model labeled an organization or a place.
+
+    Args:
+        entities: The label, first index, and end index of each entity of the message.
+
+    Returns:
+        The spans that the person-cue rule reads.
+    """
+    return tuple(TextSpan(start, end) for label, start, end in entities if label in _CUE_LABELS)
 
 
 def _find_addresses(doc: Doc) -> Iterator[Span]:
@@ -93,6 +111,11 @@ def _place_after(doc: Doc, places: dict[int, Span], end: int) -> Span | None:
     if end < len(doc) and doc[end].text == ",":
         end += 1
     return places.get(end)
+
+
+def _grown_name(message: str, entity: Span) -> Detection:
+    span = grow_person_span(message, entity.start_char, entity.end_char)
+    return Detection(span.start, span.end, PseudonymType.NAME, DetectionSource.NAMED_ENTITY)
 
 
 def _detection(span: Span, pseudonym_type: PseudonymType) -> Detection:

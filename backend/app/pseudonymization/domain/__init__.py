@@ -24,6 +24,20 @@ from app.pseudonymization.domain.errors import (
     PseudonymLimitExceededError,
     StoredMapDiffersError,
 )
+from app.pseudonymization.domain.name_rules import (
+    AMBIGUOUS_UNACCENTED_FAMILY_NAMES,
+    NAME_NEIGHBOUR_STOPLIST,
+    NAME_STOP_WORDS,
+    NAME_WORD_COUNTS,
+    TITLES,
+    VIETNAMESE_FAMILY_NAMES,
+    VIETNAMESE_FAMILY_NAMES_UNACCENTED,
+    VIETNAMESE_MIDDLE_NAMES,
+    TextSpan,
+    VietnameseNameDetector,
+    grow_person_span,
+    person_cue_names,
+)
 from app.pseudonymization.domain.placeholders import (
     PLACEHOLDER_PATTERN,
     PseudonymType,
@@ -40,8 +54,16 @@ from app.pseudonymization.domain.pseudonym_map import (
 )
 
 __all__ = [
+    "AMBIGUOUS_UNACCENTED_FAMILY_NAMES",
+    "NAME_NEIGHBOUR_STOPLIST",
+    "NAME_STOP_WORDS",
+    "NAME_WORD_COUNTS",
     "PLACEHOLDER_PATTERN",
     "PSEUDONYMIZED_TEXT_MAX_LENGTH",
+    "TITLES",
+    "VIETNAMESE_FAMILY_NAMES",
+    "VIETNAMESE_FAMILY_NAMES_UNACCENTED",
+    "VIETNAMESE_MIDDLE_NAMES",
     "Detection",
     "DetectionSource",
     "Detector",
@@ -63,10 +85,14 @@ __all__ = [
     "PseudonymizedTextTooLongError",
     "RestoredText",
     "StoredMapDiffersError",
+    "TextSpan",
+    "VietnameseNameDetector",
     "build_pseudonymized_message",
     "contains_placeholder",
     "drop_product_names",
+    "grow_person_span",
     "is_luhn_valid",
+    "person_cue_names",
     "resolve_overlaps",
     "restore_pseudonyms",
 ]
