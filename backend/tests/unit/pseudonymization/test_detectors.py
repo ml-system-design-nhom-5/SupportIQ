@@ -12,6 +12,7 @@ from hypothesis import strategies as st
 
 from app.pseudonymization.domain import (
     PSEUDONYMIZED_TEXT_MAX_LENGTH,
+    AddressRuleDetector,
     Detection,
     DetectionSource,
     KnownValue,
@@ -21,6 +22,7 @@ from app.pseudonymization.domain import (
     PseudonymEntry,
     PseudonymizedTextTooLongError,
     PseudonymType,
+    VietnameseNameDetector,
     build_pseudonymized_message,
     contains_placeholder,
     drop_product_names,
@@ -576,7 +578,13 @@ def test_restored_literal_is_the_customers_text_and_still_a_placeholder() -> Non
 
 @given(st.text(max_size=300))
 def test_pseudonymization_is_deterministic_and_restores_the_message(message: str) -> None:
-    detectors = (LiteralPlaceholderDetector(), KnownValueDetector(), PatternDetector())
+    detectors = (
+        LiteralPlaceholderDetector(),
+        KnownValueDetector(),
+        PatternDetector(),
+        VietnameseNameDetector(),
+        AddressRuleDetector(),
+    )
     detections = resolve_overlaps(
         detection for detector in detectors for detection in detector.detect(message, KNOWN_VALUES)
     )

@@ -16,6 +16,7 @@ from app.pseudonymization.application import (
 )
 from app.pseudonymization.domain import (
     PSEUDONYMIZED_TEXT_MAX_LENGTH,
+    AddressRuleDetector,
     Detector,
     DetectorError,
     KnownValue,
@@ -24,11 +25,13 @@ from app.pseudonymization.domain import (
     MapTicketId,
     PatternDetector,
     PseudonymizationError,
+    VietnameseNameDetector,
     contains_placeholder,
 )
 
 __all__ = [
     "PSEUDONYMIZED_TEXT_MAX_LENGTH",
+    "AddressRuleDetector",
     "Detector",
     "DetectorError",
     "KnownValue",
@@ -42,5 +45,6 @@ __all__ = [
     "PseudonymizationStores",
     "PseudonymizeMessage",
     "RestorePseudonyms",
+    "VietnameseNameDetector",
     "contains_placeholder",
 ]

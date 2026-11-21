@@ -38,6 +38,7 @@ from app.pseudonymization.domain import (
     DetectorError,
     KnownValue,
     MapTicketId,
+    PersonalDataLeftError,
     PseudonymEntry,
     PseudonymizationError,
     PseudonymizedMessage,
@@ -46,6 +47,7 @@ from app.pseudonymization.domain import (
     PseudonymType,
     StoredMapDiffersError,
     build_pseudonymized_message,
+    check_nothing_left,
     drop_product_names,
     resolve_overlaps,
 )
@@ -144,8 +146,9 @@ class PseudonymizeMessage:
             The pseudonymized text, at most 4 000 characters.
 
         Raises:
-            PseudonymizationError: A detector failed, the text is too long, or the stored map
-                differs. The failure is in the audit log, and nothing may be sent.
+            PseudonymizationError: A detector failed, the text is too long, personal data is
+                left in the text, or the stored map differs. The failure is in the audit log,
+                and nothing may be sent.
             DatabaseUnavailableError: The database is not available: no failure of
                 pseudonymization, and the job tries again after its lease.
         """
@@ -168,6 +171,9 @@ class PseudonymizeMessage:
             result = build_pseudonymized_message(
                 message.message, self._detect(message.message, known_values, product_names)
             )
+            # Nothing leaves backend while personal data is left in the text, and no map row is
+            # kept for it (ADR-0029, statement 4).
+            check_nothing_left(result.text, result.entries, known_values)
             await _keep_one_map(
                 stores.pseudonyms, message.ticket_id, result.entries, self._ports.clock.now()
             )
@@ -225,8 +231,18 @@ class PseudonymizeMessage:
             if isinstance(error, PseudonymizedTextTooLongError)
             else self._ports.events.record
         )
+        # The type of the placeholder next to a finding is Internal; its value never leaves
+        # (LOG-29).
+        details = (
+            {"pseudonym_type": error.pseudonym_type.value}
+            if isinstance(error, PersonalDataLeftError)
+            else {}
+        )
         record(
-            EventName.PSEUDONYMIZATION_FAILED, ticket_id=ticket_id, reason_code=error.reason.value
+            EventName.PSEUDONYMIZATION_FAILED,
+            ticket_id=ticket_id,
+            reason_code=error.reason.value,
+            **details,
         )
 
 

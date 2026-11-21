@@ -17,12 +17,15 @@ from app.idempotency.adapters.idempotency_store import PostgresIdempotencyStore
 from app.platform.adapters.database import SqlAlchemyTransactionRunner
 from app.platform.settings import Settings
 from app.pseudonymization import (
+    AddressRuleDetector,
+    Detector,
     KnownValueDetector,
     LiteralPlaceholderDetector,
     PatternDetector,
     PseudonymizationPorts,
     PseudonymizationStores,
     PseudonymizeMessage,
+    VietnameseNameDetector,
 )
 from app.pseudonymization.adapters.named_entity_detector import (
     SpacyNamedEntityDetector,
@@ -363,19 +366,36 @@ def load_named_entity_detector() -> SpacyNamedEntityDetector:
     return SpacyNamedEntityDetector()
 
 
+def build_detectors() -> tuple[Detector, ...]:
+    """Build the detectors of ADR-0010 in the order of its steps.
+
+    Step 4 holds the named-entity model and the two rule detectors of ADR-0029, statements 2
+    and 3. The trial of the named-entity detector and the replay of the re-measurement use the
+    same detectors, so they measure what backend runs.
+
+    Returns:
+        The detectors.
+
+    Raises:
+        NamedEntityModelMissingError: The model is not installed (ERR-17).
+    """
+    return (
+        LiteralPlaceholderDetector(),
+        KnownValueDetector(),
+        PatternDetector(),
+        load_named_entity_detector(),
+        VietnameseNameDetector(),
+        AddressRuleDetector(),
+    )
+
+
 def _build_pseudonymizer(
     session_factory: async_sessionmaker[AsyncSession], shared: SharedPorts
 ) -> PseudonymizeMessage:
-    # The detectors of ADR-0010 in the order of its steps.
     return PseudonymizeMessage(
         SqlAlchemyTransactionRunner(session_factory, build_pseudonymization_stores),
         PseudonymizationPorts(
-            detectors=(
-                LiteralPlaceholderDetector(),
-                KnownValueDetector(),
-                PatternDetector(),
-                load_named_entity_detector(),
-            ),
+            detectors=build_detectors(),
             clock=shared.clock,
             ids=shared.ids,
             traces=shared.traces,

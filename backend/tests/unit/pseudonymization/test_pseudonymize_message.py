@@ -25,6 +25,7 @@ from app.pseudonymization.domain import (
     Detection,
     DetectionSource,
     KnownValue,
+    PersonalDataLeftError,
     PseudonymEntry,
     PseudonymType,
 )
@@ -293,6 +294,41 @@ async def test_a_storage_error_is_no_pseudonymization_failure() -> None:
 
     assert harness.audit.entries == []
     assert harness.transactions.commit_count == 0
+
+
+# The customer's phone with letters stuck to it: no step finds it, and the pre-send check finds
+# its digits as a known value inside a run of digits (ADR-0029, statement 4).
+LEFT_PHONE_MESSAGE = f"Call me at {CONTACT.phone}pm please."
+
+
+@pytest.mark.anyio
+async def test_personal_data_left_in_the_text_fails_closed_and_keeps_no_map() -> None:
+    harness = build_harness()
+
+    with pytest.raises(PersonalDataLeftError) as caught:
+        await harness.pseudonymize.pseudonymize(ticket_message(LEFT_PHONE_MESSAGE))
+
+    (entry,) = harness.audit.entries
+    assert caught.value.pseudonym_type is PseudonymType.PHONE
+    assert harness.pseudonyms.entries_by_ticket == {}
+    assert entry.data == {"outcome": "failed", "failure_reason": "personal_data_left"}
+    assert (harness.transactions.rollback_count, harness.transactions.commit_count) == (1, 1)
+
+
+@pytest.mark.anyio
+async def test_personal_data_left_is_an_error_event_with_its_type_and_no_value() -> None:
+    harness = build_harness()
+
+    with pytest.raises(PersonalDataLeftError):
+        await harness.pseudonymize.pseudonymize(ticket_message(LEFT_PHONE_MESSAGE))
+
+    (event,) = harness.events.of(EventName.PSEUDONYMIZATION_FAILED)
+    assert not event.is_handled_input
+    assert event.attributes == {
+        "ticket_id": TICKET_ID,
+        "reason_code": "personal_data_left",
+        "pseudonym_type": "PHONE",
+    }
 
 
 @pytest.mark.anyio

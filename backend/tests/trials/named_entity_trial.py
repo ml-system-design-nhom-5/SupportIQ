@@ -5,9 +5,10 @@ Run it on demand from `backend/`, with the report in the git-ignored folder `exp
     uv run python -m tests.trials.named_entity_trial ../exports/named-entity-trial.json
 
 On the fixed `synthetic-dev-only` set, it measures the recall and the over-detection of names
-and addresses after the overlap rule, the peak resident memory before and after the model loads,
-and the latency of pseudonymizing one message with every detector. Numbers from a laptop are
-indicative only; the design asks for the memory and the latency on the free instance.
+and addresses after the overlap rule, the messages that the pre-send check stops, the peak
+resident memory before and after the model loads, and the latency of pseudonymizing one message
+with every detector and the pre-send check. Numbers from a laptop are indicative only; the design
+asks for the memory and the latency on the free instance.
 """
 
 import json
@@ -16,20 +17,18 @@ import resource
 import statistics
 import sys
 import time
+from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
 from typing import TypedDict
 
-from app.pseudonymization.adapters.named_entity_detector import (
-    SpacyNamedEntityDetector,
-)
+from app.composition_root.suggestions_wiring import build_detectors
 from app.pseudonymization.domain import (
     Detection,
-    KnownValueDetector,
-    LiteralPlaceholderDetector,
-    PatternDetector,
+    PersonalDataLeftError,
     PseudonymType,
     build_pseudonymized_message,
+    check_nothing_left,
     drop_product_names,
     resolve_overlaps,
 )
@@ -49,8 +48,10 @@ class TrialMessage(TypedDict):
     addresses: list[str]
 
 
-type Pseudonymize = Callable[[str], tuple[Detection, ...]]
-type Result = tuple[TrialMessage, tuple[Detection, ...]]
+# The type that the pre-send check found, or None when it let the message through.
+type Stop = PseudonymType | None
+type Pseudonymize = Callable[[str], tuple[tuple[Detection, ...], Stop]]
+type Result = tuple[TrialMessage, tuple[Detection, ...], Stop]
 
 
 def main(output: Path) -> None:
@@ -58,29 +59,32 @@ def main(output: Path) -> None:
     seed = json.loads(SEED.read_text(encoding="utf-8"))
     rss_before_model = _peak_rss_mib()
     product_names = tuple(p["name"] for p in seed["commerce"]["products"])
-    named_entities = SpacyNamedEntityDetector()
+    # The detectors that backend runs, so the trial measures them (ADR-0029); building them
+    # loads the model.
+    detectors = build_detectors()
     rss_with_model = _peak_rss_mib()
-    detectors = (
-        LiteralPlaceholderDetector(),
-        KnownValueDetector(),
-        PatternDetector(),
-        named_entities,
-    )
 
-    def pseudonymize(text: str) -> tuple[Detection, ...]:
+    def pseudonymize(text: str) -> tuple[tuple[Detection, ...], Stop]:
         found = (d for detector in detectors for d in detector.detect(text, ()))
         kept = resolve_overlaps(drop_product_names(found, text, product_names))
-        build_pseudonymized_message(text, kept)
-        return kept
+        built = build_pseudonymized_message(text, kept)
+        # backend runs the pre-send check on every message, so the trial times it too, and
+        # counts a stop instead of ending the run.
+        try:
+            check_nothing_left(built.text, built.entries, ())
+        except PersonalDataLeftError as error:
+            return kept, error.pseudonym_type
+        return kept, None
 
     messages: list[TrialMessage] = trial["messages"]
-    results = [(message, pseudonymize(message["text"])) for message in messages]
+    results: list[Result] = [(message, *pseudonymize(message["text"])) for message in messages]
     report = {
         "trial_set": f"{TRIAL_SET.name}, version {trial['version']}",
         "machine": f"{platform.platform()}, Python {platform.python_version()}",
         "types": {
             str(kind): _score(results, kind) for kind in (PseudonymType.NAME, PseudonymType.ADDRESS)
         },
+        "pre_send_check": _stops(results),
         "peak_rss_mib": {"before_model": rss_before_model, "with_model": rss_with_model},
         "latency_ms": _latency(messages, pseudonymize),
     }
@@ -92,7 +96,7 @@ def _score(results: list[Result], kind: PseudonymType) -> dict[str, object]:
     """Count the values of one type that the kept detections cover, and its detections of none."""
     values = covered = covered_as_kind = over = 0
     misses: list[str] = []
-    for message, kept in results:
+    for message, kept, _ in results:
         text = message["text"]
         gold = [_span(text, value) for value in (*message["names"], *message["addresses"])]
         for value in message["names"] if kind is PseudonymType.NAME else message["addresses"]:
@@ -114,6 +118,27 @@ def _score(results: list[Result], kind: PseudonymType) -> dict[str, object]:
         "over_detections": over,
         "misses": misses,
     }
+
+
+def _stops(results: list[Result]) -> dict[str, object]:
+    """Count the messages that the pre-send check stops, by type, and the false stops of them.
+
+    A false stop is a stopped message whose stopped text holds no raw value (leak fixes design,
+    Rollout): the kept detections cover every name and address of the message.
+    """
+    stopped = [(message, kept, stop) for message, kept, stop in results if stop is not None]
+    return {
+        "messages": len(results),
+        "stopped": len(stopped),
+        "by_type": dict(Counter(str(stop) for _, _, stop in stopped)),
+        "false_stops": sum(1 for message, kept, _ in stopped if _covers_every_value(message, kept)),
+    }
+
+
+def _covers_every_value(message: TrialMessage, kept: tuple[Detection, ...]) -> bool:
+    text = message["text"]
+    values = (*message["names"], *message["addresses"])
+    return all(_covers(kept, _span(text, value)) for value in values)
 
 
 def _span(text: str, value: str) -> tuple[int, int]:

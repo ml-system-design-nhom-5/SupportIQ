@@ -110,6 +110,19 @@ def test_event_line_drops_attributes_that_are_not_allow_listed(captured: Capture
     }
 
 
+def test_event_line_keeps_the_type_of_a_placeholder(captured: CapturedLog) -> None:
+    captured.events.record(
+        EventName.PSEUDONYMIZATION_FAILED,
+        ticket_id=TICKET_ID,
+        reason_code="personal_data_left",
+        pseudonym_type="PHONE",
+    )
+
+    (line,) = captured.lines()
+
+    assert (line["reason_code"], line["pseudonym_type"]) == ("personal_data_left", "PHONE")
+
+
 def test_event_line_redacts_known_patterns_in_allow_listed_text(captured: CapturedLog) -> None:
     captured.events.record(
         EventName.REQUEST_COMPLETED, http_route=f"/v1/x/{ORDER_ID}/{EMAIL}/{RAW_SESSION_ID}"

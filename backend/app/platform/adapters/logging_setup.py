@@ -42,6 +42,7 @@ ALLOWED_ATTRIBUTES = frozenset(
         "draft_status",
         "decision_type",
         "reason_code",
+        "pseudonym_type",
         "stream_end_reason",
         "duration_ms",
         "error_type",

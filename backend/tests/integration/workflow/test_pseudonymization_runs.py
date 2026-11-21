@@ -1,8 +1,9 @@
 """`PseudonymizeMessage` against PostgreSQL 17: one map per ticket, nothing kept of a failure.
 
-The first successful run inserts the map, and a later run only compares. A run that fails
-keeps no map row, and its failure is audited in a transaction of its own, so a value never
-gets two pseudonyms (ADR-0010, Storage and lifecycle, items 2 to 4). A storage error is no
+The first successful run inserts the map, and a later run only compares. A run that fails,
+also one that the pre-send check stops (ADR-0029, statement 4), keeps no map row, and its
+failure is audited in a transaction of its own, so a value never gets two pseudonyms
+(ADR-0010, Storage and lifecycle, items 2 to 4). A storage error is no
 pseudonymization failure: it rolls everything back and audits nothing (backend ticket
 workflow design, Pseudonymization, item 3).
 """
@@ -42,6 +43,7 @@ from app.pseudonymization.adapters.pseudonym_map_store import (
 from app.pseudonymization.domain import (
     Detection,
     KnownValue,
+    PersonalDataLeftError,
     PseudonymEntry,
     PseudonymMapStore,
     StoredMapDiffersError,
@@ -220,6 +222,33 @@ async def test_a_detector_failure_keeps_no_map_row_and_audits_the_failure(
 
     assert await builder.scalar(COUNT_MAP_ROWS, ticket_id=message.ticket_id) == 0
     assert await builder.scalar(FAILURE_REASON, ticket_id=message.ticket_id) == "detector_error"
+
+
+async def test_personal_data_left_keeps_no_map_row_and_audits_the_failure(
+    app_engine: AsyncEngine, builder: DatabaseBuilder
+) -> None:
+    _account_id, customer_id = await builder.customer_account()
+    order_id = await builder.order_of_one_product(customer_id)
+    ticket_id = await builder.ticket(customer_id, order_id)
+    phone = await builder.scalar(
+        "SELECT phone FROM customers WHERE customer_id = :customer_id", customer_id=customer_id
+    )
+    # The customer's phone with letters stuck to it: no detector finds it, and the pre-send
+    # check does (ADR-0029, statement 4).
+    message = MessageToPseudonymize(
+        MapTicketId(ticket_id),
+        f"Please call me back at {phone}pm today.",
+        CustomerId(str(customer_id)),
+        OrderId(order_id),
+    )
+
+    with pytest.raises(PersonalDataLeftError):
+        await build_use_case(app_engine).pseudonymize(message)
+
+    assert await builder.scalar(COUNT_MAP_ROWS, ticket_id=message.ticket_id) == 0
+    assert await builder.scalar(FAILURE_REASON, ticket_id=message.ticket_id) == (
+        "personal_data_left"
+    )
 
 
 async def test_an_insert_that_fails_rolls_the_map_back_and_audits_nothing(
