@@ -39,7 +39,13 @@ _EMAIL_PATTERN = re.compile(r"(?<![\w.%+-])[\w.%+-]+@[\w-]+(?:\.[\w-]+)+(?![\w-]
 _PHONE_RUN = re.compile(
     r"\+?(?:[0-9]+[ .-]?)?\([0-9]{2,5}\)[ .-]?[0-9]+(?:[ .-][0-9]+)*|\+?[0-9]+(?:[ .-][0-9]+)*"
 )
-_PHONE_EXTENSION = re.compile(r"(?:x|ext\.?)[0-9]{1,6}(?![^\W_])")
+# Every character but a digit that `_PHONE_RUN` takes. The pre-send check reads a run of digits
+# and these characters as one number, so it finds a phone number written with other separators
+# (ADR-0029, statement 4). The separators of a card number are among them.
+PHONE_SEPARATORS = " .-()+"
+# The extension right after the last group of a phone number. The pre-send check leaves it out
+# of the digits that it compares, because its digits are no part of the number.
+PHONE_EXTENSION = re.compile(r"(?:x|ext\.?)[0-9]{1,6}(?![^\W_])")
 _CARD_RUN = re.compile(r"[0-9]+(?:[ -][0-9]+)*")
 _DIGIT_GROUP = re.compile(r"[0-9]+")
 _PHONE_DIGIT_COUNT = range(9, 16)
@@ -128,7 +134,7 @@ class PatternDetector:
                     _PHONE_DIGIT_COUNT,
                     PseudonymType.PHONE,
                     _is_any_number,
-                    _PHONE_EXTENSION,
+                    PHONE_EXTENSION,
                 ),
             ),
             *_find_digit_values(

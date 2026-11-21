@@ -15,6 +15,7 @@ from app.pseudonymization.domain.detection import (
     resolve_overlaps,
 )
 from app.pseudonymization.domain.detectors import (
+    PHONE_SEPARATORS,
     KnownValueDetector,
     LiteralPlaceholderDetector,
     PatternDetector,
@@ -50,6 +51,7 @@ from app.pseudonymization.domain.placeholders import (
     contains_placeholder,
 )
 from app.pseudonymization.domain.ports import MapTicketId, PseudonymMapStore
+from app.pseudonymization.domain.pre_send_check import CURRENCY_WORDS, check_nothing_left
 from app.pseudonymization.domain.pseudonym_map import (
     PSEUDONYMIZED_TEXT_MAX_LENGTH,
     PseudonymEntry,
@@ -64,9 +66,11 @@ __all__ = [
     "ADDRESS_PART_COUNT",
     "ADDRESS_WORDS",
     "AMBIGUOUS_UNACCENTED_FAMILY_NAMES",
+    "CURRENCY_WORDS",
     "NAME_NEIGHBOUR_STOPLIST",
     "NAME_STOP_WORDS",
     "NAME_WORD_COUNTS",
+    "PHONE_SEPARATORS",
     "PLACEHOLDER_PATTERN",
     "PSEUDONYMIZED_TEXT_MAX_LENGTH",
     "TITLES",
@@ -98,6 +102,7 @@ __all__ = [
     "TextSpan",
     "VietnameseNameDetector",
     "build_pseudonymized_message",
+    "check_nothing_left",
     "contains_placeholder",
     "drop_product_names",
     "grow_person_span",
