@@ -1,0 +1,3 @@
+# The one name of asyncpg that backend uses; the package ships no type information.
+
+class PostgresError(Exception): ...

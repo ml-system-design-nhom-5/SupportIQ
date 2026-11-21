@@ -3,14 +3,18 @@
 - **Status:** Approved
 - **Owner:** frontend engineer
 - **Reviewers:** backend engineer, contracts gatekeeper
-- **Last reviewed:** 2026-11-05
-- **Related:** [Requirements](../product/requirements.md) (FR-08, FR-11), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md), [contracts v1 design](contracts-v1.md) (revision 2, in review), [console UI design](console-ui.md) (tokens), [UI rules](../rules/ui.md#shop)
+- **Last reviewed:** 2026-11-12
+- **Related:** [Requirements](../product/requirements.md) (FR-08, FR-11), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md), [contracts v1 design](contracts-v1.md) (revision 2, in review), [account management design](account-management.md), [console UI design](console-ui.md) (tokens), [UI rules](../rules/ui.md#shop)
 
 ## Summary
 
 This design fixes the screens of `/shop`, where simulated customers browse a read-only catalog, see their orders, write to support about an order, and read the reply once staff send it. Its scope is fixed by [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md), and it reuses the design tokens and primitives of the [console UI design](console-ui.md#design-tokens).
 
 On 2026-11-05 the team chose the layout: My orders is a list, and each order page holds the order details, every ticket about that order with its reply, and a message box. A Support page lists every ticket, and each one opens on the page of its order.
+
+**Revision of 2026-11-07, decided by the project lead:** after a timeout, a lost connection, `502`, or `504`, nobody knows whether a message arrived: `backend` may finish a write after `frontend` stopped waiting (`backend` contract, Timeouts), and a write in flight can fail with `502` ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)). Version 1.0.1 of the `backend` contract states this in its text on responses from the ingress. The same holds for a `2xx` whose body cannot be read, and for a later failure with the same key, unless `backend` refuses it with `422` or `404`. The `Idempotency-Key` now stays with a message until the send succeeds or the text changes, and the banner says that the message may have arrived. The first decision is kept under [Alternatives considered](#alternatives-considered). The revision also records that a product appears at most once in an order, and where the focus goes after sending.
+
+**Revision of 2026-11-11, for [ADR-0015](../decisions/0015-account-creation-and-password-changes.md):** the account menu replaces the customer's display name and Sign out in the top bar, and adds Change password, which opens the shared page `/change-password`. Both are defined in the [account management design](account-management.md#account-menu). The earlier top bar is kept under [Alternatives considered](#alternatives-considered).
 
 ## Goals and non-goals
 
@@ -24,7 +28,7 @@ On 2026-11-05 the team chose the layout: My orders is a list, and each order pag
 
 ### Non-goals
 
-- Everything that ADR-0013 excludes: sign-up, profile editing, a cart, a checkout, payment, search, filters, reviews, and any action that changes an order.
+- Everything that ADR-0013 excludes: sign-up, profile editing, a cart, a checkout, payment, search, filters, reviews, and any action that changes an order. ADR-0015 adds the own password change to the shop's list; profile editing stays excluded ([ADR-0015](../decisions/0015-account-creation-and-password-changes.md), Relation to earlier ADRs).
 - A conversation with several messages per ticket ([contracts v1](contracts-v1.md#non-goals)).
 - Support questions that are not about an order (ADR-0013).
 - `/console` and `/admin`, which have their own designs: [console UI](console-ui.md) and [admin UI](admin-ui.md).
@@ -44,7 +48,7 @@ Only `frontend` changes. It reads and writes through the `backend` contract only
 
 ### Layout
 
-- A top bar with the shop name, the navigation (Products, My orders, Support), the customer's display name, and Sign out. At phone width the navigation moves to a second row.
+- A top bar with the shop name, "Demo Shop" (decided by the project lead on 2026-11-05), the navigation (Products, My orders, Support), and the [account menu](account-management.md#account-menu): the customer's display name, the role label Customer, Change password, and Sign out. At phone width the navigation moves to a second row, and the menu trigger shows only the person icon.
 - One content column, at most 960 px wide, with 32 px padding on desktop and 16 px at phone width.
 - Body text is 16 px ([UI-08](../rules/ui.md#tokens)). Products and order lines show the neutral product image of the design system ([UI-38](../rules/ui.md#shop)).
 - After sign-in, `frontend` opens the area of the role that `getCurrentSession` returns: `/shop` for a customer.
@@ -54,6 +58,7 @@ Only `frontend` changes. It reads and writes through the `backend` contract only
 | Screen | Route (proposed) | Content | Mockup |
 |---|---|---|---|
 | Sign in | `/sign-in` | Shared with the console | [sign-in.png](assets/console-ui/sign-in.png) |
+| Change password | `/change-password` | Shared with every role, opened from the account menu ([account management design](account-management.md#change-password-page)) | [change-password.png](assets/account-management/change-password.png) |
 | Products | `/shop` | Catalog cards: neutral image, name, category, price. Show more products loads the next page ([CON-14](../rules/contracts.md#api-conventions)) | [products.png](assets/shop-ui/products.png) |
 | Product | `/shop/products/{product_id}` | Name, category, price, description, neutral image | [product.png](assets/shop-ui/product.png) |
 | My orders | `/shop/orders` | List, newest first, with Show more when there is a next page: order ID, `placed_at`, product names, order and shipment status, refund status when there is a refund, total | [orders.png](assets/shop-ui/orders.png) |
@@ -83,7 +88,7 @@ The order page ends with one card that holds the tickets of the order and the me
 - **Tickets:** oldest first. `listShopTickets` returns them newest first, so the order page reverses the list, and Show earlier tickets loads the next page when an order has more tickets than one page holds. The customer's message sits on the right, marked "You". The reply sits on the left, marked "Reply from support", because `ShopTicketView` carries no staff name. Each ticket shows its ID and its status.
 - **Message box:** a visible label, "Write to support about this order"; a counter from 0 to 2 000 characters (`MessageText`); and Send message, disabled while the box is empty, over the limit, or sending. The help line says that each message gets one reply from a person on the support team, so the box does not read as a live chat.
 - **Contact support:** the button at the top of the order page moves focus to the message box. It helps on long pages and at phone width.
-- **After sending:** the box empties, a banner says "Message sent. A person from our support team replies here.", and the new ticket appears as Received.
+- **After sending:** the box empties, a banner says "Message sent. A person from our support team replies here.", and the new ticket appears as Received. When the send settles, with a success or a failure, the focus moves from Send message to the box ([UI-30](../rules/ui.md#accessibility)).
 
 ![After sending a message](assets/shop-ui/order-sent.png)
 
@@ -129,17 +134,33 @@ sequenceDiagram
     else Session expired
         BE-->>FE: 401 unauthenticated
         FE-->>Customer: Sign-in, then back to the order
-    else Network error, 5xx, or 413, 429, 502, 504 from the ingress
+    else Timeout, lost connection, 502, 504, or a 2xx with an unreadable body
+        BE-->>FE: No valid response, backend may have finished the write
+        FE-->>Customer: The message may have arrived, sending the same text again is safe, text and key kept
+    else Other 5xx, or 413, 429 from the ingress
         BE-->>FE: No valid response
-        FE-->>Customer: Error with a trace ID when there is one, text kept
+        FE-->>Customer: Error with a trace ID when there is one, text and key kept
+    end
+    opt The browser window regains focus on the order page
+        FE->>BE: GET /v1/shop/orders/{order_id} and GET /v1/shop/tickets?order_id
+        alt Valid responses
+            BE-->>FE: 200 order and its tickets
+            FE-->>Customer: Updated page, message box unchanged
+        else Session expired
+            BE-->>FE: 401 unauthenticated
+            FE-->>Customer: Sign-in, then back to the order
+        else Network error, 5xx, or a response from the ingress
+            BE-->>FE: No valid response
+            FE-->>Customer: Page and message box unchanged
+        end
     end
 ```
 
 1. The customer opens an order from My orders, or a ticket from Support, which opens its order page at that ticket.
 2. The customer writes a message of 1 to 2 000 characters and chooses Send message.
-3. `frontend` sends `createShopTicket` with an `Idempotency-Key` created once per Send message. Automatic retries follow [TS-29](../rules/typescript.md#api-access) and [ERR-12](../rules/errors-and-reliability.md#retries) and reuse the key, so a retry never creates a second ticket.
+3. `frontend` sends `createShopTicket` with an `Idempotency-Key` that stays with the message until the send succeeds or the text changes. Automatic retries follow [TS-29](../rules/typescript.md#api-access) and [ERR-12](../rules/errors-and-reliability.md#retries) and reuse the key. Sending the same text again after a failure reuses it too, so neither creates a second ticket: `backend` remembers a success and answers with the original ticket. Changed text gets a new key, and so does the next message after a success.
 4. On `201`, the new ticket appears as Received with "No reply yet. A person from our support team replies here."
-5. When staff send the reply, the ticket shows Replied and the reply. The shop does not poll; the reply appears the next time the customer opens the page.
+5. When staff send the reply, the ticket shows Replied and the reply. The shop does not poll. The order page loads its order and tickets again in the background when the browser window regains focus, so the reply appears then, or the next time the customer opens the page. The page and the text in the message box stay as they are while it loads.
 6. To ask again, the customer sends another message, which creates a new ticket.
 
 ### States
@@ -151,6 +172,8 @@ sequenceDiagram
 | No orders | `listShopOrders` returns no item | "You have no orders yet." | — |
 | No tickets | The customer has no ticket about this order, or none at all | Order page: only the message box. Support: "You have not written to support yet." | — |
 | Sending | After Send message | The button shows progress; the text stays | — |
+| Outcome unknown | A timeout, a lost connection, `502`, `504`, or a `2xx` with an unreadable body on Send message, or a later failure with the same key, unless `backend` refuses it with `422` or `404` | A banner says that the message may have arrived and that sending the same text again is safe; the text stays | — |
+| Reloading on focus | The browser window regains focus on the order page | No skeleton: the page and the message box stay until the new data arrives. A network error, `5xx`, or a response from the ingress changes nothing | — |
 | Loading more | After Show more | The button shows progress; the items already shown stay. On an error, a message under the list and the button again. The button is hidden when there is no next page | — |
 | Received | `customer_status` is `received` | Badge Received and the "No reply yet" line | [order-sent.png](assets/shop-ui/order-sent.png) |
 | Replied | `customer_status` is `replied` | Badge Replied and the reply | [order.png](assets/shop-ui/order.png) |
@@ -177,7 +200,9 @@ Each badge has an icon and a label, so color is never the only signal. The tones
 - Every screen maps to `ShopProductView`, `ShopOrderView`, or `ShopTicketView` in [contracts v1](contracts-v1.md#backend-contract-backendopenapiyaml) revision 2. The shop schemas have no field that can hold AI output.
 - The order page lists the tickets of one order with the optional `order_id` query parameter of `listShopTickets` (contracts v1 revision 2, a compatible change under [CON-19](../rules/contracts.md#evolution)).
 - Order lines show the product name and quantity, and the order shows its total. `ShopOrderView` has no price per line, so the shop shows none.
-- `getShopTicket` has no screen in this design, because every ticket opens on its order page. Contract PR 2 keeps or removes it (Open questions).
+- A product appears at most once in an order (decided by the project lead on 2026-11-07), so `frontend` keys order lines by `product_id` ([TS-24](../rules/typescript.md#react)). Version 1.0.1 of the `backend` contract states it.
+- `getShopTicket` has no screen in this design, because every ticket opens on its order page. Contract PR 2 keeps it, because the Goals of the [backend foundation design](backend-foundation.md#goals) list it.
+- Every list requests the default page of 20 items, and Show more requests the next page with `next_cursor` ([CON-14](../rules/contracts.md#api-conventions)). The contract fixes the orders: products by name, orders newest first by `placed_at`, and tickets newest first by `created_at`.
 
 ### Errors and guardrails
 
@@ -186,11 +211,13 @@ Each badge has an icon and a label, so color is never the only signal. The tones
 | A customer sees AI output | Impossible: shop schemas have no AI fields | Schema test over every `/v1/shop/` response (contracts v1); guardrail test |
 | A customer sees another customer's order or ticket | `404`, shown as "not found", so its existence is not revealed ([SEC-17](../rules/security-and-privacy.md#authentication-and-authorization)) | Permission test; component test |
 | Another role opens `/shop` | `403`: the permission-denied state | Permission table test; component test |
-| A double click or a retry creates two tickets | The `Idempotency-Key` makes the second request return the first result; Send message is disabled while sending | Idempotency test; component test |
+| A double click, a retry, or sending the same text again creates two tickets | The `Idempotency-Key` makes the second request return the first result; Send message is disabled while sending | Idempotency test; component test |
 | The message is empty or over 2 000 characters | Send message disabled; `422` from `backend` as the backstop, text kept | Component test |
 | The message box reads as a live chat with instant replies | The label and help line say that a person replies once to each message | Story review |
 | Session expired | `401`: sign-in, then back to the same page; the text of an unsent message is lost | Component test |
-| Network error, `5xx`, or a response from the ingress | Plain-language error, trace ID when there is one, text kept | Component test |
+| Timeout, lost connection, `502`, `504`, or a `2xx` with an unreadable body on Send message | The outcome is unknown, so the banner never says that the message was not sent: it says that the message may have arrived and that sending the same text again is safe. The text and its key stay | Component test; UI flow test |
+| A retry, or the same text sent again, fails after an unknown outcome | The banner stays the same, because the last failure says nothing about the earlier attempt. Only `422` or `404` from `backend` says "not sent": `backend` remembers a success, so these refusals mean that no attempt succeeded | Component test |
+| Any other `5xx`, or another response from the ingress | Plain-language error, trace ID when there is one, text kept | Component test |
 | Customer or staff text contains HTML or Markdown | Rendered as plain text ([SEC-22](../rules/security-and-privacy.md#input-and-output-handling)) | Component test |
 | The shop changes an order or a payment | Impossible: no such operation exists ([ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md)) | Contract test that lists operations |
 
@@ -200,13 +227,15 @@ Each badge has an icon and a label, so color is never the only signal. The tones
 - **Option B, a separate Support area with its own form page and ticket pages:** not chosen. The reply sits away from the order it is about, and writing a message takes one more step.
 - **Option C as first drawn, with the form on its own page:** changed by the team. The form moved into the order page, and My orders became a list like Support.
 - **A chat window on every page, including Products:** not chosen. ADR-0013 attaches every message to one of the customer's orders, a ticket holds one message and one reply, and a chat window would read as the autonomous chatbot that the requirements exclude. A Contact support panel with an order picker is drawn as a proposal (Open questions).
-- **Polling for the reply while the page is open:** not chosen for the draft, because the customer does not wait on the page. See Open questions.
+- **Polling for the reply while the page is open:** not chosen, because the customer does not wait on the page. On 2026-11-05 the project lead decided that the order page loads its data again when the window regains focus instead.
+- **The customer's display name and Sign out directly in the top bar:** the layout of this design until 2026-11-11. Replaced by the account menu, so that every role finds Change password in the same place ([ADR-0015](../decisions/0015-account-creation-and-password-changes.md)).
+- **A new `Idempotency-Key` for each Send message, and "Your message was not sent" after every failure:** the first decision of this design, replaced on 2026-11-07. After a timeout, a lost connection, `502`, or `504`, `backend` may still finish the write, so that banner could be false, and sending again with a new key could create a second ticket.
 
 ## Testing and evaluation
 
 - **Storybook:** a story for every block (top bar, product card, order row, order summary, ticket item, message box) in every state, with axe checks ([UI-32](../rules/ui.md#accessibility)).
-- **Component tests:** the message counter and Send message enablement, Contact support moving focus to the message box, the status presentations, the mapping of every problem type to a state, and the 360 px layout.
-- **End-to-end tests (Playwright):** a customer signs in, opens an order, and sends a message; staff send the reply in the console; the customer sees Replied and the reply on the order page and in Support. The same flow runs at a 360 px viewport.
+- **Component tests:** the message counter and Send message enablement, Contact support moving focus to the message box, the status presentations, the mapping of every problem type to a state, the reload on window focus, which keeps the text in the message box also when it fails, the key of a message sent again (same text, changed text, and a new message after a success), the focus after sending, and the 360 px layout.
+- **End-to-end tests (Playwright):** a customer signs in, opens an order, and sends a message; staff send the reply in the console; the customer sees Replied and the reply on the order page and in Support. The same flow runs at a 360 px viewport. The account menu and the password change at 360 px are tested as the [account management design](account-management.md#testing-and-evaluation) lists.
 - No model metric changes.
 
 ## Observability
@@ -227,6 +256,7 @@ Each badge has an icon and a label, so color is never the only signal. The tones
 2. Done on 2026-11-05: the backend and frontend owners approved this design.
 3. Contract PR 2 implements `ShopTicketView` with `replied` and the `order_id` filter of `listShopTickets`.
 4. Implementation: the shop blocks join the design system with stories first ([UI-38](../rules/ui.md#shop)), then the screens, against Prism mocks.
+5. Done on 2026-11-11: the project lead approved the revision of 2026-11-11, in place of a PR review. The account menu is built after `backend` contract 1.1.0 ([account management design](account-management.md#rollout)).
 
 ### Mockup sources
 
@@ -242,9 +272,5 @@ docs/design/assets/shop-ui/render.sh
 
   ![Proposal: Contact support panel with an order picker](assets/shop-ui/proposal-contact-panel.png)
 
-- The catalog page size, and the order of products.
-- Whether the order page polls while open, and how often.
-- Whether contract PR 2 keeps `getShopTicket`, which no screen uses.
 - Whether the console order popover adopts the status badges above, so that order, shipment, and refund statuses look the same in both areas (UI-12).
-- The shop name. The mockups use "Demo Shop", a neutral stand-in.
 - This design was approved on 2026-11-05 while contracts v1 revision 2 was still in review. If it changes, this design is revised.

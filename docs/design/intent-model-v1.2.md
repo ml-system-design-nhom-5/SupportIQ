@@ -3,8 +3,8 @@
 - **Status:** Draft
 - **Owner:** ML engineer
 - **Reviewers:** team
-- **Last reviewed:** 2026-11-14
-- **Related:** NFR-01, NFR-02, NFR-05, FR-05, ESC-02; [intent model retraining](intent-model-retraining.md), [evaluation protocol](intent-evaluation-protocol.md), [multi-request detection](multi-request-detection.md), [return-channel guard](return-channel-guard.md), [ADR-0016](../decisions/0016-frozen-intent-scenario-set.md); [DATA-25](../rules/data-and-ml.md), [DATA-28](../rules/data-and-ml.md#leakage), [DATA-34](../rules/data-and-ml.md), [DATA-58](../rules/data-and-ml.md)
+- **Last reviewed:** 2026-11-17
+- **Related:** NFR-01, NFR-02, NFR-05, FR-05, ESC-02; [intent model retraining](intent-model-retraining.md), [evaluation protocol](intent-evaluation-protocol.md), [multi-request detection](multi-request-detection.md), [return-channel guard](return-channel-guard.md), [ADR-0026](../decisions/0026-frozen-intent-scenario-set.md); [DATA-25](../rules/data-and-ml.md), [DATA-28](../rules/data-and-ml.md#leakage), [DATA-34](../rules/data-and-ml.md), [DATA-58](../rules/data-and-ml.md)
 
 ## Summary
 
@@ -33,7 +33,7 @@ On the independent frozen set `intent/v2`, candidate `v1.1.0` with policy `v3` b
 
 ### `intent/v2` result (2026-11-13)
 
-See [ADR-0016, results on v2](../decisions/0016-frozen-intent-scenario-set.md#results-on-intentv2-2026-11-13). The gate fails on unsafe drafts (3) and misses the Macro-F1 target (0.742) and the confident-error target (8).
+See [ADR-0026, results on v2](../decisions/0026-frozen-intent-scenario-set.md#results-on-intentv2-2026-11-13). The gate fails on unsafe drafts (3) and misses the Macro-F1 target (0.742) and the confident-error target (8).
 
 ### Development evidence (2026-11-14, `v1.1.0`)
 
@@ -60,7 +60,7 @@ Separating draftable from must-escalate messages on dev (AUROC): top-1 confidenc
 
 | # | Component | Change |
 |---|---|---|
-| 1 | `data/intent/dev_independent/v1/` (new) | About 300 labelled messages (all 46 labels, weighted towards the confusions above, plus out-of-scope and multi-request messages), written by a new independent AI agent session under the [ADR-0016](../decisions/0016-frozen-intent-scenario-set.md) access rules. It is **development data**: used for tuning and round decisions, never for training. It is leakage-checked against `data/benchmarks/` and the training files. |
+| 1 | `data/intent/dev_independent/v1/` (new) | About 300 labelled messages (all 46 labels, weighted towards the confusions above, plus out-of-scope and multi-request messages), written by a new independent AI agent session under the [ADR-0026](../decisions/0026-frozen-intent-scenario-set.md) access rules. It is **development data**: used for tuning and round decisions, never for training. It is leakage-checked against `data/benchmarks/` and the training files. |
 | 2 | `data/intent/train_supplement/v2/` (new) | About 15 rows for each unsupported intent from the evidence list: `return_product_in_store`, `return_product_online`, `track_delivery`, `missing_item`, `product_issue`, `wrong_item`, `order_history`, `product_information`, `close_account`. Contrast rows go to the supported intents they are confused with. Written to the label definitions, `synthetic-dev-only`, leakage-checked. |
 | 3 | `pipeline/training/train_distilbert_robust.py` | Optional scope head: a linear layer on the pooled representation that predicts draftable versus must-escalate. Binary cross-entropy weights a missed escalation `scope_fn_weight` times (default 3). Saved as `scope_head.safetensors` with its checksum in the artifact manifest. Optional seed ensemble (`ensemble_seeds`). |
 | 4 | `apps/ml_inference/app.py` | Returns `scope_probability` when the artifact has a scope head, or the summed draftable probability otherwise (`scope_kind` says which). It averages logits over ensemble members when the artifact has several. Additive response fields only. |
@@ -99,6 +99,8 @@ The team decided on 2026-11-14 that the gate may accept **at most one** must-not
 3. If the gate fails **only** because of exactly one unsafe draft, the team decision is applied: the protocol and `pipeline/configs/autoeval.json` change to `≤ 1` in a separate commit that names the team decision, and the result is reported as "passes under the relaxed safety threshold (team decision 2026-11-14)". The unsafe case IDs are listed (DATA-48).
 
 Every draft still needs staff approval (FR-04), which limits the harm of one unsafe draft. The relaxation does not apply to any other gate.
+
+The join with `main` does not take the relaxation: the gate stays at 0 ([intent evaluation protocol, Unsafe drafts](intent-evaluation-protocol.md#unsafe-drafts-the-gate-stays-at-0)), so candidate `v1.2.0` with policy `v4` does not pass it.
 
 ## Results (2026-11-14)
 
@@ -153,7 +155,7 @@ One ML run of the round 5 ensemble with policy `v4` (`intent_policy.v4.json`, `a
 
 The one unsafe draft is `unsupported-return_product_online-01`, which is not one of the 7 training near-duplicates. With the threshold at 0, the gate failed on this case alone. `ml_model_integrity` also fails, because `v1.2.0` is not pinned in `apps/ml_inference/app.py`; that is procedural.
 
-Following [the order above](#gate-and-the-team-decision-on-unsafe-drafts), the team decision was applied: `ml_unsafe_drafts <= 1` in `pipeline/configs/autoeval.json` and in the [protocol](intent-evaluation-protocol.md#team-decision-2026-11-14-unsafe-drafts). **Under the relaxed safety threshold, `v1.2.0` + `v4` passes every blocking ML gate except model integrity**, which passes once it is pinned. Every metric is better than or equal to the release. The safety target of 0 is still missed and is reported as missed (DATA-48).
+Following [the order above](#gate-and-the-team-decision-on-unsafe-drafts), the team decision was applied: `ml_unsafe_drafts <= 1` in `pipeline/configs/autoeval.json` and in the protocol on `main`; the join keeps 0 ([protocol, Unsafe drafts](intent-evaluation-protocol.md#unsafe-drafts-the-gate-stays-at-0)). **Under the relaxed safety threshold, `v1.2.0` + `v4` passes every blocking ML gate except model integrity**, which passes once it is pinned. Every metric is better than or equal to the release. The safety target of 0 is still missed and is reported as missed (DATA-48).
 
 Before `v1.2.0` can serve:
 

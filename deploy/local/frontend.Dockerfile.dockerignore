@@ -1,0 +1,32 @@
+# The build context of the local frontend image (frontend.Dockerfile) is an allow-list: nothing
+# enters it but the files below, so no .env file, no installed package of the host, and no build
+# output or test report reaches the image (SEC-29). BuildKit reads this file because it lies
+# next to the Dockerfile and is named after it.
+*
+
+# pnpm installs the locked dependencies from these three files.
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+
+# Vite reads its configuration, which imports two modules of src/, and serves index.html.
+!vite.config.ts
+!index.html
+
+# The TypeScript settings that Vite reads for the code of src/: tsconfig.json and every file
+# that it references, because the transform of Vite stops when a referenced file is missing.
+!tsconfig.json
+!tsconfig.app.json
+!tsconfig.node.json
+!tsconfig.ingress.json
+
+# vite.config.ts sets up the stories project with this folder when the configuration loads.
+!.storybook/
+
+# The code of the app, the generated client included, and the static files.
+!src/
+!public/
+
+# No environment file enters the context, even inside an allowed folder.
+**/.env
+**/.env.*

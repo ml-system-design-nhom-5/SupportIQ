@@ -1,0 +1,12 @@
+{
+  "summary": "The loaded release",
+  "value": {
+    "release_id": "release-2026-11-12-sample",
+    "model_version": "intent-model-sample-1",
+    "kb_version": "kb-sample-1",
+    "mapping_version": "mapping-sample-1",
+    "prompt_version": "prompts-sample-1",
+    "routing_version": "routing-sample-1",
+    "index_version": "index-sample-1"
+  }
+}

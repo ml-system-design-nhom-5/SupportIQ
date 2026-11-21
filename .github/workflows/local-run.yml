@@ -1,0 +1,53 @@
+# The smoke tests of the local run of the whole system (docs/design/local-run.md, Testing and
+# evaluation): the script tests, then a first start of the Compose way without AI, its health
+# checks and a sign-in through each origin, a stop, and a second start without --yes and
+# without a terminal, which must ask nothing and keep the data. Each check runs once. Every
+# workflow follows the convention in docs/guides/repository-checks.md.
+name: local-run
+
+on:
+  push:
+    branches:
+      - main
+      - "build/**"
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  local-run-compose:
+    name: local-run-compose
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Run the script tests of local-run.sh
+        run: deploy/local/tests/test-local-run.sh
+      - name: Start the local run with Compose, without AI
+        run: deploy/local/local-run.sh start --yes
+      - name: Show the parts and their health
+        run: deploy/local/local-run.sh status
+      - name: Check backend, directly and through frontend, and sign in at each origin
+        run: deploy/local/tests/smoke-check.sh running
+      - name: Stop the local run
+        run: deploy/local/local-run.sh stop
+      - name: Check that no container remains and that the ports are free
+        run: deploy/local/tests/smoke-check.sh stopped
+      - name: Start again without --yes and without a terminal, which needs no question
+        run: deploy/local/local-run.sh start < /dev/null
+      - name: Check that the data of the first start was kept
+        run: deploy/local/tests/smoke-check.sh kept
+      - name: Stop the local run again
+        run: deploy/local/local-run.sh stop
+      - name: Check again that no container remains and that the ports are free
+        run: deploy/local/tests/smoke-check.sh stopped

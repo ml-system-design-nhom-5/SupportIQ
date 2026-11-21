@@ -1,0 +1,16 @@
+# Test dummies, a documentation example, and dev values of 2026-10-29 that no code reads.
+99dea5ce027f524c119e45499dbb84559ff9edbd:tests/unit/test_intent_client_safe_errors.py:generic-api-key:12
+a0ac1ee61e7d5f1832bcf8019af7947b7e44792a:tests/unit/test_completion_grounding.py:generic-api-key:30
+4e89845f81b46499a206099c95ccc69c449149a0:tests/unit/test_system_review_probes.py:generic-api-key:139
+4e04960c36b9d83736d2f6e69d218d3697ab3a78:infra/secrets/.env.example:generic-api-key:11
+4e04960c36b9d83736d2f6e69d218d3697ab3a78:infra/compose/docker-compose.yml:generic-api-key:31
+4e04960c36b9d83736d2f6e69d218d3697ab3a78:infra/compose/docker-compose.yml:generic-api-key:59
+4e04960c36b9d83736d2f6e69d218d3697ab3a78:infra/compose/docker-compose.yml:generic-api-key:115
+5189f191b7f070dd27891c691469b82a88d3aabc:tests/conftest.py:generic-api-key:15
+5189f191b7f070dd27891c691469b82a88d3aabc:tests/conftest.py:generic-api-key:16
+86676ae4c637fe0e359f386c0cd2909332b0b1d5:docs/superpowers/specs/2026-10-27-core-backend-design.md:generic-api-key:280
+# The same test dummies in the files restored from main, in the file:rule:line form of the
+# commit-stage hook. They stay as long as the files do (ADR-0028, Checks, statement 6).
+tests/unit/test_completion_grounding.py:generic-api-key:32
+tests/unit/test_intent_client_safe_errors.py:generic-api-key:12
+tests/unit/test_system_review_probes.py:generic-api-key:148

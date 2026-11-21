@@ -3,7 +3,7 @@
 - **Status:** Draft
 - **Owner:** ML engineer
 - **Reviewers:** team; contract owner for the `AiReasonCode` change
-- **Last reviewed:** 2026-11-12
+- **Last reviewed:** 2026-11-17
 - **Related:** NFR-02, ESC-01, ESC-02, ESC-03, FR-05; [intent model retraining](intent-model-retraining.md), [label definitions D3](intent-label-definitions.md#d3-multi-intent-messages-are-not-training-rows), [evaluation protocol](intent-evaluation-protocol.md), [contracts v1](contracts-v1.md#reason-codes); [DATA-25](../rules/data-and-ml.md), [DATA-28](../rules/data-and-ml.md#leakage), [DATA-58](../rules/data-and-ml.md), [DATA-59](../rules/data-and-ml.md)
 
 ## Summary
@@ -29,7 +29,7 @@ This design adds a routing rule, which the [intent model retraining](intent-mode
 
 ## Background
 
-On the frozen scenario set `data/benchmarks/intent/v1` the retrained candidate `v1.1.0` flags 7 of 15 multi-intent messages (0.467), against 11 of 15 for `v1.0.0`; overall it flags 0.875 of out-of-scope messages, below the 0.90 target. Its training made it more confident on in-domain text, so the confidence (τ) and margin (δ) gates in [`routing.py`](../../apps/core_backend/intent/routing.py) let these messages through. Lowering τ for all messages would raise the clarify rate on single-intent messages, which the gate also limits.
+On the frozen scenario set `data/benchmarks/intent/v1` the retrained candidate `v1.1.0` flags 7 of 15 multi-intent messages (0.467), against 11 of 15 for `v1.0.0`; overall it flags 0.875 of out-of-scope messages, below the 0.90 target. Its training made it more confident on in-domain text, so the confidence (τ) and margin (δ) gates in `routing.py` (`apps/core_backend/intent/routing.py` on `main` at `e677f77`) let these messages through. Lowering τ for all messages would raise the clarify rate on single-intent messages, which the gate also limits.
 
 Three approaches were compared (see [Alternatives](#alternatives-considered)). Clause-level detection was chosen because a multi-request message has a visible structure, two requests joined by a conjunction or a sentence break, that the existing model can read clause by clause.
 
@@ -208,4 +208,4 @@ Rollback: select policy `v2`, which has no `multi_request` block.
 
 - Contract change: add `multiple_requests` to `AiReasonCode`, or report it as `low_confidence` with a detail field until a contract v2.
 - Whether some intent pairs count as one request (for example `track_order` with `delivery_issue` in "where is my order, it is late"). The request-clause filter removed every dev false flag without a pair list, so none is planned.
-- Each gate run on the frozen set uses up some of its independence. [ADR-0016](../decisions/0016-frozen-intent-scenario-set.md) says to revisit the set once it has been used for more than three release decisions. This run was the second; the [return-channel guard](return-channel-guard.md#results-2026-11-13) run was the third.
+- Each gate run on the frozen set uses up some of its independence. [ADR-0026](../decisions/0026-frozen-intent-scenario-set.md) says to revisit the set once it has been used for more than three release decisions. This run was the second; the [return-channel guard](return-channel-guard.md#results-2026-11-13) run was the third.

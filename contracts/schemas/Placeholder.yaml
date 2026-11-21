@@ -1,0 +1,9 @@
+description: >-
+  Text that contains at least one placeholder: a pseudonym such as `[ORDER_ID_1]`, written by
+  `backend`, or a mask such as `[EMAIL]`, written by `ai-service` (ADR-0010, placeholder syntax).
+  The pattern is the regular expression of ADR-0010 and, as in every JSON Schema pattern, matches
+  anywhere in the string. A contract applies it with `not` to require text without any
+  placeholder, as on the body of a reply, because no placeholder may reach a customer (SEC-38).
+  Data class: that of the property holding this value.
+type: string
+pattern: '\[(NAME|EMAIL|PHONE|CARD|ADDRESS|ORDER_ID|TRACKING_ID|TRANSACTION_ID|LITERAL)(_[1-9][0-9]{0,2})?\]'

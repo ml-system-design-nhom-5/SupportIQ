@@ -1,6 +1,6 @@
 # Data and ML rules
 
-> **Status:** Active · **Owner:** ai-service · **Last reviewed:** 2026-11-01
+> **Status:** Active · **Owner:** ai-service · **Last reviewed:** 2026-11-17
 
 Rules for datasets, the knowledge base (KB), splits, training, prompts, and evaluation. They follow the [requirements](../product/requirements.md) and the course lectures on architecture (Lecture 3) and data quality engineering (Lecture 4). Every reported number must be reproducible from the repository.
 
@@ -40,7 +40,7 @@ data/
 
 **DATA-11.** Loading Bitext checks: the expected columns, exactly the 46 expected intent labels (from a versioned label file), no empty instructions, a row count that matches the manifest, and a report of exact and near-duplicate instructions. The report also counts instructions that contain identifier-like values (emails, phone numbers, order numbers) or text in the placeholder syntax ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#placeholder-syntax)).
 
-**DATA-12.** KB ingestion checks against the KB data contract: required fields, unique (document ID, version) pairs, valid dates with `effective_from` before `effective_to`, a policy key on every document, matching checksums, and a report of overlapping effective periods with different content for the same policy key.
+**DATA-12.** KB ingestion checks against the KB data contract: required fields, unique (document ID, version) pairs, valid dates with `effective_start_at` before `effective_end_at`, a policy key on every document, matching checksums, and a report of overlapping effective periods with different content for the same policy key.
 
 **DATA-13.** Invalid records are quarantined with a report. They are never silently dropped or fixed. A run with quarantined records fails until an issue reviews and accepts the quarantine.
 
@@ -50,7 +50,7 @@ data/
 
 ## Knowledge base
 
-**DATA-16.** The KB data contract defines, for each document version: document ID, version, title, body, policy key (the topic used to detect conflicts), `effective_from`, `effective_to` (absent means open-ended), source, owner, checksum, and `last_reviewed_at` when the source provides it. It also states freshness rules and who acts when a rule is violated.
+**DATA-16.** The KB data contract defines, for each document version: document ID, version, title, body, policy key (the topic used to detect conflicts), `effective_start_at`, `effective_end_at` (absent means open-ended), source, owner, checksum, and `last_reviewed_at` when the source provides it. It also states freshness rules and who acts when a rule is violated.
 
 **DATA-17.** A KB version is immutable. A change produces a new `kb_version`. Earlier versions stay available so old suggestions can be reproduced.
 
@@ -111,7 +111,7 @@ data/
 
 If the gate fails, the current release stays in service. Missed targets are reported as they are (DATA-48). The gate never tunes anything on test data (DATA-25).
 
-**DATA-58.** The routing configuration is a versioned file that holds τ (the minimum top-1 probability), δ (the minimum gap between the top two probabilities), the rerank weight λ, the list of sensitive intents, and the sensitive-term list (ESC-01, ESC-03). τ, δ, and λ are tuned on validation data for one model artifact version, and the file records that version. Each entry of the sensitive-term list states its category (legal claim, suspected fraud) and is reviewed by the policy owner and the RAG engineer. Any change produces a new version ([ARCH-40](architecture.md#versioned-assets)) and a new evaluation.
+**DATA-58.** The routing configuration is a versioned file that holds τ (the minimum top-1 probability), δ (the minimum gap between the top two probabilities), the rerank weight λ, the list of sensitive intents, and the sensitive-term list (ESC-01, ESC-03). τ, δ, and λ are tuned on validation data for one model artifact version, and the file records that version. Each entry of the sensitive-term list states its category (legal claim, suspected fraud, transaction dispute, or policy exception; [ADR-0025](../decisions/0025-routing-configuration-of-the-first-release.md)) and is reviewed by the policy owner and the RAG engineer. Any change produces a new version ([ARCH-40](architecture.md#versioned-assets)) and a new evaluation.
 
 **DATA-59.** The classifier, the retrieval index, and the evaluation sets see the same kind of text that `ai-service` receives in service: pseudonymized text. Preprocessing maps every placeholder to its type alone (for example `[ORDER_ID_1]` to `[ORDER_ID]`) in training, evaluation, and serving, inside the same pipeline object (DATA-26). The scenario sets include messages with placeholders and messages that name third persons, and robustness results report them as separate slices.
 

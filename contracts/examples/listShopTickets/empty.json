@@ -1,0 +1,7 @@
+{
+  "summary": "No ticket",
+  "description": "The caller has no ticket, or none about the given order.",
+  "value": {
+    "items": []
+  }
+}

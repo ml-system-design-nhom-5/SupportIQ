@@ -1,0 +1,207 @@
+"""The migrations: they upgrade, downgrade completely, and upgrade again (PY-40).
+
+The downgrade runs on a database of its own, so no other test sees a schema without tables.
+"""
+
+from collections.abc import AsyncIterator
+from dataclasses import replace
+
+import pytest
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import inspect, text
+from sqlalchemy.engine import Connection, make_url
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
+from sqlalchemy.orm import DeclarativeBase
+
+from app.accounts.adapters.tables import AccountsTables
+from app.audit.adapters.tables import AuditTables
+from app.commerce.adapters.tables import CommerceTables
+from app.idempotency.adapters.tables import IdempotencyTables
+from app.migrations.tables import TRUNCATE_EVERY_TABLE
+from app.platform import BackendError
+from app.platform.adapters.migrations import (
+    HEAD,
+    SCRIPT_LOCATION,
+    downgrade_database,
+    head_revision,
+    upgrade_database,
+)
+from app.pseudonymization.adapters.tables import PseudonymizationTables
+from app.suggestions.adapters.tables import SuggestionsTables
+from app.tickets.adapters.tables import TicketsTables
+from tests.integration.database import (
+    BACKEND_TABLE_NAMES,
+    WorkerDatabase,
+    create_owner_engine,
+    drop_database,
+    recreate_database,
+)
+from tests.integration.schema.statements import CHECK_VIOLATION, sqlstate_of_refusal
+
+pytestmark = pytest.mark.anyio
+
+FEATURE_TABLES: tuple[type[DeclarativeBase], ...] = (
+    AccountsTables,
+    AuditTables,
+    CommerceTables,
+    IdempotencyTables,
+    TicketsTables,
+    SuggestionsTables,
+    PseudonymizationTables,
+)
+SCHEMA_OBJECTS = text(
+    "SELECT (SELECT count(*) FROM pg_tables WHERE schemaname = 'public'"
+    " AND tablename <> 'alembic_version'),"
+    " (SELECT count(*) FROM pg_proc WHERE proname LIKE 'reject_%'),"
+    " (SELECT count(*) FROM pg_class WHERE relname = 'ticket_number_seq'),"
+    # The grant of the migration itself; PUBLIC keeps its own default USAGE on `public`.
+    " EXISTS (SELECT FROM pg_namespace, aclexplode(nspacl) AS acl"
+    " WHERE nspname = 'public' AND acl.grantee = 'supportiq_app'::regrole)"
+)
+HEAD_REVISION = "0003"
+FOUNDATION_REVISION = "0001"
+# The three trigger functions of `r0001`, the one of `r0002`, and the three of `r0003`.
+FOUNDATION_TRIGGER_FUNCTION_COUNT = 3
+TRIGGER_FUNCTION_COUNT = 7
+# The tables of `r0001`; `r0002` adds none, and `r0003` adds the eight of the ticket workflow.
+FOUNDATION_TABLE_COUNT = 13
+NEW_EVENT_TYPE_COUNT = 3
+TRACE_ID = "4bf92f3577b34da6a3ce929d0e0e4736"
+INSERT_ENTRIES_OF_THE_NEW_EVENT_TYPES = (
+    "INSERT INTO audit_log_entries (entry_id, occurred_at, event_type, trace_id, data) VALUES"
+    " (gen_random_uuid(), now(), 'account.created', :trace_id, '{}'),"
+    " (gen_random_uuid(), now(), 'account.password_changed', :trace_id, '{}'),"
+    " (gen_random_uuid(), now(), 'account.password_reset', :trace_id, '{}')"
+)
+
+
+def table_columns(connection: Connection) -> dict[str, dict[str, bool]]:
+    inspector = inspect(connection)
+    return {
+        table: {column["name"]: column["nullable"] for column in inspector.get_columns(table)}
+        for table in inspector.get_table_names()
+        if table != "alembic_version"
+    }
+
+
+def orm_columns() -> dict[str, dict[str, bool]]:
+    return {
+        table.name: {column.name: bool(column.nullable) for column in table.columns}
+        for base in FEATURE_TABLES
+        for table in base.metadata.sorted_tables
+    }
+
+
+@pytest.fixture
+async def migration_database(worker_database: WorkerDatabase) -> AsyncIterator[WorkerDatabase]:
+    name = worker_database.name + "_migration"
+    database = replace(
+        worker_database,
+        name=name,
+        owner_url=make_url(worker_database.owner_url)
+        .set(database=name)
+        .render_as_string(hide_password=False),
+    )
+    await recreate_database(database)
+    yield database
+    await drop_database(database)
+
+
+@pytest.fixture
+async def migration_engine(migration_database: WorkerDatabase) -> AsyncIterator[AsyncEngine]:
+    engine = create_owner_engine(migration_database)
+    yield engine
+    await engine.dispose()
+
+
+def test_alembic_without_the_connection_of_backend_migrate_is_refused() -> None:
+    config = Config()
+    config.set_main_option("script_location", SCRIPT_LOCATION)
+
+    with pytest.raises(BackendError):
+        command.upgrade(config, HEAD)
+
+
+async def test_upgrade_reaches_the_head_revision(migration_engine: AsyncEngine) -> None:
+    revision = await upgrade_database(migration_engine)
+
+    assert revision == head_revision() == HEAD_REVISION
+
+
+async def test_downgrade_removes_every_object_of_the_upgrade(
+    migration_engine: AsyncEngine,
+) -> None:
+    await upgrade_database(migration_engine)
+
+    revision = await downgrade_database(migration_engine)
+    async with migration_engine.connect() as connection:
+        objects = (await connection.execute(SCHEMA_OBJECTS)).one()
+
+    assert revision is None
+    assert tuple(objects) == (0, 0, 0, False)
+
+
+async def test_upgrade_after_a_downgrade_restores_the_schema(
+    migration_engine: AsyncEngine,
+) -> None:
+    await upgrade_database(migration_engine)
+    await downgrade_database(migration_engine)
+
+    revision = await upgrade_database(migration_engine)
+    async with migration_engine.connect() as connection:
+        objects = (await connection.execute(SCHEMA_OBJECTS)).one()
+
+    assert revision == HEAD_REVISION
+    assert tuple(objects) == (len(BACKEND_TABLE_NAMES), TRIGGER_FUNCTION_COUNT, 1, True)
+
+
+async def test_r0002_downgrade_keeps_entries_of_the_new_event_types_and_refuses_new_ones(
+    migration_engine: AsyncEngine,
+) -> None:
+    await upgrade_database(migration_engine)
+    async with migration_engine.begin() as connection:
+        await connection.execute(
+            text(INSERT_ENTRIES_OF_THE_NEW_EVENT_TYPES), {"trace_id": TRACE_ID}
+        )
+
+    revision = await downgrade_database(migration_engine, revision=FOUNDATION_REVISION)
+    refused = await sqlstate_of_refusal(
+        migration_engine, INSERT_ENTRIES_OF_THE_NEW_EVENT_TYPES, trace_id=TRACE_ID
+    )
+    async with migration_engine.connect() as connection:
+        kept = await connection.scalar(text("SELECT count(*) FROM audit_log_entries"))
+        objects = (await connection.execute(SCHEMA_OBJECTS)).one()
+
+    assert revision == FOUNDATION_REVISION
+    assert refused == CHECK_VIOLATION
+    assert kept == NEW_EVENT_TYPE_COUNT
+    assert tuple(objects) == (FOUNDATION_TABLE_COUNT, FOUNDATION_TRIGGER_FUNCTION_COUNT, 1, True)
+
+
+async def test_migrated_tables_are_exactly_the_tables_that_reset_truncates(
+    worker_database: WorkerDatabase,
+) -> None:
+    engine = create_async_engine(worker_database.owner_url)
+    async with engine.connect() as connection:
+        columns = await connection.run_sync(table_columns)
+    await engine.dispose()
+
+    assert set(columns) == set(BACKEND_TABLE_NAMES)
+
+
+def test_the_truncate_statement_lists_every_table() -> None:
+    table_list = ", ".join(BACKEND_TABLE_NAMES)
+
+    assert f"TRUNCATE TABLE {table_list} RESTART IDENTITY" == TRUNCATE_EVERY_TABLE
+
+
+async def test_orm_models_of_the_features_match_the_migrated_columns(
+    worker_database: WorkerDatabase,
+) -> None:
+    engine = create_async_engine(worker_database.owner_url)
+    async with engine.connect() as connection:
+        columns = await connection.run_sync(table_columns)
+    await engine.dispose()
+
+    assert columns == orm_columns()

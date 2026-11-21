@@ -1,4 +1,0 @@
-/v1/*     https://supportiq-i9f8.onrender.com/v1/:splat     200
-/api/*    https://supportiq-i9f8.onrender.com/api/:splat    200
-/health/* https://supportiq-i9f8.onrender.com/health/:splat 200
-/*        /index.html                                        200

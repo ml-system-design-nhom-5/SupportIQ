@@ -1,6 +1,6 @@
 # Testing rules
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-05
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-12
 
 Tests are executable specifications. They catch hidden bugs early, protect the guardrails, and keep technical debt from accumulating unseen. A behavior without a test does not exist.
 
@@ -12,6 +12,7 @@ Tests are executable specifications. They catch hidden bugs early, protect the g
 | Component (UI) | Design-system and feature components in every state | `*.test.tsx`, stories | Vitest, Testing Library, Storybook with axe | Interact like a user; select by role and label |
 | Adapter and integration | Database, retriever, LLM, and HTTP adapters | `tests/integration/` | pytest | Local instances or fakes; default CI never calls a real LLM |
 | Contract | Each component matches `contracts/` | `tests/contract/` | Schemathesis, Prism mocks | Every outcome of every operation ([contracts.md](contracts.md#contract-tests)) |
+| UI flow | Main flows of one component against its mock | `frontend/e2e/` | Playwright with axe | The production build against Prism |
 | End-to-end | Main staff and customer flows across all components | `e2e/` | Playwright with axe | Few tests, covering the main flow and the main failures |
 | Evaluation | Macro-F1, Recall@3, groundedness, robustness, escalation | `eval/` | Python | Reproducible; reported against the baseline ([data-and-ml.md](data-and-ml.md#evaluation-and-reporting)) |
 
@@ -73,7 +74,7 @@ describe("DraftEditor", () => {
 - whitespace-only text, very long text, and non-ASCII text;
 - typos and unusual phrasing (Bitext `tags` slices);
 - values exactly at, just below, and just above every threshold;
-- validity boundaries: `effective_from == as_of`, `effective_to == as_of`, overlapping versions;
+- validity boundaries: `effective_start_at == as_of`, `effective_end_at == as_of`, overlapping versions;
 - unknown enum values and missing optional fields;
 - duplicate requests with the same idempotency key;
 - timeouts, retries, and partial results.
@@ -137,12 +138,13 @@ describe("DraftEditor", () => {
 - Actions that require authority (FR-06) are rejected for roles without it.
 - No reply is accepted while a part of the current suggestion is `pending`, and no intent override is accepted before an intent is known, so a `requires_authority` result is always known before a send.
 - Confidential data never appears in logs (a test captures log output and checks for it).
+- No password sent to `backend` appears in an idempotency record, a response body, a log line, a span, or an audit log entry. The test sends a known password through every operation that takes one ([ADR-0015](../decisions/0015-account-creation-and-password-changes.md), [ERR-15](errors-and-reliability.md#idempotency)).
 - Seeded personal values of the ticket never appear in any request that `backend` sends to `ai-service`, nor in any LLM payload captured by a fake LLM adapter (FR-09, NFR-06).
 - When pseudonymization fails, `backend` makes no call to `ai-service` ([SEC-36](security-and-privacy.md#pseudonymization)).
 - No reply or reply proposal body that contains a placeholder is accepted ([SEC-38](security-and-privacy.md#pseudonymization)).
 - An admin cannot call any `/v1/shop/` or `/v1/console/` operation, and no other role can call a `/v1/admin/` operation ([SEC-41](security-and-privacy.md#authentication-and-authorization)).
 - `UPDATE` and `DELETE` on the audit log are rejected by the database ([SEC-39](security-and-privacy.md#audit-log)).
-- From the `backend` container, no internet host is reachable, directly or through the egress proxy. From the `ai-service` container, only allow-listed hosts are reachable, and only through the proxy ([SEC-40](security-and-privacy.md#transport-and-runtime)).
+- `backend` connects only to its database, `ai-service`, and the telemetry destination in its settings, and `ai-service` only to the hosts on the egress allow-list ([SEC-40](security-and-privacy.md#transport-and-runtime)).
 - No admin operation returns or changes a customer account ([SEC-41](security-and-privacy.md#authentication-and-authorization)).
 
 ## End-to-end scenarios

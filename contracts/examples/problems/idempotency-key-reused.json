@@ -1,0 +1,10 @@
+{
+  "summary": "The Idempotency-Key was used with a different request",
+  "value": {
+    "type": "urn:supportiq:problem:idempotency-key-reused",
+    "title": "Idempotency key reused",
+    "status": 409,
+    "detail": "The Idempotency-Key was already used with a different request.",
+    "trace_id": "5916cd43dd8448eb211c80319c0af765"
+  }
+}

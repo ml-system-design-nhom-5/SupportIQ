@@ -1,0 +1,10 @@
+{
+  "summary": "status is missing or unknown",
+  "value": {
+    "type": "urn:supportiq:problem:invalid-request",
+    "title": "Invalid request",
+    "status": 422,
+    "detail": "The parameter status must be open, awaiting_approval, escalated, or closed.",
+    "trace_id": "929d0e0e4736bf92f3577b34da6a3ce9"
+  }
+}

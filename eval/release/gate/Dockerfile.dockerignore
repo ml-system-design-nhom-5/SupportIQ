@@ -1,0 +1,32 @@
+# The build context of eval/release/gate/Dockerfile is the repository root. BuildKit reads this
+# file instead of a .dockerignore of the root, and only what the two images need enters
+# (SEC-29): never a .env file, data/, the release records of eval/releases/, or .git.
+*
+!ai-service/pyproject.toml
+!ai-service/uv.lock
+!ai-service/README.md
+!ai-service/app
+!ai-service/tests
+!eval/release/pyproject.toml
+!eval/release/uv.lock
+!eval/release/README.md
+!eval/release/src
+!eval/release/gate/check_locks.py
+!backend/pyproject.toml
+!backend/uv.lock
+!backend/README.md
+!backend/app
+!backend/tests
+!backend/seed
+!backend/certs
+!contracts/ai-service.openapi.yaml
+!contracts/backend.openapi.yaml
+!contracts/schemas
+!contracts/examples
+**/.env*
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.ruff_cache
+**/.import_linter_cache

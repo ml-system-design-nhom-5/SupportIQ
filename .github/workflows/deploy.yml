@@ -1,0 +1,209 @@
+# Deploy of backend to the demo: the checks of backend on one commit, then `backend migrate` as
+# the owner role on Supabase, then the Render deploy hook with ref set to that commit
+# (ADR-0016, Migrations and one-off commands, items 2 to 5). A failed check or a failed
+# migration deploys nothing. The jobs deploy-checks, deploy-tests, and deploy-image repeat the
+# jobs of backend.yml line for line, under their own names, and the hook
+# deploy-workflow-copies-backend fails when the two differ. This is the only workflow that
+# holds secrets, the owner URL and the deploy hook URL (item 4). The project lead runs it by
+# hand on main, and deploy-migrate stops on any other ref. One deploy runs at a time, whatever
+# the ref, and it is never cancelled while it migrates: a newer run waits until the running one
+# ends. Its trigger and its concurrency depart from conventions 2 and 7 of
+# docs/guides/repository-checks.md, and its own hooks pin both; it follows every other rule of
+# that convention.
+name: deploy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy-checks:
+    name: deploy-checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          version: "0.11.11"
+          enable-cache: false
+      - name: Install pre-commit
+        run: |
+          uv tool install --python 3.12 pre-commit==4.7.0
+          uv tool dir --bin >> "$GITHUB_PATH"
+      - name: Install the Python of .python-version and the locked backend dependencies
+        working-directory: backend
+        run: uv sync --locked
+      - name: Check the formatting (ruff format)
+        run: pre-commit run backend-format --all-files --show-diff-on-failure
+      - name: Lint (ruff)
+        run: pre-commit run backend-lint --all-files --show-diff-on-failure
+      - name: Type-check in strict mode (pyright)
+        run: pre-commit run backend-types --all-files --show-diff-on-failure
+      - name: Check the layer and feature boundaries (import-linter)
+        run: pre-commit run backend-imports --all-files --show-diff-on-failure
+      - name: Check that the generated models match the contract (CON-26)
+        run: pre-commit run backend-generated --all-files --show-diff-on-failure
+      - name: Audit every locked dependency for known vulnerabilities (WF-31)
+        working-directory: backend
+        # pip-audit cannot audit the URL requirement of the named-entity model, so the export
+        # leaves out that one package; its checksum in uv.lock protects it (ADR-0017, item 3).
+        # PyPI reads can exceed 15 s on CI, so each may take 60 s; a timeout still fails the step.
+        run: |
+          uv export --locked --all-groups --no-emit-project --no-emit-package en-core-web-sm \
+            --format requirements-txt --output-file "$RUNNER_TEMP/requirements.txt"
+          uv run --locked pip-audit --strict --disable-pip --require-hashes --timeout 60 \
+            --requirement "$RUNNER_TEMP/requirements.txt"
+
+  deploy-tests:
+    name: deploy-tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        # PostgreSQL 17, the version of local development (backend README, Set up).
+        image: postgres:17.11@sha256:748a18a54d3842d43bc156f0840d78029b8d349e0feca98c12b9c4ce3404a6b3
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-superuser
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready --username postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      # Passwords of a throwaway database that exists only in this job; never real secrets.
+      DATABASE_URL_OWNER: postgresql+asyncpg://supportiq_owner:ci-owner@127.0.0.1:5432/supportiq
+      DATABASE_URL_APP: postgresql+asyncpg://supportiq_app:ci-app@127.0.0.1:5432/supportiq
+      # The service runs PostgreSQL on this runner without TLS (backend README, TLS).
+      DATABASE_TLS: disable
+      ALLOWED_ORIGINS: '["http://localhost:5173"]'
+      SEED_PASSWORD_CUSTOMER: ci-customer
+      SEED_PASSWORD_STAFF: ci-staff
+      SEED_PASSWORD_MANAGER: ci-manager
+      SEED_PASSWORD_ADMIN: ci-admin
+      # A dummy service token and an address where nothing listens: the tests serve
+      # ai-service from in-memory fakes and never call ai-service over the network (TEST-16).
+      AI_SERVICE_BASE_URL: http://ai-service.invalid
+      AI_SERVICE_TOKEN: ci-ai-service-token
+      # The build version that getAdminVersions reports: the commit SHA, as a deploy sets it.
+      BACKEND_BUILD_VERSION: ${{ github.sha }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          version: "0.11.11"
+          enable-cache: false
+      - name: Install the Python of .python-version and the locked backend dependencies
+        working-directory: backend
+        run: uv sync --locked
+      - name: Create the owner role and the database, as the superuser of the service
+        run: |
+          docker exec "${{ job.services.postgres.id }}" psql --username postgres \
+            --set ON_ERROR_STOP=1 \
+            --command "CREATE ROLE supportiq_owner LOGIN CREATEDB CREATEROLE PASSWORD 'ci-owner'" \
+            --command "CREATE DATABASE supportiq OWNER supportiq_owner"
+      - name: Create the role supportiq_app, as the owner
+        working-directory: backend
+        run: uv run --locked backend create-app-role
+      - name: Apply the migrations, as the owner (the tests migrate their own databases too)
+        working-directory: backend
+        run: uv run --locked backend migrate
+      # The floors apply to the combined coverage below, so this step alone has none.
+      - name: Run the unit tests with branch coverage
+        working-directory: backend
+        run: uv run --locked pytest tests/unit --cov --cov-report= --cov-fail-under=0
+      - name: Run the integration and contract tests against PostgreSQL, adding to the coverage
+        working-directory: backend
+        run: uv run --locked pytest tests/integration tests/contract --cov --cov-append --cov-report=
+      - name: Check the overall branch coverage of at least 80% (TEST-21)
+        working-directory: backend
+        run: uv run --locked coverage report --fail-under=80
+      - name: Check the branch coverage of the domain and application layers of at least 90% (TEST-21)
+        working-directory: backend
+        run: >-
+          uv run --locked coverage report --fail-under=90
+          --include="*/app/*/domain/*,*/app/*/application/*"
+
+  deploy-image:
+    name: deploy-image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the backend image (ARCH-10)
+        run: docker build --tag supportiq-backend:ci backend
+  # ===== end of the jobs of backend.yml =====
+
+  deploy-migrate:
+    name: deploy-migrate
+    needs: [deploy-checks, deploy-tests, deploy-image]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      # TLS to Supabase that checks the server certificate against backend/certs (SEC-28;
+      # deploy guide, TLS to PostgreSQL). It is the default too; set here so that no default
+      # decides it.
+      DATABASE_TLS: verify-full
+      # Settings that backend requires and `migrate` does not use: dummy values, never secrets.
+      DATABASE_URL_APP: postgresql+asyncpg://supportiq_app:unused@db.invalid:5432/unused
+      ALLOWED_ORIGINS: '["http://localhost:5173"]'
+      AI_SERVICE_BASE_URL: http://ai-service.invalid
+      AI_SERVICE_TOKEN: deploy-unused-token
+      BACKEND_BUILD_VERSION: ${{ github.sha }}
+    steps:
+      - name: Deploy only the branch main
+        run: |
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::The deploy workflow deploys only main, not $GITHUB_REF"
+            exit 1
+          fi
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          version: "0.11.11"
+          enable-cache: false
+      - name: Install the Python of .python-version and the locked runtime dependencies of backend
+        working-directory: backend
+        run: uv sync --locked --no-dev
+      - name: Apply the migrations on Supabase, as the owner role
+        working-directory: backend
+        env:
+          DATABASE_URL_OWNER: ${{ secrets.DEPLOY_DATABASE_URL_OWNER }}
+        run: uv run --locked --no-dev backend migrate
+
+  deploy-render:
+    name: deploy-render
+    needs: deploy-migrate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Call the Render deploy hook with ref set to the migrated commit
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: >-
+          curl --fail --silent --show-error --max-time 30 --proto '=https' --request POST
+          "${RENDER_DEPLOY_HOOK_URL}&ref=${GITHUB_SHA}"

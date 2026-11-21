@@ -1,0 +1,11 @@
+{
+  "summary": "The admin tried to change their own account",
+  "value": {
+    "type": "urn:supportiq:problem:invalid-request",
+    "title": "Invalid request",
+    "status": 422,
+    "detail": "An admin cannot change their own account.",
+    "trace_id": "7651916cd43dd8448eb211c80319c0af",
+    "violated_rule": "own_account"
+  }
+}

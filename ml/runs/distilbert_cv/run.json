@@ -1,0 +1,94 @@
+{
+  "run_id": "distilbert_cv",
+  "source": {
+    "commit": "19ece5d81fbd74c00602eb1b34bb53ead06c9668",
+    "run_folder": "artifacts/training/distilbert_cv/",
+    "model_folder": "artifacts/models/trained/distilbert-supportiq/",
+    "script": "pipeline/training/train_distilbert_cv.py"
+  },
+  "model": {
+    "version": "v1.0.0",
+    "architecture": "DistilBertForSequenceClassification",
+    "base_model": "distilbert/distilbert-base-uncased",
+    "num_labels": 46
+  },
+  "configuration": {
+    "epochs": 2,
+    "batch_size": 32,
+    "learning_rate": 3e-05,
+    "train_samples": 37911,
+    "cv_protocol": "10-fold cross-validation",
+    "cv_n_folds": 10
+  },
+  "data": {
+    "raw_dataset_sha256": "13a988266fed4e2b2c1ff947a89ef220ce09b5b13ac83c4a1496c0d7b81e8127",
+    "preparation_run_id": "03-11-2026-02",
+    "preparation_manifest_sha256": "924f455583caecf22100edd5667ead711f3f940fab5b7258738f6631133398a2",
+    "cleaned_csv_sha256": "8bc10cfa056371bdecb3394bfd4c75eee7e10022ace5071833ecd140b2d75846",
+    "split_assignments_sha256": "1d366e898f6ba68be46c5ca0f9059e9862fad1d7bafe350d9cdd310dd3e0a04c",
+    "split_report_sha256": "bdaef5c2699384a2a76aa5bc4c98c32d7423ff1af425aa90e630512437448c56",
+    "train_sample_ids_sha256": "aea5d14f09c8bbab63fbafe2fab37c5060705c25798598f3d232f7dc21ce9220"
+  },
+  "metrics": {
+    "cv_macro_f1_mean": 0.9952684306823985,
+    "cv_macro_f1_std": 0.0010525208592438058,
+    "cv_accuracy_mean": 0.9952256176353723,
+    "cv_accuracy_std": 0.0010585637476796768,
+    "cv_weighted_f1_mean": 0.9952195987456344,
+    "cv_weighted_f1_std": 0.0010610925185574386
+  },
+  "durations_seconds": {
+    "cv": 1410.29,
+    "refit": 103.77,
+    "total": 1514.06
+  },
+  "created_at": "2026-11-04T08:24:32.311556+00:00",
+  "not_recorded": [
+    "seed",
+    "max_length_in_training",
+    "code_commit_of_the_run",
+    "environment_lockfile"
+  ],
+  "files": {
+    "fold_metrics.csv": "1aaba403fc66e010d9c96f0d352e5db753ef3036e8151b1fcf306d5bcb3d1894",
+    "model-artifact.json": "825370bf4bd1283438acf1ae26ee9687290858cf8d6929cbb4d5afa2ea2f7fc6"
+  },
+  "assets": [
+    {
+      "release": "v1.0.0-model",
+      "name": "model.safetensors",
+      "sha256": "dc7af8cffb19fe7711ed5a5d0137ffff3d7d1a1f43bad5a35edff8c8de4c1302"
+    },
+    {
+      "release": "v2.0.0-model",
+      "name": "distilbert-supportiq.zip",
+      "sha256": "1f32feaa04c49c71add7481115b9a238710a42d0c3888960bf35231e2a93cad7",
+      "files": [
+        {
+          "path": "distilbert-supportiq/config.json",
+          "sha256": "6fa1fa9cc6a94063a977b0adaf2c9c3b296cf296d4ad9dcc6f2c52ca3bac9cb2"
+        },
+        {
+          "path": "distilbert-supportiq/model.safetensors",
+          "sha256": "dc7af8cffb19fe7711ed5a5d0137ffff3d7d1a1f43bad5a35edff8c8de4c1302"
+        },
+        {
+          "path": "distilbert-supportiq/tokenizer.json",
+          "sha256": "5f218e0ea9eaa9f154815cc067351fb941bea26da81bfd12af3ded3cc66fa3ff"
+        },
+        {
+          "path": "distilbert-supportiq/tokenizer_config.json",
+          "sha256": "a0cc1faf9647cb9748cb7e94443dded7c5ef0c9428fb43adde9a723955d8250a"
+        },
+        {
+          "path": "distilbert-supportiq/training_report.json",
+          "sha256": "9609b6604c0c137365db927f0eb149bdd4af54fdf3ca22aa1adb235bf22a3972"
+        },
+        {
+          "path": "distilbert-supportiq/train_sample_ids.json",
+          "sha256": "aea5d14f09c8bbab63fbafe2fab37c5060705c25798598f3d232f7dc21ce9220"
+        }
+      ]
+    }
+  ]
+}

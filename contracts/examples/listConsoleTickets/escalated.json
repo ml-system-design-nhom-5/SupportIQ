@@ -1,0 +1,25 @@
+{
+  "summary": "The escalation queue of managers",
+  "value": {
+    "items": [
+      {
+        "ticket_id": "TCK-1047",
+        "created_at": "2026-11-06T11:30:00Z",
+        "status": "escalated",
+        "handling_mode": "assisted",
+        "is_authority_required": false,
+        "handling_started_at": "2026-11-06T11:38:00Z",
+        "customer": {
+          "display_name": "Lan Tran"
+        },
+        "message_excerpt": "I want to talk to a person about my order, please.",
+        "draft_status": "escalation_recommended",
+        "predicted_intent": {
+          "label": "human_agent",
+          "probability": 0.95,
+          "confidence_band": "high"
+        }
+      }
+    ]
+  }
+}
