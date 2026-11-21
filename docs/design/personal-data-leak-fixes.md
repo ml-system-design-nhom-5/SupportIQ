@@ -3,7 +3,7 @@
 - **Status:** Approved
 - **Owner:** backend engineer
 - **Reviewers:** project lead, ML engineer
-- **Last reviewed:** 2026-11-20
+- **Last reviewed:** 2026-11-21
 - **Related:** [Requirements](../product/requirements.md) (FR-09, NFR-06), [SEC-36](../rules/security-and-privacy.md#pseudonymization), [LOG-29](../rules/logging-and-observability.md#privacy-in-telemetry), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md), [ADR-0017](../decisions/0017-named-entity-model-from-its-release-url.md), [ADR-0020](../decisions/0020-storage-errors-of-the-pseudonym-map.md), [ADR-0029](../decisions/0029-rule-based-detectors-and-a-pre-send-check.md), [backend ticket workflow design](backend-ticket-workflow.md#pseudonymization)
 
 ## Summary
@@ -19,6 +19,29 @@ A measurement of `backend` on 2026-11-18 found raw names, phone numbers, and add
 - settled: family names are compared with their diacritics, and only the unambiguous ones also have a fixed unaccented spelling (item 2).
 
 The revision also states the known limits of the rules ([Layer 1, phone](#layer-1-phone); [Layer 1, names](#layer-1-names), item 6). The approved text of item 1, and the readings that the two settled points rule out, are kept under [Alternatives considered](#alternatives-considered). No other decision changes.
+
+**Third revision of 2026-11-21.** The second revision said that span growth and the pre-send check use one list, but only the pre-send check skips a word that starts a sentence or the text. A review of the name rules, the address rule, and the pre-send check then found more points that the text left open or got wrong. The project lead decided them all, and the revision changes these points of [Layer 1, names](#layer-1-names), [Layer 1, addresses](#layer-1-addresses), and [Layer 2](#layer-2-the-pre-send-check):
+
+- settled: span growth adds a word that starts a sentence or the text, unlike the pre-send check (item 1);
+- changed: the name rules read a word with its combining marks, and compare it with a list after Unicode NFC normalization, so a message typed with decomposed diacritics gives the same names; the message itself does not change (opening paragraph);
+- changed: a word joined to a letter or digit by a hyphen, a dot, a slash, or an at sign is part of a code and never joins a name, so "Robert Johnson ORD-12345" keeps the order ID whole (opening paragraph);
+- changed: a word of the stoplist is never part of a window of the Vietnamese name rule, and a title at the start of a window, with or without a period, is left out of the `NAME` instead of ruling the window out (item 2);
+- settled: of two windows of equal length, the one that starts with a family name wins, then the left one (item 2);
+- settled: family names are compared after case folding too, so a name in capitals is found (item 2);
+- changed: the unaccented list is the list of the source without diacritics, except "Do", "Ho", and "Le": 14 names, where the approved text had 11 (item 2);
+- changed: "Le", "Do", and "Ho" without diacritics are family names when a middle name of a fixed list comes right after them (item 2);
+- changed: a name whose family name is not on the list is a known limit, and the list never changes to fit the measured messages (item 6);
+- settled: an address part ends at its first word that fits none of the kinds of the rule, and the address ends with it (Layer 1, addresses);
+- settled: a period after an abbreviated address word, and a number after any address word, belong to the address (Layer 1, addresses);
+- settled: two capitalized words joined by a hyphen or an apostrophe are one word of an address, unlike in the name rules (Layer 1, addresses);
+- settled: a line break between two parts of an address counts as a comma (Layer 1, addresses);
+- settled: the pre-send check compares a phone number without its extension (Layer 2);
+- settled: the pre-send check reads the word beside a `[NAME_n]`, and the number before a `[NAME_n]` or `[ADDRESS_n]`, with one or more spaces between, and reads no word as part of a code (Layer 2);
+- settled: a currency word or sign right before a number makes it an amount too, as in "$250000" (Layer 2);
+- corrected: "Hà Nội" is no known limit, because "Hà" is not on the list of family names (item 6);
+- corrected: the model is not the only step that can find a name that the Vietnamese name rule misses (item 6).
+
+The revision adds the known limits that follow from these points (Layer 1, names, item 6; Layer 1, addresses; Layer 2), and three [open questions](#open-questions): a longer list of family names, whether a name missed only because its family name is not on the list stops the PR, and the everyday typing of addresses. The approved texts and the readings that the lead ruled out are kept under [Alternatives considered](#alternatives-considered). No other decision changes.
 
 ## Goals and non-goals
 
@@ -81,6 +104,7 @@ Only `backend` changes, and only its `pseudonymization` feature module and its c
 | `adapters/named_entity_detector.py` | `PERSON` spans grow over the capitalized words next to them ([Layer 1, names](#layer-1-names)) |
 | A new domain module of name rules | The Vietnamese name rule and the person-cue rule ([Layer 1, names](#layer-1-names)) |
 | A new domain module of address rules | The address rule of [Layer 1, addresses](#layer-1-addresses) |
+| A new domain module of word reading | How the name rules, the address rule, and the pre-send check read a word ([Layer 1, names](#layer-1-names), opening paragraphs) |
 | A new domain module, the pre-send check | [Layer 2](#layer-2-the-pre-send-check) |
 | `domain/errors.py` | `PersonalDataLeftError`, a `PseudonymizationError` with the failure reason `personal_data_left` |
 | `application/pseudonymize.py` | Runs the pre-send check on the built text, before the map is stored or compared |
@@ -99,20 +123,36 @@ A known limit: an extension written after a space, such as "0901 110 001 ext. 12
 
 ### Layer 1: names
 
+The name rules read a word as a letter followed by letters and combining marks: the combining diacritical marks U+0300 to U+036F (each of Unicode category `Mn`), which hold every Vietnamese diacritic. They compare a word with a list after Unicode NFC normalization. So "Vũ" typed with a decomposed tilde is one word and the family name "Vũ". The rules never change the message: their spans index the message as it came.
+
+A word joined to a letter or digit by a hyphen, a dot, a slash, or an at sign, on either side, is part of a code, such as an order ID or an email, and never joins a name. So "Robert Johnson ORD-12345" grows no further than "Robert Johnson", and the order ID stays whole. This holds for span growth and for the Vietnamese name rule. A dot that ends a sentence joins nothing, so "Robert Johnson Smith." still grows.
+
 1. **Span growth.** A `PERSON` span grows over each capitalized word right next to it, one space apart, up to 4 words in total, so "Vũ" and "Dũng" join the pseudonym.
    - A word on the list of titles (`Mr`, `Mrs`, `Ms`, `Miss`, `Dr`, `Ông`, `Bà`, `Chị`, `Cô`, `Chú`) is not added.
    - Nor is a word of the stoplist of the [pre-send check](#layer-2-the-pre-send-check): `I`, `Thanks`, `Thank`, `Regards`, `Best`, `Dear`, `Hi`, `Hello`, and `Please`. So "Thanks Lan" becomes "Thanks [NAME_1]".
-   - Span growth and the pre-send check use one list.
-2. **Vietnamese name rule.** In each run of capitalized words, the longest window of 2 to 4 words whose first or last word is on a fixed list of Vietnamese family names, and whose first word is not a title, is a `NAME`.
-   - It finds "Hương Nguyễn", "Phương Hữu Bùi", and "Anh Anh Lê". "Hi Nguyễn Văn An" becomes "Hi [NAME_1]", and "Bà Hương Nguyễn" becomes "Bà [NAME_1]".
-   - **Comparing family names.** Family names are compared with their diacritics, after Unicode NFC normalization. A second fixed list holds the unaccented spelling of the family names that no common English word shares: Nguyen, Tran, Pham, Hoang, Huynh, Phan, Vu, Dang, Bui, Duong, Ngo. Every other family name, such as "Đỗ", "Hồ", and "Lê", is compared with its diacritics only, so "Do You Ship" is no name.
-   - **Source of the list.** The list of family names comes from a public list of common Vietnamese family names, named in the code, and never from the generator of the measured messages. Otherwise the re-measurement would test the list against itself.
+   - Span growth and the pre-send check use one list of words, but only the pre-send check also skips a word that starts a sentence or the text. Span growth adds such a word, so "Ask Robert Johnson" becomes one name. An extra word in a name only makes the draft worse, while a skipped word can leave a family name in the text: at the start of a sentence, the model finds "Thị Lan" in "Vũ Thị Lan" (FR-09).
+2. **Vietnamese name rule.** In each run of capitalized words, one space apart, the longest window of 2 to 4 words whose first or last word is on a fixed list of Vietnamese family names is a `NAME`.
+   - It finds "Hương Nguyễn", "Phương Hữu Bùi", and "Anh Anh Lê".
+   - **Stoplist words and titles.** The nine words of the stoplist of item 1 are never part of a window, so "Hi Nguyễn Văn An" becomes "Hi [NAME_1]", and "Dear Pham Minh" becomes "Dear [NAME_1]". A title may only be the first word of a window, and the `NAME` leaves it out, as span growth leaves titles out ([ADR-0029](../decisions/0029-rule-based-detectors-and-a-pre-send-check.md), statement 2): "Bà Hương Nguyễn" becomes "Bà [NAME_1]", "Mr Tran" becomes "Mr [NAME_1]", and "Dear Mr Tran" becomes "Dear Mr [NAME_1]". A title may end with a period, as in "Mr. Tran".
+   - **Windows of equal length.** The window that starts with a family name wins. When both or neither do, the left one wins. So the rule always finds the same name in the same message: in "Lan Pham Minh", it finds "Pham Minh".
+   - **Comparing family names.** Family names are compared after Unicode NFC normalization and case folding, so "NGUYEN VAN AN", as in a bank transfer note, is found. A second fixed list holds the unaccented spelling of the family names: the list of the source without diacritics, except three names that are also common words:
+     - "Do", the verb, as in "Do You Ship";
+     - "Ho", as in "Ho Ho Ho";
+     - "Le", as in "Le Monde".
+
+     That leaves 14 names: Nguyen, Tran, Pham, Hoang, Huynh, Vu, Vo, Phan, Truong, Bui, Dang, Ngo, Duong, Ly. "Dang" ("dang it"), "Ngo" (NGO), and "Vu" ("Déjà Vu") are words too, but rare ones, and the rule needs at least 2 capitalized words, so they can only cause over-detection.
+   - **"Le", "Do", and "Ho" without diacritics.** They are family names only when the word right after them is a middle name of a fixed list, compared in the same way: "Văn" and "Thị", and their unaccented spellings "Van" and "Thi". So "Le Van An", "Do Thi Mai", and "Ho Van Nam" are names, and "Do You Ship", "Le Monde", and "Ho Ho Ho" are not.
+   - **Source of the lists.** The family names and the middle names come from one public source about Vietnamese names, named in the code with its revision, and never from the generator of the measured messages. Otherwise the re-measurement would test the lists against themselves.
 3. **Person-cue rule.** 2 to 4 capitalized words that the model labels `ORG`, `GPE`, or `LOC` are a `NAME` when a cue from a fixed list comes right before them: "my name is", "I am", "this is", "on behalf of", "Regards,", "Thanks,", and "my" with a word for a relative or a neighbour. This finds "Kathryn Reynolds".
 4. Product names of the catalog are still excluded ([`drop_product_names`](../../backend/app/pseudonymization/domain/detection.py)), for the rule detectors too.
 5. The lists are constants of the module, versioned with it. A change of a list is a change of the detector version ([ADR-0010, Placeholder syntax](../decisions/0010-pseudonymization-and-egress-control.md#placeholder-syntax), item 5).
-6. **Known limits.** Tests state both limits as they are.
-   - "Hà Nội" and "Hồ Chí Minh" alone are taken for names, because "Hà" and "Hồ" are family names. This is over-detection ([Non-goals](#non-goals)).
-   - A family name without an unaccented spelling, typed without diacritics, is not found by the Vietnamese name rule. Examples are "Le Van An" and "Do Minh". Only the model can find such a name. The pre-send check finds it only when a part of it stands beside a placeholder.
+6. **Known limits.** Tests state each limit as it is.
+   - Place names that start or end with a family name are taken for names when they stand alone: "Hồ Chí Minh", "Phan Thiết", and "Hoàng Mai", and "Phan Thiet" without diacritics. So are street names such as "Lê Lợi" and "Nguyễn Huệ" outside an address. This is over-detection ([Non-goals](#non-goals)).
+   - A capitalized word that starts a sentence or the text joins the person name right after it: "Ask Robert Johnson about the refund" becomes "[NAME_1] about the refund". This is over-detection too (item 1).
+   - The Vietnamese name rule does not find a family name of the list that is typed without diacritics and has no unaccented spelling on the list, unless a middle name follows it. Examples are "Do Minh" and "Le Thu Ha". The model, a known value of the ticket ([ADR-0010, Detection](../decisions/0010-pseudonymization-and-egress-control.md#detection), step 2), and the person-cue rule can still find such a name. The pre-send check finds it when it is a value of the map or a known value outside a placeholder, or when a part of it stands beside a placeholder.
+   - The Vietnamese name rule does not find a family name that is not on the list, such as "Lâm", "Đinh", or "Mai". If the re-measurement misses such a name, the report states it as a known limit against NFR-06. The list never changes to fit the measured messages (guardrail 5, [DATA-25](../rules/data-and-ml.md#leakage)). A longer list is an [open question](#open-questions).
+   - A given name before a window of two words stays outside it: in "Lan Pham Minh", the rule finds "Pham Minh" (item 2), and "Lan" stays beside the placeholder. The pre-send check stops such a ticket, unless "Lan" starts a sentence or the text. Then only the model, or a known value of the ticket that holds the whole name, can find "Lan".
+   - The person cues are English, so a message in Vietnamese, such as "Tôi là Lan Anh", gets no help from the person-cue rule. CST-06 sets the language of the data, KB, prompts, and UI, and `backend` has no gate on the language of a customer message.
 
 ### Layer 1: addresses
 
@@ -124,11 +164,29 @@ An address is a span that:
 
 The span is an `ADDRESS` detection, so the overlap rule lets it replace the names that the model found inside it ([ADR-0010, Detection](../decisions/0010-pseudonymization-and-egress-control.md#detection), step 5: the longer span wins). The `FAC`-based address of the adapter stays.
 
+The rule reads the parts of an address in this way:
+
+- A part ends at its first word that fits none of the three kinds, and the address ends with it: "Ship to 12 Main Street today" gives "12 Main Street".
+- A period right after `St`, `Ave`, `Rd`, `Ln`, `Blvd`, or `Apt` belongs to the address: "12 Main St., Springfield".
+- A number in the form of a house number right after an address word, with or without a period, belongs to the address: "Apt. 5B", "Phường 5", "Quận 3", "Hẻm 34/5", "Đường 3/2".
+- Two capitalized words joined by a hyphen or an apostrophe are one capitalized word, because place names are written so: "Tỉnh Bà Rịa-Vũng Tàu", "O'Connell Street". This differs from the name rules, which read a word joined by a hyphen as part of a code ([Layer 1, names](#layer-1-names)). "ORD-12345" still ends a part, because "12345" is no capitalized word.
+- A line break between two parts counts as a comma, so "12 Main Street" and "Springfield, IL 62701" on the next line are one address of 3 parts. An address still has at most 5 parts.
+- A word is read as the name rules read it, and an address word is compared after NFC normalization and case folding, with its diacritics.
+
+Known limits of the address rule. Tests state each limit as it is.
+
+- Address words typed without diacritics, such as "Phuong", "Quan", or "Duong", are no address words, so "12 Nguyen Hue, Phuong Ben Nghe" is not found.
+- A street name in lowercase is no part of an address, because only address words may be in lowercase: "12 main street" is not found, and "12 đường lê lợi" gives "12 đường".
+- Vietnamese abbreviations of address words, such as "Q.1" and "TP.HCM", read as codes, and they are no address words: "12 Lê Lợi, Q.1, TP.HCM" is not found.
+- These three ways of everyday typing are an [open question](#open-questions).
+- A greeting on the line after an address joins it: "12 Main Street" and "Thanks, Lan" on the next line are one address. This is over-detection ([Non-goals](#non-goals)).
+- So does the next sentence after an abbreviation with a period: "Ship to 12 Main St. Thanks a lot" gives "12 Main St. Thanks". This is over-detection too.
+
 ### Layer 2: the pre-send check
 
 The pre-send check runs on the pseudonymized text that `pseudonymize` built, with the entries of its map and the known values of the ticket. It compares a value with the text outside placeholders in one of two ways, by type:
 
-- **Digits only**, for `PHONE` and `CARD`: the digits of the value, in order and without a gap, inside one run of digits and separators of the text. "0901110001" is found in "0901 110 001" and in "09011100012".
+- **Digits only**, for `PHONE` and `CARD`: the digits of the value, without the extension of a phone number, in order and without a gap, inside one run of digits and separators of the text. "0901110001" is found in "0901 110 001" and in "09011100012", and "0901110001x12" in "0901-110-001".
 - **Whole words**, ignoring case and diacritics, for `NAME`, `EMAIL`, `ADDRESS`, `ORDER_ID`, `TRACKING_ID`, and `TRANSACTION_ID`, as step 2 compares them ([`find_whole_words`](../../backend/app/pseudonymization/domain/detection.py)).
 
 It fails when it finds any of these:
@@ -138,10 +196,14 @@ It fails when it finds any of these:
 | A value of the map, again, outside a placeholder: every original value except `LITERAL` ones | A name that the model found in one sentence and not in the next | A detector returns spans, and only those spans are replaced. The model judges each occurrence in its own context |
 | A known value of the ticket outside a placeholder | The customer's phone number written with other separators, or inside a longer digit run, such as "09011100012" | Step 2 finds whole words of the stored spelling only |
 | Digits or letters joined to a placeholder by nothing or by `-`, `.`, `/`, `x`, or `@` | "[PHONE_1]-3701x6147" | Each detector judges its own spans; nothing looks at what is left beside a replaced span |
-| A capitalized word right before or after a `[NAME_n]`, with one space between, that is not on the stoplist: `I`, the titles of [Layer 1, names](#layer-1-names), the words of thanks and greeting (`Thanks`, `Thank`, `Regards`, `Best`, `Dear`, `Hi`, `Hello`), `Please`, and any word that starts a sentence or the text | "Vũ [NAME_1]"; not "Thanks [NAME_1]", "[NAME_1]. Please", or "This is [NAME_1] I want" | The same |
-| A number of 1 to 5 digits right before a `[NAME_n]` or `[ADDRESS_n]`, or a number of 5 or 6 digits in the comma-separated part right after one, unless a currency word or sign follows it (`VND`, `đ`, `USD`, `$`) | "72 [NAME_1], [NAME_2] xã, 660877"; not "[ADDRESS_1], 250000 VND" | The same: a house number and a postal code left around a street that the model took for a name |
+| A capitalized word right before or after a `[NAME_n]`, with one or more spaces between, that is not on the stoplist: `I`, the titles of [Layer 1, names](#layer-1-names), the words of thanks and greeting (`Thanks`, `Thank`, `Regards`, `Best`, `Dear`, `Hi`, `Hello`), `Please`, and any word that starts a sentence or the text | "Vũ [NAME_1]"; not "Thanks [NAME_1]", "[NAME_1]. Please", or "This is [NAME_1] I want" | The same |
+| A number of 1 to 5 digits right before a `[NAME_n]` or `[ADDRESS_n]`, with one or more spaces between, or a number of 5 or 6 digits in the comma-separated part right after one, unless a currency word or sign stands right before or after it (`VND`, `đ`, `USD`, `$`) | "72 [NAME_1], [NAME_2] xã, 660877"; not "[ADDRESS_1], 250000 VND" or "[ADDRESS_1], $250000" | The same: a house number and a postal code left around a street that the model took for a name |
+
+The check reads the words beside a placeholder as the name rules do: a word holds its combining marks, and the stoplist is compared after NFC normalization ([Layer 1, names](#layer-1-names)). Unlike the name rules, it reads no word as part of a code, so "Pierre" of "Jean-Pierre [NAME_1]" is the word before the placeholder, and the check stops the ticket.
 
 It does not find a value that no detector found and that stands away from every placeholder, such as "Bà Hương Nguyễn" in round 1. Only layer 1 fixes those.
+
+Known limit of the check: a placeholder inside the path of a link, as in `https://shop.test/orders/[ORDER_ID_1]`, is joined to the text by "/", so the check stops the ticket. This is a false stop, which the re-measurement counts ([Evaluation](#evaluation), statement 2). A test states it as it is.
 
 ### Flow
 
@@ -214,9 +276,23 @@ The guardrails do not change: staff approve every reply, nothing is sent to a cu
 - **A larger or multilingual model** instead of the name and address rules. It changes [ADR-0017](../decisions/0017-named-entity-model-from-its-release-url.md), needs a new trial, and must fit the memory of the free instance beside `backend` (NFR-08). It stays an option if the rules fail the re-measurement.
 - **Block every text with a name-like or digit-like residue anywhere.** It would stop most messages, because order totals, dates, and product names look the same.
 - **Span growth over every capitalized word except titles** (the approved text of [Layer 1, names](#layer-1-names), item 1, before the second revision). It joins a greeting or a polite word to the name, as in "Thanks Lan". The stoplist of the pre-send check already lists those words.
+- **Span growth that also skips a word that starts a sentence or the text**, as the pre-send check does (a reading of [Layer 1, names](#layer-1-names), item 1, before the third revision). "Ask Robert Johnson" would stay "Ask [NAME_1]", but "Vũ" would stay beside "[NAME_1]" when the model finds only "Thị Lan" at the start of a sentence, and the pre-send check skips that word too.
+- **A window that starts with a title is no name** (the approved text of [Layer 1, names](#layer-1-names), item 2, before the third revision). It misses "Mr Tran", because the name without its title is one word.
+- **Windows of equal length left to the code.** The rule would find "Lan Pham" or "Pham Minh" in "Lan Pham Minh" by the order of the code, not by a stated rule.
+- **"Hà" on the list of family names.** The source does not list it, and "Hà Nội", "Hà Giang", and "Hà Tĩnh" would become names.
+- **A longer list of family names now**, such as "Lâm", "Đinh", and "Mai". Each added name also brings over-detection of place names, such as "Lâm Đồng" and "Cao Bằng", and both effects can only be measured on messages. The only messages at hand are the measured ones, and a list chosen from them would fit the test to itself. It is chosen on the independent set for NFR-06 ([Open questions](#open-questions)).
+- **NFC normalization of the whole message** before detection. It changes the text that `backend` pseudonymizes, stores, and restores, and the spans of every other detector. Reading words with their combining marks inside the rules finds the same names and leaves the message as it came.
 - **The Vietnamese name rule on a whole run of capitalized words.** It misses a name after another capitalized word, as in "Hi Nguyễn Văn An", because neither end of the run is a family name.
 - **Family names compared without diacritics, all of them**, as known values are. It finds every name typed without diacritics, but "Do", "Ho", and "Le" are also English words, so "Do You Ship" would become a name.
 - **Family names compared with their diacritics only.** It misses every name typed without diacritics, even "Nguyen".
+- **An unaccented list of 11 names** (the approved text of item 2 before the third revision). It also left out "Vo", "Truong", and "Ly", which share no common word.
+- **"Le", "Do", and "Ho" compared with their diacritics only** (the approved text of item 2 before the third revision). It misses "Le Van An" and "Do Thi Mai", although a middle name right after them rules out the common words.
+- **Family names compared with their case** (a reading of item 2 before the third revision, which did not mention case). It misses a name typed in capitals, such as "NGUYEN VAN AN".
+- **A part with one word outside the three kinds is no part** (a reading of [Layer 1, addresses](#layer-1-addresses), item 2, before the third revision). "Ship to 12 Main Street today" would be no address, because "today" spoils its only part.
+- **No period, number after an address word, joined word, or line break inside an address** (the letter of Layer 1, addresses, item 2, before the third revision). "12 Main St., Springfield" would hold no address word, "Apt 5" and "Phường 5" would leave "5", "Bà Rịa-Vũng Tàu" would leave "Rịa-Vũng Tàu", and a city on the next line would be sent whole.
+- **A number only after "Apt", "Suite", or "Unit"** (a first reading of the third revision). "12 Lê Lợi, phường 5, quận 3" would end at "phường" and leave "5, quận 3".
+- **A phone number of the map compared with its extension** (a reading of [Layer 2](#layer-2-the-pre-send-check) before the third revision). The digits of the extension would follow those of the number, so "0901 110 001 x12", written again outside its placeholder, would pass.
+- **One space only beside a `[NAME_n]`** (the letter of Layer 2 before the third revision). "Vũ  [NAME_1]" with two spaces would pass, and span growth does not join "Vũ" either.
 
 ## Testing and evaluation
 
@@ -224,7 +300,9 @@ The guardrails do not change: staff approve every reply, nothing is sent to a cu
 
 - One test per leak form of [What the measurement found](#what-the-measurement-found): the 4 names left whole, the 2 names left in part, the 4 phone numbers left whole, the 3 extensions left in part, the 2 addresses left whole, and each kind of address left in part. Each test uses the message rebuilt from its template.
 - At least 5 positive and 5 negative examples for each changed or new detector ([ADR-0010, Detection](../decisions/0010-pseudonymization-and-egress-control.md#detection)). The negatives include an ISO date, a list number "(1)", a price, an order total, a time such as "2pm", a product name of the catalog, a city name alone, and a title alone.
-- The pre-send check: each finding of its table, positive and negative, and a text with no placeholder. The negatives include each stoplist word beside a `[NAME_n]` ("I", "Thanks [NAME_1]", "[NAME_1]. Please", "This is [NAME_1] I want"), and an amount after an address ("[ADDRESS_1], 250000 VND").
+- The name rules: each example of [Layer 1, names](#layer-1-names), its opening paragraphs and items 1 to 3, such as "Robert Johnson ORD-12345", "Mr Tran", "Dear Pham Minh", "NGUYEN VAN AN", "Le Van An", "Do You Ship", "Le Monde", and "Ho Ho Ho"; a message typed with decomposed diacritics; a test that the unaccented list is the list of the source without diacritics, except "Do", "Ho", and "Le"; and one test per known limit of item 6.
+- The address rule: each reading of [Layer 1, addresses](#layer-1-addresses), such as "12 Main St., Springfield", "Apt. 5B", "phường 5, quận 3", "Tỉnh Bà Rịa-Vũng Tàu", "12 Main Street ORD-12345", and a city on the next line, and one test per known limit of the rule.
+- The pre-send check: each finding of its table, positive and negative, and a text with no placeholder. The negatives include each stoplist word beside a `[NAME_n]` ("I", "Thanks [NAME_1]", "[NAME_1]. Please", "This is [NAME_1] I want"), and an amount after an address ("[ADDRESS_1], 250000 VND", "[ADDRESS_1], $250000"). The positives include a phone number of the map with an extension, written again without it, and a word two spaces from a `[NAME_n]`. The known limit of a link has its own test.
 - The use case: a stop keeps no map row, writes the audit entry `failed` with `personal_data_left`, raises `PersonalDataLeftError`, and logs no value of the message ([TEST-26](../rules/testing.md#guardrail-tests), last item).
 
 ### Integration tests
@@ -248,7 +326,7 @@ The guardrails do not change: staff approve every reply, nothing is sent to a cu
 
 - The message, the pseudonymized text, and the map are Confidential. The check reads them inside `backend` only, and nothing new leaves `backend`.
 - A stopped run sends nothing to `ai-service`, so no raw value of that ticket reaches the LLM provider.
-- The rule lists hold no personal data: titles, cue words, family names, and address words.
+- The rule lists hold no personal data: titles, cue words, family names, middle names, and address words.
 - The test messages are `synthetic-dev-only` values made by Faker.
 
 ## Rollout
@@ -262,3 +340,6 @@ The guardrails do not change: staff approve every reply, nothing is sent to a cu
 ## Open questions
 
 - **An independent set for NFR-06.** The re-measurement uses the messages whose failures the rules were written from. An NFR-06 figure without that bias needs a new set: another seed and templates written before the rules are seen. Who writes it, and does the PR into `main` wait for it?
+- **A longer list of family names**, such as "Lâm", "Đinh", and "Mai" ([Layer 1, names](#layer-1-names), item 6). Which names join the list, chosen on the independent set above and never on the measured messages?
+- **A name missed only because its family name is not on the list.** Item 6 reports it as a known limit against NFR-06, while the third [goal](#goals) asks for 0 raw values of each type, and [Rollout](#rollout), step 3, stops the PR when a type still leaks. Does such a miss stop the PR? It is decided before the re-measurement runs, so that the answer does not depend on its result.
+- **Everyday typing of addresses** ([Layer 1, addresses](#layer-1-addresses), known limits). Should the address rule also take address words typed without diacritics, except those that are common English words, such as "To" for "Tổ", "Day" for "Dãy", and "Hem" for "Hẻm"; street names in lowercase; and the abbreviations "Q.", "P.", and "TP."?
