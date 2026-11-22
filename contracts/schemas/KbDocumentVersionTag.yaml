@@ -1,9 +1,0 @@
-description: >-
-  The version of a KB document, for example `2.0`. Together with `KbDocumentId` it identifies one
-  immutable KB document version. Opaque (CON-15): consumers compare it as a string and never parse
-  or order it. From 1 to 64 characters: ASCII letters, digits, `.`, `_`, and `-`, starting with a
-  letter or a digit. Data class: Internal.
-type: string
-minLength: 1
-maxLength: 64
-pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'

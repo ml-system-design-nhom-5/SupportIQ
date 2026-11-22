@@ -1,9 +1,0 @@
-{
-  "summary": "A staff account changed its own password",
-  "description": "Requested with is_signed_out_elsewhere true: the other sessions of the account ended, and the current session stays.",
-  "value": {
-    "account_id": "9a7d3e21-6c4b-4f8e-b1a2-3c5d7e9f0a12",
-    "display_name": "Mai Nguyen",
-    "role": "staff"
-  }
-}

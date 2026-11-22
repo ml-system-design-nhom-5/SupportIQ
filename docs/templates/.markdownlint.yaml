@@ -1,5 +1,0 @@
-# The templates mark the parts to fill in with angle brackets, such as <Option 1>, and repeat
-# them as headings. Templates are exempt from the structure rules (docs/README.md, Structure).
-extends: ../../.markdownlint.yaml
-MD024: false
-MD033: false

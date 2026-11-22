@@ -1,9 +1,0 @@
-description: >-
-  The version of one asset that `ai-service` loads through its release manifest, for example
-  `2.1.0` (DATA-56). Opaque: consumers compare it as a string and never parse or order
-  it. From 1 to 128 characters: ASCII letters, digits, `.`, `_`, `:`, `+`, and `-`, starting with a
-  letter or a digit. Data class: Internal.
-type: string
-minLength: 1
-maxLength: 128
-pattern: '^[A-Za-z0-9][A-Za-z0-9._:+-]{0,127}$'

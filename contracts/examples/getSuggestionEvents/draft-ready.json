@@ -1,7 +1,0 @@
-{
-  "summary": "The event after the draft of the current suggestion is stored",
-  "value": {
-    "event": "suggestion",
-    "data": "{\"suggestion_id\":\"6b1f0c3e-2a4d-4e8f-9b7c-1d3e5f7a9b20\",\"analysis_status\":\"ready\",\"draft_status\":\"draft_ready\"}"
-  }
-}

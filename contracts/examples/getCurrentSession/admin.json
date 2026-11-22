@@ -1,9 +1,0 @@
-{
-  "summary": "The session of an admin account",
-  "description": "frontend opens /admin.",
-  "value": {
-    "account_id": "e1f3a5c7-9b2d-4e6f-a8c0-4b6d8f0a2c16",
-    "display_name": "Quang Vo",
-    "role": "admin"
-  }
-}

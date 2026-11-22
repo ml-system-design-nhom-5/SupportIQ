@@ -3,18 +3,14 @@
 - **Status:** Approved
 - **Owner:** backend engineer
 - **Reviewers:** frontend engineer, contracts gatekeeper
-- **Last reviewed:** 2026-11-12
-- **Related:** [Requirements](../product/requirements.md) (FR-08, FR-11, NFR-09), [ADR-0001](../decisions/0001-system-architecture.md), [ADR-0003](../decisions/0003-tech-stack.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), [ADR-0016](../decisions/0016-hosting-on-free-tiers.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md), [contracts v1 design](contracts-v1.md) (revision 2, in review), [shop UI](shop-ui.md), [admin UI](admin-ui.md), [architecture rules](../rules/architecture.md), [security rules](../rules/security-and-privacy.md)
+- **Last reviewed:** 2026-11-05
+- **Related:** [Requirements](../product/requirements.md) (FR-08, FR-11, NFR-09), [ADR-0001](../decisions/0001-system-architecture.md), [ADR-0003](../decisions/0003-tech-stack.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md) (Proposed), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md), [contracts v1 design](contracts-v1.md) (revision 2, in review), [shop UI](shop-ui.md), [admin UI](admin-ui.md), [architecture rules](../rules/architecture.md), [security rules](../rules/security-and-privacy.md)
 
 ## Summary
 
 This design fixes the part of `backend` that needs no AI: its feature modules, the PostgreSQL tables for accounts, sessions, idempotency, commerce data, tickets, and the audit log, the database roles, the seed and reset commands, and the settings. It lets the team build sign-in, the shop, and the account screens of the admin area before `ai-service` is ready.
 
-The ticket workflow that involves the AI (suggestion jobs, pseudonymization, the `ai-service` client, replies, proposals, escalations, decisions, and reports) is the subject of the `backend` ticket workflow design, which extends the tables below. Account creation, password changes, and password resets are the subject of the [account management design](account-management.md), which extends `accounts`, its privileges, the settings, and the audit log events.
-
-**Revision of 2026-11-07.** The implementation added the settings `trace_exporter`, `otlp_traces_endpoint`, and `otlp_export_timeout_ms`. The request hash now also covers the path parameters. `supportiq_owner` also runs the create-app-role command, with `CREATEROLE` and `CREATEDB`. The seed file answers the open question about its content: 9 accounts, 3 customers, 8 products, and 10 orders. On 2026-11-08, version 1.0.1 of `contracts/backend.openapi.yaml` recorded the same rule for the `Idempotency-Key`, and stated that a product appears at most once in an order; `order_lines` now enforces this with a unique constraint. The decisions that this revision replaces are under Alternatives considered.
-
-**Revision of 2026-11-17.** The implementation added the settings `database_tls` and `database_ca_file`, so that every connection to the hosted database checks the server certificate ([SEC-28](../rules/security-and-privacy.md#transport-and-runtime)). `database_tls` is `verify-full` by default, and `disable` serves only a database on the same host. A database URL now holds no query. This revision replaces no earlier decision.
+The ticket workflow that involves the AI (suggestion jobs, pseudonymization, the `ai-service` client, replies, proposals, escalations, decisions, and reports) is the subject of the `backend` ticket workflow design, which extends the tables below.
 
 ## Goals and non-goals
 
@@ -37,7 +33,7 @@ The ticket workflow that involves the AI (suggestion jobs, pseudonymization, the
 - Sign-in, sessions, password hashing, throttling, and the `Origin` check: [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md).
 - Roles and the admin limits: [ADR-0012](../decisions/0012-roles-v1.md). The permission matrix: [contracts v1](contracts-v1.md#roles-and-permissions).
 - Commerce entities, the audit log events, and the ticket lifecycle: [contracts v1](contracts-v1.md#simulated-commerce-data-owned-by-backend).
-- Replicas, migrations as a one-off command, and the seed and reset commands: [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md). Where they run: [ADR-0016](../decisions/0016-hosting-on-free-tiers.md).
+- Replicas, the one-off `backend-migrate` service, and the seed and reset commands: [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md).
 - Layers, feature modules, ports, and settings: [architecture rules](../rules/architecture.md). Persistence: [PY-39 to PY-42](../rules/python.md#persistence-backend).
 
 ## Design
@@ -68,11 +64,11 @@ Every column is `NOT NULL` unless it says "optional". Times are `timestamptz` in
 | `accounts` (`accounts`) | `account_id` UUID (Internal); `login_name` unique (Internal: a role and a number such as `staff-1`, never a person's name); `display_name` (Confidential: staff identity or customer name); `role` enum `customer`, `staff`, `manager`, `admin` (Internal); `is_active` (Internal); `customer_id` optional, set only for `customer` (Internal); `password_hash` Argon2id (Confidential); `created_at` (Internal) | A check constraint requires `customer_id` exactly when `role` is `customer` |
 | `sessions` (`accounts`) | `session_id_hash` SHA-256, primary key (Confidential); `account_id` (Internal); `role` at creation (Internal); `created_at`, `last_seen_at`, `expires_at` (Internal) | The raw identifier exists only in the cookie ([ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), statement 4) |
 | `sign_in_failures` (`accounts`) | `login_name_hash` SHA-256 of the normalized login name (Internal); `failed_at` (Internal) | Keyed by the typed name, not the account, so an unknown name is slowed down exactly like a known one |
-| `idempotency_records` (`idempotency`) | `account_id`, `operation_id`, `idempotency_key` (Internal); `request_hash` SHA-256 of the canonical request: the body fields and the path parameters (Internal); `response_status` optional (Internal); `response_body` JSON, optional (Confidential); `created_at` (Internal) | Unique on (`account_id`, `operation_id`, `idempotency_key`). No response yet means the request is in progress |
+| `idempotency_records` (`idempotency`) | `account_id`, `operation_id`, `idempotency_key` (Internal); `request_hash` SHA-256 of the canonical body (Internal); `response_status` optional (Internal); `response_body` JSON, optional (Confidential); `created_at` (Internal) | Unique on (`account_id`, `operation_id`, `idempotency_key`). No response yet means the request is in progress |
 | `customers` (`commerce`) | `customer_id` (Internal); `display_name`, `email`, `phone` (Confidential, synthetic) | Seeded only |
 | `products` (`commerce`) | `product_id`, `name`, `description`, `category`, `price` (Public) | Seeded only |
 | `orders` (`commerce`) | `order_id` (Confidential); `customer_id` (Internal); `order_status`, `placed_at`, `order_total`, `shipping_cost`, `shipping_address` (synthetic), `transaction_id` (Confidential) | Seeded only |
-| `order_lines` (`commerce`) | `order_id`, `line_number`, `product_id`, `quantity` (Confidential) | Seeded only; a product appears at most once per order, enforced by a unique constraint on (`order_id`, `product_id`) |
+| `order_lines` (`commerce`) | `order_id`, `line_number`, `product_id`, `quantity` (Confidential) | Seeded only |
 | `shipments` (`commerce`) | `shipment_id` (Internal); `order_id`, `shipment_status`, `tracking_code`, `estimated_delivery_at` optional, `delivered_at` optional (Confidential) | Seeded only; at most one per order, enforced by a unique constraint on `order_id` |
 | `refunds` (`commerce`) | `refund_id` (Internal); `order_id`, `refund_status`, `refund_amount`, `refund_requested_at`, `updated_at` (Confidential) | Seeded only; at most one per order, enforced by a unique constraint on `order_id` |
 | `tickets` (`tickets`) | `ticket_number` from the sequence `ticket_number_seq` (Internal); `ticket_id` = `TCK-` and the number (Internal); `customer_id` (Internal); `order_id` optional, absent for imported tickets (Confidential); `status`, `handling_mode`, `is_authority_required` default false, `source` `shop` or `import` (Internal); `created_at`, `handling_started_at` optional, `closed_at` optional (Internal) | The ticket workflow design adds its own tables that point here |
@@ -86,7 +82,7 @@ Every column is `NOT NULL` unless it says "optional". Times are `timestamptz` in
 
 | Role | Used by |
 |---|---|
-| `supportiq_owner` | The create-app-role, migrate, seed, and reset commands. Owns the schema and every table |
+| `supportiq_owner` | `backend-migrate`, the seed command, and the reset command. Owns the schema and every table |
 | `supportiq_app` | The `backend` replicas, with the privileges below and nothing else |
 
 | Objects | Privileges of `supportiq_app` |
@@ -98,13 +94,12 @@ Every column is `NOT NULL` unless it says "optional". Times are `timestamptz` in
 | `ticket_number_seq` | `USAGE` |
 | `sessions`, `sign_in_failures`, `idempotency_records` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
 
-- `supportiq_app` cannot insert or delete an account, so accounts exist only through the seed ([ADR-0012](../decisions/0012-roles-v1.md), admin limits 2 and 3). The [account management design](account-management.md#migration-r0002) adds migration `r0002`, which lets `supportiq_app` insert `staff` and `manager` accounts and update passwords; `admin` and customer accounts still come only from the seed.
+- `supportiq_app` cannot insert or delete an account, so accounts exist only through the seed ([ADR-0012](../decisions/0012-roles-v1.md), admin limits 2 and 3).
 - Triggers add checks that no privilege can express:
   - on `audit_log_entries`, reject every `UPDATE` and `DELETE`, for every role. The reset command uses `TRUNCATE`, which `supportiq_app` may not run ([SEC-39](../rules/security-and-privacy.md#audit-log));
   - on `accounts`, reject a role change unless it goes from `staff` to `manager` or back ([ADR-0012](../decisions/0012-roles-v1.md), admin limit 3);
   - on `tickets`, reject a change of `is_authority_required` from true to false ([contracts v1](contracts-v1.md#authority-rule-fr-06)).
 - The two connection strings are separate settings. The replicas never receive the owner's.
-- `supportiq_owner` has `CREATEROLE`, to create `supportiq_app`, and `CREATEDB`, because the tests create one database per worker.
 
 ### Flows
 
@@ -159,11 +154,11 @@ sequenceDiagram
         BE-->>FE: 403 forbidden
     else Customer session
         BE->>DB: Begin, insert the idempotency record without a response
-        alt Key already used with the same body and path parameters
+        alt Key already used with the same body
             DB-->>BE: Unique violation once the first request commits
             BE->>DB: Read the stored response
             BE-->>FE: The original 201
-        else Key already used with a different body or different path parameters
+        else Key already used with a different body
             BE-->>FE: 409 idempotency-key-reused
         else New key, order not the caller's
             BE->>DB: Roll back
@@ -202,9 +197,9 @@ sequenceDiagram
         else Target is a customer account or unknown
             BE->>DB: Roll back
             BE-->>FE: 404 not-found
-        else Own account, admin role change, unchanged value, or no active manager afterwards
+        else Own account, admin role change, or no active manager or admin afterwards
             BE->>DB: Roll back
-            BE-->>FE: 422 invalid-request with violated_rule
+            BE-->>FE: 422 invalid-request
         else Allowed
             BE->>DB: Update the account, delete its sessions, insert the audit log entry, commit
             BE-->>FE: 201
@@ -217,7 +212,7 @@ sequenceDiagram
 
 1. The transaction-level advisory lock serializes every account change across replicas.
 2. With the lock held, the use case reloads the caller. Its session may have been deleted by a change that committed while it waited, so an admin deactivated by another admin cannot still act.
-3. The rules of [ADR-0012](../decisions/0012-roles-v1.md) apply after the reload. A customer account or an unknown target returns `404 not-found`. Every other refusal returns `422 invalid-request` with `violated_rule`, in the order that the contract fixes for that field ([contracts v1](contracts-v1.md#admin-operations)): the caller's own account, an `admin` account in a role change, a value that the account already has, and a change that leaves no active `manager`. At least one active `admin` always stays, because the caller is an active admin and cannot change their own account.
+3. The rules of [ADR-0012](../decisions/0012-roles-v1.md) apply after the reload: not the caller, not a customer account, only `staff` to `manager` or back, and at least one active `manager` and one active `admin` afterwards.
 4. The audit log entry `account.role_changed` or `account.status_changed` is written in the same transaction.
 
 ### Seed and reset
@@ -234,9 +229,7 @@ All settings live in one `pydantic-settings` class ([PY-43](../rules/python.md#s
 | Setting | Initial value | Origin |
 |---|---|---|
 | `database_url_app` (secret) | None; required | [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md) |
-| `database_url_owner` (secret) | None; required only by the create-app-role, migrate, seed, and reset commands | Database roles above |
-| `database_tls` | `verify-full`; `disable` only for a database on the same host, such as the local one and the one of CI | [SEC-28](../rules/security-and-privacy.md#transport-and-runtime), [deploy guide, TLS to PostgreSQL](../../deploy/README.md#tls-to-postgresql) |
-| `database_ca_file` | `certs/supabase-root-ca.crt`, relative to the working directory; read only when `database_tls` is `verify-full` | SEC-28, [backend README, TLS to the database](../../backend/README.md#tls-to-the-database) |
+| `database_url_owner` (secret) | None; required only by `backend-migrate`, seed, and reset | Database roles above |
 | `database_connect_timeout_ms` | 3 000 | [ERR-09](../rules/errors-and-reliability.md#timeouts-and-latency-budget) |
 | `database_statement_timeout_ms` | 5 000 | ERR-09 |
 | `database_lock_timeout_ms` | 3 000 | ERR-09; bounds the idempotency wait and the advisory lock |
@@ -252,24 +245,15 @@ All settings live in one `pydantic-settings` class ([PY-43](../rules/python.md#s
 | `idempotency_retention_ms` | 86 400 000 (24 hours) | [ERR-15](../rules/errors-and-reliability.md#idempotency) |
 | `default_handling_mode` | `assisted` | [contracts v1](contracts-v1.md#ticket-lifecycle) |
 | `seed_password_customer`, `seed_password_staff`, `seed_password_manager`, `seed_password_admin` (secret) | None; required by the seed | ADR-0009, statement 1 |
-| `trace_exporter` | `none`; `otlp` exports spans | [ADR-0007](../decisions/0007-observability-stack.md) |
-| `otlp_traces_endpoint` | None; required when `trace_exporter` is `otlp` | ADR-0007 |
-| `otlp_export_timeout_ms` | 10 000 | ERR-09 |
 
 No scheduler exists outside the suggestion job queue ([ARCH-41](../rules/architecture.md#state-time-and-side-effects)), so each insert into `idempotency_records` or `sign_in_failures` also deletes the expired rows of that table, and each sign-in deletes expired sessions.
 
 ### Data and contracts
 
-- No contract change beyond contracts v1 revision 2, except version 1.0.1, which adds path parameters to the `Idempotency-Key` rule, corrects when the ingress answers `502` or `504`, and states that a product appears at most once in an order. Contract PR 2 needs these points from this design, and `contracts/backend.openapi.yaml` contains them:
+- No contract change beyond contracts v1 revision 2. Contract PR 2 needs these points, which this design proposes:
   - `createSession` takes `login_name` and `password`.
   - `deleteCurrentSession`, like `createSession`, takes no `Idempotency-Key` ([contracts v1](contracts-v1.md#common-elements)).
-  - Each list operation documents its maximum `limit` ([CON-14](../rules/contracts.md#api-conventions)). The contract sets 20 by default and 100 at most.
-  - The `422` body of `changeAccountRole` and `changeAccountStatus` carries `violated_rule` ([contracts v1](contracts-v1.md#admin-operations)).
-- Cursors (decided by the project lead on 2026-11-05). No cursor contains a Confidential value ([SEC-01](../rules/security-and-privacy.md#data-classification)), and each one also names the operation that returned it, so a cursor of another operation returns `422`:
-  - `listShopProducts`: the `name` and `product_id` of the last item, both Public, as a keyset.
-  - `listShopTickets`: the `created_at` and `ticket_id` of the last item, both Internal, as a keyset. The `order_id` filter is not in the cursor.
-  - `listAdminAccounts`: the `account_id` of the last item. `backend` reads that account's display name to continue the order by `display_name`.
-  - `listShopOrders`: the position of the next item in the sort order. Orders have no Internal key, and `placed_at` and `order_id` are Confidential. A position is exact because orders are read-only and the seed is deterministic ([ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md)).
+  - Each list operation documents its maximum `limit` ([CON-14](../rules/contracts.md#api-conventions)). The proposal is 20 by default and 100 at most.
 - Migrations: one Alembic migration per schema change, each with a working downgrade ([PY-40](../rules/python.md#persistence-backend)). The first migration creates every table above, the privileges of `supportiq_app`, and the triggers.
 
 ### Errors and guardrails
@@ -285,13 +269,13 @@ No scheduler exists outside the suggestion job queue ([ARCH-41](../rules/archite
 | A role calls an operation it may not use | `403 forbidden`, and the `permission.denied` event | Table-driven permission test over every operation and all four roles |
 | Two admins remove the last two managers, or deactivate each other, at the same time | The advisory lock serializes the changes, and the reload after the lock refuses the second one | Integration test with two concurrent transactions for each case |
 | A retried ticket creation runs on two replicas | One ticket; the second request returns the first result | Integration test with two concurrent requests |
-| The same key arrives with a different body or different path parameters | `409 idempotency-key-reused` | Handler test |
+| The same key arrives with a different body | `409 idempotency-key-reused` | Handler test |
 | Sign-in is guessed repeatedly | After the limit, every attempt waits `sign_in_failure_delay_ms`, for known and unknown names alike | Integration test with a fake `Clock` |
 | A deactivated or changed account keeps a session | Impossible: its sessions are deleted in the same transaction | Integration test |
 | A session expires | `401`; the session row is deleted | Use-case test with a fake `Clock` |
 | A request without an allowed `Origin` changes state | `403 forbidden` | Handler test |
 | The database is unreachable or a timeout fires | `GET /health/ready` returns `503`; requests return `503 not-ready` and roll back | Integration test |
-| Confidential data or a secret reaches a log | The logging setup drops attributes that are not allow-listed and masks known patterns ([LOG-30](../rules/logging-and-observability.md#privacy-in-telemetry)). Request logs never include headers, so the raw session identifier in the `Cookie` header is never logged. Request logs and traces record the route template, never the raw path or query, because an order ID in a URL is Confidential | Log-capture test with message text, display names, order IDs in URLs and elsewhere, shipping addresses, passwords, and a raw cookie value (TEST-26) |
+| Confidential data or a secret reaches a log | The logging setup drops attributes that are not allow-listed and masks known patterns ([LOG-30](../rules/logging-and-observability.md#privacy-in-telemetry)). Request logs never include headers, so the raw session identifier in the `Cookie` header is never logged | Log-capture test with message text, display names, order IDs, shipping addresses, passwords, and a raw cookie value (TEST-26) |
 | The seed produces different data on two runs | Prevented by design and checked | Test that seeds twice and compares every table except `password_hash`, and checks each seeded password against its hash |
 | Reset leaves changed accounts or tickets behind | Impossible: every table is truncated before the seed | Test that changes a role, creates a ticket, resets, and compares with a fresh seed |
 
@@ -301,20 +285,18 @@ No scheduler exists outside the suggestion job queue ([ARCH-41](../rules/archite
 - **Throttling sign-in per account only:** not chosen, because the delay would reveal which login names exist.
 - **Locking all active manager and admin rows with `SELECT … FOR UPDATE` instead of an advisory lock:** possible. The advisory lock is simpler and also covers changes that add a manager.
 - **Running the seed at replica startup:** rejected by [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), because two replicas would seed twice.
-- **`request_hash` over the canonical body only:** the design before the revision of 2026-11-07. Replaced, because the same key and body on another account would return the result of the first account without changing the second.
-- **`supportiq_owner` used only by the migrate, seed, and reset commands:** the design before the revision of 2026-11-07. Replaced, because the same role also creates `supportiq_app`, and the tests create one database per worker.
 
 ## Testing and evaluation
 
 - **Unit:** the admin rules, with a property-based test that no sequence of role and status changes leaves no active manager or no active admin; session expiry with a fake `Clock`; the sign-in throttle; ID formats.
-- **Integration (local PostgreSQL 17 or a CI service container):** privileges of `supportiq_app`, the triggers, idempotency under concurrency, the advisory lock with concurrent changes, session deletion on a role change, one audit log entry per successful admin change, seed determinism, and reset.
-- **Contract:** Schemathesis against every operation listed in Goals and the health checks ([CON-27](../rules/contracts.md#contract-tests)).
+- **Integration (PostgreSQL in a container):** privileges of `supportiq_app`, the triggers, idempotency under concurrency, the advisory lock with concurrent changes, session deletion on a role change, one audit log entry per successful admin change, seed determinism, and reset.
+- **Contract:** Schemathesis against every operation listed in Goals ([CON-27](../rules/contracts.md#contract-tests)).
 - **Guardrail (TEST-26):** the audit log rejects `UPDATE` and `DELETE`; no Confidential data or secret in captured logs; an admin cannot call any `/v1/shop/` or `/v1/console/` operation; no admin operation returns or changes a customer account.
 - No model metric changes.
 
 ## Observability
 
-- Events from the [LOG-19 table](../rules/logging-and-observability.md): `startup.completed`, `settings.loaded`, `settings.invalid`, and `shutdown.started` from `platform`; `ticket.created`, `account.role_changed`, `account.status_changed`, and `permission.denied` from the features. The full catalog is in the [Events section of the `backend` README](../../backend/README.md#events).
+- Events from the [LOG-19 table](../rules/logging-and-observability.md): `startup.completed`, `settings.loaded`, `settings.invalid`, and `shutdown.started` from `platform`; `ticket.created`, `account.role_changed`, `account.status_changed`, and `permission.denied` from the features.
 - Events carry Internal IDs (`ticket_id`, `account_id`) and roles. They never carry an order ID, a login name, a display name, or message text ([LOG-29](../rules/logging-and-observability.md#privacy-in-telemetry)).
 - Every request has a trace with the database spans ([ADR-0007](../decisions/0007-observability-stack.md)).
 
@@ -328,15 +310,15 @@ No scheduler exists outside the suggestion job queue ([ARCH-41](../rules/archite
 ## Rollout
 
 1. Done on 2026-11-05: the backend and frontend owners approved this design.
-2. Done on 2026-11-05: the project lead approved the `frontend` ↔ `backend` part of contracts v1 revision 2 for contract PR 2 and its implementation: the operations listed in Goals and the health checks ([contracts v1, Rollout](contracts-v1.md#rollout)).
-3. Done on 2026-11-06: contract PR 2 wrote the operations listed in Goals and the health checks, with the points under Data and contracts.
-4. Decided by the project lead on 2026-11-05: the scaffold leaves out `deploy/` and Docker Compose until ADR-0011 or the hosting ADR is accepted. Until then, migrate, seed, and reset run as `backend` commands, against Homebrew PostgreSQL 17 locally and a PostgreSQL service container in CI, and CI only builds the `backend` Docker image.
-5. Done on 2026-11-07: scaffold `backend` (uv, ruff, pyright, pytest, import-linter, Alembic) and its CI workflow, following step 4. A SQL script, run once as the database owner, creates `supportiq_app` and its privileges, with a password from a secret setting. Migrations run as a one-off `backend` command before the `backend` instances start (step 4). Once [ADR-0016](../decisions/0016-hosting-on-free-tiers.md#migrations-and-one-off-commands) is accepted, its deploy workflow takes over that step, because the free plan of the host has no pre-deploy command. The README gets a "Demo accounts" section that lists the login names and roles and says that passwords come from each person's `.env`.
-6. Done on 2026-11-07 for `backend`: implement `platform`, `audit`, and `idempotency`, then `accounts`, then `commerce` with the seed, then `tickets`. `frontend` builds the shop and admin screens against Prism mocks in parallel.
-7. The `backend` ticket workflow design follows, for the console and everything that involves `ai-service`.
+2. Contract PR 2 writes the operations listed in Goals, with the points under Data and contracts.
+3. Scaffold `backend` (uv, ruff, pyright, pytest, import-linter, Alembic), `deploy/`, and CI. A SQL script, run once as the database owner, creates `supportiq_app` and its privileges, with a password from a secret setting. Migrations run as a one-off step before the `backend` instances start: the `backend-migrate` service in local Docker Compose ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)), or the host's pre-deploy command in a hosted demo. The README gets a "Demo accounts" section that lists the login names and roles and says that passwords come from each person's `.env`.
+4. Implement `platform`, `audit`, and `idempotency`, then `accounts`, then `commerce` with the seed, then `tickets`. `frontend` builds the shop and admin screens against Prism mocks in parallel.
+5. The `backend` ticket workflow design follows, for the console and everything that involves `ai-service`.
 
 ## Open questions
 
 - The ID formats of the shared commerce data of groups 2 and 5. When that data is adopted, the seed formats above change to match it.
-- Hosting of the demo: decided in [ADR-0016](../decisions/0016-hosting-on-free-tiers.md), which keeps the browser on the origin of `frontend`, as the session cookie of ADR-0009 requires. Its checks of the database roles through the Supabase session pooler apply to the roles of this design.
-- This design was approved on 2026-11-05 while ADR-0011 and contracts v1 revision 2 were still in review. ADR-0011 was revised on 2026-11-12, and the statements above that name the `backend-migrate` service and the pre-deploy step were revised with it. The project lead approved this revision on 2026-11-12.
+- The content of the seed file: how many products, customers, and orders. The seed PR proposes it.
+- Whether the backend and frontend owners may approve contract PR 2 for the operations above before the ML and RAG engineers approve contracts v1 as a whole.
+- Hosting of the demo. The project lead proposes Supabase for PostgreSQL, Render for `backend` with UptimeRobot, and Vercel or Cloudflare Pages for `frontend`, instead of the single-host topology of ADR-0011. It needs an ADR, because it changes ADR-0011 and the session cookie of ADR-0009 requires the browser to reach `backend` on the same site as `frontend`.
+- This design was approved on 2026-11-05 while ADR-0011 and contracts v1 revision 2 were still in review. If either changes, this design is revised.

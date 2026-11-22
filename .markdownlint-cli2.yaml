@@ -1,7 +1,0 @@
-# markdownlint-cli2 options. The rules are in .markdownlint.yaml.
-customRules:
-  - markdownlint-rule-relative-links
-ignores:
-  - "**/node_modules/**"
-  - "**/dist/**"
-  - "**/generated/**"

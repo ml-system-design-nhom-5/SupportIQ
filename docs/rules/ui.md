@@ -1,6 +1,6 @@
 # UI rules
 
-> **Status:** Active · **Owner:** frontend · **Last reviewed:** 2026-11-15
+> **Status:** Active · **Owner:** frontend · **Last reviewed:** 2026-11-05
 
 A strict design system and interaction rules, so every screen looks and behaves the same, staff can work quickly and safely, and developers can build and review UI with confidence. The console exists to help staff check the AI, not to make them trust it blindly. Design-system structure: [ADR-0008](../decisions/0008-ui-design-system.md). Shop scope: [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md). Roles: [ADR-0012](../decisions/0012-roles-v1.md).
 
@@ -21,7 +21,7 @@ flowchart TB
     D -->|"used by"| S["Feature screens<br/>/console, /shop, /admin"]
 ```
 
-**UI-01.** The design system lives in `frontend/src/design-system/` with `tokens/`, `format/`, `primitives/`, and `components/` ([TS-05](typescript.md#project-layout)).
+**UI-01.** The design system lives in `frontend/src/design-system/` with `tokens/`, `primitives/`, and `components/` ([TS-05](typescript.md#project-layout)).
 
 **UI-02.** Feature screens are composed only of design-system components, including layout primitives (stack, grid, panel). Feature code does not style raw HTML elements.
 
@@ -61,7 +61,7 @@ flowchart TB
 
 **UI-11.** Color is never the only signal. Status is always shown with an icon and a text label as well.
 
-**UI-12.** Each ticket and suggestion status has exactly one presentation (token, icon, label), defined once in the design system and used everywhere. Screens never define their own status colors. A report that counts statuses apart may give each its own label where one presentation groups them, with the same token and icon; the console UI design lists each such label.
+**UI-12.** Each ticket and suggestion status has exactly one presentation (token, icon, label), defined once in the design system and used everywhere. Screens never define their own status colors.
 
 **UI-13.** AI-generated content always carries the `ai` marker and a label ("AI draft", "AI suggestion"). Text written by staff never carries it.
 
@@ -69,7 +69,7 @@ flowchart TB
 
 ## Console interaction
 
-**UI-15.** The console uses one fixed workspace layout, defined in the console design doc. Panels and actions never move between tickets. Staff may resize and collapse the inbox and the AI sidebar; the widths and the collapsed state are a display preference of each account and stay the same for every ticket.
+**UI-15.** The console uses one fixed workspace layout, defined in the console design doc. Panels and actions never move between tickets.
 
 **UI-16.** The main actions are always visible, in the same place: Edit, Reject draft, Escalate, and Send reply. When authority is required, staff see Submit for approval instead of Send reply; otherwise it sits in a secondary menu, and in the manual-handling state it is a visible button. Actions that `backend` does not list in `allowed_actions` are disabled, with the reason shown. There is no automatic send.
 
@@ -89,7 +89,7 @@ flowchart TB
 
 **UI-42.** When a draft abstained for low confidence (ESC-01), the console shows the top three candidate intents with their confidence, each with a "Use this intent" action, and says that no draft is created until staff choose. The draft area shows no draft and no filler text.
 
-**UI-43.** AI text is shown exactly as `backend` returns it. Every text that matches the placeholder syntax ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#placeholder-syntax)), whether a mask, a pseudonym that `backend` could not restore, or customer text that only looks like a placeholder (a restored `LITERAL`), is highlighted with one label: "Personal data or reserved text: replace before sending" ([ADR-0019](../decisions/0019-one-label-for-text-in-the-placeholder-syntax.md)). Send reply and Submit for approval stay disabled while the reply editor contains text in the placeholder syntax. The UI never tries to restore or remove placeholders itself.
+**UI-43.** AI text is shown exactly as `backend` returns it. Any text that matches the placeholder syntax ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#placeholder-syntax)), which means a mask or a pseudonym that `backend` could not restore, is highlighted with the label "Personal data hidden: replace before sending". Customer text that only looks like a placeholder (a restored `LITERAL`) is highlighted with the label "Customer text in a reserved format: rephrase before sending". Send reply and Submit for approval stay disabled while the reply editor contains text in the placeholder syntax. The UI never tries to restore or remove placeholders itself.
 
 ## States
 
@@ -125,12 +125,7 @@ flowchart TB
 
 ## Developer views
 
-**UI-35.** Dev mode adds developer details to the screens of `staff`, `manager`, and `admin`, and changes nothing else. It has two layers:
-
-- An environment setting makes dev mode available. It is on in local development and off in the demo deployment.
-- Where dev mode is available, each `staff`, `manager`, and `admin` user switches it on or off for themselves. The choice is a display preference stored in the browser.
-
-Customers never get dev mode. It never changes permissions, never shows data that the role cannot already see, and offers no sign-in as another account. In dev mode, the ticket workspace shows a collapsible "Developer details" panel: trace ID with a link to the trace in Grafana ([ADR-0007](../decisions/0007-observability-stack.md)), the release ID with the model, KB, and prompt versions, latency per step, and raw statuses and reason codes.
+**UI-35.** When the developer-details setting is enabled (off by default in demo mode), the ticket workspace shows a collapsible "Developer details" panel: trace ID with a link to the trace in Grafana ([ADR-0007](../decisions/0007-observability-stack.md)), the release ID with the model, KB, and prompt versions, latency per step, and raw statuses and reason codes.
 
 **UI-36.** Storybook is the catalog of every design-system component and the place to review UI changes in isolation. A UI PR links the affected stories.
 
@@ -138,7 +133,7 @@ Customers never get dev mode. It never changes permissions, never shows data tha
 
 ## Shop
 
-**UI-38.** The shop uses the same design system and adds no components outside it. Its scope is fixed by [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md) and [ADR-0015](../decisions/0015-account-creation-and-password-changes.md): a read-only catalog, "My orders", the support form, sent replies, and the own password change. Every product shows the same neutral product image from the design system.
+**UI-38.** The shop uses the same design system and adds no components outside it. Its scope is fixed by [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md): a read-only catalog, "My orders", the support form, and sent replies. Every product shows the same neutral product image from the design system.
 
 ## Reports
 
@@ -146,11 +141,7 @@ Customers never get dev mode. It never changes permissions, never shows data tha
 
 ## Admin
 
-**UI-45.** The admin area `/admin` has exactly two screens: accounts (list `staff`, `manager`, and `admin` accounts; create a `staff` or `manager` account; reset the password of a `staff` or `manager` account; change a role between `staff` and `manager`; deactivate; reactivate) and versions in use. Account creation and password resets are dialogs on the accounts screen. Every change asks for confirmation and names the account and the change. The area uses the design system and never shows customer accounts, tickets, messages, orders, or reports ([ADR-0012](../decisions/0012-roles-v1.md), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md)).
-
-## Password fields
-
-**UI-46.** Every password field uses the design-system `PasswordInput`. It has a show and hide toggle: a button at the end of the field with a fixed accessible name, "Show password", and `aria-pressed` for its state. The password is hidden on every load and after every successful submission, and the toggle never changes the value or the focus of the field. The field never blocks paste or autofill, never truncates, and sets `autocomplete` to `current-password` or `new-password`.
+**UI-45.** The admin area `/admin` has exactly two screens: accounts (list `staff`, `manager`, and `admin` accounts; change a role between `staff` and `manager`; deactivate; reactivate) and versions in use. Every change asks for confirmation and names the account and the change. The area uses the design system and never shows customer accounts, tickets, messages, orders, or reports ([ADR-0012](../decisions/0012-roles-v1.md)).
 
 ## Boundaries
 
@@ -166,5 +157,4 @@ Customers never get dev mode. It never changes permissions, never shows data tha
 - [ ] Irreversible actions need a deliberate action; warnings must be acknowledged.
 - [ ] Placeholders are highlighted and block sending; flows stay within the NFR-11 action budget.
 - [ ] Keyboard and screen reader work; axe passes.
-- [ ] Every password field is a `PasswordInput` with the show and hide toggle (UI-46).
 - [ ] Text uses glossary terms and contains no jargon.

@@ -1,9 +1,0 @@
-description: >-
-  The identifier of a KB document, the same for all its versions, for example `POL-REFUND-002`.
-  Opaque (CON-15): consumers compare it as a string and never parse it. From 1 to 64 characters:
-  ASCII letters, digits, `.`, `_`, and `-`, starting with a letter or a digit. Data class:
-  Internal.
-type: string
-minLength: 1
-maxLength: 64
-pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'

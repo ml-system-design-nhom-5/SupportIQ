@@ -1,6 +1,6 @@
 # Engineering rules
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-11
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-10-23
 
 These rules make the codebase clean, consistent, easy to understand, and easy to extend for the life of the project. They apply to all code in the repository (`frontend`, `backend`, `ai-service`, `ml`, `eval`, `contracts`, scripts, and configuration) and to every contributor, human or AI agent. Documentation rules are in the [documentation handbook](../README.md).
 
@@ -64,7 +64,7 @@ When two rules conflict, follow the higher one and open a PR that removes the co
 | [logging-and-observability.md](logging-and-observability.md) | `LOG` | Log schema, events, traces, metrics, dashboards, the single observability screen |
 | [security-and-privacy.md](security-and-privacy.md) | `SEC` | Data classification, LLM data rules, secrets, access control, prompt injection, incidents |
 | [data-and-ml.md](data-and-ml.md) | `DATA` | Datasets, KB, splits, leakage, artifacts, prompts, evaluation, feedback, drift |
-| [ui.md](ui.md) | `UI` | Design system, tokens, console interaction, states, content, accessibility, password fields, developer views |
+| [ui.md](ui.md) | `UI` | Design system, tokens, console interaction, states, content, accessibility, developer views |
 
 ## Enforcement
 
@@ -77,13 +77,13 @@ When two rules conflict, follow the higher one and open a PR that removes the co
 | Types | pyright (strict), tsc (strict) | CI |
 | Layer and feature boundaries | import-linter, dependency-cruiser | CI |
 | Tests and coverage | pytest, Vitest, Playwright | CI |
-| Contracts | Redocly CLI with custom rules and example validation, Prism mocks, Schemathesis, generated-code freshness check | pre-commit, CI |
+| Contracts | Schemathesis, Prism mocks, generated-code freshness check | CI |
 | Secrets | gitleaks | pre-commit, CI |
 | Dependency vulnerabilities | pip-audit, pnpm audit | CI |
-| Documentation: style, relative links, and anchors | markdownlint-cli2 with markdownlint-rule-relative-links | pre-commit, CI |
+| Documentation | markdownlint, lychee | CI |
 | Accessibility | axe (Storybook and Playwright) | CI |
 
-Framework-level tool choices come from [ADR-0003](../decisions/0003-tech-stack.md) and [ADR-0008](../decisions/0008-ui-design-system.md) ([WF-29](workflow.md#dependencies)). Every other tool is justified where it is configured ([WF-27](workflow.md#dependencies)): the Tools table of [contracts/README.md](../../contracts/README.md#tools) and the checks table of [repository checks](../guides/repository-checks.md#what-runs-where). The repository-wide checks and the contract checks are configured in `.pre-commit-config.yaml` and `contracts/` ([repository checks](../guides/repository-checks.md)). Component configuration files are created when each component is scaffolded. External links are not checked yet ([repository checks, Open questions](../guides/repository-checks.md#open-questions)).
+Tool choices come from [ADR-0003](../decisions/0003-tech-stack.md) and [ADR-0008](../decisions/0008-ui-design-system.md). Configuration files are created when each component is scaffolded.
 
 ## Suppressions
 

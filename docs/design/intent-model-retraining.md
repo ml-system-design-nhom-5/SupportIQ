@@ -3,8 +3,8 @@
 - **Status:** Draft
 - **Owner:** ML engineer
 - **Reviewers:** team; Group 2 contact for the shared evaluation procedure (CST-02)
-- **Last reviewed:** 2026-11-17
-- **Related:** FR-01, FR-05, NFR-01, NFR-02, ESC-01, ESC-02; [DATA-03](../rules/data-and-ml.md#sources-and-acceptable-use), [DATA-20 to DATA-35](../rules/data-and-ml.md#splits-and-evaluation-protocol), [DATA-56 to DATA-59](../rules/data-and-ml.md); [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md); [autoeval](../../eval/README.md#autoeval)
+- **Last reviewed:** 2026-11-12
+- **Related:** FR-01, FR-05, NFR-01, NFR-02, ESC-01, ESC-02; [DATA-03](../rules/data-and-ml.md#sources-and-acceptable-use), [DATA-20 to DATA-35](../rules/data-and-ml.md#splits-and-evaluation-protocol), [DATA-56 to DATA-59](../rules/data-and-ml.md); [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md); [autoeval](../autoeval.md)
 
 ## Summary
 
@@ -91,7 +91,7 @@ No API contract changes: the classifier still returns 46 labels with probabiliti
 | Product-semantics training rows | Teach the product's label boundaries | The 2026-11-06 AI-assisted rows, kept by team decision on 2026-11-12, with identifiers replaced by placeholders | `synthetic-dev-only` in the file name and manifest (DATA-03, DATA-09). |
 | Dev set (in-domain + out-of-domain) | Calibration and τ/δ tuning only | Same origin as the training rows | Validation data, never reported as a test result (DATA-03, DATA-34, DATA-58). |
 | Out-of-domain training texts | Outlier exposure | Same origin as the training rows | Avoid topics of `ml_oos.jsonl`; `synthetic-dev-only`. |
-| Frozen scenario set `data/benchmarks/intent/v1` | Gate and reported results | An author with no access to the training data or failure analysis ([ADR-0026](../decisions/0026-frozen-intent-scenario-set.md)) | Training and dev rows that are near-duplicates of it are removed, never rewritten (DATA-24, DATA-25). |
+| Frozen scenario set `data/benchmarks/intent/v1` | Gate and reported results | An author with no access to the training data or failure analysis ([ADR-0016](../decisions/0016-frozen-intent-scenario-set.md)) | Training and dev rows that are near-duplicates of it are removed, never rewritten (DATA-24, DATA-25). |
 
 Because the training rows were written after earlier test failures had been read, their origin is recorded in
 `data/intent/README.md`, and only the independently written set may support a release decision.

@@ -1,6 +1,6 @@
 # Python rules
 
-> **Status:** Active · **Owner:** backend and ai-service · **Last reviewed:** 2026-11-20
+> **Status:** Active · **Owner:** backend and ai-service · **Last reviewed:** 2026-10-23
 
 Python-specific rules for `backend`, `ai-service`, `ml`, `eval`, and Python scripts. They build on [code.md](code.md); where both apply, both must hold.
 
@@ -47,7 +47,7 @@ Python-specific rules for `backend`, `ai-service`, `ml`, `eval`, and Python scri
 
 ## Project layout
 
-**PY-06.** The package of `backend` and of `ai-service` is `app/` at the root of the component, and its feature modules sit inside it, never directly at the root or under `src/`, where `platform/` would hide the standard module `platform` ([ADR-0028, Package names](../decisions/0028-repository-layout-for-the-pull-request-into-main.md#package-names)). `eval/release/` keeps the `src` layout, `src/supportiq_release/`, because it installs `ai-service`, and a second package named `app` would share its environment. Package and module names are `snake_case`.
+**PY-06.** Each component uses the `src` layout: `src/supportiq_<component>/`. Package and module names are `snake_case`.
 
 **PY-07.** Tests live under `tests/unit/`, `tests/integration/`, and `tests/contract/`, mirroring the source tree.
 
@@ -109,7 +109,7 @@ Python-specific rules for `backend`, `ai-service`, `ml`, `eval`, and Python scri
 
 **PY-31.** CPU-bound work that can take more than a few milliseconds, such as model inference, runs in a worker thread (`asyncio.to_thread`) so it never blocks the event loop.
 
-**PY-32.** Every awaited I/O has a timeout: client-level timeouts on `httpx.AsyncClient`, plus `asyncio.timeout()` around composite operations that call another service, using values from settings. The database timeout settings bound each database call, so a transaction needs no timeout of its own.
+**PY-32.** Every awaited I/O has a timeout: client-level timeouts on `httpx.AsyncClient`, plus `asyncio.timeout()` around composite operations, using values from settings.
 
 **PY-33.** Concurrent calls use `asyncio.TaskGroup`. Fire-and-forget tasks are forbidden; every task is awaited or owned by a supervised group.
 
@@ -133,7 +133,7 @@ Python-specific rules for `backend`, `ai-service`, `ml`, `eval`, and Python scri
 
 **PY-41.** Transactions belong to the application layer (unit of work). Repositories and handlers never commit.
 
-**PY-42.** SQL is never built with string formatting. Use the ORM or bound parameters. Exception: test code may format the identifiers and the password in a DDL statement that PostgreSQL cannot parameterize, such as `CREATE DATABASE` or `CREATE ROLE`, when each value is a constant of the test or matches a fixed pattern.
+**PY-42.** SQL is never built with string formatting. Use the ORM or bound parameters.
 
 ## Settings
 

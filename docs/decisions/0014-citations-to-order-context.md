@@ -1,7 +1,7 @@
 # ADR-0014: Citations to the order context
 
-- **Status:** Accepted
-- **Date:** 2026-11-12
+- **Status:** Proposed
+- **Date:** 2026-11-04
 - **Deciders:** Team
 - **Related:** [Requirements](../product/requirements.md) (FR-03, FR-04, FR-05, NFR-04, ESC-04), [ADR-0001](0001-system-architecture.md), [ADR-0005](0005-intent-independent-retrieval.md), [contracts v1 design](../design/contracts-v1.md), [console UI design](../design/console-ui.md), [TEST-26](../rules/testing.md#guardrail-tests)
 
@@ -64,7 +64,7 @@ flowchart TD
 
 ### Follow-ups
 
-- Define `Citation` in contract PR 1, and `CitationView` in the contract change that adds the console operations.
+- Define `Citation` in contract PR 1, and `CitationView` in contract PR 2.
 - The `ai-service` pipeline design defines how the prompt exposes field names and how the grounding check compares values.
 - The NFR-04 grading rubric includes order citations.
 

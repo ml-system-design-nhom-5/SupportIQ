@@ -3,8 +3,8 @@
 - **Status:** Draft
 - **Owner:** ML engineer
 - **Reviewers:** team
-- **Last reviewed:** 2026-11-17
-- **Related:** ESC-02, ESC-04, NFR-05; [label definitions D2](intent-label-definitions.md#d2-a-named-return-channel-selects-the-channel-intent), [multi-request detection](multi-request-detection.md), [evaluation protocol](intent-evaluation-protocol.md), [ADR-0026](../decisions/0026-frozen-intent-scenario-set.md); [DATA-25](../rules/data-and-ml.md), [DATA-28](../rules/data-and-ml.md#leakage), [DATA-58](../rules/data-and-ml.md)
+- **Last reviewed:** 2026-11-13
+- **Related:** ESC-02, ESC-04, NFR-05; [label definitions D2](intent-label-definitions.md#d2-a-named-return-channel-selects-the-channel-intent), [multi-request detection](multi-request-detection.md), [evaluation protocol](intent-evaluation-protocol.md), [ADR-0016](../decisions/0016-frozen-intent-scenario-set.md); [DATA-25](../rules/data-and-ml.md), [DATA-28](../rules/data-and-ml.md#leakage), [DATA-58](../rules/data-and-ml.md)
 
 ## Summary
 
@@ -24,7 +24,7 @@ Under [D2](intent-label-definitions.md#d2-a-named-return-channel-selects-the-cha
 
 ## Background
 
-The gate run of 2026-11-13 (`v1.1.0` with policy `v3`, [multi-request detection](multi-request-detection.md#gate-run-on-the-frozen-set-2026-11-13)) failed only because two must-not-draft messages reached drafting. The report names them by case ID: `unsupported-product_issue-02` and `unsupported-return_product_in_store-01`. Their texts were not read (ADR-0026). Only the intents in those IDs directed this work, and this is recorded as test feedback (DATA-28).
+The gate run of 2026-11-13 (`v1.1.0` with policy `v3`, [multi-request detection](multi-request-detection.md#gate-run-on-the-frozen-set-2026-11-13)) failed only because two must-not-draft messages reached drafting. The report names them by case ID: `unsupported-product_issue-02` and `unsupported-return_product_in_store-01`. Their texts were not read (ADR-0016). Only the intents in those IDs directed this work, and this is recorded as test feedback (DATA-28).
 
 To work without the frozen set, a new dev file `data/intent/dev_escalation/v1/cases.synthetic-dev-only.psv` (52 rows) was written. It has 20 `product_issue` messages, 10 of each channel-return intent, and contrast rows for `return_product`, `return_policy`, `request_refund` and `delivery_issue`. Two rows were removed as near-duplicates of benchmark or training text. Measured with `v1.1.0` and policy `v3`:
 
@@ -85,7 +85,7 @@ The guard only adds escalations; it never turns an escalation or a clarification
 
 - Unit tests: the cue list (positive and negative examples, `store credit`), gate 2e for each intent family, off without the policy flag, override skip.
 - Dev (prototype, policy `v3`, all dev files): must-escalate messages drafted 6 → 0. Supported messages escalated by the guard: 2, both `return_policy` questions about a channel's rules. The cue list was written by the author of the dev rows, so these numbers are optimistic.
-- Gate: one more ML run on the frozen set with `v1.1.0` and policy `v3` plus the guard. That will be the **third** decision based on the frozen set. ADR-0026 says to revisit the set once it has been used for more than three, so any later decision triggers that revisit.
+- Gate: one more ML run on the frozen set with `v1.1.0` and policy `v3` plus the guard. That will be the **third** decision based on the frozen set. ADR-0016 says to revisit the set once it has been used for more than three, so any later decision triggers that revisit.
 
 ### Results (2026-11-13)
 
@@ -107,13 +107,13 @@ The guard fired on two frozen-set messages: it closed `unsupported-return_produc
 
 **Verdict: the gate still fails** (rules 1 and 2): one `product_issue` message reaches drafting. The dev `product_issue` rows did not reproduce this leak, so no routing change is supported by dev evidence. `v1.0.0` stays in service.
 
-This was the **third** decision based on `data/benchmarks/intent/v1`. [ADR-0026](../decisions/0026-frozen-intent-scenario-set.md) says to revisit the set once it has been used for more than three release decisions, so the next decision triggers that revisit. Three rounds of gate feedback have steered this work: the multi-intent slice, then the two failing case IDs. Further gate runs on this set would weaken it as evidence.
+This was the **third** decision based on `data/benchmarks/intent/v1`. [ADR-0016](../decisions/0016-frozen-intent-scenario-set.md) says to revisit the set once it has been used for more than three release decisions, so the next decision triggers that revisit. Three rounds of gate feedback have steered this work: the multi-intent slice, then the two failing case IDs. Further gate runs on this set would weaken it as evidence.
 
 ## Rollout
 
 1. This design approved.
 2. PR: cue function, gate 2e behind `return_channel_guard`, context flag in the runner and evaluation, tests, policy `v3` flag.
-3. Gate run, then the ADR-0026 review.
+3. Gate run, then the ADR-0016 review.
 
 Rollback: set `return_channel_guard` to false.
 
