@@ -275,8 +275,6 @@ body {
 .compare-card.editable { border-color: var(--color-border-strong); }
 .compare-card .head { display: flex; align-items: center; gap: var(--space-8); margin-bottom: var(--space-8); font-weight: var(--weight-semibold); }
 .compare-card .head .trail { margin-left: auto; font-weight: var(--weight-regular); }
-.staff-input { margin-top: var(--space-12); }
-.candidate-chip { display: inline-flex; align-items: center; gap: var(--space-8); padding: 2px var(--space-8); border: 1px solid var(--color-border); border-radius: var(--radius-md); font-size: var(--text-12); }
 
 .dev-row { display: flex; align-items: center; gap: var(--space-8); color: var(--color-text-muted); padding: var(--space-8) var(--space-16); }
 
@@ -382,22 +380,6 @@ mark.placeholder { background: var(--color-warning-subtle); color: var(--color-w
 .center { flex: 1; display: flex; align-items: center; justify-content: center; }
 .empty-state { display: flex; flex-direction: column; align-items: center; gap: var(--space-8); text-align: center; }
 .empty-state .icon { width: 24px; height: 24px; color: var(--color-text-muted); }
-/* Column controls of the layout revision of 2026-11-15: window splitters and collapsed rails. */
-.shell.with-splitter { grid-template-columns: 272px 8px minmax(0, 1fr); }
-.shell.inbox-collapsed { grid-template-columns: 48px minmax(0, 1fr); }
-.workspace.with-splitter { grid-template-columns: minmax(0, 1fr) 8px 340px; gap: var(--space-4); }
-.workspace.sidebar-collapsed { grid-template-columns: minmax(0, 1fr) 48px; }
-.splitter { display: flex; align-items: center; justify-content: center; cursor: col-resize; }
-.splitter .grip { display: flex; padding: var(--space-4) 0; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text-muted); }
-.btn-icon { width: 28px; padding: 0; justify-content: center; }
-.column-rail { display: flex; flex-direction: column; align-items: center; gap: var(--space-12); padding: var(--space-12) 0; background: var(--color-surface); }
-.column-rail-left { border-right: 1px solid var(--color-border); }
-.column-rail-right { border: 1px solid var(--color-border); border-radius: var(--radius-md); }
-.column-head { display: flex; align-items: center; gap: var(--space-8); color: var(--color-text-muted); font-size: var(--text-12); font-weight: var(--weight-semibold); }
-.column-head .btn-icon { margin-left: auto; }
-.rail-mark { display: flex; padding: var(--space-4); border: 1px solid color-mix(in srgb, var(--color-ai) 35%, white); border-radius: 999px; background: var(--color-ai-subtle); color: var(--color-ai); }
-.rail-head .btn-icon { width: 20px; height: 20px; }
-.rail-head .trail { white-space: nowrap; }
 .rail-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-8); }
 .scrim { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; background: rgb(24 24 27 / 0.4); }
 .scrim-right { justify-content: flex-end; align-items: stretch; }
@@ -417,50 +399,12 @@ mark.placeholder { background: var(--color-warning-subtle); color: var(--color-w
 .reports { padding: var(--space-24); display: flex; flex-direction: column; gap: var(--space-16); }
 .reports .trail { margin-left: auto; }
 .page-title { font-size: var(--text-20); font-weight: var(--weight-semibold); margin: 0; }
-.report-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-16); align-items: start; }
-.report-column { display: flex; flex-direction: column; gap: var(--space-16); }
+.report-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-16); }
 table.report { width: 100%; border-collapse: collapse; }
-table.report th { text-align: left; font-size: var(--text-12); font-weight: var(--weight-semibold); color: var(--color-text-muted); padding: var(--space-4) var(--space-16); background: var(--color-background); }
-table.report td { padding: var(--space-4) var(--space-16); border-top: 1px solid var(--color-border); font-size: var(--text-12); }
+table.report th { text-align: left; font-size: var(--text-12); font-weight: var(--weight-semibold); color: var(--color-text-muted); padding: var(--space-8) var(--space-16); background: var(--color-background); }
+table.report td { padding: var(--space-8) var(--space-16); border-top: 1px solid var(--color-border); font-size: var(--text-12); }
 table.report .num { text-align: right; white-space: nowrap; font-weight: var(--weight-medium); }
 .sign-in { width: 360px; padding: var(--space-24); gap: var(--space-12); }
 .sign-in .brand { font-size: var(--text-18); font-weight: var(--weight-semibold); }
 .sign-in .brand span { color: var(--color-text-muted); font-weight: var(--weight-regular); }
 .error-line { display: flex; align-items: center; gap: var(--space-4); color: var(--color-danger); }
-
-/* ---------- Account menu, password fields, and form controls (account management design) ---------- */
-
-.account-trigger { display: inline-flex; align-items: center; gap: var(--space-8); height: 32px; padding: 0 var(--space-8); border: 1px solid transparent; border-radius: var(--radius-md); background: transparent; color: var(--color-text-muted); font: inherit; }
-.account-trigger b { color: var(--color-text); font-weight: var(--weight-medium); }
-.account-trigger.open { border-color: var(--color-border-strong); background: var(--color-background); }
-.account-menu { position: fixed; top: 44px; right: var(--space-16); z-index: 30; width: 240px; padding: var(--space-4); background: var(--color-surface-raised); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: var(--elevation-3); }
-.account-menu .menu-heading { display: flex; flex-direction: column; padding: var(--space-8); }
-.account-menu .menu-heading b { font-weight: var(--weight-semibold); }
-.account-menu hr { margin: var(--space-4) 0; border: none; border-top: 1px solid var(--color-border); }
-.account-menu .menu-entry { display: flex; align-items: center; gap: var(--space-8); padding: var(--space-8); border-radius: var(--radius-sm); font-weight: var(--weight-medium); }
-.account-menu .menu-entry.focused { background: var(--color-background); outline: 2px solid var(--color-focus-ring); outline-offset: -2px; }
-
-.input .toggle { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: var(--radius-sm); color: var(--color-text-muted); }
-.input-invalid { border-color: var(--color-danger); }
-.input-prefix { display: flex; align-items: stretch; }
-.input-prefix .prefix { display: flex; align-items: center; padding: 0 var(--space-8); border: 1px solid var(--color-border-strong); border-right: none; border-radius: var(--radius-md) 0 0 var(--radius-md); background: var(--color-background); font-family: var(--font-mono); font-size: var(--text-12); }
-.input-prefix .input { flex: 1; border-radius: 0 var(--radius-md) var(--radius-md) 0; }
-.placeholder-text { color: var(--color-text-muted); }
-.field-hint { font-size: var(--text-12); color: var(--color-text-muted); }
-.field-error { display: flex; align-items: center; gap: var(--space-4); font-size: var(--text-12); color: var(--color-danger); }
-
-.radio-group { display: flex; gap: var(--space-16); }
-.radio { display: inline-flex; align-items: center; gap: var(--space-8); font-weight: var(--weight-medium); }
-.radio i { width: 16px; height: 16px; border: 1px solid var(--color-border-strong); border-radius: 50%; background: var(--color-surface); display: inline-block; }
-.radio i.on { border: 5px solid var(--color-primary); }
-.checkbox i.on { display: inline-flex; align-items: center; justify-content: center; border-color: var(--color-primary); background: var(--color-primary); color: var(--color-primary-foreground); }
-.checkbox i.on .icon { width: 12px; height: 12px; }
-.input-row { display: flex; align-items: center; gap: var(--space-8); }
-.input-row .input { flex: 1; }
-
-.form-panel { width: 400px; padding: var(--space-24); gap: var(--space-16); }
-.form-panel .brand { font-size: var(--text-18); font-weight: var(--weight-semibold); }
-.form-panel h1 { margin: 0; font-size: var(--text-20); font-weight: var(--weight-semibold); }
-.form-panel p { margin: 0; }
-.form-actions { display: flex; justify-content: flex-end; gap: var(--space-8); }
-.dialog-form { width: 520px; }

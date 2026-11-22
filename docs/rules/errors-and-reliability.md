@@ -1,6 +1,6 @@
 # Error and reliability rules
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-11
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-04
 
 Every failure is designed: it has a type, a defined behavior, a contract mapping, a log event, and a test. The system never turns a failure into a firm answer without evidence.
 
@@ -69,7 +69,7 @@ Every error belongs to exactly one category:
 
 ## Idempotency
 
-**ERR-15.** Every write operation that a client may retry accepts an `Idempotency-Key`. A repeated key with the same body and path parameters returns the original result without repeating the side effect. A repeated key with a different body or different path parameters returns `409`. Password fields are the one exception: the request hash leaves them out, so no password is ever stored in an idempotency record, and a repeated key with a different password returns the original result. A client therefore creates a new key whenever a password field changes ([account management design](../design/account-management.md#idempotency)).
+**ERR-15.** Every write operation that a client may retry accepts an `Idempotency-Key`. A repeated key with the same body returns the original result without repeating the side effect. A repeated key with a different body returns `409`.
 
 **ERR-16.** Recording a staff decision and sending a reply are idempotent. A retry never records a decision twice or sends a reply twice.
 

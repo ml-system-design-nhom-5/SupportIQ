@@ -1,9 +1,0 @@
-{
-  "dataset": "synthetic-dev-only-named-entity-trial-v1.json",
-  "source": "Written by hand; synthetic-dev-only (DATA-03)",
-  "version": 1,
-  "sha256": "3efb455aa289b4a386ef484936e179c40aef3e48b27a9e7b2f4a6416aace427d",
-  "row_count": 32,
-  "producing_script": null,
-  "created": "2026-11-15"
-}

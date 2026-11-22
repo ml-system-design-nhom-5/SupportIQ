@@ -1,5 +1,5 @@
 /*
- * Admin UI mockups (design docs: docs/design/admin-ui.md and docs/design/account-management.md).
+ * Admin UI mockups (design doc: docs/design/admin-ui.md).
  * Review material, not frontend code. Design tokens, the app shell, and primitives come from
  * ../console-ui/mockup.css; this file only adds the admin layout.
  */
@@ -7,7 +7,6 @@
 .admin-main { flex: 1; width: 100%; max-width: 1040px; margin: 0 auto; padding: var(--space-24); display: flex; flex-direction: column; gap: var(--space-16); }
 .admin-main .page-title { display: flex; align-items: center; gap: var(--space-12); }
 .admin-main .page-title .trail { margin-left: auto; font-size: var(--text-14); font-weight: var(--weight-regular); }
-.admin-main .page-title .btn { font-size: var(--text-14); font-weight: var(--weight-medium); }
 
 table.accounts { width: 100%; border-collapse: collapse; }
 table.accounts th { text-align: left; font-size: var(--text-12); font-weight: var(--weight-semibold); color: var(--color-text-muted); padding: var(--space-8) var(--space-16); background: var(--color-background); }
@@ -17,11 +16,8 @@ table.accounts td.actions .btn + .btn { margin-left: var(--space-8); }
 table.accounts .note { font-size: var(--text-12); color: var(--color-text-muted); }
 
 .btn-danger { background: var(--color-danger); border-color: var(--color-danger); color: var(--color-text-inverse); }
-.banner-success { background: var(--color-success-subtle); border-color: color-mix(in srgb, var(--color-success) 35%, white); }
-.banner-success .icon, .banner-success b { color: var(--color-success); }
 
 table.accounts th:last-child { text-align: right; }
-table.accounts td, table.accounts th { padding-left: var(--space-12); padding-right: var(--space-12); }
 
 .versions { display: grid; grid-template-columns: 240px 1fr; margin: 0; }
 .versions dt, .versions dd { margin: 0; padding: var(--space-12) var(--space-16); border-top: 1px solid var(--color-border); }

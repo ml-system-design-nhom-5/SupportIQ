@@ -24,7 +24,6 @@ const ICONS = {
   lock: '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
   search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
   x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
-  key: '<path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/>',
 };
 
 function icon(name, extraClass = "") {
@@ -101,31 +100,21 @@ const JUST_SENT = {
 
 // ---------- Building blocks ----------
 
-function shopBar(active, isMenuOpen = false) {
+function shopBar(active) {
   const link = (key, iconName, label) => `<a class="${active === key ? "active" : ""}">${icon(iconName)}${label}</a>`;
   return `<header class="shopbar">
     <div class="brand">${icon("shoppingBag")}Demo Shop</div>
     <nav>${link("products", "grid", "Products")}${link("orders", "package", "My orders")}${link("support", "lifeBuoy", "Support")}</nav>
-    <div class="user"><button class="account-trigger${isMenuOpen ? " open" : ""}">${icon("user")}<span><b>${CUSTOMER}</b> · Customer</span>${icon("chevronDown", "icon-sm")}</button></div>
-  </header>${isMenuOpen ? accountMenu() : ""}`;
-}
-
-// The account menu of the account management design, drawn open.
-function accountMenu() {
-  return `<div class="account-menu" role="menu">
-    <div class="menu-heading"><b>${CUSTOMER}</b><span class="muted">Customer</span></div>
-    <hr>
-    <div class="menu-entry focused" role="menuitem">${icon("key")}Change password</div>
-    <div class="menu-entry" role="menuitem">${icon("logOut")}Sign out</div>
-  </div>`;
+    <div class="user">${icon("user")}<span><b>${CUSTOMER}</b></span><button class="btn btn-ghost btn-sm">${icon("logOut", "icon-sm")}Sign out</button></div>
+  </header>`;
 }
 
 function mockLabel(text) {
   return `<div class="mock-label">Mockup · ${text} · Sample data (synthetic-dev-only)</div>`;
 }
 
-function page(active, inner, label, overlay = "", isMenuOpen = false) {
-  return `<div class="shop-app">${shopBar(active, isMenuOpen)}<main class="shop-main">${inner}</main>${overlay}${mockLabel(label)}</div>`;
+function page(active, inner, label, overlay = "") {
+  return `<div class="shop-app">${shopBar(active)}<main class="shop-main">${inner}</main>${overlay}${mockLabel(label)}</div>`;
 }
 
 function lineList(lines) {
@@ -271,7 +260,6 @@ const SCREENS = {
   "permission-denied": () => `<div class="shop-app"><header class="shopbar"><div class="brand">${icon("shoppingBag")}Demo Shop</div></header><main class="shop-main"><section class="card"><div class="card-body"><div class="empty-state">${icon("lock")}<b>The shop is for customer accounts</b><span class="muted">You are signed in with a support or admin account. Sign out, then sign in with a customer account.</span><button class="btn">${icon("logOut", "icon-sm")}Sign out</button><span class="row small muted">Details: trace 9e2f61c0</span></div></div></section></main>${mockLabel("State · permission denied (403)")}</div>`,
   "orders-mobile": () => page("orders", ordersList(), "My orders, phone width"),
   "order-mobile": () => page("orders", ORDER_PAGE(), "Order, phone width"),
-  "account-menu-mobile": () => page("orders", ordersList(), "Account menu open, phone width", "", true),
   "proposal-contact-panel": () => page("products", productsGrid(), "Proposal, not decided · Contact support panel with an order picker", contactPanel()),
 };
 

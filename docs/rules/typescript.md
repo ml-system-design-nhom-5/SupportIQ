@@ -1,6 +1,6 @@
 # TypeScript rules
 
-> **Status:** Active · **Owner:** frontend · **Last reviewed:** 2026-11-08
+> **Status:** Active · **Owner:** frontend · **Last reviewed:** 2026-10-23
 
 TypeScript and React rules for `frontend`. They build on [code.md](code.md) and [ui.md](ui.md); where several apply, all must hold.
 
@@ -46,7 +46,6 @@ frontend/src/
 ├── app/                 # routes, providers, layout shells, error boundaries
 ├── design-system/       # tokens, primitives, domain components (ADR-0008)
 │   ├── tokens/
-│   ├── format/          # money, date, number, and clock formatting
 │   ├── primitives/
 │   └── components/
 ├── features/
@@ -65,7 +64,7 @@ frontend/src/
 
 - `features/<a>` imports `features/<b>` only through `features/<b>/index.ts`.
 - `design-system/` imports nothing from `features/`, `app/`, or `api/`.
-- Only `features/*/api/`, `app/composition-root.tsx`, and `test/` import from `api/`.
+- Only `features/*/api/` imports from `api/`.
 - `app/` composes features and never contains business presentation logic.
 
 **TS-07.** File names are `kebab-case` (`ticket-list.tsx`). A file exports one component, named in `PascalCase` after the file. Path aliases (`@/features/...`) replace deep relative imports (`../../..`).
@@ -120,7 +119,7 @@ frontend/src/
 
 **TS-28.** Only `features/*/api/` calls the client. Components never call `fetch` or the client directly.
 
-**TS-29.** Write mutations that the contract gives an `Idempotency-Key` send one, created once per user action, and automatic retries reuse it ([ERR-15](errors-and-reliability.md#idempotency)). Repeating the same action after a failure is a retry of that action: sending the same text again, or confirming the same change again, reuses the key. Sign-in and sign-out take no key and are never retried automatically ([CON-13](contracts.md#api-conventions)). Sending a reply is never retried automatically.
+**TS-29.** Write mutations send an `Idempotency-Key` created once per user action. Automatic retries reuse the same key. Sending a reply is never retried automatically.
 
 ## Documentation
 

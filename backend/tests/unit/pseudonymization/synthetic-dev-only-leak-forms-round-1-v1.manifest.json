@@ -1,9 +1,0 @@
-{
-  "dataset": "synthetic-dev-only-leak-forms-round-1-v1.json",
-  "source": "Rebuilt from the message set of round 1 of the backend comparison (make_messages.py, Faker 33.1.0, seed 20261118; sha256 602389bd1c9e8e3a4907334e890d9817c8f59e4370094367463ebfc8ffde905e); synthetic-dev-only (DATA-03)",
-  "version": 1,
-  "sha256": "4944d97fae0cd8efe0a167ac894ac2e6fcd8a12179999c5d5235b3c4f56fcd51",
-  "row_count": 30,
-  "producing_script": null,
-  "created": "2026-11-20"
-}

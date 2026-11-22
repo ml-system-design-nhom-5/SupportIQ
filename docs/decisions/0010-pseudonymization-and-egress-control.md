@@ -1,9 +1,9 @@
 # ADR-0010: Pseudonymization of personal data and egress control
 
-- **Status:** Accepted
-- **Date:** 2026-11-12
+- **Status:** Proposed
+- **Date:** 2026-10-28
 - **Deciders:** Team
-- **Related:** [Requirements](../product/requirements.md) (FR-09, NFR-06), [ADR-0001](0001-system-architecture.md), [ADR-0005](0005-intent-independent-retrieval.md), [ADR-0006](0006-staff-feedback-and-reason-codes.md), [ADR-0011](0011-deployment-and-runtime-topology.md), [ADR-0016](0016-hosting-on-free-tiers.md), [security rules](../rules/security-and-privacy.md#pseudonymization), [Design: contracts v1](../design/contracts-v1.md)
+- **Related:** [Requirements](../product/requirements.md) (FR-09, NFR-06), [ADR-0001](0001-system-architecture.md), [ADR-0005](0005-intent-independent-retrieval.md), [ADR-0006](0006-staff-feedback-and-reason-codes.md), [ADR-0011](0011-deployment-and-runtime-topology.md), [security rules](../rules/security-and-privacy.md#pseudonymization), [Design: contracts v1](../design/contracts-v1.md)
 
 ## Context
 
@@ -16,7 +16,6 @@
 - `backend` owns customer and order data ([ADR-0001](0001-system-architecture.md)), so it knows the exact values to look for. `ai-service` never reads `backend` data ([ARCH-04](../rules/architecture.md#component-boundaries)) and keeps no per-ticket state ([ARCH-09](../rules/architecture.md#component-boundaries)).
 - Intent classification, retrieval, and drafting all run on the text that `ai-service` receives ([ADR-0005](0005-intent-independent-retrieval.md)).
 - All data is simulated but handled as if it were real ([SEC-02](../rules/security-and-privacy.md#data-classification)).
-- Revised on 2026-11-12, while Proposed: Egress control states which hosts each component may call, not how other calls are blocked. [ADR-0016](0016-hosting-on-free-tiers.md) decides the enforcement. The pseudonymization decision is unchanged.
 
 ## Decision drivers
 
@@ -47,7 +46,7 @@ flowchart LR
         RES["restore for staff"] -->|"read"| MAP
     end
     JOB -->|"pseudonymized text, allow-listed order context"| AI["ai-service"]
-    AI -->|"masked text, KB snippets, order fields"| EP["egress control<br/>host allow-list"]
+    AI -->|"masked text, KB snippets, order fields"| EP["egress proxy<br/>host allow-list"]
     EP -->|"TLS, allowed host only"| LLM["LLM provider"]
     AI -->|"AI text with placeholders"| JOB
     JOB -->|"stored as received"| DB[("suggestion records")]
@@ -59,7 +58,7 @@ flowchart LR
 sequenceDiagram
     participant BE as backend
     participant AI as ai-service
-    participant EP as egress control
+    participant EP as egress proxy
     participant LLM as LLM provider
     BE->>BE: Pseudonymize the message (first job of the ticket: store the map)
     alt Detector error, storage error, or text over 4 000 characters
@@ -67,12 +66,12 @@ sequenceDiagram
     else Pseudonymized text ready
         BE->>AI: POST /v1/drafts with the pseudonymized message
         AI->>AI: Mask personal-data patterns still present (second layer)
-        AI->>EP: HTTPS call to the LLM host
+        AI->>EP: HTTPS CONNECT to the LLM host
         alt Host not on the allow-list
-            EP-->>AI: Call refused
+            EP-->>AI: Connection refused
             AI-->>BE: llm_unavailable
         else Host allowed
-            EP->>LLM: HTTPS with TLS end to end
+            EP->>LLM: Tunnel with TLS end to end
             alt Timeout, 5xx, or rate limit after the retries the budget allows
                 AI-->>BE: llm_unavailable, no draft
             else Output received
@@ -192,22 +191,22 @@ The limit of 4 000 characters is twice the `MessageText` limit. Only a message m
 | The pseudonymized text is longer than 4 000 characters | Same behavior. This is handled input, not a defect | Event `pseudonymization.failed` at `warning` |
 | `ai-service` finds a personal-data pattern outside any placeholder | The value is masked and the request continues | Event `personal_data.masked` at `warning`, with the type only |
 | The LLM output contains a placeholder that was not in the prompt | No draft; outcome `llm_invalid_output` | Event `llm.call_failed` |
-| A call to a host that is not on the egress allow-list is refused | No draft; outcome `llm_unavailable`; the attempt counts toward the circuit breaker ([ERR-14](../rules/errors-and-reliability.md#retries)) | Event `llm.call_failed` |
+| The egress proxy refuses the connection | No draft; outcome `llm_unavailable`; the attempt counts toward the circuit breaker ([ERR-14](../rules/errors-and-reliability.md#retries)) | Event `llm.call_failed` |
 | A pseudonym in stored AI text is missing from the map | The pseudonym stays visible and highlighted. This is a defect | Event `pseudonym.restore_failed` at `error` |
 | A reply or proposal body contains a placeholder | `422 invalid-request` | Handler test |
 
 ### Egress control
 
-This section states which hosts each component may call. How every other call is blocked is decided by [ADR-0016](0016-hosting-on-free-tiers.md).
-
-1. `ai-service` MUST call outside the system only the LLM provider hosts on the egress allow-list. Whether another host receives text from `ai-service`, such as a host that serves the model, is decided at the join with the AI and ML code, together with where `ai-service` runs ([ADR-0016, Open questions](0016-hosting-on-free-tiers.md#open-questions)).
-2. The allow-list is a versioned configuration file in the repository. It contains only the LLM provider host names. Changing it is a security change that needs two approvals ([SEC-35](../rules/security-and-privacy.md#security-review)).
-3. `backend` MUST make outbound connections only to its database, to `ai-service`, and to the telemetry destination in its settings. Its one-off commands connect only to its database.
+1. When the full stack runs in Docker Compose, `ai-service` MUST be attached only to the `internal` and `llm-egress` networks, neither of which has an internet route ([ADR-0011](0011-deployment-and-runtime-topology.md#topology)). The `llm-egress` network has exactly two members: `ai-service` and `egress-proxy`.
+2. The only route out is the egress proxy: a forward proxy for HTTPS `CONNECT` with a host allow-list. The proxy MUST refuse every host that is not on the list. It tunnels TLS end to end, so it never sees request bodies or API keys.
+3. The allow-list is a versioned configuration file in the repository. It contains only the LLM provider host names. Changing it is a security change that needs two approvals ([SEC-35](../rules/security-and-privacy.md#security-review)).
+4. `ai-service` uses the proxy only for LLM calls, through the setting `llm_proxy_url`. It makes no other outbound call.
+5. `backend`, `backend-migrate`, PostgreSQL, and the observability stack MUST have no outbound internet access, directly or through the egress proxy: they share no network with it.
 
 ### Secrets
 
-1. The LLM API key exists only in the secret settings of `ai-service` ([SEC-10](../rules/security-and-privacy.md#secrets)). It is injected at runtime, from `.env` locally and from the settings of the hosting platform when deployed ([ADR-0016](0016-hosting-on-free-tiers.md#secrets)).
-2. The key is never given to another service or proxy. The specification's Figure 3 shows a proxy receiving the key; this decision keeps the key in `ai-service` and TLS end to end instead, so nothing between `ai-service` and the LLM provider can read the traffic.
+1. The LLM API key exists only in the secret settings of `ai-service` ([SEC-10](../rules/security-and-privacy.md#secrets)). It is injected at runtime, from `.env` locally and from the AWS secret store on the shared test host ([ADR-0011](0011-deployment-and-runtime-topology.md)).
+2. The key is never given to the egress proxy. The specification's Figure 3 shows the proxy receiving the key; this decision keeps TLS end to end instead, so the proxy cannot read traffic.
 
 ## Consequences
 
@@ -217,14 +216,14 @@ This section states which hosts each component may call. How every other call is
 - Drafts can repeat the references that the customer wrote, by pseudonym, and staff see the real values. A draft cannot name an order or a customer that the message does not mention, because the order context holds no identifiers; staff add such a reference themselves.
 - One component owns personal data and its map, consistent with ADR-0001.
 - NFR-06 is measurable: seeded personal values are searched for in every request to `ai-service`, every LLM payload, and every log line.
-- A prompt injection cannot make `ai-service` send text to a host that is not on the allow-list, and no other service holds the API key.
+- A prompt injection cannot reach an unknown host or read the API key through the proxy.
 
 ### Negative
 
 - Detection stays incomplete: the named-entity detector can miss values, and it can replace terms that are not personal data. Both are measured.
-- The named-entity detector adds a dependency and memory use in every `backend` replica (NFR-08).
+- The named-entity detector adds a dependency and memory use in both `backend` replicas (NFR-08).
 - The LLM can alter a placeholder. Such output is rejected, which can lower the share of tickets that get a draft.
-- `backend` gains a feature module and a table. `ai-service` gains an output check and the enforcement of its allow-list.
+- `backend` gains a feature module and a table. `ai-service` gains an output check and a proxy setting. Docker Compose gains a proxy container.
 - The classifier receives placeholders that the training text may not contain.
 
 ### Follow-ups
@@ -233,7 +232,7 @@ This section states which hosts each component may call. How every other call is
 - `backend` ticket workflow design: the detector implementations, the named-entity library and its exclusion list, and the identifier formats of the shared commerce data.
 - `ai-service` pipeline design: prompt instructions for placeholders and the output check.
 - The DATA-11 loading report states whether Bitext instructions contain identifiers. The classifier's handling of placeholders follows [DATA-59](../rules/data-and-ml.md#models-and-artifacts).
-- [ADR-0016](0016-hosting-on-free-tiers.md#outbound-connections) enforces the list of `backend` with a guardrail test. The enforcement for `ai-service` is decided with its placement.
+- The egress proxy image and its configuration are added at scaffold, as part of [ADR-0011](0011-deployment-and-runtime-topology.md).
 
 ## Pros and cons of the options
 
@@ -264,6 +263,6 @@ This section states which hosts each component may call. How every other call is
 - The NFR-06 suite includes messages that name third persons and unknown addresses, and it reports misses and over-detection separately.
 - A reply body that contains a placeholder is rejected with `422`.
 - A pseudonymizer that raises an error results in no call to `ai-service` and the reason `pseudonymization_failed`.
-- A call from `ai-service` to a host that is not on the allow-list fails.
-- `backend` connects only to its database, `ai-service`, and the telemetry destination in its settings ([TEST-26](../rules/testing.md#guardrail-tests)).
+- From inside the `ai-service` container, a connection to a host that is not on the allow-list fails, and a direct connection without the proxy fails.
+- From inside the `backend` container, no internet host is reachable, directly or through the egress proxy.
 - Revisit if the NFR-06 suite finds personal data that the detectors miss, if over-detection lowers the NFR-01 or NFR-03 results, or if outputs rejected for altered placeholders noticeably lower the draft rate in evaluation.
