@@ -89,8 +89,24 @@ def _check_place(output: Path, inputs: Sequence[Path]) -> None:
         raise OutputFolderError(OutputFolderProblem.IN_AN_INPUT)
 
 
+def hidden_partial_path(target: Path) -> Path:
+    """Return a new hidden path next to a target, for a file or folder written before a rename.
+
+    Every command writes this way, so a partial entry is always `.<name>.partial-<hex>` next to
+    its target, on the same file system, and the rename is atomic. No command reads such an
+    entry, and the local run skips every name that starts with `.`.
+
+    Args:
+        target: The file or folder that the entry becomes once it is whole.
+
+    Returns:
+        `<parent>/.<name>.partial-<16 hexadecimal characters>`, which does not exist yet.
+    """
+    return target.parent / f".{target.name}.partial-{secrets.token_hex(_STAGING_TOKEN_BYTES)}"
+
+
 def _make_staging_folder(output: Path) -> Path:
-    staging = output.parent / f".{output.name}.partial-{secrets.token_hex(_STAGING_TOKEN_BYTES)}"
+    staging = hidden_partial_path(output)
     try:
         output.parent.mkdir(parents=True, exist_ok=True)
         staging.mkdir()

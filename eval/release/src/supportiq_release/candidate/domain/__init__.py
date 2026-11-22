@@ -3,6 +3,7 @@
 from supportiq_release.candidate.domain.spec import (
     ASSET_NAMES,
     MANIFEST_FILE_NAME,
+    RELEASE_ID_PATTERN,
     AssetName,
     AssetSpec,
     ReleaseSpec,
@@ -15,6 +16,7 @@ from supportiq_release.candidate.domain.spec import (
 __all__ = [
     "ASSET_NAMES",
     "MANIFEST_FILE_NAME",
+    "RELEASE_ID_PATTERN",
     "AssetName",
     "AssetSpec",
     "ReleaseSpec",

@@ -1,17 +1,20 @@
 [project]
 name = "supportiq-release"
 version = "0.1.0"
-description = "SupportIQ release command: KB ingestion, the candidate release manifest, and the offline evaluation gate."
+description = "SupportIQ release command: KB ingestion, the candidate release manifest, the offline evaluation gate, and the release download."
 readme = "README.md"
 # One Python version for all Python code, pinned with ../../.python-version (PY-01).
 requires-python = "~=3.14.4"
 # KB ingestion needs only the standard library. The candidate manifest and the gate use
 # ai-service through its public modules only (ADR-0021, Where the code of main goes, statements 1
-# and 3). Each version is the one of ai-service/uv.lock. Every dependency is justified in
-# README.md (WF-27).
+# and 3). The settings of the release download are one pydantic-settings class, with the token
+# as SecretStr (PY-43, PY-44). Each version is the one of ai-service/uv.lock. Every dependency is
+# justified in README.md (WF-27).
 dependencies = [
     "defusedxml==0.7.1",
     "httpx==0.28.1",
+    "pydantic==2.14.3",
+    "pydantic-settings==2.16.2",
     "starlette==1.10.0",
     "supportiq-ai-service",
 ]
@@ -140,11 +143,14 @@ include_external_packages = true
 [[tool.importlinter.contracts]]
 name = "Layers: the composition root, then adapters, then shared files, then domain, then the root error (ARCH-11, PY-20)"
 type = "layers"
+# The domain of the release download sits above the other domains, because it uses the pattern
+# of a release ID and the name of the manifest from the public API of the candidate domain.
 layers = [
     "supportiq_release.composition_root",
     "supportiq_release.gate.adapters",
-    "supportiq_release.kb_ingestion.adapters | supportiq_release.candidate.adapters",
+    "supportiq_release.kb_ingestion.adapters | supportiq_release.candidate.adapters | supportiq_release.distribution.adapters",
     "supportiq_release.files",
+    "supportiq_release.distribution.domain",
     "supportiq_release.kb_ingestion.domain | supportiq_release.candidate.domain | supportiq_release.gate.domain",
     "supportiq_release.errors",
 ]
@@ -156,8 +162,9 @@ source_modules = [
     "supportiq_release.kb_ingestion.domain",
     "supportiq_release.candidate.domain",
     "supportiq_release.gate.domain",
+    "supportiq_release.distribution.domain",
 ]
-forbidden_modules = ["json", "pathlib", "hashlib", "argparse", "app"]
+forbidden_modules = ["json", "pathlib", "hashlib", "argparse", "app", "httpx", "tarfile"]
 
 [[tool.importlinter.contracts]]
 name = "The release command imports only public modules of ai-service (ADR-0021, statement 1)"

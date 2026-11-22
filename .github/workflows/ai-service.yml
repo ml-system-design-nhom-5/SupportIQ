@@ -44,9 +44,10 @@ jobs:
         run: |
           uv tool install --python 3.12 pre-commit==4.7.0
           uv tool dir --bin >> "$GITHUB_PATH"
+      # The deploy group holds the Modal SDK, which pyright needs for modal_app.py (ADR-0030).
       - name: Install the Python of .python-version and the locked ai-service dependencies
         working-directory: ai-service
-        run: uv sync --locked
+        run: uv sync --locked --group deploy
       - name: Check the formatting (ruff format)
         run: pre-commit run ai-service-format --all-files --show-diff-on-failure
       - name: Lint (ruff)
@@ -95,12 +96,13 @@ jobs:
         with:
           version: "0.11.11"
           enable-cache: false
+      # The deploy group holds the Modal SDK, which the tests of modal_app.py import (ADR-0030).
       - name: Install the Python of .python-version and the locked dependencies, without torch
         working-directory: ai-service
-        run: uv sync --locked
+        run: uv sync --locked --group deploy
       - name: Run the tests with the fakes, without torch (ADR-0021, CI, statement 4)
         working-directory: ai-service
-        run: uv run --locked pytest --junitxml="$RUNNER_TEMP/ai-service-tests.xml"
+        run: uv run --locked --group deploy pytest --junitxml="$RUNNER_TEMP/ai-service-tests.xml"
       # The tests that need torch skip with this one reason, by design: ai-service-tests-torch
       # runs them and allows no skip (ADR-0021, CI, statement 4, which stands above TEST-20).
       # Every other skip fails, as TEST-20 requires. pytest reports a module that skips while it
@@ -155,14 +157,14 @@ jobs:
           enable-cache: false
       - name: Install the Python of .python-version and the locked dependencies, with torch
         working-directory: ai-service
-        run: uv sync --locked --group torch
+        run: uv sync --locked --group torch --group deploy
       - name: Check that torch from the CPU index is installed
         working-directory: ai-service
         run: uv run --locked --group torch python -I -c "import torch; print(torch.__version__)"
       - name: Run every test with torch, with branch coverage (ADR-0021, CI, statement 4)
         working-directory: ai-service
         run: >-
-          uv run --locked --group torch pytest --cov --cov-report=
+          uv run --locked --group torch --group deploy pytest --cov --cov-report=
           --junitxml="$RUNNER_TEMP/ai-service-tests-torch.xml"
       # The text of a skip names its file, line, and reason, also for a module that skips while
       # it is collected; an expected failure has only its message.
@@ -243,6 +245,27 @@ jobs:
             --format requirements-txt --output-file "$RUNNER_TEMP/requirements-release.txt"
           uv run --locked pip-audit --strict --disable-pip --require-hashes --timeout 60 \
             --requirement "$RUNNER_TEMP/requirements-release.txt"
+      # The pinned file names a published release, always, and GitHub holds its archive with
+      # that size whenever the pinned file changes (ADR-0030, Release archives, statement 5).
+      # The step always runs and reports. It reads the public API of GitHub only for a change of
+      # the pinned file, anonymously, because a check that depends on another website must not
+      # block other pull requests (repository checks, Open questions). A missing or unfetchable
+      # base counts as a change.
+      - name: Check the pinned release, and its archive on GitHub when the pinned file changed
+        env:
+          BASE_COMMIT: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          pinned=eval/releases/pinned-release.txt
+          no_commit="$(printf '0%.0s' {1..40})"
+          remote=(--remote)
+          if [[ "$BASE_COMMIT" =~ ^[0-9a-f]{40}$ && "$BASE_COMMIT" != "$no_commit" ]] \
+            && git fetch --no-tags --depth=1 origin "$BASE_COMMIT" \
+            && git diff --quiet "$BASE_COMMIT" HEAD -- "$pinned"; then
+            remote=()
+            echo "The pinned file did not change since $BASE_COMMIT: GitHub is not read."
+          fi
+          uv run --locked --project eval/release supportiq-release check-pinned-release \
+            --release-records eval/releases "${remote[@]}"
 
   ai-service-image:
     name: ai-service-image
@@ -255,3 +278,8 @@ jobs:
           persist-credentials: false
       - name: Build the ai-service image, with torch from the CPU index (ARCH-10)
         run: docker build --tag supportiq-ai-service:ci ai-service
+      # The deploy group stays out of the image that serves (ADR-0030, The Modal function, 2).
+      - name: Check that the image holds no package of the deploy group
+        run: >-
+          docker run --rm --entrypoint python supportiq-ai-service:ci -I -c
+          "import importlib.util, sys; sys.exit(importlib.util.find_spec('modal') is not None)"

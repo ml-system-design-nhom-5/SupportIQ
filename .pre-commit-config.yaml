@@ -415,10 +415,11 @@ repos:
         files: ^ai-service/
         pass_filenames: false
         stages: [pre-commit]
+      # The deploy group holds the Modal SDK, which pyright needs for modal_app.py (ADR-0030).
       - id: ai-service-types
         name: Type-check the ai-service code in strict mode (pyright)
         language: system
-        entry: bash -c 'cd ai-service && uv run --locked pyright'
+        entry: bash -c 'cd ai-service && uv run --locked --group deploy pyright'
         files: ^ai-service/
         pass_filenames: false
         stages: [pre-commit]

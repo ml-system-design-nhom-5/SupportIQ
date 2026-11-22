@@ -46,6 +46,10 @@ dev = [
 # installs on macOS without it (ADR-0021, Python and dependencies, statement 2). The image and
 # CI install it with `uv sync --locked --group torch`.
 torch = ["torch==2.15.0 ; sys_platform == 'linux'"]
+# The Modal SDK, for `modal deploy` of modal_app.py and its tests only (ADR-0030). The Dockerfile
+# installs `--no-dev --group torch`, so the image that serves never holds it. CI installs it with
+# `uv sync --locked --group deploy` where pyright and the tests read modal_app.py.
+deploy = ["modal==1.6.4"]
 
 [tool.uv.sources]
 torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
@@ -131,7 +135,9 @@ known-first-party = ["app", "tests"]
 
 # ----- Type checking (PY-03, CODE-26) -----
 [tool.pyright]
-include = ["app", "tests"]
+# modal_app.py is the Modal app of ai-service, next to its Dockerfile (ADR-0030); pyright reads
+# it with the `deploy` group installed.
+include = ["app", "tests", "modal_app.py"]
 exclude = ["app/generated", "**/__pycache__", ".venv"]
 ignore = ["app/generated"]
 typeCheckingMode = "strict"
@@ -170,7 +176,8 @@ filterwarnings = ["error"]
 
 [tool.coverage.run]
 branch = true
-source = ["app"]
+# modal_app.py, the Modal app next to the Dockerfile (ADR-0030), is measured with the package.
+source = ["app", "modal_app"]
 # Generated code is excluded from coverage (CON-26, TEST-22).
 omit = ["*/app/generated/*"]
 

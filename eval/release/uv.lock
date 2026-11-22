@@ -1071,6 +1071,7 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
+deploy = [{ name = "modal", specifier = "==1.6.4" }]
 dev = [
     { name = "anyio", specifier = "==4.16.0" },
     { name = "coverage", specifier = "==7.17.2" },
@@ -1096,6 +1097,8 @@ source = { editable = "." }
 dependencies = [
     { name = "defusedxml" },
     { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
     { name = "starlette" },
     { name = "supportiq-ai-service" },
 ]
@@ -1118,6 +1121,8 @@ dev = [
 requires-dist = [
     { name = "defusedxml", specifier = "==0.7.1" },
     { name = "httpx", specifier = "==0.28.1" },
+    { name = "pydantic", specifier = "==2.14.3" },
+    { name = "pydantic-settings", specifier = "==2.16.2" },
     { name = "starlette", specifier = "==1.10.0" },
     { name = "supportiq-ai-service", editable = "../../ai-service" },
 ]
