@@ -1,6 +1,6 @@
 # Security and privacy rules
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-21
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-23
 
 Strict rules for protecting data and keys, especially when calling LLM providers (FR-08, FR-09). All data in this project is simulated, but it is handled exactly as real data would be, so the habits and the controls are right from the start.
 
@@ -41,7 +41,7 @@ Everything else is forbidden, including names, emails, phone numbers, addresses,
 
 **SEC-06.** Before every LLM call, `ai-service` replaces personal-data patterns that are still present outside placeholders with masks: `[EMAIL]`, `[PHONE]`, `[CARD]` ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#placeholder-syntax)). Masking is the second layer and never replaces pseudonymization. Each pattern has unit tests with at least five positive and five negative examples. Every mask applied is logged as `personal_data.masked` at `warning`, with the type only, because it means pseudonymization missed a value.
 
-**SEC-07.** The LLM provider and plan are chosen so that API data is not used for training and is retained as briefly as the provider allows. The LLM provider ADR records the terms that were checked.
+**SEC-07.** The LLM provider and plan are chosen so that API data is not used for training and is retained as briefly as the provider allows. The LLM provider ADR records the terms that were checked. Every deployment, the demo deployment on Modal included, uses such a paid plan. The only exception is the local run of the [local run design](../design/local-run.md), on a developer's or a tester's own machine: it MAY use a key of a free plan whose terms let the provider use and read the requests, because it processes only simulated data (CST-03), and the text is still pseudonymized by `backend` and masked by `ai-service` before it leaves the machine (SEC-04, SEC-06). The exception changes no data class (SEC-02), and the [local-run guide](../guides/local-run.md) warns testers that the provider may use and read those requests and that no real data may be entered.
 
 **SEC-08.** Only `ai-service` calls LLM providers, over TLS, only to the hosts on the egress allow-list ([SEC-40](#transport-and-runtime)), with a key used for nothing else.
 

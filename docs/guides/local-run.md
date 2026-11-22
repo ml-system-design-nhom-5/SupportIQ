@@ -1,6 +1,6 @@
 # Local run of the whole system
 
-> **Status:** Active · **Owner:** project lead · **Last reviewed:** 2026-11-18
+> **Status:** Active · **Owner:** project lead · **Last reviewed:** 2026-11-23
 
 This guide starts the whole SupportIQ system on your machine with one command: PostgreSQL 17, `backend` with the simulated demo data, `frontend`, and optionally `ai-service` and the local Grafana stack. It is for testers and developers of the team. The [local run design](../design/local-run.md) records why it works this way.
 
@@ -74,6 +74,7 @@ deploy/local/local-run.sh start --with-ai <release folder>
 
 - The release folder holds `release-manifest.json` and every file that it names, as `supportiq-release publish-candidate` writes it ([release command README, Publish](../../eval/release/README.md#publish)). The download of a published release comes with [#41](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/41); until then, use a folder that you published yourself.
 - Set `GEMINI_API_KEY`, `LLM_INPUT_PRICE_MICRO_USD_PER_MILLION_TOKENS`, and `LLM_OUTPUT_PRICE_MICRO_USD_PER_MILLION_TOKENS` in your shell first: `ai-service` requires all three at startup ([ai-service README, Set up](../../ai-service/README.md#set-up)). `start` stops and names each missing one. The key goes only to `ai-service` and is never written to a file.
+- A key of the free plan of the Gemini API is allowed only for this local run ([SEC-07](../rules/security-and-privacy.md#data-sent-to-llm-providers)). Under the section Unpaid Services of the [Gemini API Additional Terms of Service](https://aistudio.google.com/docs/terms#unpaid-services) (effective 2026-03-23, read on 2026-11-23), Google uses what you send to "provide, improve, and develop Google products and services and machine learning technologies", "human reviewers may read, annotate, and process your API input and output", and the terms say: "Do not submit sensitive, confidential, or personal information to the Unpaid Services." So never type real data into the local run: use only the simulated demo data, and assume that Google can read every request.
 - `ai-service` checks every file of the folder against the manifest and stops when one differs or when the folder holds another file, such as a `.DS_Store` of macOS. `start` then stops before `backend` starts.
 - It also needs the port 8001. The image installs torch, so it runs on Apple silicon and on Intel machines alike.
 - With the first release, `release-2026-11-18-02`, no request gets a draft: each one abstains or is escalated, without an LLM call ([ai-service README, Known limits](../../ai-service/README.md#known-limits)).
