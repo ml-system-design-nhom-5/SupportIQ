@@ -1,6 +1,6 @@
 # ADR-0027: Retrieval index configuration of the first release
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-17
 - **Deciders:** Project lead
 - **Related:** [ADR-0005](0005-intent-independent-retrieval.md) (statement 5), [ADR-0018](0018-hosting-of-ai-service-on-modal.md) ([Artifact store](0018-hosting-of-ai-service-on-modal.md#artifact-store)), [ADR-0021](0021-repository-layout-and-ai-ml-migration.md) ([KB ingestion](0021-repository-layout-and-ai-ml-migration.md#kb-ingestion), [Python and dependencies](0021-repository-layout-and-ai-ml-migration.md#python-and-dependencies), [Release and the offline evaluation gate](0021-repository-layout-and-ai-ml-migration.md#release-and-the-offline-evaluation-gate)), [ADR-0025](0025-routing-configuration-of-the-first-release.md), [data and ML rules](../rules/data-and-ml.md#models-and-artifacts) (DATA-56), [ARCH-40](../rules/architecture.md#versioned-assets), [WF-22 to WF-24](../rules/workflow.md#technical-debt), [`ai-service` README, Asset formats](../../ai-service/README.md#asset-formats)
@@ -73,7 +73,8 @@ flowchart LR
 ### The configuration
 
 1. We will serve the index configuration version `bge-small-en-v1.5-main-untuned-v1-kb-v2` in the first release. Its source is [`ai-service/index/bge-small-en-v1.5-main-untuned-v1-kb-v2/index.json`](../../ai-service/index/bge-small-en-v1.5-main-untuned-v1-kb-v2/index.json), next to the routing sources in `ai-service/routing/`, and the release command copies it into the index asset at the path `index`. Its `kb_version` is `v2`.
-2. Each value comes from `main` at `19ece5d`, as this table states. None is tuned.
+2. The first release that serves KB documents uses KB v2.1, so it serves the index configuration version `bge-small-en-v1.5-main-untuned-v1-kb-v2.1`. Its source is `ai-service/index/bge-small-en-v1.5-main-untuned-v1-kb-v2.1/index.json`. It holds the values of statement 3 and the encoder files of statement 4, and differs from `…-kb-v2` only in its version and its `kb_version`, `v2.1` ([gate design for a release with KB documents](../design/gate-for-a-release-with-kb-documents.md#data-and-contracts)).
+3. Each value comes from `main` at `19ece5d`, as this table states. None is tuned.
 
    | Field | Value | Source in `main` |
    |---|---|---|
@@ -84,14 +85,14 @@ flowchart LR
    | `chunking.overlap_tokens` | 40 | `encoder.py`, line 21 |
    | `relevance_min_score` | 0.55 | `adapter.py`, line 50 |
 
-3. The encoder files of the index asset are the six files of the snapshot `5c38ec7c405ec4b44b94cc5a9bb96e735b38267a` in `bge-small-en-v1.5-hf-cache.zip` of the release `v2.0.0-model`: `config.json`, `model.safetensors`, `special_tokens_map.json`, `tokenizer.json`, `tokenizer_config.json`, and `vocab.txt`, with the checksums that the [README of the source](../../ai-service/index/bge-small-en-v1.5-main-untuned-v1-kb-v2/README.md) lists. They go into `index/encoder/` of the release; the rest of the archive belongs to the cache layout.
-4. This ADR does not choose the embedding model. That choice stays with [#30](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/30), the `tech-debt` issue of [ADR-0021, Python and dependencies](0021-repository-layout-and-ai-ml-migration.md#python-and-dependencies), statement 4.
+4. The encoder files of the index asset are the six files of the snapshot `5c38ec7c405ec4b44b94cc5a9bb96e735b38267a` in `bge-small-en-v1.5-hf-cache.zip` of the release `v2.0.0-model`: `config.json`, `model.safetensors`, `special_tokens_map.json`, `tokenizer.json`, `tokenizer_config.json`, and `vocab.txt`, with the checksums that the [README of the source](../../ai-service/index/bge-small-en-v1.5-main-untuned-v1-kb-v2/README.md) lists. They go into `index/encoder/` of the release; the rest of the archive belongs to the cache layout.
+5. This ADR does not choose the embedding model. That choice stays with [#30](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/30), the `tech-debt` issue of [ADR-0021, Python and dependencies](0021-repository-layout-and-ai-ml-migration.md#python-and-dependencies), statement 4.
 
 ### Exception to ADR-0005
 
 This exception does not end with the merge of the join PR.
 
-1. This ADR weakens exactly one passage, for the index configuration `bge-small-en-v1.5-main-untuned-v1-kb-v2` only: [ADR-0005](0005-intent-independent-retrieval.md#decision), statement 5, "Thresholds are tuned on validation data", for the minimum similarity `relevance_min_score`. The rest of ADR-0005 still holds.
+1. This ADR weakens exactly one passage, for the index configurations `bge-small-en-v1.5-main-untuned-v1-kb-v2` and `bge-small-en-v1.5-main-untuned-v1-kb-v2.1` only: [ADR-0005](0005-intent-independent-retrieval.md#decision), statement 5, "Thresholds are tuned on validation data", for the minimum similarity `relevance_min_score`. The rest of ADR-0005 still holds.
 2. One issue labeled `tech-debt`, [#38](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/38), tunes `relevance_min_score` on validation data, once a KB version with document versions is served, with a run record of its own ([DATA-30](../rules/data-and-ml.md#experiments-and-reproducibility)), never on test data ([DATA-25](../rules/data-and-ml.md#leakage)). Its result is a new index version with a new name, which passes the offline evaluation gate before it is served. The exception ends when that version is published.
 3. The README of the source and the Known limits of the [`ai-service` README](../../ai-service/README.md#known-limits) state that the index values are not tuned, with a link to this ADR.
 
