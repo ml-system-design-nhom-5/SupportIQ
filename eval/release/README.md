@@ -314,7 +314,7 @@ A published release reaches the Modal deploy and the local run through its relea
 
 1. Commit the record and the manifest that `publish-candidate` wrote into `eval/releases/<release_id>/`.
 2. `pack-release --pin` writes `<release_id>.tar.gz` outside the repository, and the pinned file ([Release download](#release-download)).
-3. In the browser, draft a GitHub Release whose tag is the release ID, on a commit that holds the manifest of step 1, attach the archive, and publish it. Immutable releases were off when `release-2026-11-18-02` was uploaded ([deploy README, Publish a release](../../deploy/README.md#publish-a-release)). They stay off by the project lead's decision of 2026-11-23, until the system has taken shape, and [ADR-0018, Follow-ups](../../docs/decisions/0018-hosting-of-ai-service-on-modal.md#follow-ups) stays open until then.
+3. In the browser, draft a GitHub Release whose tag is the release ID, on a commit that holds the manifest of step 1, attach the archive, and publish it. The form preselects `main`: choose the branch that holds that commit, and check the tag as the [deploy README, Publish a release](../../deploy/README.md#publish-a-release), states. Immutable releases were off when both releases were uploaded. They stay off by the project lead's decision of 2026-11-23, until the system has taken shape, and [ADR-0018, Follow-ups](../../docs/decisions/0018-hosting-of-ai-service-on-modal.md#follow-ups) stays open until then.
 4. `download-release --release <release_id> --yes` downloads the archive from GitHub and runs every check of the download, which proves the upload end to end.
 5. `check-pinned-release --remote` checks the pinned file against GitHub.
 6. Only then commit and push the pinned file.

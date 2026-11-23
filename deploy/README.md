@@ -129,7 +129,17 @@ SUPPORTIQ_RELEASE_FOLDER="$release_folder" uv run --locked --project ai-service 
 
 ### Publish a release
 
-A release reaches Modal and the local run only through its release archive on GitHub. Publish it in the order of the [release command README, Publish](../eval/release/README.md#publish): commit the manifest, `pack-release --pin`, upload the archive in the browser, `download-release --release <release_id> --yes`, `check-pinned-release --remote`, and only then commit and push the pinned file. Immutable releases were off when `release-2026-11-18-02` was uploaded (see the table below). They stay off by the project lead's decision of 2026-11-23, until the system has taken shape, and [ADR-0018, Follow-ups](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#follow-ups) stays open until then. An uploaded archive is never replaced or deleted.
+A release reaches Modal and the local run only through its release archive on GitHub. Publish it in the order of the [release command README, Publish](../eval/release/README.md#publish): commit the manifest, `pack-release --pin`, upload the archive in the browser, `download-release --release <release_id> --yes`, `check-pinned-release --remote`, and only then commit and push the pinned file. Immutable releases were off when both releases were uploaded (see the tables below). They stay off by the project lead's decision of 2026-11-23, until the system has taken shape, and [ADR-0018, Follow-ups](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#follow-ups) stays open until then. An uploaded archive is never replaced or deleted.
+
+The form of a GitHub Release preselects the default branch, `main`, as the target of a new tag: choose the branch whose tip is the pushed commit that holds the manifest. No command checks this, so read the commit of the tag before `download-release`, and compare the manifest of that commit with the one in git, which prints nothing when both are equal. The field `target_commitish` of the GitHub Release does not follow a moved tag, so it proves nothing.
+
+```bash
+curl -fsS https://api.github.com/repos/ml-system-design-nhom-5/SupportIQ/git/ref/tags/<release_id>
+```
+
+```bash
+git show <commit>:eval/releases/<release_id>/release-manifest.json | cmp - eval/releases/<release_id>/release-manifest.json
+```
 
 The publish of `release-2026-11-18-02`, contract 1.0.0, on 2026-11-23. The reviewer checked each value against the output of the runs and against the public GitHub API, read without a token. An exit status that nobody printed is not recorded:
 
@@ -147,7 +157,24 @@ The publish of `release-2026-11-18-02`, contract 1.0.0, on 2026-11-23. The revie
 | `download-release` again | A cache hit: "Release release-2026-11-18-02 is in the cache and checked.", the folder on standard output, exit status 0 |
 | `check-pinned-release --remote`, anonymous | `pinned release_id=release-2026-11-18-02 archive_size_bytes=324312182 github=checked`, exit status 0 |
 
-The download folder is recorded with the home folder written as `$HOME`.
+The publish of `release-2026-11-23-01`, contract 1.0.0, on 2026-11-23: the first release that serves KB documents, with KB v2.1. The reviewer gave the output of the runs, and the files and the public GitHub API, read without a token, were checked again for this table. An exit status that nobody printed is not recorded. The gate calls no LLM provider; the runs with the real LLM are recorded in [Runs with the real AI](#runs-with-the-real-ai):
+
+| Fact | Value |
+|---|---|
+| Gate run | `run-gate.sh` at the commit `86910f4`, with the case set `escalation/interim-v2`, from 22:40:52 to 22:56:52 (UTC+7), exit status 0. Passed: 41 of 41 cases, the three checks on the candidate, and the guardrail tests (55 of `ai-service`, 22 of `backend`) with no failure, error, or skip. The LLM step of the gate recorded 24 calls, one for each case that expects a draft, and sent none to a provider |
+| Record in git | [`gate-run.json`](../eval/releases/release-2026-11-23-01/gate-run.json), in `supportiq-gate-run/interim-2`, SHA-256 `d7fa06ed3f34d490b0df44dfbdbe112a14c6ce263fc338216643b548960a1d5c`, committed in `9f5b584` |
+| Published manifest | [`release-manifest.json`](../eval/releases/release-2026-11-23-01/release-manifest.json), SHA-256 `751edd44cff4deaf09704fcf1f283b76900a7251bb4c6dcf38f74c7c54916a3f`, committed in `9f5b584`. It equals the manifest of the candidate (SHA-256 `f7b34762d984f26ff409c9c0a9148137e1201065adc9bd4482fdcbe348775ff9`) apart from `gate_run` |
+| Assets that did not change | The model, the prompts, the routing, and the encoder files of the index have the paths and SHA-256 values of `release-2026-11-18-02`, as the [gate design](../docs/design/gate-for-a-release-with-kb-documents.md#data-57-item-2-against-release-2026-11-18-02) requires |
+| Archive | 324316560 bytes, SHA-256 `6df4d02b226bc2cf788a018737d51f6e2a5e11a8f0e401355d720e52359d78e6`. GitHub reports the same digest for the uploaded asset |
+| Pinned file | `release_id=release-2026-11-23-01` and `archive_size_bytes=324316560`, committed in `689575a` |
+| GitHub Release | Tag `release-2026-11-23-01`, published at 2026-11-23T16:19:00Z, the latest release, not a draft or a prerelease. Its only asset is `release-2026-11-23-01.tar.gz`, in the state `uploaded`, of 324316560 bytes |
+| Tag | First created on `67d8fc4`, then the tip of `main`, which does not hold the manifest. The project lead moved it to `9f5b584`, which holds the published manifest byte for byte; the public API showed it there at 23:31:35 (UTC+7). The asset did not change. `target_commitish` still says `main` |
+| Immutable release | `immutable: false`, by the project lead's decision of 2026-11-23 |
+| `download-release --yes` | Downloaded and checked the release |
+| Download folder | `$HOME/.cache/supportiq/releases/release-2026-11-23-01`: 18 files with mode `0644`, folders with mode `0755`, no entry of another type, and the same files as the published release folder (`diff -rq`) |
+| `check-pinned-release --remote` | `github=checked`, and the same when run again after the tag was moved |
+
+The download folders are recorded with the home folder written as `$HOME`.
 
 ### Runs by hand
 
