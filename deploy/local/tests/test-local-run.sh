@@ -1475,6 +1475,44 @@ test_a_second_start_with_ai_and_the_release_in_the_cache_asks_nothing() {
   expect_logged "LOCAL_RELEASE_FOLDER=$(cache_dir)/$RELEASE_ID "
 }
 
+# The steps of the CI job local-run-compose-ai, with the dummy key of that job read from the
+# workflow itself: `start --yes`, after a download or on a hit of the release cache, then `start`
+# without --yes and without a terminal (run_script reads /dev/null), which must ask nothing. The
+# key is not of the AI Studio form, so each start warns once, and a key of the environment is
+# never saved, so no question is due for it.
+run_the_steps_of_the_ci_job_with_ai() {
+  local first_start=$1 key
+  local warning="Warning: the Gemini key does not look like an AI Studio key; ignore this if you are sure."
+  key=$(sed -n 's/^ *GEMINI_API_KEY: //p' "$REPOSITORY_ROOT/.github/workflows/local-run.yml")
+  [ -n "$key" ] || fail_test "the job local-run-compose-ai sets no GEMINI_API_KEY"
+  given_ai_without_a_key
+  if [ "$first_start" = cache-hit ]; then given_the_release_in_the_cache; fi
+  GEMINI_API_KEY=$key run_script start --yes
+  expect_status 0
+  expect_output_once "$warning"
+  if [ "$first_start" = cache-hit ]; then expect_not_logged "run "; else expect_logged "run "; fi
+  expect_no_part_of_the_key "$key"
+  : > "$root/docker.log"
+  GEMINI_API_KEY=$key STUB_VOLUME_INSPECT_STATUS=0 STUB_DOWNLOAD_STATUS=5 run_script start
+  expect_status 0
+  expect_no_output "$QUESTION"
+  expect_no_output "$KEY_PROMPT"
+  expect_output_once "$warning"
+  expect_not_logged "run "
+  expect_not_logged "pull "
+  expect_logged "LOCAL_RELEASE_FOLDER=$(cache_dir)/$RELEASE_ID "
+  [ ! -e "$root/.local-run/gemini.env" ] || fail_test "gemini.env was written"
+  expect_no_part_of_the_key "$key"
+}
+
+test_the_steps_of_the_ci_job_with_ai_after_a_download_ask_nothing_the_second_time() {
+  run_the_steps_of_the_ci_job_with_ai download
+}
+
+test_the_steps_of_the_ci_job_with_ai_on_a_cache_hit_ask_nothing_the_second_time() {
+  run_the_steps_of_the_ci_job_with_ai cache-hit
+}
+
 test_a_missing_image_makes_the_question_due() {
   given_a_first_start --without-ai
   STUB_VOLUME_INSPECT_STATUS=0 STUB_IMAGE_INSPECT_STATUS=1 run_script start --without-ai
