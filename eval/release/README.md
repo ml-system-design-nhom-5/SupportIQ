@@ -190,6 +190,12 @@ A quarantined record is named by its position in the KB file, from 0, and by its
 
 Issue [#13](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/13) reviewed the quarantine and the project lead accepted it there (DATA-13), so the committed report records that issue as `quarantine_accepted_in`, and ADR-0021 (Validation) is met for KB v2. A test runs the command with `--accepted-quarantine` and that issue, checks that it exits with status 0 and that the committed files equal the new run, and that the raw folder keeps its SHA-256.
 
+### KB v2.1
+
+[`../kb-ingestion/v2.1/`](../kb-ingestion/v2.1/) holds the output for `data/raw/kb/v2.1/`, the release `current-policies-v1.1`. It admits all 14 `POL-…` document versions, quarantines none, and lists no conflict and no released version that the KB file lacks. Each version has its own `policy_key`, and its intents are labels of the contract ([`data/raw/kb/v2.1/README.md`](../../data/raw/kb/v2.1/README.md), the manifest of the folder and its approved changes).
+
+Nothing is quarantined, so the run needs no `--accepted-quarantine`, and the report holds no `quarantine_accepted_in`. A test runs the command, checks that it exits with status 0 and that the committed files equal the new run, and that the raw folder keeps its SHA-256. It also checks that the mapping and the report hold no text of the KB, and that no text names the brand of KB v2.
+
 ### The checks of the importer of `main`
 
 `main` had its own KB importer, `retrieval/adapters/kb_importer.py` (deleted in the join; commit `3a4544b` holds it). Each of its checks maps to KB ingestion as follows.
@@ -223,7 +229,7 @@ The spec is a JSON file in `supportiq-release-spec/interim-1`, with exactly thes
 | `assets.<asset>.path` | Where the asset goes in the release folder: a file path for a file, a folder path for a folder |
 | `assets.routing.model_version` | The model version that the routing configuration was tuned for, equal to `assets.model.version` ([DATA-58](../../docs/rules/data-and-ml.md#models-and-artifacts)) |
 
-For KB v2, the sources of `kb` and `mapping` are `eval/kb-ingestion/v2/kb.json` and `eval/kb-ingestion/v2/document-intents.json`, and the source of `prompts` is a folder of `ai-service/prompts/`.
+For KB v2, the sources of `kb` and `mapping` are `eval/kb-ingestion/v2/kb.json` and `eval/kb-ingestion/v2/document-intents.json`, and the source of `prompts` is a folder of `ai-service/prompts/`. For KB v2.1, they are the same files of `eval/kb-ingestion/v2.1/`. The source of `index` is then a folder outside the repository with `index.json` of `ai-service/index/bge-small-en-v1.5-main-untuned-v1-kb-v2.1/`, because the index names its KB, and the same six files of the encoder in `encoder/` ([ADR-0027](../../docs/decisions/0027-retrieval-index-configuration-of-the-first-release.md#the-configuration), statements 2 and 4).
 
 ### Checks before the first copy
 
