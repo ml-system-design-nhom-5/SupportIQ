@@ -1,0 +1,2 @@
+release_id=release-2026-11-18-02
+archive_size_bytes=324312182
