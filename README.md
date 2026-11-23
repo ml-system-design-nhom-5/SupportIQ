@@ -101,7 +101,7 @@ The rows from `pipeline/` to `apps/` are parts of `main`, kept at their paths by
 
 ## Run and test on your machine
 
-One command starts the whole system with Docker, on Linux, macOS, and WSL2 on Windows: PostgreSQL 17, `backend` with the simulated demo data, and `frontend` at <http://localhost:5173>. The [local run guide](docs/guides/local-run.md) gives the requirements, the demo accounts, the mode with AI, and how to stop it.
+One command starts the whole system with Docker, on Linux, macOS, and WSL2 on Windows: PostgreSQL 17, `backend` with the simulated demo data, `frontend` at <http://localhost:5173>, and `ai-service` with the newest published release, which it downloads once; `--without-ai` leaves the AI out. The [local run guide](docs/guides/local-run.md) gives the requirements, the demo accounts, the Gemini key, the releases, and how to stop it.
 
 ```bash
 deploy/local/local-run.sh start
