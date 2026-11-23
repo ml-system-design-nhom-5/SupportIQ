@@ -1,0 +1,196 @@
+{
+  "format": "kb-v2.1-changes/1",
+  "status": "approved by the project lead on 2026-11-23",
+  "approved_by": "project lead",
+  "approved_on": "2026-11-23",
+  "kb_version": "v2.1",
+  "base": {
+    "folder": "data/raw/kb/v2",
+    "kb_release_sha256": "33cf05b50c25384fbb208cd0c0c5cae71991d29a0f754cb1b20a1d6d7285cdaa",
+    "kb_file": "approved_kb.v2.json",
+    "kb_file_sha256": "aaa924c4b48dcd53a14269045b278b66f6e5e8ae9d1b614cd59b757102b78594"
+  },
+  "kb_file": "approved_kb.v2.1.json",
+  "release": {
+    "release": "current-policies-v1.1",
+    "source": "data/raw/kb/v2.1/approved_kb.v2.1.json"
+  },
+  "documents": [
+    {
+      "document_id": "POL-RET-001",
+      "from_version": "2.0",
+      "version": "2.1",
+      "approved_at": "2026-11-23T00:00:00Z",
+      "policy_key": "return_window",
+      "supported_intents": null,
+      "replacements": [
+        {"field": "title", "old": "Tiki Standard Product Return", "new": "Demo Shop Standard Product Return"},
+        {"field": "content", "old": "directly distributed by Tiki Trading", "new": "directly distributed by Demo Shop"},
+        {"field": "content", "old": "marketplace partner sellers on Tiki", "new": "marketplace partner sellers on Demo Shop"}
+      ]
+    },
+    {
+      "document_id": "POL-RET-002",
+      "from_version": "2.0",
+      "version": "2.1",
+      "approved_at": "2026-11-23T00:00:00Z",
+      "policy_key": "return_request_process",
+      "supported_intents": null,
+      "replacements": [
+        {"field": "title", "old": "Steps on Tiki App", "new": "Steps on Demo Shop App"},
+        {"field": "content", "old": "received by Tiki,", "new": "received by Demo Shop,"},
+        {"field": "content", "old": "designated Tiki partner post offices", "new": "designated Demo Shop partner post offices"}
+      ]
+    },
+    {
+      "document_id": "POL-RET-003",
+      "from_version": "2.0",
+      "version": "2.1",
+      "approved_at": "2026-11-23T00:00:00Z",
+      "policy_key": "non_returnable_items",
+      "supported_intents": null,
+      "replacements": [
+        {"field": "title", "old": "Items on Tiki", "new": "Items on Demo Shop"},
+        {"field": "content", "old": "Tiki Ngon fresh groceries", "new": "fresh groceries"},
+        {"field": "content", "old": "if Tiki delivered", "new": "if Demo Shop delivered"}
+      ]
+    },
+    {
+      "document_id": "POL-REFUND-001",
+      "from_version": "1.0",
+      "version": "1.1",
+      "approved_at": "2026-11-23T00:00:00Z",
+      "policy_key": "refund_eligibility",
+      "supported_intents": null,
+      "replacements": [
+        {"field": "title", "old": "Principles on Tiki", "new": "Principles on Demo Shop"},
+        {"field": "content", "old": "the Tiki warehouse", "new": "the Demo Shop warehouse"}
+      ]
+    },
+    {
+      "document_id": "POL-REFUND-002",
+      "from_version": "2.0",
+      "version": "2.1",
+      "approved_at": "2026-11-23T00:00:00Z",
+      "policy_key": "refund_timeline",
+      "supported_intents": null,
+      "replacements": [
+        {"field": "title", "old": "Payment Method on Tiki", "new": "Payment Method on Demo Shop"},
+        {"field": "content", "old": "a refund on Tiki depends", "new": "a refund on Demo Shop depends"},
+        {"field": "content", "old": "For Tiki Coins Wallet", "new": "For Demo Shop Coins Wallet"}
+      ]
+    },
+    {
+      "document_id": "POL-REFUND-007",
+      "from_version": "1.0",
+      "version": "1.1",
+      "approved_at": "2026-11-23T00:00:00Z",
+      "policy_key": "refund_status_tracking",
+      "supported_intents": null,
+      "replacements": [
+        {"field": "title", "old": "Order Status on Tiki", "new": "Order Status on Demo Shop"},
+        {"field": "content", "old": "dispatched from Tiki,", "new": "dispatched from Demo Shop,"}
+      ]
+    },
+    {
+      "document_id": "POL-ORD-001",
+      "from_version": "1.0",
+      "version": "1.1",
+      "approved_at": "2026-11-23T00:00:00Z",
+      "policy_key": "order_tracking",
+      "supported_intents": null,
+      "replacements": [
+        {"field": "title", "old": "Status on Tiki", "new": "Status on Demo Shop"},
+        {"field": "content", "old": "on the Tiki app", "new": "on the Demo Shop app"}
+      ]
+    },
+    {
+      "document_id": "POL-ORD-002",
+      "from_version": "1.0",
+      "version": "1.1",
+      "approved_at": "2026-11-23T00:00:00Z",
+      "policy_key": "cancellation_window",
+      "supported_intents": null,
+      "replacements": [
+        {"field": "title", "old": "Conditions on Tiki", "new": "Conditions on Demo Shop"},
+        {"field": "content", "old": "on the Tiki app", "new": "on the Demo Shop app"},
+        {"field": "content", "old": "according to Tiki refund policies", "new": "according to Demo Shop refund policies"}
+      ]
+    },
+    {
+      "document_id": "POL-ORD-003",
+      "from_version": "1.0",
+      "version": "1.0",
+      "approved_at": null,
+      "policy_key": "delivery_address_change",
+      "supported_intents": ["change_order"],
+      "replacements": []
+    },
+    {
+      "document_id": "POL-SHIP-001",
+      "from_version": "1.0",
+      "version": "1.1",
+      "approved_at": "2026-11-23T00:00:00Z",
+      "policy_key": "delivery_timelines",
+      "supported_intents": ["delivery_time"],
+      "replacements": [
+        {"field": "title", "old": "and Tiki Shipping Service Packages", "new": "and Demo Shop Shipping Service Packages"},
+        {"field": "content", "old": "delivery times on Tiki are", "new": "delivery times on Demo Shop are"},
+        {"field": "content", "old": "TikiNOW Express delivers", "new": "Express Delivery delivers"}
+      ]
+    },
+    {
+      "document_id": "POL-SHIP-002",
+      "from_version": "1.0",
+      "version": "1.1",
+      "approved_at": "2026-11-23T00:00:00Z",
+      "policy_key": "shipping_fees",
+      "supported_intents": null,
+      "replacements": [
+        {"field": "title", "old": "(Freeship TikiPRO)", "new": "(Freeship Demo Shop PRO)"},
+        {"field": "content", "old": "Shipping fees on Tiki are", "new": "Shipping fees on Demo Shop are"},
+        {"field": "content", "old": "Customers with TikiPRO memberships", "new": "Customers with Demo Shop PRO memberships"}
+      ]
+    },
+    {
+      "document_id": "POL-SHIP-004",
+      "from_version": "1.0",
+      "version": "1.1",
+      "approved_at": "2026-11-23T00:00:00Z",
+      "policy_key": "delayed_or_lost_delivery",
+      "supported_intents": null,
+      "replacements": [
+        {"field": "content", "old": "In the event a Tiki order", "new": "In the event a Demo Shop order"},
+        {"field": "content", "old": "contact Tiki Customer Support", "new": "contact Demo Shop Customer Support"},
+        {"field": "content", "old": "via hotline 1900 6035", "new": "via the Demo Shop hotline"},
+        {"field": "content", "old": "Tiki's dispatch team", "new": "Demo Shop's dispatch team"},
+        {"field": "content", "old": "is lost, Tiki will dispatch", "new": "is lost, Demo Shop will dispatch"}
+      ]
+    },
+    {
+      "document_id": "POL-PAY-001",
+      "from_version": "1.0",
+      "version": "1.1",
+      "approved_at": "2026-11-23T00:00:00Z",
+      "policy_key": "unconfirmed_payment",
+      "supported_intents": null,
+      "replacements": [
+        {"field": "title", "old": "Transactions on Tiki", "new": "Transactions on Demo Shop"},
+        {"field": "content", "old": "the order on Tiki remains", "new": "the order on Demo Shop remains"},
+        {"field": "content", "old": "The Tiki system", "new": "The Demo Shop system"}
+      ]
+    },
+    {
+      "document_id": "POL-PAY-004",
+      "from_version": "1.0",
+      "version": "1.1",
+      "approved_at": "2026-11-23T00:00:00Z",
+      "policy_key": "duplicate_charge",
+      "supported_intents": null,
+      "replacements": [
+        {"field": "content", "old": "the same Tiki order code", "new": "the same Demo Shop order code"},
+        {"field": "content", "old": "Tiki's automated reconciliation", "new": "Demo Shop's automated reconciliation"}
+      ]
+    }
+  ]
+}

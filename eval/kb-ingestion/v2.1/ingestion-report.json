@@ -1,0 +1,76 @@
+{
+  "format": "supportiq-kb-ingestion-report/interim-1",
+  "kb_version": "v2.1",
+  "kb_release": "current-policies-v1.1",
+  "inputs": [
+    {
+      "file": "kb-release.json",
+      "sha256": "2c31296c3bf712ab372beac29cd3e305813aa96bc5328f71e73b00e347e9a266"
+    },
+    {
+      "file": "approved_kb.v2.1.json",
+      "sha256": "e74786e082062e76830a7cf55b77c66ac3a15060aaa68971adf826edd57315b7"
+    }
+  ],
+  "admitted": [
+    {
+      "document_id": "POL-ORD-001",
+      "version": "1.1"
+    },
+    {
+      "document_id": "POL-ORD-002",
+      "version": "1.1"
+    },
+    {
+      "document_id": "POL-ORD-003",
+      "version": "1.0"
+    },
+    {
+      "document_id": "POL-PAY-001",
+      "version": "1.1"
+    },
+    {
+      "document_id": "POL-PAY-004",
+      "version": "1.1"
+    },
+    {
+      "document_id": "POL-REFUND-001",
+      "version": "1.1"
+    },
+    {
+      "document_id": "POL-REFUND-002",
+      "version": "2.1"
+    },
+    {
+      "document_id": "POL-REFUND-007",
+      "version": "1.1"
+    },
+    {
+      "document_id": "POL-RET-001",
+      "version": "2.1"
+    },
+    {
+      "document_id": "POL-RET-002",
+      "version": "2.1"
+    },
+    {
+      "document_id": "POL-RET-003",
+      "version": "2.1"
+    },
+    {
+      "document_id": "POL-SHIP-001",
+      "version": "1.1"
+    },
+    {
+      "document_id": "POL-SHIP-002",
+      "version": "1.1"
+    },
+    {
+      "document_id": "POL-SHIP-004",
+      "version": "1.1"
+    }
+  ],
+  "quarantined": [],
+  "conflicts": [],
+  "released_but_absent": []
+}

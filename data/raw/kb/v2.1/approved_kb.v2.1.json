@@ -1,0 +1,415 @@
+[
+  {
+    "doc_id": "POL-RET-001",
+    "document_id": "POL-RET-001",
+    "version": "2.1",
+    "title": "Demo Shop Standard Product Return and Exchange Policy and Conditions",
+    "category": "return_refund",
+    "policy_key": "return_window",
+    "content": "Customers may request an exchange or return within 30 days (for products directly distributed by Demo Shop) or within 7 days (for products from marketplace partner sellers on Demo Shop) from the date of successful delivery. Returned products must have intact security seals, complete original packaging, accessories, invoices, and included promotional gifts, and show no signs of usage or laundering.",
+    "content_hash": "5d59f25219f4729620bb8114b9031912684e16351331385bf17038fe213c33de",
+    "status": "approved",
+    "approved_by": "lead_compliance_officer",
+    "approved_at": "2026-11-23T00:00:00Z",
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": "2026-12-31T23:59:59Z",
+    "allowed_roles": [
+      "agent",
+      "staff",
+      "manager",
+      "admin",
+      "customer"
+    ],
+    "supported_intents": [
+      "return_policy",
+      "return_product"
+    ],
+    "answer_capabilities": [
+      "return_window",
+      "return_conditions",
+      "exchange_terms"
+    ]
+  },
+  {
+    "doc_id": "POL-RET-002",
+    "document_id": "POL-RET-002",
+    "version": "2.1",
+    "title": "Return and Exchange Request Process and Steps on Demo Shop App",
+    "category": "return_refund",
+    "policy_key": "return_request_process",
+    "content": "To create a return or exchange request, customers navigate to 'Account' > 'Order Management' > select the order with 'Delivered' status > tap 'Request Return/Exchange'. Customers select the reason and upload 3-5 clear photos or a video demonstrating the product defect. Once the request is received by Demo Shop, shipping couriers will pick up the item directly from the customer's address for free within 1-2 business days, or customers may drop off the package at designated Demo Shop partner post offices.",
+    "content_hash": "7d04d5bd6a29eb1d2c5a3fd463a1d1be8ad4e1fee226c4dd444b9d1bb010bd5c",
+    "status": "approved",
+    "approved_by": "lead_compliance_officer",
+    "approved_at": "2026-11-23T00:00:00Z",
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": "2026-12-31T23:59:59Z",
+    "allowed_roles": [
+      "agent",
+      "staff",
+      "manager",
+      "admin",
+      "customer"
+    ],
+    "supported_intents": [
+      "return_product",
+      "return_policy"
+    ],
+    "answer_capabilities": [
+      "return_initiation",
+      "return_instructions",
+      "pickup_service"
+    ]
+  },
+  {
+    "doc_id": "POL-RET-003",
+    "document_id": "POL-RET-003",
+    "version": "2.1",
+    "title": "Restricted Return Categories and Non-Returnable Change-of-Mind Items on Demo Shop",
+    "category": "return_refund",
+    "policy_key": "non_returnable_items",
+    "content": "Product categories that do not support returns due to change of mind or personal preference include: Underwear, swimwear, cosmetics and chemicals with unsealed protective packaging, fresh groceries, dietary supplements, mobile top-up scratch cards, electronic service vouchers, and clearance outlet items marked as non-returnable. These items are only eligible for return or exchange if Demo Shop delivered an incorrect item or if there is a verified manufacturer defect.",
+    "content_hash": "2357b6ed7d110ee5bc9527a2c281ec558b70b3dd2e4a53022f336fbcfcf5205f",
+    "status": "approved",
+    "approved_by": "lead_compliance_officer",
+    "approved_at": "2026-11-23T00:00:00Z",
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": "2026-12-31T23:59:59Z",
+    "allowed_roles": [
+      "agent",
+      "staff",
+      "manager",
+      "admin",
+      "customer"
+    ],
+    "supported_intents": [
+      "return_policy",
+      "return_product"
+    ],
+    "answer_capabilities": [
+      "restricted_categories",
+      "non_returnable_items"
+    ]
+  },
+  {
+    "doc_id": "POL-REFUND-001",
+    "document_id": "POL-REFUND-001",
+    "version": "1.1",
+    "title": "Safe Refund Reconciliation Rules and Principles on Demo Shop",
+    "category": "return_refund",
+    "policy_key": "refund_eligibility",
+    "content": "Refund requests are only processed once an order has been successfully canceled prior to dispatch, or after the Demo Shop warehouse receives and inspects the returned product to standard. All refund decisions must undergo reconciliation by authorized customer service personnel; AI is prohibited from autonomously approving monetary transactions. Original shipping fees are non-refundable if the return reason is based on personal preference.",
+    "content_hash": "c385c50739b928672b4bb1c3dd0c7b532d6b1ab62e6fb5d83be4fe41c3e2c0a5",
+    "status": "approved",
+    "approved_by": "lead_compliance_officer",
+    "approved_at": "2026-11-23T00:00:00Z",
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": "2026-12-31T23:59:59Z",
+    "allowed_roles": [
+      "agent",
+      "staff",
+      "manager",
+      "admin",
+      "customer"
+    ],
+    "supported_intents": [
+      "refund_policy",
+      "request_refund"
+    ],
+    "answer_capabilities": [
+      "refund_reconciliation",
+      "refund_eligibility"
+    ]
+  },
+  {
+    "doc_id": "POL-REFUND-002",
+    "document_id": "POL-REFUND-002",
+    "version": "2.1",
+    "title": "Refund Receipt Timeline by Payment Method on Demo Shop",
+    "category": "return_refund",
+    "policy_key": "refund_timeline",
+    "content": "The timeline for receiving a refund on Demo Shop depends on the original payment method: For Demo Shop Coins Wallet, refunds are credited within 24 hours. For linked e-wallets (MoMo, ZaloPay, VNPay, Viettel Money), funds are returned to the wallet within 1-2 business days. For domestic Napas ATM cards, the timeline is 3-5 business days. For international credit/debit cards (Visa, Mastercard, JCB), issuing banks process within 7-15 business days (excluding Saturdays, Sundays, and public holidays).",
+    "content_hash": "2989886130de244dab6a4dfe66c754dd6ab0091258a09cd2d93430e3d2acb0cb",
+    "status": "approved",
+    "approved_by": "lead_compliance_officer",
+    "approved_at": "2026-11-23T00:00:00Z",
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": "2026-12-31T23:59:59Z",
+    "allowed_roles": [
+      "agent",
+      "staff",
+      "manager",
+      "admin",
+      "customer"
+    ],
+    "supported_intents": [
+      "refund_policy",
+      "refund_status",
+      "request_refund"
+    ],
+    "answer_capabilities": [
+      "refund_timeline",
+      "payment_method_timelines"
+    ]
+  },
+  {
+    "doc_id": "POL-REFUND-007",
+    "document_id": "POL-REFUND-007",
+    "version": "1.1",
+    "title": "Checking Refund History and Order Status on Demo Shop",
+    "category": "return_refund",
+    "policy_key": "refund_status_tracking",
+    "content": "Customers can monitor refund progress by accessing 'Account Details' > 'Return & Refund Management'. Refund statuses include: 'Reconciliation Processing' (under customer support review), 'Transferred to Bank' (funds dispatched from Demo Shop, awaiting bank credit), and 'Refund Succeeded' along with the bank's transaction tracing reference code.",
+    "content_hash": "36a0eaa5dd6088b59e57744e5f1f1f1fcb2333cca91b149a53e0d2b004072898",
+    "status": "approved",
+    "approved_by": "lead_compliance_officer",
+    "approved_at": "2026-11-23T00:00:00Z",
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": "2026-12-31T23:59:59Z",
+    "allowed_roles": [
+      "agent",
+      "staff",
+      "manager",
+      "admin",
+      "customer"
+    ],
+    "supported_intents": [
+      "refund_status"
+    ],
+    "answer_capabilities": [
+      "refund_tracking",
+      "refund_history"
+    ]
+  },
+  {
+    "doc_id": "POL-ORD-001",
+    "document_id": "POL-ORD-001",
+    "version": "1.1",
+    "title": "Instructions for Tracking Order Journey and Status on Demo Shop",
+    "category": "orders",
+    "policy_key": "order_tracking",
+    "content": "Customers can check order status by navigating to 'My Orders' on the Demo Shop app. Order statuses include: 'Pending Confirmation' (seller preparing), 'Pick Up in Progress' (packed, awaiting courier), 'In Transit' (courier delivering, real-time tracking code provided), 'Delivered' (completed), and 'Canceled'. Customers tap the tracking code to view details of each transit hub the parcel has passed through.",
+    "content_hash": "6a20cdfcdd94593936d9bd8a9d8fe9cc12ff619fd07fdaeddffbc1a46330eac9",
+    "status": "approved",
+    "approved_by": "lead_compliance_officer",
+    "approved_at": "2026-11-23T00:00:00Z",
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": "2026-12-31T23:59:59Z",
+    "allowed_roles": [
+      "agent",
+      "staff",
+      "manager",
+      "admin",
+      "customer"
+    ],
+    "supported_intents": [
+      "track_order"
+    ],
+    "answer_capabilities": [
+      "order_tracking_guide",
+      "status_lookup"
+    ]
+  },
+  {
+    "doc_id": "POL-ORD-002",
+    "document_id": "POL-ORD-002",
+    "version": "1.1",
+    "title": "Order Cancellation Rules and Conditions on Demo Shop",
+    "category": "orders",
+    "policy_key": "cancellation_window",
+    "content": "Customers can click 'Cancel Order' directly on the Demo Shop app if the order is in 'Processing' or 'Awaiting Packing' status and has not yet been handed over to the shipping carrier. Once the order transitions to 'In Transit', the direct cancellation button is disabled; customers should reject the package upon courier contact. For canceled prepaid orders, refunds will be issued automatically according to Demo Shop refund policies.",
+    "content_hash": "de8de95deabaa7fb9b64c2239b068b5ad1044d9906ec418aa69ef400f91c9808",
+    "status": "approved",
+    "approved_by": "lead_compliance_officer",
+    "approved_at": "2026-11-23T00:00:00Z",
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": "2026-12-31T23:59:59Z",
+    "allowed_roles": [
+      "agent",
+      "staff",
+      "manager",
+      "admin",
+      "customer"
+    ],
+    "supported_intents": [
+      "cancel_order"
+    ],
+    "answer_capabilities": [
+      "cancellation_window",
+      "cancellation_process"
+    ]
+  },
+  {
+    "doc_id": "POL-ORD-003",
+    "document_id": "POL-ORD-003",
+    "version": "1.0",
+    "title": "Instructions for Changing Delivery Address or Phone Number After Placing Order",
+    "category": "orders",
+    "policy_key": "delivery_address_change",
+    "content": "Customers may change the delivery address or phone number only once per order, provided the order remains in 'Pending Processing' status. When an order advances to 'Preparing Items' or 'Handed Over to Courier', modification features are locked to prevent parcel misrouting. Customers should contact the courier upon phone contact to arrange delivery at a nearby location.",
+    "content_hash": "96a3d87bc7a88dd4f52f2a46cabf1e1e177bb86ae8385c0e2db6378e36c885db",
+    "status": "approved",
+    "approved_by": "lead_compliance_officer",
+    "approved_at": "2026-01-01T00:00:00Z",
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": "2026-12-31T23:59:59Z",
+    "allowed_roles": [
+      "agent",
+      "staff",
+      "manager",
+      "admin",
+      "customer"
+    ],
+    "supported_intents": [
+      "change_order"
+    ],
+    "answer_capabilities": [
+      "modify_address_window",
+      "address_update_process"
+    ]
+  },
+  {
+    "doc_id": "POL-SHIP-001",
+    "document_id": "POL-SHIP-001",
+    "version": "1.1",
+    "title": "Estimated Delivery Timelines and Demo Shop Shipping Service Packages",
+    "category": "shipping_delivery",
+    "policy_key": "delivery_timelines",
+    "content": "Estimated delivery times on Demo Shop are categorized by service package: Express Delivery delivers within 2 hours in inner districts of Hanoi, Ho Chi Minh City, and Da Nang. Fast Delivery delivers within 1-2 business days across major urban centers. Standard Delivery takes 3-5 business days for inter-provincial orders or rural districts. During severe weather or peak holiday seasons, delivery may be extended by 1-2 additional days.",
+    "content_hash": "3093ba18ac36ca044a433b3c50e63b1496467bdcd07d6d28944d648c0e9684c3",
+    "status": "approved",
+    "approved_by": "lead_compliance_officer",
+    "approved_at": "2026-11-23T00:00:00Z",
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": "2026-12-31T23:59:59Z",
+    "allowed_roles": [
+      "agent",
+      "staff",
+      "manager",
+      "admin",
+      "customer"
+    ],
+    "supported_intents": [
+      "delivery_time"
+    ],
+    "answer_capabilities": [
+      "delivery_timelines",
+      "express_shipping"
+    ]
+  },
+  {
+    "doc_id": "POL-SHIP-002",
+    "document_id": "POL-SHIP-002",
+    "version": "1.1",
+    "title": "Shipping Fee Schedule and Shipping Support Policy (Freeship Demo Shop PRO)",
+    "category": "shipping_delivery",
+    "policy_key": "shipping_fees",
+    "content": "Shipping fees on Demo Shop are calculated automatically based on distance and parcel weight: Intra-city orders carry a base fee of 18,000 VND to 25,000 VND. Inter-provincial orders range from 35,000 VND to 55,000 VND. Customers with Demo Shop PRO memberships or orders meeting the minimum value of 149,000 VND can apply Freeship discount vouchers for up to 30,000 VND - 70,000 VND in shipping discounts. The final shipping fee is displayed transparently on the checkout page.",
+    "content_hash": "0387b523b5fa1d00e6a9595ec8a0ab86aa5985dab213c3885b0e2f51756dd906",
+    "status": "approved",
+    "approved_by": "lead_compliance_officer",
+    "approved_at": "2026-11-23T00:00:00Z",
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": "2026-12-31T23:59:59Z",
+    "allowed_roles": [
+      "agent",
+      "staff",
+      "manager",
+      "admin",
+      "customer"
+    ],
+    "supported_intents": [
+      "shipping_costs"
+    ],
+    "answer_capabilities": [
+      "shipping_fees",
+      "free_shipping_rules"
+    ]
+  },
+  {
+    "doc_id": "POL-SHIP-004",
+    "document_id": "POL-SHIP-004",
+    "version": "1.1",
+    "title": "Handling Delayed, Lost, or Discrepant Delivery Statuses",
+    "category": "shipping_delivery",
+    "policy_key": "delayed_or_lost_delivery",
+    "content": "In the event a Demo Shop order exceeds its estimated delivery date without arrival, or if a courier marks an order as 'Successfully Delivered' when the customer has not received the parcel, the customer must contact Demo Shop Customer Support within 24-48 hours via the Demo Shop hotline. Demo Shop's dispatch team will verify courier GPS logs, coordinate with the delivery hub, and resolve the complaint. If an order is lost, Demo Shop will dispatch a replacement or issue a 100% refund.",
+    "content_hash": "c30fa14c1b7e3472d737921b6eab5d08866552878f74724a370fa573e8b25f2e",
+    "status": "approved",
+    "approved_by": "lead_compliance_officer",
+    "approved_at": "2026-11-23T00:00:00Z",
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": "2026-12-31T23:59:59Z",
+    "allowed_roles": [
+      "agent",
+      "staff",
+      "manager",
+      "admin",
+      "customer"
+    ],
+    "supported_intents": [
+      "delivery_issue"
+    ],
+    "answer_capabilities": [
+      "delayed_package_handling",
+      "discrepant_status"
+    ]
+  },
+  {
+    "doc_id": "POL-PAY-001",
+    "document_id": "POL-PAY-001",
+    "version": "1.1",
+    "title": "Handling Payment Incidents and Banking Transactions on Demo Shop",
+    "category": "payment",
+    "policy_key": "unconfirmed_payment",
+    "content": "If a customer's bank account or e-wallet is debited but the order on Demo Shop remains in 'Awaiting Payment' status or fails to display, this is typically due to transmission latency from the payment gateway. The Demo Shop system and payment gateway automatically reconcile and update the order within 15-30 minutes. If the order remains unconfirmed after 1 hour, the system will automatically refund the original payment account within 24-72 business hours.",
+    "content_hash": "416f32299770f0b309e8ec9c024c8f9a665575c6779eed6c1128e5470b3f867e",
+    "status": "approved",
+    "approved_by": "lead_compliance_officer",
+    "approved_at": "2026-11-23T00:00:00Z",
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": "2026-12-31T23:59:59Z",
+    "allowed_roles": [
+      "agent",
+      "staff",
+      "manager",
+      "admin",
+      "customer"
+    ],
+    "supported_intents": [
+      "payment_issue"
+    ],
+    "answer_capabilities": [
+      "failed_transaction",
+      "payment_reversal"
+    ]
+  },
+  {
+    "doc_id": "POL-PAY-004",
+    "document_id": "POL-PAY-004",
+    "version": "1.1",
+    "title": "Handling Double Deductions on Credit Cards or E-Wallets",
+    "category": "payment",
+    "policy_key": "duplicate_charge",
+    "content": "In instances where network congestion causes a transaction to be recorded and charged twice for the same Demo Shop order code, Demo Shop's automated reconciliation system and partner banks will detect the duplicate charge during end-of-day settlement and refund the excess amount to the card within 48 business hours without requiring a formal dispute claim.",
+    "content_hash": "6b6b1c854eef670d7c0ad0e2799daad237263501133c36cb7d08a4298933e915",
+    "status": "approved",
+    "approved_by": "lead_compliance_officer",
+    "approved_at": "2026-11-23T00:00:00Z",
+    "valid_from": "2026-01-01T00:00:00Z",
+    "valid_to": "2026-12-31T23:59:59Z",
+    "allowed_roles": [
+      "agent",
+      "staff",
+      "manager",
+      "admin",
+      "customer"
+    ],
+    "supported_intents": [
+      "payment_issue"
+    ],
+    "answer_capabilities": [
+      "duplicate_charge_resolution"
+    ]
+  }
+]
