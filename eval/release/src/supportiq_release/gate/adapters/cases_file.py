@@ -6,8 +6,11 @@ skipped or read in part. A problem type, a recommendation, a draft status, or a 
 outside contract 1.0.0 refuses the set too, so a typo never shows as a failed case. An injected
 distribution lists each intent label of the model at most once, most likely first, with
 probabilities that add up to at most 1 and that each stay above the equal share of the rest, so
-the listed intents come first. The SHA-256 of the file goes into the record of the gate run,
-and the approval of the set must cover it.
+the listed intents come first. A case that expects a draft names the document versions that
+must and must not reach the LLM step, each once and never in both lists, and no other case names
+any (`docs/design/gate-for-a-release-with-kb-documents.md`, Search in the draft cases). The
+SHA-256 of the file goes into the record of the gate run, and the approval of the set must cover
+it.
 """
 
 import math
@@ -24,6 +27,7 @@ from supportiq_release.files import read_json_file
 from supportiq_release.gate.domain import (
     Case,
     CaseSet,
+    DocumentVersion,
     DraftStatus,
     Expected,
     Failure,
@@ -65,6 +69,11 @@ _EXPECTED_FIELDS = frozenset(
         "llm_called",
     }
 )
+_INCLUDE = "llm_sources_include"
+_EXCLUDE = "llm_sources_exclude"
+# The fields of the expected outcome of a case that expects a draft.
+_DRAFT_EXPECTED_FIELDS = _EXPECTED_FIELDS | {_INCLUDE, _EXCLUDE}
+_VERSION_FIELDS = frozenset({"document_id", "version"})
 
 
 class CasesProblem(StrEnum):
@@ -207,13 +216,17 @@ def _probability(value: object, case_id: str) -> tuple[str, float]:
 
 
 def _expected(value: object, case_id: str) -> Expected:
-    fields = _object(value, _EXPECTED_FIELDS, case_id)
+    fields = _object(value, None, case_id)
+    if frozenset(fields) not in {_EXPECTED_FIELDS, _DRAFT_EXPECTED_FIELDS}:
+        raise CasesInvalidError(CasesProblem.SHAPE_INVALID, case_id)
     status = fields["http_status"]
     authority = fields["requires_authority"]
     if not isinstance(status, int) or isinstance(status, bool):
         raise CasesInvalidError(CasesProblem.SHAPE_INVALID, case_id)
     if authority is not None and not isinstance(authority, bool):
         raise CasesInvalidError(CasesProblem.SHAPE_INVALID, case_id)
+    llm_called = _flag(fields["llm_called"], case_id)
+    include, exclude = _sources(fields, llm_called, case_id)
     return Expected(
         http_status=status,
         problem_type=_optional_member(ProblemType, fields["problem_type"], case_id),
@@ -223,8 +236,39 @@ def _expected(value: object, case_id: str) -> Expected:
         forbidden_reason_codes=_codes(fields["forbidden_reason_codes"], case_id),
         no_other_reason_codes=_flag(fields["no_other_reason_codes"], case_id),
         requires_authority=authority,
-        llm_called=_flag(fields["llm_called"], case_id),
+        llm_called=llm_called,
+        llm_sources_include=include,
+        llm_sources_exclude=exclude,
     )
+
+
+def _sources(
+    fields: Mapping[str, object], llm_called: bool, case_id: str
+) -> tuple[frozenset[DocumentVersion], frozenset[DocumentVersion]]:
+    # Only a case that expects a draft names versions, and it always names one that must reach
+    # the LLM step, so a draft case can never pass on any search result.
+    if _INCLUDE not in fields:
+        if llm_called:
+            raise CasesInvalidError(CasesProblem.SHAPE_INVALID, case_id)
+        return frozenset(), frozenset()
+    include = _versions(fields[_INCLUDE], case_id)
+    exclude = _versions(fields[_EXCLUDE], case_id)
+    if not llm_called or not include or include & exclude:
+        raise CasesInvalidError(CasesProblem.SHAPE_INVALID, case_id)
+    return include, exclude
+
+
+def _versions(value: object, case_id: str) -> frozenset[DocumentVersion]:
+    listed = [_version(entry, case_id) for entry in _list(value, case_id)]
+    versions = frozenset(listed)
+    if len(versions) != len(listed):
+        raise CasesInvalidError(CasesProblem.SHAPE_INVALID, case_id)
+    return versions
+
+
+def _version(value: object, case_id: str) -> DocumentVersion:
+    fields = _object(value, _VERSION_FIELDS, case_id)
+    return (_text(fields["document_id"], case_id), _text(fields["version"], case_id))
 
 
 def _codes(value: object, case_id: str) -> frozenset[ReasonCode]:

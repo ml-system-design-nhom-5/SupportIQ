@@ -49,6 +49,7 @@ from supportiq_release.gate.domain import (
     GuardrailSuite,
     candidate_checks,
     check_case,
+    known_gaps,
     written_for_mismatches,
 )
 
@@ -86,7 +87,7 @@ def run_gate(arguments: argparse.Namespace) -> int:
         read_guardrail_result(GuardrailSuite.AI_SERVICE, Path(arguments.ai_service_guardrails)),
         read_guardrail_result(GuardrailSuite.BACKEND, Path(arguments.backend_guardrails)),
     )
-    outcome = _outcome(cases, _run_candidate(candidate, cases), guardrails)
+    outcome = _outcome(candidate, cases, _run_candidate(candidate, cases), guardrails)
     identity = GateRunIdentity(
         release_id=candidate.release_id,
         manifest_sha256=candidate.manifest_sha256,
@@ -176,14 +177,19 @@ def _run_candidate(candidate: CandidateFacts, cases: CasesFile) -> CandidateRun:
 
 
 def _outcome(
-    cases: CasesFile, run: CandidateRun, guardrails: tuple[GuardrailResult, ...]
+    candidate: CandidateFacts,
+    cases: CasesFile,
+    run: CandidateRun,
+    guardrails: tuple[GuardrailResult, ...],
 ) -> GateOutcome:
-    results = zip(cases.case_set.cases, run.observations, strict=True)
+    sent = cases.case_set.cases
+    results = zip(sent, run.observations, strict=True)
     return GateOutcome(
         cases=tuple(check_case(case, observation) for case, observation in results),
-        checks=candidate_checks(run.routes, run.log_text, cases.case_set.cases, run.llm_calls),
+        checks=candidate_checks(run.routes, run.log_text, sent, run.observations, run.llm_calls),
         guardrails=guardrails,
         llm_calls=run.llm_calls,
+        known_gaps=known_gaps(candidate.release.kb_document_count),
     )
 
 

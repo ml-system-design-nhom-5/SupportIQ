@@ -12,7 +12,14 @@ from app.retrieval import DocumentSearch, RetrievalError
 
 from supportiq_release.gate.adapters import GatePorts
 from supportiq_release.gate.domain import Failure, Injection
-from tests.unit.gate.fakes import FAKE_DISTRIBUTION, FAKE_LABELS, FakeClassifier, FakeSearch
+from tests.unit.gate.fakes import (
+    FAKE_DISTRIBUTION,
+    FAKE_LABELS,
+    FAKE_SOURCE_VERSION,
+    FAKE_SOURCES,
+    FakeClassifier,
+    FakeSearch,
+)
 
 LABELS = (*FAKE_LABELS, "cancel_order", "delivery_issue")
 MESSAGE = "Where is [ORDER_ID_1] now?"
@@ -172,6 +179,18 @@ def test_the_writer_counts_every_call_and_fails_it_as_unavailable(
             writer.write(REQUEST)
         assert failed.value.failure is LlmFailure.UNAVAILABLE
         assert ports.llm_calls == call
+
+
+def test_the_writer_keeps_only_the_document_versions_of_each_call() -> None:
+    ports = GatePorts(labels=LABELS)
+    writer = ports.candidate_ports().writer
+    with_sources = DraftRequest(MESSAGE, "track_order", FAKE_SOURCES, (), False)
+
+    for request in (with_sources, REQUEST):
+        with pytest.raises(LlmCallError):
+            writer.write(request)
+
+    assert ports.llm_sources == [frozenset({FAKE_SOURCE_VERSION}), frozenset()]
 
 
 def test_the_fake_distribution_is_the_real_answer_of_the_tests() -> None:

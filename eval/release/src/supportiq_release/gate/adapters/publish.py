@@ -88,7 +88,7 @@ def prepare_release(
     Raises:
         PublishRefusedError: The records are not a relative path, the record did not pass, is
             of another candidate, or ran other cases, or the release ID is already published.
-        GateRecordInvalidError: The record is not in `supportiq-gate-run/interim-1`.
+        GateRecordInvalidError: The record is not in `supportiq-gate-run/interim-2`.
         ReleaseInvalidError: `ai-service` refuses the candidate or the published release.
         JsonFileInvalidError: The manifest or the record is missing or not strict JSON.
     """

@@ -11,6 +11,7 @@ from supportiq_release.gate.domain import (
     CaseKind,
     CaseResult,
     CaseSet,
+    DocumentVersion,
     Expected,
     Failure,
     Injection,
@@ -63,6 +64,7 @@ def _observation(
     recommendation: str = "abstain",
     draft_status: str = "abstained",
     llm_called: bool = False,
+    llm_sources: frozenset[DocumentVersion] = frozenset(),
 ) -> Observation:
     routing = {"recommendation": recommendation, "reason_codes": list(codes)}
     return Observation(
@@ -72,6 +74,7 @@ def _observation(
             {"analysis": {"routing": routing}, "status": draft_status, "reason_codes": list(codes)},
         ),
         llm_called=llm_called,
+        llm_sources=llm_sources,
     )
 
 
@@ -249,6 +252,49 @@ def test_an_expected_authority_is_allowed_besides_the_exact_codes() -> None:
         "createDraft.no_other_reason_codes",
         "createDraft.requires_authority",
     )
+
+
+RETURNS = ("POL-RET-001", "2.1")
+REFUNDS = ("POL-REFUND-002", "2.1")
+SHIPPING = ("POL-SHIP-002", "1.1")
+# A case that expects a draft: the returns policy must reach the LLM step, shipping must not.
+DRAFTS = replace(
+    ABSTAIN,
+    llm_called=True,
+    llm_sources_include=frozenset({RETURNS}),
+    llm_sources_exclude=frozenset({SHIPPING}),
+)
+
+
+@pytest.mark.parametrize(
+    "sources",
+    [frozenset({RETURNS}), frozenset({RETURNS, REFUNDS})],
+    ids=["exactly-the-included", "with-another-version"],
+)
+def test_a_draft_case_passes_when_the_included_versions_reach_the_llm_and_no_excluded_one(
+    sources: frozenset[DocumentVersion],
+) -> None:
+    result = check_case(_case(DRAFTS), _observation(llm_called=True, llm_sources=sources))
+
+    assert result.passed
+
+
+@pytest.mark.parametrize(
+    ("sources", "observed"),
+    [
+        (frozenset[DocumentVersion](), "empty"),
+        (frozenset({REFUNDS}), "POL-REFUND-002@2.1"),
+        (frozenset({SHIPPING, RETURNS}), "POL-RET-001@2.1,POL-SHIP-002@1.1"),
+    ],
+    ids=["none", "included-missing", "excluded-present"],
+)
+def test_a_draft_case_fails_on_its_sources_and_shows_only_their_identifiers(
+    sources: frozenset[DocumentVersion], observed: str
+) -> None:
+    result = check_case(_case(DRAFTS), _observation(llm_called=True, llm_sources=sources))
+
+    assert _fields(result) == ("createDraft.llm_sources",)
+    assert _observed(result) == {"createDraft.llm_sources": observed}
 
 
 def test_authority_that_is_not_checked_matches_either_way() -> None:

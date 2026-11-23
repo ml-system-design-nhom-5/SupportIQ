@@ -7,9 +7,12 @@ and so is a candidate built with an ID that a run already used.
 
 The record holds identifiers, versions, checksums, counts, and codes, never text of a message
 or of the KB (LOG-29). It states every part, what each case rests on, which parts load the
-candidate, the test classes of each folder of guardrail tests, that no LLM call was made, and
-the known gaps of the first release (ADR-0021, statement 4; ADR-0025). This module alone knows
-the fields of the format: `publish-candidate` reads a record with `read_gate_record`.
+candidate, the test classes of each folder of guardrail tests, whether the LLM step received
+exactly the calls that the cases expect, and the known gaps of the candidate (ADR-0021,
+statement 4; ADR-0025; ADR-0027). The format is `interim-2`: `interim-1` named the check of
+the LLM step `no_llm_call` and held no document version (the design of the gate for a release
+with KB documents, Data and contracts). This module alone knows the fields of the format:
+`publish-candidate` reads a record with `read_gate_record`.
 """
 
 from collections import Counter
@@ -26,9 +29,10 @@ from supportiq_release.errors import ReleaseCommandError
 from supportiq_release.files import read_json_file, write_json_file
 from supportiq_release.gate.domain import (
     CANDIDATE_SCOPE,
-    KNOWN_GAPS,
+    LLM_CALLS_AS_EXPECTED,
     NO_LLM_CALL,
     SHARED_SCENARIO_SET_ITEM,
+    CandidateCheck,
     CaseResult,
     CheckResult,
     GateOutcome,
@@ -36,12 +40,13 @@ from supportiq_release.gate.domain import (
     GuardrailSuite,
 )
 
-RECORD_FORMAT = "supportiq-gate-run/interim-1"
+RECORD_FORMAT = "supportiq-gate-run/interim-2"
 RECORD_FILE_NAME = "gate-run.json"
 PASSED = "passed"
 FAILED = "failed"
-LLM_CALLED = (
-    "The LLM step of the gate received a call, so the gate fails (ADR-0021, CI, statement 2)."
+LLM_CALLS_UNEXPECTED = (
+    "The LLM step of the gate received a call that the cases do not expect, so the gate fails"
+    " (ADR-0021, CI, statement 2)."
 )
 # The fields of the format that the reader reads too.
 _FORMAT = "format"
@@ -55,7 +60,7 @@ _OUTCOME = "outcome"
 
 
 class GateRecordInvalidError(ReleaseCommandError):
-    """A record is not one in `supportiq-gate-run/interim-1`."""
+    """A record is not one in `supportiq-gate-run/interim-2`."""
 
     def __init__(self) -> None:
         """Build the error with its fixed message."""
@@ -137,7 +142,7 @@ def gate_record_document(identity: GateRunIdentity, outcome: GateOutcome) -> dic
         outcome: Every part of the run.
 
     Returns:
-        The document, in `supportiq-gate-run/interim-1`.
+        The document, in `supportiq-gate-run/interim-2`.
     """
     return {
         _FORMAT: RECORD_FORMAT,
@@ -149,9 +154,9 @@ def gate_record_document(identity: GateRunIdentity, outcome: GateOutcome) -> dic
         _CHECKS: [_check_entry(result) for result in outcome.checks],
         "candidate_scope": _scope_part(),
         "guardrails": [_guardrail_entry(result) for result in outcome.guardrails],
-        "llm": _llm_part(outcome.llm_calls),
+        "llm": _llm_part(outcome),
         "test_26": SHARED_SCENARIO_SET_ITEM,
-        "known_gaps": list(KNOWN_GAPS),
+        "known_gaps": list(outcome.known_gaps),
         _OUTCOME: PASSED if outcome.passed else FAILED,
     }
 
@@ -167,7 +172,7 @@ def read_gate_record(path: Path) -> RecordedRun:
 
     Raises:
         JsonFileInvalidError: The file is missing, a link, unreadable, or not strict JSON.
-        GateRecordInvalidError: The record is not in `supportiq-gate-run/interim-1`.
+        GateRecordInvalidError: The record is not in `supportiq-gate-run/interim-2`.
     """
     record = read_json_file(path)
     content = _object(record.content)
@@ -219,8 +224,19 @@ def _scope_part() -> dict[str, object]:
     }
 
 
-def _llm_part(llm_calls: int) -> dict[str, object]:
-    return {"calls": llm_calls, "statement": NO_LLM_CALL if llm_calls == 0 else LLM_CALLED}
+def _llm_part(outcome: GateOutcome) -> dict[str, object]:
+    as_expected = all(
+        result.passed
+        for result in outcome.checks
+        if result.check is CandidateCheck.LLM_CALLS_AS_EXPECTED
+    )
+    if not as_expected:
+        statement = LLM_CALLS_UNEXPECTED
+    elif outcome.llm_calls == 0:
+        statement = NO_LLM_CALL
+    else:
+        statement = LLM_CALLS_AS_EXPECTED
+    return {"calls": outcome.llm_calls, "statement": statement}
 
 
 def _check_entry(result: CheckResult) -> dict[str, object]:

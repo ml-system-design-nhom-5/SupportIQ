@@ -156,7 +156,8 @@ def test_a_record_that_does_not_cover_the_candidate_and_the_cases_is_refused(
 
 
 def test_a_record_of_another_format_is_refused(candidate: Path, output: Path) -> None:
-    _change(_record(candidate), format="supportiq-gate-run/interim-2")
+    # `interim-1` is the format of the record of the first release, before the draft path.
+    _change(_record(candidate), format="supportiq-gate-run/interim-1")
 
     with pytest.raises(GateRecordInvalidError):
         prepare_release(candidate, RECORDS, CASES_SHA256, output)

@@ -10,6 +10,7 @@ from supportiq_release.gate.domain.cases import (
     Case,
     CaseKind,
     CaseSet,
+    DocumentVersion,
     DraftStatus,
     Expected,
     Failure,
@@ -33,6 +34,8 @@ from supportiq_release.gate.domain.outcome import (
     CANDIDATE_SCOPE,
     CONTRACT_ROUTES,
     KNOWN_GAPS,
+    KNOWN_GAPS_WITH_KB_DOCUMENTS,
+    LLM_CALLS_AS_EXPECTED,
     NO_LLM_CALL,
     SHARED_SCENARIO_SET_ITEM,
     CandidateCheck,
@@ -41,6 +44,7 @@ from supportiq_release.gate.domain.outcome import (
     GuardrailResult,
     GuardrailSuite,
     candidate_checks,
+    known_gaps,
 )
 
 __all__ = [
@@ -49,6 +53,8 @@ __all__ = [
     "CONTRACT_VERSION",
     "INTERIM_LABEL",
     "KNOWN_GAPS",
+    "KNOWN_GAPS_WITH_KB_DOCUMENTS",
+    "LLM_CALLS_AS_EXPECTED",
     "NO_LLM_CALL",
     "SHARED_SCENARIO_SET_ITEM",
     "Approval",
@@ -60,6 +66,7 @@ __all__ = [
     "CaseResult",
     "CaseSet",
     "CheckResult",
+    "DocumentVersion",
     "DraftStatus",
     "Expected",
     "Failure",
@@ -77,5 +84,6 @@ __all__ = [
     "approval_problem",
     "candidate_checks",
     "check_case",
+    "known_gaps",
     "written_for_mismatches",
 ]

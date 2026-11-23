@@ -92,7 +92,7 @@ def test_the_real_application_serves_exactly_the_routes_of_contract_1_0_0(
     routes = _routes_of(real_app)
 
     assert routes == CONTRACT_ROUTES
-    assert candidate_checks(routes, "", [], 0)[0].passed
+    assert candidate_checks(routes, "", [], [], 0)[0].passed
 
 
 def test_a_route_of_an_included_router_outside_the_contract_fails_the_check_and_is_named(
@@ -108,7 +108,7 @@ def test_a_route_of_an_included_router_outside_the_contract_fails_the_check_and_
 
     routes = _routes_of(app)
 
-    check = candidate_checks(routes, "", [], 0)[0]
+    check = candidate_checks(routes, "", [], [], 0)[0]
     assert ("POST", "/v1/refunds") in routes
     assert (check.check, check.passed, check.observed) == (
         CandidateCheck.ROUTES,
@@ -147,7 +147,7 @@ def test_an_unknown_kind_of_route_inside_an_included_router_fails_the_check(
     unknown = {(kind, path) for kind, path in routes if path == "/v1/stream"}
     assert len(unknown) == 1
     assert unknown.isdisjoint(CONTRACT_ROUTES)
-    assert not candidate_checks(routes, "", [], 0)[0].passed
+    assert not candidate_checks(routes, "", [], [], 0)[0].passed
 
 
 @pytest.mark.parametrize("prefix", ["", "/v1"])
@@ -178,7 +178,7 @@ def test_the_frontend_of_an_included_router_fails_the_check(
     router.frontend("/", directory=_frontend_folder(tmp_path))
     real_app.include_router(router)
 
-    check = candidate_checks(_routes_of(real_app), "", [], 0)[0]
+    check = candidate_checks(_routes_of(real_app), "", [], [], 0)[0]
 
     assert not check.passed
     assert check.observed == ("+_FrontendRouteGroup /",)
@@ -187,7 +187,7 @@ def test_the_frontend_of_an_included_router_fails_the_check(
 def test_the_frontend_of_the_application_fails_the_check(real_app: FastAPI, tmp_path: Path) -> None:
     real_app.frontend("/", directory=_frontend_folder(tmp_path))
 
-    check = candidate_checks(_routes_of(real_app), "", [], 0)[0]
+    check = candidate_checks(_routes_of(real_app), "", [], [], 0)[0]
 
     assert not check.passed
     assert check.observed == ("+_FrontendRouteGroup /",)

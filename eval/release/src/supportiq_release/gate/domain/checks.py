@@ -6,7 +6,8 @@ and the type of a problem only from a Problem Details body, so the `status` of a
 never read as the status of a draft.
 
 A mismatch names the operation and the field, with what the candidate gave: an HTTP status, a
-value of a closed set of the contract, or reason codes. A value outside the closed set shows as
+value of a closed set of the contract, reason codes, or the document versions that reached the
+LLM step. A value outside the closed set shows as
 `other`, never as the text itself, because a response can hold text of the message (LOG-29).
 """
 
@@ -19,6 +20,7 @@ from supportiq_release.gate.domain.cases import (
     Case,
     CaseKind,
     CaseSet,
+    DocumentVersion,
     DraftStatus,
     Failure,
     ProblemType,
@@ -60,11 +62,14 @@ class Observation:
         analysis: The response of `createAnalysis`.
         draft: The response of `createDraft`.
         llm_called: Whether the LLM step received a call during `createDraft`.
+        llm_sources: The document versions of the policy sources that reached the LLM step
+            during `createDraft`, each once.
     """
 
     analysis: Response
     draft: Response
     llm_called: bool
+    llm_sources: frozenset[DocumentVersion] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,6 +150,8 @@ def check_case(case: Case, observation: Observation) -> CaseResult:
     ]
     if observation.llm_called != case.expected.llm_called:
         mismatches.append(Mismatch(f"{DRAFT}.llm_called", str(observation.llm_called).lower()))
+    if not _sources_match(case, observation):
+        mismatches.append(Mismatch(f"{DRAFT}.llm_sources", _shown_sources(observation.llm_sources)))
     return CaseResult(
         case_id=case.case_id,
         esc_rule=case.esc_rule,
@@ -246,6 +253,21 @@ def _shown_member(value: object, members: type[StrEnum]) -> str:
     if value is None:
         return _NULL
     return value if isinstance(value, str) and value in {m.value for m in members} else _OTHER
+
+
+def _sources_match(case: Case, observation: Observation) -> bool:
+    # Sets, not an exact list: nobody can write the top documents of the real search by hand.
+    expected = case.expected
+    return (
+        expected.llm_sources_include <= observation.llm_sources
+        and not expected.llm_sources_exclude & observation.llm_sources
+    )
+
+
+def _shown_sources(sources: frozenset[DocumentVersion]) -> str:
+    # Identifiers of the KB, sorted, never its text.
+    shown = sorted(f"{document_id}@{version}" for document_id, version in sources)
+    return ",".join(shown) if shown else _EMPTY
 
 
 def _shown_codes(codes: frozenset[str]) -> str:

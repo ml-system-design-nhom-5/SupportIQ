@@ -22,9 +22,10 @@ from supportiq_release.gate.adapters import (
     candidate_settings,
     run_cases,
 )
-from supportiq_release.gate.domain import Case
+from supportiq_release.gate.domain import LLM_CALLS_AS_EXPECTED, Case
 from tests.unit.candidate.fakes import RELEASE_ID
 from tests.unit.gate.fakes import (
+    FAKE_SOURCE_VERSION,
     GUARDRAIL_CLASSNAME,
     LLM_MESSAGE,
     MESSAGE,
@@ -213,7 +214,7 @@ def test_a_log_that_holds_the_message_fails_the_gate(
     assert _checks(workspace) == {
         "routes_are_those_of_contract_1_0_0": True,
         "no_case_text_in_the_logs": False,
-        "no_llm_call": True,
+        "llm_calls_as_expected": True,
     }
 
 
@@ -226,7 +227,7 @@ def test_a_route_outside_the_contract_fails_the_gate(
     assert _checks(workspace) == {
         "routes_are_those_of_contract_1_0_0": False,
         "no_case_text_in_the_logs": True,
-        "no_llm_call": True,
+        "llm_calls_as_expected": True,
     }
     route_check = _entries(_record(workspace)["candidate_checks"])[0]
     assert route_check["observed"] == ["+POST /v1/refunds"]
@@ -256,12 +257,56 @@ def test_an_injected_failure_with_the_problem_of_the_contract_passes_its_case(
     }
 
 
-def test_a_call_of_the_llm_step_fails_the_gate_even_when_the_case_expects_it(
+def _draft_case(include: list[dict[str, str]]) -> dict[str, object]:
+    # A case whose `createDraft` calls the LLM step of the gate with the fake sources.
+    return case_document(
+        request={"message": LLM_MESSAGE, "as_of": "2026-11-17T09:00:00Z"},
+        expected=expected_document(
+            no_other_reason_codes=False,
+            llm_called=True,
+            llm_sources_include=include,
+            llm_sources_exclude=[],
+        ),
+    )
+
+
+def test_the_call_that_a_draft_case_expects_with_its_versions_passes_the_gate(
     workspace: Path,
 ) -> None:
+    document_id, version = FAKE_SOURCE_VERSION
+    write_set(
+        workspace / "set",
+        set_document(_draft_case([{"document_id": document_id, "version": version}])),
+    )
+
+    status = _run_gate()
+
+    record = _record(workspace)
+    assert status == EXIT_PASSED
+    assert _entries(_object(record["escalation_cases"])["results"])[0]["passed"] is True
+    assert _checks(workspace)["llm_calls_as_expected"] is True
+    assert record["llm"] == {"calls": 1, "statement": LLM_CALLS_AS_EXPECTED}
+
+
+def test_a_draft_case_whose_version_does_not_reach_the_llm_fails_the_gate(
+    workspace: Path,
+) -> None:
+    write_set(
+        workspace / "set",
+        set_document(_draft_case([{"document_id": "POL-OTHER-001", "version": "1.0"}])),
+    )
+
+    status = _run_gate()
+
+    result = _entries(_object(_record(workspace)["escalation_cases"])["results"])[0]
+    assert status == EXIT_FAILED
+    assert result["observed"] == {"createDraft.llm_sources": "POL-FAKE-001@1.1"}
+
+
+def test_a_call_that_no_case_expects_fails_the_gate(workspace: Path) -> None:
     case = case_document(
         request={"message": LLM_MESSAGE, "as_of": "2026-11-17T09:00:00Z"},
-        expected=expected_document(no_other_reason_codes=False, llm_called=True),
+        expected=expected_document(no_other_reason_codes=False),
     )
     write_set(workspace / "set", set_document(case))
 
@@ -269,13 +314,8 @@ def test_a_call_of_the_llm_step_fails_the_gate_even_when_the_case_expects_it(
 
     record = _record(workspace)
     assert status == EXIT_FAILED
-    assert _entries(_object(record["escalation_cases"])["results"])[0]["passed"] is True
-    assert _checks(workspace)["no_llm_call"] is False
-    assert record["llm"] == {
-        "calls": 1,
-        "statement": "The LLM step of the gate received a call, so the gate fails"
-        " (ADR-0021, CI, statement 2).",
-    }
+    assert _checks(workspace)["llm_calls_as_expected"] is False
+    assert _entries(record["candidate_checks"])[2]["observed"] == ["fake-case-1", "calls:1"]
 
 
 def test_the_record_holds_no_text_of_a_case(workspace: Path) -> None:

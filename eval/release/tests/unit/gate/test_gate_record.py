@@ -20,6 +20,8 @@ from supportiq_release.gate.adapters import (
 from supportiq_release.gate.domain import (
     CANDIDATE_SCOPE,
     KNOWN_GAPS,
+    KNOWN_GAPS_WITH_KB_DOCUMENTS,
+    LLM_CALLS_AS_EXPECTED,
     NO_LLM_CALL,
     SHARED_SCENARIO_SET_ITEM,
     CandidateCheck,
@@ -62,7 +64,7 @@ FAILED = GateOutcome(cases=(), checks=CHECKS, guardrails=GUARDRAILS, llm_calls=0
 def test_the_record_identifies_the_candidate_the_commit_and_the_cases() -> None:
     document = gate_record_document(IDENTITY, PASSED)
 
-    assert document["format"] == "supportiq-gate-run/interim-1"
+    assert document["format"] == "supportiq-gate-run/interim-2"
     assert document["run_id"] == document["release_id"] == "fake-release-1"
     assert document["manifest_sha256"] == "b" * 64
     assert document["git_commit"] == "c" * 40
@@ -128,7 +130,7 @@ def test_the_record_states_every_part_the_gaps_and_that_no_llm_call_was_made() -
     assert document["candidate_checks"] == [
         {"check": "routes_are_those_of_contract_1_0_0", "passed": True, "observed": []},
         {"check": "no_case_text_in_the_logs", "passed": True, "observed": []},
-        {"check": "no_llm_call", "passed": True, "observed": []},
+        {"check": "llm_calls_as_expected", "passed": True, "observed": []},
     ]
     assert document["guardrails"] == [
         {
@@ -156,6 +158,23 @@ def test_the_record_states_every_part_the_gaps_and_that_no_llm_call_was_made() -
     for gap, source in zip(KNOWN_GAPS, ("DATA-23", "CST-02", "ESC-04", "ADR-0025"), strict=True):
         assert source in gap
     assert document["outcome"] == "passed"
+
+
+def test_a_release_with_kb_documents_records_its_own_gaps() -> None:
+    outcome = GateOutcome(
+        cases=CASES,
+        checks=CHECKS,
+        guardrails=GUARDRAILS,
+        llm_calls=0,
+        known_gaps=KNOWN_GAPS_WITH_KB_DOCUMENTS,
+    )
+
+    document = gate_record_document(IDENTITY, outcome)
+
+    assert document["known_gaps"] == list(KNOWN_GAPS_WITH_KB_DOCUMENTS)
+    sources = ("DATA-23", "CST-02", "ADR-0025", "ADR-0027", "DATA-48")
+    for gap, source in zip(KNOWN_GAPS_WITH_KB_DOCUMENTS, sources, strict=True):
+        assert source in gap
 
 
 def test_the_record_names_the_parts_that_load_the_candidate_and_those_that_do_not() -> None:
@@ -190,18 +209,34 @@ def test_a_skipped_guardrail_test_is_recorded_and_fails_the_run() -> None:
     assert document["outcome"] == "failed"
 
 
-def test_an_llm_call_is_recorded_and_fails_the_run() -> None:
-    checks = (*CHECKS[:2], CheckResult(CandidateCheck.NO_LLM_CALL, ("1",)))
+def test_an_llm_call_that_no_case_expects_is_recorded_and_fails_the_run() -> None:
+    checks = (*CHECKS[:2], CheckResult(CandidateCheck.LLM_CALLS_AS_EXPECTED, ("real", "calls:1")))
     outcome = GateOutcome(cases=CASES, checks=checks, guardrails=GUARDRAILS, llm_calls=1)
 
     document = gate_record_document(IDENTITY, outcome)
 
+    checks_part = document["candidate_checks"]
+    assert isinstance(checks_part, list)
+    assert checks_part[2] == {
+        "check": "llm_calls_as_expected",
+        "passed": False,
+        "observed": ["real", "calls:1"],
+    }
     assert document["llm"] == {
         "calls": 1,
-        "statement": "The LLM step of the gate received a call, so the gate fails"
-        " (ADR-0021, CI, statement 2).",
+        "statement": "The LLM step of the gate received a call that the cases do not expect, so"
+        " the gate fails (ADR-0021, CI, statement 2).",
     }
     assert document["outcome"] == "failed"
+
+
+def test_the_calls_that_the_draft_cases_expect_are_recorded_as_such() -> None:
+    outcome = GateOutcome(cases=CASES, checks=CHECKS, guardrails=GUARDRAILS, llm_calls=3)
+
+    document = gate_record_document(IDENTITY, outcome)
+
+    assert document["llm"] == {"calls": 3, "statement": LLM_CALLS_AS_EXPECTED}
+    assert document["outcome"] == "passed"
 
 
 def test_a_failed_case_is_recorded_with_its_mismatches() -> None:
@@ -282,7 +317,7 @@ def test_a_written_record_reads_back_with_its_ids_checksums_and_outcome(
 @pytest.mark.parametrize(
     "change",
     [
-        {"format": "supportiq-gate-run/interim-2"},
+        {"format": "supportiq-gate-run/interim-1"},
         {"outcome": "skipped"},
         {"run_id": ""},
         {"release_id": 1},
@@ -291,7 +326,7 @@ def test_a_written_record_reads_back_with_its_ids_checksums_and_outcome(
         {"escalation_cases": {"set": SET_NAME}},
     ],
     ids=[
-        "another format",
+        "the format before the draft path",
         "another outcome",
         "an empty run ID",
         "a release ID not a text",

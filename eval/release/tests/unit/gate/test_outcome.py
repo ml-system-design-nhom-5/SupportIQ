@@ -6,6 +6,8 @@ import pytest
 
 from supportiq_release.gate.domain import (
     CONTRACT_ROUTES,
+    KNOWN_GAPS,
+    KNOWN_GAPS_WITH_KB_DOCUMENTS,
     CandidateCheck,
     Case,
     CaseKind,
@@ -15,9 +17,12 @@ from supportiq_release.gate.domain import (
     GuardrailResult,
     GuardrailSuite,
     Mismatch,
+    Observation,
+    Response,
     candidate_checks,
+    known_gaps,
 )
-from tests.unit.gate.fakes import ABSTAIN
+from tests.unit.gate.fakes import ABSTAIN, FAKE_SOURCE_VERSION
 
 MESSAGE = "Where is [ORDER_ID_1] now? It left on Monday."
 CASE = Case(
@@ -28,6 +33,15 @@ CASE = Case(
     depends_on_model=True,
     expected=ABSTAIN,
 )
+DRAFT_CASE = replace(
+    CASE,
+    case_id="fake-draft-1",
+    expected=replace(
+        ABSTAIN, llm_called=True, llm_sources_include=frozenset({FAKE_SOURCE_VERSION})
+    ),
+)
+QUIET = Observation(analysis=Response(200, {}), draft=Response(200, {}), llm_called=False)
+CALLED = replace(QUIET, llm_called=True)
 PASSED_CASE = CaseResult("fake-case-1", "ESC-04", CaseKind.REAL_MODEL, None, ())
 FAILED_CASE = CaseResult(
     "fake-case-2", "ESC-04", CaseKind.REAL_MODEL, None, (Mismatch("createDraft.x", "y"),)
@@ -101,7 +115,9 @@ def test_a_gate_with_a_missing_or_failed_part_fails(parts: dict[str, object]) ->
 
 
 def test_the_routes_of_contract_1_0_0_and_clean_logs_pass_every_check() -> None:
-    results = candidate_checks(CONTRACT_ROUTES, '{"event": "analysis_created"}\n', [CASE], 0)
+    results = candidate_checks(
+        CONTRACT_ROUTES, '{"event": "analysis_created"}\n', [CASE], [QUIET], 0
+    )
 
     assert results == PASSED_CHECKS
 
@@ -121,7 +137,7 @@ def test_the_routes_of_contract_1_0_0_and_clean_logs_pass_every_check() -> None:
 def test_routes_other_than_those_of_contract_1_0_0_fail_the_route_check_and_are_named(
     routes: frozenset[tuple[str, str]], observed: tuple[str, ...]
 ) -> None:
-    results = candidate_checks(routes, "", [CASE], 0)
+    results = candidate_checks(routes, "", [CASE], [QUIET], 0)
 
     assert results[0] == CheckResult(CandidateCheck.ROUTES, observed)
     assert all(result.passed for result in results[1:])
@@ -138,13 +154,13 @@ def test_routes_other_than_those_of_contract_1_0_0_fail_the_route_check_and_are_
 def test_a_log_that_holds_text_of_a_case_fails_the_log_check_and_names_only_the_case(
     log_text: str,
 ) -> None:
-    results = candidate_checks(CONTRACT_ROUTES, log_text, [CASE], 0)
+    results = candidate_checks(CONTRACT_ROUTES, log_text, [CASE], [QUIET], 0)
 
     assert results[1] == CheckResult(CandidateCheck.NO_CASE_TEXT_IN_LOGS, ("fake-case-1",))
 
 
 def test_a_placeholder_that_is_not_in_any_message_may_be_logged() -> None:
-    results = candidate_checks(CONTRACT_ROUTES, '{"detail": "[EMAIL]"}\n', [CASE], 0)
+    results = candidate_checks(CONTRACT_ROUTES, '{"detail": "[EMAIL]"}\n', [CASE], [QUIET], 0)
 
     assert results == PASSED_CHECKS
 
@@ -152,10 +168,41 @@ def test_a_placeholder_that_is_not_in_any_message_may_be_logged() -> None:
 def test_a_case_without_a_message_never_matches_an_empty_log() -> None:
     case = replace(CASE, request={"as_of": "2026-11-17T09:00:00Z"})
 
-    assert candidate_checks(CONTRACT_ROUTES, "", [case], 0) == PASSED_CHECKS
+    assert candidate_checks(CONTRACT_ROUTES, "", [case], [QUIET], 0) == PASSED_CHECKS
 
 
-def test_one_llm_call_fails_the_llm_check() -> None:
-    results = candidate_checks(CONTRACT_ROUTES, "", [CASE], 1)
+def test_one_call_for_each_draft_case_and_no_other_call_passes_the_llm_check() -> None:
+    results = candidate_checks(CONTRACT_ROUTES, "", [CASE, DRAFT_CASE], [QUIET, CALLED], 1)
 
-    assert results[2] == CheckResult(CandidateCheck.NO_LLM_CALL, ("1",))
+    assert results[2] == CheckResult(CandidateCheck.LLM_CALLS_AS_EXPECTED)
+
+
+@pytest.mark.parametrize(
+    ("cases", "observations", "llm_calls", "observed"),
+    [
+        ([CASE], [CALLED], 1, ("fake-case-1", "calls:1")),
+        ([CASE], [QUIET], 1, ("calls:1",)),
+        ([DRAFT_CASE], [QUIET], 0, ("fake-draft-1", "calls:0")),
+        ([DRAFT_CASE], [CALLED], 2, ("calls:2",)),
+    ],
+    ids=[
+        "a call where none is expected",
+        "a call outside every case",
+        "a draft case without its call",
+        "a second call in a draft case",
+    ],
+)
+def test_calls_other_than_those_the_cases_expect_fail_the_llm_check_and_are_named(
+    cases: list[Case], observations: list[Observation], llm_calls: int, observed: tuple[str, ...]
+) -> None:
+    results = candidate_checks(CONTRACT_ROUTES, "", cases, observations, llm_calls)
+
+    assert results[2] == CheckResult(CandidateCheck.LLM_CALLS_AS_EXPECTED, observed)
+
+
+def test_the_known_gaps_depend_on_whether_the_kb_serves_documents() -> None:
+    assert known_gaps(0) == KNOWN_GAPS
+    assert known_gaps(14) == KNOWN_GAPS_WITH_KB_DOCUMENTS
+    assert not any("ESC-04" in gap for gap in KNOWN_GAPS_WITH_KB_DOCUMENTS)
+    assert any("ADR-0027" in gap for gap in KNOWN_GAPS_WITH_KB_DOCUMENTS)
+    assert not any("ADR-0027" in gap for gap in KNOWN_GAPS)

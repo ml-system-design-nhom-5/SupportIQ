@@ -3,12 +3,18 @@
 The set replaces the mandatory escalation cases of the shared scenario set until that set is in
 `data/benchmarks/escalation/` (ADR-0021, Exception to TEST-26). Each case sends one request to
 `createAnalysis` and to `createDraft`, possibly with a part of `ai-service` replaced, and states
-the outcome that contract 1.0.0 expects (`data/benchmarks/escalation/interim-v1/README.md`).
+the outcome that contract 1.0.0 expects (`data/benchmarks/escalation/interim-v1/README.md`). A
+case that expects a draft names the document versions that must and must not reach the LLM step
+(`docs/design/gate-for-a-release-with-kb-documents.md`, Search in the draft cases).
 """
 
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
+
+# A KB document version as (`document_id`, `version`), the only part of a policy source that
+# the gate keeps: an identifier, never text of the KB.
+type DocumentVersion = tuple[str, str]
 
 
 class Failure(StrEnum):
@@ -107,6 +113,9 @@ class Expected:
         requires_authority: Whether `requires_authority` is in both lists, or None when it is
             not checked.
         llm_called: Whether the LLM step received a call during `createDraft`.
+        llm_sources_include: The document versions that must reach the LLM step; empty
+            unless `llm_called`, and then never empty.
+        llm_sources_exclude: The document versions that must not reach the LLM step.
     """
 
     http_status: int
@@ -118,6 +127,8 @@ class Expected:
     no_other_reason_codes: bool
     requires_authority: bool | None
     llm_called: bool
+    llm_sources_include: frozenset[DocumentVersion] = frozenset()
+    llm_sources_exclude: frozenset[DocumentVersion] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)

@@ -57,6 +57,42 @@ def _injected(*probabilities: tuple[str, object], failure: object = None) -> dic
     return {"intent_distribution": distribution or None, "failure": failure}
 
 
+def _version(document_id: object, version: object) -> dict[str, object]:
+    return {"document_id": document_id, "version": version}
+
+
+RETURNS = _version("POL-RET-001", "2.1")
+SHIPPING = _version("POL-SHIP-002", "1.1")
+
+
+def _drafts(**fields: object) -> dict[str, object]:
+    # The expected outcome of a case that expects a draft, with some fields replaced.
+    draft: dict[str, object] = {
+        "llm_called": True,
+        "llm_sources_include": [RETURNS],
+        "llm_sources_exclude": [SHIPPING],
+    }
+    return expected_document(**{**draft, **fields})
+
+
+def test_a_draft_case_names_the_versions_that_must_and_must_not_reach_the_llm(
+    tmp_path: Path,
+) -> None:
+    cases = read_cases_file(_write(tmp_path, set_document(case_document(expected=_drafts()))))
+
+    (read,) = cases.case_set.cases
+    assert read.expected.llm_called
+    assert read.expected.llm_sources_include == {("POL-RET-001", "2.1")}
+    assert read.expected.llm_sources_exclude == {("POL-SHIP-002", "1.1")}
+
+
+def test_a_case_that_expects_no_draft_names_no_version(tmp_path: Path) -> None:
+    cases = read_cases_file(_write(tmp_path, set_document(case_document())))
+
+    (read,) = cases.case_set.cases
+    assert read.expected.llm_sources_include == read.expected.llm_sources_exclude == frozenset()
+
+
 def test_the_interim_set_of_the_repository_reads_with_its_27_cases_and_its_checksum() -> None:
     cases = read_cases_file(INTERIM_CASES)
 
@@ -215,6 +251,40 @@ def test_the_checksum_is_that_of_the_bytes_of_the_file(tmp_path: Path) -> None:
         pytest.param(
             case_document(inject=_injected(("track_order", 0.01))),
             id="distribution-below-the-share-of-the-rest",
+        ),
+        pytest.param(
+            case_document(expected=expected_document(llm_called=True)),
+            id="draft-without-versions",
+        ),
+        pytest.param(
+            case_document(expected=_drafts(llm_called=False)), id="versions-without-a-draft"
+        ),
+        pytest.param(
+            case_document(expected=_without(_drafts(), "llm_sources_exclude")),
+            id="versions-exclude-missing",
+        ),
+        pytest.param(
+            case_document(expected=_without(_drafts(), "llm_sources_include")),
+            id="versions-include-missing",
+        ),
+        pytest.param(
+            case_document(expected=_drafts(llm_sources_include=[])), id="versions-include-empty"
+        ),
+        pytest.param(
+            case_document(expected=_drafts(llm_sources_exclude=[RETURNS])),
+            id="version-in-both-lists",
+        ),
+        pytest.param(
+            case_document(expected=_drafts(llm_sources_include=[RETURNS, RETURNS])),
+            id="version-twice",
+        ),
+        pytest.param(
+            case_document(expected=_drafts(llm_sources_include=[_version("POL-RET-001", 2)])),
+            id="version-not-a-text",
+        ),
+        pytest.param(
+            case_document(expected=_drafts(llm_sources_include=[{"document_id": "POL-RET-001"}])),
+            id="version-field-missing",
         ),
     ],
 )

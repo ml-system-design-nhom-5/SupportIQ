@@ -7,7 +7,8 @@ decision driver 1). The fakes are here:
   distribution, which gets exactly that distribution, or a failure of the intent model;
 - the search of the candidate answers every case, except a case that injects its failure;
 - the LLM step records each call and fails with `llm_unavailable`, so a gate run never calls a
-  provider (ADR-0021, CI, statement 2). A case that injects the failure of the LLM gets the
+  provider (ADR-0021, CI, statement 2). Of each call it keeps only the document versions of
+  the policy sources, never their text. A case that injects the failure of the LLM gets the
   same step.
 
 The runner sets the case before it sends the requests of that case, so the two models load once.
@@ -26,7 +27,7 @@ from app.intent import (
 )
 from app.retrieval import DocumentMatch, DocumentSearch, RetrievalError
 
-from supportiq_release.gate.domain import Failure, Injection
+from supportiq_release.gate.domain import DocumentVersion, Failure, Injection
 
 
 class GatePorts:
@@ -41,6 +42,8 @@ class GatePorts:
         self._labels = tuple(labels)
         self._injection: Injection | None = None
         self.llm_calls = 0
+        # The document versions of the policy sources of each call, in the order of the calls.
+        self.llm_sources: list[frozenset[DocumentVersion]] = []
 
     def use(self, injection: Injection | None) -> None:
         """Set the parts that the next requests replace.
@@ -127,6 +130,8 @@ class _GateWriter:
         self._ports = ports
 
     def write(self, request: DraftRequest) -> DraftReply:
-        del request
         self._ports.llm_calls += 1
+        self._ports.llm_sources.append(
+            frozenset((source.document_id, source.version) for source in request.policy_sources)
+        )
         raise LlmCallError(LlmFailure.UNAVAILABLE)

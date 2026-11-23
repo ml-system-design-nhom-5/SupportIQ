@@ -25,6 +25,7 @@ from tests.unit.gate.fakes import (
     ABSTAIN,
     FAILS,
     FAKE_LABELS,
+    FAKE_SOURCE_VERSION,
     INTERNAL_ERROR_PROBLEM,
     LLM_MESSAGE,
     MESSAGE,
@@ -158,8 +159,10 @@ def test_a_call_of_the_llm_step_is_observed_for_its_case_and_counted() -> None:
 
     calls, does_not_call = run.observations
     assert calls.llm_called
+    assert calls.llm_sources == frozenset({FAKE_SOURCE_VERSION})
     assert calls.draft.body["reason_codes"] == ["no_valid_document", "llm_unavailable"]
     assert not does_not_call.llm_called
+    assert does_not_call.llm_sources == frozenset()
     assert run.llm_calls == 1
 
 

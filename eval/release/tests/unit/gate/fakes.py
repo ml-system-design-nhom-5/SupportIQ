@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import TextIO
 
 from app.composition_root import CandidatePorts
-from app.drafting import DraftRequest, LlmCallError
+from app.drafting import DraftRequest, LlmCallError, PolicySource
 from app.intent import IntentDistribution, IntentModelError, IntentProbability
 from app.retrieval import DocumentMatch, RetrievalError
 from starlette.applications import Starlette
@@ -47,6 +47,12 @@ WRITTEN_FOR: dict[str, object] = {
 MESSAGE = "Where is [ORDER_ID_1] now?"
 # A message that makes the fake application call the LLM step during `createDraft`.
 LLM_MESSAGE = "Please write me a reply about [ORDER_ID_1]."
+# The policy sources of that call: two snippets of one document version, as a search can give.
+FAKE_SOURCE_VERSION = ("POL-FAKE-001", "1.1")
+FAKE_SOURCES = (
+    PolicySource("S1", *FAKE_SOURCE_VERSION, "Fake policy", "The first passage."),
+    PolicySource("S2", *FAKE_SOURCE_VERSION, "Fake policy", "The second passage."),
+)
 INTERNAL_ERROR = "urn:supportiq:problem:internal-error"
 # The Problem Details body of a 500 of contract 1.0.0, from its example: its `status` member is
 # the HTTP status, which the gate must never read as the status of a draft.
@@ -390,7 +396,7 @@ class _FakeApplication:
         routing = {"recommendation": recommendation, "reason_codes": list(codes)}
         if message == LLM_MESSAGE:
             try:
-                self._writer.write(DraftRequest(message, "track_order", (), (), False))
+                self._writer.write(DraftRequest(message, "track_order", FAKE_SOURCES, (), False))
             except LlmCallError:
                 codes.append("llm_unavailable")
         status = "abstained" if recommendation == "abstain" else "escalation_recommended"

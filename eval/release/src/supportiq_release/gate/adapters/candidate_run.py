@@ -172,7 +172,12 @@ async def _observe_case(client: httpx.AsyncClient, case: Case, ports: GatePorts)
     finally:
         ports.use(None)
     return Observation(
-        analysis=analysis, draft=draft, llm_called=ports.llm_calls > calls_before_the_draft
+        analysis=analysis,
+        draft=draft,
+        llm_called=ports.llm_calls > calls_before_the_draft,
+        llm_sources=frozenset(
+            version for sources in ports.llm_sources[calls_before_the_draft:] for version in sources
+        ),
     )
 
 
