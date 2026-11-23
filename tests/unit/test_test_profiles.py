@@ -2,7 +2,8 @@
 import socket
 
 import pytest
-from transformers import AutoTokenizer
+transformers = pytest.importorskip("transformers")
+AutoTokenizer = transformers.AutoTokenizer
 
 
 def test_default_profile_blocks_network_before_connect():

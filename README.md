@@ -91,30 +91,148 @@ The parts of `main` are kept at their paths, byte for byte, next to the componen
 | [`eval/`](eval/README.md) | The release command, the gate run records and published manifests of the releases in `eval/releases/`, and the output of KB ingestion |
 | [`deploy/`](deploy/README.md) | The setup of the demo on free plans: the setup order, the settings of each platform, and the checks before and after the first deploy; and, in `deploy/local/`, the local run of the whole system ([local run guide](docs/guides/local-run.md)) |
 | `data/` | Data committed unchanged: the KB versions in `data/raw/kb/<kb_version>/`, the interim escalation cases in `data/benchmarks/escalation/`, and the data of `main`: its other test and scenario sets in `data/benchmarks/`, and `data/business/`, `data/datasets/`, `data/intent/`, and `data/knowledge/`. Downloaded datasets, such as Bitext, are not committed ([DATA-06 to DATA-08](docs/rules/data-and-ml.md#data-layout)) |
-| [`pipeline/`](pipeline/README.md) | The offline tools of `main`: the data preparation, the training, and the evaluation of the intent model and of the whole system, with the autoeval. Not on the serving path |
-| `artifacts/` | The outputs of the runs of `main`: data preparation, training, evaluation, audits, browser tests, and the search index |
-| [`tests/`](tests/README.md), `pytest.ini` | The tests of `pipeline/`, `scripts/`, and `apps/`, with their pytest configuration. Each component keeps its own tests |
-| `scripts/` | 20 scripts of `main` for training, evaluation, and acceptance runs |
-| `apps/` | The code of `main` that `pipeline/`, `tests/`, and `scripts/` import. Nothing deploys it, and `apps/backend/` and `apps/demo/` are frozen |
-
-The rows from `pipeline/` to `apps/` are parts of `main`, kept at their paths byte for byte. They follow no engineering rule yet ([ADR-0028, Technical debt](docs/decisions/0028-repository-layout-for-the-pull-request-into-main.md#technical-debt)).
+| [`pipeline/`](pipeline/README.md) | The independent ML pipeline: data preparation, preprocessing, training, offline model evaluation, and artifact generation. Completely decoupled from the serving path |
+| `artifacts/` | The outputs of model training, offline evaluation, and model artifacts |
+| [`tests/`](tests/README.md), `pytest.ini` | Unit tests for `pipeline/` (data preparation, preprocessing, training, and offline evaluation) |
+| `scripts/` | Maintenance and test cache cleaning scripts |
 
 ## Run and test on your machine
 
-One command starts the whole system with Docker, on Linux, macOS, and WSL2 on Windows: PostgreSQL 17, `backend` with the simulated demo data, and `frontend` at <http://localhost:5173>. The [local run guide](docs/guides/local-run.md) gives the requirements, the demo accounts, the mode with AI, and how to stop it.
+### Quick start (local run)
+
+The entire system runs locally via Docker on Linux, macOS, and WSL2 on Windows. This includes PostgreSQL 17, `backend` with simulated commerce data, `frontend`, and optionally `ai-service` and the local observability stack.
+
+#### 1. Prerequisites
+- **Docker**: Docker Engine 25+ (API 1.44+) and Docker Compose v2.20.2+ with BuildKit enabled (`docker compose`, not `docker-compose`).
+- **Hardware**: At least 4 GB RAM (8 GB recommended when running with AI or observability).
+- **Ports**: `5173` (frontend), `8000` (backend), `5434` (PostgreSQL), and optionally `8001` (ai-service) and `3000` (Grafana).
+
+#### 2. Start the system (standard mode without AI)
+
+Start the whole system from the repository root:
 
 ```bash
 deploy/local/local-run.sh start
 ```
+*(Tip: pass `--yes` to accept first-run setup prompts automatically: `deploy/local/local-run.sh start --yes`)*
 
-Each part also runs on its own. Set it up and run it as its README states; the commands below come from those READMEs.
+On the first start, the script:
+- Generates `.local-run/secrets.env` with random local passwords (kept on your machine, git-ignored).
+- Builds Docker images for `backend` and `frontend`.
+- Initializes PostgreSQL on port `5434`, runs migrations, and loads demo seed data.
+- Starts `backend` on <http://127.0.0.1:8000> and `frontend` on <http://127.0.0.1:5173>.
+
+#### 3. Access URLs and demo accounts
+
+Open your browser:
+- **Frontend**: <http://localhost:5173>
+  - `/shop`: Simulated customer store to browse orders and submit support tickets.
+  - `/console`: Staff review console to inspect, edit, approve, or reject suggestions.
+  - `/admin`: Admin console for system settings and audit oversight.
+- **Backend API Docs**: <http://localhost:8000/docs> (Swagger / OpenAPI)
+- **PostgreSQL**: `127.0.0.1:5434` (database `supportiq`, user `supportiq_owner`)
+
+Demo passwords are generated into `.local-run/secrets.env`. Inspect them with:
+```bash
+grep '^SEED_PASSWORD_' .local-run/secrets.env
+```
+
+| Login name | Role | Password key in `.local-run/secrets.env` |
+|---|---|---|
+| `customer-1`, `customer-2`, `customer-3` | Customer | `SEED_PASSWORD_CUSTOMER` |
+| `staff-1`, `staff-2` | Staff | `SEED_PASSWORD_STAFF` |
+| `manager-1`, `manager-2` | Manager | `SEED_PASSWORD_MANAGER` |
+| `admin-1`, `admin-2` | Admin | `SEED_PASSWORD_ADMIN` |
+
+#### 4. Running with the AI Service (`--with-ai`)
+
+In standard mode (without AI), the backend and frontend run normally and suggestions default to manual handling without requiring any downloaded model weights.
+
+To enable automated intent classification, semantic KB policy retrieval, and LLM drafting:
+
+##### Step 4.1 — Download model weights and release assets
+
+Model weights, archives, and release binaries (~400 MB total) are excluded from git ([ADR-0021](docs/decisions/0021-repository-layout-and-ai-ml-migration.md)). The repository's `.gitignore` automatically ignores downloaded archives (`*.tar.gz`, `*.tgz`, `*.zip`), model weights (`*.safetensors`, `*.pt`, `*.bin`), extracted release assets (`eval/releases/*/*/`), and the runtime directory `/.local-run/`.
+
+Assets are hosted on [GitHub Releases](https://github.com/ml-system-design-nhom-5/SupportIQ/releases):
+
+- **For local AI runtime (`.local-run/release/`)**:
+  Extract the verified release bundle directly into `.local-run/release/` (which is git-ignored):
+  ```bash
+  mkdir -p .local-run/release
+
+  # Option A: via GitHub CLI
+  gh release download release-2026-11-18-02 --repo ml-system-design-nhom-5/SupportIQ --pattern "release-2026-11-18-02.tar.gz"
+  tar -xzf release-2026-11-18-02.tar.gz -C .local-run/release/
+  rm -f release-2026-11-18-02.tar.gz
+
+  # Option B: via curl (stream extract directly without saving archive)
+  curl -L "https://github.com/ml-system-design-nhom-5/SupportIQ/releases/download/release-2026-11-18-02/release-2026-11-18-02.tar.gz" | tar -xz -C .local-run/release/
+  ```
+  *(This extracts `release-manifest.json`, `model/`, `index/`, `kb/`, `mapping/`, `prompts/`, and `routing/` directly into `.local-run/release`. `ai-service` strictly validates every file hash against `release-manifest.json` on startup).*
+
+- **For offline ML pipeline training & evaluation (`v2.0.0-model`)**:
+  If retraining models or running offline benchmarks in `pipeline/`, download the standalone model weights from GitHub Release [`v2.0.0-model`](https://github.com/ml-system-design-nhom-5/SupportIQ/releases/tag/v2.0.0-model):
+  - `distilbert-supportiq.zip`: DistilBERT baseline classifier weights and tokenizer
+  - `bge-small-en-v1.5-hf-cache.zip`: Offline Hugging Face cache for `BAAI/bge-small-en-v1.5` embeddings
+  - `reconstructed-fit2-supcon-20261113.zip`: Calibrated Fit2 DistilBERT classifier
+  ```bash
+  gh release download v2.0.0-model --repo ml-system-design-nhom-5/SupportIQ
+  ```
+  *(Both the `.zip` archives and the extracted model directories are ignored by `.gitignore`, preventing accidental commits).*
+
+##### Step 4.2 — Configure credentials in `.env`
+
+1. Create a `.env` file from `.env.example`:
+   ```bash
+   cp .env.example .env
+   ```
+2. Set your Gemini API key and token price rates in `.env`:
+   ```env
+   GEMINI_API_KEY="your-gemini-api-key"
+   LLM_INPUT_PRICE_MICRO_USD_PER_MILLION_TOKENS="150"
+   LLM_OUTPUT_PRICE_MICRO_USD_PER_MILLION_TOKENS="600"
+   ```
+
+##### Step 4.3 — Start the system with AI
+
+Export the variables and start with the release folder:
+```bash
+set -a && source .env && set +a
+deploy/local/local-run.sh start --with-ai .local-run/release
+```
+*`ai-service` will listen on <http://127.0.0.1:8001> and verify its model and KB assets against its release manifest before starting `backend` and `frontend`.*
+
+#### 5. Developer workflow and container logs
+
+Because `.env` configures Compose project defaults, standard `docker compose` commands work directly from the repository root:
+
+```bash
+docker compose ps                     # Check container status
+docker compose logs -f                # Follow logs of all services
+docker compose logs -f backend        # Follow backend logs
+docker compose logs -f ai-service     # Follow AI service logs
+docker compose logs -f frontend       # Follow frontend logs
+docker compose restart backend        # Restart a single service
+```
+
+Alternatively, use the helper script:
+```bash
+deploy/local/local-run.sh status      # Check health and ports of each part
+deploy/local/local-run.sh logs        # Follow logs (or `logs <part>`)
+deploy/local/local-run.sh stop        # Stop containers while preserving data
+```
+
+Full details on troubleshooting, observability with Grafana (`--observability`), and resetting database state are in the [local run guide](docs/guides/local-run.md).
+
+### Run individual components standalone
 
 - **`frontend`** ([Set up](frontend/README.md#set-up), [Run](frontend/README.md#run), [Test](frontend/README.md#test)): `pnpm run dev:mock` serves the app at <http://localhost:5173> against the Prism mock of the `backend` contract, on Linux, macOS, and WSL2 on Windows. The mock answers every sign-in with the customer of the examples, so a browser reaches the shop but not the console or the admin area. `pnpm run dev` proxies to the `backend` that `SUPPORTIQ_BACKEND_URL` names instead ([Settings](frontend/README.md#settings)). `pnpm test` runs every test.
 - **`contracts/`** ([Set up](contracts/README.md#set-up), [Commands](contracts/README.md#commands)): `pnpm run check` checks both contracts. `pnpm run mock` serves the `backend` contract as a mock at `http://127.0.0.1:4010`, and `pnpm run mock:ai-service` serves the `ai-service` contract at `http://127.0.0.1:4012`, which `backend` can call during development ([The `ai-service` mock](contracts/README.md#the-ai-service-mock)).
 - **`backend`** ([Set up](backend/README.md#set-up), [Run and test](backend/README.md#run-and-test)): one replica and every test run against PostgreSQL 17, with the settings of `backend/.env`, made from `.env.example`. The README sets up PostgreSQL 17 with Homebrew. The unit tests need no database: `uv run pytest tests/unit`.
 - **`ai-service`** ([Set up](ai-service/README.md#set-up), [Run and test](ai-service/README.md#run-and-test)): `uv run pytest` runs the tests on Linux, macOS, and Windows; without torch, the tests that need it are skipped. `ai-service serve` loads the real model, so it runs only on Linux, because torch is locked for Linux only ([ADR-0021, Python and dependencies](docs/decisions/0021-repository-layout-and-ai-ml-migration.md#python-and-dependencies)). It also needs the files of a published release on the machine; without them it does not start.
 - **The release command in `eval/release/`** ([Set up](eval/release/README.md#set-up), [Run and test](eval/release/README.md#run-and-test)): `uv run --project eval/release pytest eval/release` runs its tests from the repository root. The offline evaluation gate runs in Docker.
-- **`pipeline/`, `tests/`, and `scripts/` of `main`** ([ADR-0028, Technical debt](docs/decisions/0028-repository-layout-for-the-pull-request-into-main.md#technical-debt)): they keep the requirements files of `main`, without a lockfile, and no workflow runs them except `.github/workflows/autoeval.yml`. Their live modes are not used, because they send messages to Gemini without `backend` and `ai-service` ([ADR-0028, Temporary rules](docs/decisions/0028-repository-layout-for-the-pull-request-into-main.md#temporary-rules), statement 3).
+- **`pipeline/` and its `tests/`**: independent ML pipeline for data preparation, preprocessing, training, and offline evaluation. Requirements are defined in `pipeline/requirements.txt` and `pipeline/requirements-transformers.txt`. Run pipeline tests with `python -m pytest tests/`.
 
 ## Documentation
 

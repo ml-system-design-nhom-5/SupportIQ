@@ -4,6 +4,9 @@ import pandas as pd
 import pytest
 
 def test_data_science_packages_installed():
+    pytest.importorskip("sklearn")
+    pytest.importorskip("joblib")
+    pytest.importorskip("matplotlib")
     import pandas as pd
     import numpy as np
     import sklearn
@@ -176,6 +179,7 @@ def test_clean_dataset_quarantines_and_cleans(tmp_path: Path):
     })
 
 def test_split_dataset_stratified_no_leakage(tmp_path: Path):
+    pytest.importorskip("sklearn")
     from pipeline.preparation.split_data import split_dataset
 
     cleaned_csv = tmp_path / "cleaned.csv"
@@ -239,6 +243,8 @@ def test_split_dataset_stratified_no_leakage(tmp_path: Path):
                 assert len(texts_f1.intersection(texts_f2)) == 0
 
 def test_intent_feature_pipeline_preserves_placeholders_and_persists(tmp_path: Path):
+    pytest.importorskip("joblib")
+    pytest.importorskip("sklearn")
     from pipeline.preparation.features import IntentFeaturePipeline
 
     texts = [
@@ -264,6 +270,8 @@ def test_intent_feature_pipeline_preserves_placeholders_and_persists(tmp_path: P
     assert test_matrix.shape[1] == matrix.shape[1]
 
 def test_run_full_preparation_synthetic_end_to_end(tmp_path: Path):
+    pytest.importorskip("joblib")
+    pytest.importorskip("sklearn")
     from pipeline.preparation.run_preparation import run_full_preparation
 
     raw_csv = tmp_path / "raw.csv"
@@ -373,6 +381,8 @@ def test_shared_nfkc_normalization_consistency():
 # === NEW TESTS ADDRESSING FEEDBACK ===
 
 def test_transformer_applies_nfkc_normalization_consistently():
+    pytest.importorskip("joblib")
+    pytest.importorskip("sklearn")
     from pipeline.preparation.features import IntentFeaturePipeline
 
     # Train vocabulary on normalized text
@@ -434,6 +444,7 @@ def test_clean_data_quarantines_near_duplicate_conflicting_intents(tmp_path: Pat
     assert cleaned_df.iloc[0]["intent"] == "delivery_issue"
 
 def test_split_dataset_exact_target_ratio_and_near_duplicate_leakage(tmp_path: Path):
+    pytest.importorskip("sklearn")
     from pipeline.preparation.split_data import split_dataset
 
     cleaned_csv = tmp_path / "cleaned.csv"
@@ -505,6 +516,8 @@ def test_clean_data_quarantines_invalid_category(tmp_path: Path):
     assert quarantined_df.iloc[0]["quarantine_reason"] == "invalid_category_label"
 
 def test_run_preparation_aborts_if_cleaned_data_has_violations(tmp_path: Path, monkeypatch):
+    pytest.importorskip("joblib")
+    pytest.importorskip("sklearn")
     from pipeline.preparation.run_preparation import run_full_preparation
     import pipeline.preparation.run_preparation as runner_mod
 
@@ -534,6 +547,7 @@ def test_run_preparation_aborts_if_cleaned_data_has_violations(tmp_path: Path, m
         run_full_preparation(input_csv=raw_csv, base_dir=tmp_path, run_id="03-11-2026-00")
 
 def test_refuse_overwriting_existing_versions(tmp_path: Path):
+    pytest.importorskip("sklearn")
     from pipeline.preparation.clean_data import clean_dataset
     from pipeline.preparation.split_data import split_dataset
 

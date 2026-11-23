@@ -9,6 +9,8 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pandas as pd
 import pytest
+
+pytest.importorskip("torch")
 import torch
 
 from pipeline.preparation.utils import STANDARD_INTENTS

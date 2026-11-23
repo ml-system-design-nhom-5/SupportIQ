@@ -31,7 +31,7 @@ repos:
         args: [--enforce-all, --maxkb=500]
         files: &outside-kept-parts |
           (?x)^(?!
-            (apps|artifacts|pipeline|scripts|tests)/
+            (artifacts|pipeline|scripts|tests)/
             | pytest\.ini$
             | data/(benchmarks/(?!escalation/)|business/|datasets/|intent/|knowledge/)
             | docs/(
@@ -108,14 +108,12 @@ repos:
   # added. The guide lists the items that stay with the reviewers.
   - repo: local
     hooks:
-      # Until issue #34 rewrites it, autoeval.yml of main fails 9 of these hooks, so those 9 skip
-      # it. Every other hook still checks it (ADR-0028, Checks, statement 7).
       - id: workflow-triggers
         name: "Workflow convention 2: exactly the push and pull_request triggers"
         language: pygrep
         entry: '^on:\n  push:\n    branches:\n      - main\n      - "build/\*\*"\n  pull_request:\n    branches:\n      - main\n\n+(?=[^\s#])'
         args: [--multiline, --negate]
-        files: &workflows-except-autoeval '^\.github/workflows/(?!autoeval\.yml$)'
+        files: &workflows-except-autoeval '^\.github/workflows/'
         # deploy.yml has its own trigger, pinned by deploy-workflow-trigger.
         exclude: ^\.github/workflows/deploy\.yml$
       - id: workflow-no-path-filters
@@ -257,51 +255,6 @@ repos:
           | sed "\$d")'
         files: ^\.github/workflows/(backend|deploy)\.yml$
         pass_filenames: false
-
-  # The temporary rules of ADR-0028: apps/backend/ and apps/demo/ of main stay frozen, and only
-  # the 28 files that import them at f6c1473 may import them (Temporary rules, statements 1 and
-  # 2; RULE-03). The hooks of this section exist to check the kept parts, so they do not skip them.
-  # TODO(#42): the kept parts of main follow no engineering rule yet; this section goes with the
-  # temporary rules at step 4 of ADR-0028, Follow-ups.
-  - repo: local
-    hooks:
-      # The index must hold the paths, modes, and blobs of apps/backend/ and apps/demo/ that step
-      # 2 restored from f6c1473. The value was taken right after step 2 (d53a86f); recompute it
-      # with `git ls-files --stage -- apps/backend apps/demo | git hash-object --stdin`.
-      - id: kept-apps-frozen
-        name: "ADR-0028, temporary rule 1: apps/backend/ and apps/demo/ stay frozen"
-        language: system
-        entry: >-
-          sh -c 'test "$(git ls-files --stage -- apps/backend apps/demo | git hash-object --stdin)"
-          = d83fb430a6c003ba3d8de6030eb69df65160b610
-          || { echo "apps/backend/ or apps/demo/ differs from f6c1473, and both are frozen"; exit 1; }'
-        always_run: true
-        pass_filenames: false
-      - id: kept-apps-imports
-        name: "ADR-0028, temporary rule 1: no new import of apps.backend or apps.demo"
-        language: pygrep
-        entry: 'apps[./](backend|demo)\b|\bfrom\s+apps\s+import\s.*\b(backend|demo)\b'
-        types: [python]
-        exclude: |
-          (?x)^(
-            apps/(backend|demo)/
-            | (
-                pipeline/evaluation/(
-                  application_acceptance | fault_boundary_runner | flash_lite_acceptance
-                  | system_execution | system_performance | system_server)
-                | scripts/(collect_final_acceptance_evidence | run_intent_correction_diagnostic)
-                | tests/application/(
-                  test_ai_boundary | test_application | test_backend_safety_closure
-                  | test_intent_correction_diagnostic | test_workflow_privacy)
-                | tests/e2e/test_full_pipeline
-                | tests/integration/(test_completion_oversight | test_demo_flow | test_system_oversight)
-                | tests/unit/(
-                  test_demo_api | test_demo_lifespan | test_mandatory_routing_b
-                  | test_model_runtime_parity_b | test_observability | test_pagination_pushdown
-                  | test_privacy_pii | test_retrieval_grounding_b2 | test_retry_draft
-                  | test_schema_constraints | test_typed_fault_propagation_a)
-              )\.py$
-          )
 
   # ===== Contract checks (owner: contracts gatekeeper) =====
   # The tool versions are pinned in contracts/pnpm-lock.yaml, so the hook calls the

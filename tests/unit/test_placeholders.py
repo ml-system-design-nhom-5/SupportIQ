@@ -1,7 +1,7 @@
 """DATA-59: one placeholder normalization for training, evaluation, and serving."""
 import random
 
-from apps.ml_inference.preprocessing import PLACEHOLDER_TYPES, normalize_placeholders
+from pipeline.preparation.preprocessing import PLACEHOLDER_TYPES, normalize_placeholders
 from pipeline.training import augment as A
 
 
@@ -28,7 +28,3 @@ def test_augmentation_never_inserts_raw_identifiers_and_keeps_placeholder_case()
     assert A.restore_placeholders("where is [order_id] now") == "where is [ORDER_ID] now"
 
 
-def test_serving_and_evaluation_use_the_same_function():
-    from pipeline.evaluation.autoeval import backends
-
-    assert backends.normalize_placeholders is normalize_placeholders

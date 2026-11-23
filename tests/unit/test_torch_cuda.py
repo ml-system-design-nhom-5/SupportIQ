@@ -1,7 +1,8 @@
 """Smoke test verifying PyTorch CUDA availability and basic tensor operations on GPU."""
 
 import pytest
-import torch
+
+torch = pytest.importorskip("torch")
 
 
 @pytest.mark.cuda

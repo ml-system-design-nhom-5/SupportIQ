@@ -72,7 +72,7 @@ This is the default. No `ai-service` runs, so every suggestion part ends unavail
 deploy/local/local-run.sh start --with-ai <release folder>
 ```
 
-- The release folder holds `release-manifest.json` and every file that it names, as `supportiq-release publish-candidate` writes it ([release command README, Publish](../../eval/release/README.md#publish)). The download of a published release comes with [#41](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/41); until then, use a folder that you published yourself.
+- The release folder holds `release-manifest.json` and every file that it names, as `supportiq-release publish-candidate` writes it ([release command README, Publish](../../eval/release/README.md#publish)). Pre-packaged release archives can be downloaded directly from [GitHub Releases](https://github.com/ml-system-design-nhom-5/SupportIQ/releases) (e.g., `release-2026-11-18-02.tar.gz` from release `release-2026-11-18-02`), or use a folder that you published yourself.
 - Set `GEMINI_API_KEY`, `LLM_INPUT_PRICE_MICRO_USD_PER_MILLION_TOKENS`, and `LLM_OUTPUT_PRICE_MICRO_USD_PER_MILLION_TOKENS` in your shell first: `ai-service` requires all three at startup ([ai-service README, Set up](../../ai-service/README.md#set-up)). `start` stops and names each missing one. The key goes only to `ai-service` and is never written to a file.
 - `ai-service` checks every file of the folder against the manifest and stops when one differs or when the folder holds another file, such as a `.DS_Store` of macOS. `start` then stops before `backend` starts.
 - It also needs the port 8001. The image installs torch, so it runs on Apple silicon and on Intel machines alike.

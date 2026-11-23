@@ -4,4 +4,3 @@
 # except the READMEs of this repository's suites (.pre-commit-config.yaml).
 data/** -text
 artifacts/** -text
-apps/core_backend/config/policies/intent_policy.v2.json -text

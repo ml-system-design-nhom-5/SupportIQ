@@ -8,6 +8,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
+
+pytest.importorskip("sklearn")
 import sklearn
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model import LogisticRegression

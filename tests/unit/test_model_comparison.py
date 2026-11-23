@@ -11,6 +11,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
+pytest.importorskip("joblib")
+pytest.importorskip("sklearn")
+
 from pipeline.evaluation import EvaluationError
 from pipeline.preparation.utils import compute_sha256, save_json
 from pipeline.training.artifacts import IntentModelBundle

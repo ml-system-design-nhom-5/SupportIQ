@@ -121,98 +121,18 @@ python -m pipeline.evaluation.run_comparison `
 
 ---
 
-## 5. Đánh giá Toàn hệ thống (System Evaluation)
+## 5. Kiến trúc Đánh giá và Phân định Ranh giới Hệ thống
 
-Phân hệ đo lường và thẩm định chất lượng toàn chuỗi: **ML Classifier -> Intake Gate Routing -> Semantic Retrieval -> Google AI Studio -> Human Oversight**.
+Nhằm đảm bảo nguyên tắc kiến trúc và tính độc lập của pipeline học máy, phân hệ `pipeline/evaluation/` tập trung hoàn toàn vào **Đánh giá Offline Mô hình Học máy (Model-centric Offline Evaluation)**:
+- **`evaluate_intent.py`**: Đánh giá chất lượng phân loại Intent (Macro-F1, Accuracy, confusion matrix, slice metrics, robustness).
+- **`evaluate_retrieval.py`**: Đánh giá chất lượng truy xuất (MRR, Hit@k, Precision@k, Recall@k).
+- **`benchmark.py`**: Đo lường thông lượng (throughput) và độ trễ (latency percentiles p50, p90, p95, p99).
+- **`run_comparison.py`**: So sánh mô hình baseline và Transformer, báo cáo benchmark offline.
+- **`reporting.py`**: Xuất báo cáo Markdown và ma trận yêu cầu.
+- **`run_evaluation.py`**: CLI điều phối đánh giá ML offline (`--mode ml`).
 
-### 5.1. Hai Profile Chạy (`mock` vs `live`)
-
-1. **`mock` (Mặc định):**
-   - Chạy offline hoàn toàn, không yêu cầu mạng, không đọc API key.
-   - Thẩm định orchestration, xử lý lỗi có kiểm soát (fault scenarios), session ownership, và tính bất biến của artifacts.
-   - Báo cáo mang nhãn `evidence_kind: simulated`. Kết quả exit code là `2` vì dữ liệu giả lập không thể chứng nhận đạt tiêu chuẩn nghiệm thu live.
-2. **`live` (Acceptance chính thức):**
-   - Đi qua classifier `supportiq_distilbert` trên ML inference service được ghim (pinned endpoint), BGE encoder thật với weights local, và Google AI Studio Gemini API.
-   - Bắt buộc kiểm tra preflight: kiểm tra release mô hình, tính sẵn sàng của encoder, snapshot tri thức, và ngân sách token (`BudgetLedger`).
-   - Yêu cầu cấu hình explicit API key qua biến môi trường server-side, không fallback vector giả hoặc template soạn sẵn.
-
-### 5.2. Lệnh Chạy CLI
-
-```powershell
-# Chạy đánh giá toàn hệ thống (Mock Profile offline)
-python -m pipeline.evaluation.run_evaluation `
-  --mode system `
-  --profile mock `
-  --suite data/benchmarks/system/v1/suite_manifest.json `
-  --config pipeline/configs/system_evaluation.json `
-  --run-id system-mock-001 `
-  --output-root artifacts/evaluation
-
-# Nhập kết quả chấm thủ công (Human Assessment)
-python -m pipeline.evaluation.assess_system `
-  --run-dir artifacts/evaluation/system-mock-001 `
-  --annotations tests/fixtures/system_evaluation/example_annotations.jsonl `
-  --assessment-id review-001 `
-  --product-sessions tests/fixtures/system_evaluation/example_product_sessions.csv
-```
-
-### 5.3. Ý nghĩa Mã thoát (Exit Codes)
-
-- **`0`**: Tất cả các cổng chất lượng bắt buộc (`mandatory_gates`) đều đạt chuẩn với bằng chứng live hợp lệ.
-- **`2`**: Quá trình đánh giá hoàn tất hợp lệ nhưng chưa đạt chuẩn nghiệm thu (hoặc chạy trên profile `mock` chỉ có bằng chứng giả lập, hoặc thiếu bằng chứng con người).
-- **`1`**: Lỗi cấu hình, vi phạm phả hệ provenance (checksum mismatch), vi phạm đường dẫn thoát repository, hoặc sự cố preflight hạ tầng.
-
-### 5.4. Live thử nghiệm khi suite chưa được duyệt
-
-Dùng `pipeline/configs/system_evaluation.experimental.json` với
-`allow_draft_suite: true` để chạy dữ liệu draft mà không thay trạng thái phê duyệt.
-Kết quả mang nhãn `live_experimental`, luôn chưa được chứng nhận nghiệm thu.
-Cấu hình mặc định vẫn từ chối live acceptance với suite draft.
-
-`ml/releases/manifest.json` ghi checksum của sáu artifact local của
-`supportiq_distilbert`; weights/tokenizer được đối chiếu với release mà ML service
-đang pin. Cần chạy ML service ở `127.0.0.1:8001`, kiểm tra `/ready`, và có encoder
-được cache trước. API key chỉ nằm trong biến môi trường hoặc `.env` phía server.
-
-Chạy từ gốc repo bằng PowerShell (đổi run ID cho mỗi lần chạy):
-
-```powershell
-@'
-from dotenv import load_dotenv
-from pipeline.evaluation.run_system_evaluation import main
-load_dotenv('.env', override=False)
-raise SystemExit(main([
-    '--profile', 'live',
-    '--suite', 'data/benchmarks/system/v1/suite_manifest.json',
-    '--config', 'pipeline/configs/system_evaluation.experimental.json',
-    '--run-id', 'system-live-experimental-001'
-]))
-'@ | .venv\Scripts\python.exe -X utf8 -
-```
-
-Các lần chạy live mới đo latency qua `POST /api/demo/runs` của demo server riêng,
-với cùng snapshot/config/as-of và ledger của run. Timer `api_total` bao gồm HTTP,
-middleware, xử lý backend, persistence và serialization; không gồm tải model,
-browser rendering hoặc thời gian người duyệt. Lưu từng mẫu trong
-`latency_results.jsonl`; timeout/lỗi vẫn có record trong tập đo.
-
-Để bổ sung HTTP latency cho run cũ mà không chạy lại 156 case hoặc ghi đè báo cáo:
-
-```powershell
-.venv\Scripts\python.exe -m pipeline.evaluation.complete_system_report `
-  --parent-run artifacts/evaluation/05-11-2026-system-live-experimental-00 `
-  --output-dir artifacts/evaluation/05-11-2026-system-http-assessment-01
-```
-
-Lệnh này dùng suite và experimental config hiện tại, kiểm tra checksum của run
-gốc trước/sau đo, trừ số call/chi phí dự phòng đã dùng khỏi ngân sách 200 call/
-1 USD của thử nghiệm. Thư mục đầu ra phải mới. Các input đã thay đổi cần được
-đánh giá như một thử nghiệm khác, không coi là cùng lần chạy cũ.
-
-Grounding vẫn cần annotation của người chấm; chế độ thử nghiệm không tự tạo
-bằng chứng phê duyệt hoặc bỏ qua kiểm tra checksum. Phiếu sơ bộ AI được ghi
-`reviewer_type: ai` và không được import như điểm chấm thủ công. Người duyệt đọc
-`grounding/review.md`, điền danh tính/thời điểm, kiểm tra từng claim/evidence và
-cập nhật `grounding/human_review.jsonl` trước khi dùng `assess_system`.
-Những case kỳ vọng có draft nhưng chưa tạo được vẫn là thiếu bằng chứng, kể cả
-khi mọi draft đã có đều được duyệt.
+### Phân định Ranh giới Kiểm thử:
+1. **Pipeline ML (`pipeline/evaluation/`)**: Chịu trách nhiệm đánh giá offline chất lượng mô hình trên artifact và bộ dữ liệu benchmark, không phụ thuộc và không khởi chạy backend ứng dụng.
+2. **Backend Integration Tests (`backend/tests/integration/`)**: Chịu trách nhiệm kiểm thử tích hợp nghiệp vụ, cơ sở dữ liệu PostgreSQL, luồng xử lý ticket, worker leasing, guardrails an toàn, và bảo mật quyền hạn (156 test files).
+3. **Local Deployment Verification (`deploy/local/tests/`)**: Chịu trách nhiệm kiểm thử runtime HTTP và kiểm tra sức khỏe hệ thống cục bộ (`test-local-run.sh`, `smoke-check.sh`).
+4. **Loại bỏ `apps/` và Legacy System Harnesses**: Thư mục `apps/` và các harness đánh giá hệ thống cũ phụ thuộc vào nó đã được dỡ bỏ hoàn toàn, chấm dứt nợ kỹ thuật của ADR-0028.

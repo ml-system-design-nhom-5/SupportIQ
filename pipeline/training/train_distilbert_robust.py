@@ -48,7 +48,7 @@ from sklearn.metrics import accuracy_score, f1_score
 from torch.utils.data import DataLoader
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, get_linear_schedule_with_warmup
 
-from apps.ml_inference.preprocessing import DRAFTABLE_INTENTS, normalize_placeholders
+from pipeline.preparation.preprocessing import DRAFTABLE_INTENTS, normalize_placeholders
 from pipeline.preparation.intent_extra import load_dev_set, load_oos, load_train_supplement
 from pipeline.preparation.utils import CORE_PRODUCT_INTENTS, STANDARD_INTENTS, compute_sha256, save_json
 from pipeline.training.augment import augment_frame

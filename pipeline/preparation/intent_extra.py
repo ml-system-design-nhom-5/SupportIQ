@@ -120,7 +120,7 @@ def load_escalation_dev(path: str | Path = ESCALATION_DEV) -> pd.DataFrame:
 
 def load_independent_dev(path: str | Path = INDEPENDENT_DEV) -> list[dict]:
     """Rows ``{id, kind, true_intent, category, text}``; placeholders normalized as the classifier sees them."""
-    from apps.ml_inference.preprocessing import normalize_placeholders
+    from pipeline.preparation.preprocessing import normalize_placeholders
 
     rows, seen = [], set()
     for lineno, line in enumerate(Path(path).read_text(encoding="utf-8").splitlines(), start=1):

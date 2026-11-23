@@ -11,8 +11,6 @@ from pathlib import Path
 import httpx
 import pytest
 
-from apps.core_backend.llm.gemini import GeminiDraftClient
-
 
 def pytest_configure(config):
     if not config.option.basetemp:
@@ -114,22 +112,3 @@ def offline_resources(monkeypatch, request):
             monkeypatch.setattr("transformers.models.auto.auto_factory._BaseAutoModelClass.from_pretrained", no_weights)
         except ImportError:
             pass
-
-
-@pytest.fixture
-def offline_retrieval():
-    """Exercise real eligibility/index code with explicit synthetic embeddings."""
-    from apps.core_backend.retrieval.adapter import RetrievalAdapter
-    from pipeline.evaluation.mock_dependencies import MockPolicyEncoder
-    return RetrievalAdapter(encoder=MockPolicyEncoder(), relevance_threshold=0.35)
-
-
-@pytest.fixture
-def fake_llm():
-    def handler(request):
-        return httpx.Response(200, json={"modelVersion": "gemini-2.5-flash", "candidates": [{
-            "finishReason": "STOP", "content": {"parts": [{"text": json.dumps({
-                "answerable": True, "answer": "Standard Return Policy: Return within 30 days. [S1]",
-                "citations": ["S1"]})}]}}]})
-    with httpx.Client(transport=httpx.MockTransport(handler)) as transport:
-        yield GeminiDraftClient(api_key="offline-test-key", model="gemini-2.5-flash", http_client=transport)
