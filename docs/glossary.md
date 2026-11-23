@@ -1,6 +1,6 @@
 # Glossary
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-21
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-23
 
 The canonical meaning of every domain term. Code, contracts, docs, and UI use these terms exactly. Add a term here in the same PR that introduces it.
 
@@ -42,6 +42,7 @@ The canonical meaning of every domain term. Code, contracts, docs, and UI use th
 | Message | Text written by a customer or staff within a ticket. | — |
 | Offline evaluation gate | The check that a candidate release manifest meets the quality targets on the frozen test and scenario sets before it is published. If it fails, the previous release stays ([DATA-57](rules/data-and-ml.md#models-and-artifacts)). | — |
 | Order context | Minimal simulated order, shipment, and refund data that `backend` passes to `ai-service`. It contains no identifiers. | — |
+| Pinned file | `eval/releases/pinned-release.txt`: the release ID of the release that the local run and the Modal deploy take by default, and the size of its release archive. Only `pack-release --pin` writes it, and it is committed only after the archive is on GitHub ([ADR-0030](decisions/0030-release-archives-and-the-modal-function-of-ai-service.md#release-archives)). The newest release is the one that it names, never GitHub's latest release. | latest release |
 | Placeholder | Text that stands in for a personal-data value: a pseudonym or a mask. Every placeholder matches one regular expression defined in [ADR-0010](decisions/0010-pseudonymization-and-egress-control.md#placeholder-syntax). The word keeps its ordinary meaning only for dummy values in settings files such as `.env.example`; anywhere else, use it only in this sense. | token |
 | Pre-send check | The last step of pseudonymization in `backend`: it reads the pseudonymized text and fails closed when a value of the pseudonym map or a known value is left outside a placeholder, or a residue of a value is left beside one. Defined in [ADR-0029](decisions/0029-rule-based-detectors-and-a-pre-send-check.md) and the [personal-data leak fixes design](design/personal-data-leak-fixes.md#layer-2-the-pre-send-check). | egress check (egress control is the allow-list of hosts) |
 | Product | A simulated item in the read-only shop catalog ([ADR-0013](decisions/0013-shop-demo-with-read-only-catalog.md)). | item |
@@ -50,6 +51,7 @@ The canonical meaning of every domain term. Code, contracts, docs, and UI use th
 | Pseudonym map | The per-ticket mapping from each pseudonym to its original value, stored only in `backend` and read only by its pseudonymization module. | token vault |
 | Pseudonymization | Replacing personal data in a customer message with pseudonyms before the text leaves `backend` (FR-09). It is reversible by `backend` and is not anonymization: pseudonymized text stays Confidential. | tokenization, anonymization, masking |
 | Reason code | An enum value that explains an AI recommendation or a staff decision. Never free text. | — |
+| Release archive | The one asset of the GitHub Release of a published release, `<release_id>.tar.gz`, whose tag is the release ID: the release manifest and every file that it names. `pack-release` writes it reproducibly; it is never packed by hand, replaced, or deleted. The release download checks it against the manifest in git ([ADR-0030](decisions/0030-release-archives-and-the-modal-function-of-ai-service.md#release-archives)). | release bundle, release zip |
 | Release manifest | The versioned file that names every asset version `ai-service` serves together: model artifact, KB, document-to-intent mapping, prompts, routing configuration, and retrieval index. Identified by its `release_id` ([DATA-56](rules/data-and-ml.md#models-and-artifacts)). | model registry |
 | Reply | The message staff send to a customer. Only staff and managers can send a reply. | answer, response |
 | Reply proposal | A reply prepared by staff and waiting for a manager to send it as is or edited; required when authority is required. Defined in the [contracts v1 design](design/contracts-v1.md#ticket-lifecycle). | — |

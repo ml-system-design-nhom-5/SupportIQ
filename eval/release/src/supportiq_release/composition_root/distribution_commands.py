@@ -125,7 +125,8 @@ def download_release(arguments: argparse.Namespace) -> int:
         asset = archive_asset(release_id, asyncio.run(look_up_assets(access, release_id)))
         if pinned_size is not None:
             check_pinned_size(asset, pinned_size)
-        # Nothing is created before the answer: a declined or failed run writes nothing.
+        # Nothing is created before the answer, so a declined run, or one that fails before it,
+        # writes nothing.
         published.contents().check_free_space(asset.size_bytes, free_bytes(cache))
         sys.stderr.write(_plan(published, asset, folder))
         if not arguments.yes and not confirms("Proceed? [y/N] "):

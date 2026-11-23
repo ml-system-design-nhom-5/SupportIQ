@@ -1,11 +1,12 @@
 # Release command
 
-`supportiq-release` builds what a release of `ai-service` serves, runs the offline evaluation gate on it, and publishes it. It is the release command of [ADR-0021, Release and the offline evaluation gate](../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#release-and-the-offline-evaluation-gate), with four commands:
+`supportiq-release` builds what a release of `ai-service` serves, runs the offline evaluation gate on it, publishes it, and distributes it. It is the release command of [ADR-0021, Release and the offline evaluation gate](../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#release-and-the-offline-evaluation-gate), with seven commands:
 
 - `ingest-kb` admits or quarantines the KB document versions of a raw KB folder ([KB ingestion](#kb-ingestion));
 - `build-candidate` copies the six assets into a new folder and writes the manifest of a candidate release, which no replica serves until the offline evaluation gate passes ([Candidate release](#candidate-release));
 - `run-gate` runs the offline evaluation gate on a candidate and records the run ([The offline evaluation gate](#the-offline-evaluation-gate));
-- `publish-candidate` copies a candidate whose gate run passed into a release folder and links the run in its manifest ([Publish](#publish)).
+- `publish-candidate` copies a candidate whose gate run passed into a release folder and links the run in its manifest ([Publish](#publish));
+- `pack-release`, `download-release`, and `check-pinned-release` write the release archive of a published release and the pinned file, download a release from its GitHub Release into a cache, and check the pinned file against GitHub ([Release download](#release-download), [ADR-0030](../../docs/decisions/0030-release-archives-and-the-modal-function-of-ai-service.md)).
 
 The gate run of `release-2026-11-18-02` passed, and its record is [`../releases/release-2026-11-18-02/gate-run.json`](../releases/release-2026-11-18-02/gate-run.json). The first run, of `release-2026-11-18-01`, failed on two defects of the gate itself, fixed in `86f73df`; its record stays in [`../releases/release-2026-11-18-01/`](../releases/release-2026-11-18-01/gate-run.json), and that release ID is never used again ([DATA-48](../../docs/rules/data-and-ml.md#evaluation-and-reporting), [ARCH-40](../../docs/rules/architecture.md#versioned-assets)).
 
@@ -51,13 +52,29 @@ uv run --project eval/release supportiq-release publish-candidate \
   --output <new folder>
 ```
 
-`run-gate` itself needs torch, so `run-gate.sh` runs it in Docker ([Run in Docker](#run-in-docker)). `build-candidate` and `publish-candidate` need no torch.
+```bash
+uv run --project eval/release supportiq-release pack-release \
+  --release-folder <published release folder> \
+  --release-records eval/releases \
+  --output <new folder outside the repository> \
+  --pin
+```
+
+```bash
+uv run --locked --project eval/release supportiq-release download-release [--release <release_id>] [--yes]
+```
+
+```bash
+uv run --locked --project eval/release supportiq-release check-pinned-release [--remote]
+```
+
+`run-gate` itself needs torch, so `run-gate.sh` runs it in Docker ([Run in Docker](#run-in-docker)). The other commands need no torch.
 
 ```bash
 uv run --project eval/release pytest eval/release
 ```
 
-The tests need no network, no `.env`, and no torch: the gate runs on a fake application of a candidate, and the routes of the real application of `ai-service` are read from its `create_app` with fake ports, through the FastAPI that `ai-service` locks. They read `data/raw/kb/v2/`, `contracts/schemas/IntentLabel.yaml`, `eval/kb-ingestion/v2/`, `data/benchmarks/escalation/interim-v1/`, and `ai-service/prompts/grounded-v4/` without changing them.
+The tests need no network, no `.env`, and no torch: the gate runs on a fake application of a candidate, the routes of the real application of `ai-service` are read from its `create_app` with fake ports, through the FastAPI that `ai-service` locks, and the release download talks to a fake GitHub through an `httpx.MockTransport`. They read `data/raw/kb/v2/`, `contracts/schemas/IntentLabel.yaml`, `eval/kb-ingestion/v2/`, `data/benchmarks/escalation/interim-v1/`, and `ai-service/prompts/grounded-v4/` without changing them.
 
 ## Set up
 
@@ -287,6 +304,17 @@ The kind of a case is what its outcome rests on: `real_model`, `injected_distrib
 
 It then copies every file of the candidate into a staging folder next to the output, writes the manifest with `gate_run` (the run ID of the record, `passed`, the path of the record, and its SHA-256), checks it with `verify_release`, and moves the folder to the output. Only then does it write the same manifest next to the record, which links the release ([ADR-0021, Release and the offline evaluation gate](../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#release-and-the-offline-evaluation-gate), statement 1). A move that fails leaves neither the output nor the link, so the command can run again ([ERR-04](../../docs/rules/errors-and-reliability.md#handling-rules)).
 
+A published release reaches the Modal deploy and the local run through its release archive on GitHub. The steps after `publish-candidate` keep this order, so that every `git pull` finds the archive of the pinned release on GitHub ([ADR-0030, Release archives](../../docs/decisions/0030-release-archives-and-the-modal-function-of-ai-service.md#release-archives), statement 5):
+
+1. Commit the record and the manifest that `publish-candidate` wrote into `eval/releases/<release_id>/`.
+2. `pack-release --pin` writes `<release_id>.tar.gz` outside the repository, and the pinned file ([Release download](#release-download)).
+3. In the browser, draft a GitHub Release whose tag is the release ID, on a commit that holds the manifest of step 1, attach the archive, and publish it. Immutable releases were off when `release-2026-11-18-02` was uploaded ([deploy README, Publish a release](../../deploy/README.md#publish-a-release)). They stay off by the project lead's decision of 2026-11-23, until the system has taken shape, and [ADR-0018, Follow-ups](../../docs/decisions/0018-hosting-of-ai-service-on-modal.md#follow-ups) stays open until then.
+4. `download-release --release <release_id> --yes` downloads the archive from GitHub and runs every check of the download, which proves the upload end to end.
+5. `check-pinned-release --remote` checks the pinned file against GitHub.
+6. Only then commit and push the pinned file.
+
+An uploaded archive is never replaced or deleted. A wrong one stays, and the fix is a new release ID ([DATA-36](../../docs/rules/data-and-ml.md#models-and-artifacts)). To go back to the previous release, revert the commit of the pinned file: its archive is still on GitHub.
+
 ### Run in Docker
 
 `run-gate` loads the model of the candidate, which needs torch on Linux, so [`gate/run-gate.sh`](gate/run-gate.sh) runs the whole gate in Docker. It needs Docker with Compose v2 (`docker compose`, not `docker-compose`), because `gate/compose.yaml` names its project with the top-level `name`. BuildKit (`docker buildx`) is required: the repository has no `.dockerignore` at its root, and only BuildKit reads `gate/Dockerfile.dockerignore`, so `run-gate.sh` stops with status 2 without it.
@@ -312,6 +340,83 @@ Every container runs as the user who runs the script, so the record and the repo
 
 `publish-candidate` needs no torch, so it runs on the machine with `uv run` ([Run and test](#run-and-test)).
 
+## Release download
+
+A published release leaves the repository as one release archive, the only asset of a GitHub Release whose tag is the release ID. The Modal deploy and the local run download it with the same command, and the manifest in git is the source of trust ([ADR-0030](../../docs/decisions/0030-release-archives-and-the-modal-function-of-ai-service.md); [release download and Modal deploy design](../../docs/design/release-download-and-modal-deploy.md)). The publish order is in [Publish](#publish).
+
+### The release archive
+
+`pack-release --release-folder <folder> --release-records eval/releases --output <new folder> [--pin]` writes `<output>/<release_id>.tar.gz`:
+
+- It packs only a published release: `verify_release` passes on `<folder>/release-manifest.json`, and that manifest is byte for byte `eval/releases/<release_id>/release-manifest.json`. Otherwise it exits with status 2 and writes nothing.
+- The archive holds `release-manifest.json` and every file of the manifest, at their paths, and nothing else: no folder entry and no link.
+- It is reproducible: members sorted by path, each a regular file in the ustar format with mode `0644`, owner and group 0, empty owner and group names, and modification time 0; gzip with modification time 0, no file name, and level 9. The same files with the same versions of Python and zlib give the same bytes.
+- It goes through a staging folder, so the output holds the whole archive or nothing.
+- It prints `release_id=<id> archive=<path> archive_size_bytes=<n>` on standard output.
+
+### The pinned file
+
+`eval/releases/pinned-release.txt` names the release that the local run and the Modal deploy take by default, and the size of its archive. It holds exactly two lines, each ended by LF, in ASCII, without comments or spaces:
+
+```text
+release_id=<release_id>
+archive_size_bytes=<the size that pack-release prints>
+```
+
+- `release_id` has the pattern of `release_id` in the contracts, and `eval/releases/<release_id>/release-manifest.json` is a published manifest of that ID.
+- `archive_size_bytes` is a decimal number without a leading zero, of at most 10 digits, from 1 to 2,147,483,647.
+- `.gitattributes` sets `text eol=lf` for it, so every checkout keeps its LF line ends, whatever `core.autocrlf` says. A CR in it stops the command.
+- Only `pack-release --pin` writes it, both lines at once, through a temporary file that it renames over the old one. Without `--pin`, the file stays as it is, for example when an older release is packed again. Never edit it by hand.
+- "Newest" means what this file says, never an order of release IDs or GitHub's latest release ([CON-15](../../docs/rules/contracts.md#api-conventions)).
+
+### Download
+
+`download-release [--release <release_id>] [--release-records eval/releases] [--yes]` puts a release into the cache and prints its folder:
+
+1. The release is `--release`, checked against the pattern of a release ID, or the one of the pinned file. Its published manifest must be in `eval/releases/`.
+2. A release that is already in the cache, with the manifest of git and with `verify_release` passing, is a cache hit: no request, no question, status 0. A cached folder that fails its check is never repaired or deleted: the command exits with status 6, names the folder, and says to remove it to download the release again.
+3. The command looks up the GitHub Release of the tag. It must have exactly one uploaded asset, `<release_id>.tar.gz`. Without `--release`, its size must also be the one in the pinned file.
+4. It checks the free space of the nearest folder of the cache that exists, for the archive and the unpacked files.
+5. It prints the plan on standard error (the release ID, the size, and the folder) and asks `Proceed? [y/N]`. Only `y` goes on. `--yes` answers for it. Without a terminal on standard input and without `--yes`, it exits with status 4 before any request, so it never waits.
+6. Only then does it create the cache folder, stream the archive into a hidden partial file, and unpack it into a hidden staging folder. It never calls `extractall`: every member must be a regular file named in the manifest of git, appear once, and have exactly the size that the manifest states. Then the unpacked manifest must equal the one in git, and `verify_release` must pass.
+7. It renames the staging folder to `<cache>/<release_id>/`, removes the archive, and prints the absolute path of that folder.
+
+On status 0, standard output holds only that path. Every other message goes to standard error and never holds the token. A failure removes the partial archive and the staging folder, Ctrl+C included, so the cache gets no new release. A declined run, or one that fails before the answer, creates nothing. A failure after the answer leaves at most the empty cache folder and the parents that it needed, when the cache folder did not exist before.
+
+### Settings
+
+| Name | Default | Meaning |
+|---|---|---|
+| `SUPPORTIQ_RELEASE_TOKEN` | Not set | Optional, Secret ([SEC-01](../../docs/rules/security-and-privacy.md#data-classification)). A GitHub token sent as `Authorization: Bearer` to `api.github.com` only, for a higher rate limit. The repository is public, so no token is needed. It is never printed or written |
+| `SUPPORTIQ_RELEASE_CACHE` | `$HOME/.cache/supportiq/releases` | The cache folder, an absolute path. The default ignores `XDG_CACHE_HOME`, so the bash of the local run computes the same path. In a container, set it to the path on the host |
+| `HOME` | From the system | Read only for the default of the cache, and then an absolute path |
+
+An empty value counts as not set. A value that breaks its rule stops the command with status 2 and a message that names the setting, never its value. The cache and `HOME` are checked only when a cache is needed, so `check-pinned-release` uses only the token and never checks the cache or `HOME`.
+
+### HTTP
+
+- Every client has `trust_env=False`, so no proxy setting and no `.netrc` of the environment is used, and `follow_redirects=False`, so the command follows each redirect itself. Connection timeout 10 s, read timeout 60 s for each read, no total timeout, and no retry ([ERR-12](../../docs/rules/errors-and-reliability.md#retries)): run the command again.
+- Every request sends `Accept-Encoding: identity`, `X-GitHub-Api-Version: 2026-03-10`, and `User-Agent: supportiq-release`. The archive is counted as raw bytes and stops at its announced size.
+- The asset request follows at most 3 redirects, only to `https://`. The token goes only with the first request, whatever the host of a redirect.
+
+### Exit statuses
+
+| Status | Meaning | Commands |
+|---|---|---|
+| 0 | Done | Every command |
+| 1 | A gate run that ran and failed | `run-gate` |
+| 2 | An input that cannot be used, a file that cannot be written, too little free space, a token that GitHub refuses (`token_refused`: a `401` of a request that sent it; fix or unset `SUPPORTIQ_RELEASE_TOKEN`), or an unexpected error, which prints only its type | Every command |
+| 3 | A quarantine that waits for an accepting issue | `ingest-kb` |
+| 4 | Declined: the answer was not `y`, or no terminal and no `--yes` | `download-release` |
+| 5 | Network: a connection error, a timeout, a `5xx`, a rate limit (`403` or `429`), another unexpected status such as a `401` without a token, or a redirect that is not allowed. Run the command again | `download-release`, `check-pinned-release --remote` |
+| 6 | Check failed: no published GitHub Release for the tag, not exactly one uploaded asset of that name, another size, a member that is not allowed or is missing, a manifest that differs from git, `verify_release` refuses, a cached folder fails its check, or a pinned file that breaks its format for `check-pinned-release` | `download-release`, `check-pinned-release` |
+
+### The check of the pinned file
+
+`check-pinned-release [--release-records eval/releases] [--remote]` checks the format of the pinned file and that its release has a published manifest in `eval/releases/`, without a request. With `--remote`, it also checks on GitHub that the tag has a published GitHub Release with exactly one uploaded asset, `<release_id>.tar.gz`, of the pinned size. It downloads nothing.
+
+The CI job `ai-service-release-command` runs it on every push to `main` or a `build/**` branch and on every pull request to `main`, with `--remote` only when the pinned file differs from the base commit or the base is missing or cannot be fetched, so the anonymous rate limit of GitHub is not a risk for other changes ([repository checks, What runs where](../../docs/guides/repository-checks.md#what-runs-where)).
+
 ## Layout
 
 | Path | Holds |
@@ -322,9 +427,11 @@ Every container runs as the user who runs the script, so the record and the repo
 | `src/supportiq_release/candidate/adapters/` | Reading the spec, checking the release ID, copying the sources, and writing and checking the manifest |
 | `src/supportiq_release/gate/domain/` | The escalation cases, their approval, the comparison of a case with the responses, and the outcome of a gate run, with no file access |
 | `src/supportiq_release/gate/adapters/` | Reading the cases, their approval, the facts of a candidate, and the JUnit XML files; the ports of the gate; running the cases; writing the record; publishing |
-| `src/supportiq_release/files/` | Strict JSON files and new or empty output folders, for every command |
-| `src/supportiq_release/errors.py` | `ReleaseCommandError`, the root of every error that the command raises on purpose ([PY-20](../../docs/rules/python.md#errors)); the command line prints its message and exits with status 2 |
-| `src/supportiq_release/composition_root/` | The command line; `gate_commands.py` holds `run-gate` and `publish-candidate`, and `exit_statuses.py` the exit statuses |
+| `src/supportiq_release/distribution/domain/` | The text of the pinned file, the members that an archive may hold, the choice of the release asset, and the size checks, with no file or network access |
+| `src/supportiq_release/distribution/adapters/` | The GitHub client over httpx, the archive writer and reader over `tarfile` and `gzip`, the pinned file, the release cache, the published manifest, and the question on the terminal |
+| `src/supportiq_release/files/` | Strict JSON files, new or empty output folders with the hidden paths of their staging, and the message of a release that `verify_release` refuses, for every command |
+| `src/supportiq_release/errors.py` | `ReleaseCommandError`, the root of every error that the command raises on purpose ([PY-20](../../docs/rules/python.md#errors)); the command line prints its message and exits with status 2. Its three subclasses for the release download exit with their own status: `DownloadDeclinedError` 4, `NetworkFailedError` 5, and `ReleaseCheckFailedError` 6 |
+| `src/supportiq_release/composition_root/` | The command line; `gate_commands.py` holds `run-gate` and `publish-candidate`, `distribution_commands.py` the commands of the release download, `download_settings.py` their settings, and `exit_statuses.py` the exit statuses |
 | `gate/` | The Docker files and the script of a gate run ([Run in Docker](#run-in-docker)) |
 | `typings/defusedxml/` | The types of the names of `defusedxml` that the command uses, because the package ships none |
 | `tests/` | Unit tests of each module, with a fake application of a candidate for the gate; the test of KB v2; a candidate from the files of the repository; the test of `gate/check_locks.py` |
@@ -339,10 +446,12 @@ Each dependency is justified here ([WF-27](../../docs/rules/workflow.md#dependen
 |---|---|---|---|
 | supportiq-ai-service | The `ai-service/` of the same commit, as a path dependency | Not published | `verify_candidate` checks a candidate, and `build_candidate_application` builds it for the gate, with the code that serves it. Only the public modules of the introduction are imported, which a contract of import-linter checks (ADR-0021, Where the code of `main` goes, statement 1) |
 | defusedxml | 0.7.1 | PSF-2.0 | Reads the JUnit XML files of the guardrail tests, refusing a document type, an entity, and an external reference, which `xml.etree` would read (ruff `S314`) |
-| httpx | 0.28.1 | BSD-3-Clause | Sends the requests of each case to the application of the candidate through its ASGI transport, without opening a port. The version of `ai-service` |
+| httpx | 0.28.1 | BSD-3-Clause | Sends the requests of each case to the application of the candidate through its ASGI transport, without opening a port, and the requests of the release download to GitHub. The version of `ai-service` |
+| pydantic | 2.14.3 | MIT | The types of the settings of the release download, with the token as `SecretStr` ([PY-44](../../docs/rules/python.md#settings)). Already locked through `ai-service`, and declared directly because the command imports it. The version of `ai-service` |
+| pydantic-settings | 2.16.2 | MIT | Reads the settings of the release download once from the environment into one settings class ([PY-43](../../docs/rules/python.md#settings)). Already locked through `ai-service`, and declared directly for the same reason. The version of `ai-service` |
 | starlette | 1.10.0 | BSD-3-Clause | The type of the application of the candidate and of its routes, which the gate checks. The version of `ai-service` |
 
-KB ingestion itself needs only the standard library.
+KB ingestion itself needs only the standard library, and the release archive only `tarfile` and `gzip`.
 
 ### Development
 
@@ -371,7 +480,7 @@ The build backend is `uv_build`, from the same release as uv (MIT or Apache-2.0)
 ## Known limits
 
 - Only some parts of the gate load the candidate. The 27 escalation cases and the checks on the candidate (the routes of contract 1.0.0, no case text in the logs, no LLM call) run on the application of the candidate, with its manifest loaded. The guardrail tests do not load it: those of `ai-service` check the service token and the packaged egress allow-list, those of `backend` serve `ai-service` from fakes, and no asset of the manifest changes what they check. They run at the commit that the record names, those of `ai-service` in the image of the gate. This reads ADR-0021 (Release and the offline evaluation gate, statement 3) as "where a test depends on what the manifest serves", and `candidate_scope` in the record states the same split.
-- No CI job checks a published manifest yet, although ADR-0021 (Release and the offline evaluation gate, statement 2) asks CI to reject a manifest without a passing gate run or with a wrong checksum. `publish-candidate` writes the manifest next to the record for that check.
+- CI checks only part of a published manifest, although ADR-0021 (Release and the offline evaluation gate, statement 2) asks CI to reject a manifest without a passing gate run or with a wrong checksum. The step for the pinned file checks that the manifest of the pinned release is a published manifest of its ID, with a gate run ([The check of the pinned file](#the-check-of-the-pinned-file)). No job checks the other manifests, the record of the run, or the checksums, because the files of a release are not in git. `publish-candidate` writes the manifest next to the record for that check.
 - The six cases that rest on the real model were written without a run of model `v1.0.0` ([Limits of the set](../../data/benchmarks/escalation/interim-v1/README.md#limits-of-the-set)). In the first gate run, all six matched.
 - The formats of the spec and of the three outputs of ingestion are interim, and the readers of `ai-service` define the KB and mapping formats. A data contract replaces them ([ADR-0021, Follow-ups](../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#follow-ups); [#21](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/21)).
 - Ingestion neither copies `last_reviewed_at` nor lists the versions without it, as the freshness rule of the [contracts v1 design, KB data contract](../../docs/design/contracts-v1.md#kb-data-contract-contractskb-contractmd) requires. KB v2 provides no `last_reviewed_at`, no policy area has a freshness rule yet, and ingestion admits no version of KB v2, so no output changes yet. The `tech-debt` issue for `source_review_overdue` adds both ([#22](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/22)).
@@ -381,4 +490,8 @@ The build backend is `uv_build`, from the same release as uv (MIT or Apache-2.0)
 - Release IDs are compared with their case, so on macOS two IDs that differ only in case name one folder of records.
 - The rule of conflicts is a copy of the rule of `ai-service`. Their tests hold the same cases, but a change on one side needs the same change on the other.
 - The intent labels are read from the layout of `contracts/schemas/IntentLabel.yaml` without a YAML library: one `enum:` line, then one line for each label, with two spaces before `- <label>`. A file with any other layout stops the run.
-- `ai-service.yml` runs the checks of this project until `eval.yml` exists ([ADR-0021, CI](../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#ci), statement 7).
+- `ai-service.yml` runs the checks of this project until `eval.yml` exists ([ADR-0021, CI](../../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#ci), statement 7). Its step for the pinned file moves there with issue [#34](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/34).
+- The release download ignores proxy settings and `.netrc` (`trust_env=False`), so it does not work where a proxy is the only way out.
+- The download is the whole archive in one request, and it cannot resume: a failed run starts again. No request is retried.
+- A process that is killed, not stopped with Ctrl+C, can leave a hidden entry in the cache: `.<release_id>.partial-<hex>` or `.<release_id>.tar.gz.partial-<hex>`. No command reads it. Remove it by hand.
+- A cache hit hashes every file of the release, 385 MiB for `release-2026-11-18-02`.

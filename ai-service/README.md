@@ -1,6 +1,6 @@
 # ai-service
 
-`ai-service` is the SupportIQ component that runs the AI pipeline for `backend`: intent classification, retrieval of KB document versions, the routing recommendation, and LLM drafting with citations ([ADR-0001](../docs/decisions/0001-system-architecture.md), [ADR-0005](../docs/decisions/0005-intent-independent-retrieval.md)). It serves [`contracts/ai-service.openapi.yaml`](../contracts/ai-service.openapi.yaml) 1.0.0. It is stateless: it has no database and owns no tickets, sessions, accounts, orders, or per-ticket state. `backend` is its only caller and sends it pseudonymized text and order context without identifiers ([ADR-0010](../docs/decisions/0010-pseudonymization-and-egress-control.md)). The AI only suggests: `ai-service` never sends a reply and never performs a transaction (FR-04, FR-06). It runs on Modal ([ADR-0018](../docs/decisions/0018-hosting-of-ai-service-on-modal.md)). The join with the AI and ML code of `main` builds it from that code ([ADR-0021, Where the code of `main` goes](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#where-the-code-of-main-goes)). This README fixes its layout ([ARCH-16](../docs/rules/architecture.md)); the features of the pipeline wait for its design ([Open questions](#open-questions)).
+`ai-service` is the SupportIQ component that runs the AI pipeline for `backend`: intent classification, retrieval of KB document versions, the routing recommendation, and LLM drafting with citations ([ADR-0001](../docs/decisions/0001-system-architecture.md), [ADR-0005](../docs/decisions/0005-intent-independent-retrieval.md)). It serves [`contracts/ai-service.openapi.yaml`](../contracts/ai-service.openapi.yaml) 1.0.0. It is stateless: it has no database and owns no tickets, sessions, accounts, orders, or per-ticket state. `backend` is its only caller and sends it pseudonymized text and order context without identifiers ([ADR-0010](../docs/decisions/0010-pseudonymization-and-egress-control.md)). The AI only suggests: `ai-service` never sends a reply and never performs a transaction (FR-04, FR-06). It runs on Modal through [`modal_app.py`](modal_app.py) ([ADR-0018](../docs/decisions/0018-hosting-of-ai-service-on-modal.md), [ADR-0030](../docs/decisions/0030-release-archives-and-the-modal-function-of-ai-service.md#the-modal-function); [deploy README, Modal](../deploy/README.md#modal)). The join with the AI and ML code of `main` builds it from that code ([ADR-0021, Where the code of `main` goes](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#where-the-code-of-main-goes)). This README fixes its layout ([ARCH-16](../docs/rules/architecture.md)); the features of the pipeline wait for its design ([Open questions](#open-questions)).
 
 ## Run and test
 
@@ -14,7 +14,7 @@ uv run --env-file .env ai-service serve --host 127.0.0.1 --port 8001
 uv run pytest
 ```
 
-The tests need no network, no `.env`, and no model weights. Without torch, the tests that need it are skipped ([Tests](#tests)).
+The tests need no network, no `.env`, and no model weights. Without torch, the tests that need it are skipped, and without the `deploy` group, `test_modal_app.py` ([Tests](#tests)).
 
 ## Set up
 
@@ -38,7 +38,15 @@ These steps work from a fresh clone, on Linux, macOS, and Windows. Only Linux ge
 
    torch is locked for Linux only, so this group installs nothing on macOS or Windows ([ADR-0021, Python and dependencies](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#python-and-dependencies), statement 2).
 
-4. Create your settings. `.env` is ignored by git, and its values never leave your machine. Replace every placeholder; `SERVICE_TOKEN` is the same value as the `backend` setting `AI_SERVICE_TOKEN`, `RELEASE_MANIFEST_PATH` names the manifest of a release whose files are on your machine ([Release manifest](#release-manifest)), and the two `LLM_*_PRICE_MICRO_USD_PER_MILLION_TOKENS` settings take the prices of `GEMINI_MODEL` from the price list of the provider: they have no default, so `ai-service` does not start until they are filled in ([LLM call](#llm-call)).
+4. To type-check or test [`modal_app.py`](modal_app.py), or to deploy, add the `deploy` group with the Modal SDK. The Dockerfile never installs it, so it is never in the image:
+
+   ```bash
+   uv sync --locked --group deploy
+   ```
+
+   `uv sync` removes the packages of a group that it is not given, so on Linux pass both groups, `--group torch --group deploy`, to keep torch.
+
+5. Create your settings. `.env` is ignored by git, and its values never leave your machine. Replace every placeholder; `SERVICE_TOKEN` is the same value as the `backend` setting `AI_SERVICE_TOKEN`, `RELEASE_MANIFEST_PATH` names the manifest of a release whose files are on your machine ([Release manifest](#release-manifest)), and the two `LLM_*_PRICE_MICRO_USD_PER_MILLION_TOKENS` settings take the prices of `GEMINI_MODEL` from the price list of the provider: they have no default, so `ai-service` does not start until they are filled in ([LLM call](#llm-call)).
 
    ```bash
    cp .env.example .env
@@ -54,7 +62,7 @@ CI builds the [`Dockerfile`](Dockerfile), which installs the `torch` group. To r
 |---|---|
 | Format | `uv run ruff format --check .` |
 | Lint | `uv run ruff check .` |
-| Types | `uv run pyright` |
+| Types | `uv run --locked --group deploy pyright`, because pyright reads `modal_app.py`, as the hook `ai-service-types` and CI run it |
 | Layer and feature boundaries | `uv run lint-imports` |
 | Unit tests only | `uv run pytest tests/unit` |
 | Tests of the tiny models, on Linux with the `torch` group | `uv run --locked --group torch pytest -m torch` |
@@ -93,10 +101,13 @@ ai-service/
 ├── prompts/                # The sources of the prompts asset, one folder for each prompt version (DATA-38)
 ├── routing/                # The sources of the routing asset, one folder for each routing version (DATA-58)
 ├── Dockerfile
+├── modal_app.py            # The Modal app: the image, the release in it, the Secret, and the function (ADR-0030)
 └── pyproject.toml          # Dependencies and the configuration of every tool
 ```
 
 `platform/`, `release/`, `composition_root/`, `generated/`, and the test folders are fixed. `suggestions/` is an interim feature named after the tag of its two operations in the contract: it holds their use cases, the types of their results in the shape of the contract, the rules of routing, evidence, masking, grounding, and usage, and `ReleasePipeline`, which runs those rules over the ports of `intent`, `retrieval`, and `drafting` ([Routing](#routing)). `intent/`, `retrieval/`, and `drafting/` hold the adapters taken over from `main`. The pipeline design decides the features of the pipeline and replaces this split ([Open questions](#open-questions)).
+
+`modal_app.py` is deployment configuration that lives with `ai-service`, next to the Dockerfile whose image it deploys, so the toolchain of `ai-service` checks and tests it ([ARCH-42](../docs/rules/architecture.md#component-boundaries), through [ADR-0030](../docs/decisions/0030-release-archives-and-the-modal-function-of-ai-service.md#the-modal-function)). It is outside `app/`: no module of `app/` imports it, and it starts `ai-service serve` as a process instead of importing the composition root.
 
 Each feature has the layers of [ARCH-16](../docs/rules/architecture.md):
 
@@ -159,7 +170,7 @@ Drafting calls Gemini once per draft step, with the one client of the egress all
 
 ## Release manifest
 
-A replica serves exactly one release, which it checks at startup ([DATA-56](../docs/rules/data-and-ml.md#models-and-artifacts)). A release is one folder: the manifest file and every asset file that it names, by a path relative to that folder. `RELEASE_MANIFEST_PATH` names the manifest. On Modal, the folder is the one that `modal deploy` adds to the image ([ADR-0018, Deploy](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#deploy)).
+A replica serves exactly one release, which it checks at startup ([DATA-56](../docs/rules/data-and-ml.md#models-and-artifacts)). A release is one folder: the manifest file and every asset file that it names, by a path relative to that folder. `RELEASE_MANIFEST_PATH` names the manifest. On Modal, the folder is the one that `download-release` checked and `modal deploy` adds to the image at `/srv/release` ([ADR-0030, The Modal function](../docs/decisions/0030-release-archives-and-the-modal-function-of-ai-service.md#the-modal-function), statement 2).
 
 The format is interim. `ReleaseManifest` in [`release/adapters/manifest_file.py`](app/release/adapters/manifest_file.py) defines it, and `app.release.manifest` exports it with its checks. A data contract in `contracts/` replaces it ([Open questions](#open-questions)). The manifest is read strictly: a missing field, an unknown field, or a value of the wrong type refuses it.
 
@@ -176,8 +187,8 @@ The format is interim. `ReleaseManifest` in [`release/adapters/manifest_file.py`
 - `index` holds the files of the encoder too, because an index is valid only with the encoder that built it, and the encoder also embeds each query.
 - The first release holds a `kb` without any document, and a `mapping` and an `index` built from it, because KB ingestion admits no document of KB v2 ([ADR-0021, KB ingestion](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#kb-ingestion)). The format sets no minimum number of documents.
 - Every result reports the versions of the manifest ([ARCH-39](../docs/rules/architecture.md#versioned-assets)). `prompt_version` is the version of `prompts`, because the contract has one version for the set of prompts.
-- The release command of `eval/` writes the manifest. `ai-service serve`, the release command, the download script before `modal deploy`, and CI read it. Nobody edits a published manifest.
-- A release folder holds only regular files and folders. The release command and the download script never write a symbolic link into it.
+- The release command of `eval/` writes the manifest. `ai-service serve`, the release command with its release download, `modal_app.py` before `modal deploy`, and CI read it. Nobody edits a published manifest.
+- A release folder holds only regular files and folders. The release command, its release download included, never writes a symbolic link into it.
 
 The model service of `main`, `apps/ml_inference`, checked the pinned checksums of the weights and the tokenizer and required the 46 labels as the outputs 0 to 45, but it did not fail closed. At `5e0cda5`, `SUPPORTIQ_DEV_FALLBACK_MODEL` was true by default, so a fallback of regular expressions with fixed scores answered and reported the version and checksum of the real model ([ADR-0021, What `main` holds](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#what-main-holds)). At `e677f77`, the last commit of `main` that the join merged, the fallback was off by default and reported a demo version of its own. `ai-service` keeps the checks, through the release manifest and the format of the model asset, and does not start without a verified release. It drops the fallback and the separate `/predict` app ([ADR-0021, Where the code of `main` goes](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#where-the-code-of-main-goes)).
 
@@ -259,6 +270,7 @@ Every request continues the trace of a valid `traceparent` or starts a new one, 
 - Tests that load real model weights carry the marker `real_model`. An empty `HF_HOME` does not stop a test from loading weights from a local path, so every test that needs real weights carries the marker, without exception. They are skipped by default and in CI, and run only with `-m real_model` on a machine that holds the release assets. The real model is otherwise tested on the Modal deployment ([ADR-0021, Python and dependencies](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#python-and-dependencies), statement 3).
 - CI runs the tests on Linux twice: without torch, with fakes, and with torch from the CPU index (ADR-0021, CI, statement 4).
 - Tests that build and run models carry the marker `torch` and skip, with their reason, where torch is not installed. They build tiny models with random weights from a vocabulary of a few words, so they download nothing and need no release assets. Only the two adapters that load a model, and `composition_root/release_models.py`, which loads both with the threads of `MODEL_CPU_THREADS`, need torch; the softmax, the chunking, the index, and the search are tested everywhere with fakes.
+- The tests of `modal_app.py` are in `tests/unit/modal_app/` and need no network and no Modal account. `test_modal_app_secrets.py` reads the source of `modal_app.py`, so it runs without the `deploy` group: it proves that the app sets no value, default, or stand-in for `GEMINI_API_KEY` or `SERVICE_TOKEN`. `test_modal_app.py` imports `modal` and skips with the reason "the deploy group is not installed" without it. The Secret is read lazily, and the process, the port check, the clock, and `modal.is_local` are fakes. It proves the checks before a deploy, the server command and its user, and the fail-fast wait. CI installs the group in every job that type-checks or tests `ai-service`, so it never skips there, and the job `ai-service-image` fails when `modal` can be imported in the image ([repository checks, What runs where](../docs/guides/repository-checks.md#what-runs-where)).
 
 ## Known limits
 
@@ -283,8 +295,10 @@ Every request continues the trace of a valid `traceparent` or starts a new one, 
 - The pipeline writes no `staff_note`, which the contract allows: the reason codes explain each outcome. Notes for staff wait for their own issue ([#26](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/26)).
 - A token count above the cap of the contract (1 000 000) refuses the output as `llm_invalid_output`, and the outcome carries no `llm_usage`, so no number outside the contract is sent.
 - Structural checks on a draft, such as citation identity and placeholder provenance, do not prove that a cited source supports a claim. Staff verify every claim before they send a reply (FR-04).
-- No Modal app of `ai-service` and no download script exist yet, so no release of contract 1.0.0 is deployed ([ADR-0018, Deploy](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#deploy); [#41](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/41)). The first release, `release-2026-11-18-02`, passed the offline evaluation gate; its record and its published manifest are in [`eval/releases/release-2026-11-18-02/`](../eval/releases/release-2026-11-18-02/release-manifest.json).
-- The cold start, the latency from `backend`, and the memory in use are not measured yet ([ADR-0018, Validation](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#validation)).
+- The first release, `release-2026-11-18-02`, passed the offline evaluation gate; its record and its published manifest are in [`eval/releases/release-2026-11-18-02/`](../eval/releases/release-2026-11-18-02/release-manifest.json). It is published on GitHub as a release archive, and its deploy on Modal is not run yet ([deploy README, Runs by hand](../deploy/README.md#runs-by-hand)).
+- The cold start, the latency from `backend`, and the memory in use are not measured yet ([ADR-0018, Validation](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#validation); [deploy README, Measurements](../deploy/README.md#measurements)).
+- On Modal, a server process that exits after its port opened leaves the container without a server until Modal stops it, and `backend` falls back to manual handling ([ADR-0030, Negative](../docs/decisions/0030-release-archives-and-the-modal-function-of-ai-service.md#negative)). The container runs as root around the server process; only the server process runs as the user `ai-service`.
+- `modal_app.py` holds one `# pyright: ignore[reportUnknownMemberType]`, on `@modal.web_server`, because the Modal SDK 1.6.4 types the function that it wraps with `Any` ([#46](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/46)).
 - When `analysis_ms` or `total_ms` exceeds 60 000, the maximum of `StepLatencies` in the contract, `ai-service` answers `500` and logs `request.failed` with `ValidationError`, without a result. It happened in the local run with AI and Grafana together on a virtual machine with 2 CPUs; `backend` had already timed out, so staff handled the ticket manually ([local run guide, Modes](../docs/guides/local-run.md#modes)).
 
 ## Dependencies
@@ -312,6 +326,16 @@ Each direct dependency, with why it is here ([WF-27](../docs/rules/workflow.md#d
 |---|---|---|---|
 | torch | 2.15.0+cpu | Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND ISC AND MIT AND Zlib | Runs the intent model and the encoder. From the PyTorch CPU index, on Linux only (ADR-0021, Python and dependencies, statement 2) |
 
+### The `deploy` group
+
+Installed only with `--group deploy`, for `modal deploy` of `modal_app.py`, pyright, and its tests. It is not a default group, so a plain `uv sync` and the Dockerfile never install it ([ADR-0030, The Modal function](../docs/decisions/0030-release-archives-and-the-modal-function-of-ai-service.md#the-modal-function), statement 2).
+
+| Name | Version | License | Why |
+|---|---|---|---|
+| modal | 1.6.4 | Apache-2.0 | The Modal SDK and its command line: defines the image, the Secret, and the web function, and runs `modal setup`, `modal secret create`, and `modal deploy` ([ADR-0018](../docs/decisions/0018-hosting-of-ai-service-on-modal.md)). No other library deploys to Modal |
+
+It adds these 19 packages to `uv.lock`, and changes no locked version: `aiohappyeyeballs` 2.7.1 (PSF-2.0), `aiohttp` 3.14.5 (Apache-2.0 AND MIT), `aiosignal` 1.4.0 (Apache-2.0), `attrs` 26.1.0 (MIT), `cbor2` 6.3.0 (MIT), `frozenlist` 1.8.0 (Apache-2.0), `grpclib` 0.4.9 (BSD-3-Clause), `h2` 4.4.1 (MIT), `hpack` 4.2.0 (MIT), `hyperframe` 6.1.0 (MIT), `multidict` 7.2.1 (Apache-2.0), `propcache` 0.5.4 (Apache-2.0), `protobuf` 7.36.2 (BSD-3-Clause), `synchronicity` 0.12.7 (Apache-2.0), `toml` 0.10.2 (MIT), `types-certifi` 2021.10.8.3 (Apache-2.0), `types-toml` 0.10.8.20260518 (Apache-2.0), `watchfiles` 1.3.0 (MIT), and `yarl` 1.25.1 (Apache-2.0).
+
 ### Development
 
 | Name | Version | License | Why |
@@ -335,6 +359,8 @@ These dependencies have a license outside the list of [WF-30](../docs/rules/work
 
 - Runtime: `certifi` (MPL-2.0), through `httpx`; `numpy` (0BSD, Zlib, and CC0-1.0 for bundled parts), a direct dependency; `regex` (Apache-2.0 AND CNRI-Python), through `transformers`; `tqdm` (MPL-2.0 AND MIT), through `transformers` and `huggingface-hub`; `typing-extensions` (PSF-2.0), through `pydantic` and other packages; `torch` (BSL-1.0, Zlib, and Apache-2.0 WITH LLVM-exception for bundled parts), a direct dependency of the `torch` group.
 - Development: `defusedxml` (PSF-2.0), through `py-serializable`, which `pip-audit` needs; `hypothesis` (MPL-2.0), a direct dependency; `pathspec` (MPL-2.0), through `black`, which `datamodel-code-generator` needs.
+
+In the `deploy` group, `aiohappyeyeballs` (PSF-2.0), through `aiohttp`, which `modal` needs, was accepted by the project lead on 2026-11-23, next to `typing-extensions` and `defusedxml`, which have the same license.
 
 The build backend is `uv_build`, from the same release as uv (MIT or Apache-2.0).
 

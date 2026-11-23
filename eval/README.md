@@ -8,8 +8,8 @@ The evaluation code of `main` is in [`pipeline/evaluation/`](../pipeline/evaluat
 
 | Path | Holds |
 |---|---|
-| [`release/`](release/README.md) | The release command `supportiq-release`, a project of its own: it ingests the KB, builds candidate releases, runs the offline evaluation gate on them, and publishes those that pass |
-| [`releases/`](releases/) | The gate run record and the published manifest of each release, one folder per release |
+| [`release/`](release/README.md) | The release command `supportiq-release`, a project of its own: it ingests the KB, builds candidate releases, runs the offline evaluation gate on them, publishes those that pass, packs each published release into its release archive, and downloads a release for the Modal deploy and the local run ([`release/README.md`, Release download](release/README.md#release-download)) |
+| [`releases/`](releases/) | The gate run record and the published manifest of each release, one folder per release, and the pinned file `pinned-release.txt`, which names the release in use |
 | [`kb-ingestion/v2/`](kb-ingestion/v2/) | The output of KB ingestion for KB v2: the KB file, the document-to-intent mapping, and the report |
 
 ## Test and scenario sets

@@ -72,7 +72,7 @@ The parts of `main` are kept at their paths, byte for byte, next to the componen
 
 - `frontend`, `backend`, `ai-service`, `ml/`, `eval/`, `contracts/`, and `deploy/` exist, each with its README ([Repository layout](#repository-layout)).
 - The first release of `ai-service`, `release-2026-11-18-02`, passed the offline evaluation gate. Its gate run record and its manifest are in [eval/releases/release-2026-11-18-02/](eval/releases/release-2026-11-18-02/). It serves no KB document, so no request gets a draft yet ([ai-service README, Known limits](ai-service/README.md#known-limits)).
-- No release of `ai-service` is deployed: its Modal app and the download script of a release wait for [#41](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/41) ([ADR-0018, Deploy](docs/decisions/0018-hosting-of-ai-service-on-modal.md#deploy)).
+- Each published release is one release archive on GitHub Releases, and the pinned file names the release in use. The release command downloads and checks it for the Modal deploy and for the local run, and `ai-service/modal_app.py` deploys it on Modal ([ADR-0030](docs/decisions/0030-release-archives-and-the-modal-function-of-ai-service.md); [release command README, Release download](eval/release/README.md#release-download)). `release-2026-11-18-02` is published on GitHub, and its deploy on Modal is not run yet ([deploy README, Runs by hand](deploy/README.md#runs-by-hand)).
 - Follow-ups are the [open issues labeled `tech-debt`](https://github.com/ml-system-design-nhom-5/SupportIQ/issues?q=is%3Aissue%20is%3Aopen%20label%3Atech-debt).
 
 ## Repository layout

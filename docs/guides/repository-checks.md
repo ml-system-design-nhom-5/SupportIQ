@@ -1,6 +1,6 @@
 # Repository checks and CI
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-20
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-23
 
 How to run the repository-wide checks locally, which GitHub Actions workflows run them, and the convention that every workflow file follows. Read it before you add hooks to `.pre-commit-config.yaml` or a workflow to `.github/workflows/`. The contract tooling itself is described in [contracts/README.md](../../contracts/README.md).
 
@@ -22,7 +22,7 @@ flowchart LR
     Repo -->|"pre-commit run --all-files<br/>--hook-stage manual"| Result{"All checks pass?"}
     Con -->|"audit, pre-commit run contracts-check,<br/>bundle, mock check"| Result
     Be -->|"backend hooks, audit, tests with coverage,<br/>image build"| Result
-    Ai -->|"ai-service and release command hooks, audits,<br/>tests without and with torch, image build"| Result
+    Ai -->|"ai-service and release command hooks, audits,<br/>tests without and with torch, pinned file,<br/>image build without modal"| Result
     Fe -->|"audit, pre-commit run frontend-check,<br/>tests, stories, build, UI flow tests"| Result
     Lr -->|"script tests, start with Compose,<br/>health checks, sign-ins, stop"| Result
     Ae -->|"evaluator tests, autoeval offline:<br/>no LLM call"| Result
@@ -30,7 +30,7 @@ flowchart LR
     Result -->|"yes"| Green["Merge allowed"]
 ```
 
-`deploy.yml` is not a check. The project lead runs it by hand on `main`, and it deploys `backend` only after the jobs of `backend.yml` pass again on that commit ([deploy guide](../../deploy/README.md#setup-order), step 5):
+`deploy.yml` is not a check. The project lead runs it by hand on `main`, and it deploys `backend` only after the jobs of `backend.yml` pass again on that commit ([deploy guide](../../deploy/README.md#setup-order), step 6):
 
 ```mermaid
 flowchart LR
@@ -63,12 +63,13 @@ Each tool is justified here, as [WF-27](../rules/workflow.md#dependencies) requi
 | Known vulnerabilities in every locked `backend` dependency except the named-entity model, which pip-audit cannot audit and its checksum in `uv.lock` protects ([ADR-0017](../decisions/0017-named-entity-model-from-its-release-url.md), item 3) | pip-audit 2.10.1, Apache-2.0 | [WF-31](../rules/workflow.md#dependencies) | — | `backend-checks` |
 | `backend` tests against PostgreSQL 17, with branch coverage | pytest 9.2.0, MIT, and coverage 7.17.2, Apache-2.0 | TEST-21 | — | `backend-tests` |
 | The `backend` image build | `docker build` of `backend/Dockerfile` | ARCH-10 | — | `backend-image` |
-| `ai-service` formatting, lint, strict types, layer and feature boundaries, and generated models | The hooks `ai-service-format`, `ai-service-lint`, `ai-service-types`, `ai-service-imports`, and `ai-service-generated`, with the tools of the [`ai-service` README](../../ai-service/README.md#dependencies) | Every rule that `backend` follows ([ADR-0021, CI](../decisions/0021-repository-layout-and-ai-ml-migration.md#ci), statement 1), [RULE-03](../rules/README.md#enforcement), CON-26 | Yes | `ai-service-checks` |
-| Known vulnerabilities in every locked `ai-service` dependency. torch is audited as the public release of its version in `uv.lock`: PyPI does not know the local version `+cpu` of the CPU build, which comes from the same source | pip-audit 2.10.1, Apache-2.0 | [WF-31](../rules/workflow.md#dependencies) | — | `ai-service-checks` |
-| `ai-service` tests on Linux without torch, with the fakes. The only skips allowed are those of the tests that need torch, with their one reason: they skip by design, because `ai-service-tests-torch` runs them and allows no skip (ADR-0021, CI, statement 4, which stands above [TEST-20](../rules/testing.md#flaky-and-skipped-tests)). Any other skip fails the job | pytest 9.2.0, MIT, and its JUnit report | ADR-0021, CI, statement 4; TEST-20 | — | `ai-service-tests` |
-| `ai-service` tests on Linux with torch from the PyTorch CPU index, with branch coverage. Any skipped test fails the job | pytest 9.2.0, MIT, and coverage 7.17.2, Apache-2.0 | ADR-0021, CI, statement 4; TEST-21 | — | `ai-service-tests-torch` |
+| `ai-service` formatting, lint, strict types, layer and feature boundaries, and generated models. `ai-service-types` runs pyright with the `deploy` group, so it reads `ai-service/modal_app.py` with the Modal SDK | The hooks `ai-service-format`, `ai-service-lint`, `ai-service-types`, `ai-service-imports`, and `ai-service-generated`, with the tools of the [`ai-service` README](../../ai-service/README.md#dependencies) | Every rule that `backend` follows ([ADR-0021, CI](../decisions/0021-repository-layout-and-ai-ml-migration.md#ci), statement 1), [RULE-03](../rules/README.md#enforcement), CON-26 | Yes | `ai-service-checks` |
+| Known vulnerabilities in every locked `ai-service` dependency, the `deploy` group included. torch is audited as the public release of its version in `uv.lock`: PyPI does not know the local version `+cpu` of the CPU build, which comes from the same source | pip-audit 2.10.1, Apache-2.0 | [WF-31](../rules/workflow.md#dependencies) | — | `ai-service-checks` |
+| `ai-service` tests on Linux without torch, with the fakes and the `deploy` group, so the tests of `modal_app.py` run. The only skips allowed are those of the tests that need torch, with their one reason: they skip by design, because `ai-service-tests-torch` runs them and allows no skip (ADR-0021, CI, statement 4, which stands above [TEST-20](../rules/testing.md#flaky-and-skipped-tests)). Any other skip fails the job | pytest 9.2.0, MIT, and its JUnit report | ADR-0021, CI, statement 4; TEST-20 | — | `ai-service-tests` |
+| `ai-service` tests on Linux with torch from the PyTorch CPU index and the `deploy` group, with branch coverage of `app` and `modal_app`. Any skipped test fails the job | pytest 9.2.0, MIT, and coverage 7.17.2, Apache-2.0 | ADR-0021, CI, statement 4; TEST-21 | — | `ai-service-tests-torch` |
 | The release command in `eval/release/`: formatting, lint, strict types, layer boundaries, tests with branch coverage, and known vulnerabilities. It follows the rule level of `ai-service` until `eval.yml` exists | The hooks `eval-release-format`, `eval-release-lint`, `eval-release-types`, and `eval-release-imports`, then pytest, coverage, and pip-audit, with the tools of the [release command README](../../eval/release/README.md#dependencies) | ADR-0021, CI, statement 7 | Yes, the hooks | `ai-service-release-command` |
-| The `ai-service` image build, with torch from the CPU index | `docker build` of `ai-service/Dockerfile` | ARCH-10 | — | `ai-service-image` |
+| The pinned file of the releases: its format, and a published manifest of its release in `eval/releases/`. When the pinned file differs from the base commit, or the base cannot be fetched, also the GitHub Release of its tag, with exactly one uploaded asset `<release_id>.tar.gz` of the pinned size, read anonymously ([release command README, The check of the pinned file](../../eval/release/README.md#the-check-of-the-pinned-file)) | `supportiq-release check-pinned-release`, with `--remote` for a change | [ADR-0030, Release archives](../decisions/0030-release-archives-and-the-modal-function-of-ai-service.md#release-archives), statement 5 | — | `ai-service-release-command` |
+| The `ai-service` image build, with torch from the CPU index, and a run of the image that fails when `modal` of the `deploy` group can be imported in it | `docker build` of `ai-service/Dockerfile`, then `docker run` of the image | ARCH-10; [ADR-0030, The Modal function](../decisions/0030-release-archives-and-the-modal-function-of-ai-service.md#the-modal-function), statement 2 | — | `ai-service-image` |
 | Format, lint, types, boundaries, and the generated client of frontend | `frontend-check`, with the tools of [frontend/README.md](../../frontend/README.md#dependencies) | [RULE-03](../rules/README.md#enforcement), [TS-02](../rules/typescript.md#toolchain), [TS-27](../rules/typescript.md#api-access) | Yes | `frontend-checks` |
 | High and critical vulnerabilities, unit tests, stories, the build, and the UI flow tests | `pnpm audit`, `test:unit`, `test:stories`, `build`, `test:e2e` in `frontend/` | [WF-31](../rules/workflow.md#dependencies), [TEST-21](../rules/testing.md#coverage), [UI-32](../rules/ui.md#accessibility) | — | `frontend-checks` |
 | The local run: the script tests of `local-run.sh`, then one start with Compose without AI, its health checks, a sign-in through each origin, a second start without a question, and a stop that leaves nothing ([local run design](../design/local-run.md#testing-and-evaluation)) | `deploy/local/tests/test-local-run.sh`, `deploy/local/local-run.sh`, and `deploy/local/tests/smoke-check.sh`, with the Docker and curl of the runner | WF-32, WF-33, TEST-01 | — | `local-run-compose` |
@@ -217,11 +218,12 @@ GitHub Actions cannot run locally. On the first push, check:
 5. `repository-checks` passes `Detect hardcoded secrets in the git history`. It scans only the commits reachable from `HEAD`: other branches of the clone, such as `main`, are not scanned.
 6. `pnpm audit --audit-level=high` reports no high or critical advisory except the one ignored in `contracts/pnpm-workspace.yaml`, and `pnpm run check:mock` prints seven `ok` lines: three for `backend.openapi.yaml` and four for `ai-service.openapi.yaml`.
 7. `backend-tests` reaches the PostgreSQL 17 service, creates `supportiq_owner` and `supportiq_app`, and passes both coverage reports. `backend-image` builds `backend/Dockerfile`, which `local-run-compose` builds again for the local run.
-8. `ai-service-tests-torch` prints the torch version `2.15.0+cpu` and allows no skip, and `ai-service-tests` allows only the skips of the tests that need torch. `ai-service-checks` audits torch as `torch==2.15.0`. `ai-service-image` builds `ai-service/Dockerfile` with torch.
-9. `local-run-compose` passes the script tests, starts the local run, signs in at both origins, starts it again without a question, and leaves no container after `stop`. Its log gives the durations of both starts, from which the deadlines of `deploy/local/local-run.sh` are set.
-10. All jobs finish within their `timeout-minutes`. Then set the branch protection above.
+8. `ai-service-tests-torch` prints the torch version `2.15.0+cpu` and allows no skip, and `ai-service-tests` allows only the skips of the tests that need torch, so the tests of `modal_app.py` run in both. `ai-service-checks` audits torch as `torch==2.15.0`. `ai-service-image` builds `ai-service/Dockerfile` with torch, and its check that `modal` is not in the image passes.
+9. The step for the pinned file in `ai-service-release-command` runs `check-pinned-release --remote` when the pinned file is new or changed since the base commit, and passes only after the archive of the pinned release is on GitHub ([release command README, Publish](../../eval/release/README.md#publish)). Otherwise its log says that the pinned file did not change. A `403` or `429` of the anonymous rate limit is exit status 5: run the job again by hand (rule 10).
+10. `local-run-compose` passes the script tests, starts the local run, signs in at both origins, starts it again without a question, and leaves no container after `stop`. Its log gives the durations of both starts, from which the deadlines of `deploy/local/local-run.sh` are set.
+11. All jobs finish within their `timeout-minutes`. Then set the branch protection above.
 
-The first deploy is step 5 of the [deploy guide, Setup order](../../deploy/README.md#setup-order).
+The first deploy is step 6 of the [deploy guide, Setup order](../../deploy/README.md#setup-order).
 
 ## Open questions
 

@@ -4,18 +4,34 @@
 - **Owner:** project lead
 - **Reviewers:** ML engineer, backend engineer, and a second reviewer for [SEC-35](../rules/security-and-privacy.md#security-review)
 - **Last reviewed:** 2026-11-23
-- **Related:** [ADR-0018](../decisions/0018-hosting-of-ai-service-on-modal.md), [ADR-0030](../decisions/0030-release-archives-and-the-modal-function-of-ai-service.md) (Proposed), [ADR-0021, Release and the offline evaluation gate](../decisions/0021-repository-layout-and-ai-ml-migration.md#release-and-the-offline-evaluation-gate), [local run design](local-run.md), [release command README](../../eval/release/README.md), [DATA-36, DATA-56, DATA-57](../rules/data-and-ml.md#models-and-artifacts), [SEC-10](../rules/security-and-privacy.md#secrets), [SEC-40](../rules/security-and-privacy.md#transport-and-runtime), [WF-27 to WF-30](../rules/workflow.md#dependencies), [#41](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/41)
+- **Related:** [ADR-0018](../decisions/0018-hosting-of-ai-service-on-modal.md), [ADR-0030](../decisions/0030-release-archives-and-the-modal-function-of-ai-service.md), [ADR-0021, Release and the offline evaluation gate](../decisions/0021-repository-layout-and-ai-ml-migration.md#release-and-the-offline-evaluation-gate), [local run design](local-run.md), [release command README](../../eval/release/README.md), [DATA-36, DATA-56, DATA-57](../rules/data-and-ml.md#models-and-artifacts), [SEC-10](../rules/security-and-privacy.md#secrets), [SEC-40](../rules/security-and-privacy.md#transport-and-runtime), [WF-27 to WF-30](../rules/workflow.md#dependencies), [#41](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/41)
 
 ## Summary
 
 No release of contract 1.0.0 is deployed, because the repository has neither the download that [ADR-0018, Deploy](../decisions/0018-hosting-of-ai-service-on-modal.md#deploy) describes nor the Modal app of `ai-service` ([#41](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/41)). This design adds three subcommands to `supportiq-release`. `pack-release` writes one archive per release. `download-release` fetches it, checks it against the manifest in git, and puts it into a cache. `check-pinned-release` keeps the pinned newest release and GitHub in step. The design also adds the Modal app `ai-service/modal_app.py` and one price file of the LLM. The Modal deploy of the project lead and the [local run](local-run.md) use the same download command, cache, and price file. The project lead decided the open points on 2026-11-22 and 2026-11-23. [ADR-0030](../decisions/0030-release-archives-and-the-modal-function-of-ai-service.md) records the parts that change ADR-0018: one archive per release, an optional token, and the settings of the Modal function.
+
+**Amended on 2026-11-23 with the project lead's approval**, during the implementation and its review. No decision of ADR-0030 changes; the passages below now say what the code does:
+
+1. `eval/release` declares two dependencies that `ai-service` already locks, `pydantic` and `pydantic-settings`, so the settings of the download are one settings class with the token as `SecretStr` ([PY-43, PY-44](../rules/python.md#settings)). The lead approved it on 2026-11-23 ([Components and responsibilities](#components-and-responsibilities)).
+2. The price parser does not repeat the cap on the sum of both prices, which ai-service defines once ([CODE-48](../rules/code.md#constants-and-configuration)). It checks the model and each price with the field rules of `Settings` of `ai-service`, on the deploying machine; a test checks the committed file with the whole `Settings`, and `ai-service` checks the cap at startup ([The price file](#the-price-file)).
+3. A member of an archive must have exactly the size that the manifest states, not at most that size ([Download](#download), Unpacking).
+4. The price file allows empty lines and comment lines anywhere, as a Compose env file does, and refuses a CR ([The price file](#the-price-file)).
+5. A `401` of a request that sent the token is its own failure, `token_refused`, with status 2 ([Exit statuses](#exit-statuses)); every request asks for no content encoding, and the archive is counted as raw bytes ([Download](#download), HTTP).
+6. A declined download, or one that fails before the answer, creates nothing: the free space is measured on the nearest folder that exists, and the cache folder is created only after the answer. A failure after the answer leaves at most the empty cache folder and the parents that it needed. `SUPPORTIQ_RELEASE_CACHE` and `HOME` are checked only when a cache is needed ([Download](#download), The cache).
+7. The size in the pinned file has at most 10 digits ([The pinned file](#the-pinned-file)).
+8. The server gets the environment of the container without the variables of the Modal runtime, and the function starts it through `start_server` ([The Modal app](#the-modal-app), Function).
+9. The download container of the local run mounts only the paths of the repository that the command reads ([Download](#download), In a container).
+10. The step by hand that runs `backend` on Render against Modal moves to after the merge, because the `deploy` workflow runs only on `main`; before the PR, the local run with AI proves that path ([Testing and evaluation](#testing-and-evaluation)).
+11. The checks of the source of `modal_app.py` run without the `deploy` group, and only the tests that import `modal` skip without it ([Testing and evaluation](#testing-and-evaluation)). The app is defined after every function that the checks of a deploy use, and only the function of the app follows it ([The Modal app](#the-modal-app)).
+12. Immutable releases stay off until the system has taken shape, decided by the project lead on 2026-11-23. `release-2026-11-18-02` was uploaded with the setting off, and ADR-0018, Follow-ups stays open until then ([Publish order](#publish-order)).
+13. `.gitattributes` keeps LF line ends for the price file and the pinned file on every checkout, whatever `core.autocrlf` says, because both refuse a CR ([The pinned file](#the-pinned-file), [The price file](#the-price-file)).
 
 ## Goals and non-goals
 
 ### Goals
 
 - One command downloads a published release, for the Modal deploy and for the local run, with or without a token, on macOS, Linux, WSL2, and in a container.
-- The manifest in git decides whether a downloaded release is valid. A download that fails any check leaves nothing behind.
+- The manifest in git decides whether a downloaded release is valid. A download that fails any check leaves no file behind.
 - One archive per release, written by a command, uploaded once in the browser, and never replaced.
 - A pinned file in git names the newest published release and the size of its archive, in plain text that bash reads. CI fails a change of it when GitHub does not hold that archive.
 - `ai-service` of contract 1.0.0 runs on Modal from `release-2026-11-18-02`, and `backend` on Render calls it.
@@ -74,7 +90,7 @@ No release of contract 1.0.0 is deployed, because the repository has neither the
 | `.github/workflows/ai-service.yml` | The `deploy` group in the jobs that type-check and test `ai-service`, the step of the pinned file, and a check that the image holds no `modal` |
 | `.pre-commit-config.yaml` | The hook `ai-service-types` runs pyright with the `deploy` group |
 
-`eval/release` gets no new dependency: httpx 0.28.1 is already a runtime dependency, and `tarfile` and `gzip` are in the standard library. The layer contract of import-linter gets the new adapters, and the domain contract gets the new domain.
+`eval/release` gets no new package: httpx 0.28.1 is already a runtime dependency, and `tarfile` and `gzip` are in the standard library. Two packages that `ai-service` already locks, `pydantic` 2.14.3 and `pydantic-settings` 2.16.2, become direct dependencies, so the settings of the download are one settings class with the token as `SecretStr` (amended on 2026-11-23 with the project lead's approval: two dependencies that `ai-service` already locks are declared directly, for PY-43 and PY-44). The layer contract of import-linter gets the new adapters, and the domain contract gets the new domain, in a layer above the other domains, because it uses the pattern of a release ID of the candidate domain.
 
 ### The release archive
 
@@ -99,8 +115,9 @@ archive_size_bytes=<the size that pack-release prints>
 ```
 
 - `release_id` has the pattern of `release_id` in the contracts, `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`, and `eval/releases/<release_id>/release-manifest.json` exists.
-- `archive_size_bytes` is a decimal number without a leading zero, from 1 to 2,147,483,647, because GitHub takes files under 2 GiB.
+- `archive_size_bytes` is a decimal number without a leading zero, of at most 10 digits, from 1 to 2,147,483,647, because GitHub takes files under 2 GiB. A longer value is refused before it becomes a number.
 - A file with another line, a comment, CRLF, or a value outside these rules stops `download-release` with status 2, and `check-pinned-release` reports it with status 6.
+- `.gitattributes` sets `text eol=lf` for the file, so every checkout keeps its LF line ends, whatever `core.autocrlf` says.
 - Only `pack-release --pin` writes it, both lines at once, into a temporary file in `eval/releases/` that it renames over the old one. A failure leaves the old file whole, and the archive in place. Running the command again gives the same bytes.
 - `publish-candidate` does not write it. The size exists only after packing, so one writer keeps the file from ever holding a new ID with an old size.
 - Release IDs are opaque ([CON-15](../rules/contracts.md#api-conventions)), so "newest" means what the pinned file says, never an order of IDs or GitHub's latest release.
@@ -130,7 +147,7 @@ flowchart TD
 
 1. `publish-candidate` and the commit of its gate record and manifest stay as they are ([release command README, Publish](../../eval/release/README.md#publish)).
 2. `pack-release --pin` writes the archive outside the repository and changes the pinned file in the working tree.
-3. In the browser, the project lead drafts a GitHub Release whose tag is the release ID, on the commit that holds the manifest, attaches `<release_id>.tar.gz`, and publishes it. If the repository settings offer immutable releases, they are turned on first ([ADR-0018, Follow-ups](../decisions/0018-hosting-of-ai-service-on-modal.md#follow-ups)).
+3. In the browser, the project lead drafts a GitHub Release whose tag is the release ID, on the commit that holds the manifest, attaches `<release_id>.tar.gz`, and publishes it. Immutable releases stay off until the system has taken shape, as the project lead decided on 2026-11-23, and [ADR-0018, Follow-ups](../decisions/0018-hosting-of-ai-service-on-modal.md#follow-ups) stays open until then.
 4. `download-release --release <id> --yes` downloads the archive from GitHub into the cache and runs every check. This proves the upload end to end, and it fills the cache for the Modal deploy.
 5. `check-pinned-release --remote` checks the pinned file against GitHub.
 6. Only then does the project lead commit and push the pinned file. Every `git pull` after it finds the archive on GitHub.
@@ -164,13 +181,15 @@ sequenceDiagram
         D-->>U: Status 4, before any request
     end
     D->>G: GET releases/tags/{release_id}, token only when set
-    alt Connection error, timeout, 5xx, 403 or 429 over the rate limit
+    alt Connection error, timeout, 5xx, 403 or 429 over the rate limit, or a 401 without a token
         G-->>D: Failure
         D-->>U: Status 5, nothing written
+    else 401 of a request that sent the token
+        D-->>U: Status 2, token_refused, nothing written
     else 404, not exactly one asset release_id.tar.gz uploaded, or another size than the pinned file
         D-->>U: Status 6, nothing written
     end
-    D->>D: Enough free space for the archive and the files?
+    D->>D: Enough free space, on the nearest folder that exists, for the archive and the files?
     alt Not enough space
         D-->>U: Status 2, nothing written
     end
@@ -178,6 +197,7 @@ sequenceDiagram
     alt Answer not y
         D-->>U: Status 4, nothing written
     end
+    D->>C: Create the cache folder if it does not exist
     D->>G: GET releases/assets/{id}, Accept: application/octet-stream
     alt 302 to an HTTPS host
         G-->>D: Location
@@ -188,7 +208,7 @@ sequenceDiagram
     end
     D->>C: Archive into cache/.release_id.tar.gz.partial-hex,<br/>stopped at the announced size
     D->>C: Unpack into the staging folder cache/.release_id.partial-hex
-    alt Member not in the manifest, missing, not a regular file, or larger than the manifest says; manifest differs from git; verify_release refuses
+    alt Member not in the manifest, missing, not a regular file, or of another size than the manifest states; manifest differs from git; verify_release refuses
         D->>C: Remove the archive and the staging folder
         D-->>U: Status 6, the reason, cache unchanged
     else Every check passes
@@ -203,7 +223,7 @@ sequenceDiagram
 1. `--release <id>` is checked against the pattern of `release_id` before it becomes part of any path. Without it, the release is the one in the pinned file.
 2. `<records>/<release_id>/release-manifest.json` must exist and must be a published manifest of that ID: `read_release_manifest` reads it, its `release_id` is the ID, and its `gate_run` is not null. This file is the source of trust ([ADR-0030, Download](../decisions/0030-release-archives-and-the-modal-function-of-ai-service.md#download), statement 3).
 
-**The cache.** The cache folder is `SUPPORTIQ_RELEASE_CACHE` when it is set. It must be an absolute path, or the command stops with status 2. Otherwise it is `$HOME/.cache/supportiq/releases`, without `XDG_CACHE_HOME`, so the bash of the local run computes the same path. A release is the folder `<cache>/<release_id>/`. Staging folders and partial archives are hidden entries in the same folder, so the final rename stays on one file system and is atomic.
+**The cache.** The cache folder is `SUPPORTIQ_RELEASE_CACHE` when it is set. It must be an absolute path, or the command stops with status 2. Otherwise it is `$HOME/.cache/supportiq/releases`, without `XDG_CACHE_HOME`, so the bash of the local run computes the same path; `HOME` must then be an absolute path. Both are checked only when a cache is needed, so `check-pinned-release` uses only the token and never checks the cache or `HOME`. A release is the folder `<cache>/<release_id>/`. Staging folders and partial archives are hidden entries in the same folder, so the final rename stays on one file system and is atomic. A declined run, or one that fails before the answer, creates nothing: the free space is measured on the nearest folder above the cache that exists, and the cache folder is created only after the answer. A failure after the answer leaves at most the empty cache folder and the parents that it needed.
 
 - **A cache hit.** `<cache>/<release_id>/` is a folder, not a link, its manifest is byte for byte the one in git, and `verify_release` passes. The command makes no request. Hashing the 403 MB of `release-2026-11-18-02` is the cost of a hit.
 - **A cached folder that fails.** It is never repaired, replaced, or deleted. The command exits with status 6, names the folder, and says that removing it makes the next run download the release again.
@@ -215,8 +235,8 @@ sequenceDiagram
 **HTTP.**
 
 - One httpx client with `trust_env=False`, so no proxy setting and no `.netrc` from the environment is used, and `follow_redirects=False`. A connection timeout of 10 s, a read timeout of 60 s for each read, and no total timeout, because 400 MB takes minutes on a slow line. Each is a named constant. No request is retried ([ERR-12](../rules/errors-and-reliability.md#retries)): the caller runs the command again.
-- Every request to `api.github.com` sends `Accept`, `X-GitHub-Api-Version: 2026-03-10` (the version of the releases page, read on 2026-11-23), and `User-Agent: supportiq-release`, which names no person or machine.
-- **Token.** When `SUPPORTIQ_RELEASE_TOKEN` is set and not empty, the two requests to `api.github.com` send `Authorization: Bearer <token>`. The value is held in a type whose `repr` hides it, is never part of a message, and is never written.
+- Every request sends `Accept`, `Accept-Encoding: identity`, `X-GitHub-Api-Version: 2026-03-10` (the version of the releases page, read on 2026-11-23), and `User-Agent: supportiq-release`, which names no person or machine. The body of the archive is counted as raw bytes, never decoded, so a content encoding cannot change its size.
+- **Token.** When `SUPPORTIQ_RELEASE_TOKEN` is set and not empty, the two requests to `api.github.com` send `Authorization: Bearer <token>`. The value is held in a type whose `repr` hides it, is never part of a message, and is never written. A `401` of a request that sent it is `token_refused`, status 2, with a message to fix or unset the setting; a `401` of any other request is an unexpected status, 5.
 - **Redirects.** The command follows at most 3 redirects of the asset request, only to `https://` URLs, and never sends `Authorization` after the first request, whatever the host. A redirect to `http://`, or a fourth one, is status 5.
 - **Sizes.** The archive must be exactly one uploaded asset named `<release_id>.tar.gz`, and GitHub's `size` must equal `archive_size_bytes` for the pinned release. The download stops at that size plus one byte, and a body of another length is status 6.
 
@@ -224,7 +244,7 @@ sequenceDiagram
 
 1. The allowed member names are exactly `release-manifest.json` and the `path` of each file of the manifest in git. These paths are relative, use `/`, and hold no `.` or `..` segment, which `read_release_manifest` checks. An absolute name, a name with `..`, or any other name is therefore refused by the name check alone.
 2. Each member must be a regular file. A folder entry, a symbolic link, a hard link, a device, or a FIFO is refused.
-3. Each name appears once, each member is at most as large as the manifest states, and the archive holds at most the expected number of members.
+3. Each name appears once, each member has exactly the size that the manifest states, and the archive holds at most the expected number of members.
 4. Each file is streamed into `staging/<name>`, with its parent folders created by the command.
 5. Every expected member must be present.
 6. `staging/release-manifest.json` must be byte for byte the manifest in git.
@@ -232,7 +252,7 @@ sequenceDiagram
 
 **Output.** On status 0, standard output holds exactly one line: the absolute path of `<cache>/<release_id>`. Every other message goes to standard error, names IDs, sizes, paths, and reasons, and never holds the token.
 
-**In a container.** The command runs as the caller's UID and GID, with the repository mounted read-only and the cache mounted writable at the same absolute path. `UV_PROJECT_ENVIRONMENT`, `UV_CACHE_DIR`, `UV_PYTHON_INSTALL_DIR`, and `HOME` point to writable folders, and it runs with `uv run --locked --project eval/release` at uv 0.11.11 and the Python of `.python-version`. The caller always sets `SUPPORTIQ_RELEASE_CACHE` to the absolute path of the cache on the host. `HOME` in the container points into the volume of uv, so the default would put the release into that volume instead of the host's cache, and the printed path would not exist on the host. The command writes only into the cache. Its container belongs to the local run ([local run design](local-run.md)).
+**In a container.** The command runs as the caller's UID and GID, with only the paths of the repository that the command reads mounted read-only, an empty tmpfs over `.local-run/`, and the cache mounted writable at the same absolute path. The [local run design](local-run.md#release) lists the paths; a run on a read-only copy of only those paths, with uv outside it, read and wrote nothing else (2026-11-23). `UV_PROJECT_ENVIRONMENT`, `UV_CACHE_DIR`, `UV_PYTHON_INSTALL_DIR`, and `HOME` point to writable folders, and it runs with `uv run --locked --project eval/release` at uv 0.11.11 and the Python of `.python-version`. The caller always sets `SUPPORTIQ_RELEASE_CACHE` to the absolute path of the cache on the host. `HOME` in the container points into the volume of uv, so the default would put the release into that volume instead of the host's cache, and the printed path would not exist on the host. The command writes only into the cache. Its container belongs to the local run ([local run design](local-run.md)).
 
 ### Exit statuses
 
@@ -240,10 +260,10 @@ sequenceDiagram
 |---|---|---|
 | 0 | Done: the release was in the cache and checked, or it was downloaded and checked; or the command succeeded | Every command |
 | 1 | A gate run that ran and failed | `run-gate` only, as now |
-| 2 | An input that cannot be used, a local file that cannot be written, too little free space, or an unexpected error, which prints only its type | Every command, as now |
+| 2 | An input that cannot be used, a local file that cannot be written, too little free space, a token that GitHub refuses (`token_refused`: a `401` of a request that sent it), or an unexpected error, which prints only its type | Every command, as now |
 | 3 | A quarantine that waits for an accepting issue | `ingest-kb` only, as now |
 | 4 | Declined: the answer was not `y`, or there is no terminal and no `--yes` | `download-release` |
-| 5 | Network: a connection error, a timeout, a `5xx`, a rate limit (`403` or `429`), or a redirect that is not allowed | `download-release`, `check-pinned-release --remote` |
+| 5 | Network: a connection error, a timeout, a `5xx`, a rate limit (`403` or `429`), another unexpected status such as a `401` without a token, or a redirect that is not allowed | `download-release`, `check-pinned-release --remote` |
 | 6 | Check failed: no published GitHub Release for the tag, not exactly one uploaded asset of that name, another size, a member that is not allowed or is missing, a manifest that differs from git, `verify_release` refuses, or a cached folder fails its check | `download-release`, `check-pinned-release` |
 
 A Ctrl+C ends the command as Python does on `SIGINT`, which the shell reports as 130, after the staging folder is removed. The [local run design](local-run.md) maps 5 to "network, try again or use `--without-ai`", 6 to a failed check that names the cache folder, and 2 to bad input.
@@ -255,7 +275,7 @@ A Ctrl+C ends the command as Python does on `SIGINT`, which the shell reports as
 - Without `--remote`, it reads only the repository. The pinned file has its format, and `eval/releases/<release_id>/release-manifest.json` exists and is a published manifest of that ID. Status 6 when not, without a request.
 - With `--remote`, it also runs the lookup of `download-release`: the tag has a published GitHub Release, the release has exactly one asset, `<release_id>.tar.gz`, in the state `uploaded`, and its size equals `archive_size_bytes`. It downloads nothing.
 
-One new step at the end of the job `ai-service-release-command`, which runs the checks of the release command until `eval.yml` exists ([ADR-0021, CI](../decisions/0021-repository-layout-and-ai-ml-migration.md#ci), statement 7). Issue [#34](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/34), which adds `eval.yml`, moves the step there. The job is a required check, so the step runs on every push and pull request and always reports ([repository checks, Workflow convention](../guides/repository-checks.md#workflow-convention), rule 3):
+One new step at the end of the job `ai-service-release-command`, which runs the checks of the release command until `eval.yml` exists ([ADR-0021, CI](../decisions/0021-repository-layout-and-ai-ml-migration.md#ci), statement 7). Issue [#34](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/34), which adds `eval.yml`, moves the step there. The job is a required check, so the step runs in every run of the workflow and always reports ([repository checks, Workflow convention](../guides/repository-checks.md#workflow-convention), rule 3):
 
 1. It takes the base commit: `github.event.pull_request.base.sha` for a pull request, `github.event.before` for a push. It fetches that commit with `git fetch --no-tags --depth=1 origin <sha>`, without credentials, because the repository is public.
 2. When the base is missing, all zeros, cannot be fetched, or holds another pinned file, it runs `check-pinned-release --remote`. Otherwise it runs `check-pinned-release` without `--remote`, and its log says that the pinned file did not change.
@@ -274,20 +294,22 @@ SECRET_KEYS = ("GEMINI_API_KEY", "SERVICE_TOKEN")
 RELEASE_IN_IMAGE = "/srv/release"
 SERVER_STARTUP_TIMEOUT_S = 300             # until the cold start is measured
 
+inputs = deploy_inputs()                   # the checks of a deploy, on the deploying machine
 image = (
     modal.Image.from_dockerfile(HERE / "Dockerfile", context_dir=HERE, ignore=outside_the_image)
-    .env(deploy_settings())                # RELEASE_MANIFEST_PATH, GEMINI_MODEL, the two prices
-    .add_local_dir(release_folder(), RELEASE_IN_IMAGE, copy=True)
+    .env(inputs.settings)                  # RELEASE_MANIFEST_PATH, GEMINI_MODEL, the two prices
+    .add_local_dir(inputs.release_folder, RELEASE_IN_IMAGE, copy=True)
 )
-app = modal.App(APP_NAME, image=image)
+app = modal.App(APP_NAME, image=image)     # after every function that the checks use
 
 @app.function(cpu=2.0, memory=2048, scaledown_window=1200, max_containers=1,
               secrets=[modal.Secret.from_name(SECRET_NAME, required_keys=list(SECRET_KEYS))])
 @modal.concurrent(max_inputs=10)
 @modal.web_server(8000, startup_timeout=SERVER_STARTUP_TIMEOUT_S)
 def ai_service() -> None:
-    start ["/opt/venv/bin/ai-service", "serve", "--host", "0.0.0.0", "--port", "8000"]
-    as the user and group "ai-service", without other groups, with the environment of the container
+    start_server: ["/opt/venv/bin/ai-service", "serve", "--host", "0.0.0.0", "--port", "8000"]
+    as the user and group "ai-service", without other groups, with the environment of the
+    container without the MODAL_* variables
     until SERVER_STARTUP_TIMEOUT_S has passed:
         if 127.0.0.1:8000 accepts a connection: return
         if the process has exited: raise ServerExitedError(its exit status)
@@ -301,19 +323,20 @@ def ai_service() -> None:
 
 **Checks before the deploy.** Module-level code also runs in the container, so the checks run only when `modal.is_local()` is True, on the deploying machine. Any failure raises before Modal receives anything, so `modal deploy` stops:
 
-1. `deploy/llm-prices.env` has its format ([The price file](#the-price-file)).
+1. `deploy/llm-prices.env` has its format, and the model and both prices pass the rules of their fields in `Settings` of `ai-service` ([The price file](#the-price-file)).
 2. `SUPPORTIQ_RELEASE_FOLDER` is set, is an absolute path, and is a folder, not a link.
 3. `verify_release(<folder>/release-manifest.json)` passes.
 4. That manifest is byte for byte `eval/releases/<release_id>/release-manifest.json` of the repository.
 
-In the container, `release_folder()` returns `/srv/release` and `deploy_settings()` reads nothing. The deploying machine has already built the image.
+`deploy_inputs()` runs these checks and returns the settings and the folder of the image. In the container it returns no setting and `/srv/release`, and reads nothing: the deploying machine has already built the image. The app is defined after every function that these checks use, and only the function of the app follows it; a test imports the module as the deploying machine does and proves that a missing release folder stops it.
 
 **Function.**
 
 - `@modal.web_server` runs `ai-service serve`, so Modal runs exactly the command that CI and the local run start, with its order of checks and its events: `settings.invalid`, `egress_allow_list.invalid`, and `release.invalid` stop it with status 2 ([ai-service README, Set up](../../ai-service/README.md#set-up)). The port opens only after the release is checked and both models are loaded, so `SERVER_STARTUP_TIMEOUT_S` covers the whole startup. Its first value, 300 s, equals the default `timeout` of a Modal function. The measured cold start sets the final value.
 - **Fail fast.** The function returns only when the port accepts a connection on `127.0.0.1:8000`. When `ai-service serve` exits first, as it does with status 2 on `settings.invalid` or `release.invalid`, the function raises `ServerExitedError` with that status at once. The container then fails within seconds, not after 300 s, so a bad release neither waits for the timeout nor spends credit on it. The function itself raises `ServerStartTimeoutError` after `SERVER_STARTUP_TIMEOUT_S`, at the same time as Modal's own timeout. The process, the port check, the clock, and the wait are passed in, so the tests run without a process, a socket, or a real wait ([TEST-14](../rules/testing.md#determinism-and-isolation)).
 - After the port is open, a server process that exits leaves the container without a server until Modal stops it. `backend` then gets errors or timeouts, and the part falls back to manual handling. The function does not watch the process after it returns, because Modal states nothing about a web server function that ends its container on purpose.
-- Modal runs the container as root, so the server process drops to the user `ai-service` (UID 10001) of the Dockerfile with `subprocess.Popen(user=…, group=…, extra_groups=[])` ([SEC-29](../rules/security-and-privacy.md#transport-and-runtime)). The release files are `0644` and their folders `0755` (Download, The cache), so that user reads them.
+- Modal runs the container as root, so `start_server` starts the server process as the user `ai-service` (UID 10001) of the Dockerfile with `subprocess.Popen(user=…, group=…, extra_groups=[])` ([SEC-29](../rules/security-and-privacy.md#transport-and-runtime)). The release files are `0644` and their folders `0755` (Download, The cache), so that user reads them.
+- The server gets the environment of the container, the two secrets included, without the variables that start with `MODAL_`, which `ai-service` never reads, and with `HOME` of its user. A credential of the Modal runtime therefore stays with the root process.
 - 2 CPU cores, 2 GiB, 20 minutes warm, up to 10 concurrent inputs, and 1 container, as [ADR-0030](../decisions/0030-release-archives-and-the-modal-function-of-ai-service.md#the-modal-function) states with its reasons. `min_containers` is not set, so the function scales to zero. The region is not pinned (ADR-0018, Platform and scaling, statement 1).
 - No proxy auth: the endpoint is public, `/health/live` and `/health/ready` stay open, and every other route checks the service token in code ([ADR-0018, Access](../decisions/0018-hosting-of-ai-service-on-modal.md#access)).
 - Egress: `ai-service` sends text only to the Gemini host through `AllowListedTransport` ([ADR-0018, Egress](../decisions/0018-hosting-of-ai-service-on-modal.md#egress)). The Modal runtime in the container talks to Modal, the host that ADR-0018 (Trust) already trusts.
@@ -346,7 +369,7 @@ SUPPORTIQ_RELEASE_FOLDER="$release_folder" uv run --locked --project ai-service 
 
 ### The price file
 
-`deploy/llm-prices.env` is committed deployment configuration ([ARCH-42](../rules/architecture.md#component-boundaries)). The Modal app reads it when it deploys, and the local run when it starts. `ai-service` itself never reads it: each value reaches it as a setting. It is an env file that bash and `docker compose --env-file` read: lines that start with `#`, then exactly these five lines, each once, as `NAME=value` without quotes or spaces:
+`deploy/llm-prices.env` is committed deployment configuration ([ARCH-42](../rules/architecture.md#component-boundaries)). The Modal app reads it when it deploys, and the local run when it starts. `ai-service` itself never reads it: each value reaches it as a setting. It is an env file that bash and `docker compose --env-file` read, in ASCII with LF line ends: comment lines that start with `#` and empty lines, anywhere, and exactly these five lines, each once, in any order, as `NAME=value` without quotes, spaces, or `$`:
 
 | Name | Value for the first release |
 |---|---|
@@ -359,7 +382,9 @@ SUPPORTIQ_RELEASE_FOLDER="$release_folder" uv run --locked --project ai-service 
 - The prices are those of the Standard paid tier, read on 2026-11-23. The implementation reads the page again on its day and records that date. The comment lines state the tier, that output includes thinking tokens, and that a cost is an estimate at list prices, not an invoiced charge, as the price record of `main` did (`artifacts/evaluation/pricing/gemini-3.1-flash-lite-20261112.json` at `f6c1473`). Nothing reads that record at runtime ([ADR-0028](../decisions/0028-repository-layout-for-the-pull-request-into-main.md)).
 - The file names the model, so the model and its prices change together. The local run takes `GEMINI_MODEL` from it as well ([local run design](local-run.md)).
 - Prices are no secret, so they are not part of the Modal Secret.
-- The parser of the Modal app refuses: a missing, unknown, or repeated name; a value with a space or a quote; a model outside `^gemini-[a-z0-9._-]+$`; a price that is not a whole number from 0; two prices that add up to more than 10,000,000, the cost cap that `ai-service` checks; a source that is not `https://`; or a date that is not a real date.
+- The parser of the Modal app refuses: a CR, which the bash of the local run would read as part of a value; a missing, unknown, or repeated name; a value with a space, a quote, or a `$`; a price that is not a whole number from 0; a source that is not `https://`; or a date that is not a real date.
+- `.gitattributes` sets `text eol=lf` for the file, so every checkout keeps its LF line ends, whatever `core.autocrlf` says.
+- On the deploying machine, the model and each price must also pass the rules of their fields in `Settings` of `ai-service`, read from the fields and never copied ([CODE-48](../rules/code.md#constants-and-configuration)), such as the pattern `^gemini-[a-z0-9._-]+$` of the model. The cap of 10,000,000 on the sum of both prices is a rule across fields, which `ai-service` checks at startup; a test checks the committed file with the whole `Settings`.
 
 ### Data and contracts
 
@@ -382,6 +407,9 @@ SUPPORTIQ_RELEASE_FOLDER="$release_folder" uv run --locked --project ai-service 
 | Connection error, timeout, `500`, `403` or `429` with `x-ratelimit-remaining: 0` | Status 5, nothing in the cache | Unit tests with a fake transport |
 | `404` for the tag, no asset, two assets, an asset in the state `open`, or another size than the pinned file | Status 6 before the download | Unit tests |
 | `302` to another host | The redirected request has no `Authorization` | Unit test that inspects every request of the fake transport |
+| `401` of a request that sent the token | Status 2, `token_refused`, with a message to fix or unset `SUPPORTIQ_RELEASE_TOKEN` | Unit tests of the adapter and of the command |
+| `401` of an anonymous request, or after a redirect | Status 5, an unexpected status: it does not blame a token | Unit tests |
+| A body with a content encoding | Written and counted as the raw bytes, never decoded | Unit test with a gzip-encoded body |
 | `302` to `http://`, or a fourth redirect | Status 5 | Unit tests |
 | No token | No request has `Authorization` | Unit test |
 | A token is set | The token appears in no output, message, log record, or `repr` of any error, in every failure path above | Unit tests that run each path with a random token and search every output |
@@ -400,7 +428,7 @@ SUPPORTIQ_RELEASE_FOLDER="$release_folder" uv run --locked --project ai-service 
 | The pinned file with CRLF, a third line, a comment, size 0, a leading zero, or 2 GiB | Refused by every reader | Unit tests |
 | The pinned file names a release without a manifest in git | `check-pinned-release` status 6 | Unit test |
 | `--remote`: no release, no asset, an extra asset, or another size | Status 6 | Unit tests |
-| `deploy/llm-prices.env` breaks its format | `modal deploy` stops before Modal receives anything | Unit tests of the parser |
+| `deploy/llm-prices.env` breaks its format, holds a CR, or names a model or a price that a field of `Settings` of `ai-service` refuses | `modal deploy` stops before Modal receives anything | Unit tests of the parser and of the check with `Settings` |
 | `SUPPORTIQ_RELEASE_FOLDER` missing, relative, a link, refused by `verify_release`, or with a manifest that differs from git | `modal deploy` stops before Modal receives anything | Unit tests |
 | The Modal app sets a secret | Never: no value, default, or stand-in for `GEMINI_API_KEY` or `SERVICE_TOKEN` | Unit test ([Testing and evaluation](#testing-and-evaluation)) |
 | The Modal Secret is missing or lacks a key | `required_keys` makes Modal refuse it; if Modal checks only at start, `ai-service` stops with `settings.invalid`. It never runs with another key | By hand at the first deploy, recorded in `deploy/README.md` |
@@ -446,7 +474,7 @@ The change touches no guardrail of `ai-service` or `backend`. Staff still approv
   - the fail-fast wait: a process that exits before the port opens, a port that opens, and the timeout, each with a fake process, port check, and clock;
   - every check before the deploy, with a fake of `modal.is_local`.
 
-  They import `modal` and need no network: `Secret.from_name` is lazy. CI installs the `deploy` group in `ai-service-checks`, `ai-service-tests`, and `ai-service-tests-torch`, so no test skips there. Without the group, these tests skip with the reason "the deploy group is not installed", as the tests of torch do.
+  The checks of the source, the scan included, are in `test_modal_app_secrets.py`, which reads `modal_app.py` without importing it, so it runs without the `deploy` group. The other tests, in `test_modal_app.py`, import `modal` and need no network: `Secret.from_name` is lazy. CI installs the `deploy` group in `ai-service-checks`, `ai-service-tests`, and `ai-service-tests-torch`, so no test skips there. Without the group, `test_modal_app.py` skips with the reason "the deploy group is not installed", as the tests of torch do.
 - **CI:**
   - the step of the pinned file ([The CI check of the pinned file](#the-ci-check-of-the-pinned-file));
   - in `ai-service-image`, a run of the built image that fails when `import modal` works;
@@ -459,6 +487,9 @@ The change touches no guardrail of `ai-service` or `backend`. Staff still approv
   4. `modal deploy` with a relative `SUPPORTIQ_RELEASE_FOLDER`, which deploys nothing. Then `modal deploy` without the Secret, recording what Modal does: refuse the deploy, or fail the container with `settings.invalid` in its logs. Either way, `ai-service` never runs with another key.
   5. The tier of the Gemini key's project is a paid tier, checked by eye in AI Studio (The Modal app, Deploy on the project lead's machine, step 3), and recorded as "paid tier checked".
   6. `modal deploy` with the Secret and the downloaded folder. Then `GET /health/live` and `GET /health/ready` answer `204` without a token, and `POST /v1/analyses` without a token answers `401` ([ADR-0018, Validation](../decisions/0018-hosting-of-ai-service-on-modal.md#validation)).
+
+  Before the PR, the path from `backend` to `ai-service` is proven by the local run with AI on the same release ([local run design](local-run.md)).
+- **By hand, after the merge**, with the first run of the `deploy` workflow on `main`, because `deploy.yml` runs only by hand and its job `deploy-migrate` stops on any other ref, so no `backend` with this code reaches Render before the merge:
   7. `backend` on Render with `AI_SERVICE_BASE_URL` and `AI_SERVICE_TOKEN`: a ticket of a demo customer gets an analysis and a routing recommendation in the console. With `release-2026-11-18-02` it abstains or escalates without an LLM call.
 - **Measurements of ADR-0018, Validation**, in a table of `deploy/README.md`, empty until measured:
   - the cold start: the time of the first `GET /health/ready` after more than 20 minutes without a request, measured with `curl` from the deploying machine, and `duration_ms` of `model.loaded` in the Modal logs;
@@ -492,8 +523,9 @@ The change touches no guardrail of `ai-service` or `backend`. Staff still approv
 |---|---|
 | [ADR-0018](../decisions/0018-hosting-of-ai-service-on-modal.md) | Not edited. [ADR-0030](../decisions/0030-release-archives-and-the-modal-function-of-ai-service.md#passages-of-adr-0018-that-this-adr-replaces) names the replaced passages, and [decisions README](../decisions/README.md) gets its row now and its note when it is accepted |
 | [ARCH-42](../rules/architecture.md#component-boundaries) | One more part that lives with its component: the Modal app of `ai-service`, next to its Dockerfile ([RULE-06](../rules/README.md#changing-a-rule), through ADR-0030) |
-| [Release command README](../../eval/release/README.md) | The three subcommands, the archive, the pinned file, the exit statuses 4 to 6, the publish order in Publish, the layout, and Known limits |
-| [deploy README](../../deploy/README.md) | A section Modal: setup, the spend limit, the Gemini key of a project with billing and its check by eye, the Secret in the dashboard or with the command line, the download, the deploy, the Render settings, the publish order, and the table of measurements. "Runs with the real AI" no longer waits for #41 |
+| [Release command README](../../eval/release/README.md) | The three subcommands, the archive, the pinned file, the exit statuses 4 to 6, the settings of the download, the publish order in Publish, the layout, the dependencies `pydantic` and `pydantic-settings`, and Known limits |
+| [deploy README](../../deploy/README.md) | A section Modal: setup, the spend limit, the Gemini key of a project with billing and its check by eye, the Secret in the dashboard or with the command line, the download, the deploy, the Render settings, the publish order, the runs by hand before and after the merge, and the table of measurements. "Runs with the real AI" no longer waits for #41 |
+| [Glossary](../glossary.md) | Two terms: Pinned file and Release archive |
 | [ai-service README](../../ai-service/README.md) | The group `deploy` in Dependencies with each new package and its license; `modal_app.py` in Layout; Known limits no longer says that no Modal app exists |
 | [README.md](../../README.md#project-status) | Project status: the Modal deploy and the release download |
 | [Repository checks](../guides/repository-checks.md#what-runs-where) | The step of the pinned file in What runs where, and in The first CI run |

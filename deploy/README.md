@@ -8,16 +8,17 @@ This guide holds no real value: no URL, project reference, token, or password. E
 
 1. **Supabase.** Create one free project in `ap-southeast-1` ([ADR-0016, PostgreSQL on Supabase](../docs/decisions/0016-hosting-on-free-tiers.md#postgresql-on-supabase)). Turn on "Enforce SSL on incoming connections" ([TLS to PostgreSQL](#tls-to-postgresql)). Run the [PostgreSQL checks](#postgresql-checks) and record their results.
 2. **The app role.** In `backend/.env` on your machine, set `DATABASE_URL_OWNER` and `DATABASE_URL_APP` to the session pooler URLs of the two roles, without a query, and set `DATABASE_TLS` to `verify-full`, because `.env.example` sets `disable` for the local cluster ([TLS to PostgreSQL](#tls-to-postgresql)). Run `uv run backend create-app-role` in `backend/` ([backend README, Commands](../backend/README.md#commands)).
-3. **Render.** Create one free web service in Singapore, built from `backend/Dockerfile`. Set `PORT` to `8000`, turn auto-deploy off, and create a deploy hook ([ADR-0016, `backend` on Render](../docs/decisions/0016-hosting-on-free-tiers.md#backend-on-render)). Enter the [Render settings](#render-settings).
-4. **GitHub.** Add two repository secrets, which only the deploy workflow reads ([ADR-0016, Migrations and one-off commands](../docs/decisions/0016-hosting-on-free-tiers.md#migrations-and-one-off-commands), item 4):
+3. **Modal.** Set up the workspace and deploy `ai-service` ([Modal](#modal)). Keep the URL that `modal deploy` prints and the service token for the next step.
+4. **Render.** Create one free web service in Singapore, built from `backend/Dockerfile`. Set `PORT` to `8000`, turn auto-deploy off, and create a deploy hook ([ADR-0016, `backend` on Render](../docs/decisions/0016-hosting-on-free-tiers.md#backend-on-render)). Enter the [Render settings](#render-settings).
+5. **GitHub.** Add two repository secrets, which only the deploy workflow reads ([ADR-0016, Migrations and one-off commands](../docs/decisions/0016-hosting-on-free-tiers.md#migrations-and-one-off-commands), item 4):
    - `DEPLOY_DATABASE_URL_OWNER`: the session pooler URL of `supportiq_owner.<project-ref>`, port 5432, with the scheme `postgresql+asyncpg`, without a query ([TLS to PostgreSQL](#tls-to-postgresql));
    - `RENDER_DEPLOY_HOOK_URL`: the deploy hook URL as Render shows it, with its `key`.
-5. **First deploy.** On GitHub, open Actions, select the workflow `deploy`, and run it on the branch `main`. It runs the jobs of `backend.yml` again, then `backend migrate` as the owner role, then calls the deploy hook with `ref` set to that commit. A failed job or a failed migration deploys nothing, and a run on another branch stops before the migration ([repository checks, What runs where](../docs/guides/repository-checks.md#what-runs-where)).
-6. **Seed.** In `backend/.env` on your machine, set the four `SEED_PASSWORD_*` settings. Run `uv run backend seed` in `backend/`.
-7. **Cloudflare Pages.** Create one Pages project and enter the [Pages settings](#cloudflare-pages-settings) ([ADR-0016, `frontend` and the ingress on Cloudflare Pages](../docs/decisions/0016-hosting-on-free-tiers.md#frontend-and-the-ingress-on-cloudflare-pages)).
-8. **Grafana Cloud.** Create one free stack with 2 named Editors and 1 shared Viewer. Keep the Viewer's password in the team's password manager ([ADR-0016, Telemetry on Grafana Cloud](../docs/decisions/0016-hosting-on-free-tiers.md#telemetry-on-grafana-cloud)).
-9. **UptimeRobot.** Create one monitor that sends `GET /health/ready` straight to the Render URL every 5 minutes, not through the Pages Function ([ADR-0016, `backend` on Render](../docs/decisions/0016-hosting-on-free-tiers.md#backend-on-render), item 5).
-10. **Checks.** Work through the [first-deploy checklist](#first-deploy-checklist).
+6. **First deploy.** On GitHub, open Actions, select the workflow `deploy`, and run it on the branch `main`. It runs the jobs of `backend.yml` again, then `backend migrate` as the owner role, then calls the deploy hook with `ref` set to that commit. A failed job or a failed migration deploys nothing, and a run on another branch stops before the migration ([repository checks, What runs where](../docs/guides/repository-checks.md#what-runs-where)).
+7. **Seed.** In `backend/.env` on your machine, set the four `SEED_PASSWORD_*` settings. Run `uv run backend seed` in `backend/`.
+8. **Cloudflare Pages.** Create one Pages project and enter the [Pages settings](#cloudflare-pages-settings) ([ADR-0016, `frontend` and the ingress on Cloudflare Pages](../docs/decisions/0016-hosting-on-free-tiers.md#frontend-and-the-ingress-on-cloudflare-pages)).
+9. **Grafana Cloud.** Create one free stack with 2 named Editors and 1 shared Viewer. Keep the Viewer's password in the team's password manager ([ADR-0016, Telemetry on Grafana Cloud](../docs/decisions/0016-hosting-on-free-tiers.md#telemetry-on-grafana-cloud)).
+10. **UptimeRobot.** Create one monitor that sends `GET /health/ready` straight to the Render URL every 5 minutes, not through the Pages Function ([ADR-0016, `backend` on Render](../docs/decisions/0016-hosting-on-free-tiers.md#backend-on-render), item 5). No monitor calls `ai-service` on Modal: it scales to zero ([Modal](#modal)).
+11. **Checks.** Work through the [first-deploy checklist](#first-deploy-checklist).
 
 ## TLS to PostgreSQL
 
@@ -37,7 +38,8 @@ Every connection to Supabase leaves the host that opens it, so it uses TLS ([SEC
 | `DATABASE_URL_APP` | The session pooler URL of `supportiq_app.<project-ref>`, port 5432, without a query ([ADR-0016, PostgreSQL on Supabase](../docs/decisions/0016-hosting-on-free-tiers.md#postgresql-on-supabase), item 1; [TLS to PostgreSQL](#tls-to-postgresql)) |
 | `ALLOWED_ORIGINS` | Only the production origin of the Pages project ([ADR-0016, `frontend` and the ingress on Cloudflare Pages](../docs/decisions/0016-hosting-on-free-tiers.md#frontend-and-the-ingress-on-cloudflare-pages), item 9) |
 | `BACKEND_BUILD_VERSION` | The commit that Render deploys ([Open questions](#open-questions)) |
-| `AI_SERVICE_BASE_URL`, `AI_SERVICE_TOKEN` | The values of the `ai-service` deployment on Modal ([ADR-0018](../docs/decisions/0018-hosting-of-ai-service-on-modal.md)), which [#41](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/41) adds |
+| `AI_SERVICE_BASE_URL` | The URL of the web function that `modal deploy` prints ([Modal, Each deploy](#each-deploy)) |
+| `AI_SERVICE_TOKEN` | The `SERVICE_TOKEN` of the Modal Secret `supportiq-ai-service` ([Modal, Once](#once)) |
 | `TRACE_EXPORTER` | `none`, until `backend` has a setting for the OTLP authorization header ([Open questions](#open-questions)) |
 
 Never set `DATABASE_URL_OWNER` on Render ([ADR-0016, `backend` on Render](../docs/decisions/0016-hosting-on-free-tiers.md#backend-on-render), item 3).
@@ -58,6 +60,133 @@ The Dockerfile installs with `uv sync --locked`, so the Render build uses `uv.lo
 | `VITE_BACKEND_WAKE_ORIGIN` | The Render origin ([backend wake-up design](../docs/design/backend-wake-up.md#rules)) |
 | `VITE_DEV_MODE` | Unset, so dev mode is off in the build ([console UI design](../docs/design/console-ui.md#frontend-settings)) |
 | The `backend` URL of the Pages Function | `SUPPORTIQ_BACKEND_URL`, set to the Render origin ([frontend README, Deploy on Cloudflare Pages](../frontend/README.md#deploy-on-cloudflare-pages)). The Function is [`frontend/functions/`](../frontend/functions/) with its code in [`frontend/ingress/`](../frontend/ingress/), and its routes are [`frontend/public/_routes.json`](../frontend/public/_routes.json) |
+
+## Modal
+
+`ai-service` runs on Modal Starter as the app `supportiq-ai-service`, defined in [`ai-service/modal_app.py`](../ai-service/modal_app.py) ([ADR-0018](../docs/decisions/0018-hosting-of-ai-service-on-modal.md), [ADR-0030, The Modal function](../docs/decisions/0030-release-archives-and-the-modal-function-of-ai-service.md#the-modal-function)). It serves one published release, which the project lead downloads with the release command and adds to the image. The function has 2 CPU cores and 2 GiB of memory, takes up to 10 concurrent inputs on at most 1 container, stays warm for 20 minutes after the last request, and scales to zero. The two health checks are open; every other route checks the service token. The steps and their reasons are in the [release download and Modal deploy design](../docs/design/release-download-and-modal-deploy.md#the-modal-app).
+
+The app `supportiq-ai` of the trial stays until the whole flow works on `supportiq-ai-service`, and is then stopped ([ADR-0021, Merge procedure](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#merge-procedure), statement 10).
+
+### Once
+
+1. **Modal command line.** In `ai-service/`, install the `deploy` group and sign in. The sign-in opens the browser and keeps the Modal token outside the repository.
+
+   ```bash
+   uv sync --locked --group deploy
+   ```
+
+   ```bash
+   uv run --locked --group deploy modal setup
+   ```
+
+2. **Spend limit.** On the Usage & Billing page of the Modal workspace, set a spend limit before the first deploy. The project lead chooses the amount. When the limit is reached, Modal stops the function, and `backend` falls back to manual handling ([ADR-0030, The Modal function](../docs/decisions/0030-release-archives-and-the-modal-function-of-ai-service.md#the-modal-function), statement 8; [Modal: Budgets](https://modal.com/docs/guide/budgets)). Anyone can keep a container warm through the open health checks, and one container kept warm all month costs about $79, beyond the $30 credit (statement 7).
+3. **Gemini API key.** Create a new key for this deployment only ([SEC-13](../docs/rules/security-and-privacy.md#secrets)), in a Google Cloud project with an active billing account. Only then is its use a Paid Service, whose prompts and responses Google does not use to improve its products ([SEC-07](../docs/rules/security-and-privacy.md#data-sent-to-llm-providers); ADR-0030, statement 9). No command tells a paid key from a free one, so check it by eye when you create it ([AI Studio: Billing](https://aistudio.google.com/docs/billing), read on 2026-11-23):
+   - in AI Studio, the Projects page shows a paid tier (Tier 1, Tier 2, or Tier 3), not Free, in the column "Billing Tier" for the key's project; or the API keys page shows "Paid" under "Plan";
+   - a project on the Free tier gets billing through the button "Set up billing" in that column;
+   - record "paid tier checked" with the date in [Runs by hand](#runs-by-hand), step 5. Never record the key or a part of it.
+4. **Modal Secret.** Create the Secret `supportiq-ai-service` with the two keys `GEMINI_API_KEY` and `SERVICE_TOKEN`. The app reads only this Secret and requires both keys; it never sets a value, a default, or a stand-in. Choose one of two ways. Neither writes a value to a file or to the shell history.
+   - **In the Modal dashboard** ([Modal: Secrets](https://modal.com/docs/guide/secrets)). Paste each value into its field. Make the service token with `openssl rand -hex 32 | pbcopy`, which copies it without showing it on macOS; on Linux, pipe it into `xclip -selection clipboard` instead.
+   - **With the command line**, in `ai-service/`. The shell expands both values, so the history holds only their names. While `modal secret create` runs, its arguments hold the values, so `ps` on that machine shows them for that time.
+
+     ```bash
+     read -rs GEMINI_API_KEY
+     ```
+
+     ```bash
+     SERVICE_TOKEN="$(openssl rand -hex 32)"
+     ```
+
+     ```bash
+     uv run --locked --group deploy modal secret create supportiq-ai-service GEMINI_API_KEY="$GEMINI_API_KEY" SERVICE_TOKEN="$SERVICE_TOKEN"
+     ```
+
+     Copy the service token for Render with `printf '%s' "$SERVICE_TOKEN" | pbcopy` on macOS, or into `xclip -selection clipboard` on Linux, then:
+
+     ```bash
+     unset GEMINI_API_KEY SERVICE_TOKEN
+     ```
+
+5. **Render.** Paste the same service token into the Render setting `AI_SERVICE_TOKEN` ([Render settings](#render-settings)). On the first setup, the Render service does not exist yet: keep the token for [Setup order](#setup-order), step 4.
+
+Never put the Gemini key or the service token into a `.env` file for Modal, a file of the repository, or a message. A Secret from a `.env` file (`--from-dotenv`) is not used.
+
+### Each deploy
+
+Run both commands from the repository root. The first downloads the pinned release into the cache, or finds it there, and prints its folder ([release command README, Release download](../eval/release/README.md#release-download)). It asks before it downloads; `--yes` answers for it.
+
+```bash
+release_folder="$(uv run --locked --project eval/release supportiq-release download-release)"
+```
+
+```bash
+SUPPORTIQ_RELEASE_FOLDER="$release_folder" uv run --locked --project ai-service --group deploy modal deploy ai-service/modal_app.py
+```
+
+- Before Modal receives anything, `modal_app.py` checks on your machine that `deploy/llm-prices.env` has its format and that its model and prices pass the rules of `Settings` of `ai-service`, that `SUPPORTIQ_RELEASE_FOLDER` is an absolute path of a folder, not a link, that `verify_release` passes on it, and that its manifest is byte for byte the one in `eval/releases/`. Any failure stops `modal deploy`. A failed download leaves `release_folder` empty, so the deploy stops too.
+- Only `pyproject.toml`, `uv.lock`, `README.md`, and `app/` of `ai-service/` go into the build context, so a local `ai-service/.env` never reaches Modal.
+- `modal deploy` prints the URL of the web function. Enter it in the Render setting `AI_SERVICE_BASE_URL` ([Render settings](#render-settings)). On the first setup, keep it for [Setup order](#setup-order), step 4.
+- To deploy another release, pass `--release <release_id>` to `download-release`. To change the model or its prices, change [`llm-prices.env`](llm-prices.env) with its source and the date the page was read, commit it, and deploy again. The local run reads the same file.
+
+### Publish a release
+
+A release reaches Modal and the local run only through its release archive on GitHub. Publish it in the order of the [release command README, Publish](../eval/release/README.md#publish): commit the manifest, `pack-release --pin`, upload the archive in the browser, `download-release --release <release_id> --yes`, `check-pinned-release --remote`, and only then commit and push the pinned file. Immutable releases were off when `release-2026-11-18-02` was uploaded (see the table below). They stay off by the project lead's decision of 2026-11-23, until the system has taken shape, and [ADR-0018, Follow-ups](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#follow-ups) stays open until then. An uploaded archive is never replaced or deleted.
+
+The publish of `release-2026-11-18-02`, contract 1.0.0, on 2026-11-23. The reviewer checked each value against the output of the runs and against the public GitHub API, read without a token. An exit status that nobody printed is not recorded:
+
+| Fact | Value |
+|---|---|
+| `pack-release`, run twice into two new folders | Each run left an archive of 324312182 bytes, and the run with `--pin` wrote the pinned file |
+| SHA-256 of the archive | `42803346175676457b49e7fb0dbe13c9f4206ca78d60877b3898e5791bcf5823`, the same for both runs, so its bytes repeat. GitHub reports the same digest for the uploaded asset |
+| `archive_size_bytes` | `324312182`. The plan that `download-release` prints shows 310 MiB, and 385 MiB unpacked |
+| Pinned file | `release_id=release-2026-11-18-02` and `archive_size_bytes=324312182` |
+| GitHub Release | Tag `release-2026-11-18-02`, published, not a draft or a prerelease, uploaded in the browser. Its only asset is `release-2026-11-18-02.tar.gz`, in the state `uploaded`, of 324312182 bytes |
+| Tag | `release-2026-11-18-02` points to the commit `425981f`, which holds the published manifest byte for byte |
+| Immutable release | `immutable: false`: the setting was off at the upload, so GitHub does not stop a change of the asset. The manifest in git still refuses a changed byte of any file of the release: `download-release` exits with status 6 |
+| `download-release`, anonymous, into an empty cache | Left the release in the download folder, with no hidden partial entry |
+| Download folder | `$HOME/.cache/supportiq/releases/release-2026-11-18-02`: 18 files with mode `0644`, folders with mode `0755`, no entry of another type, and the same files as the packed release folder (`diff -rq`) |
+| `download-release` again | A cache hit: "Release release-2026-11-18-02 is in the cache and checked.", the folder on standard output, exit status 0 |
+| `check-pinned-release --remote`, anonymous | `pinned release_id=release-2026-11-18-02 archive_size_bytes=324312182 github=checked`, exit status 0 |
+
+The download folder is recorded with the home folder written as `$HOME`.
+
+### Runs by hand
+
+These runs are recorded here without any value of a secret ([release download and Modal deploy design, Testing and evaluation](../docs/design/release-download-and-modal-deploy.md#testing-and-evaluation)).
+
+Before the implementation PR of [#41](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/41) is ready:
+
+| Step | Run | Date | Result |
+|---|---|---|---|
+| 1 | `pack-release --pin` of the published folder of `release-2026-11-18-02`, twice, with the same SHA-256 of the archive both times ([Publish a release](#publish-a-release)) | 2026-11-23 | Passed: the same SHA-256 both times |
+| 2 | The upload, then `download-release --release release-2026-11-18-02 --yes` into an empty cache, once anonymously and once with a token, and a second run that is a cache hit | 2026-11-23 | The upload, the anonymous download, and the cache hit passed. The download with a token is not run yet |
+| 3 | `check-pinned-release --remote` | 2026-11-23 | Passed, exit status 0 |
+| 4 | `modal deploy` with a relative `SUPPORTIQ_RELEASE_FOLDER` deploys nothing. Then `modal deploy` without the Secret: record what Modal does, refuse the deploy or fail the container with `settings.invalid` in its logs, which also answers when Modal checks the required keys | | Not run yet |
+| 5 | The tier of the Gemini key's project is a paid tier, checked by eye in AI Studio ([Once](#once), step 3): "paid tier checked" | | Not run yet |
+| 6 | `modal deploy` with the Secret and the downloaded folder: Modal builds `ai-service/Dockerfile` and runs its runtime next to `/opt/venv`; `GET /health/live` and `GET /health/ready` answer `204` without a token, and `POST /v1/analyses` without a token answers `401` ([ADR-0018, Validation](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#validation)) | | Not run yet |
+
+Before the PR, the path from `backend` to `ai-service` is proven by the local run with AI on the same release ([local run design](../docs/design/local-run.md)).
+
+After the merge, with the first run of the workflow `deploy` on `main`. `deploy.yml` runs only by hand, and its job `deploy-migrate` stops on any other ref, so no `backend` with this code reaches Render before the merge:
+
+| Step | Run | Date | Result |
+|---|---|---|---|
+| 7 | `backend` on Render with `AI_SERVICE_BASE_URL` and `AI_SERVICE_TOKEN`: a ticket of a demo customer gets an analysis and a routing recommendation in the console. With `release-2026-11-18-02` it abstains or escalates without an LLM call | | Not run yet |
+
+### Measurements
+
+The measurements of [ADR-0018, Validation](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#validation). No number is recorded before it is measured.
+
+| Measurement | How | Date | `release_id` | Value |
+|---|---|---|---|---|
+| Cold start | The time of the first `GET /health/ready` after more than 20 minutes without a request, with `curl` from the deploying machine, and `duration_ms` of `model.loaded` in the Modal logs | | | Not measured yet |
+| Latency of `createAnalysis` | `analysis_ms` of the responses and the duration of `request.completed` in the Modal logs. This is not the path from Render ([Open questions](#open-questions)) | | | Not measured yet |
+| Memory in use | As Modal reports it for the container | | | Not measured yet |
+
+The latency and the cost of a draft wait for the first release that serves a KB document, because `release-2026-11-18-02` makes no LLM call.
+
+### Roll back on Modal
+
+Download the previous release with `download-release --release <release_id>` and deploy it again ([Each deploy](#each-deploy)). Its archive is still on GitHub, because no archive is ever deleted. To stop the AI part instead, stop the app `supportiq-ai-service` in the Modal dashboard: `backend` falls back to manual handling. To make the local run take the previous release, revert the commit of the pinned file.
 
 ## PostgreSQL checks
 
@@ -110,7 +239,7 @@ These rows are covered by the tests below (ADR-0021, Removal of the application 
 
 ### Runs with the real AI
 
-The rows wait for [#41](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/41): the repository has neither the Modal app of `ai-service` nor the download script of [ADR-0018, Deploy](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#deploy), so no release is deployed yet. Each row below is run by hand against the Modal deployment of [ADR-0018](../docs/decisions/0018-hosting-of-ai-service-on-modal.md), because CI never calls an LLM (ADR-0021, Removal of the application of `main`, statement 1). A row that needs a draft with a policy citation runs only after a new KB version is admitted (statement 2).
+Each row below is run by hand against the Modal deployment ([Modal](#modal)), because CI never calls an LLM (ADR-0021, Removal of the application of `main`, statement 1). The rows run once `backend` on Render calls that deployment, after the merge ([Runs by hand](#runs-by-hand), step 7). A row that needs a draft with a policy citation runs only after a new KB version is admitted (statement 2).
 
 | Row of the checklist | Date | Commit | `release_id` | Steps | Result |
 |---|---|---|---|---|---|
@@ -119,11 +248,11 @@ The rows wait for [#41](https://github.com/ml-system-design-nhom-5/SupportIQ/iss
 
 ## Every month
 
-Check that the Render free hours, the Functions requests, the database size, and the Grafana Cloud usage stay within the free limits ([ADR-0016, Validation](../docs/decisions/0016-hosting-on-free-tiers.md#validation)).
+Check that the Render free hours, the Functions requests, the database size, and the Grafana Cloud usage stay within the free limits ([ADR-0016, Validation](../docs/decisions/0016-hosting-on-free-tiers.md#validation)). Check that the Modal usage stays within the $30 credit and the spend limit, and the Gemini usage of the billing project ([Modal](#modal)).
 
 ## Roll back
 
-Call the deploy hook with `ref` set to the previous commit. Every migration keeps the previous release working, so the database stays as it is ([ADR-0016, Migrations and one-off commands](../docs/decisions/0016-hosting-on-free-tiers.md#migrations-and-one-off-commands), item 5).
+Call the deploy hook with `ref` set to the previous commit. Every migration keeps the previous release working, so the database stays as it is ([ADR-0016, Migrations and one-off commands](../docs/decisions/0016-hosting-on-free-tiers.md#migrations-and-one-off-commands), item 5). `ai-service` on Modal rolls back on its own ([Roll back on Modal](#roll-back-on-modal)).
 
 ## Open questions
 
@@ -131,3 +260,6 @@ Call the deploy hook with `ref` set to the previous commit. Every migration keep
 - Which variable of Render fills `BACKEND_BUILD_VERSION` with the deployed commit.
 - Whether `backend` accepts only requests that come through the Function, and how the per-client rate limit is enforced ([ADR-0016, Open questions](../docs/decisions/0016-hosting-on-free-tiers.md#open-questions)).
 - Whether the free tier of Grafana Cloud offers the Singapore region at sign-up ([ADR-0016, Platforms](../docs/decisions/0016-hosting-on-free-tiers.md#platforms)).
+- Two facts of the Modal build that only the first `modal deploy` proves: that Modal builds the two-stage `ai-service/Dockerfile`, and that its runtime works next to `/opt/venv` ([Runs by hand](#runs-by-hand), step 6). If either fails, the fallback image of the [release download and Modal deploy design, Alternatives considered](../docs/design/release-download-and-modal-deploy.md#alternatives-considered) needs the project lead's approval.
+- How the latency of `createAnalysis` is measured from `backend`: `ai_service.called` holds no duration, and traces are off on Render ([release download and Modal deploy design, Open questions](../docs/design/release-download-and-modal-deploy.md#open-questions)).
+- How `min_containers` is turned on for a demo day, which waits for the measured cold start ([ADR-0018, Platform and scaling](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#platform-and-scaling), statement 2): a deploy with another value, or the Modal dashboard.
