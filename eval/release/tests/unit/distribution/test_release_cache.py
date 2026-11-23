@@ -1,6 +1,8 @@
 """A cached release is the published one exactly, and only a whole check installs one."""
 
+import shutil
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
@@ -269,12 +271,47 @@ def test_a_pinned_file_that_is_not_ascii_is_refused(tmp_path: Path) -> None:
     assert refused.value.problem is PinnedReleaseProblem.NOT_TWO_LINES
 
 
-def test_the_free_space_of_a_cache_that_does_not_exist_is_that_of_its_nearest_folder(
+@dataclass(frozen=True, slots=True)
+class _Usage:
+    # The one field of the result of `shutil.disk_usage` that `free_bytes` reads.
+    free: int
+
+
+FREE = 123_456_789
+
+
+@pytest.mark.parametrize(
+    ("cache", "existing", "measured"),
+    [
+        (("cache",), ("cache",), ("cache",)),
+        (("not", "yet", "cache"), (), ()),
+        (("not", "yet", "cache"), ("not",), ("not",)),
+    ],
+    ids=["the-cache-exists", "no-folder-of-the-cache-exists", "a-parent-of-the-cache-exists"],
+)
+def test_the_free_space_is_that_of_the_cache_or_its_nearest_existing_folder(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    cache: tuple[str, ...],
+    existing: tuple[str, ...],
+    measured: tuple[str, ...],
 ) -> None:
-    cache = tmp_path / "not" / "yet" / "cache"
+    # A fake disk usage: the free space of the real file system changes while other tests, in
+    # other workers, write to it, so two readings of it may differ (TEST-14).
+    asked: list[Path] = []
 
-    space = free_bytes(cache)
+    def disk_usage(path: Path) -> _Usage:
+        asked.append(path)
+        return _Usage(free=FREE)
 
-    assert space == free_bytes(tmp_path)
-    assert not (tmp_path / "not").exists()
+    monkeypatch.setattr(shutil, "disk_usage", disk_usage)
+    tmp_path.joinpath(*existing).mkdir(parents=True, exist_ok=True)
+
+    space = free_bytes(tmp_path.joinpath(*cache))
+
+    assert space == FREE
+    assert asked == [tmp_path.joinpath(*measured)]
+    # Measuring creates nothing: only the folders that the test made exist.
+    assert {path.relative_to(tmp_path).parts for path in tmp_path.rglob("*")} == (
+        {existing} if existing else set()
+    )
