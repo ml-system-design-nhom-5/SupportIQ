@@ -1,7 +1,9 @@
 # The local run of the whole system (docs/design/local-run.md, docs/guides/local-run.md).
 # deploy/local/local-run.sh writes .local-run/secrets.env, builds the images one at a time, and
-# runs this project with --env-file local-run.env and --env-file ../../.local-run/secrets.env.
-# The profile `ai` adds ai-service, and the profile `observability` adds otel-lgtm.
+# runs this project with --env-file local-run.env and --env-file ../../.local-run/secrets.env;
+# with AI, also with --env-file ../llm-prices.env and, for a saved key,
+# --env-file ../../.local-run/gemini.env. The profile `ai` adds ai-service, and the profile
+# `observability` adds otel-lgtm.
 #
 # Every published port is bound to 127.0.0.1. Inside the containers, the servers listen on every
 # interface, because a published port reaches a container through its own network interface.
@@ -156,10 +158,13 @@ services:
       HOME: /tmp
       SERVICE_TOKEN: ${LOCAL_SERVICE_TOKEN:?run deploy/local/local-run.sh start}
       RELEASE_MANIFEST_PATH: /srv/release/release-manifest.json
-      # From the user's environment only; local-run.sh stops before it asks anything when one
-      # is missing (docs/design/local-run.md, Two modes).
+      # The key of the user's environment, otherwise the one of .local-run/gemini.env
+      # (docs/design/local-run.md, Gemini key). Only this service receives it.
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${LOCAL_GEMINI_MODEL:?}
+      # From deploy/llm-prices.env, so the model and its prices change together. local-run.sh
+      # checks all three before it asks anything; the defaults only let Compose read this file
+      # without the profile ai.
+      GEMINI_MODEL: ${GEMINI_MODEL:-}
       LLM_INPUT_PRICE_MICRO_USD_PER_MILLION_TOKENS: ${LLM_INPUT_PRICE_MICRO_USD_PER_MILLION_TOKENS:-}
       LLM_OUTPUT_PRICE_MICRO_USD_PER_MILLION_TOKENS: ${LLM_OUTPUT_PRICE_MICRO_USD_PER_MILLION_TOKENS:-}
     volumes:

@@ -95,7 +95,7 @@ Each component README lists its own commands. These are the commands agents run 
 | `uv run ruff check . && uv run pyright && uv run lint-imports` | `backend/` | Lints, type-checks, and checks the layer boundaries of `backend` |
 | `uv run datamodel-codegen` | `backend/` | Regenerates the `backend` models from the contract |
 | `deploy/local/tests/test-local-run.sh` | Repository root | Runs the script tests of the local run with stub tools; it needs no Docker |
-| `deploy/local/local-run.sh start --yes`, then `stop` | Repository root | Starts the whole system with Docker Compose and stops it ([local run guide](docs/guides/local-run.md)). It writes only `.local-run/` and Docker objects of the project `supportiq-local`; ask the person first, because it builds images and uses ports |
+| `deploy/local/local-run.sh start --without-ai --yes`, then `stop` | Repository root | Starts the whole system without AI with Docker Compose and stops it ([local run guide](docs/guides/local-run.md)). It writes only `.local-run/` and Docker objects of the project `supportiq-local`; ask the person first, because it builds images and uses ports. Agents never run `set-key`, never enter a Gemini key, and never read `.local-run/secrets.env` or `.local-run/gemini.env` |
 
 - Pass only the files of your own task to `--files`. Some hooks fix files in place (trailing whitespace, final newlines, line endings), so `--all-files` can rewrite files that you did not create.
 - Always pass `--files` to `pre-commit run`. Without it or `--all-files`, pre-commit stashes unstaged changes while it runs ([WF-35](docs/rules/workflow.md#ai-agents)).

@@ -34,7 +34,7 @@ jobs:
       - name: Run the script tests of local-run.sh
         run: deploy/local/tests/test-local-run.sh
       - name: Start the local run with Compose, without AI
-        run: deploy/local/local-run.sh start --yes
+        run: deploy/local/local-run.sh start --without-ai --yes
       - name: Show the parts and their health
         run: deploy/local/local-run.sh status
       - name: Check backend, directly and through frontend, and sign in at each origin
@@ -44,7 +44,7 @@ jobs:
       - name: Check that no container remains and that the ports are free
         run: deploy/local/tests/smoke-check.sh stopped
       - name: Start again without --yes and without a terminal, which needs no question
-        run: deploy/local/local-run.sh start < /dev/null
+        run: deploy/local/local-run.sh start --without-ai < /dev/null
       - name: Check that the data of the first start was kept
         run: deploy/local/tests/smoke-check.sh kept
       - name: Stop the local run again
