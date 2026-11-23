@@ -1,0 +1,8 @@
+{
+  "format": "supportiq-case-set-approval/interim-1",
+  "set": "escalation/interim-v2",
+  "status": "frozen",
+  "cases_sha256": "21e2d0db0593630a8778c3e58babff830ca2007fcfb221d92c6a75339f479bbc",
+  "approved_by": "project lead",
+  "approved_on": "2026-11-23"
+}
