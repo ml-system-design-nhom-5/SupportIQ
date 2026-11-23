@@ -1,0 +1,429 @@
+{
+  "format": "supportiq-gate-run/interim-2",
+  "run_id": "release-2026-11-23-01",
+  "release_id": "release-2026-11-23-01",
+  "manifest_sha256": "f7b34762d984f26ff409c9c0a9148137e1201065adc9bd4482fdcbe348775ff9",
+  "git_commit": "86910f4c43afc8ceb1c071094d18e93075d55d5b",
+  "escalation_cases": {
+    "set": "escalation/interim-v2",
+    "sha256": "21e2d0db0593630a8778c3e58babff830ca2007fcfb221d92c6a75339f479bbc",
+    "count": 41,
+    "kinds": {
+      "injected_distribution": 31,
+      "injected_failure": 2,
+      "real_model": 6,
+      "staff_choice": 2
+    },
+    "results": [
+      {
+        "case_id": "fr03-draft-return-window",
+        "esc_rule": "FR-03",
+        "kind": "injected_distribution",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "fr03-draft-return-request-process",
+        "esc_rule": "FR-03",
+        "kind": "injected_distribution",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "fr03-draft-non-returnable-items",
+        "esc_rule": "FR-03",
+        "kind": "injected_distribution",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "fr03-draft-refund-eligibility",
+        "esc_rule": "FR-03",
+        "kind": "injected_distribution",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "fr03-draft-refund-timeline",
+        "esc_rule": "FR-03",
+        "kind": "injected_distribution",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "fr03-draft-refund-status-tracking",
+        "esc_rule": "FR-03",
+        "kind": "injected_distribution",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "fr03-draft-order-tracking",
+        "esc_rule": "FR-03",
+        "kind": "injected_distribution",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "fr03-draft-cancellation-window",
+        "esc_rule": "FR-03",
+        "kind": "injected_distribution",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "fr03-draft-delivery-timelines",
+        "esc_rule": "FR-03",
+        "kind": "injected_distribution",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "fr03-draft-shipping-fees",
+        "esc_rule": "FR-03",
+        "kind": "injected_distribution",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "fr03-draft-delayed-or-lost-delivery",
+        "esc_rule": "FR-03",
+        "kind": "injected_distribution",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "fr03-draft-unconfirmed-payment",
+        "esc_rule": "FR-03",
+        "kind": "injected_distribution",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "fr03-draft-duplicate-charge",
+        "esc_rule": "FR-03",
+        "kind": "injected_distribution",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "esc01-below-tau",
+        "esc_rule": "ESC-01",
+        "kind": "injected_distribution",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "esc01-below-delta",
+        "esc_rule": "ESC-01",
+        "kind": "injected_distribution",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "esc01-at-tau",
+        "esc_rule": "ESC-01",
+        "kind": "injected_distribution",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "esc01-staff-confirms-intent",
+        "esc_rule": "ESC-01",
+        "kind": "staff_choice",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "esc02-out-of-scope-intent",
+        "esc_rule": "ESC-02",
+        "kind": "injected_distribution",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "esc02-password-message",
+        "esc_rule": "ESC-02",
+        "kind": "real_model",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "esc02-store-hours-message",
+        "esc_rule": "ESC-02",
+        "kind": "real_model",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "esc03a-refund-request-message",
+        "esc_rule": "ESC-03 (a)",
+        "kind": "real_model",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "esc03a-sensitive-intent-not-first",
+        "esc_rule": "ESC-03 (a)",
+        "kind": "injected_distribution",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "esc03a-sensitive-intent-at-threshold",
+        "esc_rule": "ESC-03 (a)",
+        "kind": "injected_distribution",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "esc03a-sensitive-intent-staff-choice",
+        "esc_rule": "ESC-03 (a)",
+        "kind": "staff_choice",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "esc03a-term-suspected-fraud",
+        "esc_rule": "ESC-03 (a)",
+        "kind": "injected_distribution",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "esc03a-term-unauthorized",
+        "esc_rule": "ESC-03 (a)",
+        "kind": "injected_distribution",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "esc03a-term-legal-claim",
+        "esc_rule": "ESC-03 (a)",
+        "kind": "injected_distribution",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "esc03a-term-transaction-dispute",
+        "esc_rule": "ESC-03 (a)",
+        "kind": "injected_distribution",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "esc03a-term-policy-exception",
+        "esc_rule": "ESC-03 (a)",
+        "kind": "injected_distribution",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "esc03a-term-legal-claim-message",
+        "esc_rule": "ESC-03 (a)",
+        "kind": "real_model",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "esc03b-human-agent-message",
+        "esc_rule": "ESC-03 (b)",
+        "kind": "real_model",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "esc03b-human-agent",
+        "esc_rule": "ESC-03 (b)",
+        "kind": "injected_distribution",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "esc03b-human-agent-low-confidence",
+        "esc_rule": "ESC-03 (b)",
+        "kind": "injected_distribution",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "esc03b-human-agent-with-term",
+        "esc_rule": "ESC-03 (b)",
+        "kind": "injected_distribution",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "esc04-no-valid-document",
+        "esc_rule": "ESC-04",
+        "kind": "injected_distribution",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "esc04-only-expired-documents",
+        "esc_rule": "ESC-04",
+        "kind": "injected_distribution",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "esc04-no-valid-document-message",
+        "esc_rule": "ESC-04",
+        "kind": "real_model",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "esc05-intent-model-failure",
+        "esc_rule": "ESC-05",
+        "kind": "injected_failure",
+        "injected_failure": "intent_model",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "esc05-retrieval-failure",
+        "esc_rule": "ESC-05",
+        "kind": "injected_failure",
+        "injected_failure": "retrieval",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "esc05-llm-failure",
+        "esc_rule": "ESC-05",
+        "kind": "injected_distribution",
+        "injected_failure": "llm",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      },
+      {
+        "case_id": "esc05-llm-failure-not-reached",
+        "esc_rule": "ESC-05",
+        "kind": "injected_distribution",
+        "injected_failure": "llm",
+        "passed": true,
+        "mismatches": [],
+        "observed": {}
+      }
+    ]
+  },
+  "candidate_checks": [
+    {
+      "check": "routes_are_those_of_contract_1_0_0",
+      "passed": true,
+      "observed": []
+    },
+    {
+      "check": "no_case_text_in_the_logs",
+      "passed": true,
+      "observed": []
+    },
+    {
+      "check": "llm_calls_as_expected",
+      "passed": true,
+      "observed": []
+    }
+  ],
+  "candidate_scope": {
+    "on_the_candidate": [
+      "escalation_cases",
+      "candidate_checks"
+    ],
+    "not_on_the_candidate": [
+      "ai_service_guardrails",
+      "backend_guardrails"
+    ],
+    "statement": "The escalation cases and the candidate checks run on the application of the candidate, with its manifest loaded. The guardrail tests do not load it: those of ai-service check the service token and the packaged egress allow-list, those of backend serve ai-service from fakes, and no asset of the manifest changes what they check."
+  },
+  "guardrails": [
+    {
+      "suite": "ai_service_guardrails",
+      "tests": 55,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "test_classnames": [
+        "tests.integration.guardrails.test_egress_allow_list",
+        "tests.integration.guardrails.test_service_token"
+      ],
+      "passed": true
+    },
+    {
+      "suite": "backend_guardrails",
+      "tests": 22,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "test_classnames": [
+        "tests.integration.guardrails.test_admin_boundary",
+        "tests.integration.guardrails.test_audit_log",
+        "tests.integration.guardrails.test_export_holds_pseudonymized_text_only",
+        "tests.integration.guardrails.test_no_confidential_data_in_telemetry",
+        "tests.integration.guardrails.test_no_confidential_data_in_workflow_telemetry",
+        "tests.integration.guardrails.test_no_password_in_records",
+        "tests.integration.guardrails.test_outbound_destinations",
+        "tests.integration.guardrails.test_pre_send_check_stops_the_call",
+        "tests.integration.guardrails.test_reply_only_from_a_send",
+        "tests.integration.guardrails.test_report_holds_no_customer_data",
+        "tests.integration.guardrails.test_suggestion_events_hold_no_text",
+        "tests.integration.guardrails.test_unknown_names_never_reach_ai_service"
+      ],
+      "passed": true
+    }
+  ],
+  "llm": {
+    "calls": 24,
+    "statement": "The LLM step of the gate received one call for each case that expects a draft and no other call. It records each call and fails it, and never calls a provider."
+  },
+  "test_26": "TEST-26, 'Mandatory escalation cases from the shared scenario set are routed correctly': not met. Interim cases replace the shared scenario set (ADR-0021, Exception to TEST-26).",
+  "known_gaps": [
+    "The acceptance set of main is contaminated (DATA-23), so no quality target is reported from it.",
+    "The shared scenario set of Groups 2 and 5 does not exist yet (CST-02), so interim cases replace it (ADR-0021, Exception to TEST-26).",
+    "The routing configuration is not tuned on validation data: its values are those of main (ADR-0025).",
+    "The minimum similarity of the index is not tuned on validation data: its value is that of main (ADR-0027).",
+    "Retrieval (NFR-03) and grounding (NFR-04) are not measured by the gate; they are measured outside it, and the first measurement is a baseline (DATA-48)."
+  ],
+  "outcome": "passed"
+}
