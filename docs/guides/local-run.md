@@ -1,6 +1,6 @@
 # Local run of the whole system
 
-> **Status:** Active · **Owner:** project lead · **Last reviewed:** 2026-11-23
+> **Status:** Active · **Owner:** project lead · **Last reviewed:** 2026-11-24
 
 This guide starts the whole SupportIQ system on your machine with one command: PostgreSQL 17, `backend` with the simulated demo data, `frontend`, `ai-service` with the newest published release unless you turn the AI off, and optionally the local Grafana stack. It is for testers and developers of the team. The [local run design](../design/local-run.md) records why it works this way.
 
@@ -71,7 +71,7 @@ This is the default. `ai-service` runs with one release folder and a Gemini key 
 - A key of the free plan of the Gemini API is allowed only for this local run ([SEC-07](../rules/security-and-privacy.md#data-sent-to-llm-providers)). Under the section Unpaid Services of the [Gemini API Additional Terms of Service](https://aistudio.google.com/docs/terms#unpaid-services) (effective 2026-03-23, read on 2026-11-23), Google uses what you send to "provide, improve, and develop Google products and services and machine learning technologies", "human reviewers may read, annotate, and process your API input and output", and the terms say: "Do not submit sensitive, confidential, or personal information to the Unpaid Services." So never type real data into the local run: use only the simulated demo data, and assume that Google can read every request.
 
 - `ai-service` checks every file of the release folder against its manifest and stops when one differs or when the folder holds another file, such as a `.DS_Store` of macOS. `start` then stops before `backend` starts.
-- With the first release, `release-2026-11-18-02`, no request gets a draft: each one abstains or is escalated, without an LLM call ([ai-service README, Known limits](../../ai-service/README.md#known-limits)). So a wrong key gives no sign yet: with a later release, a draft step with a wrong key ends `llm_unavailable`, and staff handle the ticket manually.
+- With the first release, `release-2026-11-18-02`, no request gets a draft, so a wrong key gives no sign. With the release in use, `release-2026-11-23-01`, a request can get a draft, when the routing recommends one or after staff choose the intent, and a draft step with a wrong key ends `llm_unavailable`, and staff handle the ticket manually ([ai-service README, Known limits](../../ai-service/README.md#known-limits)).
 - On a virtual machine with 2 CPUs and 4 GiB, the first analysis after a start took 6.4 s in one test run and 6.8 s in another, and the later ones under 1 s. `backend` waits 3 s for an analysis, so the first suggestion can show its analysis as unavailable. Staff can run the AI again on that ticket with Try AI again in the console.
 
 ### Without AI

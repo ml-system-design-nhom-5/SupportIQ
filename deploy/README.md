@@ -191,7 +191,7 @@ Before the implementation PR of [#41](https://github.com/ml-system-design-nhom-5
 | 5 | The tier of the Gemini key's project is a paid tier, checked by eye in AI Studio ([Once](#once), step 3): "paid tier checked" | | Not run yet |
 | 6 | `modal deploy` with the Secret and the downloaded folder: Modal builds `ai-service/Dockerfile` and runs its runtime next to `/opt/venv`; `GET /health/live` and `GET /health/ready` answer `204` without a token, and `POST /v1/analyses` without a token answers `401` ([ADR-0018, Validation](../docs/decisions/0018-hosting-of-ai-service-on-modal.md#validation)) | | Not run yet |
 
-Before the PR, the path from `backend` to `ai-service` is proven by the local run with AI on the same release ([local run design](../docs/design/local-run.md)).
+Before the PR, the path from `backend` to `ai-service` is proven by the local run with AI on the pinned release ([local run design](../docs/design/local-run.md)).
 
 After the merge, with the first run of the workflow `deploy` on `main`. `deploy.yml` runs only by hand, and its job `deploy-migrate` stops on any other ref, so no `backend` with this code reaches Render before the merge:
 
@@ -209,7 +209,7 @@ The measurements of [ADR-0018, Validation](../docs/decisions/0018-hosting-of-ai-
 | Latency of `createAnalysis` | `analysis_ms` of the responses and the duration of `request.completed` in the Modal logs. This is not the path from Render ([Open questions](#open-questions)) | | | Not measured yet |
 | Memory in use | As Modal reports it for the container | | | Not measured yet |
 
-The latency and the cost of a draft wait for the first release that serves a KB document, because `release-2026-11-18-02` makes no LLM call.
+The latency and the cost of a draft are not measured yet. `release-2026-11-18-02` makes no LLM call, and the drafts of `release-2026-11-23-01`, which serves KB documents, are not measured on the Modal deployment yet.
 
 ### Roll back on Modal
 
@@ -249,7 +249,7 @@ The checks of [ADR-0016, Validation](../docs/decisions/0016-hosting-on-free-tier
 
 ## Removal of the application of `main`
 
-[ADR-0021](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#removal-of-the-application-of-main) deletes `apps/backend`, `apps/frontend`, and `apps/demo` in step 6 of the join, once every row of its checklist names its proof. The proofs are recorded here, because an accepted ADR is not edited ([documentation handbook, ADRs](../docs/README.md#adrs)).
+[ADR-0021](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#removal-of-the-application-of-main) removes the application of `main`. `apps/frontend` never entered this tree ([ADR-0028](../docs/decisions/0028-repository-layout-for-the-pull-request-into-main.md#what-is-not-brought)), and [ADR-0031](../docs/decisions/0031-retiring-apps-and-the-evaluation-runners-of-main.md) retires `apps/backend` and `apps/demo` through PR #47, now [#48](https://github.com/ml-system-design-nhom-5/SupportIQ/pull/48). Its checklist is the condition of the PR into `main`: that PR opens only when every row names its proof ([ADR-0031, The checklist of ADR-0021](../docs/decisions/0031-retiring-apps-and-the-evaluation-runners-of-main.md#the-checklist-of-adr-0021)). The proofs are recorded here, because an accepted ADR is not edited ([documentation handbook, ADRs](../docs/README.md#adrs)).
 
 ### Rows covered by existing tests
 
@@ -266,7 +266,7 @@ These rows are covered by the tests below (ADR-0021, Removal of the application 
 
 ### Runs with the real AI
 
-Each row below is run by hand against the Modal deployment ([Modal](#modal)), because CI never calls an LLM (ADR-0021, Removal of the application of `main`, statement 1). The rows run once `backend` on Render calls that deployment, after the merge ([Runs by hand](#runs-by-hand), step 7). A row that needs a draft with a policy citation runs only after a new KB version is admitted (statement 2).
+Each row below is run by hand with the real AI, because CI never calls an LLM (ADR-0021, Removal of the application of `main`, statement 1). Before the PR into `main`, the rows run in the strict end-to-end round on `release-2026-11-23-01`, the first release that serves KB documents, with the local run with AI ([ADR-0031, The checklist of ADR-0021](../docs/decisions/0031-retiring-apps-and-the-evaluation-runners-of-main.md#the-checklist-of-adr-0021), statement 2). Two people grade the same drafts, and a row records counts only, never the text of a message or of a draft ([gate design, Groundedness](../docs/design/gate-for-a-release-with-kb-documents.md#groundedness); [SEC-02](../docs/rules/security-and-privacy.md#data-classification)). The runs against Render follow the merge ([Runs by hand](#runs-by-hand), step 7).
 
 | Row of the checklist | Date | Commit | `release_id` | Steps | Result |
 |---|---|---|---|---|---|
