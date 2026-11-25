@@ -218,11 +218,14 @@ test("TEST-27: a low-confidence ticket takes an intent outside the top three", a
   await expect(choice).toContainText("None of these? Use:");
   await expectNoAccessibilityViolations(page);
 
-  // By keyboard alone: the menu opens, typing finds the intent, and Enter chooses it (UI-30).
+  // By keyboard alone: the menu opens, typing finds the intent, and Enter chooses it (UI-30). The
+  // menu moves the focus after each step, so the next key waits for it (TEST-19). The typed word has
+  // no space, because Space chooses the item with the focus once the search has timed out.
   await choice.getByRole("button", { name: "Other intent" }).focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("menuitem", { name: "Cancel order" })).toBeVisible();
-  await page.keyboard.type("cancel o");
+  await expect(page.getByRole("menuitem").first()).toBeFocused();
+  await page.keyboard.type("cancel");
+  await expect(page.getByRole("menuitem", { name: "Cancel order" })).toBeFocused();
   await page.keyboard.press("Enter");
 
   const strip = main.getByRole("region", { name: "Intent", exact: true });
