@@ -31,6 +31,8 @@ No release of contract 1.0.0 is deployed, because the repository has neither the
 - The pinned file is not on `main` (`67d8fc4`), so every run of the PR into `main`, and the first push run on `main`, counts as a change of it and reads GitHub.
 - On 2026-11-25 the step failed on the pull request run of `e9347db` (run 45544569823) and in both attempts on `682fd11` (run 45551410061). The start of `local-run-compose-ai`, which downloads the release too, failed on `e9347db` (run 45544569326), and passed on `682fd11` (run 45551409903). The logs, read by the reviewer, state `rate_limited` and status `403`; they need a sign-in on GitHub.
 
+**Also amended on 2026-11-25 with the project lead's approval.** The download with a token (step 2) and steps 4, 5, and 6 of the runs by hand follow the merge, before step 7, because the redeploy to Modal and Render comes after the merge. #41 stays open until they are recorded, and their rows stay "Not run yet". Until then, nothing is recorded of a Modal deploy of this app, of the refusal without the Secret, and of the paid tier. No real key of a deployment is used before step 5 is recorded ([Testing and evaluation](#testing-and-evaluation)).
+
 ## Goals and non-goals
 
 ### Goals
@@ -461,6 +463,7 @@ The change touches no guardrail of `ai-service` or `backend`. Staff still approv
 - **Fallback image: `Image.from_registry` of the pinned Python image, then `uv_sync`.** `uv_sync` exists since Modal 1.1.0, and runs `uv sync --frozen` without installing the project ([Modal: Image](https://modal.com/docs/sdk/py/latest/Image)). It would copy the steps of the Dockerfile into a second definition of the image, so it is kept only as the fallback if Modal cannot build `ai-service/Dockerfile`. Switching to it needs the project lead's approval.
 - **The Modal app in `deploy/modal/`, as ARCH-42 places deployment configuration.** No Python toolchain lives there, and the app needs the `modal` package of the `deploy` group of `ai-service`, as the project lead decided on 2026-11-22, for pyright and its tests. `ai-service/` already holds the Dockerfile that the app deploys. [ADR-0030](../decisions/0030-release-archives-and-the-modal-function-of-ai-service.md#the-modal-function) adds the exception to ARCH-42.
 - **The `deploy` group as a default group of uv.** A plain `uv sync` would then install `modal` for every teammate, and `uv sync --no-dev` in the Dockerfile would install it into the image too, which the project lead ruled out on 2026-11-22.
+- **Every run by hand before the implementation PR is ready.** The design until 2026-11-25. Replaced by the project lead's decision of 2026-11-25: the redeploy to Modal and Render comes after the merge, so the runs that need it do too.
 - **An anonymous CI check.** The design until 2026-11-25: `GITHUB_TOKEN` has 1,000 requests per hour, but rule 13 of the workflow convention let only `deploy.yml` read a secret, and the anonymous check runs only for a change of the pinned file, so the shared limit of 60 was said not to matter for it. Replaced on 2026-11-25 by the token of the run in this one step, because every run of the PR into `main` is a change of the pinned file ([Summary](#summary)).
 - **A Modal Secret from a `.env` file (`--from-dotenv`).** It would put the key into a file on disk, which the project lead ruled out.
 
@@ -485,7 +488,7 @@ The change touches no guardrail of `ai-service` or `backend`. Staff still approv
   - in `ai-service-image`, a run of the built image that fails when `import modal` works;
   - every existing check of `eval/release` and `ai-service`, with coverage floors of 80% overall and 90% for the domain.
 - **Dependencies.** `uv lock` in `ai-service/` adds `modal==1.6.4` and its dependencies, and must keep every version that is already locked. `gate/check_locks.py` requires the packages that `ai-service/uv.lock` shares with `eval/release/uv.lock` to keep one version. If `modal` needs another version of a locked package, the implementation stops and asks the project lead. Each new package and its license is listed in the Dependencies of `ai-service/README.md`. A license outside [WF-30](../rules/workflow.md#dependencies) waits for team approval in the PR.
-- **By hand, before the implementation PR is ready**, recorded in `deploy/README.md` without any value of a secret:
+- **By hand**, recorded in `deploy/README.md` without any value of a secret: steps 1 and 3, and step 2 without the token, before the implementation PR is ready; the token part of step 2, and steps 4, 5, and 6, after the merge and before step 7 (amendment of 2026-11-25):
   1. `pack-release --pin` of `~/supportiq-gate/releases/release-2026-11-18-02`, twice, with the same SHA-256 of the archive both times.
   2. The upload ([Publish order](#publish-order)), then `download-release --release release-2026-11-18-02 --yes` into an empty cache, once anonymously and once with a token, and a second run that is a cache hit.
   3. `check-pinned-release --remote`.

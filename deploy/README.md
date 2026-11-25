@@ -180,7 +180,7 @@ The download folders are recorded with the home folder written as `$HOME`.
 
 These runs are recorded here without any value of a secret ([release download and Modal deploy design, Testing and evaluation](../docs/design/release-download-and-modal-deploy.md#testing-and-evaluation)).
 
-Before the implementation PR of [#41](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/41) is ready:
+Steps 1 and 3, and step 2 without the token, run before the implementation PR of [#41](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/41) is ready. The project lead decided on 2026-11-25 that the download with a token (step 2) and steps 4, 5, and 6 follow the merge, before step 7, because the redeploy to Modal and Render comes after the merge. [#41](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/41) stays open until they are recorded. Until then, three things are unproven, because none is recorded: a Modal deploy of this app, the refusal of a deploy without the Secret, and the paid tier of the Gemini key. No real key of a deployment is used before step 5 is recorded:
 
 | Step | Run | Date | Result |
 |---|---|---|---|
