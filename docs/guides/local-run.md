@@ -1,6 +1,6 @@
 # Local run of the whole system
 
-> **Status:** Active · **Owner:** project lead · **Last reviewed:** 2026-11-24
+> **Status:** Active · **Owner:** project lead · **Last reviewed:** 2026-11-25
 
 This guide starts the whole SupportIQ system on your machine with one command: PostgreSQL 17, `backend` with the simulated demo data, `frontend`, `ai-service` with the newest published release unless you turn the AI off, and optionally the local Grafana stack. It is for testers and developers of the team. The [local run design](../design/local-run.md) records why it works this way.
 
@@ -172,14 +172,17 @@ This builds the images in parallel, asks nothing, and does not check the ports o
 
 ## Remove the local data
 
+One machine has one local run and one local database, whichever folder of the repository started it, such as another clone or git worktree. `status`, `stop`, and `logs` act on it from any folder, while `.local-run/` with its passwords stays per folder. So before you remove the database, check that no other folder uses it: its `.local-run/secrets.env` does not open a new one.
+
 `stop` deletes nothing. To start again from an empty database, run these yourself, in the repository root:
 
 ```bash
-docker compose --project-name supportiq-local down --volumes
+deploy/local/local-run.sh stop
+docker volume rm supportiq-local_postgres-data
 rm -r .local-run
 ```
 
-Remove both together: new passwords in a new `secrets.env` do not open the database of the old volume. Removing `.local-run/` also removes the saved Gemini key. To also remove the images, run `docker image rm supportiq-local-backend supportiq-local-frontend supportiq-local-ai-service`. The packages of the download command stay in their own volume, which `docker volume rm supportiq-local_release-tool` removes; the next download installs them again. The release cache stays too: remove `~/.cache/supportiq/releases/<release_id>/`, or the folder of `SUPPORTIQ_RELEASE_CACHE`, to download that release again.
+Stop first, because Docker removes no volume that a container still uses. Remove the volume and `.local-run/` together: new passwords in a new `secrets.env` do not open the database of the old volume. Removing `.local-run/` also removes the saved Gemini key. To also remove the images, run `docker image rm supportiq-local-backend supportiq-local-frontend supportiq-local-ai-service`. The packages of the download command stay in their own volume, which `docker volume rm supportiq-local_release-tool` removes; the next download installs them again. The release cache stays too: remove `~/.cache/supportiq/releases/<release_id>/`, or the folder of `SUPPORTIQ_RELEASE_CACHE`, to download that release again.
 
 ## When something fails
 
@@ -196,10 +199,10 @@ Remove both together: new passwords in a new `secrets.env` do not open the datab
 | `… failed its check` | The downloaded release differs from its manifest in git, and nothing was kept. Start with `--without-ai`, and tell the project lead |
 | `the release cache … lies outside your home folder` | Set `SUPPORTIQ_RELEASE_CACHE` to a folder in your home folder, or unset it |
 | `ai-service refused the cached release …` | Remove that folder of the cache; the next start downloads the release again |
-| `.local-run/secrets.env is missing, but the volume … still holds the database` | Only the passwords of the lost file open that database: remove the local data as above, then start again |
+| `.local-run/secrets.env is missing, but the volume … holds the database of an earlier start` | Only the passwords of that start open the database. When another folder of the repository still has its `.local-run/`, start there; otherwise remove the local data as above, then start again |
 | `do not run it as root or with sudo` | Run it again as your normal user |
 | `the local run already runs in another mode` | Run `stop`, then `start` with the options you want |
-| `a part did not get ready` | Read its log with `logs <part>`, then run `stop` |
+| `a part did not get ready` | Read its log with `logs <part>`, then run `stop`. When `logs backend-setup` shows a password failure, another folder of the repository created the local database: start there, or remove the local data as above |
 | `ai-service did not get ready, so backend and frontend were not started` | Read `logs ai-service`: a `release.invalid` line names the reason, such as `file_unlisted` for an extra file in the release folder. Then run `stop` |
 | `another start holds .local-run/start.lock` | Wait for the other start, or remove that folder when no start runs |
 | `.local-run/secrets.env lacks …` | Add the missing line, or remove the local data as above |

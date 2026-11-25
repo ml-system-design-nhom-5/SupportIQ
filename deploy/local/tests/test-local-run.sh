@@ -20,6 +20,9 @@ readonly REPOSITORY_ROOT
 readonly SECRET_COUNT=8
 readonly SECRET_PATTERN='^[0-9a-f]{64}$'
 readonly EXIT_INTERRUPTED=130
+# The status of the pseudo-terminal driver when a hidden prompt keeps the echo on; local-run.sh
+# never exits with it.
+readonly ECHO_STAYED_ON=86
 readonly RELEASE_ID=release-2026-11-18-02
 # 384 MiB exactly, so the plan says "about 384 MiB".
 readonly ARCHIVE_SIZE_BYTES=402653184
@@ -74,8 +77,14 @@ case "$*" in
   "compose version --short") echo "${STUB_COMPOSE_VERSION:-2.29.1}"; exit 0 ;;
   "version --format"*) echo "${STUB_API_VERSION:-1.51}"; exit 0 ;;
   "image inspect"*) exit "${STUB_IMAGE_INSPECT_STATUS:-0}" ;;
+  "volume inspect --format {{.CreatedAt}}"*)
+    [ "${STUB_VOLUME_INSPECT_STATUS:-1}" -eq 0 ] || exit 1
+    echo "${STUB_VOLUME_CREATED_AT-2026-11-18T14:40:12Z}"
+    exit 0
+    ;;
   "volume inspect"*) exit "${STUB_VOLUME_INSPECT_STATUS:-1}" ;;
   "inspect --format {{.State.OOMKilled}}"*) echo "${STUB_OOM_KILLED:-false}"; exit 0 ;;
+  "inspect --format {{.State.ExitCode}}"*) echo "${STUB_EXIT_CODE:-0}"; exit 0 ;;
   "pull "*) exit "${STUB_PULL_STATUS:-0}" ;;
   "run "*)
     # The download command of #41: the path of the release folder on standard output.
@@ -204,7 +213,8 @@ run_script() {
 
 # Run local-run.sh on a pseudo-terminal. The arguments are pairs of a text and the answer to
 # type once the output holds that text, then --, then the arguments of the script. Before it
-# types into a hidden prompt, it waits until the script has turned the echo off.
+# types into a hidden prompt, it waits until the script has turned the echo off; when the echo is
+# still on after 5 s, it types nothing, stops the script, and the test fails on that cause.
 run_script_on_a_terminal() {
   local -a dialog=()
   while [ "$1" != -- ]; do
@@ -214,13 +224,16 @@ run_script_on_a_terminal() {
   shift
   run_status=0
   run_output=$(PATH="$fixture_path" HOME="$root/home" STUB_DOCKER_LOG="$root/docker.log" \
+    ECHO_STAYED_ON_STATUS="$ECHO_STAYED_ON" \
     python3 - "$root/deploy/local/local-run.sh" "${#dialog[@]}" "${dialog[@]}" "$@" << 'PYTHON'
 import os
 import pty
+import signal
 import sys
 import termios
 import time
 
+ECHO_WAIT_S = 5
 script, count = sys.argv[1], int(sys.argv[2])
 dialog, arguments = sys.argv[3:3 + count], sys.argv[3 + count:]
 pairs = list(zip(dialog[0::2], dialog[1::2]))
@@ -253,9 +266,16 @@ while True:
             break
         matched = index + len(text)
         if "hidden" in text:
-            deadline = time.monotonic() + 5
+            deadline = time.monotonic() + ECHO_WAIT_S
             while not echo_is_off() and time.monotonic() < deadline:
                 time.sleep(0.05)
+            if not echo_is_off():
+                # Typing now would show the answer on the terminal.
+                os.kill(pid, signal.SIGKILL)
+                os.waitpid(pid, 0)
+                sys.stdout.write(output.decode(errors="replace"))
+                sys.stdout.write(f"\nthe echo was still on {ECHO_WAIT_S} s after: {text}\n")
+                sys.exit(int(os.environ["ECHO_STAYED_ON_STATUS"]))
         time.sleep(0.2)
         os.write(terminal, answer.encode() + b"\n")
         pairs.pop(0)
@@ -264,6 +284,8 @@ sys.stdout.write(output.decode(errors="replace"))
 sys.exit(os.waitstatus_to_exitcode(status))
 PYTHON
   ) || run_status=$?
+  [ "$run_status" -ne "$ECHO_STAYED_ON" ] \
+    || fail_test "a hidden prompt kept the echo on, so its answer was not typed"
 }
 
 # Run local-run.sh on a pseudo-terminal, and press Ctrl+C once its output holds a text. The
@@ -634,10 +656,17 @@ test_start_with_docker_api_1_43_stops() {
 test_a_volume_without_its_secrets_file_stops_before_the_question() {
   STUB_VOLUME_INSPECT_STATUS=0 run_script start --without-ai --yes
   expect_status 1
-  expect_output ".local-run/secrets.env is missing, but the volume supportiq-local_postgres-data still holds the database"
-  expect_output "Remove the local data"
+  expect_output ".local-run/secrets.env is missing, but the volume supportiq-local_postgres-data, created on 2026-11-18, holds the database of an earlier start"
+  expect_output "This machine has one local database for every folder of the repository, so it may belong to the .local-run/ of another folder: start there instead, or, once no run uses it, remove it with: deploy/local/local-run.sh stop, then docker volume rm supportiq-local_postgres-data"
   expect_no_state
   expect_not_logged " up "
+}
+
+test_a_volume_of_an_unknown_date_without_its_secrets_file_says_so() {
+  STUB_VOLUME_INSPECT_STATUS=0 STUB_VOLUME_CREATED_AT="" run_script start --without-ai --yes
+  expect_status 1
+  expect_output "the volume supportiq-local_postgres-data, created on an unknown date, holds the database"
+  expect_no_state
 }
 
 test_compose_project_name_of_the_environment_changes_nothing() {
@@ -1662,7 +1691,7 @@ test_a_secrets_file_that_lacks_a_value_stops_and_stays_as_it_is() {
   printf 'LOCAL_DB_SUPERUSER_PASSWORD=%064d\n' 0 > "$root/.local-run/secrets.env"
   run_script start --without-ai --yes
   expect_status 1
-  expect_output ".local-run/secrets.env lacks LOCAL_DB_OWNER_PASSWORD"
+  expect_output ".local-run/secrets.env lacks LOCAL_DB_OWNER_PASSWORD; it is never rewritten: add the line, or remove the local data with: deploy/local/local-run.sh stop, then docker volume rm supportiq-local_postgres-data, then rm -r .local-run"
   [ "$(wc -l < "$root/.local-run/secrets.env" | tr -d ' ')" = 1 ] || fail_test "secrets.env changed"
 }
 
@@ -1744,6 +1773,26 @@ test_a_part_that_does_not_get_ready_stops_the_start() {
   expect_status 1
   expect_output "a part did not get ready"
   [ ! -e "$root/.local-run/start.lock" ] || fail_test "the lock stayed"
+}
+
+# The volume is shared by every folder of the repository, so a setup that fails may have met a
+# database that only the secrets.env of another folder opens.
+test_a_failed_backend_setup_names_a_database_of_another_folder() {
+  STUB_UP_STATUS=1 STUB_CONTAINER_IDS=$'abc\n' STUB_EXIT_CODE=1 run_script start --without-ai --yes
+  expect_status 1
+  expect_output "backend-setup failed. If its log shows a password failure, the volume supportiq-local_postgres-data holds a database that a start in another folder of the repository created"
+  expect_output "a part did not get ready"
+  expect_logged "ps --all --quiet backend-setup"
+}
+
+test_another_part_that_does_not_get_ready_says_nothing_of_another_folder() {
+  STUB_UP_STATUS=1 STUB_CONTAINER_IDS=$'abc\n' STUB_EXIT_CODE=0 run_script start --without-ai --yes
+  expect_status 1
+  expect_output "a part did not get ready"
+  expect_no_output "backend-setup failed"
+  STUB_UP_STATUS=1 run_script start --without-ai --yes
+  expect_status 1
+  expect_no_output "backend-setup failed"
 }
 
 test_ctrl_c_while_the_parts_start_stops_them_and_keeps_the_volume() {

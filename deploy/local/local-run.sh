@@ -279,6 +279,27 @@ volume_is_present() {
   docker volume inspect "$1" > /dev/null 2>&1
 }
 
+# The date on which Docker created a volume, as YYYY-MM-DD, or "an unknown date".
+volume_created_on() {
+  local created
+  created=$(docker volume inspect --format '{{.CreatedAt}}' "$1" 2> /dev/null || true)
+  if [[ $created =~ ^([0-9]{4}-[0-9]{2}-[0-9]{2}) ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+  else
+    printf 'an unknown date'
+  fi
+}
+
+# Whether the setup of this start exited with an error. backend-setup runs once and exits, so a
+# container that still runs, or none at all, is no failure of it.
+backend_setup_failed() {
+  local container code
+  container=$(compose ps --all --quiet backend-setup 2> /dev/null | head -n 1 || true)
+  [ -n "$container" ] || return 1
+  code=$(docker inspect --format '{{.State.ExitCode}}' "$container" 2> /dev/null || true)
+  [ -n "$code" ] && [ "$code" != 0 ]
+}
+
 project_has_containers() {
   docker_is_ready && [ -n "$(docker compose --project-name "$PROJECT" ps --all --quiet 2> /dev/null)" ]
 }
@@ -650,15 +671,16 @@ check_secrets_file() {
   local name
   if [ ! -f "$SECRETS_FILE" ]; then
     # New passwords would not open the database of the volume, so the setup would fail later
-    # with an error that does not name the cause.
+    # with an error that does not name the cause. The project name, and so the volume, is the
+    # same for every folder of the repository, while .local-run/ is per folder.
     if volume_is_present "$DATABASE_VOLUME"; then
-      add_gap ".local-run/secrets.env is missing, but the volume $DATABASE_VOLUME still holds the database of an earlier start, which only the passwords of that file open; remove both, as the section Remove the local data of the guide shows"
+      add_gap ".local-run/secrets.env is missing, but the volume $DATABASE_VOLUME, created on $(volume_created_on "$DATABASE_VOLUME"), holds the database of an earlier start, which only the passwords of that start open. This machine has one local database for every folder of the repository, so it may belong to the .local-run/ of another folder: start there instead, or, once no run uses it, remove it with: $SCRIPT_NAME stop, then docker volume rm $DATABASE_VOLUME"
     fi
     return 0
   fi
   for name in $SECRET_NAMES; do
     if ! secret_is_generated "$name"; then
-      add_gap ".local-run/secrets.env lacks $name; it is never rewritten: add the line, or remove the local data as the guide shows"
+      add_gap ".local-run/secrets.env lacks $name; it is never rewritten: add the line, or remove the local data with: $SCRIPT_NAME stop, then docker volume rm $DATABASE_VOLUME, then rm -r .local-run"
     fi
   done
 }
@@ -1176,6 +1198,9 @@ start_compose() {
   say "Starting the parts, and waiting until each one is healthy."
   if ! run_child compose up --detach --wait --wait-timeout "$COMPOSE_WAIT_TIMEOUT_S" --no-build; then
     compose ps --all --format 'table {{.Service}}\t{{.Status}}' >&2 || true
+    if backend_setup_failed; then
+      say "$SCRIPT_NAME: backend-setup failed. If its log shows a password failure, the volume $DATABASE_VOLUME holds a database that a start in another folder of the repository created: this machine has one local database, and only the .local-run/secrets.env of that folder opens it (the guide, Remove the local data)."
+    fi
     fail "a part did not get ready; read its log with: $SCRIPT_NAME logs <part>; the parts that started run until $SCRIPT_NAME stop"
   fi
   if [ "$is_database_new" = true ] || [ "$recorded_db_port" != "$db_port" ]; then

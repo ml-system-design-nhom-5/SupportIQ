@@ -55,16 +55,17 @@ jobs:
         run: deploy/local/tests/smoke-check.sh stopped
 
   # Not a required check. It runs in every run, without a path filter, and the release cache keeps
-  # the download of the archive to one per release: for release-2026-11-18-02, 324312182 bytes
-  # (about 309 MiB), which the cache holds unpacked (about 385 MiB). The download is anonymous,
-  # because only deploy.yml reads a secret; a 403 or 429 of GitHub ends the start with status 5,
-  # and the job is run again by hand (docs/design/local-run.md, Amendment of 2026-11-23, rollout
-  # step 4b).
+  # the download of the archive to one per release: for release-2026-11-23-01, 324316560 bytes
+  # (about 309 MiB), which the cache holds unpacked. The download is anonymous, because only
+  # deploy.yml reads a secret. A 403 or 429 of GitHub makes the download command end with status
+  # 5, so the start stops with status 1 and names a network failure, and the job is run again by
+  # hand (docs/design/local-run.md, Amendment of 2026-11-23, rollout step 4b).
   local-run-compose-ai:
     name: local-run-compose-ai
     runs-on: ubuntu-24.04
-    # Not measured yet: three image builds, torch included, the download on a cache miss, and up
-    # to 600 s until ai-service is healthy, for each of two starts.
+    # Measured once, on 29b74e9 (run 45187195847): about 163 s in all, the first start 103 s, on
+    # the first run of its cache key. 60 min stays above the deadlines of local-run.sh itself: two
+    # waits of up to 600 s in each of two starts, so a slow run ends with the message of the script.
     timeout-minutes: 60
     env:
       # A fixed dummy value, no secret: no step sends a customer message, so ai-service never
