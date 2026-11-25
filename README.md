@@ -68,7 +68,7 @@ sequenceDiagram
 
 ## Project status
 
-The parts of `main` are kept at their paths, byte for byte, next to the components ([ADR-0028](docs/decisions/0028-repository-layout-for-the-pull-request-into-main.md)). Decisions are recorded in [docs/decisions/](docs/decisions/README.md), and contract changes in the [contracts changelog](contracts/CHANGELOG.md).
+The parts of `main` that remain are kept at their paths, next to the components ([ADR-0028](docs/decisions/0028-repository-layout-for-the-pull-request-into-main.md), [ADR-0031](docs/decisions/0031-retiring-apps-and-the-evaluation-runners-of-main.md)). Decisions are recorded in [docs/decisions/](docs/decisions/README.md), and contract changes in the [contracts changelog](contracts/CHANGELOG.md).
 
 - `frontend`, `backend`, `ai-service`, `ml/`, `eval/`, `contracts/`, and `deploy/` exist, each with its README ([Repository layout](#repository-layout)).
 - Two releases of `ai-service` are published, each after a passed run of the offline evaluation gate, with its gate run record and its manifest in [eval/releases/](eval/releases/). The first, `release-2026-11-18-02`, serves no KB document. The release in use, `release-2026-11-23-01`, serves the 14 policy documents of KB v2.1, so a request can get a draft: when the routing recommends one, or after staff choose the intent ([ai-service README, Known limits](ai-service/README.md#known-limits)).
@@ -91,13 +91,12 @@ The parts of `main` are kept at their paths, byte for byte, next to the componen
 | [`eval/`](eval/README.md) | The release command, the gate run records and published manifests of the releases in `eval/releases/`, and the output of KB ingestion |
 | [`deploy/`](deploy/README.md) | The setup of the demo on free plans: the setup order, the settings of each platform, and the checks before and after the first deploy; and, in `deploy/local/`, the local run of the whole system ([local run guide](docs/guides/local-run.md)) |
 | `data/` | Data committed unchanged: the KB versions in `data/raw/kb/<kb_version>/`, the interim escalation cases in `data/benchmarks/escalation/`, and the data of `main`: its other test and scenario sets in `data/benchmarks/`, and `data/business/`, `data/datasets/`, `data/intent/`, and `data/knowledge/`. Downloaded datasets, such as Bitext, are not committed ([DATA-06 to DATA-08](docs/rules/data-and-ml.md#data-layout)) |
-| [`pipeline/`](pipeline/README.md) | The offline tools of `main`: the data preparation, the training, and the evaluation of the intent model and of the whole system, with the autoeval. Not on the serving path |
+| [`pipeline/`](pipeline/README.md) | The offline tools of `main`: the data preparation, the training, and the evaluation of the intent model, of retrieval, and of routing. Not on the serving path |
 | `artifacts/` | The outputs of the runs of `main`: data preparation, training, evaluation, audits, browser tests, and the search index |
-| [`tests/`](tests/README.md), `pytest.ini` | The tests of `pipeline/`, `scripts/`, and `apps/`, with their pytest configuration. Each component keeps its own tests |
-| `scripts/` | 20 scripts of `main` for training, evaluation, and acceptance runs |
-| `apps/` | The code of `main` that `pipeline/`, `tests/`, and `scripts/` import. Nothing deploys it, and `apps/backend/` and `apps/demo/` are frozen |
+| [`tests/`](tests/README.md), `pytest.ini` | The tests of `pipeline/`, with their pytest configuration. Each component keeps its own tests |
+| `scripts/` | `clean_test_cache.ps1` of `main`, which lists and removes the pytest caches |
 
-The rows from `pipeline/` to `apps/` are parts of `main`, kept at their paths byte for byte. They follow no engineering rule yet ([ADR-0028, Technical debt](docs/decisions/0028-repository-layout-for-the-pull-request-into-main.md#technical-debt)).
+The rows from `pipeline/` to `scripts/` are parts of `main`. They follow no engineering rule yet ([ADR-0031, Technical debt](docs/decisions/0031-retiring-apps-and-the-evaluation-runners-of-main.md#technical-debt)).
 
 ## Run and test on your machine
 
@@ -114,7 +113,7 @@ Each part also runs on its own. Set it up and run it as its README states; the c
 - **`backend`** ([Set up](backend/README.md#set-up), [Run and test](backend/README.md#run-and-test)): one replica and every test run against PostgreSQL 17, with the settings of `backend/.env`, made from `.env.example`. The README sets up PostgreSQL 17 with Homebrew. The unit tests need no database: `uv run pytest tests/unit`.
 - **`ai-service`** ([Set up](ai-service/README.md#set-up), [Run and test](ai-service/README.md#run-and-test)): `uv run pytest` runs the tests on Linux, macOS, and Windows; without torch, the tests that need it are skipped. `ai-service serve` loads the real model, so it runs only on Linux, because torch is locked for Linux only ([ADR-0021, Python and dependencies](docs/decisions/0021-repository-layout-and-ai-ml-migration.md#python-and-dependencies)). It also needs the files of a published release on the machine; without them it does not start.
 - **The release command in `eval/release/`** ([Set up](eval/release/README.md#set-up), [Run and test](eval/release/README.md#run-and-test)): `uv run --project eval/release pytest eval/release` runs its tests from the repository root. The offline evaluation gate runs in Docker.
-- **`pipeline/`, `tests/`, and `scripts/` of `main`** ([ADR-0028, Technical debt](docs/decisions/0028-repository-layout-for-the-pull-request-into-main.md#technical-debt)): they keep the requirements files of `main`, without a lockfile, and no workflow runs them except `.github/workflows/autoeval.yml`. Their live modes are not used, because they send messages to Gemini without `backend` and `ai-service` ([ADR-0028, Temporary rules](docs/decisions/0028-repository-layout-for-the-pull-request-into-main.md#temporary-rules), statement 3).
+- **`pipeline/` and `tests/` of `main`** ([ADR-0031, Technical debt](docs/decisions/0031-retiring-apps-and-the-evaluation-runners-of-main.md#technical-debt)): they keep the requirements files of `main`, without a lockfile, and no workflow runs them.
 
 ## Documentation
 

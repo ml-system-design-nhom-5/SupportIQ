@@ -1,6 +1,6 @@
 # ml
 
-`ml/runs/` holds the run records of the intent model that `ai-service` serves ([DATA-30](../docs/rules/data-and-ml.md#experiments-and-reproducibility)). The code that prepares the data and trains the model is the code of `main` in [`pipeline/`](../pipeline/README.md), kept at its path byte for byte ([ADR-0028, Copies deleted from `build/join-main`](../docs/decisions/0028-repository-layout-for-the-pull-request-into-main.md#copies-deleted-from-buildjoin-main), statement 2). `ai-service` loads the model as a release asset and never trains ([DATA-37](../docs/rules/data-and-ml.md#models-and-artifacts)).
+`ml/runs/` holds the run records of the intent model that `ai-service` serves ([DATA-30](../docs/rules/data-and-ml.md#experiments-and-reproducibility)). The code that prepares the data and trains the model is the code of `main` in [`pipeline/`](../pipeline/README.md), kept at its path ([ADR-0028, Copies deleted from `build/join-main`](../docs/decisions/0028-repository-layout-for-the-pull-request-into-main.md#copies-deleted-from-buildjoin-main), statement 2). `ai-service` loads the model as a release asset and never trains ([DATA-37](../docs/rules/data-and-ml.md#models-and-artifacts)).
 
 ## Run records
 
@@ -21,7 +21,7 @@ The record was written from the files of `main`; no value comes from a new run (
 
 ## Training code
 
-- The data preparation and the training are in [`pipeline/preparation/`](../pipeline/preparation/README.md) and [`pipeline/training/`](../pipeline/training/README.md). They write their runs to `artifacts/`, not to `ml/runs/`, and they follow no engineering rule yet ([ADR-0028, Technical debt](../docs/decisions/0028-repository-layout-for-the-pull-request-into-main.md#technical-debt)).
+- The data preparation and the training are in [`pipeline/preparation/`](../pipeline/preparation/README.md) and [`pipeline/training/`](../pipeline/training/README.md). They write their runs to `artifacts/`, not to `ml/runs/`, and they follow no engineering rule yet ([ADR-0031, Technical debt](../docs/decisions/0031-retiring-apps-and-the-evaluation-runners-of-main.md#technical-debt)). The placeholder normalization that [DATA-59](../docs/rules/data-and-ml.md#models-and-artifacts) requires is in [`pipeline/preparation/preprocessing.py`](../pipeline/preparation/preprocessing.py), and `ai-service` does not apply it yet ([ADR-0031, Technical debt](../docs/decisions/0031-retiring-apps-and-the-evaluation-runners-of-main.md#technical-debt), item 1).
 - The data quality checks of `main` and its proposed requirements DQ-01 to DQ-08 are in [`docs/data-quality.md`](../docs/data-quality.md).
 - The results measured on `main` are recorded in [ADR-0021, Evaluation evidence on `main`](../docs/decisions/0021-repository-layout-and-ai-ml-migration.md#evaluation-evidence-on-main). The 10-fold cross-validation of DistilBERT on Bitext gives a Macro-F1 between 0.993 and 0.997 per fold. The autoeval of `main` ran the real model on 156 written cases: a Macro-F1 of 0.611 and an expected calibration error of 0.106. The Macro-F1 of 0.9736 in several reports of `main`, `docs/AI_PIPELINE_METRIC_IMPROVEMENTS.md` among them, comes from a script that did not run the model, so it is not a result ([ADR-0028, A number in a kept document](../docs/decisions/0028-repository-layout-for-the-pull-request-into-main.md#a-number-in-a-kept-document)).
 

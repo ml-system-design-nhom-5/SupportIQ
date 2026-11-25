@@ -1,6 +1,6 @@
 # Repository checks and CI
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-23
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-25
 
 How to run the repository-wide checks locally, which GitHub Actions workflows run them, and the convention that every workflow file follows. Read it before you add hooks to `.pre-commit-config.yaml` or a workflow to `.github/workflows/`. The contract tooling itself is described in [contracts/README.md](../../contracts/README.md).
 
@@ -18,14 +18,12 @@ flowchart LR
     Push --> Ai["ai-service.yml:<br/>jobs ai-service-checks, ai-service-tests,<br/>ai-service-tests-torch,<br/>ai-service-release-command, ai-service-image"]
     Push --> Fe["frontend.yml:<br/>job frontend-checks"]
     Push --> Lr["local-run.yml:<br/>job local-run-compose"]
-    Push -.->|"pull request on its paths"| Ae["autoeval.yml of main:<br/>job offline"]
     Repo -->|"pre-commit run --all-files<br/>--hook-stage manual"| Result{"All checks pass?"}
     Con -->|"audit, pre-commit run contracts-check,<br/>bundle, mock check"| Result
     Be -->|"backend hooks, audit, tests with coverage,<br/>image build"| Result
     Ai -->|"ai-service and release command hooks, audits,<br/>tests without and with torch, pinned file,<br/>image build without modal"| Result
     Fe -->|"audit, pre-commit run frontend-check,<br/>tests, stories, build, UI flow tests"| Result
     Lr -->|"script tests, start with Compose,<br/>health checks, sign-ins, stop"| Result
-    Ae -->|"evaluator tests, autoeval offline:<br/>no LLM call"| Result
     Result -->|"no"| Red["Merge blocked (WF-19)"]
     Result -->|"yes"| Green["Merge allowed"]
 ```
@@ -55,7 +53,6 @@ Each tool is justified here, as [WF-27](../rules/workflow.md#dependencies) requi
 | Workflow files | actionlint 1.7.12, MIT | Checks the syntax, expressions, and action inputs of GitHub Actions workflows, which no other tool here understands | Yes | `repository-checks` |
 | The bash scripts of `deploy/local/` and `eval/release/gate/` | `shellcheck-py` 0.11.0.1, MIT, which installs shellcheck 0.11.0, GPL-3.0 | The standard linter of shell scripts: unquoted expansions, unset variables, and bash features that the bash 3.2 of macOS lacks. The wrapper installs it with pip, so no system package is needed | Yes | `repository-checks` |
 | The workflow convention ([Who checks each rule](#who-checks-each-rule)) | The `workflow-*` and `deploy-workflow-*` pygrep hooks of pre-commit 4.7.0, and `deploy-workflow-copies-backend`, which compares two workflows with bash, sed, and diff | Pattern checks and a file comparison that need no new tool | Yes | `repository-checks` |
-| `apps/backend/` and `apps/demo/` of `main` stay frozen, and only the 28 files of `main` that import them may import them ([ADR-0028, Temporary rules](../decisions/0028-repository-layout-for-the-pull-request-into-main.md#temporary-rules)) | `kept-apps-frozen`, which compares a hash of `git ls-files --stage` of both folders with the value taken after the restore, with sh and git; and `kept-apps-imports`, a pygrep hook of pre-commit 4.7.0 | An index hash and a pattern check that need no new tool | Yes | `repository-checks` |
 | Contract lint, custom rules, example validation, and the TypeScript checks | `contracts-check`, with the tools of [contracts/README.md](../../contracts/README.md#tools) | [RULE-03](../rules/README.md#enforcement), CON-04 to CON-18 | Yes | `contract-checks` |
 | High and critical vulnerabilities in the contract tools | `pnpm audit --audit-level=high` in `contracts/` | [WF-31](../rules/workflow.md#dependencies) | — | `contract-checks` |
 | Contract bundles, and the sign-in flow, the `ai-service` service token, and example files through the Prism mock of each contract | `pnpm run bundle`, `pnpm run check:mock` in `contracts/` | Proves that consumers can generate code from the bundle and use the mock | — | `contract-checks` |
@@ -76,11 +73,10 @@ Each tool is justified here, as [WF-27](../rules/workflow.md#dependencies) requi
 
 pre-commit installs the runtimes of the hooks at the versions in `default_language_version`: Go 1.27.3 for gitleaks and actionlint, and Node.js 24.22.2 for markdownlint-cli2.
 
-Some files are outside some hooks ([ADR-0028, Checks](../decisions/0028-repository-layout-for-the-pull-request-into-main.md#checks)). Each exclusion is written on its hook, and the top-level `exclude` skips only generated code:
+Some files are outside some hooks ([ADR-0028, Checks](../decisions/0028-repository-layout-for-the-pull-request-into-main.md#checks); [ADR-0031, Checks and CI](../decisions/0031-retiring-apps-and-the-evaluation-runners-of-main.md#checks-and-ci); [ADR-0032](../decisions/0032-deleting-the-intent-policy-file-of-main.md)). Each exclusion is written on its hook, and the top-level `exclude` skips only generated code:
 
-- The parts of `main` that ADR-0028 keeps byte for byte, `pipeline/`, `artifacts/`, `apps/`, `tests/`, `scripts/`, `pytest.ini`, nine documents of `docs/`, and the data folders of `main` in `data/`, are outside every hook that could change or refuse them, through `files: *outside-kept-parts`. markdownlint-cli2 therefore skips the 8 Markdown files of those data folders. Both gitleaks hooks and the two hooks of the temporary rules still check them.
-- The hooks that fix files also skip the frozen data of this repository, through `exclude: *frozen-data`: every file of `data/raw/` and every data file of `data/benchmarks/escalation/`. The READMEs there are still checked. `.gitattributes` turns off line-end conversion for `data/**`, `artifacts/**`, and the `intent_policy.v2.json` that the manifests of the system suites pin.
-- Until issue #34 rewrites it, `.github/workflows/autoeval.yml` of `main` is outside the 9 hooks that it fails, through `files: *workflows-except-autoeval`: `workflow-triggers`, `workflow-no-path-filters`, `workflow-no-if`, `workflow-pinned-actions`, `workflow-checkout-credentials`, `workflow-pinned-runner`, `workflow-concurrency`, `workflow-frozen-installs`, and `workflow-secrets-only-in-deploy`. actionlint and every other hook still check it.
+- The parts of `main` that remain, `pipeline/`, `artifacts/`, `tests/`, `scripts/`, `pytest.ini`, nine documents of `docs/`, and the data folders of `main` in `data/`, are outside every hook that could change or refuse them, through `files: *outside-kept-parts`. markdownlint-cli2 therefore skips the 8 Markdown files of those data folders. Both gitleaks hooks still check them.
+- The hooks that fix files also skip the frozen data of this repository, through `exclude: *frozen-data`: every file of `data/raw/` and every data file of `data/benchmarks/escalation/`. The READMEs there are still checked. `.gitattributes` turns off line-end conversion for `data/**` and `artifacts/**`.
 
 ## Set up pre-commit
 
@@ -127,7 +123,7 @@ Run every command in the repository root.
 
 ## Workflow convention
 
-Every file in `.github/workflows/` follows these rules, including the `backend.yml`, `ai-service.yml`, and `frontend.yml` files that the component owners add ([WF-19](../rules/workflow.md#continuous-integration)). `deploy.yml` departs from rules 2 and 7 only, as those rules state. `autoeval.yml` of `main` comes back byte for byte and departs from this convention until issue #34 rewrites it ([ADR-0028, CI](../decisions/0028-repository-layout-for-the-pull-request-into-main.md#ci)); the hooks that it fails skip it ([What runs where](#what-runs-where)). actionlint checks the syntax of every workflow, the `workflow-*` and `deploy-workflow-*` hooks of `.pre-commit-config.yaml` check every rule that a tool can check, and reviewers check the rest ([Who checks each rule](#who-checks-each-rule)).
+Every file in `.github/workflows/` follows these rules, including the `backend.yml`, `ai-service.yml`, and `frontend.yml` files that the component owners add ([WF-19](../rules/workflow.md#continuous-integration)). `deploy.yml` departs from rules 2 and 7 only, as those rules state. actionlint checks the syntax of every workflow, the `workflow-*` and `deploy-workflow-*` hooks of `.pre-commit-config.yaml` check every rule that a tool can check, and reviewers check the rest ([Who checks each rule](#who-checks-each-rule)).
 
 1. **One workflow per area.** The file is `.github/workflows/<area>.yml` with `name: <area>`: `repository`, `contracts`, `backend`, `ai-service`, `frontend`, `local-run`, `deploy`. `local-run` holds the smoke tests of the [local run](local-run.md), which span every component.
 2. **Triggers.** Exactly these, and nothing else ([ADR-0021, CI](../decisions/0021-repository-layout-and-ai-ml-migration.md#ci), statement 3):
@@ -211,7 +207,7 @@ Set these on GitHub for `main` (Settings → Branches, or a ruleset), right afte
 
 GitHub Actions cannot run locally. On the first push, check:
 
-1. All six workflows that a push starts run, and the jobs `repository-checks`, `contract-checks`, `backend-checks`, `backend-tests`, `backend-image`, `ai-service-checks`, `ai-service-tests`, `ai-service-tests-torch`, `ai-service-release-command`, `ai-service-image`, `frontend-checks`, and `local-run-compose` appear. `deploy.yml` does not start on a push. On the PR into `main`, `autoeval.yml` also starts, because the PR touches its paths, and its job `offline` must pass ([ADR-0028, CI](../decisions/0028-repository-layout-for-the-pull-request-into-main.md#ci), statement 5). A missing workflow means a trigger or syntax problem. `frontend-checks` installs Chromium with `playwright install --with-deps chromium`.
+1. All six workflows that a push starts run, and the jobs `repository-checks`, `contract-checks`, `backend-checks`, `backend-tests`, `backend-image`, `ai-service-checks`, `ai-service-tests`, `ai-service-tests-torch`, `ai-service-release-command`, `ai-service-image`, `frontend-checks`, and `local-run-compose` appear. `deploy.yml` does not start on a push. A missing workflow means a trigger or syntax problem. `frontend-checks` installs Chromium with `playwright install --with-deps chromium`.
 2. Every `uses:` step resolves. "Unable to resolve action" means a wrong commit SHA.
 3. `contract-checks` installs pnpm 12.16.1 and Node.js 24.22.2, and `pnpm install --frozen-lockfile` neither reports an outdated lockfile nor stops on an ignored build script.
 4. `repository-checks`, `contract-checks`, `backend-checks`, `ai-service-checks`, `ai-service-release-command`, and `frontend-checks` install pre-commit 4.7.0. The first `repository-checks` run downloads Go 1.27.3 and Node.js 24.22.2 for the hooks and saves the cache; the second run is faster.
