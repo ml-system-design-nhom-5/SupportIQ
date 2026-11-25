@@ -33,13 +33,3 @@ python -m pytest tests/ -q
 # Chạy riêng kiểm thử tiền xử lý
 python -m pytest tests/unit/test_placeholders.py tests/unit/test_clause_split.py -q
 ```
-
----
-
-## 3. Dọn Dẹp Cache Kiểm Thử
-
-Script `scripts/clean_test_cache.ps1` hỗ trợ liệt kê và dọn dẹp an toàn các thư mục cache tạm (`.pytest-*`, `tmp/pytest`, `__pycache__` ngoài môi trường ảo):
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/clean_test_cache.ps1 -Apply
-```

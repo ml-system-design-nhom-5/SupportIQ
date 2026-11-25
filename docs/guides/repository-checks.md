@@ -78,7 +78,7 @@ pre-commit installs the runtimes of the hooks at the versions in `default_langua
 
 Some files are outside some hooks ([ADR-0028, Checks](../decisions/0028-repository-layout-for-the-pull-request-into-main.md#checks); [ADR-0031, Checks and CI](../decisions/0031-retiring-apps-and-the-evaluation-runners-of-main.md#checks-and-ci); [ADR-0032](../decisions/0032-deleting-the-intent-policy-file-of-main.md)). Each exclusion is written on its hook, and the top-level `exclude` skips only generated code:
 
-- The parts of `main` that remain, `pipeline/`, `artifacts/`, `tests/`, `scripts/`, `pytest.ini`, nine documents of `docs/`, and the data folders of `main` in `data/`, are outside every hook that could change or refuse them, through `files: *outside-kept-parts`. markdownlint-cli2 therefore skips the 8 Markdown files of those data folders. Both gitleaks hooks still check them.
+- The parts of `main` that remain, `pipeline/`, `artifacts/`, `tests/`, `pytest.ini`, nine documents of `docs/`, and the data folders of `main` in `data/`, are outside every hook that could change or refuse them, through `files: *outside-kept-parts`. markdownlint-cli2 therefore skips the 8 Markdown files of those data folders. Both gitleaks hooks still check them.
 - The hooks that fix files also skip the frozen data of this repository, through `exclude: *frozen-data`: every file of `data/raw/` and every data file of `data/benchmarks/escalation/`. The READMEs there are still checked. `.gitattributes` turns off line-end conversion for `data/**` and `artifacts/**`.
 
 ## Set up pre-commit

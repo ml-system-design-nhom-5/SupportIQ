@@ -31,7 +31,7 @@ repos:
         args: [--enforce-all, --maxkb=500]
         files: &outside-kept-parts |
           (?x)^(?!
-            (artifacts|pipeline|scripts|tests)/
+            (artifacts|pipeline|tests)/
             | pytest\.ini$
             | data/(benchmarks/(?!escalation/)|business/|datasets/|intent/|knowledge/)
             | docs/(

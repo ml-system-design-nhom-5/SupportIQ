@@ -94,9 +94,8 @@ The parts of `main` that remain are kept at their paths, next to the components 
 | [`pipeline/`](pipeline/README.md) | The offline tools of `main`: the data preparation, the training, and the evaluation of the intent model, of retrieval, and of routing. Not on the serving path |
 | `artifacts/` | The outputs of the runs of `main`: data preparation, training, evaluation, audits, browser tests, and the search index |
 | [`tests/`](tests/README.md), `pytest.ini` | The tests of `pipeline/`, with their pytest configuration. Each component keeps its own tests |
-| `scripts/` | `clean_test_cache.ps1` of `main`, which lists and removes the pytest caches |
 
-The rows from `pipeline/` to `scripts/` are parts of `main`. They follow no engineering rule yet ([ADR-0031, Technical debt](docs/decisions/0031-retiring-apps-and-the-evaluation-runners-of-main.md#technical-debt)).
+The rows from `pipeline/` to `tests/` are parts of `main`. They follow no engineering rule yet ([ADR-0031, Technical debt](docs/decisions/0031-retiring-apps-and-the-evaluation-runners-of-main.md#technical-debt)).
 
 ## Run and test on your machine
 
