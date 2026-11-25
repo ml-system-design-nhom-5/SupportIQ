@@ -210,6 +210,28 @@ repos:
         language: pygrep
         entry: '\bsecrets:\s*inherit\b|^\s+environment:'
         files: ^\.github/workflows/
+      # The one exception of convention 13 beside deploy.yml: two steps read the token of the run. A
+      # pattern sees text, not YAML: a token that an expression builds from `github`, such as
+      # toJSON(github), stays with the reviewers.
+      - id: workflow-run-token-elsewhere
+        name: "Workflow convention 13: only ai-service.yml and local-run.yml read the token of the run"
+        language: pygrep
+        entry: 'github\.token|github *\[|GITHUB_TOKEN|GH_TOKEN'
+        files: ^\.github/workflows/
+        exclude: ^\.github/workflows/(ai-service|local-run)\.yml$
+      # Fails on a line that names the token and is not the allowed line, and on a second one.
+      - id: workflow-run-token-line
+        name: "Workflow convention 13: the token of the run only once, as SUPPORTIQ_RELEASE_TOKEN of a step"
+        language: pygrep
+        entry: '^(?!          SUPPORTIQ_RELEASE_TOKEN: \$\{\{ github\.token \}\}\n)[^\n]*(github\.token|github *\[|GITHUB_TOKEN|GH_TOKEN)|github\.token.*github\.token'
+        args: [--multiline]
+        files: ^\.github/workflows/(ai-service|local-run)\.yml$
+      - id: workflow-run-token-step
+        name: "Workflow convention 13: the token of the run only in its two steps"
+        language: pygrep
+        entry: '^      - name: (Check the pinned release, and its archive on GitHub when the pinned file changed|Start the local run with Compose, with AI from the pinned release)\n        env:\n(          [^\n]*\n)*          SUPPORTIQ_RELEASE_TOKEN: \$\{\{ github\.token \}\}\n        run:'
+        args: [--multiline, --negate]
+        files: ^\.github/workflows/(ai-service|local-run)\.yml$
       # The exceptions of deploy.yml: its trigger (convention 2), its concurrency (convention 7),
       # and the two steps that read its two secrets (convention 13).
       - id: deploy-workflow-trigger

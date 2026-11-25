@@ -56,10 +56,11 @@ jobs:
 
   # Not a required check. It runs in every run, without a path filter, and the release cache keeps
   # the download of the archive to one per release: for release-2026-11-23-01, 324316560 bytes
-  # (about 309 MiB), which the cache holds unpacked. The download is anonymous, because only
-  # deploy.yml reads a secret. A 403 or 429 of GitHub makes the download command end with status
-  # 5, so the start stops with status 1 and names a network failure, and the job is run again by
-  # hand (docs/design/local-run.md, Amendment of 2026-11-23, rollout step 4b).
+  # (about 309 MiB), which the cache holds unpacked. The download sends the token of the run,
+  # because the runners share the rate limit of anonymous requests by IP address (repository
+  # checks, Workflow convention, rule 13; docs/design/local-run.md, Amendment of 2026-11-25). A
+  # 403 or 429 of GitHub makes the download command end with status 5, so the start stops with
+  # status 1 and names a network failure, and the job is run again by hand.
   local-run-compose-ai:
     name: local-run-compose-ai
     runs-on: ubuntu-24.04
@@ -90,6 +91,9 @@ jobs:
           path: ~/.cache/supportiq/releases
           key: local-run-release-${{ steps.pinned.outputs.release_id }}
       - name: Start the local run with Compose, with AI from the pinned release
+        env:
+          # Read-only (contents: read). The download command sends it only to api.github.com.
+          SUPPORTIQ_RELEASE_TOKEN: ${{ github.token }}
         run: deploy/local/local-run.sh start --yes
       - name: Show the parts and their health
         run: deploy/local/local-run.sh status

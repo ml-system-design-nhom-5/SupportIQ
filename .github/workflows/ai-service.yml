@@ -248,12 +248,15 @@ jobs:
       # The pinned file names a published release, always, and GitHub holds its archive with
       # that size whenever the pinned file changes (ADR-0030, Release archives, statement 5).
       # The step always runs and reports. It reads the public API of GitHub only for a change of
-      # the pinned file, anonymously, because a check that depends on another website must not
-      # block other pull requests (repository checks, Open questions). A missing or unfetchable
-      # base counts as a change.
+      # the pinned file, because a check that depends on another website must not block other
+      # pull requests (repository checks, Open questions). A missing or unfetchable base counts
+      # as a change. The token of the run raises the rate limit, which the runners share by IP
+      # address (repository checks, Workflow convention, rule 13).
       - name: Check the pinned release, and its archive on GitHub when the pinned file changed
         env:
           BASE_COMMIT: ${{ github.event.pull_request.base.sha || github.event.before }}
+          # Read-only (contents: read). The command sends it only to api.github.com.
+          SUPPORTIQ_RELEASE_TOKEN: ${{ github.token }}
         run: |
           pinned=eval/releases/pinned-release.txt
           no_commit="$(printf '0%.0s' {1..40})"

@@ -3,7 +3,7 @@
 - **Status:** Approved
 - **Owner:** project lead
 - **Reviewers:** ML engineer, backend engineer, and a second reviewer for [SEC-35](../rules/security-and-privacy.md#security-review)
-- **Last reviewed:** 2026-11-23
+- **Last reviewed:** 2026-11-25
 - **Related:** [ADR-0018](../decisions/0018-hosting-of-ai-service-on-modal.md), [ADR-0030](../decisions/0030-release-archives-and-the-modal-function-of-ai-service.md), [ADR-0021, Release and the offline evaluation gate](../decisions/0021-repository-layout-and-ai-ml-migration.md#release-and-the-offline-evaluation-gate), [local run design](local-run.md), [release command README](../../eval/release/README.md), [DATA-36, DATA-56, DATA-57](../rules/data-and-ml.md#models-and-artifacts), [SEC-10](../rules/security-and-privacy.md#secrets), [SEC-40](../rules/security-and-privacy.md#transport-and-runtime), [WF-27 to WF-30](../rules/workflow.md#dependencies), [#41](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/41)
 
 ## Summary
@@ -25,6 +25,11 @@ No release of contract 1.0.0 is deployed, because the repository has neither the
 11. The checks of the source of `modal_app.py` run without the `deploy` group, and only the tests that import `modal` skip without it ([Testing and evaluation](#testing-and-evaluation)). The app is defined after every function that the checks of a deploy use, and only the function of the app follows it ([The Modal app](#the-modal-app)).
 12. Immutable releases stay off until the system has taken shape, decided by the project lead on 2026-11-23. `release-2026-11-18-02` was uploaded with the setting off, and ADR-0018, Follow-ups stays open until then ([Publish order](#publish-order)).
 13. `.gitattributes` keeps LF line ends for the price file and the pinned file on every checkout, whatever `core.autocrlf` says, because both refuse a CR ([The pinned file](#the-pinned-file), [The price file](#the-price-file)).
+
+**Amended on 2026-11-25 with the project lead's approval.** The CI check of the pinned file sends the token of the run, `github.token`, as `SUPPORTIQ_RELEASE_TOKEN` ([The CI check of the pinned file](#the-ci-check-of-the-pinned-file), item 3). ADR-0030, Download, statement 2, already allows an optional token, and the command reads it, so no code and no ADR changes. The reason of the design against the token, that the shared limit of 60 requests does not matter for this check, is disproved:
+
+- The pinned file is not on `main` (`67d8fc4`), so every run of the PR into `main`, and the first push run on `main`, counts as a change of it and reads GitHub.
+- On 2026-11-25 the step failed on the pull request run of `e9347db` (run 45544569823) and in both attempts on `682fd11` (run 45551410061). The start of `local-run-compose-ai`, which downloads the release too, failed on `e9347db` (run 45544569326), and passed on `682fd11` (run 45551409903). The logs, read by the reviewer, state `rate_limited` and status `403`; they need a sign-in on GitHub.
 
 ## Goals and non-goals
 
@@ -279,7 +284,7 @@ One new step at the end of the job `ai-service-release-command`, which runs the 
 
 1. It takes the base commit: `github.event.pull_request.base.sha` for a pull request, `github.event.before` for a push. It fetches that commit with `git fetch --no-tags --depth=1 origin <sha>`, without credentials, because the repository is public.
 2. When the base is missing, all zeros, cannot be fetched, or holds another pinned file, it runs `check-pinned-release --remote`. Otherwise it runs `check-pinned-release` without `--remote`, and its log says that the pinned file did not change.
-3. The remote check is anonymous. It runs only for a change of the pinned file, so the shared limit of 60 requests per hour is not a risk for other pull requests. A `403` or `429` on that one change is status 5, and the step is run again by hand ([repository checks, Workflow convention](../guides/repository-checks.md#workflow-convention), rule 10).
+3. The remote check sends the token of the run, `github.token`, as `SUPPORTIQ_RELEASE_TOKEN` in the `env` of this step only. It has `contents: read`, and the command sends it only to `api.github.com` ([Download](#download), Token; [repository checks, Workflow convention](../guides/repository-checks.md#workflow-convention), rules 4 and 13). It raises the limit from 60 requests per hour for each IP address to 1,000 per hour for the repository. The check still runs only for a change of the pinned file. A `403` or `429` is still status 5, and the step is run again by hand (rule 10).
 
 No step-level `if:` skips the step, and no path filter is added.
 
@@ -456,7 +461,7 @@ The change touches no guardrail of `ai-service` or `backend`. Staff still approv
 - **Fallback image: `Image.from_registry` of the pinned Python image, then `uv_sync`.** `uv_sync` exists since Modal 1.1.0, and runs `uv sync --frozen` without installing the project ([Modal: Image](https://modal.com/docs/sdk/py/latest/Image)). It would copy the steps of the Dockerfile into a second definition of the image, so it is kept only as the fallback if Modal cannot build `ai-service/Dockerfile`. Switching to it needs the project lead's approval.
 - **The Modal app in `deploy/modal/`, as ARCH-42 places deployment configuration.** No Python toolchain lives there, and the app needs the `modal` package of the `deploy` group of `ai-service`, as the project lead decided on 2026-11-22, for pyright and its tests. `ai-service/` already holds the Dockerfile that the app deploys. [ADR-0030](../decisions/0030-release-archives-and-the-modal-function-of-ai-service.md#the-modal-function) adds the exception to ARCH-42.
 - **The `deploy` group as a default group of uv.** A plain `uv sync` would then install `modal` for every teammate, and `uv sync --no-dev` in the Dockerfile would install it into the image too, which the project lead ruled out on 2026-11-22.
-- **The workflow token for the CI check.** `GITHUB_TOKEN` has 1,000 requests per hour, but rule 13 of the workflow convention lets only `deploy.yml` read a secret. The anonymous check runs only for a change of the pinned file, so the shared limit of 60 does not matter for it.
+- **An anonymous CI check.** The design until 2026-11-25: `GITHUB_TOKEN` has 1,000 requests per hour, but rule 13 of the workflow convention let only `deploy.yml` read a secret, and the anonymous check runs only for a change of the pinned file, so the shared limit of 60 was said not to matter for it. Replaced on 2026-11-25 by the token of the run in this one step, because every run of the PR into `main` is a change of the pinned file ([Summary](#summary)).
 - **A Modal Secret from a `.env` file (`--from-dotenv`).** It would put the key into a file on disk, which the project lead ruled out.
 
 ## Testing and evaluation

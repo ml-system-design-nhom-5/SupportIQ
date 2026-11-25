@@ -421,7 +421,7 @@ An empty value counts as not set. A value that breaks its rule stops the command
 
 `check-pinned-release [--release-records eval/releases] [--remote]` checks the format of the pinned file and that its release has a published manifest in `eval/releases/`, without a request. With `--remote`, it also checks on GitHub that the tag has a published GitHub Release with exactly one uploaded asset, `<release_id>.tar.gz`, of the pinned size. It downloads nothing.
 
-The CI job `ai-service-release-command` runs it on every push to `main` or a `build/**` branch and on every pull request to `main`, with `--remote` only when the pinned file differs from the base commit or the base is missing or cannot be fetched, so the anonymous rate limit of GitHub is not a risk for other changes ([repository checks, What runs where](../../docs/guides/repository-checks.md#what-runs-where)).
+The CI job `ai-service-release-command` runs it on every push to `main` or a `build/**` branch and on every pull request to `main`, with `--remote` only when the pinned file differs from the base commit or the base is missing or cannot be fetched. It sends the token of the run, because the runners share the rate limit of anonymous requests ([repository checks, Workflow convention](../../docs/guides/repository-checks.md#workflow-convention), rule 13; [What runs where](../../docs/guides/repository-checks.md#what-runs-where)).
 
 ## Layout
 
