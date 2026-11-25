@@ -231,6 +231,7 @@ test("the account menu and the show and hide toggle work with the keyboard only"
   await expect(page.getByRole("menu")).toBeHidden();
   await expect(menuButton).toBeFocused();
   await page.keyboard.press("ArrowDown");
+  await expect(page.getByRole("menuitem", { name: "Change password" })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/change-password$/);
 
