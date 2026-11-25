@@ -24,7 +24,7 @@ The first release manifest of `ai-service` needs a routing configuration asset, 
 
 - **No tuned values.** `ml/runs/` does not exist, so no run records a tuning ([DATA-30](../rules/data-and-ml.md#experiments-and-reproducibility)). The out-of-fold predictions of `main` (`artifacts/training/distilbert_cv/oof_predictions.csv`) hold the columns `sample_id`, `fold`, `y_true`, and `y_pred`, and no probabilities, so they cannot tune a threshold. The model artifact of the join has no calibration ([`ai-service` README, Known limits](../../ai-service/README.md#known-limits)). `intent_policy.v2.json` states `approved_by` `lead_ml_engineer` and `approval_date` `2026-11-04`, and names no model version and no tuning data.
 - **The model.** The only model version that the records of `main` name is `v1.0.0`: `apps/ml_inference/app.py` line 20, and `eval/configs/autoeval_baseline.json` lines 24 and 25, which pin it with the weights SHA-256 `dc7af8cffb19fe7711ed5a5d0137ffff3d7d1a1f43bad5a35edff8c8de4c1302`.
-- **The values.** Serving on `main` read them from `intent_policy.v2.json`, which the join keeps byte for byte as [`apps/core_backend/config/policies/intent_policy.v2.json`](../../apps/core_backend/config/policies/intent_policy.v2.json), and from its code:
+- **The values.** Serving on `main` read them from `intent_policy.v2.json`, which the join keeps byte for byte as [`apps/core_backend/config/policies/intent_policy.v2.json`](https://github.com/ml-system-design-nhom-5/SupportIQ/blob/f6c1473695a1d55206db5a82bc05c039e3a0ac54/apps/core_backend/config/policies/intent_policy.v2.json), and from its code:
 
 | Value | Value in `main` | Source in `main` | How `main` applied it |
 |---|---|---|---|

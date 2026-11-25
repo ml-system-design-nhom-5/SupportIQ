@@ -21,10 +21,10 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # frozen: v6.0.0
     hooks:
-      # The kept parts of main, and the one file that stays of apps/, are outside every hook that
-      # could change or refuse them, except gitleaks (ADR-0028, Checks, statements 1 to 4;
-      # ADR-0031, Checks and CI, statement 3). It is a files pattern because a hook takes one
-      # exclude, and three of these hooks already exclude the frozen data.
+      # The kept parts of main are outside every hook that could change or refuse them, except
+      # gitleaks (ADR-0028, Checks, statements 1 to 4; ADR-0031, Checks and CI, statement 3;
+      # ADR-0032). It is a files pattern because a hook takes one exclude, and three of these
+      # hooks already exclude the frozen data.
       # TODO(#42): the kept parts follow no engineering rule yet; this pattern goes when they do
       # (ADR-0028, Follow-ups).
       - id: check-added-large-files
@@ -32,7 +32,6 @@ repos:
         files: &outside-kept-parts |
           (?x)^(?!
             (artifacts|pipeline|scripts|tests)/
-            | apps/core_backend/config/policies/intent_policy\.v2\.json$
             | pytest\.ini$
             | data/(benchmarks/(?!escalation/)|business/|datasets/|intent/|knowledge/)
             | docs/(

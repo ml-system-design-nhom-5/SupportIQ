@@ -1,6 +1,6 @@
 # Architecture decision records
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-23
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-25
 
 An architecture decision record (ADR) captures one significant decision: its context, the options, what we chose, and what it costs. This page lists every ADR and explains the process. Writing rules are in the [documentation handbook](../README.md#adrs).
 
@@ -39,6 +39,7 @@ An architecture decision record (ADR) captures one significant decision: its con
 | [0029](0029-rule-based-detectors-and-a-pre-send-check.md) | Rule-based detectors and a pre-send check in pseudonymization | Accepted | 2026-11-20 |
 | [0030](0030-release-archives-and-the-modal-function-of-ai-service.md) | Release archives and the Modal function of `ai-service` | Accepted | 2026-11-23 |
 | [0031](0031-retiring-apps-and-the-evaluation-runners-of-main.md) | Retiring `apps/` and the evaluation runners of `main` | Accepted | 2026-11-23 |
+| [0032](0032-deleting-the-intent-policy-file-of-main.md) | Deleting `intent_policy.v2.json` of `main` | Accepted | 2026-11-25 |
 
 Notes on the index:
 
@@ -61,6 +62,7 @@ Notes on the index:
 - [ADR-0029](0029-rule-based-detectors-and-a-pre-send-check.md) was accepted on 2026-11-20 by the project lead, together with the approved [personal-data leak fixes design](../design/personal-data-leak-fixes.md). It replaces three passages of [ADR-0010, Detection](0010-pseudonymization-and-egress-control.md#detection): the `PHONE` pattern of step 3, the passage that `ADDRESS` has no regular-expression pattern, and the passage that a value every detector misses is not a failure. It adds to ADR-0010 the rule detectors for names in step 4 and one row of Failure handling, for the stop of the pre-send check, and it amends statement 4 of [ADR-0020](0020-storage-errors-of-the-pseudonym-map.md): that stop is one more deterministic failure, never retried. The rest of ADR-0010, [ADR-0017](0017-named-entity-model-from-its-release-url.md), and ADR-0020 still holds.
 - [ADR-0030](0030-release-archives-and-the-modal-function-of-ai-service.md) was accepted on 2026-11-23 by the project lead, together with the approved [release download and Modal deploy design](../design/release-download-and-modal-deploy.md). It replaces the passages of [ADR-0018](0018-hosting-of-ai-service-on-modal.md) that its section [Passages of ADR-0018 that this ADR replaces](0030-release-archives-and-the-modal-function-of-ai-service.md#passages-of-adr-0018-that-this-adr-replaces) lists: one archive per release instead of one asset per file, a download token that is optional while the repository is public, and the cost estimate. It also sets the resources of the Modal function and records the terms of the Gemini API that SEC-07 asks for. The rest of ADR-0018 still holds.
 - [ADR-0031](0031-retiring-apps-and-the-evaluation-runners-of-main.md) was accepted on 2026-11-23 by the project lead. It replaces the passages of [ADR-0028](0028-repository-layout-for-the-pull-request-into-main.md) and [ADR-0021](0021-repository-layout-and-ai-ml-migration.md) that its section [Passages of other ADRs that this ADR replaces](0031-retiring-apps-and-the-evaluation-runners-of-main.md#passages-of-other-adrs-that-this-adr-replaces) lists, mainly: the kept `apps/` of `main` except `intent_policy.v2.json`, the autoeval, the system evaluation, the acceptance runners, and the temporary rules. The rest of both ADRs still holds.
+- [ADR-0032](0032-deleting-the-intent-policy-file-of-main.md) was accepted on 2026-11-25 by the project lead. It deletes `intent_policy.v2.json`, the only file of `apps/` that ADR-0031 kept, and replaces the passages of [ADR-0021](0021-repository-layout-and-ai-ml-migration.md), [ADR-0025](0025-routing-configuration-of-the-first-release.md), [ADR-0028](0028-repository-layout-for-the-pull-request-into-main.md), and [ADR-0031](0031-retiring-apps-and-the-evaluation-runners-of-main.md) that its section [Passages of other ADRs that this ADR replaces](0032-deleting-the-intent-policy-file-of-main.md#passages-of-other-adrs-that-this-adr-replaces) lists. The served routing values do not change, and the rest of those ADRs still holds.
 
 ## Lifecycle
 
