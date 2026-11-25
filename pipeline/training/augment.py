@@ -13,7 +13,7 @@ from typing import Callable
 
 import pandas as pd
 
-from apps.ml_inference.preprocessing import PLACEHOLDER_TYPES
+from pipeline.preparation.preprocessing import PLACEHOLDER_TYPES
 
 ABBREVIATIONS = {
     "please": ["pls", "plz"], "you": ["u"], "your": ["ur", "yr"], "are": ["r"], "thanks": ["thx", "ty"],

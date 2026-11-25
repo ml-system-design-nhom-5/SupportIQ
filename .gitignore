@@ -14,7 +14,19 @@ data/datasets/
 # (ADR-0021, Large files and data, statement 5; ADR-0018, Artifact store)
 *.safetensors
 *.pt
+*.bin
 *.sqlite3
+*.tar.gz
+*.tgz
+*.zip
+
+# Downloaded release assets inside eval/releases (only gate-run.json and release-manifest.json are committed)
+eval/releases/*/*/
+
+# Extracted model folders and HuggingFace cache
+models--*
+distilbert-supportiq/
+reconstructed-fit2-supcon-20261113/
 
 # Evaluation exports: written only to git-ignored folders, never committed (SEC-33)
 exports/

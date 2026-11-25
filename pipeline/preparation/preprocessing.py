@@ -2,7 +2,7 @@
 
 The classifier sees pseudonymized text. Numbered placeholders such as ``[ORDER_ID_1]`` are mapped to their type
 alone (``[ORDER_ID]``) so the model learns the type, not the counter. This module has no third-party imports so
-that training (``pipeline/``), evaluation (autoeval), and ``ModelContainer.predict`` all call the same function.
+that training (``pipeline/``), evaluation, and model serving all call the same function.
 """
 
 import re

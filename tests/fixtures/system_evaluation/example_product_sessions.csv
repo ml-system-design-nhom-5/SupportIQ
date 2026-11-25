@@ -1,5 +1,0 @@
-participant_id,task_id,condition,trial_order,duration_seconds,outcome,feedback_action,draft_hash
-p01,task_return,manual,1,110.5,completed,approve,mock-draft-hash-001
-p01,task_return,copilot,2,42.0,completed,approve,mock-draft-hash-001
-p02,task_refund,manual,2,95.0,completed,approve,mock-draft-hash-002
-p02,task_refund,copilot,1,38.5,completed,approve,mock-draft-hash-002
