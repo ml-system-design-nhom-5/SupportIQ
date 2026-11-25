@@ -54,3 +54,6 @@ coverage/
 
 # Operating system
 .DS_Store
+
+# New training runs of pipeline/ (tests/unit/test_training.py); the runs that are tracked stay tracked
+/artifacts/training/
