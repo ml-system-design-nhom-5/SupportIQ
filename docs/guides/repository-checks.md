@@ -18,12 +18,14 @@ flowchart LR
     Push --> Ai["ai-service.yml:<br/>jobs ai-service-checks, ai-service-tests,<br/>ai-service-tests-torch,<br/>ai-service-release-command, ai-service-image"]
     Push --> Fe["frontend.yml:<br/>job frontend-checks"]
     Push --> Lr["local-run.yml:<br/>job local-run-compose"]
+    Push --> LrAi["local-run.yml:<br/>job local-run-compose-ai"]
     Repo -->|"pre-commit run --all-files<br/>--hook-stage manual"| Result{"All checks pass?"}
     Con -->|"audit, pre-commit run contracts-check,<br/>bundle, mock check"| Result
     Be -->|"backend hooks, audit, tests with coverage,<br/>image build"| Result
     Ai -->|"ai-service and release command hooks, audits,<br/>tests without and with torch, pinned file,<br/>image build without modal"| Result
     Fe -->|"audit, pre-commit run frontend-check,<br/>tests, stories, build, UI flow tests"| Result
     Lr -->|"script tests, start with Compose,<br/>health checks, sign-ins, stop"| Result
+    LrAi -->|"start with Compose and AI, health checks,<br/>sign-ins, no LLM call, stop"| Shown["Result shown,<br/>not a required check"]
     Result -->|"no"| Red["Merge blocked (WF-19)"]
     Result -->|"yes"| Green["Merge allowed"]
 ```
@@ -70,6 +72,7 @@ Each tool is justified here, as [WF-27](../rules/workflow.md#dependencies) requi
 | Format, lint, types, boundaries, and the generated client of frontend | `frontend-check`, with the tools of [frontend/README.md](../../frontend/README.md#dependencies) | [RULE-03](../rules/README.md#enforcement), [TS-02](../rules/typescript.md#toolchain), [TS-27](../rules/typescript.md#api-access) | Yes | `frontend-checks` |
 | High and critical vulnerabilities, unit tests, stories, the build, and the UI flow tests | `pnpm audit`, `test:unit`, `test:stories`, `build`, `test:e2e` in `frontend/` | [WF-31](../rules/workflow.md#dependencies), [TEST-21](../rules/testing.md#coverage), [UI-32](../rules/ui.md#accessibility) | — | `frontend-checks` |
 | The local run: the script tests of `local-run.sh`, then one start with Compose without AI, its health checks, a sign-in through each origin, a second start without a question, and a stop that leaves nothing ([local run design](../design/local-run.md#testing-and-evaluation)) | `deploy/local/tests/test-local-run.sh`, `deploy/local/local-run.sh`, and `deploy/local/tests/smoke-check.sh`, with the Docker and curl of the runner | WF-32, WF-33, TEST-01 | — | `local-run-compose` |
+| The local run with AI: one start with Compose from the pinned release, health checks and a sign-in through each origin, the readiness of `ai-service`, a check that no text was sent to the LLM (no suggestion job, and no event of a draft step), a second start that uses the release cache without a question, and a stop that leaves nothing ([local run design](../design/local-run.md#testing-and-evaluation)). The download reads GitHub with the token of the run ([Workflow convention](#workflow-convention), rule 13) | `deploy/local/local-run.sh` and `deploy/local/tests/smoke-check.sh`, with the Docker and curl of the runner, and `actions/cache` (MIT) for the release cache, under a key made of the release ID | WF-32, WF-33, TEST-01. The cache keeps the download of the archive, about 309 MiB for `release-2026-11-23-01`, to one per release without a path filter (rule 3) | — | `local-run-compose-ai`, not a required check |
 
 pre-commit installs the runtimes of the hooks at the versions in `default_language_version`: Go 1.27.3 for gitleaks and actionlint, and Node.js 24.22.2 for markdownlint-cli2.
 
@@ -207,17 +210,18 @@ Set these on GitHub for `main` (Settings → Branches, or a ruleset), right afte
 
 GitHub Actions cannot run locally. On the first push, check:
 
-1. All six workflows that a push starts run, and the jobs `repository-checks`, `contract-checks`, `backend-checks`, `backend-tests`, `backend-image`, `ai-service-checks`, `ai-service-tests`, `ai-service-tests-torch`, `ai-service-release-command`, `ai-service-image`, `frontend-checks`, and `local-run-compose` appear. `deploy.yml` does not start on a push. A missing workflow means a trigger or syntax problem. `frontend-checks` installs Chromium with `playwright install --with-deps chromium`.
+1. All six workflows that a push starts run, and the jobs `repository-checks`, `contract-checks`, `backend-checks`, `backend-tests`, `backend-image`, `ai-service-checks`, `ai-service-tests`, `ai-service-tests-torch`, `ai-service-release-command`, `ai-service-image`, `frontend-checks`, `local-run-compose`, and `local-run-compose-ai` appear. `deploy.yml` does not start on a push. A missing workflow means a trigger or syntax problem. `frontend-checks` installs Chromium with `playwright install --with-deps chromium`.
 2. Every `uses:` step resolves. "Unable to resolve action" means a wrong commit SHA.
 3. `contract-checks` installs pnpm 12.16.1 and Node.js 24.22.2, and `pnpm install --frozen-lockfile` neither reports an outdated lockfile nor stops on an ignored build script.
 4. `repository-checks`, `contract-checks`, `backend-checks`, `ai-service-checks`, `ai-service-release-command`, and `frontend-checks` install pre-commit 4.7.0. The first `repository-checks` run downloads Go 1.27.3 and Node.js 24.22.2 for the hooks and saves the cache; the second run is faster.
 5. `repository-checks` passes `Detect hardcoded secrets in the git history`. It scans only the commits reachable from `HEAD`: other branches of the clone, such as `main`, are not scanned.
 6. `pnpm audit --audit-level=high` reports no high or critical advisory except the one ignored in `contracts/pnpm-workspace.yaml`, and `pnpm run check:mock` prints seven `ok` lines: three for `backend.openapi.yaml` and four for `ai-service.openapi.yaml`.
-7. `backend-tests` reaches the PostgreSQL 17 service, creates `supportiq_owner` and `supportiq_app`, and passes both coverage reports. `backend-image` builds `backend/Dockerfile`, which `local-run-compose` builds again for the local run.
+7. `backend-tests` reaches the PostgreSQL 17 service, creates `supportiq_owner` and `supportiq_app`, and passes both coverage reports. `backend-image` builds `backend/Dockerfile`, which `local-run-compose` and `local-run-compose-ai` build again for the local run.
 8. `ai-service-tests-torch` prints the torch version `2.15.0+cpu` and allows no skip, and `ai-service-tests` allows only the skips of the tests that need torch, so the tests of `modal_app.py` run in both. `ai-service-checks` audits torch as `torch==2.15.0`. `ai-service-image` builds `ai-service/Dockerfile` with torch, and its check that `modal` is not in the image passes.
 9. The step for the pinned file in `ai-service-release-command` runs `check-pinned-release --remote` when the pinned file is new or changed since the base commit, and passes only after the archive of the pinned release is on GitHub ([release command README, Publish](../../eval/release/README.md#publish)). Otherwise its log says that the pinned file did not change. A `403` or `429` of the rate limit of GitHub is exit status 5: run the job again by hand (rule 10).
 10. `local-run-compose` passes the script tests, starts the local run, signs in at both origins, starts it again without a question, and leaves no container after `stop`. Its log gives the durations of both starts, from which the deadlines of `deploy/local/local-run.sh` are set.
-11. All jobs finish within their `timeout-minutes`. Then set the branch protection above.
+11. `local-run-compose-ai` starts the local run with AI from the pinned release. Its first run with a release downloads it and saves the release cache; on a later run, its log shows no download. `smoke-check.sh ai` passes after each start, and the second start asks nothing. A `403` or `429` of the rate limit of GitHub is exit status 5 of the download command, so the start stops with status 1 and names a network failure: run the job again by hand (rule 10). The times of its steps give the durations of both starts with AI.
+12. All jobs finish within their `timeout-minutes`. Then set the branch protection above.
 
 The first deploy is step 6 of the [deploy guide, Setup order](../../deploy/README.md#setup-order).
 
