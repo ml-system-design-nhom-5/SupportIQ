@@ -3,7 +3,7 @@
 - **Status:** Approved
 - **Owner:** frontend engineer
 - **Reviewers:** backend engineer, ML engineer, RAG engineer, contracts gatekeeper
-- **Last reviewed:** 2026-11-15
+- **Last reviewed:** 2026-11-25
 - **Related:** [Requirements](../product/requirements.md) (FR-01, FR-04 to FR-07, FR-10, NFR-08, NFR-11, ESC-01 to ESC-05), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0008](../decisions/0008-ui-design-system.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0014](../decisions/0014-citations-to-order-context.md), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md), [ADR-0019](../decisions/0019-one-label-for-text-in-the-placeholder-syntax.md), [ADR-0022](../decisions/0022-server-sent-events-for-suggestion-progress.md), [contracts v1 design](contracts-v1.md) (revision 2), [backend ticket workflow design](backend-ticket-workflow.md), [account management design](account-management.md), [UI rules](../rules/ui.md)
 
 ## Summary
@@ -174,7 +174,7 @@ flowchart TD
     W -->|"a part unavailable: retry starts on the view"| P
     W -->|"retry failed, or manual mode"| M["Manual handling: instructions, reminder, empty editor"]
     M -->|"Try AI again: createSuggestion"| P
-    W -->|"abstained with low_confidence"| L["Choose an intent from the top three candidates"]
+    W -->|"abstained with low_confidence"| L["Choose an intent from the top three candidates, or from Other intent"]
     L -->|"Use this intent: createSuggestion"| P
     W -->|"abstained or escalation recommended for another reason"| N["Reason codes shown; empty editor"]
     W -->|"draft_ready"| D["Draft with citations and warnings"]
@@ -272,7 +272,7 @@ Each state of [UI-23](../rules/ui.md#states) has a mockup.
 | Draft ready | `draft_ready`, with or without warnings | As in the workspace mockup | Shown | [workspace-staff.png](assets/console-ui/workspace-staff.png) |
 | Editing | After Edit draft | The editor; citation markers hidden | Shown | [state-editing.png](assets/console-ui/state-editing.png) |
 | Rejected | After Reject draft | Reason chips, the rejected draft, and an empty editor | Shown | [state-rejected.png](assets/console-ui/state-rejected.png) |
-| Choose an intent | `abstained` with `low_confidence` (ESC-01) | No draft and no filler text; "No draft is created until you choose an intent" | Shown; the middle holds the top three candidates, each with "Use this intent" (UI-42) | [state-choose-intent.png](assets/console-ui/state-choose-intent.png) |
+| Choose an intent | `abstained` with `low_confidence` (ESC-01) | No draft and no filler text; "No draft is created until you choose an intent" | Shown; the middle holds the top three candidates, each with "Use this intent" (UI-42), and below them one row, "None of these? Use:" with Other intent, the menu of the intent strip, for an intent that is not among the three (ESC-01). Where `correct_intent` is not allowed, the candidates have no button and the row is absent | [state-choose-intent.png](assets/console-ui/state-choose-intent.png) |
 | Abstained | `abstained` for another reason (ESC-02, ESC-04) | Reason codes and an empty editor | Shown | [state-abstained.png](assets/console-ui/state-abstained.png) |
 | Escalation recommended | `escalation_recommended` (ESC-03) | Reason codes, an empty editor, and Escalate ticket | Shown | [state-escalation-recommended.png](assets/console-ui/state-escalation-recommended.png) |
 | Intent changed | After Use this intent | Previous draft marked as outdated; new draft pending (UI-22); Escalate ticket enabled. The Authority banner stays if the flag is set | Shown; the staff note comes with the new draft | [state-intent-changed.png](assets/console-ui/state-intent-changed.png) |

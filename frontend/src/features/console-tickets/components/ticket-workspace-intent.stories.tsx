@@ -6,6 +6,7 @@ import {
   answerConsole,
   type ConsoleAnswers,
   workspaceExample,
+  workspaceWith,
   workspaceWithSuggestion,
 } from "@/test/console-screen";
 import { ConsoleStoryFrame } from "@/test/console-story-frame";
@@ -91,6 +92,21 @@ export const OtherIntentOpen: Story = {
 };
 export const ChooseAnIntent: Story = {
   decorators: withAnswers({ workspace: [workspaceExample("abstained-low-confidence")] }),
+};
+export const ChooseAnIntentReadOnly: Story = {
+  decorators: withAnswers({
+    workspace: [workspaceWith("abstained-low-confidence", { allowed_actions: [] })],
+  }),
+};
+export const ChooseAnotherIntent: Story = {
+  decorators: withAnswers({ workspace: [workspaceExample("abstained-low-confidence")] }),
+  play: async ({ canvasElement }) => {
+    await userEvent.click(
+      await within(canvasElement).findByRole("button", { name: "Other intent" }),
+    );
+
+    await expect(await screen.findByRole("menuitem", { name: "Cancel order" })).toBeVisible();
+  },
 };
 export const CorrectionFailed: Story = {
   decorators: withAnswers({ suggestion: [exampleAnswer(409, "problems", "suggestion-pending")] }),

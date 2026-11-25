@@ -79,13 +79,10 @@ export { InlineMessage } from "@/design-system/components/inline-message";
 export type {
   IntentChoiceCandidate,
   IntentChoiceProps,
-  IntentUse,
 } from "@/design-system/components/intent-choice";
 export { IntentChoice } from "@/design-system/components/intent-choice";
 export type {
   IntentConfidence,
-  IntentCorrection,
-  IntentOption,
   IntentStripCandidate,
   IntentStripProps,
 } from "@/design-system/components/intent-strip";
@@ -131,6 +128,11 @@ export type {
   OrderSummaryStatus,
 } from "@/design-system/components/order-summary";
 export { OrderSummary } from "@/design-system/components/order-summary";
+export type {
+  IntentCorrection,
+  IntentOption,
+  IntentUse,
+} from "@/design-system/components/other-intent-menu";
 export type { PageHeaderDensity, PageHeaderProps } from "@/design-system/components/page-header";
 export { PageHeader } from "@/design-system/components/page-header";
 export type { ProductCardProps } from "@/design-system/components/product-card";

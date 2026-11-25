@@ -14,6 +14,7 @@ import {
   openConsole,
   TICKET_PATH,
   workspaceExample,
+  workspaceWith,
   workspaceWithSuggestion,
 } from "@/test/console-screen";
 import { readOperationExample } from "@/test/contract-examples";
@@ -244,9 +245,48 @@ describe("Choosing an intent (UI-42)", () => {
       intent_override: "request_refund",
     });
   });
+
+  it("sends an intent outside the top three from Other intent (ESC-01)", async () => {
+    const { user, backend, main } = await openWorkspace({
+      workspace: [workspaceExample("abstained-low-confidence")],
+    });
+    expect(within(main).queryByRole("region", { name: "Intent" })).toBeNull();
+
+    await user.click(within(main).getByRole("button", { name: "Other intent" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Cancel order" }));
+
+    const [key] = await readSuggestionKeys(backend, 1);
+    expect(key).toMatch(idempotencyKeyPattern);
+    expect(backend.requestsTo(createSuggestionRoute)[0]?.body).toEqual({
+      intent_override: "cancel_order",
+    });
+  });
+
+  it("offers every intent but the predicted one in Other intent", async () => {
+    const { user, main } = await openWorkspace({
+      workspace: [workspaceExample("abstained-low-confidence")],
+    });
+    const choice = within(main).getByRole("region", { name: "Choose an intent" });
+
+    await user.click(within(choice).getByRole("button", { name: "Other intent" }));
+
+    const menu = await screen.findByRole("menu", { name: "Other intent" });
+    expect(within(menu).getAllByRole("menuitem")).toHaveLength(45);
+    expect(within(menu).queryByRole("menuitem", { name: "Refund status" })).toBeNull();
+  });
 });
 
 describe("No correction without correct_intent (UI-40)", () => {
+  it("offers no intent of the choice when backend does not allow a correction", async () => {
+    const { main } = await openWorkspace({
+      workspace: [workspaceWith("abstained-low-confidence", { allowed_actions: [] })],
+    });
+
+    const choice = within(main).getByRole("region", { name: "Choose an intent" });
+    expect(within(choice).getAllByRole("listitem")).toHaveLength(3);
+    expect(within(choice).queryAllByRole("button")).toEqual([]);
+  });
+
   it("shows the intent read-only when backend does not allow a correction", async () => {
     const { main } = await openWorkspace({ workspace: [workspaceExample("read-only-for-staff")] });
 

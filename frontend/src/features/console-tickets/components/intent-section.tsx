@@ -10,6 +10,7 @@ import { Sparkles } from "lucide-react";
 
 import {
   IntentChoice,
+  type IntentCorrection,
   IntentStrip,
   type IntentUse,
   Panel,
@@ -137,12 +138,8 @@ function IntentOfAnalysis({
       {...(state.canCorrect
         ? {
             correction: {
-              ...use,
+              ...toCorrection(intent.intent, use),
               otherIntentId: OTHER_INTENT_ID,
-              otherIntents: listOtherIntents(intent.intent).map((other) => ({
-                value: other.label,
-                name: other.name,
-              })),
             },
           }
         : {})}
@@ -151,8 +148,10 @@ function IntentOfAnalysis({
 }
 
 /**
- * Render the top three candidates after an abstention for low confidence, each with "Use this
- * intent" when `backend` allows a correction (UI-42).
+ * Render the top three candidates after an abstention for low confidence. When `backend` allows a
+ * correction, each has "Use this intent", and Other intent is below them (UI-42). That button has
+ * no `OTHER_INTENT_ID`: the choice goes away with the correction, so the focus waits for the button
+ * of the strip.
  *
  * @param props - The state, and how staff use an intent.
  * @returns The choice.
@@ -175,9 +174,30 @@ function IntentCandidates({
         },
         ...state.alternatives.map(toCandidate),
       ]}
-      {...(state.canCorrect ? { use } : {})}
+      {...(state.canCorrect ? { correction: toCorrection(state.intent.intent, use) } : {})}
     />
   );
+}
+
+/**
+ * Build the correction that the strip and the choice offer.
+ *
+ * @param intent - The intent on the strip, or the predicted one of the choice, which Other intent
+ *   leaves out.
+ * @param use - How staff use an intent.
+ * @returns The correction, with the intents of Other intent.
+ */
+function toCorrection(
+  intent: Intent,
+  use: IntentUse<ChoosableIntentLabel>,
+): IntentCorrection<ChoosableIntentLabel> {
+  return {
+    ...use,
+    otherIntents: listOtherIntents(intent).map((other) => ({
+      value: other.label,
+      name: other.name,
+    })),
+  };
 }
 
 /**

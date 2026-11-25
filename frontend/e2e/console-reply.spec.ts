@@ -202,6 +202,37 @@ test("TEST-27: a low-confidence ticket gets a draft once staff confirm the inten
   await expect(main.getByRole("button", { name: "Edit draft" })).toBeEnabled();
 });
 
+test("TEST-27: a low-confidence ticket takes an intent outside the top three", async ({ page }) => {
+  const chooseTicket = await openTicket(
+    page,
+    DRAFT_READY_PATH,
+    replyFlow("example=abstained-low-confidence"),
+  );
+  await changeTicketOnWrite(page, createSuggestionRequest, {
+    chooseTicket,
+    prefer: "example=intent-corrected",
+  });
+  const main = page.getByRole("main");
+  const suggestions = recordWrites(page, "/suggestions");
+  const choice = main.getByRole("region", { name: "Choose an intent" });
+  await expect(choice).toContainText("None of these? Use:");
+  await expectNoAccessibilityViolations(page);
+
+  // By keyboard alone: the menu opens, typing finds the intent, and Enter chooses it (UI-30).
+  await choice.getByRole("button", { name: "Other intent" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("menuitem", { name: "Cancel order" })).toBeVisible();
+  await page.keyboard.type("cancel o");
+  await page.keyboard.press("Enter");
+
+  const strip = main.getByRole("region", { name: "Intent", exact: true });
+  await expect(strip).toContainText("Chosen by staff");
+  await expect(main.getByRole("region", { name: "AI draft" })).toContainText(DRAFT_SENTENCE);
+  expect(suggestions).toEqual([{ intent_override: "cancel_order" }]);
+  await expect(strip.getByRole("button", { name: "Other intent" })).toBeFocused();
+  await expectNoAccessibilityViolations(page);
+});
+
 test("TEST-27: an intent correction produces a new draft", async ({ page }) => {
   const chooseTicket = await openTicket(page, DRAFT_READY_PATH, draftReadyFlow);
   await changeTicketOnWrite(page, createSuggestionRequest, {

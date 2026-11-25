@@ -93,12 +93,18 @@ export const OtherIntentOpen: Story = {
   },
 };
 export const ChooseAnIntentWithUse: Story = {
-  render: () => (
-    <IntentChoice candidates={choiceCandidates} use={{ isSending: false, onUseIntent: fn() }} />
-  ),
+  render: () => <IntentChoice candidates={choiceCandidates} correction={correction} />,
 };
 export const ChooseAnIntentSending: Story = {
   render: () => (
-    <IntentChoice candidates={choiceCandidates} use={{ isSending: true, onUseIntent: fn() }} />
+    <IntentChoice candidates={choiceCandidates} correction={{ ...correction, isSending: true }} />
   ),
+};
+export const ChooseAnIntentOtherIntentOpen: Story = {
+  render: () => <IntentChoice candidates={choiceCandidates} correction={correction} />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Other intent" }));
+
+    await expect(await screen.findByRole("menuitem", { name: "Return product" })).toBeVisible();
+  },
 };

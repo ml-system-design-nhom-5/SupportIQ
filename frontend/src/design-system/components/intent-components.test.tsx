@@ -2,7 +2,8 @@ import { screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { IntentChoice } from "@/design-system/components/intent-choice";
-import { type IntentCorrection, IntentStrip } from "@/design-system/components/intent-strip";
+import { IntentStrip } from "@/design-system/components/intent-strip";
+import type { IntentCorrection } from "@/design-system/components/other-intent-menu";
 import { renderUi } from "@/test/render-app";
 
 /** The intents of Other intent in these tests. */
@@ -47,7 +48,7 @@ function renderCorrectableStrip(overrides: Partial<IntentCorrection> = {}) {
 }
 
 /**
- * Render the choice of an intent with "Use this intent".
+ * Render the choice of an intent with "Use this intent" and Other intent.
  *
  * @param isSending - Whether a correction is sending.
  * @returns The handler of the choices and the user-event instance.
@@ -57,7 +58,7 @@ function renderChoiceWithUse(isSending: boolean) {
   const { user } = renderUi(
     <IntentChoice
       candidates={choiceCandidates}
-      use={{ isSending, onUseIntent: handleUseIntent }}
+      correction={{ otherIntents, isSending, onUseIntent: handleUseIntent }}
     />,
   );
   return { handleUseIntent, user };
@@ -151,9 +152,10 @@ describe("IntentChoice with Use this intent", () => {
   it("offers no button for a candidate that staff cannot choose", () => {
     renderChoiceWithUse(false);
 
-    expect(screen.getAllByRole("button")).toHaveLength(2);
+    expect(screen.getAllByRole("button")).toHaveLength(3);
     expect(screen.getByRole("button", { name: "Use this intent: Cancel order" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Use this intent: Change order" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Other intent" })).toBeVisible();
   });
 
   it("ignores Use this intent while a correction is sending", async () => {
@@ -164,5 +166,63 @@ describe("IntentChoice with Use this intent", () => {
 
     expect(button).toHaveAttribute("aria-disabled", "true");
     expect(handleUseIntent).not.toHaveBeenCalled();
+  });
+});
+
+describe("IntentChoice with Other intent", () => {
+  it("uses an intent that is not among the candidates (ESC-01)", async () => {
+    const { handleUseIntent, user } = renderChoiceWithUse(false);
+
+    await user.click(screen.getByRole("button", { name: "Other intent" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Track order" }));
+
+    expect(handleUseIntent).toHaveBeenCalledExactlyOnceWith("track_order");
+  });
+
+  it("is one row below the list, which holds only the candidates", () => {
+    renderChoiceWithUse(false);
+
+    const choice = screen.getByRole("region", { name: "Choose an intent" });
+    expect(within(choice).getAllByRole("listitem")).toHaveLength(choiceCandidates.length);
+    expect(
+      within(within(choice).getByRole("list")).queryByRole("button", { name: "Other intent" }),
+    ).toBeNull();
+    expect(choice).toHaveTextContent(/Unspecified intent11%None of these\? Use:Other intent$/);
+  });
+
+  it("opens with the keyboard, chooses by typing, and gives the focus back (UI-30)", async () => {
+    const { handleUseIntent, user } = renderChoiceWithUse(false);
+    const button = screen.getByRole("button", { name: "Other intent" });
+
+    button.focus();
+    await user.keyboard("{Enter}");
+    await screen.findByRole("menu", { name: "Other intent" });
+    await user.keyboard("{Escape}");
+    expect(button).toHaveFocus();
+
+    await user.keyboard("{Enter}");
+    await screen.findByRole("menu", { name: "Other intent" });
+    await user.keyboard("track{Enter}");
+
+    expect(handleUseIntent).toHaveBeenCalledExactlyOnceWith("track_order");
+  });
+
+  it("disables its intents while a correction is sending", async () => {
+    const { handleUseIntent, user } = renderChoiceWithUse(true);
+
+    await user.click(screen.getByRole("button", { name: "Other intent" }));
+    const intent = await screen.findByRole("menuitem", { name: "Track order" });
+    await user.click(intent);
+
+    expect(intent).toHaveAttribute("aria-disabled", "true");
+    expect(handleUseIntent).not.toHaveBeenCalled();
+  });
+
+  it("is absent when staff may not choose an intent (UI-40)", () => {
+    renderUi(<IntentChoice candidates={choiceCandidates} />);
+
+    const choice = screen.getByRole("region", { name: "Choose an intent" });
+    expect(within(choice).queryAllByRole("button")).toEqual([]);
+    expect(choice).not.toHaveTextContent("None of these?");
   });
 });

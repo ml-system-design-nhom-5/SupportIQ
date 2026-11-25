@@ -7,20 +7,21 @@
  * one interaction from where the intent is shown. The strip is AI output, so it carries the `ai`
  * marker (UI-13).
  */
-import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
-import { ChevronRight, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 
 import {
   type ConfidenceBandName,
   ConfidenceMeter,
 } from "@/design-system/components/confidence-meter";
-import type { IntentUse } from "@/design-system/components/intent-choice";
+import {
+  type IntentCorrection,
+  type IntentUse,
+  OtherIntentMenu,
+} from "@/design-system/components/other-intent-menu";
 import { Tag } from "@/design-system/components/tag";
 import { formatPercent } from "@/design-system/format/number";
 import { Button } from "@/design-system/primitives/button";
-import { cn } from "@/design-system/primitives/class-names";
 import { Icon } from "@/design-system/primitives/icon";
-import { MENU_CONTENT_CLASSES, MENU_ITEM_CLASSES } from "@/design-system/primitives/menu-item";
 import { Panel } from "@/design-system/primitives/panel";
 import { VisuallyHidden } from "@/design-system/primitives/visually-hidden";
 
@@ -36,23 +37,6 @@ export type IntentStripCandidate<Value extends string = string> = {
 export type IntentConfidence = {
   readonly band: ConfidenceBandName;
   readonly probability: number;
-};
-
-/** An intent of the Other intent menu. */
-export type IntentOption<Value extends string = string> = {
-  readonly value: Value;
-  readonly name: string;
-};
-
-/** How staff correct the intent from the strip (UI-22). */
-export type IntentCorrection<Value extends string = string> = IntentUse<Value> & {
-  /** The intents that Other intent lists, in the order of the menu. */
-  readonly otherIntents: readonly IntentOption<Value>[];
-  /**
-   * The ID of the Other intent button, which a script moves the focus to, such as when the
-   * element that held the focus is gone (UI-30). The menu stays named by the button.
-   */
-  readonly otherIntentId?: string;
 };
 
 /** Props of {@link IntentStrip}. */
@@ -212,60 +196,5 @@ function CandidateButton<Value extends string>({
         <span className="text-text-muted">{formatPercent(candidate.probability)}</span>
       </span>
     </Button>
-  );
-}
-
-/**
- * Render Other intent: a button that opens the menu of the other intents. Enter, Space, or the
- * down arrow opens it, the arrow keys and typing move between the intents, Escape closes it, and
- * the focus returns to the button. The menu opens beside the button and stays within the height
- * of the window, where its list scrolls. Its items are disabled while a correction is sending.
- * The button takes the `otherIntentId` of the correction, and the menu is then labelled by that ID
- * instead of the one that Radix gives the button, so it keeps its name.
- *
- * @param props - The correction.
- * @returns The button; the menu opens in a portal.
- */
-function OtherIntentMenu<Value extends string>({
-  correction,
-}: {
-  readonly correction: IntentCorrection<Value>;
-}) {
-  const { otherIntentId } = correction;
-  return (
-    // Not modal, as in the WAI-ARIA menu button pattern (axe aria-hidden-focus, UI-32).
-    <DropdownMenuPrimitive.Root modal={false}>
-      <DropdownMenuPrimitive.Trigger
-        asChild
-        {...(otherIntentId === undefined ? {} : { id: otherIntentId })}
-      >
-        <Button size="sm" variant="ghost">
-          Other intent
-          <Icon icon={ChevronRight} />
-        </Button>
-      </DropdownMenuPrimitive.Trigger>
-      <DropdownMenuPrimitive.Portal>
-        <DropdownMenuPrimitive.Content
-          side="right"
-          align="start"
-          sideOffset={4}
-          className={cn(MENU_CONTENT_CLASSES, "max-h-screen overflow-y-auto")}
-          {...(otherIntentId === undefined ? {} : { "aria-labelledby": otherIntentId })}
-        >
-          {correction.otherIntents.map((option) => (
-            <DropdownMenuPrimitive.Item
-              key={option.value}
-              className={MENU_ITEM_CLASSES}
-              disabled={correction.isSending}
-              onSelect={() => {
-                correction.onUseIntent(option.value);
-              }}
-            >
-              {option.name}
-            </DropdownMenuPrimitive.Item>
-          ))}
-        </DropdownMenuPrimitive.Content>
-      </DropdownMenuPrimitive.Portal>
-    </DropdownMenuPrimitive.Root>
   );
 }

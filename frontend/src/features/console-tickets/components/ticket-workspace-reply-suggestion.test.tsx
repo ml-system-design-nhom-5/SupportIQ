@@ -166,6 +166,27 @@ describe("The focus after an action (UI-30)", () => {
     });
   });
 
+  it("moves to Other intent of the strip once staff chose another intent", async () => {
+    const { user, main } = await openReplyArea({
+      workspace: [
+        workspaceExample("abstained-low-confidence"),
+        workspaceWithSuggestion(
+          "draft-ready",
+          readOperationExample("createSuggestion", 202, "intent-override"),
+        ),
+      ],
+    });
+    const choice = within(main).getByRole("region", { name: "Choose an intent" });
+
+    await user.click(within(choice).getByRole("button", { name: "Other intent" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Cancel order" }));
+
+    const strip = await within(main).findByRole("region", { name: "Intent" });
+    await waitFor(() => {
+      expect(within(strip).getByRole("button", { name: "Other intent" })).toHaveFocus();
+    });
+  });
+
   it("moves to the generating draft once Try AI again started it", async () => {
     const { user, main } = await openReplyArea({
       workspace: [
