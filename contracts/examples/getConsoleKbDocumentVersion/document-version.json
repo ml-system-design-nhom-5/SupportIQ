@@ -1,0 +1,15 @@
+{
+  "summary": "The full text of a cited document version",
+  "description": "A sample, not KB content: the KB files have not arrived (contracts v1 design, KB data contract).",
+  "value": {
+    "document_id": "SAMPLE-REFUND-001",
+    "version": "1.0",
+    "title": "Sample refund document",
+    "body": "This is sample text. It is not KB content and not a policy. The approved KB files will replace it.",
+    "policy_key": "sample_refund_timeline",
+    "effective_start_at": "2026-01-01T00:00:00Z",
+    "effective_end_at": "2027-01-01T00:00:00Z",
+    "owner": "Policy owner (sample)",
+    "source": "Sample source document"
+  }
+}

@@ -1,0 +1,51 @@
+description: >-
+  Why the AI recommends what it recommends, as the contracts v1 design defines (reason codes),
+  with the escalation rule each code refines.
+  `low_confidence`: the top intent probability is below τ, or the gap between the top two
+  probabilities is below δ (ESC-01).
+  `signal_disagreement`: the predicted intent and the top documents point to different topics; a
+  warning that lowers the confidence (ADR-0005, statement 4).
+  `out_of_scope_intent`: the intent is outside the 12 in-scope intents (ESC-02).
+  `human_agent_requested`: the intent is `human_agent` (ESC-03). It never sets the authority
+  flag.
+  `requires_authority`: a refund decision, a transaction dispute, a policy exception, a legal
+  claim, or suspected fraud (FR-06, ESC-03). It comes only from the intent distribution and the
+  sensitive-term list of the routing configuration, never from the LLM (SEC-26).
+  `no_valid_document`: no document version in effect at `as_of` supports the request (ESC-04).
+  `only_expired_documents`: relevant document versions exist, but none is in effect at `as_of`
+  (ESC-04).
+  `conflicting_sources`: two versions in effect with the same policy key disagree (ESC-04).
+  `missing_information`: the request needs information that is in neither the message nor the
+  order context (ESC-04).
+  `source_review_overdue`: a document version is past its review deadline under the KB freshness
+  rules; a warning only, never a reason to abstain (ESC-04).
+  `grounding_failed`: the draft made claims that its sources do not support (ESC-05).
+  `llm_unavailable`: the LLM timed out, failed, or was rate-limited, a call to a host that is not
+  on the egress allow-list was refused, or the circuit breaker of the LLM calls is open (ESC-05).
+  `llm_invalid_output`: the LLM output failed schema validation, or it contained a placeholder
+  that was not in the prompt (ESC-05).
+  `budget_exceeded`: the latency budget ran out before drafting (ESC-05).
+  `ai_service_unavailable`: set only by `backend`; `ai-service` was unreachable, timed out,
+  returned `4xx` or `5xx`, returned an invalid response, or the job ran out of attempts (ESC-05).
+  `pseudonymization_failed`: set only by `backend`; pseudonymization failed or produced text
+  longer than `PseudonymizedText` allows, and `ai-service` was not called (ESC-05).
+  `ai-service` never returns the last two codes. Consumers show an unknown value as an
+  unspecified reason (CON-22). Data class: Internal.
+type: string
+enum:
+  - low_confidence
+  - signal_disagreement
+  - out_of_scope_intent
+  - human_agent_requested
+  - requires_authority
+  - no_valid_document
+  - only_expired_documents
+  - conflicting_sources
+  - missing_information
+  - source_review_overdue
+  - grounding_failed
+  - llm_unavailable
+  - llm_invalid_output
+  - budget_exceeded
+  - ai_service_unavailable
+  - pseudonymization_failed

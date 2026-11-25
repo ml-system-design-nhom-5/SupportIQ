@@ -1,0 +1,111 @@
+{
+  "format": "supportiq-document-intents/interim-1",
+  "version": "v2.1",
+  "kb_version": "v2.1",
+  "documents": [
+    {
+      "document_id": "POL-ORD-001",
+      "version": "1.1",
+      "intents": [
+        "track_order"
+      ]
+    },
+    {
+      "document_id": "POL-ORD-002",
+      "version": "1.1",
+      "intents": [
+        "cancel_order"
+      ]
+    },
+    {
+      "document_id": "POL-ORD-003",
+      "version": "1.0",
+      "intents": [
+        "change_order"
+      ]
+    },
+    {
+      "document_id": "POL-PAY-001",
+      "version": "1.1",
+      "intents": [
+        "payment_issue"
+      ]
+    },
+    {
+      "document_id": "POL-PAY-004",
+      "version": "1.1",
+      "intents": [
+        "payment_issue"
+      ]
+    },
+    {
+      "document_id": "POL-REFUND-001",
+      "version": "1.1",
+      "intents": [
+        "refund_policy",
+        "request_refund"
+      ]
+    },
+    {
+      "document_id": "POL-REFUND-002",
+      "version": "2.1",
+      "intents": [
+        "refund_policy",
+        "refund_status",
+        "request_refund"
+      ]
+    },
+    {
+      "document_id": "POL-REFUND-007",
+      "version": "1.1",
+      "intents": [
+        "refund_status"
+      ]
+    },
+    {
+      "document_id": "POL-RET-001",
+      "version": "2.1",
+      "intents": [
+        "return_policy",
+        "return_product"
+      ]
+    },
+    {
+      "document_id": "POL-RET-002",
+      "version": "2.1",
+      "intents": [
+        "return_product",
+        "return_policy"
+      ]
+    },
+    {
+      "document_id": "POL-RET-003",
+      "version": "2.1",
+      "intents": [
+        "return_policy",
+        "return_product"
+      ]
+    },
+    {
+      "document_id": "POL-SHIP-001",
+      "version": "1.1",
+      "intents": [
+        "delivery_time"
+      ]
+    },
+    {
+      "document_id": "POL-SHIP-002",
+      "version": "1.1",
+      "intents": [
+        "shipping_costs"
+      ]
+    },
+    {
+      "document_id": "POL-SHIP-004",
+      "version": "1.1",
+      "intents": [
+        "delivery_issue"
+      ]
+    }
+  ]
+}

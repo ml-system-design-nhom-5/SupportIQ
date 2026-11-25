@@ -1,10 +1,8 @@
 # Documentation handbook
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-12
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-05
 
 This handbook tells you where each document lives and how to write it. It applies to every contributor, human or AI agent. A change is not done until its documentation is correct.
-
-Historical Topic 1 audit logs and evaluation snapshots are archived at git tag `archive/pre-doc-pruning` (`git checkout archive/pre-doc-pruning -- docs/audits/`).
 
 ## Principles
 
@@ -23,11 +21,11 @@ Historical Topic 1 audit logs and evaluation snapshots are archived at git tag `
 | [`docs/decisions/`](decisions/README.md) | Architecture decision records (ADRs): why we chose what we chose | team |
 | [`docs/design/`](design/contracts-v1.md) | Design docs: how a feature will work, written before code | feature owner |
 | `docs/architecture/` | Living description of the system as it is today: components, flows, data | team |
-| `docs/guides/` | How-to guides: set up, run, evaluate | component owner |
+| [`docs/guides/`](guides/repository-checks.md) | How-to guides: set up, run, evaluate | component owner |
 | [`docs/rules/`](rules/README.md) | Engineering rules every contributor follows | team |
 | [`docs/templates/`](templates/adr.md) | Templates for ADRs and design docs | team |
 | [`docs/glossary.md`](glossary.md) | Canonical domain terms | team |
-| `contracts/` | API and data contracts, with examples and a changelog | contracts gatekeeper |
+| [`contracts/`](../contracts/README.md) | API and data contracts, with examples and a changelog | contracts gatekeeper |
 | `<component>/README.md` | How to run, test, and navigate one component | component owner |
 | [`AGENTS.md`](../AGENTS.md) | Instructions for AI coding agents, whatever the tool. It links to these docs and never restates them. Personal agent configuration (for example `CLAUDE.md`, `.claude/`) is not committed | team |
 
@@ -120,7 +118,7 @@ The keywords MUST, MUST NOT, SHOULD, SHOULD NOT, and MAY are used as defined in 
 - Link to repository files with relative links. Do not paste bare URLs; use descriptive link text.
 - Every code block has a language tag (`text` for directory trees and plain output).
 - Use tables for comparisons, lists for items, and prose for reasoning.
-- Once CI exists, it runs a Markdown linter and a link checker on `docs/` and every `README.md`.
+- CI runs a Markdown linter and a check of every relative link and `#fragment` on every Markdown file ([repository checks](guides/repository-checks.md)).
 
 ## ADRs
 

@@ -1,0 +1,11 @@
+{
+  "summary": "The account already has the requested status",
+  "value": {
+    "type": "urn:supportiq:problem:invalid-request",
+    "title": "Invalid request",
+    "status": 422,
+    "detail": "The account already has this status.",
+    "trace_id": "8448eb211c80319c0af7651916cd43dd",
+    "violated_rule": "status_unchanged"
+  }
+}

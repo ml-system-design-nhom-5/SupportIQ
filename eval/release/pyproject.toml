@@ -1,0 +1,191 @@
+[project]
+name = "supportiq-release"
+version = "0.1.0"
+description = "SupportIQ release command: KB ingestion, the candidate release manifest, the offline evaluation gate, and the release download."
+readme = "README.md"
+# One Python version for all Python code, pinned with ../../.python-version (PY-01).
+requires-python = "~=3.14.4"
+# KB ingestion needs only the standard library. The candidate manifest and the gate use
+# ai-service through its public modules only (ADR-0021, Where the code of main goes, statements 1
+# and 3). The settings of the release download are one pydantic-settings class, with the token
+# as SecretStr (PY-43, PY-44). Each version is the one of ai-service/uv.lock. Every dependency is
+# justified in README.md (WF-27).
+dependencies = [
+    "defusedxml==0.7.1",
+    "httpx==0.28.1",
+    "pydantic==2.14.3",
+    "pydantic-settings==2.16.2",
+    "starlette==1.10.0",
+    "supportiq-ai-service",
+]
+
+[tool.uv.sources]
+# The ai-service of this repository, so a candidate is checked by the code that serves it.
+supportiq-ai-service = { path = "../../ai-service", editable = true }
+
+[project.scripts]
+supportiq-release = "supportiq_release.composition_root:main"
+
+[dependency-groups]
+# Development dependencies, separate from the runtime ones (PY-46). The versions are those of
+# ai-service, whose rule level this project follows (ADR-0021, CI, statement 7).
+dev = [
+    "coverage==7.17.2",
+    "import-linter==2.16",
+    "pip-audit==2.10.1",
+    "pyright[nodejs]==1.1.414",
+    "pytest==9.2.0",
+    "pytest-cov==7.1.0",
+    "pytest-randomly==5.0.0",
+    "pytest-socket==0.8.1",
+    "pytest-xdist==3.8.0",
+    "ruff==0.17.4",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.11,<0.12"]
+build-backend = "uv_build"
+
+# ----- Formatting and linting (PY-03, PY-04, PY-05), as in ai-service -----
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "N", "D", "ANN", "B", "PIE", "RUF", "S", "ASYNC", "DTZ", "T20",
+    "ERA", "C90", "PL", "PT", "PTH", "RET", "SIM", "C4", "TRY", "EM", "ARG", "TID",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests: `assert` is the pytest assertion (PY-29); test names state the behavior, so a
+# docstring per test function would repeat the name (TEST-03).
+"tests/**" = ["S101", "D103"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.mccabe]
+max-complexity = 8
+
+[tool.ruff.lint.pylint]
+max-args = 5
+max-branches = 8
+max-returns = 4
+max-statements = 30
+max-nested-blocks = 3
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.isort]
+known-first-party = ["supportiq_release", "tests"]
+
+# ----- Type checking (PY-03, CODE-26) -----
+[tool.pyright]
+include = ["src", "tests"]
+exclude = ["**/__pycache__", ".venv"]
+typeCheckingMode = "strict"
+pythonVersion = "3.14"
+venvPath = "."
+venv = ".venv"
+# ai-service ships no `py.typed`, so pyright reads its source to check the calls of this project.
+extraPaths = ["src", "../../ai-service"]
+reportMissingModuleSource = "error"
+reportUnnecessaryTypeIgnoreComment = "error"
+
+# ----- Tests (TEST-14 to TEST-16, TEST-21) -----
+[tool.pytest.ini_options]
+minversion = "9.0"
+testpaths = ["tests"]
+# The fakes and builders live in the `tests` package, next to the tests that own them (ARCH-27).
+pythonpath = ["."]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--import-mode=importlib",
+    # Parallel workers (TEST-15).
+    "--numprocesses=auto",
+    "--dist=loadfile",
+    # No test opens a socket (TEST-16): the command reads and writes local files only.
+    "--disable-socket",
+    "--allow-unix-socket",
+]
+xfail_strict = true
+# Zero warnings (PY-03): every warning fails the test run.
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+branch = true
+source = ["supportiq_release"]
+
+[tool.coverage.report]
+# The overall floor of TEST-21. The floor for the domain layer is checked by a second
+# `coverage report` with --include (README.md, Commands).
+fail_under = 80
+show_missing = true
+skip_covered = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "assert_never\\(",
+    "raise AssertionError",
+    "\\.\\.\\.$",
+]
+
+# ----- Layer boundaries (ARCH-11, ADR-0021) -----
+# ai-service is a root package too, so a contract can tell its public module
+# `release.manifest` from its internals.
+[tool.importlinter]
+root_packages = ["supportiq_release", "app"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Layers: the composition root, then adapters, then shared files, then domain, then the root error (ARCH-11, PY-20)"
+type = "layers"
+# The domain of the release download sits above the other domains, because it uses the pattern
+# of a release ID and the name of the manifest from the public API of the candidate domain.
+layers = [
+    "supportiq_release.composition_root",
+    "supportiq_release.gate.adapters",
+    "supportiq_release.kb_ingestion.adapters | supportiq_release.candidate.adapters | supportiq_release.distribution.adapters",
+    "supportiq_release.files",
+    "supportiq_release.distribution.domain",
+    "supportiq_release.kb_ingestion.domain | supportiq_release.candidate.domain | supportiq_release.gate.domain",
+    "supportiq_release.errors",
+]
+
+[[tool.importlinter.contracts]]
+name = "Domain code reads no file and uses no library (ARCH-11, ARCH-12)"
+type = "forbidden"
+source_modules = [
+    "supportiq_release.kb_ingestion.domain",
+    "supportiq_release.candidate.domain",
+    "supportiq_release.gate.domain",
+    "supportiq_release.distribution.domain",
+]
+forbidden_modules = ["json", "pathlib", "hashlib", "argparse", "app", "httpx", "tarfile"]
+
+[[tool.importlinter.contracts]]
+name = "The release command imports only public modules of ai-service (ADR-0021, statement 1)"
+type = "forbidden"
+# Every module of ai-service is forbidden, a future one too, except the direct imports that the
+# ignores name: release.manifest, the entry point of the gate in composition_root, and the
+# public API of the three packages whose ports the gate gives a candidate. Each is a package
+# `__init__` or a public module; every module inside those packages stays forbidden.
+allow_indirect_imports = true
+source_modules = ["supportiq_release"]
+forbidden_modules = ["app"]
+ignore_imports = [
+    "supportiq_release.** -> app.release.manifest",
+    "supportiq_release.gate.adapters.** -> app.composition_root",
+    "supportiq_release.gate.adapters.** -> app.drafting",
+    "supportiq_release.gate.adapters.** -> app.intent",
+    "supportiq_release.gate.adapters.** -> app.retrieval",
+]
+
+[[tool.importlinter.contracts]]
+name = "The release command uses no code of main (ADR-0021, statement 3)"
+type = "forbidden"
+source_modules = ["supportiq_release"]
+forbidden_modules = ["apps", "pipeline"]

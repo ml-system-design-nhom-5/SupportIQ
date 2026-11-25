@@ -1,0 +1,44 @@
+description: >-
+  One part of a draft: a sentence or a few sentences with the citations that support them. AI
+  text is a suggestion for staff and is never sent to a customer by any component (FR-04). Data
+  class: Confidential.
+type: object
+required:
+  - segment_id
+  - paragraph_index
+  - text
+  - citation_ids
+properties:
+  segment_id:
+    $ref: './AiItemId.yaml'
+    description: >-
+      The identifier of the segment, unique among the segments of the draft. Data class:
+      Internal.
+  paragraph_index:
+    description: >-
+      The paragraph that the segment belongs to. It is 0 in the first segment and never
+      decreases from one segment to the next; segments with the same index form one paragraph.
+      Data class: Internal.
+    type: integer
+    minimum: 0
+    maximum: 49
+  text:
+    description: >-
+      The text of the segment, from 1 to 2 000 characters, without citation markers. It may
+      contain only the placeholders that appear in the prompt: the pseudonyms of the request's
+      `message` and the masks that `ai-service` applied (ADR-0010, AI output). It is shown as
+      plain text (SEC-22). Data class: Confidential.
+    type: string
+    minLength: 1
+    maxLength: 2000
+  citation_ids:
+    description: >-
+      The citations that support the segment, each the `citation_id` of a citation in the same
+      draft, without repeats. Every segment that states a fact or a policy has at least one
+      (TEST-26); the list is empty only for a segment that states neither, such as a greeting.
+      Data class: Internal.
+    type: array
+    maxItems: 10
+    uniqueItems: true
+    items:
+      $ref: './AiItemId.yaml'

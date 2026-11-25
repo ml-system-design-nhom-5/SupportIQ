@@ -1,0 +1,13 @@
+{
+  "summary": "The document version",
+  "value": {
+    "document_id": "SAMPLE-REFUND-001",
+    "version": "1.0",
+    "title": "Sample refund document",
+    "body": "This is sample text. It is not KB content and not a policy. The document version opens here in full, so staff can check a citation against its source.",
+    "policy_key": "sample_refund_review",
+    "effective_start_at": "2026-01-01T00:00:00Z",
+    "owner": "Policy owner",
+    "source": "Sample source document"
+  }
+}

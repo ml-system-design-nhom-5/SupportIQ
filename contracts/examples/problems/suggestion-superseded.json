@@ -1,0 +1,10 @@
+{
+  "summary": "The request names a suggestion that is no longer current",
+  "value": {
+    "type": "urn:supportiq:problem:suggestion-superseded",
+    "title": "Suggestion superseded",
+    "status": 409,
+    "detail": "The suggestion_id is not the ticket's current suggestion.",
+    "trace_id": "0e4736bf92f3577b34da6a3ce929d0e3"
+  }
+}

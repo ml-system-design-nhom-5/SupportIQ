@@ -1,0 +1,948 @@
+openapi: 3.1.0
+info:
+  title: SupportIQ ai-service API
+  version: 1.0.0
+  description: |
+    The contract between `backend` and `ai-service`: intent analysis, drafting with citations,
+    KB document versions, and the versions of the loaded release. Version 1.0.0 is contract PR 1
+    of the [contracts v1 design](../docs/design/contracts-v1.md) (revision 2). `backend` is the
+    only consumer; `frontend` never calls `ai-service`.
+
+    ## Responsibility
+
+    - `ai-service` only suggests. It never sends anything to a customer, never performs a
+      transaction, and never reads `backend` data (ADR-0001, FR-04, FR-06). It keeps no state
+      per ticket: every request carries what the pipeline needs.
+    - It receives the customer's message only after `backend` pseudonymized it (SEC-36). It never
+      restores, guesses, or rewrites a placeholder. AI text in a response contains only the
+      placeholders of the prompt: the pseudonyms of the request's `message` and the masks that
+      `ai-service` applied (ADR-0010).
+    - It calls outside the system only the LLM provider hosts on the egress allow-list
+      (ADR-0010, SEC-40).
+    - It serves exactly one release manifest, loaded at startup, and every result names its
+      `release_id` and asset versions (DATA-56).
+    - The reason code `requires_authority` comes only from the intent distribution and the
+      sensitive-term list of the routing configuration. The LLM never sets it (SEC-26). A draft
+      that carries it contains supporting information only.
+    - Business outcomes, such as an abstention or an unavailable LLM, return `200` with a status
+      and reason codes. HTTP errors are only for technical failures (CON-11).
+    - `ai-service` never sends a field that this contract does not define (CON-21).
+
+    ## Authentication
+
+    Every operation except the health checks requires the header
+    `Authorization: Bearer <service token>` (security scheme `serviceToken`). The service token is
+    Secret: it lives only in the secret settings of `backend` and `ai-service` (SEC-10) and never
+    appears in logs, telemetry, or error bodies (SEC-09). A missing or wrong token returns
+    `401 unauthenticated`. The health checks need no token, so the hosting platform can probe
+    them (ERR-18).
+
+    ## Errors
+
+    Every error body is a `ProblemDetails` with a problem type from the registry (CON-12) and the
+    media type `application/problem+json`. `ai-service` returns `422 invalid-request` for every
+    invalid request, including a body that is not valid JSON, and never returns `400`. `backend`
+    treats every `4xx` and `5xx`, a timeout, and a response that does not match this contract as
+    `ai_service_unavailable`, and logs a `4xx` at `error` level, because it means `backend` sent
+    a request that breaks this contract (contracts v1 design, suggestion lifecycle).
+
+    ## Headers
+
+    - `traceparent` is optional on every request. `backend` sends it on every call, so the work
+      of `ai-service` belongs to the trace of the suggestion job (LOG-05). `ai-service` starts a
+      new trace when it is absent or invalid, and returns the trace ID in every error body.
+    - No operation takes an `Idempotency-Key`. `createAnalysis` and `createDraft` have no side
+      effects, so `backend` may repeat a call: it retries once after a connection error, `502`,
+      or `503`, never after a timeout (ADR-0011, `ai-service` replicas, item 2).
+    - No operation uses a custom `X-` header (CON-13).
+
+    ## Timeouts
+
+    - **Latency target:** a suggestion completes within 12 s at p95, from ticket creation (NFR-08,
+      ERR-10).
+    - **Caller's timeouts:** `backend` stops waiting after `ai_service_analysis_timeout_ms` for
+      `createAnalysis` and `ai_service_draft_timeout_ms` for `createDraft`, initially 3 000 ms and
+      11 000 ms (contracts v1 design, suggestion lifecycle). The other operations use the
+      analysis timeout.
+    - **Provider bounds:** the LLM step, retries included, has a budget of at most 10 000 ms
+      (NFR-07). When the budget runs out, `createDraft` answers `200` with the status
+      `llm_unavailable` and a reason code instead of running late (ERR-11). The `ai-service`
+      pipeline design fits its step budgets inside the caller's timeouts.
+
+    ## Compatibility
+
+    Version 1.0.0 is the first version and has no earlier consumer. Compatible and breaking
+    changes follow CON-19 and CON-20. Consumers ignore unknown response fields (CON-21) and map
+    unknown enum values to a safe default (CON-22): an unknown draft status means manual
+    handling, and an unknown reason code is shown as an unspecified reason.
+servers:
+  - url: /
+    description: >-
+      The base URL of `ai-service`, the `backend` setting `ai_service_base_url`. Every path of
+      this contract is relative to it.
+tags:
+  - name: suggestions
+    description: >-
+      Intent analysis without the LLM, and the whole pipeline with drafting (ADR-0005).
+  - name: knowledge-base
+    description: >-
+      KB document versions of the loaded KB, for the citation view of the console.
+  - name: releases
+    description: >-
+      The release manifest that `ai-service` serves (DATA-56).
+  - name: health
+    description: >-
+      Liveness and readiness of `ai-service` (ERR-18). No service token is required.
+paths:
+  /v1/analyses:
+    post:
+      operationId: createAnalysis
+      tags:
+        - suggestions
+      summary: Analyze a customer message without the LLM
+      description: >-
+        Runs the pipeline up to routing (ADR-0005): intent classification with calibrated
+        probabilities, content retrieval, the validity filter at `as_of`, reranking with the
+        intent distribution, and the routing recommendation with its reason codes and warnings.
+        It never calls the LLM, so it is fast and deterministic for one release. With
+        `intent_override`, the staff-chosen intent replaces the distribution. Callable by
+        `backend` with the service token.
+      security:
+        - serviceToken: []
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SuggestionRequest'
+      responses:
+        '200':
+          description: >-
+            The analysis. `routing.recommendation` tells whether the pipeline may draft, should
+            abstain, or recommends escalation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Analysis'
+              examples:
+                draft:
+                  $ref: ./examples/createAnalysis/draft.json
+                requires-authority:
+                  $ref: ./examples/createAnalysis/requires-authority.json
+                abstain:
+                  $ref: ./examples/createAnalysis/abstain.json
+                escalate:
+                  $ref: ./examples/createAnalysis/escalate.json
+                staff-intent:
+                  $ref: ./examples/createAnalysis/staff-intent.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '422':
+          $ref: '#/components/responses/InvalidSuggestionRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/drafts:
+    post:
+      operationId: createDraft
+      tags:
+        - suggestions
+      summary: Analyze a customer message and draft a reply
+      description: >-
+        Runs the whole pipeline (ADR-0005): the same analysis as `createAnalysis`, then, when the
+        routing recommends a draft, masking of personal-data patterns that are still present
+        (SEC-06), the LLM call within its budget, the placeholder check of the output (ADR-0010),
+        and the grounding check of every citation (ADR-0014). It does not depend on an earlier
+        `createAnalysis` call, and the response embeds its own analysis. The draft is a
+        suggestion for staff; no component sends it to a customer without a staff action
+        (FR-04). Callable by `backend` with the service token.
+      security:
+        - serviceToken: []
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SuggestionRequest'
+      responses:
+        '200':
+          description: >-
+            The draft outcome. `status` tells whether a draft is ready; only `draft_ready` carries
+            a draft.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DraftOutcome'
+              examples:
+                draft-ready:
+                  $ref: ./examples/createDraft/draft-ready.json
+                requires-authority:
+                  $ref: ./examples/createDraft/requires-authority.json
+                abstained:
+                  $ref: ./examples/createDraft/abstained.json
+                escalation-recommended:
+                  $ref: ./examples/createDraft/escalation-recommended.json
+                llm-unavailable:
+                  $ref: ./examples/createDraft/llm-unavailable.json
+                grounding-failed:
+                  $ref: ./examples/createDraft/grounding-failed.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '422':
+          $ref: '#/components/responses/InvalidSuggestionRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/kb-documents/{document_id}/versions/{version}:
+    get:
+      operationId: getKbDocumentVersion
+      tags:
+        - knowledge-base
+      summary: Read one KB document version
+      description: >-
+        Returns the full text and metadata of one version of a KB document, so staff can check a
+        citation against its source (UI-20). Only the versions of the loaded KB are served: a
+        version that only an earlier KB contained returns `404`. Callable by `backend` with the
+        service token; `backend` serves it to staff and managers.
+      security:
+        - serviceToken: []
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+        - $ref: '#/components/parameters/DocumentId'
+        - $ref: '#/components/parameters/DocumentVersion'
+      responses:
+        '200':
+          description: The document version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KbDocumentVersion'
+              examples:
+                found:
+                  $ref: ./examples/getKbDocumentVersion/found.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/InvalidRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /v1/asset-versions:
+    get:
+      operationId: getAssetVersions
+      tags:
+        - releases
+      summary: Read the release and asset versions in use
+      description: >-
+        Returns the `release_id` of the loaded release manifest and the version of each asset it
+        names (DATA-56). `backend` uses it for the versions in use of the admin area and to detect
+        that the loaded KB version changed. Callable by `backend` with the service token.
+      security:
+        - serviceToken: []
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+      responses:
+        '200':
+          description: The release and asset versions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetVersions'
+              examples:
+                loaded:
+                  $ref: ./examples/getAssetVersions/loaded.json
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /health/live:
+    get:
+      operationId: checkLiveness
+      tags:
+        - health
+      summary: Check that the ai-service process runs
+      description: >-
+        Liveness (ERR-18): answers `204` while the process can serve HTTP. It checks no asset and
+        no dependency. Callable without a service token.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+      responses:
+        '204':
+          description: The process runs. There is no body.
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /health/ready:
+    get:
+      operationId: checkReadiness
+      tags:
+        - health
+      summary: Check that ai-service can serve requests
+      description: >-
+        Readiness (ERR-18): answers `204` when the settings are valid and the release manifest is
+        loaded and verified: the model artifact, the KB, the document-to-intent mapping, the
+        prompts, the routing configuration, and the retrieval index, each with a matching
+        checksum (DATA-56). Otherwise it answers `503 not-ready`, and the instance receives no
+        traffic. Readiness does not depend on the LLM provider: while the LLM fails, analyses
+        still work and drafts end with `llm_unavailable` (ERR-19). Callable without a service
+        token.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Traceparent'
+      responses:
+        '204':
+          description: The instance is ready. There is no body.
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/NotReady'
+components:
+  securitySchemes:
+    serviceToken:
+      type: http
+      scheme: bearer
+      description: >-
+        The service token that `backend` sends as `Authorization: Bearer <token>`. It is a random
+        value shared by `backend` and `ai-service` through their secret settings, and it is Secret
+        (SEC-10). It is never logged and never appears in a URL or an error body (SEC-09). A
+        missing or wrong token returns `401`.
+  parameters:
+    Traceparent:
+      name: traceparent
+      in: header
+      required: false
+      description: >-
+        The W3C Trace Context header (ADR-0004, decision 6; LOG-05). `backend` sends the context
+        of its suggestion job, and `ai-service` continues that trace. Absent or invalid means that
+        `ai-service` starts a new trace, as the W3C specification requires, so this header never
+        causes `422`. Data class: Internal.
+      schema:
+        type: string
+    DocumentId:
+      name: document_id
+      in: path
+      required: true
+      description: >-
+        The KB document, as a `kb_document` citation or a ranked document names it. Data class:
+        Internal.
+      schema:
+        $ref: '#/components/schemas/KbDocumentId'
+    DocumentVersion:
+      name: version
+      in: path
+      required: true
+      description: >-
+        The version of the document, as a `kb_document` citation or a ranked document names it.
+        Data class: Internal.
+      schema:
+        $ref: '#/components/schemas/KbDocumentVersionTag'
+  responses:
+    Unauthenticated:
+      description: >-
+        `unauthenticated`: the request has no `Authorization` header, or its bearer token is not
+        the service token. The body never repeats the token.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            service-token-rejected:
+              $ref: ./examples/problems/service-token-rejected.json
+    InvalidSuggestionRequest:
+      description: >-
+        `invalid-request`: the body is not valid JSON, breaks the schema (an unknown field, an
+        order context field outside the allow-list, a message over 4 000 characters), or names a
+        `kb_version` other than the loaded one. Nothing was computed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            invalid-request:
+              $ref: ./examples/problems/invalid-request.json
+            unknown-kb-version:
+              $ref: ./examples/problems/unknown-kb-version.json
+    InvalidRequest:
+      description: >-
+        `invalid-request`: a path parameter breaks its schema.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            invalid-request:
+              $ref: ./examples/problems/invalid-request.json
+    NotFound:
+      description: >-
+        `not-found`: the loaded KB has no such document version.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            not-found:
+              $ref: ./examples/problems/not-found.json
+    NotReady:
+      description: >-
+        `not-ready`: `ai-service` cannot serve requests now, because its release manifest is not
+        loaded or not verified (ERR-17, ERR-18). A failing LLM provider never causes it. `backend`
+        retries once on another replica when there is one (ADR-0011).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            release-not-loaded:
+              $ref: ./examples/problems/release-not-loaded.json
+    InternalError:
+      description: >-
+        `internal-error`: an unexpected failure in `ai-service`, logged at `error` level with the
+        trace ID. The body names no internal detail and no text of the request (CON-12).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            internal-error:
+              $ref: ./examples/problems/internal-error.json
+  schemas:
+    Money:
+      $ref: ./schemas/Money.yaml
+    Timestamp:
+      $ref: ./schemas/Timestamp.yaml
+    ProblemDetails:
+      $ref: ./schemas/ProblemDetails.yaml
+    OrderStatus:
+      $ref: ./schemas/OrderStatus.yaml
+    ShipmentStatus:
+      $ref: ./schemas/ShipmentStatus.yaml
+    RefundStatus:
+      $ref: ./schemas/RefundStatus.yaml
+    IntentLabel:
+      $ref: ./schemas/IntentLabel.yaml
+    ConfidenceBand:
+      $ref: ./schemas/ConfidenceBand.yaml
+    AiReasonCode:
+      $ref: ./schemas/AiReasonCode.yaml
+    DocumentValidity:
+      $ref: ./schemas/DocumentValidity.yaml
+    KbDocumentId:
+      $ref: ./schemas/KbDocumentId.yaml
+    KbDocumentVersionTag:
+      $ref: ./schemas/KbDocumentVersionTag.yaml
+    AiItemId:
+      $ref: ./schemas/AiItemId.yaml
+    AssetVersion:
+      $ref: ./schemas/AssetVersion.yaml
+    AssetVersions:
+      $ref: ./schemas/AssetVersions.yaml
+    OrderContextField:
+      $ref: ./schemas/OrderContextField.yaml
+    OrderContext:
+      $ref: ./schemas/OrderContext.yaml
+    Citation:
+      $ref: ./schemas/Citation.yaml
+    KbDocumentCitation:
+      $ref: ./schemas/KbDocumentCitation.yaml
+    OrderContextCitation:
+      $ref: ./schemas/OrderContextCitation.yaml
+    RankedDocument:
+      $ref: ./schemas/RankedDocument.yaml
+    DraftSegment:
+      $ref: ./schemas/DraftSegment.yaml
+    Warning:
+      $ref: ./schemas/Warning.yaml
+    StepLatencies:
+      $ref: ./schemas/StepLatencies.yaml
+    KbDocumentVersion:
+      $ref: ./schemas/KbDocumentVersion.yaml
+    PseudonymizedText:
+      description: >-
+        The customer's message after `backend` pseudonymized it (ADR-0010), from 1 to 4 000
+        characters, counted in Unicode code points. It may contain pseudonyms, and text that
+        looked like a placeholder in the raw message arrives as a `LITERAL` pseudonym, so every
+        placeholder in it is one that `backend` wrote. It is still Confidential: pseudonymization
+        is not anonymization, and a value that every detector missed can remain. Data class:
+        Confidential.
+      type: string
+      minLength: 1
+      maxLength: 4000
+    SuggestionRequest:
+      description: >-
+        The body of `createAnalysis` and `createDraft`. It carries no ticket ID, no customer
+        identity, and no staff identity (SEC-04); requests are correlated by trace context. Data
+        class: Confidential.
+      type: object
+      additionalProperties: false
+      required:
+        - message
+        - as_of
+      properties:
+        message:
+          $ref: '#/components/schemas/PseudonymizedText'
+          description: >-
+            The customer's message after pseudonymization. Data class: Confidential.
+        order_context:
+          $ref: '#/components/schemas/OrderContext'
+          description: >-
+            The allow-listed facts of the ticket's order. Absent when the ticket has no order,
+            such as an imported ticket. Data class: Confidential.
+        as_of:
+          $ref: '#/components/schemas/Timestamp'
+          description: >-
+            The point in time at which KB document validity is evaluated: the ticket's
+            `created_at`, the time the customer asked (contracts v1 design). It keeps its
+            glossary name, the one exception to the `_at` suffix of CON-18. Data class: Internal.
+        kb_version:
+          $ref: '#/components/schemas/AssetVersion'
+          description: >-
+            The KB version to use. Absent means the loaded KB version. `ai-service` serves one
+            release manifest (DATA-56), so any other value returns `422 invalid-request`. Data
+            class: Internal.
+        intent_override:
+          $ref: '#/components/schemas/IntentLabel'
+          description: >-
+            The intent that staff chose or confirmed. It replaces the intent distribution
+            (ADR-0005, statement 7): the analysis then has `intent.source` `staff`, no
+            alternatives, and never `low_confidence`. A sensitive intent chosen this way sets
+            `requires_authority` as a predicted one does. Absent when staff chose no intent. Data
+            class: Internal.
+    Analysis:
+      description: >-
+        The result of the pipeline up to routing (ADR-0005). It is the `200` body of
+        `createAnalysis` and is embedded in every draft outcome. Data class: Internal.
+      type: object
+      required:
+        - intent
+        - alternatives
+        - is_in_scope
+        - documents
+        - routing
+        - warnings
+        - versions
+        - step_latencies
+      properties:
+        intent:
+          $ref: '#/components/schemas/AnalysisIntent'
+          description: >-
+            The intent that the rest of the pipeline uses: the model's top intent, or the intent
+            that staff chose. Data class: Internal.
+        alternatives:
+          description: >-
+            The next most likely intents of the model after `intent`, most likely first, at most
+            four. The console shows the top three candidates: `intent` and the first two
+            alternatives (FR-01). Empty when `intent.source` is `staff`, because the staff choice
+            replaces the distribution. Data class: Internal.
+          type: array
+          maxItems: 4
+          items:
+            $ref: '#/components/schemas/IntentAlternative'
+        is_in_scope:
+          description: >-
+            Whether `intent.label` is one of the 12 in-scope intents (requirements §3.2). The
+            routing carries `out_of_scope_intent` exactly when this is false. Data class:
+            Internal.
+          type: boolean
+        documents:
+          description: >-
+            The KB document versions that retrieval found, ordered by `rank`, at most ten. A
+            version in effect at `as_of` is `valid` or `conflicting`; a relevant version whose
+            effective period ended is listed as `expired` and never supports a draft. Empty when
+            no relevant version exists. Data class: Internal.
+          type: array
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/RankedDocument'
+        routing:
+          $ref: '#/components/schemas/Routing'
+          description: >-
+            The routing recommendation and its reason codes. Data class: Internal.
+        warnings:
+          description: >-
+            Conditions that allow a draft but need staff attention, at most ten, each with a
+            `warning_id` unique in the list. The warnings of a draft are the warnings of its
+            embedded analysis. Data class: Internal.
+          type: array
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/Warning'
+        versions:
+          $ref: '#/components/schemas/AssetVersions'
+          description: >-
+            The release and asset versions that produced the analysis. Data class: Internal.
+        step_latencies:
+          $ref: '#/components/schemas/StepLatencies'
+          description: >-
+            In `createAnalysis`, the time of the call. In the analysis embedded in a draft
+            outcome, the time until routing; the outcome's own `step_latencies` cover the whole
+            call. Data class: Internal.
+    AnalysisIntent:
+      description: >-
+        The intent of an analysis, discriminated by `source`: the model's prediction with its
+        calibrated probability (`model`), or the intent that staff chose, which has no
+        probability (`staff`). Consumers handle an unknown `source` as no known intent (CON-22).
+        Data class: Internal.
+      oneOf:
+        - $ref: '#/components/schemas/ModelIntent'
+        - $ref: '#/components/schemas/StaffIntent'
+      discriminator:
+        propertyName: source
+        mapping:
+          model: '#/components/schemas/ModelIntent'
+          staff: '#/components/schemas/StaffIntent'
+    ModelIntent:
+      description: >-
+        The top intent of the classification model. Data class: Internal.
+      type: object
+      required:
+        - source
+        - label
+        - probability
+        - confidence_band
+      properties:
+        source:
+          description: >-
+            Where the intent comes from: always `model` in this variant. Data class: Internal.
+          type: string
+          enum:
+            - model
+        label:
+          $ref: '#/components/schemas/IntentLabel'
+          description: >-
+            The predicted intent. Data class: Internal.
+        probability:
+          description: >-
+            The calibrated probability that `label` is the customer's intent, from 0 to 1
+            (FR-01): among many predictions with probability p, about a share p is right.
+            Calibration is measured offline for the model artifact of the release. Data class:
+            Internal.
+          type: number
+          minimum: 0
+          maximum: 1
+        confidence_band:
+          $ref: '#/components/schemas/ConfidenceBand'
+          description: >-
+            The band of `probability`. Data class: Internal.
+    StaffIntent:
+      description: >-
+        An intent that staff chose or confirmed with `intent_override`. It has no probability and
+        no band, because no model estimated it. Data class: Internal.
+      type: object
+      required:
+        - source
+        - label
+      properties:
+        source:
+          description: >-
+            Where the intent comes from: always `staff` in this variant. Data class: Internal.
+          type: string
+          enum:
+            - staff
+        label:
+          $ref: '#/components/schemas/IntentLabel'
+          description: >-
+            The intent that staff chose, equal to the request's `intent_override`. Data class:
+            Internal.
+    IntentAlternative:
+      description: >-
+        A further candidate intent of the model. Data class: Internal.
+      type: object
+      required:
+        - label
+        - probability
+      properties:
+        label:
+          $ref: '#/components/schemas/IntentLabel'
+          description: >-
+            The candidate intent. Data class: Internal.
+        probability:
+          description: >-
+            The calibrated probability of the candidate, from 0 to 1, no higher than that of the
+            top intent. Data class: Internal.
+          type: number
+          minimum: 0
+          maximum: 1
+    Routing:
+      description: >-
+        What the pipeline recommends for the ticket and why. It is a recommendation; staff and
+        managers decide (ADR-0001). Data class: Internal.
+      type: object
+      required:
+        - recommendation
+        - reason_codes
+      properties:
+        recommendation:
+          $ref: '#/components/schemas/RoutingRecommendation'
+          description: >-
+            The recommended next step. Data class: Internal.
+        reason_codes:
+          description: >-
+            The reason codes of the recommendation, without repeats. `requires_authority` can
+            appear with any recommendation; it never prevents retrieval or drafting. Empty when
+            nothing needs explaining. Data class: Internal.
+          type: array
+          maxItems: 14
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/AiServiceReasonCode'
+    RoutingRecommendation:
+      description: >-
+        The routing recommendation (ADR-0005).
+        `draft`: the evidence allows a draft, and `createDraft` calls the LLM.
+        `abstain`: no draft, because of low confidence, an out-of-scope intent, or missing or
+        unusable evidence (ESC-01, ESC-02, ESC-04); the reason codes say which.
+        `escalate`: no draft, and the AI recommends that staff move the ticket to a manager
+        (ESC-03), for example when the customer asks for a person.
+        Consumers map an unknown value to `abstain`, so the ticket is handled manually (CON-22).
+        Data class: Internal.
+      type: string
+      enum:
+        - draft
+        - abstain
+        - escalate
+    AiServiceReasonCode:
+      description: >-
+        A reason code that `ai-service` may return: any `AiReasonCode` except the two that only
+        `backend` sets. Data class: Internal.
+      allOf:
+        - $ref: '#/components/schemas/AiReasonCode'
+      not:
+        description: >-
+          The reason codes that only `backend` sets. Data class: Internal.
+        enum:
+          - ai_service_unavailable
+          - pseudonymization_failed
+    DraftOutcome:
+      description: >-
+        The `200` body of `createDraft`, discriminated by `status`, so a draft exists only when it
+        is ready (CODE-29).
+        `draft_ready`: a grounded draft is ready for staff review.
+        `abstained`: no draft, as the routing recommended `abstain` (ESC-01, ESC-02, ESC-04).
+        `escalation_recommended`: no draft, as the routing recommended `escalate` (ESC-03).
+        `llm_unavailable`: the routing allowed a draft, but drafting failed inside `ai-service`
+        (ESC-05). The reason codes say how: `llm_unavailable`, `llm_invalid_output`,
+        `grounding_failed`, or `budget_exceeded`. `backend` offers staff a retry.
+        Consumers map an unknown status to manual handling (CON-22). Data class: Confidential.
+      oneOf:
+        - $ref: '#/components/schemas/DraftReadyOutcome'
+        - $ref: '#/components/schemas/NoDraftOutcome'
+      discriminator:
+        propertyName: status
+        mapping:
+          draft_ready: '#/components/schemas/DraftReadyOutcome'
+          abstained: '#/components/schemas/NoDraftOutcome'
+          escalation_recommended: '#/components/schemas/NoDraftOutcome'
+          llm_unavailable: '#/components/schemas/NoDraftOutcome'
+    DraftReadyOutcome:
+      description: >-
+        A draft outcome with a draft. Data class: Confidential.
+      allOf:
+        - $ref: '#/components/schemas/DraftOutcomeFields'
+        - description: >-
+            The status and the draft. Data class: Confidential.
+          type: object
+          required:
+            - status
+            - draft
+          properties:
+            status:
+              description: >-
+                The outcome: always `draft_ready` in this variant. Data class: Internal.
+              type: string
+              enum:
+                - draft_ready
+            draft:
+              $ref: '#/components/schemas/Draft'
+              description: >-
+                The draft. Data class: Confidential.
+    NoDraftOutcome:
+      description: >-
+        A draft outcome without a draft. Data class: Confidential.
+      not:
+        description: >-
+          An outcome of this variant never carries `draft`. Data class: Confidential.
+        type: object
+        required:
+          - draft
+        properties:
+          draft:
+            description: >-
+              A draft of any shape, which this variant never carries. Data class: Confidential.
+      allOf:
+        - $ref: '#/components/schemas/DraftOutcomeFields'
+        - description: >-
+            The status. Data class: Internal.
+          type: object
+          required:
+            - status
+          properties:
+            status:
+              description: >-
+                The outcome: `abstained`, `escalation_recommended`, or `llm_unavailable`. Data
+                class: Internal.
+              type: string
+              enum:
+                - abstained
+                - escalation_recommended
+                - llm_unavailable
+    DraftOutcomeFields:
+      description: >-
+        The fields that every draft outcome carries, whatever its status. Data class:
+        Confidential.
+      type: object
+      required:
+        - reason_codes
+        - analysis
+        - versions
+        - step_latencies
+        - mask_count_by_type
+      properties:
+        reason_codes:
+          description: >-
+            Every reason code of `analysis.routing.reason_codes`, so `requires_authority` is here
+            exactly when the analysis carries it, plus the codes of the drafting step, without
+            repeats. The drafting step never adds `requires_authority` (SEC-26). Warnings are
+            listed in `analysis.warnings`, not here. Data class: Internal.
+          type: array
+          maxItems: 14
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/AiServiceReasonCode'
+        analysis:
+          $ref: '#/components/schemas/Analysis'
+          description: >-
+            The analysis computed in the same call. `backend` uses it when the `createAnalysis`
+            call of the same suggestion failed (contracts v1 design). Data class: Internal.
+        staff_note:
+          description: >-
+            AI-written text for staff only, such as why the AI abstained or what information is
+            missing, from 1 to 1 000 characters. It is never sent to a customer. It may contain
+            only the placeholders of the prompt (ADR-0010) and is shown as plain text (SEC-22).
+            Absent when there is nothing to add. Data class: Confidential.
+          type: string
+          minLength: 1
+          maxLength: 1000
+        versions:
+          $ref: '#/components/schemas/AssetVersions'
+          description: >-
+            The release and asset versions that produced the outcome, equal to
+            `analysis.versions`. Data class: Internal.
+        step_latencies:
+          $ref: '#/components/schemas/StepLatencies'
+          description: >-
+            The time spent on each step of this call. Data class: Internal.
+        mask_count_by_type:
+          $ref: '#/components/schemas/MaskCountByType'
+          description: >-
+            The masks that the second layer applied before the LLM call (SEC-06). Data class:
+            Internal.
+        llm_usage:
+          $ref: '#/components/schemas/LlmUsage'
+          description: >-
+            The LLM usage of this call. Present when the LLM answered at least once, also when
+            its output was then rejected; absent when no LLM request was made or none was
+            answered. Data class: Internal.
+    Draft:
+      description: >-
+        An AI-proposed reply for the customer, made of segments with citations. Joined as
+        `backend` joins them (segments of one paragraph with one space, paragraphs with one blank
+        line), the text of all segments has at most 2 000 characters, the `MessageText` limit of
+        a reply. Every `citation_id` in a segment names a citation of the draft, and every
+        citation is named by at least one segment. A segment that states a policy, an
+        eligibility, or a conclusion cites a `kb_document`; a segment that states an order fact
+        cites the `order_context` field that holds it (ADR-0014). Data class: Confidential.
+      type: object
+      required:
+        - segments
+        - citations
+      properties:
+        segments:
+          description: >-
+            The segments in reading order, at least one and at most 50. Data class:
+            Confidential.
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/DraftSegment'
+        citations:
+          description: >-
+            The sources that the segments cite, at most 20, each with a `citation_id` unique in
+            the list. Empty only for a draft that states no fact and no policy, such as one that
+            asks for missing information (ADR-0014, statement 3). Data class: Internal.
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/Citation'
+    MaskCountByType:
+      description: >-
+        The number of masks that `ai-service` applied by type, before the LLM call, to
+        personal-data patterns that pseudonymization missed (SEC-06, ADR-0010). A mask means
+        `backend` missed a value, so `backend` records these numbers in the audit log (NFR-06).
+        Every count is 0 when no LLM request was made. Data class: Internal.
+      type: object
+      required:
+        - email
+        - phone
+        - card
+      properties:
+        email:
+          description: >-
+            The number of `[EMAIL]` masks, from 0 to 1 000. Data class: Internal.
+          type: integer
+          minimum: 0
+          maximum: 1000
+        phone:
+          description: >-
+            The number of `[PHONE]` masks, from 0 to 1 000. Data class: Internal.
+          type: integer
+          minimum: 0
+          maximum: 1000
+        card:
+          description: >-
+            The number of `[CARD]` masks, from 0 to 1 000. Data class: Internal.
+          type: integer
+          minimum: 0
+          maximum: 1000
+    LlmUsage:
+      description: >-
+        What the LLM requests of one call used, for the cost figures of the reports (FR-10) and
+        NFR-10. Data class: Internal.
+      type: object
+      required:
+        - input_token_count
+        - output_token_count
+        - cost_micro_usd
+      properties:
+        input_token_count:
+          description: >-
+            The input tokens of every LLM request of the call, retries included, as the provider
+            counts them. Data class: Internal.
+          type: integer
+          minimum: 0
+          maximum: 1000000
+        output_token_count:
+          description: >-
+            The output tokens of every LLM request of the call, retries included, as the provider
+            counts them. Data class: Internal.
+          type: integer
+          minimum: 0
+          maximum: 1000000
+        cost_micro_usd:
+          description: >-
+            The cost of these tokens at the provider's prices, in millionths of a US dollar,
+            rounded up. Data class: Internal.
+          type: integer
+          minimum: 0
+          maximum: 10000000

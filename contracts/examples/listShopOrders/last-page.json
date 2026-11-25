@@ -1,0 +1,63 @@
+{
+  "summary": "The last page of the caller's orders",
+  "description": "No next_cursor: no order follows.",
+  "value": {
+    "items": [
+      {
+        "order_id": "ORD-20931",
+        "order_status": "delivered",
+        "placed_at": "2026-10-02T19:30:00Z",
+        "order_total": {
+          "amount_minor": 8900,
+          "currency": "USD"
+        },
+        "shipping_cost": {
+          "amount_minor": 0,
+          "currency": "USD"
+        },
+        "lines": [
+          {
+            "product_id": "PRD-1002",
+            "product_name": "Wireless headphones",
+            "quantity": 1
+          }
+        ],
+        "shipment": {
+          "shipment_status": "delivered",
+          "delivered_at": "2026-10-06T12:05:00Z"
+        },
+        "refund": {
+          "refund_status": "under_review",
+          "refund_amount": {
+            "amount_minor": 8900,
+            "currency": "USD"
+          },
+          "refund_requested_at": "2026-10-14T09:20:00Z"
+        }
+      },
+      {
+        "order_id": "ORD-20900",
+        "order_status": "processing",
+        "placed_at": "2026-09-20T11:00:00Z",
+        "order_total": {
+          "amount_minor": 2450,
+          "currency": "USD"
+        },
+        "shipping_cost": {
+          "amount_minor": 0,
+          "currency": "USD"
+        },
+        "lines": [
+          {
+            "product_id": "PRD-1001",
+            "product_name": "Desk lamp",
+            "quantity": 1
+          }
+        ],
+        "shipment": {
+          "shipment_status": "not_shipped"
+        }
+      }
+    ]
+  }
+}

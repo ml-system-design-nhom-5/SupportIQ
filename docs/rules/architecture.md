@@ -1,6 +1,6 @@
 # Architecture rules
 
-> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-01
+> **Status:** Active · **Owner:** team · **Last reviewed:** 2026-11-23
 
 Rules for where code lives, how parts depend on each other, and how the system grows without rewrites. The component map and its reasons are in [ADR-0001](../decisions/0001-system-architecture.md).
 
@@ -28,13 +28,13 @@ Rules for where code lives, how parts depend on each other, and how the system g
 
 **ARCH-07.** LLM API keys and prompt templates exist only in `ai-service`.
 
-**ARCH-08.** `ml/` and `eval/` are not on the serving path. `ml/` produces versioned artifacts; `ai-service` only loads them.
+**ARCH-08.** `ml/`, `pipeline/`, and `eval/` are not on the serving path. `ml/` and `pipeline/` produce versioned artifacts; `ai-service` only loads them.
 
 **ARCH-09.** `ai-service` keeps no per-ticket state between requests. Every request carries what it needs.
 
 **ARCH-10.** Each component has its own README, configuration, Dockerfile, test suite, and dependency lockfile.
 
-**ARCH-42.** Deployment configuration (the Compose file, Nginx, the egress proxy, and observability provisioning) lives in `deploy/` ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)). Components never read files from `deploy/` at runtime; they receive values through their settings.
+**ARCH-42.** Deployment configuration (the setup steps and the settings of each hosting platform, without secret values, and observability provisioning) lives in `deploy/` ([ADR-0016](../decisions/0016-hosting-on-free-tiers.md)). Three parts live elsewhere. Two live where their platform reads them: the deploy workflow in `.github/workflows/`, and the Pages Function with its routes in `frontend/`. The third is the Modal app of `ai-service`, `ai-service/modal_app.py`, next to the Dockerfile whose image it deploys, so the toolchain of `ai-service` checks and tests it ([ADR-0030](../decisions/0030-release-archives-and-the-modal-function-of-ai-service.md#the-modal-function)). Components never read files from `deploy/` at runtime; they receive values through their settings. The Modal app reads `deploy/llm-prices.env` only on the deploying machine and passes its values to `ai-service` as settings.
 
 ## Layers
 
@@ -54,7 +54,7 @@ flowchart TB
 |---|---|---|---|
 | Interface | HTTP handlers, request and response mapping, UI routes | Application, its own contract models | Adapters, database drivers, LLM SDKs |
 | Application | Use cases that orchestrate the domain through ports; transaction boundaries | Domain | Interface, adapters, frameworks, SDKs |
-| Domain | Entities, value objects, business rules, domain errors, port interfaces | Standard library only | Everything else |
+| Domain | Entities, value objects, business rules, domain errors, port interfaces | Standard library; the public API of `platform`, for the root error (PY-20) and for shared errors, types, and pure functions; the public API of a lower feature, for its identifiers and errors | Frameworks, drivers, SDKs, adapters, interface code |
 | Adapters | Port implementations | Domain, third-party SDKs and drivers | Interface, application, other adapters |
 | Composition root | Creates adapters, wires them into use cases, configures the framework | Everything | — |
 
@@ -73,7 +73,7 @@ flowchart TB
 **ARCH-16.** Code is organized by feature first, then by layer inside each feature.
 
 ```text
-backend/src/supportiq_backend/
+backend/app/
 ├── tickets/
 │   ├── domain/
 │   ├── application/

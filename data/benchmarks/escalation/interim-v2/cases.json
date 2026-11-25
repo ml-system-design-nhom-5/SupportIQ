@@ -1,0 +1,1745 @@
+{
+  "label": "interim, not the shared scenario set",
+  "set": "escalation/interim-v2",
+  "written_for": {
+    "ai_service_contract": "1.0.0",
+    "model_version": "v1.0.0",
+    "routing_version": "main-untuned-v1",
+    "kb_version": "v2.1",
+    "kb_document_count": 14
+  },
+  "cases": [
+    {
+      "case_id": "fr03-draft-return-window",
+      "esc_rule": "FR-03",
+      "signal": "A question on the topic of POL-RET-001, injected return_policy 0.93",
+      "request": {
+        "message": "How many days do I have to return a blender from [ORDER_ID_1]? It was sold by a marketplace partner seller.",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "return_policy",
+            "probability": 0.93
+          }
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "draft",
+        "draft_status": "llm_unavailable",
+        "required_reason_codes": [],
+        "forbidden_reason_codes": [
+          "low_confidence",
+          "out_of_scope_intent",
+          "human_agent_requested",
+          "no_valid_document",
+          "only_expired_documents",
+          "conflicting_sources"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": false,
+        "llm_called": true,
+        "llm_sources_include": [
+          {
+            "document_id": "POL-RET-001",
+            "version": "2.1"
+          }
+        ],
+        "llm_sources_exclude": [
+          {
+            "document_id": "POL-PAY-004",
+            "version": "1.1"
+          }
+        ]
+      },
+      "without_kb_evidence": "The injected intent is in scope, at least tau, and at least delta above the rest. The message states the topic of POL-RET-001, which KB v2.1 holds in effect at as_of, with a policy_key that no other version shares, so routing drafts and POL-RET-001 is among the valid documents that reach the LLM step. POL-PAY-004 states another topic and is not expected among the top three. The LLM step of the gate fails, so the draft status is llm_unavailable (ESC-05). return_policy is not a sensitive intent and the message holds no sensitive term, so authority is not required."
+    },
+    {
+      "case_id": "fr03-draft-return-request-process",
+      "esc_rule": "FR-03",
+      "signal": "A question on the topic of POL-RET-002, injected return_product 0.93",
+      "request": {
+        "message": "How do I create a return request for [ORDER_ID_1] in the app, and can a courier pick the item up from my address?",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "return_product",
+            "probability": 0.93
+          }
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "draft",
+        "draft_status": "llm_unavailable",
+        "required_reason_codes": [],
+        "forbidden_reason_codes": [
+          "low_confidence",
+          "out_of_scope_intent",
+          "human_agent_requested",
+          "no_valid_document",
+          "only_expired_documents",
+          "conflicting_sources"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": true,
+        "llm_called": true,
+        "llm_sources_include": [
+          {
+            "document_id": "POL-RET-002",
+            "version": "2.1"
+          }
+        ],
+        "llm_sources_exclude": [
+          {
+            "document_id": "POL-PAY-004",
+            "version": "1.1"
+          }
+        ]
+      },
+      "without_kb_evidence": "The injected intent is in scope, at least tau, and at least delta above the rest. The message states the topic of POL-RET-002, which KB v2.1 holds in effect at as_of, with a policy_key that no other version shares, so routing drafts and POL-RET-002 is among the valid documents that reach the LLM step. POL-PAY-004 states another topic and is not expected among the top three. The LLM step of the gate fails, so the draft status is llm_unavailable (ESC-05). return_product is a sensitive intent, so authority is required, and the draft holds supporting information only (ESC-03 (a))."
+    },
+    {
+      "case_id": "fr03-draft-non-returnable-items",
+      "esc_rule": "FR-03",
+      "signal": "A question on the topic of POL-RET-003, injected return_policy 0.93",
+      "request": {
+        "message": "Can I return a swimsuit only because I changed my mind about the color?",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "return_policy",
+            "probability": 0.93
+          }
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "draft",
+        "draft_status": "llm_unavailable",
+        "required_reason_codes": [],
+        "forbidden_reason_codes": [
+          "low_confidence",
+          "out_of_scope_intent",
+          "human_agent_requested",
+          "no_valid_document",
+          "only_expired_documents",
+          "conflicting_sources"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": false,
+        "llm_called": true,
+        "llm_sources_include": [
+          {
+            "document_id": "POL-RET-003",
+            "version": "2.1"
+          }
+        ],
+        "llm_sources_exclude": [
+          {
+            "document_id": "POL-PAY-001",
+            "version": "1.1"
+          }
+        ]
+      },
+      "without_kb_evidence": "The injected intent is in scope, at least tau, and at least delta above the rest. The message states the topic of POL-RET-003, which KB v2.1 holds in effect at as_of, with a policy_key that no other version shares, so routing drafts and POL-RET-003 is among the valid documents that reach the LLM step. POL-PAY-001 states another topic and is not expected among the top three. The LLM step of the gate fails, so the draft status is llm_unavailable (ESC-05). return_policy is not a sensitive intent and the message holds no sensitive term, so authority is not required."
+    },
+    {
+      "case_id": "fr03-draft-refund-eligibility",
+      "esc_rule": "FR-03",
+      "signal": "A question on the topic of POL-REFUND-001, injected refund_policy 0.93",
+      "request": {
+        "message": "If I return a lamp because I no longer like it, do I get the original shipping fee back?",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "refund_policy",
+            "probability": 0.93
+          }
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "draft",
+        "draft_status": "llm_unavailable",
+        "required_reason_codes": [],
+        "forbidden_reason_codes": [
+          "low_confidence",
+          "out_of_scope_intent",
+          "human_agent_requested",
+          "no_valid_document",
+          "only_expired_documents",
+          "conflicting_sources"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": false,
+        "llm_called": true,
+        "llm_sources_include": [
+          {
+            "document_id": "POL-REFUND-001",
+            "version": "1.1"
+          }
+        ],
+        "llm_sources_exclude": [
+          {
+            "document_id": "POL-ORD-001",
+            "version": "1.1"
+          }
+        ]
+      },
+      "without_kb_evidence": "The injected intent is in scope, at least tau, and at least delta above the rest. The message states the topic of POL-REFUND-001, which KB v2.1 holds in effect at as_of, with a policy_key that no other version shares, so routing drafts and POL-REFUND-001 is among the valid documents that reach the LLM step. POL-ORD-001 states another topic and is not expected among the top three. The LLM step of the gate fails, so the draft status is llm_unavailable (ESC-05). refund_policy is not a sensitive intent and the message holds no sensitive term, so authority is not required."
+    },
+    {
+      "case_id": "fr03-draft-refund-timeline",
+      "esc_rule": "FR-03",
+      "signal": "A question on the topic of POL-REFUND-002, injected refund_policy 0.93",
+      "request": {
+        "message": "My refund for [ORDER_ID_1] goes back to my linked e-wallet. How many business days will it take?",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "refund_policy",
+            "probability": 0.93
+          }
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "draft",
+        "draft_status": "llm_unavailable",
+        "required_reason_codes": [],
+        "forbidden_reason_codes": [
+          "low_confidence",
+          "out_of_scope_intent",
+          "human_agent_requested",
+          "no_valid_document",
+          "only_expired_documents",
+          "conflicting_sources"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": false,
+        "llm_called": true,
+        "llm_sources_include": [
+          {
+            "document_id": "POL-REFUND-002",
+            "version": "2.1"
+          }
+        ],
+        "llm_sources_exclude": [
+          {
+            "document_id": "POL-ORD-003",
+            "version": "1.0"
+          }
+        ]
+      },
+      "without_kb_evidence": "The injected intent is in scope, at least tau, and at least delta above the rest. The message states the topic of POL-REFUND-002, which KB v2.1 holds in effect at as_of, with a policy_key that no other version shares, so routing drafts and POL-REFUND-002 is among the valid documents that reach the LLM step. POL-ORD-003 states another topic and is not expected among the top three. The LLM step of the gate fails, so the draft status is llm_unavailable (ESC-05). refund_policy is not a sensitive intent and the message holds no sensitive term, so authority is not required."
+    },
+    {
+      "case_id": "fr03-draft-refund-status-tracking",
+      "esc_rule": "FR-03",
+      "signal": "A question on the topic of POL-REFUND-007, injected refund_status 0.93",
+      "request": {
+        "message": "Where can I follow my refund for [ORDER_ID_1]? Its status says 'Transferred to Bank'.",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "refund_status",
+            "probability": 0.93
+          }
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "draft",
+        "draft_status": "llm_unavailable",
+        "required_reason_codes": [],
+        "forbidden_reason_codes": [
+          "low_confidence",
+          "out_of_scope_intent",
+          "human_agent_requested",
+          "no_valid_document",
+          "only_expired_documents",
+          "conflicting_sources"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": false,
+        "llm_called": true,
+        "llm_sources_include": [
+          {
+            "document_id": "POL-REFUND-007",
+            "version": "1.1"
+          }
+        ],
+        "llm_sources_exclude": [
+          {
+            "document_id": "POL-SHIP-002",
+            "version": "1.1"
+          }
+        ]
+      },
+      "without_kb_evidence": "The injected intent is in scope, at least tau, and at least delta above the rest. The message states the topic of POL-REFUND-007, which KB v2.1 holds in effect at as_of, with a policy_key that no other version shares, so routing drafts and POL-REFUND-007 is among the valid documents that reach the LLM step. POL-SHIP-002 states another topic and is not expected among the top three. The LLM step of the gate fails, so the draft status is llm_unavailable (ESC-05). refund_status is not a sensitive intent and the message holds no sensitive term, so authority is not required."
+    },
+    {
+      "case_id": "fr03-draft-order-tracking",
+      "esc_rule": "FR-03",
+      "signal": "A question on the topic of POL-ORD-001, injected track_order 0.93",
+      "request": {
+        "message": "Where can I check the status of [ORDER_ID_1]? The app says 'Pick Up in Progress'.",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "track_order",
+            "probability": 0.93
+          }
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "draft",
+        "draft_status": "llm_unavailable",
+        "required_reason_codes": [],
+        "forbidden_reason_codes": [
+          "low_confidence",
+          "out_of_scope_intent",
+          "human_agent_requested",
+          "no_valid_document",
+          "only_expired_documents",
+          "conflicting_sources"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": false,
+        "llm_called": true,
+        "llm_sources_include": [
+          {
+            "document_id": "POL-ORD-001",
+            "version": "1.1"
+          }
+        ],
+        "llm_sources_exclude": [
+          {
+            "document_id": "POL-RET-003",
+            "version": "2.1"
+          }
+        ]
+      },
+      "without_kb_evidence": "The injected intent is in scope, at least tau, and at least delta above the rest. The message states the topic of POL-ORD-001, which KB v2.1 holds in effect at as_of, with a policy_key that no other version shares, so routing drafts and POL-ORD-001 is among the valid documents that reach the LLM step. POL-RET-003 states another topic and is not expected among the top three. The LLM step of the gate fails, so the draft status is llm_unavailable (ESC-05). track_order is not a sensitive intent and the message holds no sensitive term, so authority is not required."
+    },
+    {
+      "case_id": "fr03-draft-cancellation-window",
+      "esc_rule": "FR-03",
+      "signal": "A question on the topic of POL-ORD-002, injected cancel_order 0.93",
+      "request": {
+        "message": "Can I still cancel [ORDER_ID_1]? It is in 'Awaiting Packing' status.",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "cancel_order",
+            "probability": 0.93
+          }
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "draft",
+        "draft_status": "llm_unavailable",
+        "required_reason_codes": [],
+        "forbidden_reason_codes": [
+          "low_confidence",
+          "out_of_scope_intent",
+          "human_agent_requested",
+          "no_valid_document",
+          "only_expired_documents",
+          "conflicting_sources"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": true,
+        "llm_called": true,
+        "llm_sources_include": [
+          {
+            "document_id": "POL-ORD-002",
+            "version": "1.1"
+          }
+        ],
+        "llm_sources_exclude": [
+          {
+            "document_id": "POL-PAY-004",
+            "version": "1.1"
+          }
+        ]
+      },
+      "without_kb_evidence": "The injected intent is in scope, at least tau, and at least delta above the rest. The message states the topic of POL-ORD-002, which KB v2.1 holds in effect at as_of, with a policy_key that no other version shares, so routing drafts and POL-ORD-002 is among the valid documents that reach the LLM step. POL-PAY-004 states another topic and is not expected among the top three. The LLM step of the gate fails, so the draft status is llm_unavailable (ESC-05). cancel_order is a sensitive intent, so authority is required, and the draft holds supporting information only (ESC-03 (a))."
+    },
+    {
+      "case_id": "fr03-draft-delivery-timelines",
+      "esc_rule": "FR-03",
+      "signal": "A question on the topic of POL-SHIP-001, injected delivery_time 0.93",
+      "request": {
+        "message": "How long does Standard Delivery take to a rural district?",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "delivery_time",
+            "probability": 0.93
+          }
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "draft",
+        "draft_status": "llm_unavailable",
+        "required_reason_codes": [],
+        "forbidden_reason_codes": [
+          "low_confidence",
+          "out_of_scope_intent",
+          "human_agent_requested",
+          "no_valid_document",
+          "only_expired_documents",
+          "conflicting_sources"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": false,
+        "llm_called": true,
+        "llm_sources_include": [
+          {
+            "document_id": "POL-SHIP-001",
+            "version": "1.1"
+          }
+        ],
+        "llm_sources_exclude": [
+          {
+            "document_id": "POL-PAY-004",
+            "version": "1.1"
+          }
+        ]
+      },
+      "without_kb_evidence": "The injected intent is in scope, at least tau, and at least delta above the rest. The message states the topic of POL-SHIP-001, which KB v2.1 holds in effect at as_of, with a policy_key that no other version shares, so routing drafts and POL-SHIP-001 is among the valid documents that reach the LLM step. POL-PAY-004 states another topic and is not expected among the top three. The LLM step of the gate fails, so the draft status is llm_unavailable (ESC-05). delivery_time is not a sensitive intent and the message holds no sensitive term, so authority is not required."
+    },
+    {
+      "case_id": "fr03-draft-shipping-fees",
+      "esc_rule": "FR-03",
+      "signal": "A question on the topic of POL-SHIP-002, injected shipping_costs 0.93",
+      "request": {
+        "message": "How much is the shipping fee for an order to another province, and when can I use a Freeship voucher?",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "shipping_costs",
+            "probability": 0.93
+          }
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "draft",
+        "draft_status": "llm_unavailable",
+        "required_reason_codes": [],
+        "forbidden_reason_codes": [
+          "low_confidence",
+          "out_of_scope_intent",
+          "human_agent_requested",
+          "no_valid_document",
+          "only_expired_documents",
+          "conflicting_sources"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": false,
+        "llm_called": true,
+        "llm_sources_include": [
+          {
+            "document_id": "POL-SHIP-002",
+            "version": "1.1"
+          }
+        ],
+        "llm_sources_exclude": [
+          {
+            "document_id": "POL-RET-003",
+            "version": "2.1"
+          }
+        ]
+      },
+      "without_kb_evidence": "The injected intent is in scope, at least tau, and at least delta above the rest. The message states the topic of POL-SHIP-002, which KB v2.1 holds in effect at as_of, with a policy_key that no other version shares, so routing drafts and POL-SHIP-002 is among the valid documents that reach the LLM step. POL-RET-003 states another topic and is not expected among the top three. The LLM step of the gate fails, so the draft status is llm_unavailable (ESC-05). shipping_costs is not a sensitive intent and the message holds no sensitive term, so authority is not required."
+    },
+    {
+      "case_id": "fr03-draft-delayed-or-lost-delivery",
+      "esc_rule": "FR-03",
+      "signal": "A question on the topic of POL-SHIP-004, injected delivery_issue 0.93",
+      "request": {
+        "message": "The courier marked [ORDER_ID_1] as delivered, but I never received the parcel.",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "delivery_issue",
+            "probability": 0.93
+          }
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "draft",
+        "draft_status": "llm_unavailable",
+        "required_reason_codes": [],
+        "forbidden_reason_codes": [
+          "low_confidence",
+          "out_of_scope_intent",
+          "human_agent_requested",
+          "no_valid_document",
+          "only_expired_documents",
+          "conflicting_sources"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": false,
+        "llm_called": true,
+        "llm_sources_include": [
+          {
+            "document_id": "POL-SHIP-004",
+            "version": "1.1"
+          }
+        ],
+        "llm_sources_exclude": [
+          {
+            "document_id": "POL-RET-003",
+            "version": "2.1"
+          }
+        ]
+      },
+      "without_kb_evidence": "The injected intent is in scope, at least tau, and at least delta above the rest. The message states the topic of POL-SHIP-004, which KB v2.1 holds in effect at as_of, with a policy_key that no other version shares, so routing drafts and POL-SHIP-004 is among the valid documents that reach the LLM step. POL-RET-003 states another topic and is not expected among the top three. The LLM step of the gate fails, so the draft status is llm_unavailable (ESC-05). delivery_issue is not a sensitive intent and the message holds no sensitive term, so authority is not required."
+    },
+    {
+      "case_id": "fr03-draft-unconfirmed-payment",
+      "esc_rule": "FR-03",
+      "signal": "A question on the topic of POL-PAY-001, injected payment_issue 0.93",
+      "request": {
+        "message": "My e-wallet was debited, but [ORDER_ID_1] still shows 'Awaiting Payment'.",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "payment_issue",
+            "probability": 0.93
+          }
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "draft",
+        "draft_status": "llm_unavailable",
+        "required_reason_codes": [],
+        "forbidden_reason_codes": [
+          "low_confidence",
+          "out_of_scope_intent",
+          "human_agent_requested",
+          "no_valid_document",
+          "only_expired_documents",
+          "conflicting_sources"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": true,
+        "llm_called": true,
+        "llm_sources_include": [
+          {
+            "document_id": "POL-PAY-001",
+            "version": "1.1"
+          }
+        ],
+        "llm_sources_exclude": [
+          {
+            "document_id": "POL-ORD-003",
+            "version": "1.0"
+          }
+        ]
+      },
+      "without_kb_evidence": "The injected intent is in scope, at least tau, and at least delta above the rest. The message states the topic of POL-PAY-001, which KB v2.1 holds in effect at as_of, with a policy_key that no other version shares, so routing drafts and POL-PAY-001 is among the valid documents that reach the LLM step. POL-ORD-003 states another topic and is not expected among the top three. The LLM step of the gate fails, so the draft status is llm_unavailable (ESC-05). payment_issue is a sensitive intent, so authority is required, and the draft holds supporting information only (ESC-03 (a))."
+    },
+    {
+      "case_id": "fr03-draft-duplicate-charge",
+      "esc_rule": "FR-03",
+      "signal": "A question on the topic of POL-PAY-004, injected payment_issue 0.93",
+      "request": {
+        "message": "My card was charged twice for the same order [ORDER_ID_1].",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "payment_issue",
+            "probability": 0.93
+          }
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "draft",
+        "draft_status": "llm_unavailable",
+        "required_reason_codes": [],
+        "forbidden_reason_codes": [
+          "low_confidence",
+          "out_of_scope_intent",
+          "human_agent_requested",
+          "no_valid_document",
+          "only_expired_documents",
+          "conflicting_sources"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": true,
+        "llm_called": true,
+        "llm_sources_include": [
+          {
+            "document_id": "POL-PAY-004",
+            "version": "1.1"
+          }
+        ],
+        "llm_sources_exclude": [
+          {
+            "document_id": "POL-ORD-003",
+            "version": "1.0"
+          }
+        ]
+      },
+      "without_kb_evidence": "The injected intent is in scope, at least tau, and at least delta above the rest. The message states the topic of POL-PAY-004, which KB v2.1 holds in effect at as_of, with a policy_key that no other version shares, so routing drafts and POL-PAY-004 is among the valid documents that reach the LLM step. POL-ORD-003 states another topic and is not expected among the top three. The LLM step of the gate fails, so the draft status is llm_unavailable (ESC-05). payment_issue is a sensitive intent, so authority is required, and the draft holds supporting information only (ESC-03 (a))."
+    },
+    {
+      "case_id": "esc01-below-tau",
+      "esc_rule": "ESC-01",
+      "signal": "Injected top 0.40, second 0.15, on the message of fr03-draft-order-tracking",
+      "request": {
+        "message": "Where can I check the status of [ORDER_ID_1]? The app says 'Pick Up in Progress'.",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "delivery_issue",
+            "probability": 0.4
+          },
+          {
+            "label": "track_order",
+            "probability": 0.15
+          }
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": [
+          "low_confidence"
+        ],
+        "forbidden_reason_codes": [],
+        "no_other_reason_codes": true,
+        "requires_authority": false,
+        "llm_called": false
+      },
+      "without_kb_evidence": "low_confidence comes from tau alone, and routing abstains on it even with valid KB evidence; no draft exists until staff confirm or correct the intent. The message is the one of fr03-draft-order-tracking, so it finds a valid document as that case does, and no evidence code is added."
+    },
+    {
+      "case_id": "esc01-below-delta",
+      "esc_rule": "ESC-01",
+      "signal": "Injected top 0.47, second 0.44, on the message of fr03-draft-refund-eligibility",
+      "request": {
+        "message": "If I return a lamp because I no longer like it, do I get the original shipping fee back?",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "refund_policy",
+            "probability": 0.47
+          },
+          {
+            "label": "return_policy",
+            "probability": 0.44
+          }
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": [
+          "low_confidence"
+        ],
+        "forbidden_reason_codes": [],
+        "no_other_reason_codes": true,
+        "requires_authority": false,
+        "llm_called": false
+      },
+      "without_kb_evidence": "The top-1 probability is below tau and the gap (0.03) is below delta, so routing abstains with low_confidence even with valid KB evidence. The message is the one of fr03-draft-refund-eligibility, so it finds a valid document as that case does, and no evidence code is added."
+    },
+    {
+      "case_id": "esc01-at-tau",
+      "esc_rule": "ESC-01",
+      "signal": "Injected top exactly 0.70, second 0.10, on the message of fr03-draft-order-tracking",
+      "request": {
+        "message": "Where can I check the status of [ORDER_ID_1]? The app says 'Pick Up in Progress'.",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "track_order",
+            "probability": 0.7
+          },
+          {
+            "label": "track_delivery",
+            "probability": 0.1
+          }
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "draft",
+        "draft_status": "llm_unavailable",
+        "required_reason_codes": [],
+        "forbidden_reason_codes": [
+          "low_confidence",
+          "out_of_scope_intent",
+          "human_agent_requested",
+          "no_valid_document",
+          "only_expired_documents",
+          "conflicting_sources"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": false,
+        "llm_called": true,
+        "llm_sources_include": [
+          {
+            "document_id": "POL-ORD-001",
+            "version": "1.1"
+          }
+        ],
+        "llm_sources_exclude": [
+          {
+            "document_id": "POL-RET-003",
+            "version": "2.1"
+          }
+        ]
+      },
+      "without_kb_evidence": "0.70 is not below tau and the gap 0.60 is not below delta, so low_confidence is not set and routing drafts from the valid documents, POL-ORD-001 among them, as in fr03-draft-order-tracking. track_delivery is not sensitive."
+    },
+    {
+      "case_id": "esc01-staff-confirms-intent",
+      "esc_rule": "ESC-01",
+      "signal": "Staff chose delivery_time, on the message of fr03-draft-delivery-timelines",
+      "request": {
+        "message": "How long does Standard Delivery take to a rural district?",
+        "as_of": "2026-11-23T09:00:00Z",
+        "intent_override": "delivery_time"
+      },
+      "inject": null,
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "draft",
+        "draft_status": "llm_unavailable",
+        "required_reason_codes": [],
+        "forbidden_reason_codes": [
+          "low_confidence",
+          "out_of_scope_intent",
+          "human_agent_requested",
+          "no_valid_document",
+          "only_expired_documents",
+          "conflicting_sources"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": false,
+        "llm_called": true,
+        "llm_sources_include": [
+          {
+            "document_id": "POL-SHIP-001",
+            "version": "1.1"
+          }
+        ],
+        "llm_sources_exclude": [
+          {
+            "document_id": "POL-PAY-004",
+            "version": "1.1"
+          }
+        ]
+      },
+      "without_kb_evidence": "A staff choice replaces the distribution, so low_confidence is never set (ESC-01), and the draft is created from the valid documents, POL-SHIP-001 among them. delivery_time is not sensitive."
+    },
+    {
+      "case_id": "esc02-out-of-scope-intent",
+      "esc_rule": "ESC-02",
+      "signal": "Injected change_order 0.94, the only intent of POL-ORD-003",
+      "request": {
+        "message": "Can I change the delivery address of [ORDER_ID_1]? It is still in 'Pending Processing' status.",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "change_order",
+            "probability": 0.94
+          }
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": [
+          "out_of_scope_intent"
+        ],
+        "forbidden_reason_codes": [
+          "low_confidence",
+          "human_agent_requested"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": false,
+        "llm_called": false
+      },
+      "without_kb_evidence": "change_order is outside the 12 in-scope intents, so routing abstains with out_of_scope_intent whatever the evidence; the topic of POL-ORD-003 therefore gets no draft. No draft case proves what this message retrieves, so the evidence codes are not checked."
+    },
+    {
+      "case_id": "esc02-password-message",
+      "esc_rule": "ESC-02",
+      "signal": "The model reads an account request, which is outside the 12 in-scope intents",
+      "request": {
+        "message": "I forgot my password and the reset link never reaches [EMAIL_1]. How do I get back into my account?",
+        "as_of": "2025-12-01T09:00:00Z"
+      },
+      "inject": null,
+      "depends_on_model": true,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": [
+          "out_of_scope_intent",
+          "no_valid_document"
+        ],
+        "forbidden_reason_codes": [
+          "human_agent_requested"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": null,
+        "llm_called": false
+      },
+      "without_kb_evidence": "Copied from interim-v1 with only as_of changed, to 2025-12-01, before every version of KB v2.1 starts. No version is in effect, so the evidence gives no_valid_document as with the KB of 0 documents, and the outcome rests on the real model exactly as in interim-v1. With a version in effect, whether this message gets a draft would rest on the confidence of the real model, which nobody can state by hand."
+    },
+    {
+      "case_id": "esc02-store-hours-message",
+      "esc_rule": "ESC-02",
+      "signal": "The model reads a store question, which is outside the 12 in-scope intents",
+      "request": {
+        "message": "What time does your store near [ADDRESS_1] open on Sundays?",
+        "as_of": "2025-12-01T09:00:00Z"
+      },
+      "inject": null,
+      "depends_on_model": true,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": [
+          "out_of_scope_intent",
+          "no_valid_document"
+        ],
+        "forbidden_reason_codes": [
+          "human_agent_requested"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": null,
+        "llm_called": false
+      },
+      "without_kb_evidence": "Copied from interim-v1 with only as_of changed, to 2025-12-01, before every version of KB v2.1 starts. No version is in effect, so the evidence gives no_valid_document as with the KB of 0 documents, and the outcome rests on the real model exactly as in interim-v1. With a version in effect, whether this message gets a draft would rest on the confidence of the real model, which nobody can state by hand."
+    },
+    {
+      "case_id": "esc03a-refund-request-message",
+      "esc_rule": "ESC-03 (a)",
+      "signal": "The model reads a refund request, and request_refund is a sensitive intent",
+      "request": {
+        "message": "Please refund [ORDER_ID_1]. I want my money back for the headphones.",
+        "as_of": "2025-12-01T09:00:00Z",
+        "order_context": {
+          "order_status": "delivered",
+          "shipment_status": "delivered"
+        }
+      },
+      "inject": null,
+      "depends_on_model": true,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": [
+          "no_valid_document"
+        ],
+        "forbidden_reason_codes": [
+          "human_agent_requested"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": true,
+        "llm_called": false
+      },
+      "without_kb_evidence": "Copied from interim-v1 with only as_of changed, to 2025-12-01, before every version of KB v2.1 starts. No version is in effect, so the evidence gives no_valid_document as with the KB of 0 documents, and the outcome rests on the real model exactly as in interim-v1. With a version in effect, whether this message gets a draft would rest on the confidence of the real model, which nobody can state by hand."
+    },
+    {
+      "case_id": "esc03a-sensitive-intent-not-first",
+      "esc_rule": "ESC-03 (a)",
+      "signal": "A parcel not received with a request for the money back: injected delivery_issue 0.76, request_refund 0.18",
+      "request": {
+        "message": "The courier marked [ORDER_ID_1] as delivered, but I never received the parcel. I want my money back.",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "delivery_issue",
+            "probability": 0.76
+          },
+          {
+            "label": "request_refund",
+            "probability": 0.18
+          }
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "draft",
+        "draft_status": "llm_unavailable",
+        "required_reason_codes": [],
+        "forbidden_reason_codes": [
+          "low_confidence",
+          "out_of_scope_intent",
+          "human_agent_requested",
+          "no_valid_document",
+          "only_expired_documents",
+          "conflicting_sources"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": true,
+        "llm_called": true,
+        "llm_sources_include": [
+          {
+            "document_id": "POL-SHIP-004",
+            "version": "1.1"
+          }
+        ],
+        "llm_sources_exclude": [
+          {
+            "document_id": "POL-RET-003",
+            "version": "2.1"
+          }
+        ]
+      },
+      "without_kb_evidence": "request_refund is at least 0.10, so authority is required although it is not first; the authority flag never prevents a draft, so routing drafts with supporting information only, POL-SHIP-004 among the documents."
+    },
+    {
+      "case_id": "esc03a-sensitive-intent-at-threshold",
+      "esc_rule": "ESC-03 (a)",
+      "signal": "Injected track_order 0.85, cancel_order exactly 0.10",
+      "request": {
+        "message": "Where can I check the status of [ORDER_ID_1]? If it is still far away, I may cancel it.",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "track_order",
+            "probability": 0.85
+          },
+          {
+            "label": "cancel_order",
+            "probability": 0.1
+          }
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "draft",
+        "draft_status": "llm_unavailable",
+        "required_reason_codes": [],
+        "forbidden_reason_codes": [
+          "low_confidence",
+          "out_of_scope_intent",
+          "human_agent_requested",
+          "no_valid_document",
+          "only_expired_documents",
+          "conflicting_sources"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": true,
+        "llm_called": true,
+        "llm_sources_include": [
+          {
+            "document_id": "POL-ORD-001",
+            "version": "1.1"
+          }
+        ],
+        "llm_sources_exclude": [
+          {
+            "document_id": "POL-RET-003",
+            "version": "2.1"
+          }
+        ]
+      },
+      "without_kb_evidence": "cancel_order at exactly 0.10 counts (at least 0.10), so authority is required; the top intent is confident, so routing drafts, POL-ORD-001 among the documents."
+    },
+    {
+      "case_id": "esc03a-sensitive-intent-staff-choice",
+      "esc_rule": "ESC-03 (a)",
+      "signal": "Staff chose request_refund, on the message of fr03-draft-refund-timeline",
+      "request": {
+        "message": "My refund for [ORDER_ID_1] goes back to my linked e-wallet. How many business days will it take?",
+        "as_of": "2026-11-23T09:00:00Z",
+        "intent_override": "request_refund"
+      },
+      "inject": null,
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "draft",
+        "draft_status": "llm_unavailable",
+        "required_reason_codes": [],
+        "forbidden_reason_codes": [
+          "low_confidence",
+          "out_of_scope_intent",
+          "human_agent_requested",
+          "no_valid_document",
+          "only_expired_documents",
+          "conflicting_sources"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": true,
+        "llm_called": true,
+        "llm_sources_include": [
+          {
+            "document_id": "POL-REFUND-002",
+            "version": "2.1"
+          }
+        ],
+        "llm_sources_exclude": [
+          {
+            "document_id": "POL-ORD-003",
+            "version": "1.0"
+          }
+        ]
+      },
+      "without_kb_evidence": "A staff choice of a sensitive intent requires authority, and the draft is created from the valid documents, POL-REFUND-002 among them, which maps to request_refund."
+    },
+    {
+      "case_id": "esc03a-term-suspected-fraud",
+      "esc_rule": "ESC-03 (a)",
+      "signal": "Term fraud, injected track_order 0.93",
+      "request": {
+        "message": "Where can I check the status of [ORDER_ID_1]? My son [NAME_1] thinks the seller is a fraud.",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "track_order",
+            "probability": 0.93
+          }
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "draft",
+        "draft_status": "llm_unavailable",
+        "required_reason_codes": [],
+        "forbidden_reason_codes": [
+          "low_confidence",
+          "out_of_scope_intent",
+          "human_agent_requested",
+          "no_valid_document",
+          "only_expired_documents",
+          "conflicting_sources"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": true,
+        "llm_called": true,
+        "llm_sources_include": [
+          {
+            "document_id": "POL-ORD-001",
+            "version": "1.1"
+          }
+        ],
+        "llm_sources_exclude": [
+          {
+            "document_id": "POL-RET-003",
+            "version": "2.1"
+          }
+        ]
+      },
+      "without_kb_evidence": "The term fraud of the sensitive-term list requires authority while the intent track_order is not sensitive; the authority flag never prevents a draft, so routing drafts with supporting information only, POL-ORD-001 among the documents."
+    },
+    {
+      "case_id": "esc03a-term-unauthorized",
+      "esc_rule": "ESC-03 (a)",
+      "signal": "Term unauthorized, injected shipping_costs 0.93",
+      "request": {
+        "message": "My card statement shows an unauthorized shipping fee for [ORDER_ID_1]. How much is the shipping fee for an order to another province?",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "shipping_costs",
+            "probability": 0.93
+          }
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "draft",
+        "draft_status": "llm_unavailable",
+        "required_reason_codes": [],
+        "forbidden_reason_codes": [
+          "low_confidence",
+          "out_of_scope_intent",
+          "human_agent_requested",
+          "no_valid_document",
+          "only_expired_documents",
+          "conflicting_sources"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": true,
+        "llm_called": true,
+        "llm_sources_include": [
+          {
+            "document_id": "POL-SHIP-002",
+            "version": "1.1"
+          }
+        ],
+        "llm_sources_exclude": [
+          {
+            "document_id": "POL-RET-003",
+            "version": "2.1"
+          }
+        ]
+      },
+      "without_kb_evidence": "The term unauthorized of the sensitive-term list requires authority while the intent shipping_costs is not sensitive; the authority flag never prevents a draft, so routing drafts with supporting information only, POL-SHIP-002 among the documents."
+    },
+    {
+      "case_id": "esc03a-term-legal-claim",
+      "esc_rule": "ESC-03 (a)",
+      "signal": "Term legal action, injected delivery_issue 0.93",
+      "request": {
+        "message": "The courier marked [ORDER_ID_1] as delivered, but I never received the parcel. If this is not sorted out by Friday, I will take legal action.",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "delivery_issue",
+            "probability": 0.93
+          }
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "draft",
+        "draft_status": "llm_unavailable",
+        "required_reason_codes": [],
+        "forbidden_reason_codes": [
+          "low_confidence",
+          "out_of_scope_intent",
+          "human_agent_requested",
+          "no_valid_document",
+          "only_expired_documents",
+          "conflicting_sources"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": true,
+        "llm_called": true,
+        "llm_sources_include": [
+          {
+            "document_id": "POL-SHIP-004",
+            "version": "1.1"
+          }
+        ],
+        "llm_sources_exclude": [
+          {
+            "document_id": "POL-RET-003",
+            "version": "2.1"
+          }
+        ]
+      },
+      "without_kb_evidence": "The term legal action of the sensitive-term list requires authority while the intent delivery_issue is not sensitive; the authority flag never prevents a draft, so routing drafts with supporting information only, POL-SHIP-004 among the documents."
+    },
+    {
+      "case_id": "esc03a-term-transaction-dispute",
+      "esc_rule": "ESC-03 (a)",
+      "signal": "Term chargeback, injected refund_status 0.93",
+      "request": {
+        "message": "Where can I follow my refund for [ORDER_ID_1]? If it does not arrive this week, I will ask my bank for a chargeback.",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "refund_status",
+            "probability": 0.93
+          }
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "draft",
+        "draft_status": "llm_unavailable",
+        "required_reason_codes": [],
+        "forbidden_reason_codes": [
+          "low_confidence",
+          "out_of_scope_intent",
+          "human_agent_requested",
+          "no_valid_document",
+          "only_expired_documents",
+          "conflicting_sources"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": true,
+        "llm_called": true,
+        "llm_sources_include": [
+          {
+            "document_id": "POL-REFUND-007",
+            "version": "1.1"
+          }
+        ],
+        "llm_sources_exclude": [
+          {
+            "document_id": "POL-SHIP-002",
+            "version": "1.1"
+          }
+        ]
+      },
+      "without_kb_evidence": "The term chargeback of the sensitive-term list requires authority while the intent refund_status is not sensitive; the authority flag never prevents a draft, so routing drafts with supporting information only, POL-REFUND-007 among the documents."
+    },
+    {
+      "case_id": "esc03a-term-policy-exception",
+      "esc_rule": "ESC-03 (a)",
+      "signal": "Term make an exception, injected return_policy 0.93",
+      "request": {
+        "message": "How many days do I have to return a blender from [ORDER_ID_1]? The return window closed two days ago. Could you make an exception for me?",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "return_policy",
+            "probability": 0.93
+          }
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "draft",
+        "draft_status": "llm_unavailable",
+        "required_reason_codes": [],
+        "forbidden_reason_codes": [
+          "low_confidence",
+          "out_of_scope_intent",
+          "human_agent_requested",
+          "no_valid_document",
+          "only_expired_documents",
+          "conflicting_sources"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": true,
+        "llm_called": true,
+        "llm_sources_include": [
+          {
+            "document_id": "POL-RET-001",
+            "version": "2.1"
+          }
+        ],
+        "llm_sources_exclude": [
+          {
+            "document_id": "POL-PAY-004",
+            "version": "1.1"
+          }
+        ]
+      },
+      "without_kb_evidence": "The term make an exception of the sensitive-term list requires authority while the intent return_policy is not sensitive; the authority flag never prevents a draft, so routing drafts with supporting information only, POL-RET-001 among the documents."
+    },
+    {
+      "case_id": "esc03a-term-legal-claim-message",
+      "esc_rule": "ESC-03 (a)",
+      "signal": "The sensitive terms 'lawyer' and 'lawsuit' (legal_claim), with the intent of the model",
+      "request": {
+        "message": "My lawyer will file a lawsuit if [ORDER_ID_1] is not resolved this week.",
+        "as_of": "2025-12-01T09:00:00Z"
+      },
+      "inject": null,
+      "depends_on_model": true,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": [
+          "no_valid_document"
+        ],
+        "forbidden_reason_codes": [
+          "human_agent_requested"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": true,
+        "llm_called": false
+      },
+      "without_kb_evidence": "Copied from interim-v1 with only as_of changed, to 2025-12-01, before every version of KB v2.1 starts. No version is in effect, so the evidence gives no_valid_document as with the KB of 0 documents, and the outcome rests on the real model exactly as in interim-v1. With a version in effect, whether this message gets a draft would rest on the confidence of the real model, which nobody can state by hand."
+    },
+    {
+      "case_id": "esc03b-human-agent-message",
+      "esc_rule": "ESC-03 (b)",
+      "signal": "The model reads a request for a person (human_agent)",
+      "request": {
+        "message": "Please connect me with a human agent. I do not want to chat with a bot.",
+        "as_of": "2025-12-01T09:00:00Z"
+      },
+      "inject": null,
+      "depends_on_model": true,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "escalate",
+        "draft_status": "escalation_recommended",
+        "required_reason_codes": [
+          "human_agent_requested",
+          "no_valid_document"
+        ],
+        "forbidden_reason_codes": [],
+        "no_other_reason_codes": false,
+        "requires_authority": null,
+        "llm_called": false
+      },
+      "without_kb_evidence": "Copied from interim-v1 with only as_of changed, to 2025-12-01, before every version of KB v2.1 starts. No version is in effect, so the evidence gives no_valid_document as with the KB of 0 documents, and the outcome rests on the real model exactly as in interim-v1. With a version in effect, whether this message gets a draft would rest on the confidence of the real model, which nobody can state by hand."
+    },
+    {
+      "case_id": "esc03b-human-agent",
+      "esc_rule": "ESC-03 (b)",
+      "signal": "Injected human_agent 0.95, with a question of fr03-draft-order-tracking",
+      "request": {
+        "message": "I would like to speak with a real person. Where can I check the status of [ORDER_ID_1]?",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "human_agent",
+            "probability": 0.95
+          }
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "escalate",
+        "draft_status": "escalation_recommended",
+        "required_reason_codes": [
+          "human_agent_requested"
+        ],
+        "forbidden_reason_codes": [],
+        "no_other_reason_codes": true,
+        "requires_authority": false,
+        "llm_called": false
+      },
+      "without_kb_evidence": "human_agent leads to an escalation recommendation and never gets a draft, even with valid KB evidence (ESC-03 (b)). The message holds the question of fr03-draft-order-tracking, so it finds a valid document, and no evidence code is added."
+    },
+    {
+      "case_id": "esc03b-human-agent-low-confidence",
+      "esc_rule": "ESC-03 (b)",
+      "signal": "Injected human_agent 0.55, customer_service 0.30, with the message of fr03-draft-delayed-or-lost-delivery",
+      "request": {
+        "message": "Can someone from your team call me back? The courier marked [ORDER_ID_1] as delivered, but I never received the parcel.",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "human_agent",
+            "probability": 0.55
+          },
+          {
+            "label": "customer_service",
+            "probability": 0.3
+          }
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "escalate",
+        "draft_status": "escalation_recommended",
+        "required_reason_codes": [
+          "low_confidence",
+          "human_agent_requested"
+        ],
+        "forbidden_reason_codes": [],
+        "no_other_reason_codes": true,
+        "requires_authority": false,
+        "llm_called": false
+      },
+      "without_kb_evidence": "human_agent escalates although its probability is below tau; low_confidence is added, and escalation still wins over abstention. The message holds that of fr03-draft-delayed-or-lost-delivery, so no evidence code is added."
+    },
+    {
+      "case_id": "esc03b-human-agent-with-term",
+      "esc_rule": "ESC-03 (b)",
+      "signal": "Injected human_agent 0.95, term lawsuit, with the message of fr03-draft-delayed-or-lost-delivery",
+      "request": {
+        "message": "I want to talk to a real person about the lawsuit over [ORDER_ID_1]. The courier marked it as delivered, but I never received the parcel.",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "human_agent",
+            "probability": 0.95
+          }
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "escalate",
+        "draft_status": "escalation_recommended",
+        "required_reason_codes": [
+          "human_agent_requested"
+        ],
+        "forbidden_reason_codes": [],
+        "no_other_reason_codes": true,
+        "requires_authority": true,
+        "llm_called": false
+      },
+      "without_kb_evidence": "human_agent escalates; the term lawsuit requires authority, which human_agent alone never sets. The message holds the question of fr03-draft-delayed-or-lost-delivery, so no evidence code is added."
+    },
+    {
+      "case_id": "esc04-no-valid-document",
+      "esc_rule": "ESC-04",
+      "signal": "Injected shipping_costs 0.94, as_of before every version of KB v2.1 starts",
+      "request": {
+        "message": "How much is the shipping fee for an order to another province, and when can I use a Freeship voucher?",
+        "as_of": "2025-12-01T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "shipping_costs",
+            "probability": 0.94
+          }
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": [
+          "no_valid_document"
+        ],
+        "forbidden_reason_codes": [],
+        "no_other_reason_codes": true,
+        "requires_authority": false,
+        "llm_called": false
+      },
+      "without_kb_evidence": "At 2025-12-01 no version of KB v2.1 is in effect yet (each starts on 2026-01-01), so every match is left out and the evidence gives no_valid_document, whatever the search finds; routing abstains (ESC-04)."
+    },
+    {
+      "case_id": "esc04-only-expired-documents",
+      "esc_rule": "ESC-04",
+      "signal": "Injected shipping_costs 0.94, as_of after every version of KB v2.1 ends",
+      "request": {
+        "message": "How much is the shipping fee for an order to another province, and when can I use a Freeship voucher?",
+        "as_of": "2027-01-15T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "shipping_costs",
+            "probability": 0.94
+          }
+        ],
+        "failure": null
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": [
+          "only_expired_documents"
+        ],
+        "forbidden_reason_codes": [],
+        "no_other_reason_codes": true,
+        "requires_authority": false,
+        "llm_called": false
+      },
+      "without_kb_evidence": "At 2027-01-15 every version of KB v2.1 has ended (2026-12-31T23:59:59Z). The message is that of fr03-draft-shipping-fees, so the search finds documents as there, all of them expired, and the evidence gives only_expired_documents; routing abstains (ESC-04)."
+    },
+    {
+      "case_id": "esc04-no-valid-document-message",
+      "esc_rule": "ESC-04",
+      "signal": "The model reads a return question, and no KB document version supports a draft",
+      "request": {
+        "message": "How many days do I have to send back a jacket from [ORDER_ID_1]?",
+        "as_of": "2025-12-01T09:00:00Z"
+      },
+      "inject": null,
+      "depends_on_model": true,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": [
+          "no_valid_document"
+        ],
+        "forbidden_reason_codes": [
+          "human_agent_requested"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": null,
+        "llm_called": false
+      },
+      "without_kb_evidence": "Copied from interim-v1 with only as_of changed, to 2025-12-01, before every version of KB v2.1 starts. No version is in effect, so the evidence gives no_valid_document as with the KB of 0 documents, and the outcome rests on the real model exactly as in interim-v1. With a version in effect, whether this message gets a draft would rest on the confidence of the real model, which nobody can state by hand."
+    },
+    {
+      "case_id": "esc05-intent-model-failure",
+      "esc_rule": "ESC-05",
+      "signal": "The intent model fails",
+      "request": {
+        "message": "Where is [ORDER_ID_1] right now?",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": null,
+        "failure": "intent_model"
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 500,
+        "problem_type": "urn:supportiq:problem:internal-error",
+        "recommendation": null,
+        "draft_status": null,
+        "required_reason_codes": [],
+        "forbidden_reason_codes": [],
+        "no_other_reason_codes": false,
+        "requires_authority": null,
+        "llm_called": false
+      },
+      "without_kb_evidence": "Copied from interim-v1 with only as_of changed. The injected part fails before routing, so both operations answer 500 internal-error whatever the KB holds, and backend falls back to manual handling (ESC-05)."
+    },
+    {
+      "case_id": "esc05-retrieval-failure",
+      "esc_rule": "ESC-05",
+      "signal": "The search of the KB fails",
+      "request": {
+        "message": "Where is [ORDER_ID_1] right now?",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": null,
+        "failure": "retrieval"
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 500,
+        "problem_type": "urn:supportiq:problem:internal-error",
+        "recommendation": null,
+        "draft_status": null,
+        "required_reason_codes": [],
+        "forbidden_reason_codes": [],
+        "no_other_reason_codes": false,
+        "requires_authority": null,
+        "llm_called": false
+      },
+      "without_kb_evidence": "Copied from interim-v1 with only as_of changed. The injected part fails before routing, so both operations answer 500 internal-error whatever the KB holds, and backend falls back to manual handling (ESC-05)."
+    },
+    {
+      "case_id": "esc05-llm-failure",
+      "esc_rule": "ESC-05",
+      "signal": "The LLM fails, injected track_order 0.93, on the message of fr03-draft-order-tracking",
+      "request": {
+        "message": "Where can I check the status of [ORDER_ID_1]? The app says 'Pick Up in Progress'.",
+        "as_of": "2026-11-23T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "track_order",
+            "probability": 0.93
+          }
+        ],
+        "failure": "llm"
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "draft",
+        "draft_status": "llm_unavailable",
+        "required_reason_codes": [],
+        "forbidden_reason_codes": [
+          "low_confidence",
+          "out_of_scope_intent",
+          "human_agent_requested",
+          "no_valid_document",
+          "only_expired_documents",
+          "conflicting_sources"
+        ],
+        "no_other_reason_codes": false,
+        "requires_authority": false,
+        "llm_called": true,
+        "llm_sources_include": [
+          {
+            "document_id": "POL-ORD-001",
+            "version": "1.1"
+          }
+        ],
+        "llm_sources_exclude": [
+          {
+            "document_id": "POL-RET-003",
+            "version": "2.1"
+          }
+        ]
+      },
+      "without_kb_evidence": "Routing drafts as in fr03-draft-order-tracking, the LLM step receives the call with POL-ORD-001 among the sources, and its failure gives the draft status llm_unavailable: manual handling, never a guessed reply (ESC-05)."
+    },
+    {
+      "case_id": "esc05-llm-failure-not-reached",
+      "esc_rule": "ESC-05",
+      "signal": "The LLM fails, but routing abstains before the drafting step",
+      "request": {
+        "message": "Where is [ORDER_ID_1] right now?",
+        "as_of": "2025-12-01T09:00:00Z"
+      },
+      "inject": {
+        "intent_distribution": [
+          {
+            "label": "track_order",
+            "probability": 0.93
+          }
+        ],
+        "failure": "llm"
+      },
+      "depends_on_model": false,
+      "expected": {
+        "http_status": 200,
+        "problem_type": null,
+        "recommendation": "abstain",
+        "draft_status": "abstained",
+        "required_reason_codes": [
+          "no_valid_document"
+        ],
+        "forbidden_reason_codes": [
+          "llm_unavailable"
+        ],
+        "no_other_reason_codes": true,
+        "requires_authority": false,
+        "llm_called": false
+      },
+      "without_kb_evidence": "Copied from interim-v1 with only as_of changed, to 2025-12-01, before every version of KB v2.1 starts. No version is in effect, so the evidence gives no_valid_document as with the KB of 0 documents, and the outcome rests on the real model exactly as in interim-v1. With a version in effect, whether this message gets a draft would rest on the confidence of the real model, which nobody can state by hand."
+    }
+  ]
+}

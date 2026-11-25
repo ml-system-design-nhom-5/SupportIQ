@@ -1,0 +1,28 @@
+# markdownlint rules. They follow docs/README.md, "Structure" and "Files and formatting".
+# One H1 per file, ATX headings, no skipped levels, and a language on every code block stay on.
+default: true
+MD003:
+  style: atx
+MD004:
+  style: dash
+MD007:
+  indent: 2
+# Prose is written one paragraph per line, so lines have no fixed maximum length.
+MD013: false
+# ADRs and design docs repeat headings such as "Positive" under different parents.
+MD024:
+  siblings_only: true
+MD029:
+  style: ordered
+MD046:
+  style: fenced
+MD048:
+  style: backtick
+MD049:
+  style: asterisk
+MD050:
+  style: asterisk
+# The tables use spaced cells with `|---|` delimiter rows, a style that MD060 does not offer.
+MD060: false
+# Every relative link points to an existing file, and every #fragment to an existing heading.
+relative-links: true

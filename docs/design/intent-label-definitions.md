@@ -3,7 +3,7 @@
 - **Status:** Draft
 - **Owner:** ML engineer
 - **Reviewers:** team
-- **Last reviewed:** 2026-11-12
+- **Last reviewed:** 2026-11-17
 - **Related:** [requirements §3.2](../product/requirements.md#32-in-scope-intents), [intent model retraining](intent-model-retraining.md), [DATA-03](../rules/data-and-ml.md#sources-and-acceptable-use), [DATA-28](../rules/data-and-ml.md#leakage)
 
 Defines what each supported intent means for this product, so that training rows and dev cases written for the [intent model retraining](intent-model-retraining.md) are labeled consistently. Sources: [requirements §3.2](../product/requirements.md#32-in-scope-intents), the approved KB (`data/knowledge/approved_kb.v2.json`), and the simulated order data (`data/knowledge/mock_orders.json`).

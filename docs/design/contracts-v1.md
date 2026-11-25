@@ -1,10 +1,10 @@
 # Design: Contracts v1
 
-- **Status:** In review
+- **Status:** Approved
 - **Owner:** contracts gatekeeper
 - **Reviewers:** ML engineer, RAG engineer, backend engineer, frontend engineer
-- **Last reviewed:** 2026-11-05
-- **Related:** [Requirements](../product/requirements.md) (FR-01 to FR-11, ESC-01 to ESC-05), [ADR-0001](../decisions/0001-system-architecture.md), [ADR-0004](../decisions/0004-api-conventions.md), [ADR-0005](../decisions/0005-intent-independent-retrieval.md), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md), [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md), [ADR-0014](../decisions/0014-citations-to-order-context.md), [contract rules](../rules/contracts.md)
+- **Last reviewed:** 2026-11-17
+- **Related:** [Requirements](../product/requirements.md) (FR-01 to FR-11, ESC-01 to ESC-05), [ADR-0001](../decisions/0001-system-architecture.md), [ADR-0004](../decisions/0004-api-conventions.md), [ADR-0005](../decisions/0005-intent-independent-retrieval.md), [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md), [ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md), [ADR-0011](../decisions/0011-deployment-and-runtime-topology.md), [ADR-0012](../decisions/0012-roles-v1.md), [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md), [ADR-0014](../decisions/0014-citations-to-order-context.md), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md), [ADR-0016](../decisions/0016-hosting-on-free-tiers.md), [account management design](account-management.md), [contract rules](../rules/contracts.md), [ADR-0022](../decisions/0022-server-sent-events-for-suggestion-progress.md)
 
 ## Summary
 
@@ -18,7 +18,7 @@ The team agreed the product behavior:
 - Personal data is pseudonymized before any text leaves `backend`.
 - Sign-in follows ADR-0009, and roles follow ADR-0012.
 
-**Revision 2 (2026-10-28, updated 2026-11-05).** Revision 1 was approved on 2026-10-24. Revision 2 aligns the design with the team's specification:
+**Revision 2 (2026-10-28, updated 2026-11-08).** Revision 1 was approved on 2026-10-24. Revision 2 aligns the design with the team's specification:
 
 - four roles, including `manager` and `admin` ([ADR-0012](../decisions/0012-roles-v1.md));
 - pseudonymization ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md));
@@ -29,7 +29,12 @@ The team agreed the product behavior:
 - the escalation rules ESC-01 to ESC-05;
 - the update of 2026-11-01: a retry of failed suggestions, draft cancellation on an intent change, read-only staff access to tickets that are not open, and the customer's other orders in the workspace;
 - the update of 2026-11-04: citations to the order context ([ADR-0014](../decisions/0014-citations-to-order-context.md)), and intent changes accepted only after an intent is known;
-- the update of 2026-11-05: one pending rule for every role, responses from the ingress, shared `Citation` and `OrderContext` schemas, the shop's `order_id` filter on `listShopTickets`, the ticket status `replied`, the newest-first order of shop lists, the `account_id` of `getCurrentSession`, the data classes of commerce IDs, no `Idempotency-Key` on sign-out, and names that follow CON-18 (`start_at`, `end_at`, `handling_time_ms`, `mask_count_by_type`).
+- the update of 2026-11-05: one pending rule for every role, responses from the ingress, shared `Citation` and `OrderContext` schemas, the shop's `order_id` filter on `listShopTickets`, the ticket status `replied`, the newest-first order of shop lists, the `account_id` of `getCurrentSession`, the data classes of commerce IDs, no `Idempotency-Key` on sign-out, and names that follow CON-18 (`start_at`, `end_at`, `handling_time_ms`, `mask_count_by_type`);
+- the update of 2026-11-08, as `backend.openapi.yaml` 1.0.1 states: the problem type `idempotency-key-reused` also covers the same key with different path parameters; the ingress answers `502` or `504` also when a write in flight fails, and a retry with the same key then cannot repeat its effect; a product appears at most once in an order;
+- the update of 2026-11-11, for `backend` contract 1.1.0 ([ADR-0015](../decisions/0015-account-creation-and-password-changes.md)): the own password change, admin account creation and password reset, the problem type `login-name-taken`, and three audit log events. The [account management design](account-management.md) holds their details;
+- the update of 2026-11-12, for `backend` contract 1.2.0: the console's KB document read is named `getConsoleKbDocumentVersion`, the queue order and the message excerpt of `TicketSummary` are fixed, and latencies are integer `_ms` fields inside objects, as CON-18 requires. After the review of the same day, staff get `403 authority-required` before `409 suggestion-pending`, a retry keeps the intent that staff chose, `source_review_overdue` refers to retrieved document versions, `StepLatencies` and `KbDocumentVersion` are shared schemas, and the report breaks down edits and rejections by staff reason code. The [backend ticket workflow design](backend-ticket-workflow.md) holds the details.
+- the update of 2026-11-15, for [ADR-0022](../decisions/0022-server-sent-events-for-suggestion-progress.md) and `backend` contract 1.2.1: the console receives the progress of a suggestion from a server-sent events stream while one of its parts is `pending`, so push updates are no longer a non-goal for that one case, and no other view of `frontend` polls more often than every 30 s. The report's end-to-end latency leaves out a ticket whose first draft part was `cancelled`, and its handling time counts only tickets first viewed no later than their reply, as the project lead decided on 2026-11-14. The project lead approved the update of 2026-11-15 on that day.
+- the update of 2026-11-17, for [ADR-0025](../decisions/0025-routing-configuration-of-the-first-release.md): the sensitive-term list also holds terms for transaction disputes and policy exceptions, as the authority signal of `main` did. The project lead decided it and accepted ADR-0025 on 2026-11-17.
 
 Revision 2 needs a new approval.
 
@@ -52,9 +57,9 @@ Revision 2 needs a new approval.
 
 - Conversations with several messages per ticket.
 - Production-grade authentication ([ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md) records the revisit).
-- Admin features beyond accounts, roles, account status, and version display ([ADR-0012](../decisions/0012-roles-v1.md)).
+- Admin features beyond accounts, roles, account status, account creation, password resets, and version display ([ADR-0012](../decisions/0012-roles-v1.md), [ADR-0015](../decisions/0015-account-creation-and-password-changes.md)).
 - A cart, a checkout, or any operation that creates or changes orders ([ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md)).
-- Streaming or push updates. `frontend` polls.
+- Push updates other than the progress of a suggestion while one of its parts is `pending`, which a server-sent events stream delivers ([ADR-0022](../decisions/0022-server-sent-events-for-suggestion-progress.md)). No other view of `frontend` polls more often than every 30 s.
 - KB content. This design fixes the structure; content arrives with the approved KB files.
 - Assigning tickets to individual staff members. All staff share one open queue.
 - Staff creating tickets on behalf of customers. Tickets come from the shop and from the evaluation import.
@@ -80,7 +85,7 @@ Revision 2 needs a new approval.
 |---|---|
 | `frontend` | Calls only `backend`. Has three areas: `/shop` for customers, `/console` for staff and managers, and `/admin` for admins. Polls a ticket while its suggestion is pending. Shows only the actions listed in `allowed_actions`. Shows AI text exactly as `backend` returns it, and highlights any placeholder in it ([UI-43](../rules/ui.md#console-interaction)). |
 | `backend` | Creates a suggestion when a ticket is created and runs it through the suggestion job queue. Pseudonymizes the message before calling `ai-service`, and restores pseudonyms for staff. Calls `/v1/analyses` and `/v1/drafts` in parallel. Stores every suggestion snapshot and writes the audit log. Enforces the ticket state machine, roles, object-level access, and the authority rule. Computes reports. Measures handling time. |
-| `ai-service` | Serves `/v1/analyses` and `/v1/drafts` on pseudonymized text, without per-ticket state. Rejects LLM output that uses a placeholder absent from the prompt. Serves KB document versions, and the release ID with the versions of its loaded assets. Reaches the LLM provider only through the egress proxy. |
+| `ai-service` | Serves `/v1/analyses` and `/v1/drafts` on pseudonymized text, without per-ticket state. Rejects LLM output that uses a placeholder absent from the prompt. Serves KB document versions, and the release ID with the versions of its loaded assets. Calls only the LLM provider hosts on the egress allow-list ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#egress-control)). |
 
 ### Roles and permissions
 
@@ -89,6 +94,7 @@ The roles are `customer`, `staff`, `manager`, and `admin` ([ADR-0012](../decisio
 | Operation | `customer` | `staff` | `manager` | `admin` |
 |---|---|---|---|---|
 | Sign in, sign out, read the current session | Yes | Yes | Yes | Yes |
+| Change their own password | Yes | Yes | Yes | Yes |
 | Browse the product catalog | Yes | No | No | No |
 | List and read their own orders | Yes | No | No | No |
 | Create a ticket on one of their orders; read their own tickets and sent replies | Yes | No | No | No |
@@ -101,6 +107,7 @@ The roles are `customer`, `staff`, `manager`, and `admin` ([ADR-0012](../decisio
 | Escalate an open ticket | No | Yes | No | No |
 | View reports | No | No | Yes | No |
 | List `staff`, `manager`, and `admin` accounts; change a role between `staff` and `manager`; deactivate or reactivate one of those accounts | No | No | No | Yes |
+| Create a `staff` or `manager` account; reset the password of one | No | No | No | Yes |
 | View the versions in use | No | No | No | Yes |
 
 - Object-level access ([SEC-17](../rules/security-and-privacy.md#authentication-and-authorization)): a customer reaches only their own orders and tickets. A request for another customer's resource returns `404`, so its existence is not revealed.
@@ -112,12 +119,12 @@ The roles are `customer`, `staff`, `manager`, and `admin` ([ADR-0012](../decisio
 
 - A ticket has `is_authority_required`, a ticket-level property that `backend` sets to `true` when any suggestion of that ticket carries the reason code `requires_authority`, in its routing or in its draft outcome. `backend` sets it in the transaction that stores that result.
 - `requires_authority` covers refund decisions, transaction disputes, policy exceptions, legal claims, and suspected fraud (ESC-03). The reason code `human_agent_requested` does not set the property.
-- `ai-service` sets `requires_authority` from these signals, and each signal can only add it:
+- `ai-service` sets `requires_authority` from two signals, and each signal can only add it:
   - a sensitive intent, at least `request_refund`, with a significant probability in the intent distribution ([ADR-0005](../decisions/0005-intent-independent-retrieval.md), statement 5);
-  - a term of the sensitive-term list, for legal claims and suspected fraud;
-  - the LLM, if the `ai-service` pipeline design adopts this signal after measuring it.
+  - a term of the sensitive-term list, for legal claims, suspected fraud, transaction disputes, and policy exceptions ([ADR-0025](../decisions/0025-routing-configuration-of-the-first-release.md)).
+- The LLM never sets `requires_authority`; it only writes the draft. The project lead decided this on 2026-11-12.
 - The property is never cleared in v1. Correcting the intent or re-running the suggestion cannot remove it. A sensitive intent chosen by staff sets it in the same way, because the override replaces the intent distribution. A choice that staff replace before its draft outcome arrives sets nothing, because staff withdrew it.
-- While any part of the current suggestion is `pending`, staff cannot send a reply (`409 suggestion-pending`). This closes the gap where the flag is not yet known.
+- While any part of the current suggestion is `pending`, staff cannot send a reply (`409 suggestion-pending`). This closes the gap where the flag is not yet known. On a ticket that already requires authority, staff get `403 authority-required` instead, also while a part is `pending`, because the flag is never cleared.
 - Staff can correct the intent only when an intent is known: the analysis of the current suggestion is `ready`, or the current suggestion already carries an `intent_override`. Every signal of the model's analysis is therefore stored before any correction. A correction is allowed while a draft is generating: it cancels the draft call and starts a new draft ([Suggestion lifecycle](#suggestion-lifecycle)).
 - Staff can always route a ticket to a manager themselves, with a reply proposal or an escalation.
 - Tickets that the AI never flags (manual mode, AI unavailable, or a missed classification) rely on staff judgment ([ASM-04](../product/requirements.md#6-assumptions-and-constraints)). The guarantee is: every ticket the AI flags is sent by a manager. The manual-handling panel reminds staff to route refund decisions and disputes to a manager and offers Submit for approval, and a retry ([Suggestion lifecycle](#suggestion-lifecycle)) limits this case to the time the AI is down.
@@ -158,7 +165,7 @@ A suggestion is everything the AI produced for a ticket in one run, as recorded 
 |---|---|
 | `ticket_created` | A ticket is created in `assisted` mode |
 | `intent_override` | Staff or a manager confirms the predicted intent or chooses another |
-| `kb_version_changed` | On the first staff view, the current suggestion used a KB version different from the one `ai-service` has loaded |
+| `kb_version_changed` | On the first staff view of an `open` ticket in `assisted` mode, the current suggestion used a KB version different from the one `ai-service` has loaded |
 | `retry` | The ticket is `open`, the current suggestion has a part `unavailable` with `ai_service_unavailable`, or a draft `llm_unavailable`, and staff open the ticket or ask for a retry |
 
 Every suggestion of a ticket uses `as_of` = the ticket's `created_at`, the time the customer asked. The `ai-service` pipeline design confirms this choice.
@@ -234,7 +241,7 @@ sequenceDiagram
     end
     Staff->>FE: Open the ticket in /console
     FE->>BE: POST /v1/console/tickets/{ticket_id}/views
-    opt Current suggestion used a different KB version
+    opt First view of an open, assisted ticket whose suggestion used a different KB version
         BE->>BE: Create suggestion (kb_version_changed) and queue its job
     end
     loop While a suggestion part is pending
@@ -350,7 +357,7 @@ sequenceDiagram
     end
     alt Failure can be retried
         BE->>BE: Create suggestion (retry) and queue its job
-        BE->>AI: POST /v1/analyses and POST /v1/drafts
+        BE->>AI: POST /v1/analyses and POST /v1/drafts, or only POST /v1/drafts with the staff-chosen intent
         alt Valid 200 responses in time
             AI-->>BE: Analysis and draft outcome
         else Timeout, 4xx, 5xx, or invalid response
@@ -361,7 +368,7 @@ sequenceDiagram
     end
 ```
 
-A retry runs both endpoints, as for a new ticket, and reuses the stored pseudonym map. A pending retry blocks another one, so opening the ticket again creates no duplicate.
+A retry repeats the input of the failed suggestion, its `intent_override` included, so a failure after an intent correction keeps the intent that staff chose. The project lead decided this on 2026-11-12. Without an override, a retry runs both endpoints, as for a new ticket; with one, it runs only `/v1/drafts`, as an intent correction does. It reuses the stored pseudonym map. A pending retry blocks another one, so opening the ticket again creates no duplicate.
 
 ### Data and contracts
 
@@ -369,37 +376,45 @@ Both contracts are new at version `1.0.0`. No consumer exists yet, so there is n
 
 #### Common elements
 
-- **Headers:** `traceparent` on every request ([ADR-0004](../decisions/0004-api-conventions.md), decision 6). `Idempotency-Key` on every write except `createSession` and `deleteCurrentSession`.
+- **Headers:** `traceparent` on every request ([ADR-0004](../decisions/0004-api-conventions.md), decision 6). `Idempotency-Key` on every write except `createSession` and `deleteCurrentSession`. The `ai-service` contract takes no `Idempotency-Key`, because its operations have no side effects ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md#ai-service-replicas)).
+- **Service token:** `backend` sends `Authorization: Bearer <service token>` on every call to `ai-service` except the health checks. The token is Secret and lives only in the secret settings of both components ([SEC-10](../rules/security-and-privacy.md#secrets)). A missing or wrong token returns `401 unauthenticated`. The project lead decided this on 2026-11-12, because `ai-service` may run on a public host ([ADR-0016, Open questions](../decisions/0016-hosting-on-free-tiers.md#open-questions)).
 - **Status codes:** as in [CON-11](../rules/contracts.md#api-conventions), including `202` for `createSuggestion` and `204` for operations without a response body.
-- **Responses from the ingress:** `ingress` can answer `413` (body over its size limit), `429` (rate limit), `502`, or `504` (`backend` unreachable) before `backend` sees the request ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)). These bodies are not Problem Details. `frontend` treats them as technical failures: a plain-language message, editor text kept, and automatic retries only as [TS-29](../rules/typescript.md#api-access) and [ERR-12](../rules/errors-and-reliability.md#retries) allow, so never for `sendReply` and never after `413`.
+- **Responses from the ingress:** `ingress` can answer `413` (body over its size limit) or `429` (rate limit) before `backend` sees the request, and `502` or `504` when `backend` is unreachable or a write in flight fails ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)). These bodies are not Problem Details. After `502` or `504` the outcome of a write is unknown, and a retry with the same `Idempotency-Key` cannot repeat its effect ([ERR-15](../rules/errors-and-reliability.md#idempotency)). `frontend` treats all four as technical failures: a plain-language message, editor text kept, and automatic retries only as [TS-29](../rules/typescript.md#api-access) and [ERR-12](../rules/errors-and-reliability.md#retries) allow, so never for `sendReply` and never after `413`.
 - **Errors:** Problem Details with a `trace_id` extension member. Problem types:
 
 | Type (`urn:supportiq:problem:` + name) | Status | Meaning |
 |---|---|---|
 | `invalid-request` | `400`, `422` | Malformed body, or a body that breaks a documented rule |
-| `unauthenticated` | `401` | No valid session |
+| `unauthenticated` | `401` | No valid session, or no valid service token on a call to `ai-service` |
 | `forbidden` | `403` | The role may not perform the operation, or the `Origin` check failed |
 | `authority-required` | `403` | Staff tried to send a reply on a ticket where authority is required |
 | `not-found` | `404` | The resource does not exist, or the caller may not know about it |
 | `invalid-ticket-state` | `409` | The operation is not allowed in the ticket's current state |
 | `suggestion-pending` | `409` | A part of the current suggestion is still pending |
 | `suggestion-superseded` | `409` | The request refers to a suggestion that is no longer current |
-| `idempotency-key-reused` | `409` | The key was used before with a different body |
+| `idempotency-key-reused` | `409` | The key was used before with a different body or different path parameters. Password fields are left out of the comparison ([ERR-15](../rules/errors-and-reliability.md#idempotency)) |
+| `login-name-taken` | `409` | The login name composed from the requested number is already used |
 | `not-ready` | `503` | The component is not ready, for example assets not loaded |
 | `internal-error` | `500` | Unexpected failure |
 
-- **Shared schemas** in `contracts/schemas/`, referenced by both OpenAPI files so they never diverge:
+- **Shared schemas** in `contracts/schemas/`, referenced by both OpenAPI files so they never diverge. Contract PR 2 adds `MessageText`, `Money`, `Timestamp`, `ProblemDetails` (with the problem types that the `backend` contract uses), `OrderStatus`, `ShipmentStatus`, and `RefundStatus`; contract PR 1 adds the others:
   - `MessageText`: customer message and reply text, 1 to 2 000 characters.
+  - `Timestamp`: an RFC 3339 time in UTC ([CON-17](../rules/contracts.md#api-conventions)).
+  - `OrderStatus`, `ShipmentStatus`, `RefundStatus`: the status enums of `OrderContext`, also used by the shop view models.
   - `IntentLabel`: the 46 labels.
-  - `ConfidenceBand`: `high`, `medium`, `low`.
+  - `ConfidenceBand`: `high`, `medium`, `low`, computed by `ai-service`, so no consumer applies a threshold.
   - `AiReasonCode`.
   - `DocumentValidity`: `valid`, `expired`, `conflicting`.
-  - `Citation` (both variants, never with a `value`), `RankedDocument`, `DraftSegment`, `Warning`.
+  - `Citation`, a union of `KbDocumentCitation` and `OrderContextCitation`, never with a `value`; `RankedDocument`, `DraftSegment`, `Warning`.
   - `OrderContext` and `OrderContextField`, the closed enum of its field names.
-  - `AssetVersions`: `release_id` and the version of each asset.
-  - `Placeholder`: the placeholder syntax of [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#placeholder-syntax). Both contracts use it to describe AI text and the rule that a reply body contains no placeholder.
+  - `AssetVersions`: `release_id` and the version of each asset, each an `AssetVersion`.
+  - `KbDocumentId` and `KbDocumentVersionTag`: the two strings that identify a KB document version, in citations, ranked documents, and path parameters.
+  - `AiItemId`: the identifier of a segment, a citation, or a warning within one `ai-service` result.
+  - `Placeholder`: text that contains at least one placeholder of [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#placeholder-syntax). A contract applies it with `not` to require text without placeholders, as on a reply body.
   - `Money`: `amount_minor`, `currency`.
   - `ProblemDetails`.
+  - `StepLatencies`: `total_ms`, `analysis_ms`, and `llm_ms` when the LLM was called.
+  - `KbDocumentVersion`: one full KB document version, the body of `getKbDocumentVersion` and of `getConsoleKbDocumentVersion`.
 - All other `backend` schemas are its own view models, so `frontend` does not depend on the `ai-service` contract.
 
 #### Reason codes
@@ -417,9 +432,9 @@ Both contracts are new at version `1.0.0`. No consumer exists yet, so there is n
 | `only_expired_documents` | Relevant documents exist, but none is in effect at `as_of` | ESC-04 |
 | `conflicting_sources` | Two valid versions with the same policy key disagree | ESC-04 |
 | `missing_information` | The request needs information that is in neither the message nor the order context | ESC-04 |
-| `source_review_overdue` | A cited document version is past its review deadline under the KB freshness rules | ESC-04 (`STALE`), as a warning |
+| `source_review_overdue` | A document version that the analysis retrieved is past its review deadline under the KB freshness rules | ESC-04 (`STALE`), as a warning |
 | `grounding_failed` | The draft made claims its sources do not support | ESC-05: the LLM output is unusable |
-| `llm_unavailable` | LLM timeout, error, rate limit, refused egress, or open circuit breaker | ESC-05 |
+| `llm_unavailable` | LLM timeout, error, or rate limit, a call refused because its host is not on the egress allow-list, or an open circuit breaker | ESC-05 |
 | `llm_invalid_output` | The LLM output failed schema validation, or it contained a placeholder that was not in the prompt | ESC-05 |
 | `budget_exceeded` | The latency budget ran out before drafting | ESC-05 |
 | `ai_service_unavailable` | Set only by `backend`: `ai-service` unreachable, timed out, returned `4xx` or `5xx`, returned an invalid response, or the job ran out of attempts | ESC-05 |
@@ -433,7 +448,8 @@ Which codes lead to a draft, an abstention, or an escalation recommendation is d
 - `out_of_scope_intent` never produces a detailed draft;
 - `human_agent_requested` produces `escalation_recommended` without `requires_authority`;
 - `requires_authority` never prevents retrieval, and any draft that carries it contains supporting information only;
-- `source_review_overdue` is only a warning and never causes an abstention. It is raised only for document versions whose source provides `last_reviewed_at` ([KB data contract](#kb-data-contract-contractskb-contractmd)).
+- `source_review_overdue` is only a warning and never causes an abstention. It is raised only for document versions whose source provides `last_reviewed_at` ([KB data contract](#kb-data-contract-contractskb-contractmd));
+- every failure of the drafting step inside `ai-service` (`llm_unavailable`, `llm_invalid_output`, `grounding_failed`, `budget_exceeded`) ends with the draft status `llm_unavailable`, and the reason code says which. The project lead decided this on 2026-11-12; the AI and ML code on `org/main` already does it.
 
 The reason code `requires_authority` is the only source of the authority flag; no separate boolean is sent.
 
@@ -449,7 +465,9 @@ Staff use the `StaffReasonCode` values from [ADR-0006](../decisions/0006-staff-f
 | `createDraft` | `POST /v1/drafts` | Run the whole pipeline |
 | `getKbDocumentVersion` | `GET /v1/kb-documents/{document_id}/versions/{version}` | Full text of one document version, for the citation view |
 | `getAssetVersions` | `GET /v1/asset-versions` | The `release_id` and the versions of the loaded model, KB, document-to-intent mapping, prompts, routing configuration, and retrieval index ([DATA-56](../rules/data-and-ml.md#models-and-artifacts)) |
-| — | `GET /health/live`, `GET /health/ready` | Liveness and readiness ([ERR-18](../rules/errors-and-reliability.md#startup-and-health)) |
+| `checkLiveness`, `checkReadiness` | `GET /health/live`, `GET /health/ready` | Liveness and readiness ([ERR-18](../rules/errors-and-reliability.md#startup-and-health)). Readiness depends on the release manifest, not on the LLM provider |
+
+Every operation except the health checks requires the service token ([Common elements](#common-elements)). `backend` is the only caller.
 
 `SuggestionRequest`, the body of both `createAnalysis` and `createDraft`:
 
@@ -457,7 +475,7 @@ Staff use the `StaffReasonCode` values from [ADR-0006](../decisions/0006-staff-f
 |---|---|---|---|---|
 | `message` | `PseudonymizedText` | Yes | Confidential | The customer's message after pseudonymization ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md)) |
 | `order_context` | `OrderContext` | No | Confidential | Allow-listed order fields; absent when the ticket has no order (imported tickets) |
-| `as_of` | timestamp | Yes | Internal | Point in time for document validity: the ticket's `created_at` |
+| `as_of` | timestamp | Yes | Internal | Point in time for document validity: the ticket's `created_at`. It keeps its glossary name, the one exception to the `_at` suffix of [CON-18](../rules/contracts.md#naming) |
 | `kb_version` | string | No | Internal | KB version to use; absent means the loaded version. An unknown version returns `422` |
 | `intent_override` | `IntentLabel` | No | Internal | Intent chosen or confirmed by staff |
 
@@ -482,21 +500,21 @@ Staff use the `StaffReasonCode` values from [ADR-0006](../decisions/0006-staff-f
 
 | Field | Meaning |
 |---|---|
-| `intent` | Predicted intent: `label`, calibrated `probability`, `confidence_band`, `source` (`model` or `staff`) |
-| `alternatives` | Up to four next most likely intents with probabilities. The console shows the top three candidates (FR-01) |
-| `is_in_scope` | Whether the intent is one of the 12 in-scope intents |
-| `documents` | Ranked `RankedDocument` items: ID, version, title, policy key, effective period, `validity`, rank, snippet |
+| `intent` | A union discriminated by `source`. `model`: the predicted `label`, its calibrated `probability`, and `confidence_band`. `staff`: the `label` that staff chose, without a probability or a band, because no model estimated it. The project lead chose this on 2026-11-12 instead of a probability of 1 |
+| `alternatives` | Up to four next most likely intents with probabilities. The console shows the top three candidates (FR-01). Empty when `intent.source` is `staff`, because the staff choice replaces the distribution |
+| `is_in_scope` | Whether the intent is one of the 12 in-scope intents. The routing carries `out_of_scope_intent` exactly when it is false |
+| `documents` | Ranked `RankedDocument` items: ID, version, title, policy key, effective period (`effective_start_at`, and `effective_end_at` unless open-ended), `validity`, rank, snippet |
 | `routing` | `recommendation` (`draft`, `abstain`, `escalate`) and `reason_codes` |
-| `warnings` | `Warning` items |
+| `warnings` | `Warning` items. The warnings of a draft are those of its embedded analysis |
 | `versions` | `AssetVersions`, including `release_id` |
-| `step_latency_ms` | Latency of each step and the total |
+| `step_latencies` | `total_ms`, `analysis_ms`, and `llm_ms` when the LLM was called. A name ending in `_ms` is an integer duration ([CON-18](../rules/contracts.md#naming)), so the object is not called `step_latency_ms` |
 
 `DraftOutcome`, the `200` body of `createDraft`, is a union discriminated by `status`, so a draft exists only when it is ready ([CODE-29](../rules/code.md#types-and-data)):
 
 | `status` | Extra fields |
 |---|---|
 | `draft_ready` | `draft`: `segments` (each with `segment_id`, `paragraph_index`, `text`, `citation_ids`) and `citations` |
-| `abstained`, `escalation_recommended`, `llm_unavailable` | No `draft` |
+| `abstained`, `escalation_recommended`, `llm_unavailable` | No `draft`. `llm_unavailable` covers every failure of the drafting step ([Reason codes](#reason-codes)) |
 
 `paragraph_index` is required: an integer that starts at 0 and never decreases from one segment to the next. Segments with the same index form one paragraph.
 
@@ -509,7 +527,42 @@ Staff use the `StaffReasonCode` values from [ADR-0006](../decisions/0006-staff-f
 
 An `order_context` citation carries the field name and never its value, so no personal value leaves `ai-service`.
 
-Every variant also carries `reason_codes`, the embedded `analysis`, an optional `staff_note`, `versions`, `step_latency_ms`, `mask_count_by_type` (the number of masks applied, by type; Internal), and `llm_usage` (input tokens, output tokens, cost in micro-USD) when the LLM was called.
+Every variant also carries:
+
+- `reason_codes`: every code of the embedded analysis's routing, so `requires_authority` is there exactly when the analysis carries it, plus the codes of the drafting step. The drafting step never adds `requires_authority`;
+- the embedded `analysis`, an optional `staff_note`, `versions`, and `step_latencies`;
+- `mask_count_by_type`: the number of `[EMAIL]`, `[PHONE]`, and `[CARD]` masks applied before the LLM call, as `email`, `phone`, and `card` ([SEC-06](../rules/security-and-privacy.md#data-sent-to-llm-providers); Internal);
+- `llm_usage` (`input_token_count`, `output_token_count`, `cost_micro_usd`) when the LLM answered at least once, also when its output was then rejected.
+
+Joined as `backend` joins them, the segments of a draft have at most 2 000 characters, the `MessageText` limit of a reply, so a draft can be sent unedited. Restoring pseudonyms can make the text longer; the `backend` workflow handles that case.
+
+`KbDocumentVersion`, the `200` body of `getKbDocumentVersion`: document ID, version, title, body, policy key, `effective_start_at`, `effective_end_at` (absent when open-ended), owner, source, and `last_reviewed_at` when the source provides it. The policy key, the owner, and the source are required, as [DATA-12](../rules/data-and-ml.md#validation-at-every-boundary) and [DATA-16](../rules/data-and-ml.md#knowledge-base) require them of every document version. Only the versions of the loaded KB are served; any other version returns `404`.
+
+#### Work for the join with the AI and ML code
+
+The AI and ML code on `org/main` (commit `5e0cda5`, read on 2026-11-12) already serves the paths of this contract in `apps/ai_service`. The project lead decided on 2026-11-12 that the contract follows the rules wherever that code differs, and that the code is not changed before the join. At the join, `ai-service` wraps that code and closes these differences:
+
+- **Protocol:**
+  - every error body is Problem Details with `trace_id`, instead of the `{"detail": …}` body of FastAPI. An unexpected error returns `500 internal-error`, and `503 not-ready` is returned only while the release manifest is not loaded; the code returns `503` for any `ValueError`, `RuntimeError`, or `KeyError` of the pipeline;
+  - every invalid request returns `422 invalid-request`, including a `kb_version` other than the loaded one; the code rejects `kb_version` as an unknown field;
+  - the service token is checked on every operation except the health checks;
+  - `traceparent` is read and propagated ([LOG-05](../rules/logging-and-observability.md#correlation));
+  - the health checks answer `204` without a body;
+  - `GET /v1/asset-versions` returns `AssetVersions` itself, without the `versions` wrapper and its second `release_id`;
+  - responses carry no field outside the contract: `score_kind`, `score`, `failure_code`, and the `confidence_band` of alternatives are removed ([CON-21](../rules/contracts.md#evolution)), and no field is `null` ([CON-08](../rules/contracts.md#openapi-style));
+  - timestamps are RFC 3339 in UTC with `Z`. An `as_of` without a time zone is rejected, not completed;
+  - `intent_override` and every `order_context` field are validated against their schemas; the code checks only the field names of `order_context`.
+- **Egress:** the egress allow-list is a versioned configuration file ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#egress-control), item 2); the code holds its one host in the source.
+- **Release manifest:** `ai-service` loads one release manifest with a `release_id` and a checksum for each asset ([DATA-56](../rules/data-and-ml.md#models-and-artifacts)), instead of computing hashes at startup, and is not ready until every asset is verified. The regex classifier that `SUPPORTIQ_DEV_FALLBACK_MODEL` turns on, which reports the pinned model version with fixed scores, never serves requests.
+- **Intent:** probabilities are calibrated (FR-01); the code sends the uncalibrated softmax scores. A staff-chosen intent has no probability and no alternatives; the code sends a probability of 1 and the model's alternatives. `out_of_scope_intent` is set only for a label outside the 12 in-scope intents; an entropy rule in the code also sets it for in-scope labels. The `ai-service` pipeline design sets the high-band threshold of `ConfidenceBand`; the code holds 0.9 in the source.
+- **Retrieval:** `validity` reflects `as_of`, so `expired`, `conflicting`, and `only_expired_documents` can occur; the code drops versions that are not in effect and marks every other version `valid`. A retrieval failure is a technical failure, never `no_valid_document`. Each ranked document carries its `policy_key`.
+- **KB:** `data/knowledge/approved_kb.v2.json` holds 17 documents. Only 3 have a `policy_key`, none of them among the 14 that `apps/ai_service/kb-release.json` releases, and no document has an `owner` or a `source`, which DATA-12 and DATA-16 require. The team fills in this metadata before the KB is loaded, without writing any policy content, and the project lead approves it. Until then the documents are quarantined ([DATA-13](../rules/data-and-ml.md#validation-at-every-boundary)). `getKbDocumentVersion` returns these fields with the effective period.
+- **Warnings:** each warning is a `Warning` with a `warning_id` and a reason code; the code sends free text.
+- **Drafting:**
+  - the second masking layer runs before the LLM call and reports `mask_count_by_type` ([SEC-06](../rules/security-and-privacy.md#data-sent-to-llm-providers)); the code always sends `{}`;
+  - the grounding check compares each order citation with the value of its field ([ADR-0014](../decisions/0014-citations-to-order-context.md), statement 4); the code checks only that the field is present;
+  - `llm_usage` reports `cost_micro_usd`, and it is present whenever the LLM answered, also for rejected output;
+  - `step_latencies` replaces `step_latency_ms`, with `total_ms`, `analysis_ms`, and `llm_ms`.
 
 #### `backend` contract (`backend.openapi.yaml`)
 
@@ -524,6 +577,7 @@ Three audience namespaces keep the guardrails structural:
 | `createSession` | `POST /v1/sessions` | Anyone | `201` session view and cookie ([ADR-0009](../decisions/0009-demo-accounts-and-cookie-sessions.md)) |
 | `getCurrentSession` | `GET /v1/sessions/current` | Signed in | `account_id` (the same identifier that `listAdminAccounts` returns), display name, role |
 | `deleteCurrentSession` | `DELETE /v1/sessions/current` | Signed in | `204` |
+| `changeOwnPassword` | `POST /v1/sessions/current/password-changes` | Signed in | `201` session view ([account management design](account-management.md)) |
 | `listShopProducts` | `GET /v1/shop/products` | customer | Catalog products, paginated |
 | `getShopProduct` | `GET /v1/shop/products/{product_id}` | customer | One catalog product |
 | `listShopOrders` | `GET /v1/shop/orders` | customer | Own orders, paginated |
@@ -538,19 +592,21 @@ Three audience namespaces keep the guardrails structural:
 | `createReplyProposal` | `POST /v1/console/tickets/{ticket_id}/reply-proposals` | staff | `201` proposal; ticket `awaiting_approval` |
 | `sendReply` | `POST /v1/console/tickets/{ticket_id}/replies` | staff, manager | `201` reply; ticket `closed` |
 | `createEscalation` | `POST /v1/console/tickets/{ticket_id}/escalations` | staff | `201` escalation; ticket `escalated` |
-| `getKbDocumentVersion` | `GET /v1/console/kb-documents/{document_id}/versions/{version}` | staff, manager | Full document version, proxied from `ai-service` |
+| `getConsoleKbDocumentVersion` | `GET /v1/console/kb-documents/{document_id}/versions/{version}` | staff, manager | Full document version, proxied from `ai-service` |
 | `getConsoleReport` | `GET /v1/console/reports` | manager | Report for a period ([Reports](#reports-fr-10)) |
 | `listAdminAccounts` | `GET /v1/admin/accounts` | admin | Accounts, paginated |
 | `changeAccountRole` | `POST /v1/admin/accounts/{account_id}/role-changes` | admin | `201` role change |
 | `changeAccountStatus` | `POST /v1/admin/accounts/{account_id}/status-changes` | admin | `201` status change |
+| `createAdminAccount` | `POST /v1/admin/accounts` | admin | `201` new `staff` or `manager` account ([account management design](account-management.md)) |
+| `resetAccountPassword` | `POST /v1/admin/accounts/{account_id}/password-resets` | admin | `201` password reset ([account management design](account-management.md)) |
 | `getAdminVersions` | `GET /v1/admin/versions` | admin | Versions in use |
-| — | `GET /health/live`, `GET /health/ready` | Anyone | Liveness and readiness |
+| `checkLiveness`, `checkReadiness` | `GET /health/live`, `GET /health/ready` | Anyone | Liveness and readiness |
 
 `createShopTicket` takes `order_id` (required, one of the caller's orders, as [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md) attaches the support form to an order) and `message` (`MessageText`). Tickets imported for evaluation may have no order; they are created by a `backend` import command, not through the shop.
 
 `listShopTickets` takes an optional `order_id` query parameter. It must name one of the caller's orders; otherwise it returns `404 not-found`. The shop's order page uses it ([shop UI design](shop-ui.md)). `listShopOrders` and `listShopTickets` return items newest first, by `placed_at` and `created_at`.
 
-`createSuggestion` takes an optional `intent_override`. With it, the request corrects or confirms the intent, also while a draft is generating. When no intent is known ([Authority rule](#authority-rule-fr-06)), it returns `409 suggestion-pending` while a part is `pending`, and `422 invalid-request` otherwise. Without it, the request is a retry, valid only when `retry_suggestion` is allowed; otherwise it returns `422 invalid-request`.
+`createSuggestion` takes an optional `intent_override`. With it, the request corrects or confirms the intent, also while a draft is generating. When no intent is known ([Authority rule](#authority-rule-fr-06)), it returns `409 suggestion-pending` while a part is `pending`, and `422 invalid-request` otherwise. Without it, the request is a retry, valid only when `retry_suggestion` is allowed; otherwise it returns `422 invalid-request`. A retry repeats the input of the failed suggestion, its `intent_override` included. On a ticket that is not `open`, or in `manual` mode, the request returns `409 invalid-ticket-state`.
 
 Shop view models:
 
@@ -566,7 +622,7 @@ Shop view models:
 - the draft status of the current suggestion, absent in `manual` mode;
 - the predicted intent with its confidence band and probability, absent when there is no analysis.
 
-The excerpt length and the sort parameter are set in contract PR 2.
+`backend` contract 1.2.0 fixes the rest: `listConsoleTickets` takes a required `status`, lists `open`, `awaiting_approval`, and `escalated` tickets oldest first by `created_at` and `closed` tickets newest first by `closed_at`, and has no sort parameter; `TicketSummary` carries `closed_at`, present exactly when the ticket is `closed`; the excerpt holds at most the first 160 characters of the message.
 
 `TicketWorkspace`, the body of `getConsoleTicket`:
 
@@ -585,7 +641,7 @@ The excerpt length and the sort parameter are set in contract PR 2.
 | `reply` | The sent reply, who sent it, and when, when closed |
 | `allowed_actions` | Subset of `send_reply`, `submit_reply_proposal`, `escalate`, `correct_intent`, `retry_suggestion`, computed by `backend` for the caller. `correct_intent` appears only when an intent is known. Empty when staff read a ticket that is not `open` |
 
-`SuggestionView`: suggestion ID, trigger, `intent_override` when staff chose an intent, `created_at`, `analysis_status` with the analysis when ready, `draft_status` with the draft when `draft_ready` (a union discriminated by `draft_status`), draft `reason_codes`, `warnings`, `staff_note`, `versions` (including `release_id`), `step_latency_ms`, and `trace_id`. Pseudonyms in draft segments and the staff note are restored to their original values. Masks and pseudonyms missing from the map stay as written. Citations use the view model `CitationView`, which references the shared variants: a `kb_document` citation as it is, and an `order_context` citation extended with `value`, typed as that field is in `OrderContext`. `backend` takes it from the stored request of that suggestion, so staff see what the draft was written from.
+`SuggestionView`: suggestion ID, trigger, `intent_override` when staff chose an intent, `created_at`, `analysis_status` with the analysis when ready, `draft_status` with the draft when `draft_ready` (a union discriminated by `draft_status`), draft `reason_codes`, `warnings`, `staff_note`, `versions` (including `release_id`), `step_latencies` (integer `_ms` fields), and `trace_id`. Pseudonyms in draft segments and the staff note are restored to their original values. Masks and pseudonyms missing from the map stay as written. Citations use the view model `CitationView`, which references the shared variants: a `kb_document` citation as it is, and an `order_context` citation extended with `value`, typed as that field is in `OrderContext`. `backend` takes it from the stored request of that suggestion, so staff see what the draft was written from.
 
 The draft in `SuggestionView` also carries `text`: the canonical plain-text body, built by `backend` from the restored segments with one rule:
 
@@ -607,7 +663,7 @@ The reply editor starts from `text`, and decision derivation compares the sent b
 - `body` MUST NOT contain any text that matches the `Placeholder` syntax ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#restoring-and-sending)).
 - A body whose basis is not valid for the ticket, or that contains a placeholder, returns `422 invalid-request`. A `suggestion_id` that is not current returns `409 suggestion-superseded`.
 
-`createEscalation` takes `staff_reason_codes` (at least one, as [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md) requires), `note` (required with `other`), and optional `suggestion_id`.
+`createEscalation` takes `staff_reason_codes` (at least one, as [ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md) requires), `note` (required with `other`; otherwise `422 invalid-request`), and optional `suggestion_id`.
 
 **Recorded decision** ([ADR-0006](../decisions/0006-staff-feedback-and-reason-codes.md)). When a reply is sent, `backend` records one decision about the AI draft. It compares the draft's canonical `text` (pseudonyms restored) with the body actually sent. Both are compared after line endings are normalized to `\n` and leading and trailing whitespace is trimmed:
 
@@ -628,28 +684,33 @@ An escalation records `escalate`. For a reply proposal, the record keeps both th
 |---|---|
 | `period` | `start_at` and `end_at` |
 | `ticket_counts` | Tickets created and tickets closed in the period, by handling mode |
-| `draft_decisions` | Counts and shares of `approve`, `edit`, and `reject` among replies sent in the period from a `draft_ready` draft |
+| `draft_decisions` | Counts and shares of `approve`, `edit`, and `reject` among replies sent in the period whose basis, or whose proposal's basis, was `ai_draft` or `rejected_ai_draft`, with the edits and the rejections by staff reason code |
 | `escalations` | Escalations in the period, by staff reason code |
 | `ai_outcomes` | Suggestions completed in the period, by draft status and by AI reason code, without `cancelled` drafts |
-| `end_to_end_latency_ms` | p50 and p95, from ticket creation until the draft part of the ticket's first suggestion left `pending` ([NFR-08](../product/requirements.md#5-quality-requirements)) |
-| `suggestion_latency_ms` | p50 and p95 per part, from suggestion creation until the part left `pending` |
+| `end_to_end_latency` | `p50_ms` and `p95_ms`, from ticket creation until the draft part of the ticket's first suggestion left `pending` ([NFR-08](../product/requirements.md#5-quality-requirements)). A ticket whose first draft part was `cancelled` is left out, because staff got no result from it; a first draft that ended `unavailable` or `llm_unavailable` counts |
 | `ai_error_rate` | Share of suggestions with a part `unavailable` or a draft `llm_unavailable` |
 | `llm_cost_micro_usd` | Total, and average per suggestion that called the LLM |
-| `handling_time_ms` | p50 by handling mode (NFR-11) |
+| `handling_time` | `p50_ms` by handling mode (NFR-11), for tickets whose first view came no later than their reply |
 
-Infrastructure cost (NFR-10) is reported from AWS billing, not from this report.
+Only managers see the report ([ADR-0012](../decisions/0012-roles-v1.md)). The console shows each figure with a label in business language, its unit, and its target where the requirements give one ([UI-44](../rules/ui.md#console-interaction)). The report holds no intent figures, such as the override rate or decisions by intent, and no latency per suggestion part: those are developer metrics on the Staff outcomes and AI pipeline dashboards of Grafana ([LOG-27](../rules/logging-and-observability.md#dashboards)). The breakdown of edits and rejections by intent that [ADR-0006, Validation](../decisions/0006-staff-feedback-and-reason-codes.md#validation) asks for comes from the decision-record export `backend export-decisions` ([backend ticket workflow design](backend-ticket-workflow.md#the-decision-record-export)) and the Staff outcomes dashboard, as the project lead decided on 2026-11-12.
+
+Infrastructure cost (NFR-10) is the price of the hosting plans ([ADR-0016](../decisions/0016-hosting-on-free-tiers.md#deviations-from-the-requirements)), not a figure of this report.
 
 #### Admin operations
 
 | Operation | Body or result | Rules ([ADR-0012](../decisions/0012-roles-v1.md)) |
 |---|---|---|
-| `listAdminAccounts` | Items for `staff`, `manager`, and `admin` accounts only: `account_id`, `display_name`, `role`, `is_active` | Customer accounts are never listed. No emails, password hashes, or session data |
+| `listAdminAccounts` | Items for `staff`, `manager`, and `admin` accounts only: `account_id`, `display_name`, `login_name`, `role`, `is_active` | Customer accounts are never listed. No emails, password hashes, or session data |
 | `changeAccountRole` | Body: `role` (`staff` or `manager`) | Only on a `staff` or `manager` account, and only between those two roles. Not on the caller. Not when it would leave no active manager |
 | `changeAccountStatus` | Body: `is_active` | Only on a `staff`, `manager`, or `admin` account. Not on the caller. Not when it would leave no active manager |
+| `createAdminAccount` | Body: `role` (`staff` or `manager`), optional `login_number`, `display_name`, `password` | Only `staff` and `manager` accounts. The login name is `<role>-<number>` ([account management design](account-management.md#login-names)) |
+| `resetAccountPassword` | Body: `password`, `is_signed_out_everywhere` | Only on a `staff` or `manager` account, active or deactivated. Not on the caller |
 | `getAdminVersions` | `release_id` and asset versions from `ai-service`, the `backend` build version, and `ai_service_status` (`available` or `unavailable`) | Returns `200` with `ai_service_status: unavailable` when `ai-service` cannot be reached |
 
-- A request that breaks a rule returns `422 invalid-request`. A request about a customer account returns `404 not-found`, as if the account did not exist.
-- A role change or a deactivation deletes all sessions of the account in the same transaction.
+- A request that breaks a rule returns `422 invalid-request`. A request about a customer account returns `404 not-found`, as if the account did not exist. `createAdminAccount` returns `409 login-name-taken` when the requested number is already used.
+- On 2026-11-05 the project lead decided that the `422` body of `changeAccountRole` and `changeAccountStatus` carries the extension member `violated_rule`, an enum: `own_account`, `admin_role_unchangeable`, `role_unchanged`, `status_unchanged`, or `last_active_manager`. It is present exactly when a well-formed request is refused under the admin limits 3 to 5 of [ADR-0012](../decisions/0012-roles-v1.md) or because the value is unchanged, and absent when the request fails validation against the contract ([CON-08](../rules/contracts.md#openapi-style)). When several reasons apply, it holds the first value of that list. Consumers map an unknown value to a generic refusal ([CON-22](../rules/contracts.md#evolution)). `violated_rule` does not change the shared `ProblemDetails`.
+- On 2026-11-11 the project lead decided that `backend` contract 1.1.0 appends `admin_password_unresettable` and `current_password_incorrect` to `violated_rule`, which the `422` body of `resetAccountPassword` and `changeOwnPassword` also carries ([account management design](account-management.md#backend-contract-110)).
+- A role change or a deactivation deletes all sessions of the account in the same transaction. A password reset deletes them too, unless the admin chooses to keep them.
 - Every successful admin change writes one audit log entry.
 
 #### Simulated commerce data (owned by `backend`)
@@ -658,11 +719,12 @@ Infrastructure cost (NFR-10) is reported from AWS billing, not from this report.
 |---|---|---|
 | Customer | `customer_id`, `display_name`, `email` (synthetic), `phone` (synthetic) | Confidential, except `customer_id` (Internal) |
 | Product | `product_id`, `name`, `description`, `category`, `price` | Public |
-| Order | `order_id`, `customer_id`, `order_status`, `placed_at`, `order_total`, `shipping_cost`, `shipping_address` (synthetic), `transaction_id`, lines (`product_id`, `quantity`) | Confidential, except `customer_id` (Internal) |
+| Order | `order_id`, `customer_id`, `order_status`, `placed_at`, `order_total`, `shipping_cost`, `shipping_address` (synthetic), `transaction_id`, lines (`product_id`, `quantity`; a product appears at most once in an order) | Confidential, except `customer_id` (Internal) |
 | Shipment | `shipment_id`, `order_id`, `shipment_status`, `tracking_code`, `estimated_delivery_at`, `delivered_at` | Confidential, except `shipment_id` (Internal) |
 | Refund | `refund_id`, `order_id`, `refund_status`, `refund_amount`, `refund_requested_at`, `updated_at` | Confidential, except `refund_id` (Internal) |
 
 - The data is produced by a deterministic, versioned seed script ([DATA-04](../rules/data-and-ml.md#sources-and-acceptable-use)) and read through the `CommerceGateway` port. No operation writes it.
+- On 2026-11-05 the project lead decided that contract PR 2 uses this `synthetic-dev-only` model, with the status enums of `OrderContext`. Adopting the shared commerce data of groups 2 and 5 is a separate contract change ([Open questions](#open-questions)).
 - Order IDs, tracking codes, and transaction IDs each follow one documented format, so that pseudonymization can detect them in free text ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#detection)).
 - `phone` and `shipping_address` exist so that pseudonymization can detect known values and the NFR-06 suite can seed them.
 
@@ -681,6 +743,9 @@ Infrastructure cost (NFR-10) is reported from AWS billing, not from this report.
 | `ticket.escalated` | Staff reason codes, suggestion ID when given, actor |
 | `account.role_changed` | Target account, old role, new role, actor |
 | `account.status_changed` | Target account, old and new `is_active`, actor |
+| `account.created` | Target account, role, actor |
+| `account.password_changed` | Target account (the actor's own), whether other sessions ended, actor |
+| `account.password_reset` | Target account, whether every session ended, actor |
 
 - Every entry has an entry ID, `occurred_at`, the event type, the actor's account ID (absent for system events), the ticket ID when relevant, and the trace ID.
 - Entries hold identifiers, statuses, reason codes, versions, and numbers only. Texts (messages, drafts, replies, notes) stay in their own records, which are never updated after creation.
@@ -692,10 +757,10 @@ This design fixes the structure; the contract is completed when the approved KB 
 
 | Element | Content |
 |---|---|
-| Document version | Document ID, version, title, body, policy key, `effective_from`, `effective_to` (absent means open-ended), source, owner, checksum, and `last_reviewed_at` when the source provides it ([DATA-16](../rules/data-and-ml.md#knowledge-base)) |
+| Document version | Document ID, version, title, body, policy key, `effective_start_at`, `effective_end_at` (absent means open-ended), source, owner, checksum, and `last_reviewed_at` when the source provides it ([DATA-16](../rules/data-and-ml.md#knowledge-base)) |
 | KB version manifest | `kb_version`, the document versions it contains with checksums, creation date, source reference |
 | Document-to-intent mapping | Separate file: `mapping_version`, `kb_version`, and for each document ID its list of `IntentLabel` values ([ADR-0005](../decisions/0005-intent-independent-retrieval.md)) |
-| Freshness | For each policy area: the maximum time between reviews, the owner who reviews, and the interim action when a review is overdue. Overdue documents stay usable, and each draft citing them carries the warning `source_review_overdue`. The warning needs `last_reviewed_at` from the source. Documents without it get no freshness warning and are listed in the ingestion report; the value is never invented ([DATA-13](../rules/data-and-ml.md#validation-at-every-boundary)) |
+| Freshness | For each policy area: the maximum time between reviews, the owner who reviews, and the interim action when a review is overdue. Overdue documents stay usable, and each suggestion whose analysis retrieves them carries the warning `source_review_overdue`. The warning needs `last_reviewed_at` from the source. Documents without it get no freshness warning and are listed in the ingestion report; the value is never invented ([DATA-13](../rules/data-and-ml.md#validation-at-every-boundary)) |
 | Violations | Who checks each rule (the ingestion script for structure, the policy owner for content), and who acts on a failure (the RAG engineer quarantines, the policy owner corrects) |
 | Ingestion | Source files stay unchanged under `data/raw/kb/<kb_version>/`. A script maps them to the canonical form and validates them ([DATA-12](../rules/data-and-ml.md#validation-at-every-boundary)) |
 
@@ -708,8 +773,9 @@ Values missing from the source files are never invented. A document without a re
 | `ai-service` times out, is unreachable, or returns `5xx` on the analysis call | Analysis `unavailable` with `ai_service_unavailable`; ticket stays `open` for manual handling | Use-case test with a fake client that times out; consumer contract test |
 | Same failure on the draft call | Draft `unavailable`; the analysis is still shown when ready | Use-case test; consumer contract test |
 | `ai-service` returns a documented `4xx` | Part `unavailable` with `ai_service_unavailable`; logged at `error` as a defect | Use-case test with a fake client returning `422` |
+| A call to `ai-service` without the service token, or with a wrong one | `401 unauthenticated`; nothing is computed, and `backend` handles it as any other `4xx` | `ai-service` provider contract test; Prism mock check (`pnpm run check:mock`) |
 | `ai-service` returns an unknown status or reason code | Treated as unavailable or as an unspecified reason ([CON-22](../rules/contracts.md#evolution)) | Consumer test with a mock returning unknown values |
-| LLM fails inside `ai-service`, or the egress proxy refuses the host | Draft `llm_unavailable`; analysis present | Provider contract test with the LLM adapter faked to fail |
+| LLM fails inside `ai-service`, or a call to a host that is not on the egress allow-list is refused | Draft `llm_unavailable`; analysis present | Provider contract test with the LLM adapter faked to fail |
 | Pseudonymization fails, or its output exceeds 4 000 characters | No call to `ai-service`; both parts `unavailable` with `pseudonymization_failed`; ticket stays `open` | Use-case test with a failing fake pseudonymizer that asserts no call was made |
 | A personal value of the ticket appears in a request to `ai-service` | A defect: known values and detected values never leave `backend` | Guardrail test over every request the fake `ai-service` client receives (NFR-06) |
 | A detector misses an unknown name or address in a message | The value reaches `ai-service`; the second layer masks only patterns. Every miss counts against NFR-06 and is reported | NFR-06 suite with messages that name third persons |
@@ -719,14 +785,14 @@ Values missing from the source files are never invented. A document without a re
 | Stored AI text contains a pseudonym missing from the map | Shown as written and highlighted; logged at `error` as a defect | Use-case test |
 | A reply or proposal body contains a placeholder | `422 invalid-request` | Handler test |
 | Staff send a reply on a ticket where authority is required | `403 authority-required` | Guardrail test (TEST-26) |
-| Staff correct the intent on a flagged ticket, then try to send | The flag stays set: `409 suggestion-pending` while pending, `403 authority-required` after | Guardrail test (TEST-26) |
+| Staff correct the intent on a flagged ticket, then try to send | The flag stays set: `403 authority-required`, also while the new suggestion is pending | Guardrail test (TEST-26) |
 | Staff correct the intent when no intent is known and a part is `pending` | `409 suggestion-pending`; no new suggestion | Guardrail test (TEST-26) |
 | Staff correct the intent when no intent is known and nothing is `pending` | `422 invalid-request`; staff use a retry when one is allowed, otherwise manual handling | Handler test |
 | Staff correct the intent while a draft is generating | The draft call is cancelled, a new suggestion starts, and the flag stays set | Use-case test |
 | A call is still running when its suggestion is superseded | Pending parts `cancelled`; a late result is discarded | Use-case test |
 | A retry while `ai-service` is still failing | The new suggestion ends `unavailable`; manual handling continues | Use-case test |
 | A retry with nothing to retry, or after `pseudonymization_failed` | `422 invalid-request` | Handler test |
-| Staff send while a suggestion part is pending | `409 suggestion-pending` | Handler test |
+| Staff send on a ticket that does not require authority while a suggestion part is pending | `409 suggestion-pending` | Handler test |
 | Reply from an AI draft without acknowledging every warning | `422 invalid-request` | Handler test |
 | Reply with `no_ai_draft` while a current draft is `draft_ready` | `422 invalid-request` | Handler test |
 | Reply or proposal refers to a superseded suggestion | `409 suggestion-superseded` | Handler test |
@@ -748,7 +814,7 @@ Values missing from the source files are never invented. A document without a re
 | A result arrives for a superseded suggestion or under an expired lease | Discarded | Use-case test |
 | A job runs out of attempts | Pending parts `unavailable` with `ai_service_unavailable` | Use-case test |
 | `UPDATE` or `DELETE` on the audit log | Rejected by the database | Integration test against PostgreSQL |
-| KB version changed before the first staff view | A new suggestion with `kb_version_changed` is created | Use-case test |
+| KB version changed before the first staff view of an `open` ticket in `assisted` mode | A new suggestion with `kb_version_changed` is created; none when `ai-service` does not answer in time, and the view is still recorded | Use-case test |
 | Invalid input: message too long, unknown field, malformed body | `400` or `422 invalid-request` ([CON-07](../rules/contracts.md#openapi-style)) | Handler tests; Schemathesis |
 
 ### Alternatives considered
@@ -756,10 +822,12 @@ Values missing from the source files are never invented. A document without a re
 - **One `/v1/suggestions` endpoint in `ai-service`** instead of analyses and drafts: rejected in [ADR-0005](../decisions/0005-intent-independent-retrieval.md).
 - **One ticket view for every role**, with fields hidden by role: rejected, because a hidden field can leak through a bug. Separate shop, console, and admin schemas make "a customer never sees a draft" and "an admin never sees a ticket" structural.
 - **Synchronous AI call during ticket creation:** rejected, because the customer would wait for the LLM and an AI failure would fail ticket creation.
-- **Push updates (server-sent events or WebSockets):** deferred. Polling fits v1. With two `backend` replicas, push would also need a shared publish-subscribe channel ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)).
+- **Polling alone, without push updates:** the rule of revision 2 until 2026-11-15. On 2026-11-13 the project lead ruled out polling more often than every 30 s, and [ADR-0022](../decisions/0022-server-sent-events-for-suggestion-progress.md) chose a server-sent events stream for the progress of a pending suggestion. It needs no shared publish-subscribe channel: each stream re-reads the part statuses, as the claim loop does ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)).
 - **Authority taken only from the current suggestion:** rejected after review, because an intent correction could remove the flag. The flag is sticky per ticket.
+- **Sensitive terms only for legal claims and suspected fraud:** the rule of revision 2 until 2026-11-17. [ADR-0025](../decisions/0025-routing-configuration-of-the-first-release.md) keeps the dispute and exception terms of `main`, so a transaction dispute or a policy exception that no sensitive intent catches still requires authority.
 - **Staff may send authority-required replies after acknowledging a warning:** rejected by the team in favor of manager approval.
-- **Reports as Grafana dashboards:** rejected. Telemetry is disposable and is not the record of truth ([LOG-33](../rules/logging-and-observability.md#alerts-and-retention)). Grafana sits outside the access control of `backend` (FR-08). The observability stack may also be reduced to fit the memory budget ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)). Grafana stays the developer view.
+- **Reports as Grafana dashboards:** rejected. Telemetry is disposable and is not the record of truth ([LOG-33](../rules/logging-and-observability.md#alerts-and-retention)). Grafana sits outside the access control of `backend` (FR-08). Grafana stays the developer view.
+- **An in-app developer screen that shows every record:** rejected by the project lead on 2026-11-12. Developers use Grafana, the Supabase dashboard of the database ([ADR-0016](../decisions/0016-hosting-on-free-tiers.md)), and dev mode ([UI-35](../rules/ui.md#developer-views)).
 - **In-process job runner with a re-queue at startup** (revision 1): replaced by the PostgreSQL job queue, because two replicas could process one job twice ([ADR-0011](../decisions/0011-deployment-and-runtime-topology.md)).
 - **Blocking intent corrections until the draft is ready:** rejected. Staff would wait up to the draft timeout for a draft they already know is wrong. Only the analysis, which has no LLM step, finishes first.
 - **Finishing the analysis of a superseded suggestion to keep its flag:** rejected. It needs an exception to the job rules, and it is not needed: an intent correction is accepted only after the analysis, so the flag is already stored.
@@ -768,6 +836,7 @@ Values missing from the source files are never invented. A document without a re
 - **A ticket attached to several orders:** rejected. It would change [ADR-0013](../decisions/0013-shop-demo-with-read-only-catalog.md) and the order context. Showing the customer's other orders read-only gives staff the context they need.
 - **Masking only inside `ai-service`** (revision 1): replaced by pseudonymization in `backend` ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md)).
 - **No admin role or admin screens** (revision 1): replaced by the minimal admin area of [ADR-0012](../decisions/0012-roles-v1.md).
+- **`idempotency-key-reused` for a different body only:** the rule until 2026-11-08. Replaced, because the same key and body on another account would return the result of the first account without changing the second.
 
 ## Testing and evaluation
 
@@ -793,6 +862,7 @@ Values missing from the source files are never invented. A document without a re
 - **Spans:** `create_ticket`, `run_suggestion_job`, `pseudonymize_message`, `call_ai_service` (with the endpoint as an attribute), `save_decision`, `send_reply`, `build_report`.
 - **Metrics:** `supportiq.ticket.handling.duration` by mode, `supportiq.staff.decisions`, `supportiq.ai_service.unavailable`, `supportiq.suggestion.duration` (ms, by part), `supportiq.pseudonymization.outcomes` (by outcome), and `supportiq.suggestion_job.lease_expirations`.
 - The trace ID is stored with each suggestion and audit log entry, and shown in the developer details panel ([UI-35](../rules/ui.md#developer-views)).
+- Dev mode has two layers ([UI-35](../rules/ui.md#developer-views)). An environment setting makes it available: on in local development, off in the demo deployment. Where it is available, each `staff`, `manager`, and `admin` user switches it on or off for themselves, as a display preference stored in the browser. Customers never get it. It only adds display on the screens of each role, never changes permissions, and offers no sign-in as another account.
 - Telemetry never contains message text, AI text, pseudonym map values, or the original values behind pseudonyms ([LOG-29](../rules/logging-and-observability.md#privacy-in-telemetry)).
 
 ## Security and privacy
@@ -800,8 +870,8 @@ Values missing from the source files are never invented. A document without a re
 | Flow | Data and class |
 |---|---|
 | `frontend` → `backend` | Credentials (Secret), only to `createSession`. Messages and replies (Confidential) |
-| `backend` → `ai-service` | Pseudonymized message and allow-listed order context (Confidential, without identifiers); `as_of`, KB version, intent override (Internal). Detected names, emails, phone numbers, addresses, order IDs, tracking codes, and transaction IDs are replaced; a value that every detector misses can remain ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#detection)). No account IDs and no `other_orders` |
-| `ai-service` → LLM provider | The pseudonymized message after masking, KB snippets, and the order fields a prompt needs, through the egress proxy ([SEC-04 to SEC-06](../rules/security-and-privacy.md#data-sent-to-llm-providers), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md)) |
+| `backend` → `ai-service` | Pseudonymized message and allow-listed order context (Confidential, without identifiers); `as_of`, KB version, intent override (Internal). Detected names, emails, phone numbers, addresses, order IDs, tracking codes, and transaction IDs are replaced; a value that every detector misses can remain ([ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md#detection)). No account IDs and no `other_orders`. The service token (Secret) authenticates `backend` on every call except the health checks, and never appears in logs or error bodies |
+| `ai-service` → LLM provider | The pseudonymized message after masking, KB snippets, and the order fields a prompt needs, only to hosts on the egress allow-list ([SEC-04 to SEC-06](../rules/security-and-privacy.md#data-sent-to-llm-providers), [ADR-0010](../decisions/0010-pseudonymization-and-egress-control.md)) |
 | `backend` → `/shop` | Catalog products (Public); the caller's own orders and tickets, and sent replies only (Confidential) |
 | `backend` → `/console` | Customer display name, message, order details, the customer's other orders without addresses, and suggestions with pseudonyms restored (Confidential), to staff and managers only. Reports (Internal), to managers only |
 | `backend` → `/admin` | Display names (Confidential, staff identity), roles, and statuses (Internal) of `staff`, `manager`, and `admin` accounts; versions in use (Internal). No customer data |
@@ -813,22 +883,27 @@ Every schema property states its data class ([SEC-03](../rules/security-and-priv
 
 1. Done on 2026-10-24: revision 1 was approved and ADR-0009 accepted.
 2. Done on 2026-10-24: UI-16, UI-17, and UI-19 were updated for the reply proposal flow.
-3. Revision 2, dated 2026-10-28 and updated 2026-11-05, is in review together with ADR-0010, ADR-0011, and ADR-0014. ADR-0012 and ADR-0013 were accepted on 2026-11-05.
-4. Contract PR 1: `contracts/README.md` (tooling commands), `CHANGELOG.md`, shared schemas, `ai-service.openapi.yaml` 1.0.0, examples, mock setup.
-5. Contract PR 2: `backend.openapi.yaml` 1.0.0 and examples.
-6. Contract PR 3: `kb-contract.md` structure, completed when the KB files arrive.
-7. Implementation starts in parallel against mocks. These follow-up design docs come first:
-   - the `ai-service` pipeline: routing per the escalation rules, the list of sensitive intents, whether the LLM is a third authority signal ([SEC-26](../rules/security-and-privacy.md#prompt-injection) applies) and, if so, how that signal stays known when a correction cancels the draft that would carry it, step budgets, retrieval limits (N, k, and snippet length), the maximum output tokens, an LLM spending limit, the grounding check including order citations, placeholder instructions and the output check, and the `as_of` confirmation;
+3. Revision 2, dated 2026-10-28 and updated 2026-11-05, was reviewed together with ADR-0010, ADR-0011, and ADR-0014. ADR-0012 and ADR-0013 were accepted on 2026-11-05, and ADR-0010, ADR-0011, and ADR-0014 on 2026-11-12. The project lead approved its `ai-service` part on 2026-11-12 (step 11).
+4. Done on 2026-11-05: the project lead approved the `frontend` ↔ `backend` part of revision 2 for contract PR 2 and its implementation, exactly these operations: `createSession`, `getCurrentSession`, `deleteCurrentSession`, `listShopProducts`, `getShopProduct`, `listShopOrders`, `getShopOrder`, `createShopTicket`, `listShopTickets`, `getShopTicket`, `listAdminAccounts`, `changeAccountRole`, `changeAccountStatus`, and the health checks. The rest of revision 2 stays in review with the AI and ML members: the console operations, `getAdminVersions`, and the `ai-service` contract.
+5. Decided on 2026-11-05: contract PR 2 lands before contract PR 1. It adds only the shared schemas that the `backend` contract needs now ([Common elements](#common-elements)).
+6. Contract PR 2: `backend.openapi.yaml` 1.0.0 with the operations of step 4, its examples, `CHANGELOG.md`, the shared schemas of step 5, and the contract tooling with its commands in `contracts/README.md`.
+7. Done on 2026-11-12: contract PR 1, `ai-service.openapi.yaml` 1.0.0 with an example for every outcome, its Prism mock, and the remaining shared schemas, with the project lead's decisions of that day ([`ai-service` contract](#ai-service-contract-ai-serviceopenapiyaml)). Later `backend` contract changes add the console operations and `getAdminVersions`.
+8. Contract PR 3: `kb-contract.md` structure, completed when the KB files arrive.
+9. Implementation starts in parallel against mocks. These follow-up design docs come first:
+   - the `ai-service` pipeline: routing per the escalation rules, the list of sensitive intents, step budgets, retrieval limits (N, k, and snippet length), the maximum output tokens, an LLM spending limit, the grounding check including order citations, placeholder instructions and the output check, and the `as_of` confirmation. Whether the LLM is a third authority signal was decided on 2026-11-12: it is not ([Authority rule](#authority-rule-fr-06));
    - the `backend` foundation: tables, database roles, sessions, idempotency, the audit log schema, and the seed and reset commands, in the [backend foundation design](backend-foundation.md);
    - the `backend` ticket workflow: job queue schema and settings, pseudonymization detectors and the named-entity library, how a storage error while writing the pseudonym map is retried (it is not a `pseudonymization_failed`), report queries, and a decision-record export that keeps original values out ([SEC-37](../rules/security-and-privacy.md#pseudonymization));
    - the screens of `/console`, `/shop`, and `/admin`: the [console UI](console-ui.md), [shop UI](shop-ui.md), and [admin UI](admin-ui.md) designs;
    - the evaluation protocol ([DATA-20](../rules/data-and-ml.md#splits-and-evaluation-protocol)).
+10. Done on 2026-11-12: the project lead approved the remaining `frontend` ↔ `backend` part of revision 2, the console operations and `getAdminVersions`, with the decisions of 2026-11-11 on reports and dev mode applied above. The `ai-service` contract followed in step 11. On the same day the project lead decided that the LLM never sets `requires_authority`: only the intent model and the sensitive-term list do, and the LLM only writes the draft ([Authority rule](#authority-rule-fr-06)). The KB data contract stays open until the KB files arrive (step 8).
+11. Done on 2026-11-12: the project lead approved the `ai-service` part of revision 2 with `ai-service` contract 1.0.0, the update of that day for `backend` contract 1.2.0 with its review fixes, and the [backend ticket workflow design](backend-ticket-workflow.md). Revision 2 is approved in full; the KB data contract still waits for the KB files (step 8). The service token, pseudonymization, and the LLM inputs need the two approvals of [SEC-35](../rules/security-and-privacy.md#security-review); the project lead's approval stands for them.
+12. Done on 2026-11-15: the project lead approved the update of 2026-11-15, for ADR-0022 and `backend` contract 1.2.1. `backend` contract 1.3.0 adds the stream of ADR-0022.
 
 Nothing is deployed yet, so no migration or rollback is needed.
 
 ## Open questions
 
-- Groups 2 and 5 agreed on shared files for the KB and the commerce data, but their origin and approval are not yet confirmed ([requirements §8](../product/requirements.md#8-open-questions)). The commerce model and the product catalog map to them through `CommerceGateway`, and field names in this design may change. These gaps need a decision before contract PR 1 and PR 2:
+- Groups 2 and 5 agreed on shared files for the KB and the commerce data, but their origin and approval are not yet confirmed ([requirements §8](../product/requirements.md#8-open-questions)). The commerce model and the product catalog map to them through `CommerceGateway`, and field names in this design may change. Adopting them is a separate contract change, which needs a decision on these gaps:
   - `OrderContext` has no payment method or payment status, although `payment_issue` is in scope, refund times depend on the payment method, and [SEC-04](../rules/security-and-privacy.md#data-sent-to-llm-providers) forbids payment data in prompts unless it is narrowed to a method type without card digits.
   - `order_status` has no value for the shared statuses `Returned` and `Payment_Failed`, and `Shipping` and `In_Transit` overlap.
   - The shared orders have no `placed_at`, `shipping_address`, seller type, or product category, and customers have no email. The return period depends on the seller type, and return limits depend on the product category.

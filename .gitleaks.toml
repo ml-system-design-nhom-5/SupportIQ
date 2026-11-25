@@ -1,0 +1,8 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "SHA-256 checksums of tokenizer files in artifact manifests and evaluation reports, not secrets"
+targetRules = ["generic-api-key"]
+regexTarget = "match"
+regexes = ['''(?i)tokenizer[a-z0-9_.]*["']?\s*[:=]\s*["']?(sha256:)?[0-9a-f]{64}''']

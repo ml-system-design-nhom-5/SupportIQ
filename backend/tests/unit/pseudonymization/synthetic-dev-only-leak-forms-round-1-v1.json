@@ -1,0 +1,218 @@
+{
+  "label": "synthetic-dev-only",
+  "version": 1,
+  "created": "2026-11-20",
+  "purpose": "One case per planted field that round 1 of the backend comparison left whole or in part: the customer message as sent, the order of customer-1 that it named, and the planted value (personal-data leak fixes design, Unit tests).",
+  "cases": [
+    {
+      "case": "m000-name",
+      "message": "Hi, my name is Bà Hương Nguyễn. Where is my order ORD-20901? You can reach me at jane62@example.org.",
+      "order_id": "ORD-20901",
+      "field": "name",
+      "value": "Bà Hương Nguyễn"
+    },
+    {
+      "case": "m001-phone",
+      "message": "Order ORD-20902 has not arrived yet. Please call 590-224-0978x548 if you need more details.",
+      "order_id": "ORD-20902",
+      "field": "phone",
+      "value": "590-224-0978x548"
+    },
+    {
+      "case": "m002-address",
+      "message": "Please update the delivery address of ORD-20903 to 72 John Làng, JaneThị xã, 660877. Thanks, Anh Tùng Vũ",
+      "order_id": "ORD-20903",
+      "field": "address",
+      "value": "72 John Làng, JaneThị xã, 660877"
+    },
+    {
+      "case": "m004-address",
+      "message": "Can you check the shipping status of ORD-20901? My phone is 04 8663172 and I live at 02 John Dãy, Huyện JaneHuyện, 832290.",
+      "order_id": "ORD-20901",
+      "field": "address",
+      "value": "02 John Dãy, Huyện JaneHuyện, 832290"
+    },
+    {
+      "case": "m006-address",
+      "message": "My neighbour Nhật Văn Đặng received a box meant for me at 582 Vũ Khu, Thị xã JaneXã, 825416. Order ORD-20903.",
+      "order_id": "ORD-20903",
+      "field": "address",
+      "value": "582 Vũ Khu, Thị xã JaneXã, 825416"
+    },
+    {
+      "case": "m008-address",
+      "message": "Is it possible to change the shipping method on ORD-20901? Regards, Nam Đức Dương, 426 Hoàng Tổ, Huyện JaneQuận, 881424",
+      "order_id": "ORD-20901",
+      "field": "address",
+      "value": "426 Hoàng Tổ, Huyện JaneQuận, 881424"
+    },
+    {
+      "case": "m012-address",
+      "message": "Please update the delivery address of ORD-20901 to 40 Jane Ngõ, Thị xã JohnThị xã, 143524. Thanks, Nhật Thế Trần",
+      "order_id": "ORD-20901",
+      "field": "address",
+      "value": "40 Jane Ngõ, Thị xã JohnThị xã, 143524"
+    },
+    {
+      "case": "m014-address",
+      "message": "Can you check the shipping status of ORD-20903? My phone is +84 34 2038824 and I live at 7 Jane Khu, Thành phố JaneXã, 853419.",
+      "order_id": "ORD-20903",
+      "field": "address",
+      "value": "7 Jane Khu, Thành phố JaneXã, 853419"
+    },
+    {
+      "case": "m017-phone",
+      "message": "Contact me at lesliephillips@example.com or 001-484-617-3701x6147 about order ORD-20902, please.",
+      "order_id": "ORD-20902",
+      "field": "phone",
+      "value": "001-484-617-3701x6147"
+    },
+    {
+      "case": "m018-address",
+      "message": "Is it possible to change the shipping method on ORD-20903? Regards, Vũ Trí Hoàng, 455 Trần Khu, Thành phố JohnThị xã, 157707",
+      "order_id": "ORD-20903",
+      "field": "address",
+      "value": "455 Trần Khu, Thành phố JohnThị xã, 157707"
+    },
+    {
+      "case": "m018-name",
+      "message": "Is it possible to change the shipping method on ORD-20903? Regards, Vũ Trí Hoàng, 455 Trần Khu, Thành phố JohnThị xã, 157707",
+      "order_id": "ORD-20903",
+      "field": "name",
+      "value": "Vũ Trí Hoàng"
+    },
+    {
+      "case": "m019-third_name",
+      "message": "I am writing on behalf of Kathryn Reynolds (flemingcrystal@example.com). Their order ORD-20904 is late.",
+      "order_id": "ORD-20904",
+      "field": "third_name",
+      "value": "Kathryn Reynolds"
+    },
+    {
+      "case": "m022-address",
+      "message": "Please update the delivery address of ORD-20903 to 870 Lê Hẻm, JaneThị xã, 966619. Thanks, Dũng Bảo Bùi",
+      "order_id": "ORD-20903",
+      "field": "address",
+      "value": "870 Lê Hẻm, JaneThị xã, 966619"
+    },
+    {
+      "case": "m022-name",
+      "message": "Please update the delivery address of ORD-20903 to 870 Lê Hẻm, JaneThị xã, 966619. Thanks, Dũng Bảo Bùi",
+      "order_id": "ORD-20903",
+      "field": "name",
+      "value": "Dũng Bảo Bùi"
+    },
+    {
+      "case": "m024-address",
+      "message": "Can you check the shipping status of ORD-20901? My phone is +84-94-829078 and I live at 407 Bùi Làng, Thị xã JohnQuận, 986986.",
+      "order_id": "ORD-20901",
+      "field": "address",
+      "value": "407 Bùi Làng, Thị xã JohnQuận, 986986"
+    },
+    {
+      "case": "m026-address",
+      "message": "My neighbour Anh Anh Lê received a box meant for me at 9 Hoàng Dãy, JaneHuyện, 190841. Order ORD-20903.",
+      "order_id": "ORD-20903",
+      "field": "address",
+      "value": "9 Hoàng Dãy, JaneHuyện, 190841"
+    },
+    {
+      "case": "m026-third_name",
+      "message": "My neighbour Anh Anh Lê received a box meant for me at 9 Hoàng Dãy, JaneHuyện, 190841. Order ORD-20903.",
+      "order_id": "ORD-20903",
+      "field": "third_name",
+      "value": "Anh Anh Lê"
+    },
+    {
+      "case": "m027-phone",
+      "message": "Contact me at lewisjoseph@example.net or 001-611-946-0160x2597 about order ORD-20904, please.",
+      "order_id": "ORD-20904",
+      "field": "phone",
+      "value": "001-611-946-0160x2597"
+    },
+    {
+      "case": "m028-address",
+      "message": "Is it possible to change the shipping method on ORD-20901? Regards, Bà Hạnh Phạm, 76 Nguyễn Tổ, Thị xã JohnXã, 730589",
+      "order_id": "ORD-20901",
+      "field": "address",
+      "value": "76 Nguyễn Tổ, Thị xã JohnXã, 730589"
+    },
+    {
+      "case": "m028-name",
+      "message": "Is it possible to change the shipping method on ORD-20901? Regards, Bà Hạnh Phạm, 76 Nguyễn Tổ, Thị xã JohnXã, 730589",
+      "order_id": "ORD-20901",
+      "field": "name",
+      "value": "Bà Hạnh Phạm"
+    },
+    {
+      "case": "m030-name",
+      "message": "Hi, my name is Phương Hữu Bùi. Where is my order ORD-20903? You can reach me at johnhoang@example.com.",
+      "order_id": "ORD-20903",
+      "field": "name",
+      "value": "Phương Hữu Bùi"
+    },
+    {
+      "case": "m031-phone",
+      "message": "Order ORD-20904 has not arrived yet. Please call 001-696-245-2556x3833 if you need more details.",
+      "order_id": "ORD-20904",
+      "field": "phone",
+      "value": "001-696-245-2556x3833"
+    },
+    {
+      "case": "m032-address",
+      "message": "Please update the delivery address of ORD-20901 to 22 Lê Ngõ, JohnQuận, 217827. Thanks, Cô Thành Lê",
+      "order_id": "ORD-20901",
+      "field": "address",
+      "value": "22 Lê Ngõ, JohnQuận, 217827"
+    },
+    {
+      "case": "m034-address",
+      "message": "Can you check the shipping status of ORD-20903? My phone is 00 6670162 and I live at 403 John Tổ, Thành phố JaneQuận, 269641.",
+      "order_id": "ORD-20903",
+      "field": "address",
+      "value": "403 John Tổ, Thành phố JaneQuận, 269641"
+    },
+    {
+      "case": "m038-address",
+      "message": "Is it possible to change the shipping method on ORD-20903? Regards, Vũ Văn Đặng, 2 Jane Ngõ, Thị xã JaneHuyện, 935119",
+      "order_id": "ORD-20903",
+      "field": "address",
+      "value": "2 Jane Ngõ, Thị xã JaneHuyện, 935119"
+    },
+    {
+      "case": "m040-phone",
+      "message": "I want a refund for order ORD-20901. My name is Anh Thế Dương, phone (00)504-5188.",
+      "order_id": "ORD-20901",
+      "field": "phone",
+      "value": "(00)504-5188"
+    },
+    {
+      "case": "m042-address",
+      "message": "The item in ORD-20903 is broken. I expect a full refund. Bảo Bảo Nguyễn, 7 Vũ Hẻm, Thị xã JaneXã, 790095",
+      "order_id": "ORD-20903",
+      "field": "address",
+      "value": "7 Vũ Hẻm, Thị xã JaneXã, 790095"
+    },
+    {
+      "case": "m043-phone",
+      "message": "Refund order ORD-20904 now or I will dispute it. Call +1-393-722-1568x72928.",
+      "order_id": "ORD-20904",
+      "field": "phone",
+      "value": "+1-393-722-1568x72928"
+    },
+    {
+      "case": "m045-phone",
+      "message": "I would like to talk to a human about ORD-20902. Call me at 810.651.1446x46429.",
+      "order_id": "ORD-20902",
+      "field": "phone",
+      "value": "810.651.1446x46429"
+    },
+    {
+      "case": "m048-address",
+      "message": "Can a human check ORD-20901? I live at 677 John Khu, JohnPhường, 715282.",
+      "order_id": "ORD-20901",
+      "field": "address",
+      "value": "677 John Khu, JohnPhường, 715282"
+    }
+  ]
+}

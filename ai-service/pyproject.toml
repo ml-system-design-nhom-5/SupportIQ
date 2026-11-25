@@ -1,0 +1,352 @@
+[project]
+name = "supportiq-ai-service"
+version = "0.1.0"
+description = "SupportIQ ai-service: intent classification, KB retrieval, the routing recommendation, and LLM drafting for backend."
+readme = "README.md"
+# One Python version for all Python code, pinned with ../.python-version (PY-01).
+requires-python = "~=3.14.4"
+# Runtime dependencies. Every one is justified in the Dependencies table of README.md (WF-27).
+# numpy, torch, and transformers keep the versions that the real model of main was evaluated
+# with on 2026-11-04 (ADR-0021, Where the code of main goes).
+dependencies = [
+    "fastapi==0.162.0",
+    "httpx==0.28.1",
+    "numpy==2.5.4",
+    "opentelemetry-api==1.45.2",
+    "pydantic==2.14.3",
+    "pydantic-core==2.50.4",
+    "pydantic-settings==2.16.2",
+    "starlette==1.10.0",
+    "transformers==5.22.1",
+    "uvicorn==0.54.0",
+]
+
+[project.scripts]
+ai-service = "app.composition_root:main"
+
+[dependency-groups]
+# Development dependencies, separate from the runtime ones (PY-46).
+dev = [
+    "anyio==4.16.0",
+    "coverage==7.17.2",
+    "datamodel-code-generator==0.90.0",
+    "hypothesis==6.170.15",
+    "import-linter==2.16",
+    "pip-audit==2.10.1",
+    "pyright[nodejs]==1.1.414",
+    "pytest==9.2.0",
+    "pytest-cov==7.1.0",
+    "pytest-randomly==5.0.0",
+    "pytest-socket==0.8.1",
+    "pytest-xdist==3.8.0",
+    "ruff==0.17.4",
+    "schemathesis==4.33.1",
+]
+# torch comes from the PyTorch CPU index, in a group of its own and only on Linux, so the rest
+# installs on macOS without it (ADR-0021, Python and dependencies, statement 2). The image and
+# CI install it with `uv sync --locked --group torch`.
+torch = ["torch==2.15.0 ; sys_platform == 'linux'"]
+# The Modal SDK, for `modal deploy` of modal_app.py and its tests only (ADR-0030). The Dockerfile
+# installs `--no-dev --group torch`, so the image that serves never holds it. CI installs it with
+# `uv sync --locked --group deploy` where pyright and the tests read modal_app.py.
+deploy = ["modal==1.6.4"]
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[build-system]
+requires = ["uv_build>=0.11.11,<0.12"]
+build-backend = "uv_build"
+
+# The package is app/ at the root of the project, without src/ (PY-06, ADR-0028).
+[tool.uv.build-backend]
+module-name = "app"
+module-root = ""
+
+# ----- Code generation (CON-25, CON-26) -----
+# `uv run datamodel-codegen` reads these options. The output is never edited by hand, and CI
+# regenerates it and fails when the committed file differs. The options are those of backend.
+[tool.datamodel-codegen]
+input = "../contracts/ai-service.openapi.yaml"
+input-file-type = "openapi"
+output = "app/generated/__init__.py"
+output-model-type = "pydantic_v2.BaseModel"
+target-python-version = "3.14"
+use-annotated = true
+field-constraints = true
+use-standard-collections = true
+use-union-operator = true
+use-specialized-enum = true
+strict-nullable = true
+disable-timestamp = true
+use-double-quotes = true
+formatters = ["builtin"]
+# An optional field of a request that the body leaves out is `MISSING`, not None, so a body
+# with `null` in it is refused (the contract never uses null, CON-08).
+use-missing-sentinel = true
+target-pydantic-version = "2.14"
+# Pydantic cannot apply the `pattern` of `Timestamp` to a datetime type, so every timestamp is
+# a string, as in backend.
+type-overrides = { Timestamp = "builtins.str" }
+
+# ----- Formatting and linting (PY-03, PY-04, PY-05) -----
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+src = [".", "tests"]
+# Generated code is never linted (CON-26).
+extend-exclude = ["app/generated"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "N", "D", "ANN", "B", "PIE", "RUF", "S", "ASYNC", "DTZ", "T20",
+    "ERA", "C90", "PL", "PT", "PTH", "RET", "SIM", "C4", "TRY", "EM", "ARG", "TID",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests: `assert` is the pytest assertion (PY-29); test names state the behavior, so a
+# docstring per test function would repeat the name (TEST-03); the credentials are synthetic
+# test values, never secrets (TEST-18).
+"tests/**" = ["S101", "D103", "S105", "S106"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.mccabe]
+max-complexity = 8
+
+[tool.ruff.lint.pylint]
+max-args = 5
+max-branches = 8
+max-returns = 4
+max-statements = 30
+max-nested-blocks = 3
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "tests"]
+
+# ----- Type checking (PY-03, CODE-26) -----
+[tool.pyright]
+# modal_app.py is the Modal app of ai-service, next to its Dockerfile (ADR-0030); pyright reads
+# it with the `deploy` group installed.
+include = ["app", "tests", "modal_app.py"]
+exclude = ["app/generated", "**/__pycache__", ".venv"]
+ignore = ["app/generated"]
+typeCheckingMode = "strict"
+pythonVersion = "3.14"
+venvPath = "."
+venv = ".venv"
+reportMissingModuleSource = "error"
+reportUnnecessaryTypeIgnoreComment = "error"
+
+# ----- Tests (TEST-14 to TEST-16, TEST-21) -----
+[tool.pytest.ini_options]
+minversion = "9.0"
+testpaths = ["tests"]
+# The fakes and builders live in the `tests` package, next to the tests that own them (ARCH-27).
+pythonpath = ["."]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--import-mode=importlib",
+    # Parallel workers (TEST-15).
+    "--numprocesses=auto",
+    "--dist=loadfile",
+    # No socket in unit tests (TEST-16). Integration and contract tests may use loopback only.
+    "--disable-socket",
+    "--allow-unix-socket",
+    # Tests that load the real weights run only when selected with -m real_model (README.md, Tests).
+    "-m", "not real_model",
+]
+markers = [
+    "real_model: loads the real model weights of a release; skipped unless selected with -m real_model",
+    "torch: builds and runs tiny models with torch; skipped where the torch group is not installed",
+]
+xfail_strict = true
+# Zero warnings (PY-03): every warning fails the test run.
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+branch = true
+# modal_app.py, the Modal app next to the Dockerfile (ADR-0030), is measured with the package.
+source = ["app", "modal_app"]
+# Generated code is excluded from coverage (CON-26, TEST-22).
+omit = ["*/app/generated/*"]
+
+[tool.coverage.report]
+# The overall floor of TEST-21. The floor for the domain and application layers is checked by
+# a second `coverage report` with --include (README.md, Commands).
+fail_under = 80
+show_missing = true
+skip_covered = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "assert_never\\(",
+    "raise AssertionError",
+    "\\.\\.\\.$",
+]
+
+# ----- Layer and feature boundaries (ARCH-11, ARCH-17, ARCH-18, ARCH-19) -----
+# Third-party contracts follow indirect imports, so a domain module cannot reach a framework
+# through another module. Contracts between modules of ai-service check direct imports,
+# because a public API of a feature may be imported from any layer. The contracts follow
+# those of backend.
+[tool.importlinter]
+root_package = "app"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Layers inside each feature: api, then application, then domain (ARCH-11)"
+type = "layers"
+containers = [
+    "app.suggestions",
+    "app.intent",
+    "app.retrieval",
+    "app.drafting",
+    "app.release",
+]
+layers = ["(api)", "(application)", "domain"]
+
+[[tool.importlinter.contracts]]
+name = "Layers inside platform: web, then application, then domain (ARCH-11, ARCH-19)"
+type = "layers"
+containers = ["app.platform"]
+layers = ["web", "application", "domain"]
+
+[[tool.importlinter.contracts]]
+name = "Features depend on each other without cycles, and platform on no feature (ARCH-18)"
+type = "layers"
+layers = [
+    "app.composition_root",
+    "app.suggestions",
+    "app.intent | app.retrieval | app.drafting",
+    "app.release",
+    "app.platform",
+]
+
+[[tool.importlinter.contracts]]
+name = "ai-service imports no code of main (core rule 3, ADR-0021)"
+type = "forbidden"
+source_modules = ["app"]
+# backend cannot be listed: its package is also app, and its own environment keeps it out
+# (ARCH-10, ADR-0028).
+forbidden_modules = ["apps", "pipeline"]
+
+[[tool.importlinter.contracts]]
+name = "Domain and application code use no framework, model library, or SDK (ARCH-11, ARCH-12)"
+type = "forbidden"
+source_modules = [
+    "app.suggestions.domain",
+    "app.suggestions.application",
+    "app.intent.domain",
+    "app.drafting.domain",
+    "app.retrieval.domain",
+    "app.retrieval.application",
+    "app.release.domain",
+    "app.release.application",
+    "app.platform.domain",
+    "app.platform.application",
+]
+forbidden_modules = [
+    "fastapi", "httpx", "numpy", "opentelemetry", "pydantic", "pydantic_core",
+    "pydantic_settings", "starlette", "transformers", "uvicorn",
+    "app.generated",
+    "app.platform.settings",
+]
+
+[[tool.importlinter.contracts]]
+name = "Domain and application code import no adapter and no interface code (ARCH-11)"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = [
+    "app.suggestions.domain",
+    "app.suggestions.application",
+    "app.intent.domain",
+    "app.drafting.domain",
+    "app.retrieval.domain",
+    "app.retrieval.application",
+    "app.release.domain",
+    "app.release.application",
+    "app.platform.domain",
+    "app.platform.application",
+]
+forbidden_modules = [
+    "app.suggestions.adapters",
+    "app.suggestions.api",
+    "app.intent.adapters",
+    "app.retrieval.adapters",
+    "app.retrieval.api",
+    "app.drafting.adapters",
+    "app.release.adapters",
+    "app.release.api",
+    "app.release.assets",
+    "app.release.manifest",
+    "app.platform.adapters",
+    "app.platform.egress",
+    "app.platform.web",
+]
+
+[[tool.importlinter.contracts]]
+name = "Adapters use no contract model and no settings (ARCH-11, ARCH-15, ARCH-33)"
+type = "forbidden"
+source_modules = [
+    "app.suggestions.adapters",
+    "app.intent.adapters",
+    "app.retrieval.adapters",
+    "app.drafting.adapters",
+    "app.release.adapters",
+    "app.platform.adapters",
+]
+forbidden_modules = ["app.generated", "app.platform.settings"]
+
+[[tool.importlinter.contracts]]
+name = "Interface code uses no settings and imports no adapter (ARCH-11)"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = [
+    "app.suggestions.api",
+    "app.retrieval.api",
+    "app.release.api",
+    "app.platform.web",
+]
+forbidden_modules = [
+    "app.platform.settings",
+    "app.suggestions.adapters",
+    "app.intent.adapters",
+    "app.retrieval.adapters",
+    "app.drafting.adapters",
+    "app.release.adapters",
+    "app.release.assets",
+    "app.release.manifest",
+    "app.platform.adapters",
+    "app.platform.egress",
+]
+
+[[tool.importlinter.contracts]]
+name = "Features reach other features only through their public API, release.api, release.assets, and platform.egress (ARCH-17)"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = [
+    "app.suggestions",
+    "app.intent",
+    "app.retrieval",
+    "app.drafting",
+]
+forbidden_modules = [
+    "app.release.domain",
+    "app.release.application",
+    "app.release.adapters",
+    "app.release.manifest",
+    "app.platform.domain",
+    "app.platform.application",
+    "app.platform.adapters",
+    "app.platform.settings",
+]

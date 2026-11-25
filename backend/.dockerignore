@@ -1,0 +1,13 @@
+# The build context holds only what the image needs (Dockerfile): no environment file, no
+# virtual environment, no tests, and no caches.
+.env
+.env.*
+.venv/
+tests/
+typings/
+htmlcov/
+.coverage
+.coverage.*
+.pytest_cache/
+.ruff_cache/
+**/__pycache__/

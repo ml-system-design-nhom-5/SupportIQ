@@ -1,0 +1,16 @@
+# Bash runs or reads these files and fails on a CR: the shell scripts, the env file of the local
+# run, and the price file and the pinned file, which also refuse a CR. So git checks them out
+# with LF line ends, whatever core.autocrlf says, as in a clone made with Git for Windows
+# (ADR-0030; release download and Modal deploy design, The price file and The pinned file).
+# They come first, so the lines below win for any path that both match.
+*.sh text eol=lf
+deploy/local/local-run.env text eol=lf
+deploy/llm-prices.env text eol=lf
+eval/releases/pinned-release.txt text eol=lf
+
+# The frozen data and the kept parts of main keep every byte, CRLF line ends included, so git
+# never converts their line ends, whatever core.autocrlf says (ADR-0021, Large files and data,
+# statement 3; ADR-0028, Checks, statement 5). The hooks that fix files skip the same paths,
+# except the READMEs of this repository's suites (.pre-commit-config.yaml).
+data/** -text
+artifacts/** -text

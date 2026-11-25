@@ -17,6 +17,7 @@ pipeline/
 ├── preparation/                # GIAI ĐOẠN ĐÃ HOÀN THIỆN: Khảo sát, làm sạch, chia tập, đặc trưng
 │   ├── __init__.py
 │   ├── utils.py                # Sinh ID DD-MM-YYYY-stt, SHA-256, I/O JSON, chuẩn hóa Unicode NFKC
+│   ├── preprocessing.py        # Tiền xử lý text chung: normalize placeholders & split clauses (DATA-59)
 │   ├── inspect_data.py         # Khảo sát dữ liệu khám phá (EDA) & xuất đồ thị trực quan
 │   ├── validate_data.py        # Kiểm tra schema, giá trị thiếu, danh mục nhãn & xung đột trùng lặp
 │   ├── clean_data.py           # Làm sạch text, bảo toàn {{...}}, cách ly mẫu lỗi (quarantined)

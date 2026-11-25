@@ -1,0 +1,125 @@
+{
+  "summary": "A draft with supporting information, and authority is required",
+  "description": "requires_authority comes from the analysis, never from the LLM. backend sets the ticket's authority flag, so only a manager can send the reply. Staff acknowledge warning w1 before a reply based on this draft.",
+  "value": {
+    "status": "draft_ready",
+    "reason_codes": [
+      "requires_authority"
+    ],
+    "analysis": {
+      "intent": {
+        "source": "model",
+        "label": "request_refund",
+        "probability": 0.84,
+        "confidence_band": "medium"
+      },
+      "alternatives": [
+        {
+          "label": "refund_status",
+          "probability": 0.09
+        },
+        {
+          "label": "return_product",
+          "probability": 0.04
+        }
+      ],
+      "is_in_scope": true,
+      "documents": [
+        {
+          "document_id": "SAMPLE-REFUND-001",
+          "version": "1.0",
+          "title": "Sample refund document",
+          "policy_key": "sample_refund_review",
+          "effective_start_at": "2026-01-01T00:00:00Z",
+          "validity": "valid",
+          "rank": 1,
+          "snippet": "This is sample text. It is not KB content and not a policy."
+        }
+      ],
+      "routing": {
+        "recommendation": "draft",
+        "reason_codes": [
+          "requires_authority"
+        ]
+      },
+      "warnings": [
+        {
+          "warning_id": "w1",
+          "reason_code": "source_review_overdue"
+        }
+      ],
+      "versions": {
+        "release_id": "release-2026-11-12-sample",
+        "model_version": "intent-model-sample-1",
+        "kb_version": "kb-sample-1",
+        "mapping_version": "mapping-sample-1",
+        "prompt_version": "prompts-sample-1",
+        "routing_version": "routing-sample-1",
+        "index_version": "index-sample-1"
+      },
+      "step_latencies": {
+        "total_ms": 181,
+        "analysis_ms": 181
+      }
+    },
+    "draft": {
+      "segments": [
+        {
+          "segment_id": "s1",
+          "paragraph_index": 0,
+          "text": "Hello [NAME_1], your refund request has been received.",
+          "citation_ids": [
+            "c2"
+          ]
+        },
+        {
+          "segment_id": "s2",
+          "paragraph_index": 0,
+          "text": "This sample sentence stands for supporting information from the cited document.",
+          "citation_ids": [
+            "c1"
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "source_type": "kb_document",
+          "citation_id": "c1",
+          "document_id": "SAMPLE-REFUND-001",
+          "version": "1.0",
+          "snippet": "This is sample text. It is not KB content and not a policy."
+        },
+        {
+          "source_type": "order_context",
+          "citation_id": "c2",
+          "field": "refund_status"
+        }
+      ]
+    },
+    "staff_note": "A manager must send the reply, because the request needs authority. The draft holds supporting information only.",
+    "versions": {
+      "release_id": "release-2026-11-12-sample",
+      "model_version": "intent-model-sample-1",
+      "kb_version": "kb-sample-1",
+      "mapping_version": "mapping-sample-1",
+      "prompt_version": "prompts-sample-1",
+      "routing_version": "routing-sample-1",
+      "index_version": "index-sample-1"
+    },
+    "step_latencies": {
+      "total_ms": 3610,
+      "analysis_ms": 181,
+      "llm_ms": 3390
+    },
+    "mask_count_by_type": {
+      "email": 0,
+      "phone": 0,
+      "card": 0
+    },
+    "llm_usage": {
+      "input_token_count": 1204,
+      "output_token_count": 88,
+      "cost_micro_usd": 207
+    }
+  }
+}

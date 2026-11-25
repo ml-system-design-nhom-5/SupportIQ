@@ -1,0 +1,14 @@
+# The build context holds only what the image needs (Dockerfile): no environment file, no
+# virtual environment, no tests, no model weights, and no caches.
+.env
+.env.*
+.venv/
+tests/
+htmlcov/
+.coverage
+.coverage.*
+.pytest_cache/
+.ruff_cache/
+**/__pycache__/
+*.safetensors
+*.pt

@@ -1,0 +1,64 @@
+{
+  "summary": "A closed ticket with the reply that staff sent",
+  "description": "Nobody can act on a closed ticket. The customer sees the same reply in getShopTicket.",
+  "value": {
+    "ticket_id": "TCK-1017",
+    "status": "closed",
+    "handling_mode": "manual",
+    "is_authority_required": false,
+    "created_at": "2026-10-13T16:45:10Z",
+    "handling_started_at": "2026-10-14T09:10:00Z",
+    "closed_at": "2026-10-14T09:25:00Z",
+    "customer": {
+      "display_name": "Lan Tran"
+    },
+    "message": {
+      "body": "The left side of the headphones makes no sound. Can I return them?",
+      "created_at": "2026-10-13T16:45:10Z"
+    },
+    "order": {
+      "order_id": "ORD-20931",
+      "order_status": "delivered",
+      "placed_at": "2026-10-02T19:30:00Z",
+      "order_total": {
+        "amount_minor": 8900,
+        "currency": "USD"
+      },
+      "shipping_cost": {
+        "amount_minor": 0,
+        "currency": "USD"
+      },
+      "lines": [
+        {
+          "product_id": "PRD-1002",
+          "product_name": "Wireless headphones",
+          "quantity": 1
+        }
+      ],
+      "shipment": {
+        "shipment_status": "delivered",
+        "delivered_at": "2026-10-06T12:05:00Z"
+      },
+      "refund": {
+        "refund_status": "under_review",
+        "refund_amount": {
+          "amount_minor": 8900,
+          "currency": "USD"
+        },
+        "refund_requested_at": "2026-10-14T09:20:00Z"
+      },
+      "shipping_address": "12 Sample Street, Sample City"
+    },
+    "reply": {
+      "reply_id": "2b4d6f8a-0c1e-4a3c-9e5b-7d9f1b3d5f86",
+      "basis": "no_ai_draft",
+      "body": "Thank you for writing. Your refund request for the headphones is under review. We will write to you again when it is decided.",
+      "sent_by": {
+        "account_id": "9a7d3e21-6c4b-4f8e-b1a2-3c5d7e9f0a12",
+        "display_name": "Mai Nguyen"
+      },
+      "sent_at": "2026-10-14T09:25:00Z"
+    },
+    "allowed_actions": []
+  }
+}

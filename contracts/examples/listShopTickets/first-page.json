@@ -1,0 +1,23 @@
+{
+  "summary": "The first page of the caller's tickets, with a next page",
+  "description": "Requested without order_id and with limit=2. Tickets are ordered by created_at, newest first.",
+  "value": {
+    "items": [
+      {
+        "ticket_id": "TCK-1042",
+        "order_id": "ORD-20931",
+        "message": "I asked for a refund for the headphones three weeks ago. When will it be paid?",
+        "created_at": "2026-11-05T08:12:30Z",
+        "customer_status": "received"
+      },
+      {
+        "ticket_id": "TCK-1038",
+        "order_id": "ORD-20990",
+        "message": "Can you tell me when my desk lamp will arrive?",
+        "created_at": "2026-11-01T10:05:00Z",
+        "customer_status": "received"
+      }
+    ],
+    "next_cursor": "eyJ0IjoiMTAzOCJ9"
+  }
+}
