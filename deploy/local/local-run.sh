@@ -75,11 +75,10 @@ readonly SECRET_BYTES=32
 # healthcheck.start_interval, which needs Docker Engine 25, whose API is 1.44.
 readonly MINIMUM_COMPOSE_VERSION=2.20.2
 readonly MINIMUM_DOCKER_API_VERSION=1.44
-# The memory that the Docker engine needs with AI: ai-service loads torch and two models.
-# PROVISIONAL, not measured: it lies between the 2 GiB of the default virtual machine of Colima
-# and the 4 GiB of the measured runs of the guide. The peak memory of the Compose way with AI,
-# measured in the by-hand runs, replaces it before the implementation PR is ready
-# (docs/design/local-run.md, Flow, step 2).
+# The memory that the Docker engine needs with AI: ai-service loads torch and two models. It is
+# about twice the measured peak of all containers together, 1570 MiB, because docker stats
+# leaves out the inactive file cache, the Docker engine, and the system
+# (docs/design/local-run.md, Testing and evaluation).
 readonly MINIMUM_DOCKER_MEMORY_BYTES=3221225472
 # With AI and --observability, this many CPUs or fewer make the AI too slow (the guide, With the
 # local Grafana stack).
