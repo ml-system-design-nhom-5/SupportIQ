@@ -1,6 +1,6 @@
 # Local run of the whole system
 
-> **Status:** Active · **Owner:** project lead · **Last reviewed:** 2026-11-25
+> **Status:** Active · **Owner:** project lead · **Last reviewed:** 2026-11-28
 
 This guide starts the whole SupportIQ system on your machine with one command: PostgreSQL 17, `backend` with the simulated demo data, `frontend`, `ai-service` with the newest published release unless you turn the AI off, and optionally the local Grafana stack. It is for testers and developers of the team. The [local run design](../design/local-run.md) records why it works this way.
 
@@ -29,7 +29,7 @@ deploy/local/local-run.sh start
 
 Open <http://localhost:5173> or <http://127.0.0.1:5173>. To start without AI, run `deploy/local/local-run.sh start --without-ai` ([Modes](#modes)).
 
-The first start builds the images, downloads the release, and takes the longest. A later start that downloads and creates nothing asks no question: it prints one line, rebuilds the images from the cache, runs the pending migrations, and keeps the data of the database. A change of a file that an image installs its dependencies from, for example after a `git pull`, makes the rebuild download every package of that image again, so `start` counts it as a download: the plan names the image and the file, and asks the question. These files are `pyproject.toml`, `uv.lock`, and `README.md` of `backend/` and of `ai-service/`, and `package.json`, `pnpm-lock.yaml`, and `pnpm-workspace.yaml` of `frontend/`; `start` records their SHA-256 in `.local-run/image-inputs/` after each build. In a test run, a change of `ai-service/README.md` made the next start with AI take 1386 s, because the image downloaded torch again. When the local run already runs in the same mode, `start` prints the URL and changes nothing: the parts keep the code of their last start. To run the changes of your working tree, run `stop`, then `start`.
+The first start builds the images, downloads the release, and takes the longest. A later start that downloads and creates nothing asks no question: it prints one line, rebuilds the images from the cache, runs the pending migrations, and keeps the data of the database. A change of a file that an image installs its dependencies from, for example after a `git pull`, makes the rebuild download every package of that image again, so `start` counts it as a download: the plan names the image and the file, and asks the question. These files are the `Dockerfile`, `pyproject.toml`, and `uv.lock` of `backend/` and of `ai-service/`, and `deploy/local/frontend.Dockerfile` with `package.json`, `pnpm-lock.yaml`, and `pnpm-workspace.yaml` of `frontend/`; `start` records their SHA-256 in `.local-run/image-inputs/` after each build. The Dockerfiles copy `README.md` after the dependencies, so a change of a README rebuilds without a download; before 2026-11-28 it did not, and a change of `ai-service/README.md` made the next start with AI take 1386 s. When the local run already runs in the same mode, `start` prints the URL and changes nothing: the parts keep the code of their last start. To run the changes of your working tree, run `stop`, then `start`.
 
 Ctrl+C during `start` stops the parts that this start launched, keeps the data, and ends with status 130.
 

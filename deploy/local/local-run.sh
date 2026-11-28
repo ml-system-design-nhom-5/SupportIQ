@@ -756,13 +756,14 @@ needs_grafana_password() {
     && ! secret_is_generated "$GRAFANA_PASSWORD_NAME"
 }
 
-# The files that an image installs its dependencies from, which its Dockerfile copies before it
-# installs them. A change of one makes the next build download every package of the image again.
+# The files that decide the dependency layer of an image: its Dockerfile and the files that it
+# copies before it installs the dependencies. A change of one makes the next build download
+# every package of the image again. README.md is copied after that layer, so it is not one.
 image_inputs() {
   case "$1" in
-    "$BACKEND_IMAGE") echo "backend/pyproject.toml backend/uv.lock backend/README.md" ;;
-    "$AI_SERVICE_IMAGE") echo "ai-service/pyproject.toml ai-service/uv.lock ai-service/README.md" ;;
-    "$FRONTEND_IMAGE") echo "frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml" ;;
+    "$BACKEND_IMAGE") echo "backend/Dockerfile backend/pyproject.toml backend/uv.lock" ;;
+    "$AI_SERVICE_IMAGE") echo "ai-service/Dockerfile ai-service/pyproject.toml ai-service/uv.lock" ;;
+    "$FRONTEND_IMAGE") echo "deploy/local/frontend.Dockerfile frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml" ;;
   esac
 }
 

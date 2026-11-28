@@ -4,22 +4,31 @@
 # environment at run time, and the release assets are added at deploy time (ADR-0018,
 # Deploy).
 
+# uv 0.11.11, the version that CI pins, as a stage of its own: the image builder of Modal
+# refuses a reference with both a tag and a digest in `COPY --from`, and accepts one in `FROM`
+# (deploy/README.md, Runs by hand, step 6).
+FROM ghcr.io/astral-sh/uv:0.11.11@sha256:798712e57f879c5393777cbda2bb309b29fcdeb0532129d4b1c3125c5385975a AS uv
+
 # Python 3.14.4, the version of ../.python-version (PY-01).
 FROM python:3.14.4-slim@sha256:2ca02f32b4d9d893863367ce07ec1972819f476dd38d8612f2a9cb6a41cbb727 AS build
-# uv 0.11.11, the version that CI pins.
-COPY --from=ghcr.io/astral-sh/uv:0.11.11@sha256:798712e57f879c5393777cbda2bb309b29fcdeb0532129d4b1c3125c5385975a /uv /usr/local/bin/uv
+COPY --from=uv /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=never \
     UV_PROJECT_ENVIRONMENT=/opt/venv
 WORKDIR /build
-# The runtime dependencies first, from the lockfile only, so code changes reuse this layer.
+# The runtime dependencies first, from the lockfile only, so a change of the code or of
+# README.md reuses this layer and downloads nothing.
 # The image runs the real model, so it installs torch from the CPU index (ADR-0021, Python
-# and dependencies, statement 2).
-COPY pyproject.toml uv.lock README.md ./
-RUN uv sync --locked --no-dev --group torch --no-install-project
+# and dependencies, statement 2). The image builder of Modal sets UV_INDEX_URL to its own
+# package mirror, which uv.lock does not name, so `--locked` would refuse the lockfile: both
+# syncs unset it and use the indexes of uv.lock, as CI does (deploy/README.md, Runs by hand,
+# step 6).
+COPY pyproject.toml uv.lock ./
+RUN env -u UV_INDEX_URL uv sync --locked --no-dev --group torch --no-install-project
+COPY README.md ./
 COPY app ./app
-RUN uv sync --locked --no-dev --group torch --no-editable
+RUN env -u UV_INDEX_URL uv sync --locked --no-dev --group torch --no-editable
 
 FROM python:3.14.4-slim@sha256:2ca02f32b4d9d893863367ce07ec1972819f476dd38d8612f2a9cb6a41cbb727 AS runtime
 # A non-root user without a home or a shell (SEC-29).

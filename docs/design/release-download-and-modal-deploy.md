@@ -3,7 +3,7 @@
 - **Status:** Approved
 - **Owner:** project lead
 - **Reviewers:** ML engineer, backend engineer, and a second reviewer for [SEC-35](../rules/security-and-privacy.md#security-review)
-- **Last reviewed:** 2026-11-25
+- **Last reviewed:** 2026-11-28
 - **Related:** [ADR-0018](../decisions/0018-hosting-of-ai-service-on-modal.md), [ADR-0030](../decisions/0030-release-archives-and-the-modal-function-of-ai-service.md), [ADR-0021, Release and the offline evaluation gate](../decisions/0021-repository-layout-and-ai-ml-migration.md#release-and-the-offline-evaluation-gate), [local run design](local-run.md), [release command README](../../eval/release/README.md), [DATA-36, DATA-56, DATA-57](../rules/data-and-ml.md#models-and-artifacts), [SEC-10](../rules/security-and-privacy.md#secrets), [SEC-40](../rules/security-and-privacy.md#transport-and-runtime), [WF-27 to WF-30](../rules/workflow.md#dependencies), [#41](https://github.com/ml-system-design-nhom-5/SupportIQ/issues/41)
 
 ## Summary
@@ -553,7 +553,7 @@ Rolling back: before the pinned file is pushed, nothing outside the working tree
 
 ## Open questions
 
-- **Two facts of the Modal build** that the documentation does not state and that only the first `modal deploy` proves: that Modal builds the two-stage `ai-service/Dockerfile` with `COPY --from` of the uv image, and that the Modal runtime works next to the virtual environment `/opt/venv`, which comes first on `PATH` and has no `pip`. If either fails, the fallback of [Alternatives considered](#alternatives-considered) needs the project lead's approval.
-- **When Modal checks `required_keys`:** at deploy or at the start of a container. Either way no other key is used. The first deploy records which.
+The first deploy on 2026-11-26 answered the two questions on the Modal build and on when Modal checks `required_keys` ([deploy README, Runs by hand](../../deploy/README.md#runs-by-hand), steps 4 and 6). Two remain:
+
 - **The latency from `backend`.** `ai_service.called` of `backend` holds no duration, and traces are off on Render ([deploy README, Open questions](../../deploy/README.md#open-questions)). The proposal: record `analysis_ms` and the duration of `request.completed` on Modal, and the round trip of `curl` from the deploying machine, and state that this is not the path from Render. A duration on `ai_service.called` would be a change of `backend` with its own review.
 - **`min_containers` on demo days.** ADR-0018 keeps one container running on demo days when the measured cold start requires it. How the project lead turns it on for one day, by a deploy with another value or in the Modal dashboard, waits for the measured cold start.

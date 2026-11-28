@@ -28,9 +28,10 @@ readonly RELEASE_ID=release-2026-11-18-02
 readonly ARCHIVE_SIZE_BYTES=402653184
 readonly KEY_PROMPT="Gemini API key (hidden"
 readonly QUESTION="Proceed? [y/N]"
-readonly IMAGE_INPUT_FILES="backend/pyproject.toml backend/uv.lock backend/README.md \
-ai-service/pyproject.toml ai-service/uv.lock ai-service/README.md frontend/package.json \
-frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml"
+readonly IMAGE_INPUT_FILES="backend/Dockerfile backend/pyproject.toml backend/uv.lock \
+ai-service/Dockerfile ai-service/pyproject.toml ai-service/uv.lock \
+deploy/local/frontend.Dockerfile frontend/package.json frontend/pnpm-lock.yaml \
+frontend/pnpm-workspace.yaml"
 
 root=""
 tools=""
@@ -189,7 +190,7 @@ new_root() {
   # The other paths that the download command reads, besides eval/releases/.
   mkdir -p "$root/eval/release/src" "$root/ai-service/app"
   for file in .python-version eval/release/pyproject.toml eval/release/uv.lock \
-    eval/release/README.md; do
+    eval/release/README.md ai-service/README.md backend/README.md; do
     echo "the content of $file" > "$root/$file"
   done
   write_stubs "$root/bin"
@@ -1555,7 +1556,7 @@ test_a_changed_dependency_file_makes_the_question_due_and_its_rebuild_is_recorde
   local file image
   given_ai_with_a_key_in_the_environment
   given_a_first_start
-  for file in ai-service/README.md backend/uv.lock frontend/pnpm-lock.yaml; do
+  for file in ai-service/Dockerfile backend/uv.lock frontend/pnpm-lock.yaml; do
     case "$file" in
       ai-service/*) image=supportiq-local-ai-service ;;
       backend/*) image=supportiq-local-backend ;;
@@ -1574,12 +1575,24 @@ test_a_changed_dependency_file_makes_the_question_due_and_its_rebuild_is_recorde
   done
 }
 
+test_a_changed_readme_asks_nothing() {
+  local file
+  given_ai_with_a_key_in_the_environment
+  given_a_first_start
+  for file in ai-service/README.md backend/README.md; do
+    echo "a changed content" >> "$root/$file"
+    STUB_VOLUME_INSPECT_STATUS=0 run_script start
+    expect_status 0
+    expect_no_output "Proceed?"
+  done
+}
+
 test_a_failing_sha256_tool_stops_before_the_question() {
   printf '#!/bin/sh\nexit 1\n' > "$root/bin/sha256sum"
   chmod +x "$root/bin/sha256sum"
   run_script start --without-ai --yes
   expect_status 1
-  expect_output "the SHA-256 of backend/pyproject.toml backend/uv.lock backend/README.md cannot be computed"
+  expect_output "the SHA-256 of backend/Dockerfile backend/pyproject.toml backend/uv.lock cannot be computed"
   expect_no_state
 }
 

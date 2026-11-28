@@ -13,9 +13,11 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_PYTHON_DOWNLOADS=never \
     UV_PROJECT_ENVIRONMENT=/opt/venv
 WORKDIR /build
-# The runtime dependencies first, from the lockfile only, so code changes reuse this layer.
-COPY pyproject.toml uv.lock README.md ./
+# The runtime dependencies first, from the lockfile only, so a change of the code or of
+# README.md reuses this layer and downloads nothing.
+COPY pyproject.toml uv.lock ./
 RUN uv sync --locked --no-dev --no-install-project
+COPY README.md ./
 COPY app ./app
 RUN uv sync --locked --no-dev --no-editable
 
